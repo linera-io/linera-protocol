@@ -1155,6 +1155,47 @@ where
         self.map.get(&short_key).await
     }
 
+    /// Reads values at given positions, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::map_view::MapView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut map: MapView<_, u32, _> = MapView::load(context).await.unwrap();
+    /// map.insert(&(37 as u32), String::from("Hello"));
+    /// map.insert(&(49 as u32), String::from("Bonjour"));
+    /// assert_eq!(
+    ///     map.multi_get(&[37 as u32, 49 as u32, 64 as u32])
+    ///         .await
+    ///         .unwrap(),
+    ///     [
+    ///         Some(String::from("Hello")),
+    ///         Some(String::from("Bonjour")),
+    ///         None
+    ///     ]
+    /// );
+    /// assert_eq!(map.get(&(34 as u32)).await.unwrap(), None);
+    /// # })
+    /// ```
+    pub async fn multi_get<'a, Q>(
+        &self,
+        indices: impl IntoIterator<Item = &'a Q>,
+    ) -> Result<Vec<Option<V>>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + 'a,
+    {
+        let short_keys = indices
+            .into_iter()
+            .map(|index| BaseKey::derive_short_key(index))
+            .collect::<Result<_, _>>()?;
+        self.map.multi_get(short_keys).await
+    }
+
+
+
+    
     /// Obtains a mutable reference to a value at a given position if available
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1636,6 +1677,40 @@ where
         self.map.get(&short_key).await
     }
 
+    /// Read values at several positions, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::map_view::CustomMapView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut map: CustomMapView<MemoryContext<()>, u128, String> =
+    ///     CustomMapView::load(context).await.unwrap();
+    /// map.insert(&(34 as u128), String::from("Hello"));
+    /// map.insert(&(12 as u128), String::from("Hi"));
+    /// assert_eq!(
+    ///     map.multi_get(&[34 as u128, 12 as u128, 89 as u128])
+    ///         .await
+    ///         .unwrap(),
+    ///     [Some(String::from("Hello")), Some(String::from("Hi")), None]
+    /// );
+    /// # })
+    /// ```
+    pub async fn multi_get<'a, Q>(
+        &self,
+        indices: impl IntoIterator<Item = &'a Q>,
+    ) -> Result<Vec<Option<V>>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + 'a,
+    {
+        let short_keys = indices
+            .into_iter()
+            .map(|index| index.to_custom_bytes())
+            .collect::<Result<_, _>>()?;
+        self.map.multi_get(short_keys).await
+    }
+
     /// Obtains a mutable reference to a value at a given position if available
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -2108,15 +2183,12 @@ mod graphql {
                 self.indices().await?
             };
 
-            let mut values = vec![];
-            for key in keys {
-                values.push(Entry {
-                    value: self.get(&key).await?,
-                    key,
-                })
-            }
-
-            Ok(values)
+            let values = self.multi_get(&keys).await?;
+            Ok(values
+		.into_iter()
+                .zip(keys)
+                .map(|(value, key)| Entry { value, key })
+                .collect())
         }
     }
 
@@ -2184,15 +2256,12 @@ mod graphql {
                 self.indices().await?
             };
 
-            let mut values = vec![];
-            for key in keys {
-                values.push(Entry {
-                    value: self.get(&key).await?,
-                    key,
-                })
-            }
-
-            Ok(values)
+            let values = self.multi_get(&keys).await?;
+            Ok(values
+		.into_iter()
+                .zip(keys)
+                .map(|(value, key)| Entry { value, key })
+                .collect())
         }
     }
 }
