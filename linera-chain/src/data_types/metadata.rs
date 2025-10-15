@@ -52,6 +52,8 @@ pub struct ChainOwnershipMetadata {
 impl From<&ChainOwnership> for ChainOwnershipMetadata {
     fn from(ownership: &ChainOwnership) -> Self {
         ChainOwnershipMetadata {
+            // Fallback to Debug format should never be needed, as ChainOwnership implements Serialize.
+            // But we include it as a safety measure for GraphQL responses to always succeed.
             ownership_json: serde_json::to_string(ownership)
                 .unwrap_or_else(|_| format!("{:?}", ownership)),
         }
@@ -68,6 +70,8 @@ pub struct ApplicationPermissionsMetadata {
 impl From<&ApplicationPermissions> for ApplicationPermissionsMetadata {
     fn from(permissions: &ApplicationPermissions) -> Self {
         ApplicationPermissionsMetadata {
+            // Fallback to Debug format should never be needed, as ApplicationPermissions implements Serialize.
+            // But we include it as a safety measure for GraphQL responses to always succeed.
             permissions_json: serde_json::to_string(permissions)
                 .unwrap_or_else(|_| format!("{:?}", permissions)),
         }
@@ -350,7 +354,8 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 required_application_ids,
             } => SystemOperationMetadata {
                 create_application: Some(CreateApplicationOperationMetadata {
-                    module_id: format!("{:?}", module_id),
+                    module_id: serde_json::to_string(module_id)
+                        .unwrap_or_else(|_| format!("{:?}", module_id)),
                     parameters_hex: hex::encode(parameters),
                     instantiation_argument_hex: hex::encode(instantiation_argument),
                     required_application_ids: required_application_ids.clone(),
@@ -365,13 +370,14 @@ impl From<&SystemOperation> for SystemOperationMetadata {
             },
             SystemOperation::VerifyBlob { blob_id } => SystemOperationMetadata {
                 verify_blob: Some(VerifyBlobMetadata {
-                    blob_id: format!("{:?}", blob_id),
+                    blob_id: blob_id.to_string(),
                 }),
                 ..SystemOperationMetadata::new("VerifyBlob")
             },
             SystemOperation::PublishModule { module_id } => SystemOperationMetadata {
                 publish_module: Some(PublishModuleMetadata {
-                    module_id: format!("{:?}", module_id),
+                    module_id: serde_json::to_string(module_id)
+                        .unwrap_or_else(|_| format!("{:?}", module_id)),
                 }),
                 ..SystemOperationMetadata::new("PublishModule")
             },
@@ -389,7 +395,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                         .iter()
                         .map(|(chain_id, stream_id, next_index)| UpdateStreamMetadata {
                             chain_id: *chain_id,
-                            stream_id: format!("{:?}", stream_id),
+                            stream_id: stream_id.to_string(),
                             next_index: *next_index as i32,
                         })
                         .collect(),
