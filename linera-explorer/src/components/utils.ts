@@ -1,7 +1,7 @@
 import JSONFormatter from 'json-formatter-js'
 import { Scalars } from '../../gql/operations'
 import { TransactionMetadata, IncomingBundle, Operation } from '../../gql/service'
-import init, { short_crypto_hash, short_app_id } from "../../pkg/linera_explorer"
+import { initSync, short_crypto_hash, short_app_id } from "../../pkg/linera_explorer"
 import { config } from '@vue/test-utils'
 
 export function json_load(id: string, data: any) {
@@ -15,7 +15,14 @@ export function operation_id(key: Scalars['OperationKey']['output']): string {
 }
 
 async function set_test_config_aux() {
-  await init()
+  // Use synchronous init for tests to avoid HTTP fetch.
+  // Dynamic import to avoid bundling Node.js modules in production.
+  const fs = await import('fs')
+  const path = await import('path')
+  const wasmPath = path.join(__dirname, '../../pkg/linera_explorer_bg.wasm')
+  const wasmBytes = fs.readFileSync(wasmPath)
+  initSync({ module: wasmBytes })
+
   config.global.mocks.short_hash = short_crypto_hash
   config.global.mocks.short_app_id = short_app_id
   config.global.mocks.json_load = json_load
