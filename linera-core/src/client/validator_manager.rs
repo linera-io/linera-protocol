@@ -61,6 +61,109 @@ pub enum RequestKey {
     CertificateForBlob(BlobId),
 }
 
+impl RequestKey {
+    /// Returns the chain ID associated with the request, if applicable.
+    fn chain_id(&self) -> Option<ChainId> {
+        match self {
+            RequestKey::Certificates { chain_id, .. } => Some(*chain_id),
+            RequestKey::CertificatesByHeights { chain_id, .. } => Some(*chain_id),
+            RequestKey::PendingBlob { chain_id, .. } => Some(*chain_id),
+            _ => None,
+        }
+    }
+
+    /// Converts certificate-related requests to a common representation of (chain_id, sorted heights).
+    ///
+    /// This helper method normalizes both `Certificates` and `CertificatesByHeights` variants
+    /// into a uniform format for easier comparison and overlap detection.
+    ///
+    /// # Returns
+    /// - `Some((chain_id, heights))` for certificate requests, where heights are sorted
+    /// - `None` for non-certificate requests (Blob, PendingBlob, CertificateForBlob)
+    fn height_range(&self) -> Option<Vec<BlockHeight>> {
+        match self {
+            RequestKey::Certificates { start, limit, .. } => {
+                let heights: Vec<BlockHeight> = (0..*limit)
+                    .map(|offset| BlockHeight(start.0 + offset))
+                    .collect();
+                Some(heights)
+            }
+            RequestKey::CertificatesByHeights { heights, .. } => Some(heights.clone()),
+            _ => None,
+        }
+    }
+
+    /// Checks if this request fully subsumes another request.
+    ///
+    /// Request A subsumes request B if A's result would contain all the data that
+    /// B's result would contain. This means B's request is redundant if A is already
+    /// in-flight or cached.
+    ///
+    /// # Examples
+    /// ```ignore
+    /// let large = RequestKey::Certificates { chain_id, start: 10, limit: 10 }; // [10..20]
+    /// let small = RequestKey::CertificatesByHeights { chain_id, heights: vec![12,13,14] };
+    /// assert!(large.subsumes(&small)); // large contains all of small's heights
+    /// ```
+    pub fn subsumes(&self, other: &RequestKey) -> bool {
+        // Different chains can't subsume each other
+        if self.chain_id() != other.chain_id() {
+            return false;
+        }
+
+        let heights1 = match self.height_range() {
+            Some(range) => range,
+            None => return self == other, // Non-certificate requests must match exactly
+        };
+        let heights2 = match other.height_range() {
+            Some(range) => range,
+            None => return false, // Can't subsume different variant types
+        };
+
+        // Check if all heights in other are contained in self
+        heights2.iter().all(|h| heights1.contains(h))
+    }
+
+    /// Attempts to extract a subset result for this request from a larger request's result.
+    ///
+    /// This is used when a request A subsumes this request B. We can extract B's result
+    /// from A's result by filtering the certificates to only those requested by B.
+    ///
+    /// # Arguments
+    /// - `from`: The key of the larger request that subsumes this one
+    /// - `result`: The result from the larger request
+    ///
+    /// # Returns
+    /// - `Some(RequestResult)` with the extracted subset if possible
+    /// - `None` if extraction is not possible (wrong variant, different chain, etc.)
+    pub fn can_extract_result(
+        &self,
+        from: &RequestKey,
+        result: &RequestResult,
+    ) -> Option<RequestResult> {
+        // Only certificate results can be extracted
+        let certificates = match result {
+            RequestResult::Certificates(Ok(certs)) => certs,
+            _ => return None,
+        };
+
+        if self.chain_id().is_none() || from.chain_id().is_none() {
+            return None;
+        }
+
+        let heights_self = self.height_range()?;
+
+        // Filter certificates to only those at the requested heights
+        let filtered: Vec<_> = certificates
+            .iter()
+            .filter(|cert| heights_self.contains(&cert.value().height()))
+            .cloned()
+            .collect();
+
+        Some(RequestResult::Certificates(Ok(filtered)))
+    }
+}
+
 /// Result types that can be shared across deduplicated requests
 #[derive(Debug, Clone)]
 pub enum RequestResult {
@@ -483,6 +586,10 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// the existing request to complete and returns its result. Otherwise, it
     /// executes the operation and broadcasts the result to all waiting callers.
     ///
+    /// This method also performs **subsumption-based deduplication**: if a larger
+    /// request that contains all the data needed by this request is already cached
+    /// or in-flight, we can extract the subset result instead of making a new request.
+    ///
     /// # Arguments
     /// - `key`: Unique identifier for the request
     /// - `operation`: Async closure that performs the actual request
@@ -495,25 +602,39 @@ impl<Env: Environment> ValidatorManager<Env> {
         F: FnOnce() -> Fut,
         Fut: Future<Output = T>,
     {
-        // Check cache first
+        // Check cache for exact match first
         {
             let cache = self.cache.read().await;
             if let Some(entry) = cache.get(&key) {
                 tracing::trace!(
                     key = ?key,
-                    "cache hit - returning cached result"
+                    "cache hit (exact match) - returning cached result"
                 );
                 return T::from((*entry.result).clone());
             }
+
+            // Check cache for subsuming requests
+            for (cached_key, entry) in cache.iter() {
+                if cached_key.subsumes(&key) {
+                    if let Some(extracted) = key.can_extract_result(cached_key, &entry.result) {
+                        tracing::trace!(
+                            key = ?key,
+                            subsumed_by = ?cached_key,
+                            "cache hit (subsumption) - extracted result from larger cached request"
+                        );
+                        return T::from(extracted);
+                    }
+                }
+            }
         }
 
-        // Check if request is already in-flight
+        // Check if exact request is already in-flight
         let mut in_flight = self.in_flight_requests.write().await;
 
         if let Some(sender) = in_flight.get(&key) {
             tracing::trace!(
                 key = ?key,
-                "deduplicating request - joining existing in-flight request"
+                "deduplicating request (exact match) - joining existing in-flight request"
             );
             let mut receiver = sender.subscribe();
             drop(in_flight);
@@ -528,6 +649,48 @@ impl<Env: Environment> ValidatorManager<Env> {
                 }
             }
         } else {
+            // Check for subsuming in-flight requests
+            for (in_flight_key, sender) in in_flight.iter() {
+                if in_flight_key.subsumes(&key) {
+                    let subsuming_key = in_flight_key.clone(); // Clone the key before dropping lock
+                    tracing::trace!(
+                        key = ?key,
+                        subsumed_by = ?subsuming_key,
+                        "deduplicating request (subsumption) - joining larger in-flight request"
+                    );
+                    let mut receiver = sender.subscribe();
+                    drop(in_flight);
+                    // Wait for result from the subsuming request
+                    match receiver.recv().await {
+                        Ok(result) => {
+                            if let Some(extracted) = key.can_extract_result(&subsuming_key, &result)
+                            {
+                                tracing::trace!(
+                                    key = ?key,
+                                    "extracted subset result from larger in-flight request"
+                                );
+                                return T::from(extracted);
+                            } else {
+                                // Extraction failed, fall through to execute our own request
+                                tracing::trace!(
+                                    key = ?key,
+                                    "failed to extract from subsuming request, will execute independently"
+                                );
+                            }
+                        }
+                        Err(_) => {
+                            tracing::trace!(
+                                key = ?key,
+                                "subsuming in-flight request sender dropped"
+                            );
+                        }
+                    }
+                    // Re-acquire lock since we dropped it
+                    in_flight = self.in_flight_requests.write().await;
+                    break;
+                }
+            }
+
             // Create new broadcast channel for this request
             let (sender, _receiver) = broadcast::channel(1);
             in_flight.insert(key.clone(), sender);
@@ -968,5 +1131,59 @@ impl<Env: Environment> NodeInfo<Env> {
             (self.alpha * success_value) + ((1.0 - self.alpha) * self.ema_success_rate);
 
         self.total_requests += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
+
+    use super::RequestKey;
+
+    #[test]
+    fn test_subsumes_complete_containment() {
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let large = RequestKey::Certificates {
+            chain_id,
+            start: BlockHeight(10),
+            limit: 10,
+        }; // [10..20]
+        let small = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: vec![BlockHeight(12), BlockHeight(13), BlockHeight(14)],
+        };
+        assert!(large.subsumes(&small));
+        assert!(!small.subsumes(&large));
+    }
+
+    #[test]
+    fn test_subsumes_partial_containment() {
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let req1 = RequestKey::Certificates {
+            chain_id,
+            start: BlockHeight(10),
+            limit: 5,
+        }; // [10,11,12,13,14]
+        let req2 = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: vec![BlockHeight(12), BlockHeight(15)], // 15 is outside range
+        };
+        assert!(!req1.subsumes(&req2)); // Can't subsume, 15 is not in req1
+    }
+
+    #[test]
+    fn test_subsumes_different_chains() {
+        let chain1 = ChainId(CryptoHash::test_hash("chain1"));
+        let chain2 = ChainId(CryptoHash::test_hash("chain2"));
+        let req1 = RequestKey::Certificates {
+            chain_id: chain1,
+            start: BlockHeight(10),
+            limit: 10,
+        };
+        let req2 = RequestKey::CertificatesByHeights {
+            chain_id: chain2,
+            heights: vec![BlockHeight(12)],
+        };
+        assert!(!req1.subsumes(&req2));
     }
 }
