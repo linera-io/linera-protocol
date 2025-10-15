@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::{Bound, Range, RangeBounds};
+use std::{
+    collections::BTreeMap,
+    ops::{Bound, Range, RangeBounds},
+};
 
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -245,24 +248,30 @@ where
                 result.push(self.new_values.get(index).cloned());
             }
         } else {
-            let mut keys = Vec::new();
-            let mut positions = Vec::new();
+            let mut index_to_positions = BTreeMap::<usize, Vec<usize>>::new();
             for (pos, index) in indices.into_iter().enumerate() {
                 if index < self.stored_count {
-                    let key = self
-                        .context
-                        .base_key()
-                        .derive_tag_key(KeyTag::Index as u8, &index)?;
-                    keys.push(key);
-                    positions.push(pos);
+                    index_to_positions.entry(index).or_default().push(pos);
                     result.push(None);
                 } else {
                     result.push(self.new_values.get(index - self.stored_count).cloned());
                 }
             }
+            let mut keys = Vec::new();
+            let mut vec_positions = Vec::new();
+            for (index, positions) in index_to_positions {
+                let key = self
+                    .context
+                    .base_key()
+                    .derive_tag_key(KeyTag::Index as u8, &index)?;
+                keys.push(key);
+                vec_positions.push(positions);
+            }
             let values = self.context.store().read_multi_values(keys).await?;
-            for (pos, value) in positions.into_iter().zip(values) {
-                *result.get_mut(pos).unwrap() = value;
+            for (positions, value) in vec_positions.into_iter().zip(values) {
+                for position in positions {
+                    *result.get_mut(position).unwrap() = value.clone();
+                }
             }
         }
         Ok(result)
