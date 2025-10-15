@@ -4517,7 +4517,9 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
     ) -> Result<JoinHandle<Result<()>>> {
         let result = async {
             loop {
-                client.transfer(Amount::ONE, source, target).await?;
+                client
+                    .transfer(Amount::from_millis(500), source, target)
+                    .await?;
                 notifier.send(()).await?;
             }
         }
