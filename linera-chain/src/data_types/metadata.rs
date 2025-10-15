@@ -105,6 +105,27 @@ pub struct SystemOperationMetadata {
     pub update_streams: Option<Vec<UpdateStreamMetadata>>,
 }
 
+impl SystemOperationMetadata {
+    /// Creates a new metadata with the given operation type and all fields set to None.
+    fn new(system_operation_type: &str) -> Self {
+        SystemOperationMetadata {
+            system_operation_type: system_operation_type.to_string(),
+            transfer: None,
+            claim: None,
+            open_chain: None,
+            change_ownership: None,
+            change_application_permissions: None,
+            admin: None,
+            create_application: None,
+            publish_data_blob: None,
+            verify_blob: None,
+            publish_module: None,
+            epoch: None,
+            update_streams: None,
+        }
+    }
+}
+
 /// Transfer operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct TransferOperationMetadata {
@@ -258,23 +279,12 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 recipient,
                 amount,
             } => SystemOperationMetadata {
-                system_operation_type: "Transfer".to_string(),
                 transfer: Some(TransferOperationMetadata {
                     owner: *owner,
                     recipient: *recipient,
                     amount: *amount,
                 }),
-                claim: None,
-                open_chain: None,
-                change_ownership: None,
-                change_application_permissions: None,
-                admin: None,
-                create_application: None,
-                publish_data_blob: None,
-                verify_blob: None,
-                publish_module: None,
-                epoch: None,
-                update_streams: None,
+                ..SystemOperationMetadata::new("Transfer")
             },
             SystemOperation::Claim {
                 owner,
@@ -282,29 +292,15 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 recipient,
                 amount,
             } => SystemOperationMetadata {
-                system_operation_type: "Claim".to_string(),
-                transfer: None,
                 claim: Some(ClaimOperationMetadata {
                     owner: *owner,
                     target_id: *target_id,
                     recipient: *recipient,
                     amount: *amount,
                 }),
-                open_chain: None,
-                change_ownership: None,
-                change_application_permissions: None,
-                admin: None,
-                create_application: None,
-                publish_data_blob: None,
-                verify_blob: None,
-                publish_module: None,
-                epoch: None,
-                update_streams: None,
+                ..SystemOperationMetadata::new("Claim")
             },
             SystemOperation::OpenChain(config) => SystemOperationMetadata {
-                system_operation_type: "OpenChain".to_string(),
-                transfer: None,
-                claim: None,
                 open_chain: Some(OpenChainOperationMetadata {
                     balance: config.balance,
                     ownership: ChainOwnershipMetadata::from(&config.ownership),
@@ -312,31 +308,9 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                         &config.application_permissions,
                     ),
                 }),
-                change_ownership: None,
-                change_application_permissions: None,
-                admin: None,
-                create_application: None,
-                publish_data_blob: None,
-                verify_blob: None,
-                publish_module: None,
-                epoch: None,
-                update_streams: None,
+                ..SystemOperationMetadata::new("OpenChain")
             },
-            SystemOperation::CloseChain => SystemOperationMetadata {
-                system_operation_type: "CloseChain".to_string(),
-                transfer: None,
-                claim: None,
-                open_chain: None,
-                change_ownership: None,
-                change_application_permissions: None,
-                admin: None,
-                create_application: None,
-                publish_data_blob: None,
-                verify_blob: None,
-                publish_module: None,
-                epoch: None,
-                update_streams: None,
-            },
+            SystemOperation::CloseChain => SystemOperationMetadata::new("CloseChain"),
             SystemOperation::ChangeOwnership {
                 super_owners,
                 owners,
@@ -344,10 +318,6 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 open_multi_leader_rounds,
                 timeout_config,
             } => SystemOperationMetadata {
-                system_operation_type: "ChangeOwnership".to_string(),
-                transfer: None,
-                claim: None,
-                open_chain: None,
                 change_ownership: Some(ChangeOwnershipOperationMetadata {
                     super_owners: super_owners.clone(),
                     owners: owners
@@ -361,46 +331,17 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                     open_multi_leader_rounds: *open_multi_leader_rounds,
                     timeout_config: TimeoutConfigMetadata::from(timeout_config),
                 }),
-                change_application_permissions: None,
-                admin: None,
-                create_application: None,
-                publish_data_blob: None,
-                verify_blob: None,
-                publish_module: None,
-                epoch: None,
-                update_streams: None,
+                ..SystemOperationMetadata::new("ChangeOwnership")
             },
             SystemOperation::ChangeApplicationPermissions(permissions) => SystemOperationMetadata {
-                system_operation_type: "ChangeApplicationPermissions".to_string(),
-                transfer: None,
-                claim: None,
-                open_chain: None,
-                change_ownership: None,
                 change_application_permissions: Some(ChangeApplicationPermissionsMetadata {
                     permissions: ApplicationPermissionsMetadata::from(permissions),
                 }),
-                admin: None,
-                create_application: None,
-                publish_data_blob: None,
-                verify_blob: None,
-                publish_module: None,
-                epoch: None,
-                update_streams: None,
+                ..SystemOperationMetadata::new("ChangeApplicationPermissions")
             },
             SystemOperation::Admin(admin_op) => SystemOperationMetadata {
-                system_operation_type: "Admin".to_string(),
-                transfer: None,
-                claim: None,
-                open_chain: None,
-                change_ownership: None,
-                change_application_permissions: None,
                 admin: Some(AdminOperationMetadata::from(admin_op)),
-                create_application: None,
-                publish_data_blob: None,
-                verify_blob: None,
-                publish_module: None,
-                epoch: None,
-                update_streams: None,
+                ..SystemOperationMetadata::new("Admin")
             },
             SystemOperation::CreateApplication {
                 module_id,
@@ -408,119 +349,41 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 instantiation_argument,
                 required_application_ids,
             } => SystemOperationMetadata {
-                system_operation_type: "CreateApplication".to_string(),
-                transfer: None,
-                claim: None,
-                open_chain: None,
-                change_ownership: None,
-                change_application_permissions: None,
-                admin: None,
                 create_application: Some(CreateApplicationOperationMetadata {
                     module_id: format!("{:?}", module_id),
                     parameters_hex: hex::encode(parameters),
                     instantiation_argument_hex: hex::encode(instantiation_argument),
                     required_application_ids: required_application_ids.clone(),
                 }),
-                publish_data_blob: None,
-                verify_blob: None,
-                publish_module: None,
-                epoch: None,
-                update_streams: None,
+                ..SystemOperationMetadata::new("CreateApplication")
             },
             SystemOperation::PublishDataBlob { blob_hash } => SystemOperationMetadata {
-                system_operation_type: "PublishDataBlob".to_string(),
-                transfer: None,
-                claim: None,
-                open_chain: None,
-                change_ownership: None,
-                change_application_permissions: None,
-                admin: None,
-                create_application: None,
                 publish_data_blob: Some(PublishDataBlobMetadata {
                     blob_hash: *blob_hash,
                 }),
-                verify_blob: None,
-                publish_module: None,
-                epoch: None,
-                update_streams: None,
+                ..SystemOperationMetadata::new("PublishDataBlob")
             },
             SystemOperation::VerifyBlob { blob_id } => SystemOperationMetadata {
-                system_operation_type: "VerifyBlob".to_string(),
-                transfer: None,
-                claim: None,
-                open_chain: None,
-                change_ownership: None,
-                change_application_permissions: None,
-                admin: None,
-                create_application: None,
-                publish_data_blob: None,
                 verify_blob: Some(VerifyBlobMetadata {
                     blob_id: format!("{:?}", blob_id),
                 }),
-                publish_module: None,
-                epoch: None,
-                update_streams: None,
+                ..SystemOperationMetadata::new("VerifyBlob")
             },
             SystemOperation::PublishModule { module_id } => SystemOperationMetadata {
-                system_operation_type: "PublishModule".to_string(),
-                transfer: None,
-                claim: None,
-                open_chain: None,
-                change_ownership: None,
-                change_application_permissions: None,
-                admin: None,
-                create_application: None,
-                publish_data_blob: None,
-                verify_blob: None,
                 publish_module: Some(PublishModuleMetadata {
                     module_id: format!("{:?}", module_id),
                 }),
-                epoch: None,
-                update_streams: None,
+                ..SystemOperationMetadata::new("PublishModule")
             },
             SystemOperation::ProcessNewEpoch(epoch) => SystemOperationMetadata {
-                system_operation_type: "ProcessNewEpoch".to_string(),
-                transfer: None,
-                claim: None,
-                open_chain: None,
-                change_ownership: None,
-                change_application_permissions: None,
-                admin: None,
-                create_application: None,
-                publish_data_blob: None,
-                verify_blob: None,
-                publish_module: None,
                 epoch: Some(epoch.0 as i32),
-                update_streams: None,
+                ..SystemOperationMetadata::new("ProcessNewEpoch")
             },
             SystemOperation::ProcessRemovedEpoch(epoch) => SystemOperationMetadata {
-                system_operation_type: "ProcessRemovedEpoch".to_string(),
-                transfer: None,
-                claim: None,
-                open_chain: None,
-                change_ownership: None,
-                change_application_permissions: None,
-                admin: None,
-                create_application: None,
-                publish_data_blob: None,
-                verify_blob: None,
-                publish_module: None,
                 epoch: Some(epoch.0 as i32),
-                update_streams: None,
+                ..SystemOperationMetadata::new("ProcessRemovedEpoch")
             },
             SystemOperation::UpdateStreams(streams) => SystemOperationMetadata {
-                system_operation_type: "UpdateStreams".to_string(),
-                transfer: None,
-                claim: None,
-                open_chain: None,
-                change_ownership: None,
-                change_application_permissions: None,
-                admin: None,
-                create_application: None,
-                publish_data_blob: None,
-                verify_blob: None,
-                publish_module: None,
-                epoch: None,
                 update_streams: Some(
                     streams
                         .iter()
@@ -531,6 +394,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                         })
                         .collect(),
                 ),
+                ..SystemOperationMetadata::new("UpdateStreams")
             },
         }
     }
