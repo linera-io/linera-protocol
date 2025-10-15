@@ -353,7 +353,7 @@ impl<Env: Environment> ValidatorManager<Env> {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn download_blob(
+    async fn download_blob(
         &self,
         peers: &[RemoteNode<Env::ValidatorNode>],
         blob_id: BlobId,
@@ -422,19 +422,20 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// Wraps a request operation with performance tracking and capacity management.
     ///
     /// This method:
-    /// 1. Selects the best available peer based on performance scores
-    /// 2. Acquires a request slot (fails if no peers are available)
-    /// 3. Executes the provided operation with the selected peer
-    /// 4. Measures response time
-    /// 5. Updates node metrics based on success/failure
-    /// 6. Releases the request slot
+    /// 1. Acquires a request slot (blocks asynchronously until one is available)
+    /// 2. Executes the provided operation with the selected peer
+    /// 3. Measures response time
+    /// 4. Updates node metrics based on success/failure
+    /// 5. Releases the request slot
     ///
     /// # Arguments
+    /// - `peer`: The remote node to execute the operation on
     /// - `operation`: Async closure that performs the actual request with the selected peer
     ///
-    /// # Errors
-    /// Returns `NodeError::WorkerError` if no peers are available or all are at capacity.
-    /// Otherwise, propagates any error from the operation.
+    /// # Behavior
+    /// If no slot is available, this method will wait asynchronously (without polling)
+    /// until another request completes and releases its slot. The task will be efficiently
+    /// suspended and woken by the async runtime using notification mechanisms.
     async fn track_request<T, F, Fut>(
         &self,
         peer: RemoteNode<Env::ValidatorNode>,
@@ -448,16 +449,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         let public_key = peer.public_key;
 
         // Acquire request slot
-        {
-            let nodes = self.nodes.read().await;
-            if let Some(info) = nodes.get(&public_key) {
-                if !info.acquire_request_slot(self.max_requests_per_node).await {
-                    return Err(NodeError::WorkerError {
-                        error: "Node is at maximum request capacity".to_string(),
-                    });
-                }
-            }
-        }
+        self.try_acquire_slot(&public_key).await;
 
         // Execute the operation
         let result = operation(peer).await;
@@ -686,6 +678,61 @@ impl<Env: Environment> ValidatorManager<Env> {
         }
     }
 
+    /// Attempts to acquire a request slot for a specific peer, blocking until one is available.
+    ///
+    /// This method uses async notifications to efficiently wait for slot availability without
+    /// polling. When a slot is not immediately available, the task will be suspended and woken
+    /// by the async runtime when another task releases a slot.
+    ///
+    /// # Arguments
+    /// - `peer_key`: The public key of the validator peer
+    ///
+    /// # Behavior
+    /// The method will:
+    /// - Subscribe to slot release notifications first (critical for avoiding missed notifications)
+    /// - Try to acquire a slot
+    /// - If unsuccessful, wait to be notified when a slot becomes available
+    /// - Retry acquisition when notified
+    /// - Continue until a slot is successfully acquired
+    async fn try_acquire_slot(&self, peer_key: &ValidatorPublicKey) {
+        // CRITICAL: Get the notifier and subscribe BEFORE checking availability.
+        // This ensures we don't miss any notifications that happen between
+        // checking and waiting. We clone the Arc to the Notify so we can
+        // hold it beyond the lock scope.
+        let notify = {
+            let nodes = self.nodes.read().await;
+            nodes.get(peer_key).map(|info| info.slot_available.clone())
+        };
+
+        // If peer doesn't exist, return immediately
+        let notify = match notify {
+            Some(n) => n,
+            None => return,
+        };
+
+        loop {
+            // Subscribe to notifications before trying to acquire
+            let notified = notify.notified();
+
+            // Try to acquire a slot
+            let nodes = self.nodes.read().await;
+            let slot_available = if let Some(info) = nodes.get(peer_key) {
+                info.acquire_request_slot(self.max_requests_per_node).await
+            } else {
+                false
+            };
+            drop(nodes);
+
+            // If we acquired a slot, return immediately
+            if slot_available {
+                return;
+            }
+            // Wait to be notified when a slot becomes available
+            notified.await;
+            // Loop and retry acquisition
+        }
+    }
+
     /// Adds a new peer to the manager if it doesn't already exist.
     async fn add_peer(&self, node: RemoteNode<Env::ValidatorNode>) {
         let mut nodes = self.nodes.write().await;
@@ -767,6 +814,10 @@ struct NodeInfo<Env: Environment> {
     /// Used to prevent overwhelming individual nodes with too many parallel requests
     in_flight_requests: Arc<tokio::sync::RwLock<usize>>,
 
+    /// Notifier for slot releases. Tasks waiting for a slot to become available
+    /// will be woken when a request completes and releases its slot.
+    slot_available: Arc<tokio::sync::Notify>,
+
     /// Total number of requests processed (for monitoring and cold-start handling)
     total_requests: u64,
 
@@ -817,6 +868,7 @@ impl<Env: Environment> NodeInfo<Env> {
             ema_latency_ms: 100.0, // Start with reasonable latency expectation
             ema_success_rate: 1.0, // Start optimistically with 100% success
             in_flight_requests: Arc::new(tokio::sync::RwLock::new(0)),
+            slot_available: Arc::new(tokio::sync::Notify::new()),
             total_requests: 0,
             weights,
             alpha: alpha.clamp(0.01, 0.5), // Ensure alpha is in reasonable range
@@ -887,9 +939,12 @@ impl<Env: Environment> NodeInfo<Env> {
     ///
     /// Should be called when a request completes (successfully or not) to free
     /// capacity for new requests. Uses saturating subtraction to prevent underflow.
+    /// Notifies one waiting task that a slot is now available.
     async fn release_request_slot(&self) {
         let mut current = self.in_flight_requests.write().await;
         *current = current.saturating_sub(1);
+        drop(current); // Release the lock before notifying
+        self.slot_available.notify_one();
     }
 
     /// Updates performance metrics using Exponential Moving Average.
