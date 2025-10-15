@@ -225,7 +225,14 @@ mod from {
                         .timeout_config
                         .fast_round_ms
                         .as_ref()
-                        .and_then(|s| s.parse::<u64>().ok())
+                        .map(|s| {
+                            s.parse::<u64>().map_err(|_| {
+                                ConversionError::UnexpectedCertificateType(
+                                    "Invalid fast_round_ms value".to_string(),
+                                )
+                            })
+                        })
+                        .transpose()?
                         .map(|ms| TimeDelta::from_micros(ms * 1000)),
                     base_timeout: TimeDelta::from_micros(
                         change_ownership
