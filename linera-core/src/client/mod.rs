@@ -621,7 +621,7 @@ impl<Env: Environment> Client<Env> {
         let certificate = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
             .await?;
-        self.receive_certificate(certificate.clone(), ReceiveCertificateMode::AlreadyChecked)
+        self.receive_certificate_no_check(certificate.clone())
             .await?;
         Ok(certificate)
     }
@@ -735,22 +735,16 @@ impl<Env: Environment> Client<Env> {
         Ok(certificate)
     }
 
-    /// Processes the confirmed block certificate in the local node. Also downloads and processes
-    /// all ancestors that are still missing.
+    /// Processes the confirmed block certificate in the local node without checking signatures.
+    /// Also downloads and processes all ancestors that are still missing.
     #[instrument(level = "trace", skip_all)]
-    async fn receive_certificate(
+    async fn receive_certificate_no_check(
         &self,
         certificate: ConfirmedBlockCertificate,
-        mode: ReceiveCertificateMode,
     ) -> Result<(), ChainClientError> {
         let certificate = Box::new(certificate);
         let block = certificate.block();
 
-        // Verify the certificate before doing any expensive networking.
-        let (max_epoch, committees) = self.admin_committees().await?;
-        if let ReceiveCertificateMode::NeedsCheck = mode {
-            Self::check_certificate(max_epoch, &committees, &certificate)?.into_result()?;
-        }
         // Recover history from the network.
         self.download_certificates(block.header.chain_id, block.header.height)
             .await?;
