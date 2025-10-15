@@ -269,8 +269,11 @@ where
             }
             let values = self.context.store().read_multi_values(keys).await?;
             for (positions, value) in vec_positions.into_iter().zip(values) {
-                for position in positions {
-                    *result.get_mut(position).unwrap() = value.clone();
+                if let Some((&last, rest)) = positions.split_last() {
+                    for &position in rest {
+                        *result.get_mut(position).unwrap() = value.clone();
+                    }
+                    *result.get_mut(last).unwrap() = value;
                 }
             }
         }
