@@ -9,6 +9,15 @@ A unique identifier for a user or an application.
 scalar AccountOwner
 
 """
+Admin operation metadata.
+"""
+type AdminOperationMetadata {
+	adminOperationType: String!
+	epoch: Int
+	blobHash: CryptoHash
+}
+
+"""
 A non-negative amount of tokens.
 """
 scalar Amount
@@ -60,6 +69,16 @@ input ApplicationPermissions {
 	These applications are allowed to perform HTTP requests.
 	"""
 	makeHttpRequests: [ApplicationId!] = null
+}
+
+"""
+Application permissions metadata for GraphQL.
+"""
+type ApplicationPermissionsMetadata {
+	"""
+	JSON serialized `ApplicationPermissions`.
+	"""
+	permissionsJson: String!
 }
 
 """
@@ -296,6 +315,16 @@ Represents the owner(s) of a chain
 """
 scalar ChainOwnership
 
+"""
+Chain ownership metadata for GraphQL.
+"""
+type ChainOwnershipMetadata {
+	"""
+	JSON serialized `ChainOwnership` for full representation.
+	"""
+	ownershipJson: String!
+}
+
 type ChainStateExtendedView {
 	chainId: ChainId!
 	"""
@@ -407,6 +436,34 @@ type Chains {
 }
 
 """
+Change application permissions operation metadata.
+"""
+type ChangeApplicationPermissionsMetadata {
+	permissions: ApplicationPermissionsMetadata!
+}
+
+"""
+Change ownership operation metadata.
+"""
+type ChangeOwnershipOperationMetadata {
+	superOwners: [AccountOwner!]!
+	owners: [OwnerWithWeight!]!
+	multiLeaderRounds: Int!
+	openMultiLeaderRounds: Boolean!
+	timeoutConfig: TimeoutConfigMetadata!
+}
+
+"""
+Claim operation metadata.
+"""
+type ClaimOperationMetadata {
+	owner: AccountOwner!
+	targetId: ChainId!
+	recipient: Account!
+	amount: Amount!
+}
+
+"""
 A set of validators (identified by their public keys) and their voting rights.
 """
 input Committee {
@@ -436,6 +493,25 @@ type ConfirmedBlock {
 	block: Block!
 	status: String!
 	hash: CryptoHash!
+}
+
+"""
+Create application operation metadata.
+"""
+type CreateApplicationOperationMetadata {
+	moduleId: String!
+	parametersHex: String!
+	instantiationArgumentHex: String!
+	requiredApplicationIds: [ApplicationId!]!
+}
+
+"""
+Credit message metadata.
+"""
+type CreditMessageMetadata {
+	target: AccountOwner!
+	amount: Amount!
+	source: AccountOwner!
 }
 
 """
@@ -757,6 +833,28 @@ The kind of outgoing message being sent
 scalar MessageKind
 
 """
+Structured representation of a message for GraphQL.
+"""
+type MessageMetadata {
+	"""
+	The type of message: "System" or "User"
+	"""
+	messageType: String!
+	"""
+	For user messages, the application ID
+	"""
+	applicationId: ApplicationId
+	"""
+	For user messages, the serialized bytes (as a hex string for GraphQL)
+	"""
+	userBytesHex: String
+	"""
+	For system messages, structured representation
+	"""
+	systemMessage: SystemMessageMetadata
+}
+
+"""
 A unique identifier for an application module
 """
 scalar ModuleId
@@ -887,6 +985,15 @@ Notify that a chain has a new certified block or a new message
 """
 scalar Notification
 
+"""
+Open chain operation metadata.
+"""
+type OpenChainOperationMetadata {
+	balance: Amount!
+	ownership: ChainOwnershipMetadata!
+	applicationPermissions: ApplicationPermissionsMetadata!
+}
+
 type Operation {
 	"""
 	The type of operation: "System" or "User"
@@ -901,9 +1008,9 @@ type Operation {
 	"""
 	userBytesHex: String
 	"""
-	For system operations, the serialized bytes (as a hex string for GraphQL)
+	For system operations, structured representation
 	"""
-	systemBytesHex: String
+	systemOperation: SystemOperationMetadata
 }
 
 """
@@ -968,6 +1075,14 @@ type OutgoingMessage {
 }
 
 """
+Owner with weight metadata.
+"""
+type OwnerWithWeight {
+	owner: AccountOwner!
+	weight: String!
+}
+
+"""
 The pending blobs belonging to a block that can't be processed without them.
 """
 type PendingBlobsView {
@@ -1017,6 +1132,24 @@ type PostedMessage {
 	The message itself.
 	"""
 	message: Message!
+	"""
+	Structured message metadata for GraphQL.
+	"""
+	messageMetadata: MessageMetadata!
+}
+
+"""
+Publish data blob operation metadata.
+"""
+type PublishDataBlobMetadata {
+	blobHash: CryptoHash!
+}
+
+"""
+Publish module operation metadata.
+"""
+type PublishModuleMetadata {
+	moduleId: String!
 }
 
 type QueryRoot {
@@ -1125,6 +1258,105 @@ type SystemExecutionStateView {
 }
 
 """
+Structured representation of a system message for GraphQL.
+"""
+type SystemMessageMetadata {
+	"""
+	The type of system message
+	"""
+	systemMessageType: String!
+	"""
+	Credit message details
+	"""
+	credit: CreditMessageMetadata
+	"""
+	Withdraw message details
+	"""
+	withdraw: WithdrawMessageMetadata
+}
+
+"""
+Structured representation of a system operation for GraphQL.
+"""
+type SystemOperationMetadata {
+	"""
+	The type of system operation
+	"""
+	systemOperationType: String!
+	"""
+	Transfer operation details
+	"""
+	transfer: TransferOperationMetadata
+	"""
+	Claim operation details
+	"""
+	claim: ClaimOperationMetadata
+	"""
+	Open chain operation details
+	"""
+	openChain: OpenChainOperationMetadata
+	"""
+	Change ownership operation details
+	"""
+	changeOwnership: ChangeOwnershipOperationMetadata
+	"""
+	Change application permissions operation details
+	"""
+	changeApplicationPermissions: ChangeApplicationPermissionsMetadata
+	"""
+	Admin operation details
+	"""
+	admin: AdminOperationMetadata
+	"""
+	Create application operation details
+	"""
+	createApplication: CreateApplicationOperationMetadata
+	"""
+	Publish data blob operation details
+	"""
+	publishDataBlob: PublishDataBlobMetadata
+	"""
+	Verify blob operation details
+	"""
+	verifyBlob: VerifyBlobMetadata
+	"""
+	Publish module operation details
+	"""
+	publishModule: PublishModuleMetadata
+	"""
+	Epoch operation details (`ProcessNewEpoch`, `ProcessRemovedEpoch`)
+	"""
+	epoch: Int
+	"""
+	`UpdateStreams` operation details
+	"""
+	updateStreams: [UpdateStreamMetadata!]
+}
+
+"""
+Timeout configuration metadata for GraphQL.
+"""
+type TimeoutConfigMetadata {
+	"""
+	The duration of the fast round in milliseconds.
+	"""
+	fastRoundMs: String
+	"""
+	The duration of the first single-leader and all multi-leader rounds in milliseconds.
+	"""
+	baseTimeoutMs: String!
+	"""
+	The duration by which the timeout increases after each single-leader round in milliseconds.
+	"""
+	timeoutIncrementMs: String!
+	"""
+	The age of an incoming tracked or protected message after which validators start
+	transitioning to fallback mode, in milliseconds.
+	"""
+	fallbackDurationMs: String!
+}
+
+"""
 A timestamp, in microseconds since the Unix epoch
 """
 scalar Timestamp
@@ -1161,9 +1393,43 @@ type TransactionMetadata {
 	operation: Operation
 }
 
+"""
+Transfer operation metadata.
+"""
+type TransferOperationMetadata {
+	owner: AccountOwner!
+	recipient: Account!
+	amount: Amount!
+}
+
+"""
+Update stream metadata.
+"""
+type UpdateStreamMetadata {
+	chainId: ChainId!
+	streamId: String!
+	nextIndex: Int!
+}
+
+"""
+Verify blob operation metadata.
+"""
+type VerifyBlobMetadata {
+	blobId: String!
+}
+
 scalar VersionInfo
 
 scalar VmRuntime
+
+"""
+Withdraw message metadata.
+"""
+type WithdrawMessageMetadata {
+	owner: AccountOwner!
+	amount: Amount!
+	recipient: Account!
+}
 
 """
 Directs the executor to include this field or fragment only when the `if` argument is true.

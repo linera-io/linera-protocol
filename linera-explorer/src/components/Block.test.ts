@@ -1,7 +1,9 @@
 import { mount } from '@vue/test-utils'
+import { set_test_config } from './utils'
 import Block from './Block.vue'
 
-test('Block mounting', () => {
+test('Block mounting', async () => {
+  await set_test_config()
   mount(Block, {
     props: {
       title: 'Block',
@@ -67,7 +69,13 @@ test('Block mounting', () => {
                     message: { System: { BytecodePublished: { operation_index: 0 } } },
                     grant: "0.01",
                     index: 4,
-                    kind: "Tracked"
+                    kind: "Tracked",
+                    messageMetadata: {
+                      messageType: "System",
+                      applicationId: null,
+                      userBytesHex: null,
+                      systemMessage: null
+                    }
                   }],
                   transactionIndex: 0,
                   timestamp: 1694097510206912
