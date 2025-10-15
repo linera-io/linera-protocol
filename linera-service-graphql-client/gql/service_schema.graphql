@@ -383,7 +383,7 @@ type ChainStateExtendedView {
 	"""
 	Sender chain and height of all certified blocks known as a receiver (local ordering).
 	"""
-	receivedLog: LogView_ChainAndHeight_3fe3c8bf!
+	receivedLog: LogView_ChainAndHeight_7af83576!
 	"""
 	The number of `received_log` entries we have synchronized, for each validator.
 	"""
@@ -690,12 +690,12 @@ type InboxStateView {
 	"""
 	These bundles have been added and are waiting to be removed.
 	"""
-	addedBundles: QueueView_MessageBundle_53ccd442!
+	addedBundles: QueueView_MessageBundle_f4399f0b!
 	"""
 	These bundles have been removed by anticipation and are waiting to be added.
 	At least one of `added_bundles` and `removed_bundles` should be empty.
 	"""
-	removedBundles: QueueView_MessageBundle_53ccd442!
+	removedBundles: QueueView_MessageBundle_f4399f0b!
 }
 
 """
@@ -735,7 +735,7 @@ A scalar that can represent any JSON Object value.
 """
 scalar JSONObject
 
-type LogView_ChainAndHeight_3fe3c8bf {
+type LogView_ChainAndHeight_7af83576 {
 	count: Int!
 	entries(start: Int, end: Int): [ChainAndHeight!]!
 }
@@ -1403,7 +1403,7 @@ type QueryRoot {
 	version: VersionInfo!
 }
 
-type QueueView_MessageBundle_53ccd442 {
+type QueueView_MessageBundle_f4399f0b {
 	count: Int!
 	entries(count: Int): [MessageBundle!]!
 }
