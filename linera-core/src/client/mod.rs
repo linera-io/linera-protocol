@@ -153,8 +153,8 @@ pub struct Client<Env: Environment> {
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
     local_node: LocalNodeClient<Env::Storage>,
-    /// Remote nodes to communicate with.
-    remote_nodes: ValidatorManager<Env>,
+    /// Manages the requests sent to validator nodes.
+    validator_manager: ValidatorManager<Env>,
     /// The admin chain ID.
     admin_id: ChainId,
     /// Chains that should be tracked by the client.
@@ -194,12 +194,12 @@ impl<Env: Environment> Client<Env> {
         .with_chain_worker_ttl(chain_worker_ttl)
         .with_sender_chain_worker_ttl(sender_chain_worker_ttl);
         let local_node = LocalNodeClient::new(state);
-        let remote_nodes = ValidatorManager::new(vec![]);
+        let validator_manager = ValidatorManager::new(vec![]);
 
         Self {
             environment,
             local_node,
-            remote_nodes,
+            validator_manager,
             chains: papaya::HashMap::new(),
             admin_id,
             tracked_chains,
@@ -357,7 +357,7 @@ impl<Env: Environment> Client<Env> {
                 .min(self.options.certificate_download_batch_size);
 
             let certificates = self
-                .remote_nodes
+                .validator_manager
                 .with_peer(
                     RequestKey::Certificates {
                         chain_id,
@@ -389,7 +389,7 @@ impl<Env: Environment> Client<Env> {
         self.local_node
             .store_blobs(
                 &self
-                    .remote_nodes
+                    .validator_manager
                     .download_blobs(
                         &[remote_node.clone()],
                         blob_ids,
@@ -426,9 +426,9 @@ impl<Env: Environment> Client<Env> {
             .await
         {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                self.remote_nodes.add_peer(remote_node.clone()).await;
+                self.validator_manager.add_peer(remote_node.clone()).await;
                 let blobs = self
-                    .remote_nodes
+                    .validator_manager
                     .download_blobs(
                         &[remote_node.clone()],
                         &blob_ids,
@@ -714,7 +714,7 @@ impl<Env: Environment> Client<Env> {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
                     let blobs = self
-                        .remote_nodes
+                        .validator_manager
                         .download_blobs(
                             &self.validator_nodes().await?,
                             blob_ids,
@@ -760,7 +760,7 @@ impl<Env: Environment> Client<Env> {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
                     let blobs = self
-                        .remote_nodes
+                        .validator_manager
                         .download_blobs(&nodes, blob_ids, self.options.blob_download_timeout)
                         .await?
                         .ok_or(err)?;
@@ -824,7 +824,7 @@ impl<Env: Environment> Client<Env> {
                         heights: remote_heights.clone(),
                     };
                     let certificates = self
-                        .remote_nodes
+                        .validator_manager
                         .with_peer(request_key, remote_node, |peer| async move {
                             peer.download_certificates_by_heights(sender_chain_id, remote_heights)
                                 .await
@@ -989,7 +989,7 @@ impl<Env: Environment> Client<Env> {
                 heights: vec![current_height],
             };
             let downloaded = self
-                .remote_nodes
+                .validator_manager
                 .with_peer(request_key, remote_node.clone(), |peer| async move {
                     peer.download_certificates_by_heights(sender_chain_id, vec![current_height])
                         .await
@@ -1175,11 +1175,11 @@ impl<Env: Environment> Client<Env> {
                 if let LocalNodeError::BlobsNotFound(_) = &err {
                     let required_blob_ids = proposal.required_blob_ids().collect::<Vec<_>>();
                     if !required_blob_ids.is_empty() {
-                        self.remote_nodes.add_peer(remote_node.clone()).await;
+                        self.validator_manager.add_peer(remote_node.clone()).await;
                         let mut blobs = Vec::new();
                         for blob_id in required_blob_ids {
                             let blob_content = match self
-                                .remote_nodes
+                                .validator_manager
                                 .with_peer(
                                     RequestKey::Blob(blob_id),
                                     remote_node.clone(),
@@ -1284,7 +1284,7 @@ impl<Env: Environment> Client<Env> {
                 for blob_id in blob_ids {
                     let key = RequestKey::PendingBlob { chain_id, blob_id };
                     let blob_content = self
-                        .remote_nodes
+                        .validator_manager
                         .with_peer(key, remote_node.clone(), |peer| async move {
                             peer.node.download_pending_blob(chain_id, blob_id).await
                         })
@@ -1312,13 +1312,15 @@ impl<Env: Environment> Client<Env> {
         let timeout = self.options.blob_download_timeout;
         // Deduplicate IDs.
         let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
-        self.remote_nodes.add_peers(remote_nodes.to_vec()).await;
+        self.validator_manager
+            .add_peers(remote_nodes.to_vec())
+            .await;
         stream::iter(blob_ids.into_iter().map(|blob_id| {
             communicate_concurrently(
                 remote_nodes,
                 async move |remote_node| {
                     let certificate = self
-                        .remote_nodes
+                        .validator_manager
                         .with_peer(
                             RequestKey::CertificateForBlob(blob_id),
                             remote_node.clone(),
