@@ -23,6 +23,7 @@ use tokio::sync::broadcast;
 use tracing::instrument;
 
 use crate::{
+    client::communicate_concurrently,
     environment::Environment,
     node::{NodeError, ValidatorNode},
     remote_node::RemoteNode,
@@ -254,10 +255,29 @@ impl<Env: Environment> ValidatorManager<Env> {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn download_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, NodeError> {
+    pub async fn download_blob(
+        &self,
+        peers: &[RemoteNode<Env::ValidatorNode>],
+        blob_id: BlobId,
+        timeout: Duration,
+    ) -> Result<Option<Blob>, NodeError> {
         let key = RequestKey::Blob(blob_id);
-        self.with_best(key, |peer| async move { peer.download_blob(blob_id).await })
-            .await
+        match communicate_concurrently(
+            peers,
+            async move |peer| {
+                self.with_peer(key, peer, |peer| async move {
+                    peer.download_blob(blob_id).await
+                })
+                .await
+            },
+            |errors| errors.last().cloned().unwrap(),
+            timeout,
+        )
+        .await
+        {
+            Ok(maybe_blob) => Ok(maybe_blob),
+            Err((_validator, error)) => Err(error),
+        }
     }
 
     /// Downloads the blobs with the given IDs. This is done in one concurrent task per blob.
@@ -266,12 +286,13 @@ impl<Env: Environment> ValidatorManager<Env> {
     #[instrument(level = "trace", skip_all)]
     pub async fn download_blobs(
         &self,
+        peers: &[RemoteNode<Env::ValidatorNode>],
         blob_ids: &[BlobId],
-        _timeout: Duration,
+        timeout: Duration,
     ) -> Result<Option<Vec<Blob>>, NodeError> {
         let mut stream = blob_ids
             .iter()
-            .map(|blob_id| self.download_blob(*blob_id))
+            .map(|blob_id| self.download_blob(peers, *blob_id, timeout))
             .collect::<FuturesUnordered<_>>();
 
         let mut blobs = Vec::new();
