@@ -1142,7 +1142,7 @@ mod tests {
     async fn test_set_view_flush_with_delete_storage_first_and_set_updates() -> Result<(), ViewError>
     {
         let context = MemoryContext::new_for_testing(());
-        let mut set: SetView<_, u32> = SetView::load(context).await?;
+        let mut set = SetView::<_,u32>::load(context).await?;
 
         // Add initial data
         set.insert(&42)?;
@@ -1178,7 +1178,7 @@ mod tests {
     #[tokio::test]
     async fn test_set_view_count_delegation() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
-        let mut set: SetView<_, u32> = SetView::load(context).await?;
+        let mut set = SetView::<_,u32>::load(context).await?;
 
         // Initially no pending changes
         assert!(!set.has_pending_changes().await);
@@ -1518,7 +1518,7 @@ mod tests {
     #[tokio::test]
     async fn test_set_view_hash_mut_delegation() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
-        let mut set: SetView<_, u32> = SetView::load(context).await?;
+        let mut set = SetView::<_,u32>::load(context).await?;
 
         // Add some data to the SetView
         set.insert(&42)?;
@@ -1559,7 +1559,7 @@ mod tests {
     async fn test_custom_set_view_flush_with_delete_storage_first_and_set_updates(
     ) -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
-        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+        let mut set = CustomSetView::<_,u128>::load(context).await?;
 
         // Initially no pending changes
         assert!(!set.has_pending_changes().await);
@@ -1630,7 +1630,7 @@ mod tests {
     #[tokio::test]
     async fn test_custom_set_view_contains_update_removed_returns_false() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
-        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+        let mut set = CustomSetView::<_,u128>::load(context).await?;
 
         // Add and persist an item
         set.insert(&12345u128)?;
@@ -1654,7 +1654,7 @@ mod tests {
     async fn test_custom_set_view_contains_delete_storage_first_returns_false(
     ) -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
-        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+        let mut set = CustomSetView::<_,u128>::load(context).await?;
 
         // Add items and persist
         set.insert(&111u128)?;
@@ -1682,7 +1682,7 @@ mod tests {
     #[tokio::test]
     async fn test_custom_set_view_hash_mut_delegation() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
-        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+        let mut set = CustomSetView::<_,u128>::load(context).await?;
 
         // Add some data
         set.insert(&1000u128)?;
@@ -1706,7 +1706,7 @@ mod tests {
     #[tokio::test]
     async fn test_custom_set_view_for_each_index_while_method_signature() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
-        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+        let mut set = CustomSetView::<_,u128>::load(context).await?;
         assert_eq!(set.count().await?, 0);
 
         // Add some data to test the method
@@ -1735,7 +1735,7 @@ mod tests {
     #[tokio::test]
     async fn test_custom_set_view_rollback() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
-        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+        let mut set = CustomSetView::<_,u128>::load(context).await?;
 
         // Add and persist some initial data
         set.insert(&100u128)?;
@@ -1773,7 +1773,7 @@ mod tests {
     #[tokio::test]
     async fn test_custom_set_view_clone_unchecked() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
-        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+        let mut set = CustomSetView::<_,u128>::load(context).await?;
 
         // Add some data to the original set
         set.insert(&42u128)?;
@@ -1858,7 +1858,7 @@ mod tests {
         impl Query {
             async fn test_set(&self) -> TestSetView {
                 let context = MemoryContext::new_for_testing(());
-                let mut set: SetView<_, u32> = SetView::load(context).await.unwrap();
+                let mut set = SetView::<_,u32>::load(context).await.unwrap();
 
                 // Add test data
                 set.insert(&42).unwrap();
