@@ -70,6 +70,18 @@ pub enum RequestResult {
     Certificate(Box<Result<ConfirmedBlockCertificate, NodeError>>),
 }
 
+impl RequestResult {
+    /// Returns true if the result represents a successful operation
+    fn is_ok(&self) -> bool {
+        match self {
+            RequestResult::Certificates(result) => result.is_ok(),
+            RequestResult::Blob(result) => result.is_ok(),
+            RequestResult::BlobContent(result) => result.is_ok(),
+            RequestResult::Certificate(result) => result.is_ok(),
+        }
+    }
+}
+
 impl From<RequestResult> for Result<Vec<ConfirmedBlockCertificate>, NodeError> {
     fn from(result: RequestResult) -> Self {
         match result {
@@ -551,8 +563,10 @@ impl<Env: Environment> ValidatorManager<Env> {
             }
         }
 
-        // Store in cache
-        self.store_in_cache(key.clone(), shared_result).await;
+        // Store in cache only if the result is successful
+        if shared_result.is_ok() {
+            self.store_in_cache(key.clone(), shared_result).await;
+        }
         result
     }
 
