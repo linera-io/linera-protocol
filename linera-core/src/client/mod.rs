@@ -2716,10 +2716,10 @@ impl<Env: Environment> ChainClient<Env> {
             ClientOutcome::Committed(None) => {}
         }
 
-        let value = self.new_pending_block(transactions, blobs).await?;
+        let block = self.new_pending_block(transactions, blobs).await?;
 
         match self.process_pending_block_without_prepare().await? {
-            ClientOutcome::Committed(Some(certificate)) if certificate.block() == &value => {
+            ClientOutcome::Committed(Some(certificate)) if certificate.block() == &block => {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
             }
             ClientOutcome::Committed(Some(certificate)) => {
@@ -2738,6 +2738,8 @@ impl<Env: Environment> ChainClient<Env> {
     /// Creates a vector of transactions which, in addition to the provided operations,
     /// also contains epoch changes, receiving message bundles and event stream updates
     /// (if there are any to be processed).
+    /// This should be called when executing a block, in order to make sure that any pending
+    /// messages or events are included in it.
     #[instrument(level = "trace", skip(operations))]
     async fn prepend_epochs_messages_and_events(
         &self,
