@@ -18,7 +18,10 @@ use linera_base::{
     time::{Duration, Instant},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
-use rand::distributions::{Distribution, WeightedIndex};
+use rand::{
+    distributions::{Distribution, WeightedIndex},
+    prelude::SliceRandom as _,
+};
 use tokio::sync::broadcast;
 use tracing::instrument;
 
@@ -254,54 +257,6 @@ impl<Env: Environment> ValidatorManager<Env> {
         }
     }
 
-    #[instrument(level = "trace", skip_all)]
-    pub async fn download_blob(
-        &self,
-        peers: &[RemoteNode<Env::ValidatorNode>],
-        blob_id: BlobId,
-        timeout: Duration,
-    ) -> Result<Option<Blob>, NodeError> {
-        let key = RequestKey::Blob(blob_id);
-        match communicate_concurrently(
-            peers,
-            async move |peer| {
-                self.with_peer(key, peer, |peer| async move {
-                    peer.download_blob(blob_id).await
-                })
-                .await
-            },
-            |errors| errors.last().cloned().unwrap(),
-            timeout,
-        )
-        .await
-        {
-            Ok(maybe_blob) => Ok(maybe_blob),
-            Err((_validator, error)) => Err(error),
-        }
-    }
-
-    /// Downloads the blobs with the given IDs. This is done in one concurrent task per blob.
-    /// Uses intelligent peer selection based on scores and load balancing.
-    /// Returns `None` if it couldn't find all blobs.
-    #[instrument(level = "trace", skip_all)]
-    pub async fn download_blobs(
-        &self,
-        peers: &[RemoteNode<Env::ValidatorNode>],
-        blob_ids: &[BlobId],
-        timeout: Duration,
-    ) -> Result<Option<Vec<Blob>>, NodeError> {
-        let mut stream = blob_ids
-            .iter()
-            .map(|blob_id| self.download_blob(peers, *blob_id, timeout))
-            .collect::<FuturesUnordered<_>>();
-
-        let mut blobs = Vec::new();
-        while let Some(maybe_blob) = stream.next().await {
-            blobs.push(maybe_blob?);
-        }
-        Ok(blobs.into_iter().collect::<Option<Vec<_>>>())
-    }
-
     /// Executes an operation with an automatically selected peer, handling deduplication,
     /// tracking, and peer selection.
     ///
@@ -385,37 +340,51 @@ impl<Env: Environment> ValidatorManager<Env> {
             .await
     }
 
-    pub async fn add_peer(&self, node: RemoteNode<Env::ValidatorNode>) {
-        let mut nodes = self.nodes.write().await;
-        let public_key = node.public_key;
-        nodes.entry(public_key).or_insert_with(|| {
-            NodeInfo::with_config(
-                node,
-                self.default_weights,
-                self.default_alpha,
-                self.default_max_expected_latency_ms,
-                self.max_requests_per_node,
-            )
-        });
+    #[instrument(level = "trace", skip_all)]
+    pub async fn download_blob(
+        &self,
+        peers: &[RemoteNode<Env::ValidatorNode>],
+        blob_id: BlobId,
+        timeout: Duration,
+    ) -> Result<Option<Blob>, NodeError> {
+        let key = RequestKey::Blob(blob_id);
+        let mut peers = peers.to_vec();
+        peers.shuffle(&mut rand::thread_rng());
+        communicate_concurrently(
+            &peers,
+            async move |peer| {
+                self.with_peer(key, peer, |peer| async move {
+                    peer.download_blob(blob_id).await
+                })
+                .await
+            },
+            |errors| errors.last().cloned().unwrap(),
+            timeout,
+        )
+        .await
+        .map_err(|(_validator, error)| error)
     }
 
-    pub async fn add_peers(
+    /// Downloads the blobs with the given IDs. This is done in one concurrent task per blob.
+    /// Uses intelligent peer selection based on scores and load balancing.
+    /// Returns `None` if it couldn't find all blobs.
+    #[instrument(level = "trace", skip_all)]
+    pub async fn download_blobs(
         &self,
-        new_nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
-    ) {
-        let mut nodes = self.nodes.write().await;
-        for node in new_nodes {
-            let public_key = node.public_key;
-            nodes.entry(public_key).or_insert_with(|| {
-                NodeInfo::with_config(
-                    node,
-                    self.default_weights,
-                    self.default_alpha,
-                    self.default_max_expected_latency_ms,
-                    self.max_requests_per_node,
-                )
-            });
+        peers: &[RemoteNode<Env::ValidatorNode>],
+        blob_ids: &[BlobId],
+        timeout: Duration,
+    ) -> Result<Option<Vec<Blob>>, NodeError> {
+        let mut stream = blob_ids
+            .iter()
+            .map(|blob_id| self.download_blob(peers, *blob_id, timeout))
+            .collect::<FuturesUnordered<_>>();
+
+        let mut blobs = Vec::new();
+        while let Some(maybe_blob) = stream.next().await {
+            blobs.push(maybe_blob?);
         }
+        Ok(blobs.into_iter().collect::<Option<Vec<_>>>())
     }
 
     /// Returns current performance metrics for all managed nodes.
@@ -528,7 +497,7 @@ impl<Env: Environment> ValidatorManager<Env> {
             if let Some(entry) = cache.get(&key) {
                 tracing::trace!(
                     key = ?key,
-                    "Cache hit - returning cached result"
+                    "cache hit - returning cached result"
                 );
                 return T::from((*entry.result).clone());
             }
@@ -613,7 +582,7 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// This method scans the cache and removes entries where the time elapsed since
     /// `cached_at` exceeds `cache_ttl`. It's useful for explicitly cleaning up stale
     /// cache entries rather than relying on lazy expiration checks.
-    pub async fn evict_expired_cache_entries(&self) -> usize {
+    async fn evict_expired_cache_entries(&self) -> usize {
         let mut cache = self.cache.write().await;
         let now = Instant::now();
         if cache.len() <= self.max_cache_size {
@@ -649,7 +618,7 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// # Returns
     /// A vector of `(score, peer)` tuples sorted by score in descending order.
     /// Returns an empty vector if no peers can accept requests.
-    pub async fn peers_by_score(&self) -> Vec<(f64, RemoteNode<Env::ValidatorNode>)> {
+    async fn peers_by_score(&self) -> Vec<(f64, RemoteNode<Env::ValidatorNode>)> {
         let nodes = self.nodes.read().await;
 
         // Filter nodes that can accept requests and calculate their scores
@@ -701,6 +670,21 @@ impl<Env: Environment> ValidatorManager<Env> {
             // Fallback to the best node if weights are invalid
             Some(scored_nodes[0].1.clone())
         }
+    }
+
+    /// Adds a new peer to the manager if it doesn't already exist.
+    async fn add_peer(&self, node: RemoteNode<Env::ValidatorNode>) {
+        let mut nodes = self.nodes.write().await;
+        let public_key = node.public_key;
+        nodes.entry(public_key).or_insert_with(|| {
+            NodeInfo::with_config(
+                node,
+                self.default_weights,
+                self.default_alpha,
+                self.default_max_expected_latency_ms,
+                self.max_requests_per_node,
+            )
+        });
     }
 }
 
