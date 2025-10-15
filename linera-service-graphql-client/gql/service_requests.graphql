@@ -48,6 +48,24 @@ query ChainInbox($chainId: ChainId!, $origin: ChainId!) {
                 kind
                 index
                 message
+                messageMetadata {
+                  messageType
+                  applicationId
+                  userBytesHex
+                  systemMessage {
+                    systemMessageType
+                    credit {
+                      target
+                      amount
+                      source
+                    }
+                    withdraw {
+                      owner
+                      amount
+                      recipient
+                    }
+                  }
+                }
               }
             }
           }
@@ -64,6 +82,24 @@ query ChainInbox($chainId: ChainId!, $origin: ChainId!) {
                 kind
                 index
                 message
+                messageMetadata {
+                  messageType
+                  applicationId
+                  userBytesHex
+                  systemMessage {
+                    systemMessageType
+                    credit {
+                      target
+                      amount
+                      source
+                    }
+                    withdraw {
+                      owner
+                      amount
+                      recipient
+                    }
+                  }
+                }
               }
             }
           }
@@ -142,6 +178,24 @@ query Chain(
                 kind
                 index
                 message
+                messageMetadata {
+                  messageType
+                  applicationId
+                  userBytesHex
+                  systemMessage {
+                    systemMessageType
+                    credit {
+                      target
+                      amount
+                      source
+                    }
+                    withdraw {
+                      owner
+                      amount
+                      recipient
+                    }
+                  }
+                }
               }
             }
           }
@@ -158,6 +212,24 @@ query Chain(
                 kind
                 index
                 message
+                messageMetadata {
+                  messageType
+                  applicationId
+                  userBytesHex
+                  systemMessage {
+                    systemMessageType
+                    credit {
+                      target
+                      amount
+                      source
+                    }
+                    withdraw {
+                      owner
+                      amount
+                      recipient
+                    }
+                  }
+                }
               }
             }
           }
@@ -268,6 +340,24 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
                 kind
                 index
                 message
+                messageMetadata {
+                  messageType
+                  applicationId
+                  userBytesHex
+                  systemMessage {
+                    systemMessageType
+                    credit {
+                      target
+                      amount
+                      source
+                    }
+                    withdraw {
+                      owner
+                      amount
+                      recipient
+                    }
+                  }
+                }
               }
             }
             action
@@ -276,7 +366,75 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
             operationType
             applicationId
             userBytesHex
-            systemBytesHex
+            systemOperation {
+              systemOperationType
+              transfer {
+                owner
+                recipient
+                amount
+              }
+              claim {
+                owner
+                targetId
+                recipient
+                amount
+              }
+              openChain {
+                balance
+                ownership {
+                  ownershipJson
+                }
+                applicationPermissions {
+                  permissionsJson
+                }
+              }
+              changeOwnership {
+                superOwners
+                owners {
+                  owner
+                  weight
+                }
+                multiLeaderRounds
+                openMultiLeaderRounds
+                timeoutConfig {
+                  fastRoundMs
+                  baseTimeoutMs
+                  timeoutIncrementMs
+                  fallbackDurationMs
+                }
+              }
+              changeApplicationPermissions {
+                permissions {
+                  permissionsJson
+                }
+              }
+              admin {
+                adminOperationType
+                epoch
+                blobHash
+              }
+              createApplication {
+                moduleId
+                parametersHex
+                instantiationArgumentHex
+                requiredApplicationIds
+              }
+              publishDataBlob {
+                blobHash
+              }
+              verifyBlob {
+                blobId
+              }
+              publishModule {
+                moduleId
+              }
+              epoch
+              updateStreams {
+                chainId
+                streamId
+                nextIndex
+              }
+            }
           }
         }
       }
@@ -344,6 +502,24 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
                 kind
                 index
                 message
+                messageMetadata {
+                  messageType
+                  applicationId
+                  userBytesHex
+                  systemMessage {
+                    systemMessageType
+                    credit {
+                      target
+                      amount
+                      source
+                    }
+                    withdraw {
+                      owner
+                      amount
+                      recipient
+                    }
+                  }
+                }
               }
             }
             action
@@ -352,7 +528,75 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
             operationType
             applicationId
             userBytesHex
-            systemBytesHex
+            systemOperation {
+              systemOperationType
+              transfer {
+                owner
+                recipient
+                amount
+              }
+              claim {
+                owner
+                targetId
+                recipient
+                amount
+              }
+              openChain {
+                balance
+                ownership {
+                  ownershipJson
+                }
+                applicationPermissions {
+                  permissionsJson
+                }
+              }
+              changeOwnership {
+                superOwners
+                owners {
+                  owner
+                  weight
+                }
+                multiLeaderRounds
+                openMultiLeaderRounds
+                timeoutConfig {
+                  fastRoundMs
+                  baseTimeoutMs
+                  timeoutIncrementMs
+                  fallbackDurationMs
+                }
+              }
+              changeApplicationPermissions {
+                permissions {
+                  permissionsJson
+                }
+              }
+              admin {
+                adminOperationType
+                epoch
+                blobHash
+              }
+              createApplication {
+                moduleId
+                parametersHex
+                instantiationArgumentHex
+                requiredApplicationIds
+              }
+              publishDataBlob {
+                blobHash
+              }
+              verifyBlob {
+                blobId
+              }
+              publishModule {
+                moduleId
+              }
+              epoch
+              updateStreams {
+                chainId
+                streamId
+                nextIndex
+              }
+            }
           }
         }
       }

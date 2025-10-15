@@ -3,12 +3,15 @@ import { computed } from 'vue'
 import { ConfirmedBlock } from '../../gql/service'
 import { getOperations, getIncomingBundles } from './utils'
 import Json from './Json.vue'
-import Op from './Op.vue'
+// Op is now imported by Transaction.vue
+import Transaction from './Transaction.vue'
+import OutgoingMessages from './OutgoingMessages.vue'
 
 const props = defineProps<{block: ConfirmedBlock, title: string}>()
 
 const operations = computed(() => getOperations(props.block.block.body.transactionMetadata))
 const incomingBundles = computed(() => getIncomingBundles(props.block.block.body.transactionMetadata))
+const transactions = computed(() => props.block.block.body.transactionMetadata || [])
 </script>
 
 <template>
@@ -67,42 +70,30 @@ const incomingBundles = computed(() => getIncomingBundles(props.block.block.body
           <span><strong>Status</strong></span>
           <span>{{ block.status }}</span>
         </li>
-        <li v-if="incomingBundles.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#in-messages-collapse-'+block.hash">
-          <span><strong>Incoming Messages</strong> ({{ incomingBundles.length }})</span>
+        <li v-if="transactions.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#transactions-collapse-'+block.hash">
+          <span><strong>Transactions</strong> ({{ transactions.length }})</span>
+          <span class="text-muted ms-2">
+            <small>
+              {{ incomingBundles.length }} message{{ incomingBundles.length !== 1 ? 's' : '' }},
+              {{ operations.length }} operation{{ operations.length !== 1 ? 's' : '' }}
+            </small>
+          </span>
           <i class="bi bi-caret-down-fill"></i>
         </li>
         <li v-else class="list-group-item d-flex justify-content-between">
-          <span><strong>Incoming Messages</strong> (0)</span>
+          <span><strong>Transactions</strong> (0)</span>
           <span></span>
         </li>
-        <div v-if="incomingBundles.length!==0" class="collapse" :id="'in-messages-collapse-'+block.hash">
-          <ul class="list-group">
-            <li v-for="(m, i) in incomingBundles" class="list-group-item p-0" key="block.hash+'-inmessage-'+i">
-              <div class="card">
-                <div class="card-header">Message {{ i+1 }}</div>
-                <div class="card-body">
-                  <Json :data="m"/>
-                </div>
-              </div>
-            </li>
-          </ul>
-        </div>
-        <li v-if="operations.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#operations-collapse-'+block.hash">
-          <span><strong>Operations</strong> ({{ operations.length }})</span>
-          <i class="bi bi-caret-down-fill"></i>
-        </li>
-        <li v-else class="list-group-item d-flex justify-content-between">
-          <span><strong>Operations</strong> (0)</span>
-          <span></span>
-        </li>
-        <div v-if="operations.length!==0" class="collapse" :id="'operations-collapse-'+block.hash">
-          <ul class="list-group">
-            <li v-for="(o, i) in operations" class="list-group-item p-0" key="block.hash+'-operation-'+i">
-              <div class="card card-body p-0">
-                <Op :op="o" :id="block.hash+'-operation-'+i" :index="i"/>
-              </div>
-            </li>
-          </ul>
+        <div v-if="transactions.length!==0" class="collapse show" :id="'transactions-collapse-'+block.hash">
+          <div class="p-3">
+            <Transaction
+              v-for="(tx, i) in transactions"
+              :key="block.hash+'-tx-'+i"
+              :transaction="tx"
+              :index="i"
+              :block-hash="block.hash"
+            />
+          </div>
         </div>
         <li v-if="block.block.body.messages.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#out-messages-collapse-'+block.hash">
           <span><strong>Outgoing Messages</strong> ({{ block.block.body.messages.length }})</span>
@@ -113,16 +104,15 @@ const incomingBundles = computed(() => getIncomingBundles(props.block.block.body
           <span></span>
         </li>
         <div v-if="block.block.body.messages.length!==0" class="collapse" :id="'out-messages-collapse-'+block.hash">
-          <ul class="list-group">
-            <li v-for="(m, i) in block.block.body.messages" class="list-group-item p-0" key="block.hash+'-outmessage-'+i">
-              <div class="card">
-                <div class="card-header">Messages for transaction {{ i+1 }}</div>
-                <div class="card-body">
-                  <Json :data="m"/>
-                </div>
-              </div>
-            </li>
-          </ul>
+          <div class="p-3">
+            <OutgoingMessages
+              v-for="(messages, i) in block.block.body.messages"
+              :key="block.hash+'-outmessages-'+i"
+              :messages="messages"
+              :transaction-index="i"
+              :block-hash="block.hash"
+            />
+          </div>
         </div>
         <li v-if="Object.keys(block.block.body.previousMessageBlocks).length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#previous-message-blocks-collapse-'+block.hash">
           <span><strong>Previous Message Blocks</strong> ({{ Object.keys(block.block.body.previousMessageBlocks).length }})</span>
