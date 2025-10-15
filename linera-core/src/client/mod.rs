@@ -621,7 +621,7 @@ impl<Env: Environment> Client<Env> {
         let certificate = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
             .await?;
-        self.receive_certificate_no_check(certificate.clone())
+        self.receive_certificate_with_checked_signatures(certificate.clone())
             .await?;
         Ok(certificate)
     }
@@ -738,7 +738,7 @@ impl<Env: Environment> Client<Env> {
     /// Processes the confirmed block certificate in the local node without checking signatures.
     /// Also downloads and processes all ancestors that are still missing.
     #[instrument(level = "trace", skip_all)]
-    async fn receive_certificate_no_check(
+    async fn receive_certificate_with_checked_signatures(
         &self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(), ChainClientError> {
