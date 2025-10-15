@@ -2716,12 +2716,10 @@ impl<Env: Environment> ChainClient<Env> {
             ClientOutcome::Committed(None) => {}
         }
 
-        let confirmed_value = self.new_pending_block(transactions, blobs).await?;
+        let value = self.new_pending_block(transactions, blobs).await?;
 
         match self.process_pending_block_without_prepare().await? {
-            ClientOutcome::Committed(Some(certificate))
-                if certificate.block() == confirmed_value.block() =>
-            {
+            ClientOutcome::Committed(Some(certificate)) if certificate.block() == &value => {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
             }
             ClientOutcome::Committed(Some(certificate)) => {
@@ -2774,7 +2772,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         transactions: Vec<Transaction>,
         blobs: Vec<Blob>,
-    ) -> Result<ConfirmedBlock, ChainClientError> {
+    ) -> Result<Block, ChainClientError> {
         let identity = self.identity().await?;
 
         ensure!(
@@ -2818,7 +2816,7 @@ impl<Env: Environment> ChainClient<Env> {
         self.update_state(|state| {
             state.set_pending_proposal(proposed_block.clone(), blobs.clone())
         });
-        Ok(ConfirmedBlock::new(block))
+        Ok(block)
     }
 
     /// Returns a suitable timestamp for the next block.
