@@ -25,7 +25,7 @@ defineProps<{op: any, id: string, index?: number}>()
             </div>
             <div class="col-md-4">
               <strong>To:</strong>
-              <div class="font-monospace text-break">{{ op.systemOperation.transfer.recipient.owner }}@{{ short_hash(op.systemOperation.transfer.recipient.chainId) }}</div>
+              <div class="font-monospace text-break">{{ op.systemOperation.transfer.recipient }}</div>
             </div>
             <div class="col-md-4">
               <strong>Amount:</strong>
@@ -48,7 +48,7 @@ defineProps<{op: any, id: string, index?: number}>()
             </div>
             <div class="col-md-3">
               <strong>Recipient:</strong>
-              <div class="font-monospace text-break">{{ op.systemOperation.claim.recipient.owner }}@{{ short_hash(op.systemOperation.claim.recipient.chainId) }}</div>
+              <div class="font-monospace text-break">{{ op.systemOperation.claim.recipient }}</div>
             </div>
             <div class="col-md-3">
               <strong>Amount:</strong>

@@ -87,7 +87,7 @@ defineProps<{
                     <div v-if="msg.messageMetadata.systemMessage.withdraw" class="small">
                       <div><strong>Owner:</strong> {{ msg.messageMetadata.systemMessage.withdraw.owner }}</div>
                       <div><strong>Amount:</strong> {{ msg.messageMetadata.systemMessage.withdraw.amount }}</div>
-                      <div><strong>Recipient:</strong> {{ msg.messageMetadata.systemMessage.withdraw.recipient.owner }}@{{ short_hash(msg.messageMetadata.systemMessage.withdraw.recipient.chainId) }}</div>
+                      <div><strong>Recipient:</strong> {{ msg.messageMetadata.systemMessage.withdraw.recipient }}</div>
                     </div>
                   </div>
 

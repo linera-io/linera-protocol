@@ -124,7 +124,7 @@ function getMessageMetadata(msg: any) {
               <div v-else-if="getMessageMetadata(msg).systemMessage.withdraw" class="small">
                 <div><strong>Owner:</strong> {{ getMessageMetadata(msg).systemMessage.withdraw.owner }}</div>
                 <div><strong>Amount:</strong> {{ getMessageMetadata(msg).systemMessage.withdraw.amount }}</div>
-                <div><strong>Recipient:</strong> {{ getMessageMetadata(msg).systemMessage.withdraw.recipient.owner }}@{{ short_hash(getMessageMetadata(msg).systemMessage.withdraw.recipient.chainId) }}</div>
+                <div><strong>Recipient:</strong> {{ getMessageMetadata(msg).systemMessage.withdraw.recipient }}</div>
               </div>
 
               <!-- Generic system message data for other types -->
