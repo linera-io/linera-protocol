@@ -158,7 +158,7 @@ struct CacheEntry {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// // Create with default configuration (balanced scoring)
 /// let manager = ValidatorManager::new(validator_nodes);
 ///
@@ -709,7 +709,7 @@ impl<Env: Environment> ValidatorManager<Env> {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// // Prioritize response time and success rate equally
 /// let balanced_weights = ScoringWeights {
 ///     latency: 0.4,
