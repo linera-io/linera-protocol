@@ -11,9 +11,7 @@ use linera_base::{
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
-use linera_execution::{
-    system::AdminOperation, Message, Operation, SystemMessage, SystemOperation,
-};
+use linera_execution::{system::AdminOperation, Message, SystemMessage, SystemOperation};
 use serde::{Deserialize, Serialize};
 
 /// Timeout configuration metadata for GraphQL.
@@ -25,7 +23,8 @@ pub struct TimeoutConfigMetadata {
     pub base_timeout_ms: String,
     /// The duration by which the timeout increases after each single-leader round in milliseconds.
     pub timeout_increment_ms: String,
-    /// The age of an incoming tracked or protected message after which validators start transitioning to fallback mode, in milliseconds.
+    /// The age of an incoming tracked or protected message after which validators start
+    /// transitioning to fallback mode, in milliseconds.
     pub fallback_duration_ms: String,
 }
 
@@ -45,7 +44,7 @@ impl From<&TimeoutConfig> for TimeoutConfigMetadata {
 /// Chain ownership metadata for GraphQL.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct ChainOwnershipMetadata {
-    /// JSON serialized ChainOwnership for full representation.
+    /// JSON serialized `ChainOwnership` for full representation.
     pub ownership_json: String,
 }
 
@@ -63,7 +62,7 @@ impl From<&ChainOwnership> for ChainOwnershipMetadata {
 /// Application permissions metadata for GraphQL.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct ApplicationPermissionsMetadata {
-    /// JSON serialized ApplicationPermissions.
+    /// JSON serialized `ApplicationPermissions`.
     pub permissions_json: String,
 }
 
@@ -103,9 +102,9 @@ pub struct SystemOperationMetadata {
     pub verify_blob: Option<VerifyBlobMetadata>,
     /// Publish module operation details
     pub publish_module: Option<PublishModuleMetadata>,
-    /// Simple flag operations (CloseChain, ProcessNewEpoch, ProcessRemovedEpoch)
+    /// Epoch operation details (`ProcessNewEpoch`, `ProcessRemovedEpoch`)
     pub epoch: Option<i32>,
-    /// UpdateStreams operation details
+    /// `UpdateStreams` operation details
     pub update_streams: Option<Vec<UpdateStreamMetadata>>,
 }
 
@@ -259,20 +258,6 @@ pub struct MessageMetadata {
     pub user_bytes_hex: Option<String>,
     /// For system messages, structured representation
     pub system_message: Option<SystemMessageMetadata>,
-}
-
-impl From<&Operation> for SystemOperationMetadata {
-    fn from(operation: &Operation) -> Self {
-        match operation {
-            Operation::System(sys_op) => SystemOperationMetadata::from(sys_op.as_ref()),
-            Operation::User { .. } => {
-                // This should not be called for user operations
-                unreachable!(
-                    "SystemOperationMetadata should only be created from system operations"
-                )
-            }
-        }
-    }
 }
 
 impl From<&SystemOperation> for SystemOperationMetadata {
