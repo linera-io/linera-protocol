@@ -54,16 +54,13 @@ pub async fn run_claim_bench<B>(
     let amt = Amount::ONE;
 
     let account = Account::new(chain2.chain_id(), owner1);
-    let cert = chain1
+    chain1
         .transfer_to_account(AccountOwner::CHAIN, amt, account)
         .await
         .unwrap()
         .unwrap();
 
-    chain2
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    chain2.synchronize_from_validators().await.unwrap();
     chain2.process_inbox().await.unwrap();
     assert_eq!(
         chain1.local_balance().await.unwrap(),
@@ -71,22 +68,16 @@ pub async fn run_claim_bench<B>(
     );
 
     let account = Account::chain(chain1.chain_id());
-    let cert = chain1
+    chain1
         .claim(owner1, chain2.chain_id(), account, amt)
         .await
         .unwrap()
         .unwrap();
 
-    chain2
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    let cert = chain2.process_inbox().await.unwrap().0.pop().unwrap();
+    chain2.synchronize_from_validators().await.unwrap();
+    chain2.process_inbox().await.unwrap().0.pop().unwrap();
 
-    chain1
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    chain1.synchronize_from_validators().await.unwrap();
     chain1.process_inbox().await.unwrap();
     assert_eq!(
         chain1.local_balance().await.unwrap(),
