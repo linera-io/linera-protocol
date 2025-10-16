@@ -29,6 +29,7 @@ use super::{
     request::{RequestKey, RequestResult},
     scoring::ScoringWeights,
     CACHE_MAX_SIZE, CACHE_TTL_SEC, MAX_ACCEPTED_LATENCY_MS, MAX_IN_FLIGHT_REQUESTS,
+    MAX_REQUEST_TTL_MS,
 };
 use crate::{
     client::communicate_concurrently,
@@ -152,7 +153,7 @@ impl<Env: Environment> ValidatorManager<Env> {
             default_alpha: alpha,
             default_max_expected_latency_ms: max_expected_latency_ms,
             in_flight_requests: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            in_flight_timeout: Duration::from_millis(60 as u64),
+            in_flight_timeout: Duration::from_millis(MAX_REQUEST_TTL_MS),
             cache: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             cache_ttl,
             max_cache_size,
@@ -748,4 +749,281 @@ struct CacheEntry {
 struct InFlightEntry {
     sender: broadcast::Sender<Arc<RequestResult>>,
     started_at: Instant,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    use linera_base::{
+        crypto::{CryptoHash, InMemorySigner},
+        data_types::BlockHeight,
+        identifiers::ChainId,
+        time::Duration,
+    };
+    use linera_chain::types::ConfirmedBlockCertificate;
+    use linera_storage::{DbStorage, TestClock};
+    use linera_views::memory::MemoryDatabase;
+    use tokio::sync::oneshot;
+
+    use super::{super::request::RequestKey, *};
+    use crate::{node::NodeError, test_utils::NodeProvider};
+
+    type TestStorage = DbStorage<MemoryDatabase, TestClock>;
+    type TestEnvironment =
+        crate::environment::Impl<TestStorage, NodeProvider<TestStorage>, InMemorySigner>;
+
+    /// Helper function to create a test ValidatorManager with custom configuration
+    fn create_test_manager(
+        in_flight_timeout: Duration,
+        cache_ttl: Duration,
+    ) -> Arc<ValidatorManager<TestEnvironment>> {
+        let mut manager = ValidatorManager::with_config(
+            vec![], // No actual nodes needed for these tests
+            10,
+            ScoringWeights::default(),
+            0.1,
+            1000.0,
+            cache_ttl,
+            100,
+        );
+        manager.in_flight_timeout = in_flight_timeout;
+        Arc::new(manager)
+    }
+
+    /// Helper function to create a test result
+    fn test_result_ok() -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        Ok(vec![])
+    }
+
+    /// Helper function to create a test request key
+    fn test_key() -> RequestKey {
+        RequestKey::Certificates {
+            chain_id: ChainId(CryptoHash::test_hash("test")),
+            start: BlockHeight(0),
+            limit: 10,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_cache_hit_returns_cached_result() {
+        // Create a manager with standard cache TTL
+        let manager = create_test_manager(Duration::from_secs(60), Duration::from_secs(60));
+        let key = test_key();
+
+        // Track how many times the operation is executed
+        let execution_count = Arc::new(AtomicUsize::new(0));
+        let execution_count_clone = execution_count.clone();
+
+        // First call - should execute the operation and cache the result
+        let result1: Result<Vec<ConfirmedBlockCertificate>, NodeError> = manager
+            .deduplicated_request(key.clone(), || async move {
+                execution_count_clone.fetch_add(1, Ordering::SeqCst);
+                test_result_ok()
+            })
+            .await;
+
+        assert!(result1.is_ok());
+        assert_eq!(execution_count.load(Ordering::SeqCst), 1);
+
+        // Second call - should return cached result without executing the operation
+        let execution_count_clone2 = execution_count.clone();
+        let result2: Result<Vec<ConfirmedBlockCertificate>, NodeError> = manager
+            .deduplicated_request(key.clone(), || async move {
+                execution_count_clone2.fetch_add(1, Ordering::SeqCst);
+                test_result_ok()
+            })
+            .await;
+
+        assert_eq!(result1, result2);
+        // Operation should still only have been executed once (cache hit)
+        assert_eq!(execution_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_in_flight_request_deduplication() {
+        let manager = create_test_manager(Duration::from_secs(60), Duration::from_secs(60));
+        let key = test_key();
+
+        // Track how many times the operation is executed
+        let execution_count = Arc::new(AtomicUsize::new(0));
+
+        // Create a channel to control when the first operation completes
+        let (tx, rx) = oneshot::channel();
+
+        // Start first request (will be slow - waits for signal)
+        let manager_clone = Arc::clone(&manager);
+        let key_clone = key.clone();
+        let execution_count_clone = execution_count.clone();
+        let first_request = tokio::spawn(async move {
+            manager_clone
+                .deduplicated_request(key_clone, || async move {
+                    execution_count_clone.fetch_add(1, Ordering::SeqCst);
+                    // Wait for signal before completing
+                    rx.await.unwrap();
+                    test_result_ok()
+                })
+                .await
+        });
+
+        // Give the first request time to register as in-flight
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Start second request - should deduplicate and wait for the first
+        let execution_count_clone2 = execution_count.clone();
+        let second_request = tokio::spawn(async move {
+            manager
+                .deduplicated_request(key, || async move {
+                    execution_count_clone2.fetch_add(1, Ordering::SeqCst);
+                    test_result_ok()
+                })
+                .await
+        });
+
+        // Give the second request time to subscribe
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Signal the first request to complete
+        tx.send(()).unwrap();
+
+        // Both requests should complete successfully
+        let result1: Result<Vec<ConfirmedBlockCertificate>, NodeError> =
+            first_request.await.unwrap();
+        let result2: Result<Vec<ConfirmedBlockCertificate>, NodeError> =
+            second_request.await.unwrap();
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+        assert_eq!(result1, result2);
+
+        // Operation should only have been executed once (deduplication worked)
+        assert_eq!(execution_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_multiple_subscribers_all_notified() {
+        let manager = create_test_manager(Duration::from_secs(60), Duration::from_secs(60));
+        let key = test_key();
+
+        // Track how many times the operation is executed
+        let execution_count = Arc::new(AtomicUsize::new(0));
+
+        // Create a channel to control when the operation completes
+        let (tx, rx) = oneshot::channel();
+
+        // Start first request (will be slow - waits for signal)
+        let manager_clone1 = Arc::clone(&manager);
+        let key_clone1 = key.clone();
+        let execution_count_clone = execution_count.clone();
+        let first_request = tokio::spawn(async move {
+            manager_clone1
+                .deduplicated_request(key_clone1, || async move {
+                    execution_count_clone.fetch_add(1, Ordering::SeqCst);
+                    rx.await.unwrap();
+                    test_result_ok()
+                })
+                .await
+        });
+
+        // Give the first request time to register as in-flight
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Start multiple additional requests - all should deduplicate
+        let mut handles = vec![];
+        for _ in 0..5 {
+            let manager_clone = Arc::clone(&manager);
+            let key_clone = key.clone();
+            let execution_count_clone = execution_count.clone();
+            let handle = tokio::spawn(async move {
+                manager_clone
+                    .deduplicated_request(key_clone, || async move {
+                        execution_count_clone.fetch_add(1, Ordering::SeqCst);
+                        test_result_ok()
+                    })
+                    .await
+            });
+            handles.push(handle);
+        }
+
+        // Give all requests time to subscribe
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Signal the first request to complete
+        tx.send(()).unwrap();
+
+        // First request should complete successfully
+        let result: Result<Vec<ConfirmedBlockCertificate>, NodeError> =
+            first_request.await.unwrap();
+        assert!(result.is_ok());
+
+        // All subscriber requests should also complete successfully
+        for handle in handles {
+            assert_eq!(handle.await.unwrap(), result);
+        }
+
+        // Operation should only have been executed once (all requests were deduplicated)
+        assert_eq!(execution_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_timeout_triggers_new_request() {
+        // Create a manager with a very short in-flight timeout
+        let manager = create_test_manager(Duration::from_millis(50), Duration::from_secs(60));
+
+        let key = test_key();
+
+        // Track how many times the operation is executed
+        let execution_count = Arc::new(AtomicUsize::new(0));
+
+        // Create a channel to control when the first operation completes
+        let (tx, rx) = oneshot::channel();
+
+        // Start first request (will be slow - waits for signal)
+        let manager_clone = Arc::clone(&manager);
+        let key_clone = key.clone();
+        let execution_count_clone = execution_count.clone();
+        let first_request = tokio::spawn(async move {
+            manager_clone
+                .deduplicated_request(key_clone, || async move {
+                    execution_count_clone.fetch_add(1, Ordering::SeqCst);
+                    rx.await.unwrap();
+                    test_result_ok()
+                })
+                .await
+        });
+
+        // Give the first request time to register as in-flight
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Wait for the timeout to elapse
+        tokio::time::sleep(Duration::from_millis(MAX_REQUEST_TTL_MS + 1)).await;
+
+        // Start second request - should NOT deduplicate because first request exceeded timeout
+        let execution_count_clone2 = execution_count.clone();
+        let second_request = tokio::spawn(async move {
+            manager
+                .deduplicated_request(key, || async move {
+                    execution_count_clone2.fetch_add(1, Ordering::SeqCst);
+                    test_result_ok()
+                })
+                .await
+        });
+
+        // Wait for second request to complete
+        let result2: Result<Vec<ConfirmedBlockCertificate>, NodeError> =
+            second_request.await.unwrap();
+        assert!(result2.is_ok());
+
+        // Complete the first request
+        tx.send(()).unwrap();
+        let result1: Result<Vec<ConfirmedBlockCertificate>, NodeError> =
+            first_request.await.unwrap();
+        assert!(result1.is_ok());
+
+        // Operation should have been executed twice (timeout triggered new request)
+        assert_eq!(execution_count.load(Ordering::SeqCst), 2);
+    }
 }

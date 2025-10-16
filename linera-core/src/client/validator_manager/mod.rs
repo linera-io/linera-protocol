@@ -18,3 +18,5 @@ pub(super) const MAX_IN_FLIGHT_REQUESTS: usize = 100;
 pub(super) const MAX_ACCEPTED_LATENCY_MS: f64 = 5000.0;
 pub(super) const CACHE_TTL_SEC: u64 = 2;
 pub(super) const CACHE_MAX_SIZE: usize = 1000;
+// Maximum latency for an in-flight request before we stop deduplicating it.
+pub(super) const MAX_REQUEST_TTL_MS: u64 = 50;
