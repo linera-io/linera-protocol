@@ -1026,4 +1026,156 @@ mod tests {
         // Operation should have been executed twice (timeout triggered new request)
         assert_eq!(execution_count.load(Ordering::SeqCst), 2);
     }
+
+    #[tokio::test]
+    async fn test_slot_limiting_blocks_excess_requests() {
+        // Tests the slot limiting mechanism:
+        // - Creates a ValidatorManager with max_requests_per_node = 2
+        // - Starts two slow requests that acquire both available slots
+        // - Starts a third request and verifies it's blocked waiting for a slot (execution count stays at 2)
+        // - Completes the first request to release a slot
+        // - Verifies the third request now acquires the freed slot and executes (execution count becomes 3)
+        // - Confirms all requests complete successfully
+        use linera_base::identifiers::BlobType;
+
+        use crate::test_utils::{MemoryStorageBuilder, TestBuilder};
+
+        // Create a test environment with one validator
+        let mut builder = TestBuilder::new(
+            MemoryStorageBuilder::default(),
+            1,
+            0,
+            InMemorySigner::new(None),
+        )
+        .await
+        .unwrap();
+
+        // Get the validator node
+        let validator_node = builder.node(0);
+        let validator_public_key = validator_node.name();
+
+        // Create a RemoteNode wrapper
+        let remote_node = RemoteNode {
+            public_key: validator_public_key,
+            node: validator_node,
+        };
+
+        // Create a ValidatorManager with max_requests_per_node = 2
+        let max_slots = 2;
+        let mut manager: ValidatorManager<TestEnvironment> = ValidatorManager::with_config(
+            vec![remote_node.clone()],
+            max_slots,
+            ScoringWeights::default(),
+            0.1,
+            1000.0,
+            Duration::from_secs(60),
+            100,
+        );
+        manager.in_flight_timeout = Duration::from_secs(60);
+        let manager = Arc::new(manager);
+
+        // Track execution state
+        let execution_count = Arc::new(AtomicUsize::new(0));
+        let completion_count = Arc::new(AtomicUsize::new(0));
+
+        // Create channels to control when operations complete
+        let (tx1, rx1) = oneshot::channel();
+        let (tx2, rx2) = oneshot::channel();
+
+        // Start first request using with_peer (will block until signaled)
+        let manager_clone1 = Arc::clone(&manager);
+        let remote_node_clone1 = remote_node.clone();
+        let execution_count_clone1 = execution_count.clone();
+        let completion_count_clone1 = completion_count.clone();
+        let key1 = RequestKey::Blob(BlobId::new(CryptoHash::test_hash("blob1"), BlobType::Data));
+
+        let first_request = tokio::spawn(async move {
+            manager_clone1
+                .with_peer(key1, remote_node_clone1, |_peer| async move {
+                    execution_count_clone1.fetch_add(1, Ordering::SeqCst);
+                    // Simulate work by waiting for signal
+                    let _ = rx1.await;
+                    completion_count_clone1.fetch_add(1, Ordering::SeqCst);
+                    Ok(None) // Return Option<Blob>
+                })
+                .await
+        });
+
+        // Give first request time to start and acquire a slot
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(execution_count.load(Ordering::SeqCst), 1);
+
+        // Start second request using with_peer (will block until signaled)
+        let manager_clone2 = Arc::clone(&manager);
+        let remote_node_clone2 = remote_node.clone();
+        let execution_count_clone2 = execution_count.clone();
+        let completion_count_clone2 = completion_count.clone();
+        let key2 = RequestKey::Blob(BlobId::new(CryptoHash::test_hash("blob2"), BlobType::Data));
+
+        let second_request = tokio::spawn(async move {
+            manager_clone2
+                .with_peer(key2, remote_node_clone2, |_peer| async move {
+                    execution_count_clone2.fetch_add(1, Ordering::SeqCst);
+                    // Simulate work by waiting for signal
+                    let _ = rx2.await;
+                    completion_count_clone2.fetch_add(1, Ordering::SeqCst);
+                    Ok(None) // Return Option<Blob>
+                })
+                .await
+        });
+
+        // Give second request time to start and acquire the second slot
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(execution_count.load(Ordering::SeqCst), 2);
+
+        // Start third request - this should be blocked waiting for a slot
+        let remote_node_clone3 = remote_node.clone();
+        let execution_count_clone3 = execution_count.clone();
+        let completion_count_clone3 = completion_count.clone();
+        let key3 = RequestKey::Blob(BlobId::new(CryptoHash::test_hash("blob3"), BlobType::Data));
+
+        let third_request = tokio::spawn(async move {
+            manager
+                .with_peer(key3, remote_node_clone3, |_peer| async move {
+                    execution_count_clone3.fetch_add(1, Ordering::SeqCst);
+                    completion_count_clone3.fetch_add(1, Ordering::SeqCst);
+                    Ok(None) // Return Option<Blob>
+                })
+                .await
+        });
+
+        // Give third request time to try acquiring a slot
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Third request should still be waiting (not executed yet)
+        assert_eq!(
+            execution_count.load(Ordering::SeqCst),
+            2,
+            "Third request should be waiting for a slot"
+        );
+
+        // Complete the first request to release a slot
+        tx1.send(()).unwrap();
+
+        // Wait for first request to complete and third request to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Now the third request should have acquired the freed slot and started executing
+        assert_eq!(
+            execution_count.load(Ordering::SeqCst),
+            3,
+            "Third request should now be executing"
+        );
+
+        // Complete remaining requests
+        tx2.send(()).unwrap();
+
+        // Wait for all requests to complete
+        let _result1 = first_request.await.unwrap();
+        let _result2 = second_request.await.unwrap();
+        let _result3 = third_request.await.unwrap();
+
+        // Verify all completed
+        assert_eq!(completion_count.load(Ordering::SeqCst), 3);
+    }
 }
