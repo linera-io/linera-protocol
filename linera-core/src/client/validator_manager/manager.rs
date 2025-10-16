@@ -38,6 +38,61 @@ use crate::{
     remote_node::RemoteNode,
 };
 
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{
+        exponential_bucket_latencies, register_histogram_vec, register_int_counter,
+        register_int_counter_vec,
+    };
+    use prometheus::{HistogramVec, IntCounter, IntCounterVec};
+
+    /// Histogram of response times per validator (in milliseconds)
+    pub static VALIDATOR_RESPONSE_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "validator_manager_response_time_ms",
+            "Response time for requests to validators in milliseconds",
+            &["validator"],
+            exponential_bucket_latencies(10000.0), // up to 10 seconds
+        )
+    });
+
+    /// Counter of total requests made to each validator
+    pub static VALIDATOR_REQUEST_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "validator_manager_request_total",
+            "Total number of requests made to each validator",
+            &["validator"],
+        )
+    });
+
+    /// Counter of successful requests per validator
+    pub static VALIDATOR_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "validator_manager_request_success",
+            "Number of successful requests to each validator",
+            &["validator"],
+        )
+    });
+
+    /// Counter for requests that were deduplicated (joined an in-flight request)
+    pub static REQUEST_CACHE_DEDUPLICATION: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "validator_manager_request_deduplication_total",
+            "Number of requests that were deduplicated by joining an in-flight request",
+        )
+    });
+
+    /// Counter for requests that were served from cache
+    pub static REQUEST_CACHE_HIT: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "validator_manager_request_cache_hit_total",
+            "Number of requests that were served from cache",
+        )
+    });
+}
+
 /// Manages a pool of validator nodes with intelligent load balancing and performance tracking.
 ///
 /// The `ValidatorManager` maintains performance metrics for each validator node using
@@ -398,21 +453,39 @@ impl<Env: Environment> ValidatorManager<Env> {
 
         // Update metrics and release slot
         let response_time_ms = start_time.elapsed().as_millis() as u64;
+        let is_success = result.is_ok();
         {
             let mut nodes = self.nodes.write().await;
             if let Some(info) = nodes.get_mut(&public_key) {
-                info.update_metrics(result.is_ok(), response_time_ms);
+                info.update_metrics(is_success, response_time_ms);
                 info.release_request_slot().await;
                 let score = info.calculate_score().await;
                 tracing::trace!(
                     node = %public_key,
                     address = %info.node.node.address(),
-                    success = %result.is_ok(),
+                    success = %is_success,
                     response_time_ms = %response_time_ms,
                     score = %score,
                     total_requests = %info.total_requests,
                     "Request completed"
                 );
+            }
+        }
+
+        // Record prometheus metrics
+        #[cfg(with_metrics)]
+        {
+            let validator_name = public_key.to_string();
+            metrics::VALIDATOR_RESPONSE_TIME
+                .with_label_values(&[&validator_name])
+                .observe(response_time_ms as f64);
+            metrics::VALIDATOR_REQUEST_TOTAL
+                .with_label_values(&[&validator_name])
+                .inc();
+            if is_success {
+                metrics::VALIDATOR_REQUEST_SUCCESS
+                    .with_label_values(&[&validator_name])
+                    .inc();
             }
         }
 
@@ -449,6 +522,8 @@ impl<Env: Environment> ValidatorManager<Env> {
                     key = ?key,
                     "cache hit (exact match) - returning cached result"
                 );
+                #[cfg(with_metrics)]
+                metrics::REQUEST_CACHE_HIT.inc();
                 return T::from((*entry.result).clone());
             }
 
@@ -461,6 +536,8 @@ impl<Env: Environment> ValidatorManager<Env> {
                             subsumed_by = ?cached_key,
                             "cache hit (subsumption) - extracted result from larger cached request"
                         );
+                        #[cfg(with_metrics)]
+                        metrics::REQUEST_CACHE_HIT.inc();
                         return T::from(extracted);
                     }
                 }
@@ -476,6 +553,8 @@ impl<Env: Environment> ValidatorManager<Env> {
                             key = ?key,
                             "deduplicating request (exact match) - joining existing in-flight request"
                         );
+                        #[cfg(with_metrics)]
+                        metrics::REQUEST_CACHE_DEDUPLICATION.inc();
                         // Wait for result from existing request
                         match receiver.recv().await {
                             Ok(result) => return T::from((*result).clone()),
@@ -508,6 +587,8 @@ impl<Env: Environment> ValidatorManager<Env> {
                             subsumed_by = ?subsuming_key,
                             "deduplicating request (subsumption) - joining larger in-flight request"
                         );
+                        #[cfg(with_metrics)]
+                        metrics::REQUEST_CACHE_DEDUPLICATION.inc();
                         // Wait for result from the subsuming request
                         match receiver.recv().await {
                             Ok(result) => {
