@@ -435,9 +435,9 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     pub async fn try_load_all_entries(
         &self,
     ) -> Result<Vec<(Vec<u8>, ReadGuardedView<W>)>, ViewError> {
+        let updates = self.updates.read().await; // Acquire the read lock to prevent writes.
         let short_keys = self.keys().await?;
         let mut results = Vec::with_capacity(short_keys.len());
-        let updates = self.updates.read().await;
 
         let mut keys_to_load = Vec::new();
         let mut keys_to_load_metadata = Vec::new();
@@ -546,7 +546,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     /// # })
     /// ```
     pub async fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
-        let updates = self.updates.write().await;
+        let updates = self.updates.read().await;
         Ok(match updates.get(short_key) {
             Some(entry) => match entry {
                 Update::Set(_view) => true,
@@ -665,7 +665,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
-        let updates = self.updates.write().await;
+        let updates = self.updates.read().await;
         let mut updates = updates.iter();
         let mut update = updates.next();
         if !self.delete_storage_first {
@@ -830,10 +830,10 @@ impl<W: HashableView> HashableView for ByteCollectionView<W::Context, W> {
         #[cfg(with_metrics)]
         let _hash_latency = metrics::COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
+        let updates = self.updates.read().await; // Acquire the lock to prevent writes.
         let keys = self.keys().await?;
         let count = keys.len() as u32;
         hasher.update_with_bcs_bytes(&count)?;
-        let updates = self.updates.read().await;
         for key in keys {
             hasher.update_with_bytes(&key)?;
             let hash = match updates.get(&key) {
