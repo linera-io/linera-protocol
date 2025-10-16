@@ -28,7 +28,6 @@ use linera_base::{
     time::{Duration, Instant},
     vm::VmRuntime,
 };
-//use OnClientDrop::*;
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
     abis::fungible::NativeFungibleTokenAbi,
