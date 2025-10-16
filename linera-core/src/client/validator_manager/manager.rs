@@ -542,10 +542,7 @@ impl<Env: Environment> ValidatorManager<Env> {
             }
         }
 
-        // Store in cache only if the result is successful
-        if shared_result.is_ok() {
-            self.store_in_cache(key.clone(), shared_result).await;
-        }
+        self.store_in_cache(key.clone(), shared_result).await;
         result
     }
 
@@ -554,6 +551,9 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// If the cache is at capacity, this method removes the oldest entry before
     /// inserting the new one. Entries are considered "oldest" based on their cached_at timestamp.
     async fn store_in_cache(&self, key: RequestKey, result: Arc<RequestResult>) {
+        if !result.is_ok() {
+            return; // Only cache successful results
+        }
         self.evict_expired_cache_entries().await; // Clean up expired entries first
         let mut cache = self.cache.write().await;
         // Insert new entry
