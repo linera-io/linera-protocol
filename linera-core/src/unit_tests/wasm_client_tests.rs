@@ -375,10 +375,6 @@ where
     assert_eq!(response_json["data"], json!({"value": 10}));
 
     receiver.synchronize_from_validators().await.unwrap();
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
     receiver.process_inbox().await.unwrap();
 
     let query = Request::new("{ value }");
@@ -398,15 +394,12 @@ where
 
     // Try again with a value that will make the (untracked) message fail.
     let operation = meta_counter::Operation::fail(receiver_id);
-    let cert = creator
+    creator
         .execute_operation(Operation::user(application_id2, &operation)?)
         .await
         .unwrap_ok_committed();
 
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    receiver.synchronize_from_validators().await.unwrap();
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
@@ -424,15 +417,12 @@ where
     // Try again with a value that will make the (tracked) message fail.
     let mut operation = meta_counter::Operation::fail(receiver_id);
     operation.is_tracked = true;
-    let cert = creator
+    creator
         .execute_operation(Operation::user(application_id2, &operation)?)
         .await
         .unwrap_ok_committed();
 
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    receiver.synchronize_from_validators().await.unwrap();
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
@@ -447,10 +437,7 @@ where
     assert_eq!(messages.len(), 1);
 
     // The bounced message is marked as "bouncing" in the Wasm context and succeeds.
-    creator
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    creator.synchronize_from_validators().await.unwrap();
     let mut certs = creator.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
@@ -597,15 +584,12 @@ where
             owner: receiver_owner,
         },
     };
-    let cert = sender
+    sender
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
         .unwrap_ok_committed();
 
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    receiver.synchronize_from_validators().await.unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let bundles = certs[0].block().body.incoming_bundles();
@@ -637,15 +621,12 @@ where
             owner: receiver2_owner,
         },
     };
-    let certificate = receiver
+    receiver
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
         .unwrap_ok_committed();
 
-    receiver2
-        .receive_certificate_and_update_validators(certificate)
-        .await
-        .unwrap();
+    receiver2.synchronize_from_validators().await.unwrap();
 
     Ok(())
 }
@@ -729,15 +710,12 @@ where
         text: text.clone(),
         image_url: None,
     };
-    let cert = sender
+    sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
         .unwrap_ok_committed();
 
-    receiver
-        .receive_certificate_and_update_validators(cert.clone())
-        .await
-        .unwrap();
+    receiver.synchronize_from_validators().await.unwrap();
 
     builder.set_fault_type([3], FaultType::Honest);
     builder.set_fault_type([2], FaultType::Offline);
@@ -782,17 +760,13 @@ where
     let request_unsubscribe = social::Operation::Unsubscribe {
         chain_id: sender.chain_id(),
     };
-    let cert = receiver
+    receiver
         .execute_operation(Operation::user(application_id, &request_unsubscribe)?)
         .await
         .unwrap_ok_committed();
 
     // Unsubscribe the receiver.
     sender.synchronize_from_validators().await.unwrap();
-    sender
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
     let _certs = sender.process_inbox().await.unwrap();
 
     // Make a post.
@@ -800,16 +774,13 @@ where
         text: "Nobody will read this!".to_string(),
         image_url: None,
     };
-    let cert = sender
+    sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
         .unwrap_ok_committed();
 
     // The post will not be received by the unsubscribed chain.
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    receiver.synchronize_from_validators().await.unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert!(certs.is_empty());
 
