@@ -402,19 +402,12 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
         let mut last_info = None;
         // First load any blocks from local storage, if available.
-        let mut hashes = Vec::new();
-        let mut next_height = BlockHeight::ZERO;
-        {
-            let chain = self.local_node.chain_state_view(chain_id).await?;
-            next_height = next_height.max(chain.tip_state.get().next_block_height);
-            while next_height < stop {
-                let Some(hash) = chain.preprocessed_blocks.get(&next_height).await? else {
-                    break;
-                };
-                hashes.push(hash);
-                next_height = next_height.try_add_one()?;
-            }
-        }
+        let chain_info = self.local_node.chain_info(chain_id).await?;
+        let mut next_height = chain_info.next_block_height;
+        let hashes = self
+            .local_node
+            .get_preprocessed_block_hashes(chain_id, next_height, stop)
+            .await?;
         let certificates = self
             .storage_client()
             .read_certificates(hashes.clone())
@@ -628,7 +621,7 @@ impl<Env: Environment> Client<Env> {
         let certificate = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
             .await?;
-        self.receive_certificate(certificate.clone(), ReceiveCertificateMode::AlreadyChecked)
+        self.receive_certificate_with_checked_signatures(certificate.clone())
             .await?;
         Ok(certificate)
     }
@@ -742,51 +735,16 @@ impl<Env: Environment> Client<Env> {
         Ok(certificate)
     }
 
-    /// Processes the confirmed block certificate and its ancestors in the local node, then
-    /// updates the validators up to that certificate.
+    /// Processes the confirmed block certificate in the local node without checking signatures.
+    /// Also downloads and processes all ancestors that are still missing.
     #[instrument(level = "trace", skip_all)]
-    async fn receive_certificate_and_update_validators(
+    async fn receive_certificate_with_checked_signatures(
         &self,
         certificate: ConfirmedBlockCertificate,
-        mode: ReceiveCertificateMode,
-    ) -> Result<(), ChainClientError> {
-        let block_chain_id = certificate.block().header.chain_id;
-        let block_height = certificate.block().header.height;
-
-        self.receive_certificate(certificate, mode).await?;
-
-        // Make sure a quorum of validators (according to the chain's new committee) are up-to-date
-        // for data availability.
-        let local_committee = self
-            .chain_info_with_committees(block_chain_id)
-            .await?
-            .into_current_committee()?;
-        self.communicate_chain_updates(
-            &local_committee,
-            block_chain_id,
-            block_height.try_add_one()?,
-            CrossChainMessageDelivery::Blocking,
-        )
-        .await?;
-        Ok(())
-    }
-
-    /// Processes the confirmed block certificate in the local node. Also downloads and processes
-    /// all ancestors that are still missing.
-    #[instrument(level = "trace", skip_all)]
-    async fn receive_certificate(
-        &self,
-        certificate: ConfirmedBlockCertificate,
-        mode: ReceiveCertificateMode,
     ) -> Result<(), ChainClientError> {
         let certificate = Box::new(certificate);
         let block = certificate.block();
 
-        // Verify the certificate before doing any expensive networking.
-        let (max_epoch, committees) = self.admin_committees().await?;
-        if let ReceiveCertificateMode::NeedsCheck = mode {
-            Self::check_certificate(max_epoch, &committees, &certificate)?.into_result()?;
-        }
         // Recover history from the network.
         self.download_certificates(block.header.chain_id, block.header.height)
             .await?;
@@ -3380,24 +3338,6 @@ impl<Env: Environment> ChainClient<Env> {
         self.update_state(|state| state.clear_pending_proposal());
     }
 
-    /// Processes a confirmed block for which this chain is a recipient and updates validators.
-    #[instrument(
-        level = "trace",
-        skip(certificate),
-        fields(certificate_hash = ?certificate.hash()),
-    )]
-    pub async fn receive_certificate_and_update_validators(
-        &self,
-        certificate: ConfirmedBlockCertificate,
-    ) -> Result<(), ChainClientError> {
-        self.client
-            .receive_certificate_and_update_validators(
-                certificate,
-                ReceiveCertificateMode::NeedsCheck,
-            )
-            .await
-    }
-
     /// Rotates the key of the chain.
     ///
     /// Replaces current owners of the chain with the new key pair.
@@ -3939,11 +3879,11 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         origin: ChainId,
     ) -> Result<BlockHeight, ChainClientError> {
-        let chain = self.chain_state_view().await?;
-        Ok(match chain.inboxes.try_load_entry(&origin).await? {
-            Some(inbox) => inbox.next_block_height_to_receive()?,
-            None => BlockHeight::ZERO,
-        })
+        Ok(self
+            .client
+            .local_node
+            .get_inbox_next_height(self.chain_id, origin)
+            .await?)
     }
 
     #[instrument(level = "trace", skip(remote_node, local_node, notification))]

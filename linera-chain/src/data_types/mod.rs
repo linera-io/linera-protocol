@@ -28,8 +28,12 @@ use crate::{
     ChainError,
 };
 
+pub mod metadata;
+
+pub use metadata::*;
+
 #[cfg(test)]
-#[path = "unit_tests/data_types_tests.rs"]
+#[path = "../unit_tests/data_types_tests.rs"]
 mod data_types_tests;
 
 /// A block containing operations to apply on a given chain, as well as the
@@ -173,8 +177,8 @@ pub struct OperationMetadata {
     pub application_id: Option<ApplicationId>,
     /// For user operations, the serialized bytes (as a hex string for GraphQL)
     pub user_bytes_hex: Option<String>,
-    /// For system operations, the serialized bytes (as a hex string for GraphQL)
-    pub system_bytes_hex: Option<String>,
+    /// For system operations, structured representation
+    pub system_operation: Option<SystemOperationMetadata>,
 }
 
 impl From<&Operation> for OperationMetadata {
@@ -184,9 +188,7 @@ impl From<&Operation> for OperationMetadata {
                 operation_type: "System".to_string(),
                 application_id: None,
                 user_bytes_hex: None,
-                system_bytes_hex: Some(hex::encode(
-                    bcs::to_bytes(sys_op).expect("System operation should be serializable"),
-                )),
+                system_operation: Some(SystemOperationMetadata::from(sys_op.as_ref())),
             },
             Operation::User {
                 application_id,
@@ -195,7 +197,7 @@ impl From<&Operation> for OperationMetadata {
                 operation_type: "User".to_string(),
                 application_id: Some(*application_id),
                 user_bytes_hex: Some(hex::encode(bytes)),
-                system_bytes_hex: None,
+                system_operation: None,
             },
         }
     }
@@ -308,6 +310,7 @@ pub struct BlockProposal {
 
 /// A message together with kind, authentication and grant information.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[graphql(complex)]
 pub struct PostedMessage {
     /// The user authentication carried by the message, if any.
     #[debug(skip_if = Option::is_none)]
@@ -350,6 +353,14 @@ impl OutgoingMessageExt for OutgoingMessage {
             index,
             message,
         }
+    }
+}
+
+#[async_graphql::ComplexObject]
+impl PostedMessage {
+    /// Structured message metadata for GraphQL.
+    async fn message_metadata(&self) -> MessageMetadata {
+        MessageMetadata::from(&self.message)
     }
 }
 

@@ -157,6 +157,36 @@ where
         new_trackers: BTreeMap<ValidatorPublicKey, u64>,
         callback: oneshot::Sender<Result<(), WorkerError>>,
     },
+
+    /// Get preprocessed block hashes in a given height range.
+    GetPreprocessedBlockHashes {
+        start: BlockHeight,
+        end: BlockHeight,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<Vec<CryptoHash>, WorkerError>>,
+    },
+
+    /// Get the next block height to receive from an inbox.
+    GetInboxNextHeight {
+        origin: ChainId,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<BlockHeight, WorkerError>>,
+    },
+
+    /// Get locking blobs for specific blob IDs.
+    GetLockingBlobs {
+        blob_ids: Vec<BlobId>,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<Option<Vec<Blob>>, WorkerError>>,
+    },
+
+    /// Read a range from the confirmed log.
+    ReadConfirmedLog {
+        start: BlockHeight,
+        end: BlockHeight,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<Vec<CryptoHash>, WorkerError>>,
+    },
 }
 
 /// The actor worker type.
