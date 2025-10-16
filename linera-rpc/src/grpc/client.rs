@@ -25,7 +25,7 @@ use linera_core::{
 };
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
-use tracing::{debug, info, instrument, warn, Level};
+use tracing::{debug, instrument, trace, warn, Level};
 
 use super::{
     api::{self, validator_node_client::ValidatorNodeClient, SubscriptionRequest},
@@ -71,11 +71,11 @@ impl GrpcClient {
     fn is_retryable(status: &Status) -> bool {
         match status.code() {
             Code::DeadlineExceeded | Code::Aborted | Code::Unavailable | Code::Unknown => {
-                info!("gRPC request interrupted: {status:?}; retrying");
+                trace!("gRPC request interrupted: {status:?}; retrying");
                 true
             }
             Code::Ok | Code::Cancelled | Code::ResourceExhausted => {
-                info!("Unexpected gRPC status: {status:?}; retrying");
+                trace!("Unexpected gRPC status: {status:?}; retrying");
                 true
             }
             Code::NotFound => false, // This code is used if e.g. the validator is missing blobs.
@@ -88,7 +88,7 @@ impl GrpcClient {
             | Code::Internal
             | Code::DataLoss
             | Code::Unauthenticated => {
-                info!("Unexpected gRPC status: {status:?}");
+                trace!("Unexpected gRPC status: {status:?}");
                 false
             }
         }
