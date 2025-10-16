@@ -166,7 +166,7 @@ where
         )
         .await
         .unwrap_ok_committed();
-    let cert = sender
+    sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_millis(100),
@@ -178,9 +178,7 @@ where
         sender.local_balance().await.unwrap(),
         Amount::from_millis(900)
     );
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await?;
+    receiver.synchronize_from_validators().await?;
     assert_eq!(receiver.process_inbox().await?.0.len(), 1);
     // The friend paid to receive the message.
     assert_eq!(
@@ -218,7 +216,7 @@ where
         .await
         .unwrap();
     // Second attempt with a correct amount.
-    let cert = sender
+    sender
         .claim(
             owner,
             receiver_id,
@@ -228,9 +226,7 @@ where
         .await
         .unwrap_ok_committed();
 
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await?;
+    receiver.synchronize_from_validators().await?;
     let cert = receiver.process_inbox().await?.0.pop().unwrap();
     {
         let messages = cert.block().body.incoming_bundles().collect::<Vec<_>>();
@@ -244,9 +240,7 @@ where
         assert_eq!(messages[1].action, MessageAction::Accept);
     }
 
-    sender
-        .receive_certificate_and_update_validators(cert)
-        .await?;
+    sender.synchronize_from_validators().await?;
     sender.process_inbox().await?;
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -487,7 +481,7 @@ where
     let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     // Open the new chain.
-    let (new_description, certificate) = sender
+    let (new_description, _certificate) = sender
         .open_chain(
             ChainOwnership::single(new_public_key.into()),
             ApplicationPermissions::default(),
@@ -506,10 +500,7 @@ where
     // Make a client to try the new chain.
     let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
     client.set_preferred_owner(new_public_key.into());
-    client
-        .receive_certificate_and_update_validators(certificate)
-        .await
-        .unwrap();
+    client.synchronize_from_validators().await.unwrap();
     assert_eq!(client.query_balance().await.unwrap(), Amount::ZERO);
     client.close_chain().await.unwrap();
     Ok(())
@@ -597,13 +588,10 @@ where
     // Make a client to try the new chain.
     let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
     client.set_preferred_owner(new_public_key.into());
-    client
-        .receive_certificate_and_update_validators(certificate)
-        .await
-        .unwrap();
+    client.synchronize_from_validators().await.unwrap();
     // Make another block on top of the one that sent the two tokens, so that the validators
     // process the cross-chain messages.
-    let certificate2 = sender
+    sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(1),
@@ -611,10 +599,7 @@ where
         )
         .await
         .unwrap_ok_committed();
-    client
-        .receive_certificate_and_update_validators(certificate2)
-        .await
-        .unwrap();
+    client.synchronize_from_validators().await.unwrap();
     assert_eq!(
         client.query_balance().await.unwrap(),
         Amount::from_tokens(3)
@@ -645,13 +630,13 @@ where
     // Open the new chain. We are both regular and super owner.
     let ownership = ChainOwnership::single(new_public_key.into())
         .with_regular_owner(new_public_key.into(), 100);
-    let (new_description, creation_certificate) = sender
+    let (new_description, _creation_certificate) = sender
         .open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO)
         .await
         .unwrap_ok_committed();
     let new_id = new_description.id();
     // Transfer after creating the chain.
-    let transfer_certificate = sender
+    sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(3),
@@ -669,15 +654,9 @@ where
     let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
     client.set_preferred_owner(new_public_key.into());
     // Must process the creation certificate before using the new chain.
-    client
-        .receive_certificate_and_update_validators(creation_certificate)
-        .await
-        .unwrap();
+    client.synchronize_from_validators().await.unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
-    client
-        .receive_certificate_and_update_validators(transfer_certificate)
-        .await
-        .unwrap();
+    client.synchronize_from_validators().await.unwrap();
     assert_eq!(
         client.query_balance().await.unwrap(),
         Amount::from_tokens(3)
@@ -965,7 +944,7 @@ where
         .with_policy(ResourceControlPolicy::only_fuel());
     let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
-    let certificate = client1
+    client1
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
@@ -987,10 +966,7 @@ where
     client2.process_inbox().await.unwrap();
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
-    client2
-        .receive_certificate_and_update_validators(certificate)
-        .await
-        .unwrap();
+    client2.synchronize_from_validators().await.unwrap();
     assert_eq!(
         client2.query_balance().await.unwrap(),
         Amount::from_millis(2000)
@@ -1057,7 +1033,7 @@ where
         .is_none());
     // Retrying the whole command works after synchronization.
     client2.synchronize_from_validators().await.unwrap();
-    let certificate = client2
+    client2
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
@@ -1081,10 +1057,7 @@ where
     // Last one was not confirmed remotely, hence a conservative balance.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
-    client3
-        .receive_certificate_and_update_validators(certificate)
-        .await
-        .unwrap();
+    client3.synchronize_from_validators().await.unwrap();
     assert_eq!(
         client3.query_balance().await.unwrap(),
         Amount::from_tokens(2)
@@ -1142,7 +1115,7 @@ where
     assert_eq!(admin.chain_info().await?.epoch, Epoch::from(2));
 
     // Sending money from the admin chain is supported.
-    let cert = admin
+    admin
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
@@ -1161,15 +1134,15 @@ where
 
     // User is still at the initial epoch, but we can receive transfers from future
     // epochs AFTER synchronizing the client with the admin chain.
-    assert_matches!(
-        user.receive_certificate_and_update_validators(cert).await,
-        Err(ChainClientError::CommitteeSynchronizationError)
-    );
-    assert_eq!(user.chain_info().await?.epoch, Epoch::from(1));
-    user.synchronize_from_validators().await.unwrap();
+    let info = user.synchronize_chain_state(user.chain_id()).await?;
+    user.process_inbox().await.unwrap();
+    assert_eq!(info.epoch, Epoch(1));
+    assert_eq!(user.local_balance().await?, Amount::ZERO);
 
+    user.synchronize_from_validators().await.unwrap();
     user.process_inbox().await.unwrap();
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(2));
+    assert_eq!(user.local_balance().await?, Amount::from_tokens(3));
 
     // Revoking the current or an already revoked epoch fails.
     assert_matches!(
@@ -1185,33 +1158,25 @@ where
     admin.revoke_epochs(Epoch::from(1)).await.unwrap();
 
     // Try to make a transfer back to the admin chain.
-    let cert = user
-        .transfer_to_account(
-            AccountOwner::CHAIN,
-            Amount::from_tokens(2),
-            Account::chain(admin.chain_id()),
-        )
-        .await
-        .unwrap_ok_committed();
-    admin
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    user.transfer_to_account(
+        AccountOwner::CHAIN,
+        Amount::from_tokens(2),
+        Account::chain(admin.chain_id()),
+    )
+    .await
+    .unwrap_ok_committed();
+    admin.synchronize_from_validators().await.unwrap();
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(2));
 
     // Try again to make a transfer back to the admin chain.
-    let cert = user
-        .transfer_to_account(
-            AccountOwner::CHAIN,
-            Amount::ONE,
-            Account::chain(admin.chain_id()),
-        )
-        .await
-        .unwrap_ok_committed();
-    admin
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    user.transfer_to_account(
+        AccountOwner::CHAIN,
+        Amount::ONE,
+        Account::chain(admin.chain_id()),
+    )
+    .await
+    .unwrap_ok_committed();
+    admin.synchronize_from_validators().await.unwrap();
     admin.process_inbox().await.unwrap();
     // Transfer goes through and the previous one as well thanks to block chaining.
     assert_eq!(admin.local_balance().await.unwrap(), Amount::from_tokens(3));
@@ -2498,7 +2463,7 @@ where
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let mut receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let recipient = Account::chain(receiver.chain_id());
-    let cert = sender
+    sender
         .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
         .await
         .unwrap_ok_committed();
@@ -2508,9 +2473,7 @@ where
     );
 
     receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Ignore, None);
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await?;
+    receiver.synchronize_from_validators().await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
@@ -2523,9 +2486,7 @@ where
     receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Reject, None);
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
-    sender
-        .receive_certificate_and_update_validators(certs.into_iter().next().unwrap())
-        .await?;
+    sender.synchronize_from_validators().await?;
     // The message bounces.
     assert_eq!(sender.process_inbox().await?.0.len(), 1);
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
@@ -2736,10 +2697,6 @@ where
         .await?;
     client2.set_preferred_owner(new_public_key.into());
     client2.synchronize_from_validators().await.unwrap();
-    client2
-        .receive_certificate_and_update_validators(certificate1)
-        .await
-        .unwrap();
 
     // Let's deactivate another validator and reactivate the one that was offline.
     // Now the client will have to update validator 3 on the admin chain in order for the
