@@ -83,7 +83,9 @@ pub struct ValidatorManager<Env: Environment> {
     default_max_expected_latency_ms: f64,
     /// Tracks in-flight requests to deduplicate concurrent requests for the same data.
     /// Maps request keys to entries containing broadcast senders and request start times.
-    in_flight_requests: Arc<tokio::sync::RwLock<HashMap<RequestKey, InFlightEntry>>>,
+    in_flight_requests: Arc<
+        tokio::sync::RwLock<HashMap<RequestKey, InFlightEntry<RemoteNode<Env::ValidatorNode>>>>,
+    >,
     /// Maximum duration before an in-flight request is considered stale and deduplication is skipped.
     in_flight_timeout: Duration,
     /// Cache of recently completed requests with their results and timestamps.
@@ -239,6 +241,74 @@ impl<Env: Environment> ValidatorManager<Env> {
         Fut: Future<Output = Result<R, NodeError>>,
     {
         self.add_peer(peer.clone()).await;
+
+        // Check if there's an in-flight request for this key
+        // If so, register this peer as an alternative source
+        {
+            let in_flight = self.in_flight_requests.read().await;
+            if let Some(entry) = in_flight.get(&key) {
+                let elapsed = Instant::now().duration_since(entry.started_at);
+
+                // Always register this peer as an alternative source
+                {
+                    let mut alt_peers = entry.alternative_peers.write().await;
+                    if !alt_peers.iter().any(|p| p.public_key == peer.public_key) {
+                        alt_peers.push(peer.clone());
+                        tracing::debug!(
+                            key = ?key,
+                            peer = ?peer.public_key,
+                            elapsed_ms = elapsed.as_millis(),
+                            "registered peer as alternative source for in-flight request"
+                        );
+                    }
+                }
+
+                // If the in-flight request has timed out, execute immediately with this peer
+                // and broadcast the result to all waiters
+                if elapsed > self.in_flight_timeout {
+                    tracing::debug!(
+                        key = ?key,
+                        peer = ?peer.public_key,
+                        elapsed_ms = elapsed.as_millis(),
+                        timeout_ms = self.in_flight_timeout.as_millis(),
+                        "in-flight exceeded time limit - executing immediately with alternative peer"
+                    );
+                    drop(in_flight);
+
+                    // Capture peer key before moving peer
+                    let peer_key = peer.public_key;
+
+                    // Execute with alternative peer
+                    let result = self.track_request(peer, operation).await;
+
+                    // Convert result for broadcasting
+                    let result_for_broadcast: RequestResult = result.clone().into();
+                    let shared_result = Arc::new(result_for_broadcast);
+
+                    // Broadcast to waiters and clean up in-flight entry
+                    {
+                        let mut in_flight = self.in_flight_requests.write().await;
+                        if let Some(entry) = in_flight.remove(&key) {
+                            tracing::info!(
+                                key = ?key,
+                                peer = ?peer_key,
+                                waiters = entry.sender.receiver_count(),
+                                "alternative peer completed; broadcasting result to waiters",
+                            );
+                            if entry.sender.receiver_count() != 0 {
+                                let _ = entry.sender.send(shared_result.clone()).unwrap();
+                            }
+                        }
+                    }
+
+                    // Store in cache
+                    self.store_in_cache(key.clone(), shared_result).await;
+
+                    return result;
+                }
+            }
+        }
+
         self.deduplicated_request(key, || async { self.track_request(peer, operation).await })
             .await
     }
@@ -288,6 +358,23 @@ impl<Env: Environment> ValidatorManager<Env> {
             blobs.push(maybe_blob?);
         }
         Ok(blobs.into_iter().collect::<Option<Vec<_>>>())
+    }
+
+    /// Returns the alternative peers registered for an in-flight request, if any.
+    ///
+    /// This can be used to retry a failed request with alternative data sources
+    /// that were registered during request deduplication.
+    pub async fn get_alternative_peers(
+        &self,
+        key: &RequestKey,
+    ) -> Option<Vec<RemoteNode<Env::ValidatorNode>>> {
+        let in_flight = self.in_flight_requests.read().await;
+        if let Some(entry) = in_flight.get(key) {
+            let peers = entry.alternative_peers.read().await;
+            Some(peers.clone())
+        } else {
+            None
+        }
     }
 
     /// Returns current performance metrics for all managed nodes.
@@ -518,6 +605,7 @@ impl<Env: Environment> ValidatorManager<Env> {
             InFlightEntry {
                 sender,
                 started_at: Instant::now(),
+                alternative_peers: Arc::new(tokio::sync::RwLock::new(Vec::new())),
             },
         );
         drop(in_flight);
@@ -745,10 +833,12 @@ struct CacheEntry {
 }
 
 /// In-flight request entry that tracks when the request was initiated
-#[derive(Debug, Clone)]
-struct InFlightEntry {
+#[derive(Debug)]
+struct InFlightEntry<N> {
     sender: broadcast::Sender<Arc<RequestResult>>,
     started_at: Instant,
+    /// Alternative peers that can provide this data if the primary request fails
+    alternative_peers: Arc<tokio::sync::RwLock<Vec<N>>>,
 }
 
 #[cfg(test)]
@@ -1177,5 +1267,120 @@ mod tests {
 
         // Verify all completed
         assert_eq!(completion_count.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn test_alternative_peers_registered_on_deduplication() {
+        use linera_base::identifiers::BlobType;
+
+        use crate::test_utils::{MemoryStorageBuilder, TestBuilder};
+
+        // Create a test environment with three validators
+        let mut builder = TestBuilder::new(
+            MemoryStorageBuilder::default(),
+            3,
+            0,
+            InMemorySigner::new(None),
+        )
+        .await
+        .unwrap();
+
+        // Get validator nodes
+        let nodes: Vec<_> = (0..3)
+            .map(|i| {
+                let node = builder.node(i);
+                let public_key = node.name();
+                RemoteNode { public_key, node }
+            })
+            .collect();
+
+        // Create a ValidatorManager
+        let manager: Arc<ValidatorManager<TestEnvironment>> =
+            Arc::new(ValidatorManager::with_config(
+                nodes.clone(),
+                10,
+                ScoringWeights::default(),
+                0.1,
+                1000.0,
+                Duration::from_secs(60),
+                100,
+            ));
+
+        let key = RequestKey::Blob(BlobId::new(
+            CryptoHash::test_hash("test_blob"),
+            BlobType::Data,
+        ));
+
+        // Create a channel to control when first request completes
+        let (tx, rx) = oneshot::channel();
+
+        // Start first request with node 0 (will block until signaled)
+        let manager_clone = Arc::clone(&manager);
+        let node_clone = nodes[0].clone();
+        let key_clone = key.clone();
+        let first_request = tokio::spawn(async move {
+            manager_clone
+                .with_peer(key_clone, node_clone, |_peer| async move {
+                    // Wait for signal
+                    rx.await.unwrap();
+                    Ok(None) // Return Option<Blob>
+                })
+                .await
+        });
+
+        // Give first request time to start and become in-flight
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Start second and third requests with different nodes
+        // These should register as alternatives and wait for the first request
+        let handles: Vec<_> = vec![nodes[1].clone(), nodes[2].clone()]
+            .into_iter()
+            .map(|node| {
+                let manager_clone = Arc::clone(&manager);
+                let key_clone = key.clone();
+                tokio::spawn(async move {
+                    manager_clone
+                        .with_peer(key_clone, node, |_peer| async move {
+                            Ok(None) // Return Option<Blob>
+                        })
+                        .await
+                })
+            })
+            .collect();
+
+        // Give time for alternative peers to register
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Check that nodes 1 and 2 are registered as alternatives
+        let alt_peers = manager.get_alternative_peers(&key).await;
+        assert!(alt_peers.is_some(), "Expected in-flight entry to exist");
+        if let Some(peers) = alt_peers {
+            assert_eq!(peers.len(), 2, "Expected two alternative peers");
+            assert!(
+                peers.iter().any(|p| p.public_key == nodes[1].public_key),
+                "Expected node 1 to be registered"
+            );
+            assert!(
+                peers.iter().any(|p| p.public_key == nodes[2].public_key),
+                "Expected node 2 to be registered"
+            );
+        }
+
+        // Signal first request to complete
+        tx.send(()).unwrap();
+
+        // Wait for all requests to complete
+        let _result1 = first_request.await.unwrap();
+        for handle in handles {
+            let _ = handle.await.unwrap();
+        }
+
+        // After completion, the in-flight entry should be removed
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let alt_peers = manager.get_alternative_peers(&key).await;
+        assert!(
+            alt_peers.is_none(),
+            "Expected in-flight entry to be removed after completion"
+        );
     }
 }
