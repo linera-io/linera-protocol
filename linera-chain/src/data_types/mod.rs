@@ -159,6 +159,15 @@ pub enum Transaction {
 
 impl BcsHashable<'_> for Transaction {}
 
+impl Transaction {
+    pub fn incoming_bundle(&self) -> Option<&IncomingBundle> {
+        match self {
+            Transaction::ReceiveMessages(bundle) => Some(bundle),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
 #[graphql(name = "Operation")]
 pub struct OperationMetadata {
