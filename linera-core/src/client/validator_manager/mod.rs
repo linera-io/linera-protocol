@@ -4,6 +4,7 @@
 //! This module manages communication with validator nodes, including connection pooling,
 //! load balancing, request deduplication, caching, and performance tracking.
 
+mod in_flight_tracker;
 mod manager;
 mod node_info;
 mod request;

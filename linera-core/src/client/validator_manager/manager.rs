@@ -21,10 +21,10 @@ use rand::{
     distributions::{Distribution, WeightedIndex},
     prelude::SliceRandom as _,
 };
-use tokio::sync::broadcast;
 use tracing::instrument;
 
 use super::{
+    in_flight_tracker::{InFlightMatch, InFlightTracker, SubscribeOutcome},
     node_info::NodeInfo,
     request::{RequestKey, RequestResult},
     scoring::ScoringWeights,
@@ -82,12 +82,7 @@ pub struct ValidatorManager<Env: Environment> {
     /// Default maximum expected latency in milliseconds for score normalization.
     default_max_expected_latency_ms: f64,
     /// Tracks in-flight requests to deduplicate concurrent requests for the same data.
-    /// Maps request keys to entries containing broadcast senders and request start times.
-    in_flight_requests: Arc<
-        tokio::sync::RwLock<HashMap<RequestKey, InFlightEntry<RemoteNode<Env::ValidatorNode>>>>,
-    >,
-    /// Maximum duration before an in-flight request is considered stale and deduplication is skipped.
-    in_flight_timeout: Duration,
+    in_flight_tracker: InFlightTracker<RemoteNode<Env::ValidatorNode>>,
     /// Cache of recently completed requests with their results and timestamps.
     /// Used to avoid re-executing requests for the same data within the TTL window.
     cache: Arc<tokio::sync::RwLock<HashMap<RequestKey, CacheEntry>>>,
@@ -154,8 +149,7 @@ impl<Env: Environment> ValidatorManager<Env> {
             default_weights: weights,
             default_alpha: alpha,
             default_max_expected_latency_ms: max_expected_latency_ms,
-            in_flight_requests: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            in_flight_timeout: Duration::from_millis(MAX_REQUEST_TTL_MS),
+            in_flight_tracker: InFlightTracker::new(Duration::from_millis(MAX_REQUEST_TTL_MS)),
             cache: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             cache_ttl,
             max_cache_size,
@@ -198,17 +192,14 @@ impl<Env: Environment> ValidatorManager<Env> {
         F: FnOnce(RemoteNode<Env::ValidatorNode>) -> Fut,
         Fut: Future<Output = Result<R, NodeError>>,
     {
-        self.deduplicated_request(key, || async {
-            // Select the best available peer
-            let peer = self
-                .select_best_peer()
-                .await
-                .ok_or_else(|| NodeError::WorkerError {
-                    error: "No validators available".to_string(),
-                })?;
-            self.track_request(peer, operation).await
-        })
-        .await
+        // Select the best available peer
+        let peer = self
+            .select_best_peer()
+            .await
+            .ok_or_else(|| NodeError::WorkerError {
+                error: "No validators available".to_string(),
+            })?;
+        self.with_peer(key, peer, operation).await
     }
 
     /// Executes an operation with a specific peer.
@@ -244,68 +235,47 @@ impl<Env: Environment> ValidatorManager<Env> {
 
         // Check if there's an in-flight request for this key
         // If so, register this peer as an alternative source
+        if let Some(elapsed) = self
+            .in_flight_tracker
+            .register_alternative_and_check_timeout(&key, peer.clone(), |p| {
+                p.public_key == peer.public_key
+            })
+            .await
         {
-            let in_flight = self.in_flight_requests.read().await;
-            if let Some(entry) = in_flight.get(&key) {
-                let elapsed = Instant::now().duration_since(entry.started_at);
+            tracing::debug!(
+                key = ?key,
+                peer = ?peer.public_key,
+                elapsed_ms = elapsed.as_millis(),
+                "registered peer as alternative source for in-flight request"
+            );
 
-                // Always register this peer as an alternative source
-                {
-                    let mut alt_peers = entry.alternative_peers.write().await;
-                    if !alt_peers.iter().any(|p| p.public_key == peer.public_key) {
-                        alt_peers.push(peer.clone());
-                        tracing::debug!(
-                            key = ?key,
-                            peer = ?peer.public_key,
-                            elapsed_ms = elapsed.as_millis(),
-                            "registered peer as alternative source for in-flight request"
-                        );
-                    }
-                }
+            // If the in-flight request has timed out, execute immediately with this peer
+            // and broadcast the result to all waiters
+            if elapsed > Duration::from_millis(MAX_REQUEST_TTL_MS) {
+                tracing::debug!(
+                    key = ?key,
+                    peer = ?peer.public_key,
+                    elapsed_ms = elapsed.as_millis(),
+                    timeout_ms = MAX_REQUEST_TTL_MS,
+                    "in-flight exceeded time limit - executing immediately with alternative peer"
+                );
 
-                // If the in-flight request has timed out, execute immediately with this peer
-                // and broadcast the result to all waiters
-                if elapsed > self.in_flight_timeout {
-                    tracing::debug!(
-                        key = ?key,
-                        peer = ?peer.public_key,
-                        elapsed_ms = elapsed.as_millis(),
-                        timeout_ms = self.in_flight_timeout.as_millis(),
-                        "in-flight exceeded time limit - executing immediately with alternative peer"
-                    );
-                    drop(in_flight);
+                // Execute with alternative peer
+                let result = self.track_request(peer, operation).await;
 
-                    // Capture peer key before moving peer
-                    let peer_key = peer.public_key;
+                // Convert result for broadcasting
+                let result_for_broadcast: RequestResult = result.clone().into();
+                let shared_result = Arc::new(result_for_broadcast);
 
-                    // Execute with alternative peer
-                    let result = self.track_request(peer, operation).await;
+                // Broadcast to waiters and clean up in-flight entry
+                self.in_flight_tracker
+                    .complete_and_broadcast(&key, shared_result.clone())
+                    .await;
 
-                    // Convert result for broadcasting
-                    let result_for_broadcast: RequestResult = result.clone().into();
-                    let shared_result = Arc::new(result_for_broadcast);
+                // Store in cache
+                self.store_in_cache(key.clone(), shared_result).await;
 
-                    // Broadcast to waiters and clean up in-flight entry
-                    {
-                        let mut in_flight = self.in_flight_requests.write().await;
-                        if let Some(entry) = in_flight.remove(&key) {
-                            tracing::info!(
-                                key = ?key,
-                                peer = ?peer_key,
-                                waiters = entry.sender.receiver_count(),
-                                "alternative peer completed; broadcasting result to waiters",
-                            );
-                            if entry.sender.receiver_count() != 0 {
-                                let _ = entry.sender.send(shared_result.clone()).unwrap();
-                            }
-                        }
-                    }
-
-                    // Store in cache
-                    self.store_in_cache(key.clone(), shared_result).await;
-
-                    return result;
-                }
+                return result;
             }
         }
 
@@ -368,13 +338,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         &self,
         key: &RequestKey,
     ) -> Option<Vec<RemoteNode<Env::ValidatorNode>>> {
-        let in_flight = self.in_flight_requests.read().await;
-        if let Some(entry) = in_flight.get(key) {
-            let peers = entry.alternative_peers.read().await;
-            Some(peers.clone())
-        } else {
-            None
-        }
+        self.in_flight_tracker.get_alternative_peers(key).await
     }
 
     /// Returns current performance metrics for all managed nodes.
@@ -503,112 +467,90 @@ impl<Env: Environment> ValidatorManager<Env> {
             }
         }
 
-        // Check if exact request is already in-flight
-        let mut in_flight = self.in_flight_requests.write().await;
-
-        if let Some(entry) = in_flight.get(&key) {
-            let elapsed = Instant::now().duration_since(entry.started_at);
-
-            // Skip deduplication if the in-flight request has exceeded timeout
-            if elapsed > self.in_flight_timeout {
-                tracing::trace!(
-                    key = ?key,
-                    elapsed_ms = elapsed.as_millis(),
-                    timeout_ms = self.in_flight_timeout.as_millis(),
-                    "in-flight request exceeded timeout - executing new request instead of deduplicating"
-                );
-                // Don't join the in-flight request, fall through to execute a new one
-            } else {
-                tracing::trace!(
-                    key = ?key,
-                    elapsed_ms = elapsed.as_millis(),
-                    "deduplicating request (exact match) - joining existing in-flight request"
-                );
-                let mut receiver = entry.sender.subscribe();
-                drop(in_flight);
-                // Wait for result from existing request
-                match receiver.recv().await {
-                    Ok(result) => return T::from((*result).clone()),
-                    Err(_) => {
+        // Check if there's an in-flight request (exact or subsuming)
+        if let Some(in_flight_match) = self.in_flight_tracker.try_subscribe(&key).await {
+            match in_flight_match {
+                InFlightMatch::Exact(outcome) => match outcome {
+                    SubscribeOutcome::Subscribed(mut receiver) => {
                         tracing::trace!(
                             key = ?key,
-                            "in-flight request sender dropped"
+                            "deduplicating request (exact match) - joining existing in-flight request"
                         );
-                        // Re-acquire lock since we dropped it
-                        in_flight = self.in_flight_requests.write().await;
-                    }
-                }
-            }
-        }
-
-        // Check for subsuming in-flight requests
-        for (in_flight_key, entry) in in_flight.iter() {
-            if in_flight_key.subsumes(&key) {
-                let elapsed = Instant::now().duration_since(entry.started_at);
-
-                // Skip subsumption deduplication if the in-flight request has exceeded timeout
-                if elapsed > self.in_flight_timeout {
-                    tracing::trace!(
-                        key = ?key,
-                        subsumed_by = ?in_flight_key,
-                        elapsed_ms = elapsed.as_millis(),
-                        timeout_ms = self.in_flight_timeout.as_millis(),
-                        "subsuming in-flight request exceeded timeout - will execute independently"
-                    );
-                    // Don't join the subsuming request, fall through to execute a new one
-                    break;
-                }
-
-                let subsuming_key = in_flight_key.clone(); // Clone the key before dropping lock
-                tracing::trace!(
-                    key = ?key,
-                    subsumed_by = ?subsuming_key,
-                    elapsed_ms = elapsed.as_millis(),
-                    "deduplicating request (subsumption) - joining larger in-flight request"
-                );
-                let mut receiver = entry.sender.subscribe();
-                drop(in_flight);
-                // Wait for result from the subsuming request
-                match receiver.recv().await {
-                    Ok(result) => {
-                        if let Some(extracted) = key.can_extract_result(&subsuming_key, &result) {
-                            tracing::trace!(
-                                key = ?key,
-                                "extracted subset result from larger in-flight request"
-                            );
-                            return T::from(extracted);
-                        } else {
-                            // Extraction failed, fall through to execute our own request
-                            tracing::trace!(
-                                key = ?key,
-                                "failed to extract from subsuming request, will execute independently"
-                            );
+                        // Wait for result from existing request
+                        match receiver.recv().await {
+                            Ok(result) => return T::from((*result).clone()),
+                            Err(_) => {
+                                tracing::trace!(
+                                    key = ?key,
+                                    "in-flight request sender dropped"
+                                );
+                                // Fall through to execute a new request
+                            }
                         }
                     }
-                    Err(_) => {
+                    SubscribeOutcome::TimedOut(elapsed) => {
                         tracing::trace!(
                             key = ?key,
-                            "subsuming in-flight request sender dropped"
+                            elapsed_ms = elapsed.as_millis(),
+                            timeout_ms = MAX_REQUEST_TTL_MS,
+                            "in-flight request exceeded timeout - executing new request instead of deduplicating"
                         );
+                        // Don't join the in-flight request, fall through to execute a new one
                     }
-                }
-                // Re-acquire lock since we dropped it
-                in_flight = self.in_flight_requests.write().await;
-                break;
+                },
+                InFlightMatch::Subsuming {
+                    key: subsuming_key,
+                    outcome,
+                } => match outcome {
+                    SubscribeOutcome::Subscribed(mut receiver) => {
+                        tracing::trace!(
+                            key = ?key,
+                            subsumed_by = ?subsuming_key,
+                            "deduplicating request (subsumption) - joining larger in-flight request"
+                        );
+                        // Wait for result from the subsuming request
+                        match receiver.recv().await {
+                            Ok(result) => {
+                                if let Some(extracted) =
+                                    key.can_extract_result(&subsuming_key, &result)
+                                {
+                                    tracing::trace!(
+                                        key = ?key,
+                                        "extracted subset result from larger in-flight request"
+                                    );
+                                    return T::from(extracted);
+                                } else {
+                                    // Extraction failed, fall through to execute our own request
+                                    tracing::trace!(
+                                        key = ?key,
+                                        "failed to extract from subsuming request, will execute independently"
+                                    );
+                                }
+                            }
+                            Err(_) => {
+                                tracing::trace!(
+                                    key = ?key,
+                                    "subsuming in-flight request sender dropped"
+                                );
+                            }
+                        }
+                    }
+                    SubscribeOutcome::TimedOut(elapsed) => {
+                        tracing::trace!(
+                            key = ?key,
+                            subsumed_by = ?subsuming_key,
+                            elapsed_ms = elapsed.as_millis(),
+                            timeout_ms = MAX_REQUEST_TTL_MS,
+                            "subsuming in-flight request exceeded timeout - will execute independently"
+                        );
+                        // Don't join the subsuming request, fall through to execute a new one
+                    }
+                },
             }
         }
 
-        // Create new broadcast channel for this request
-        let (sender, _receiver) = broadcast::channel(1);
-        in_flight.insert(
-            key.clone(),
-            InFlightEntry {
-                sender,
-                started_at: Instant::now(),
-                alternative_peers: Arc::new(tokio::sync::RwLock::new(Vec::new())),
-            },
-        );
-        drop(in_flight);
+        // Create new in-flight entry for this request
+        self.in_flight_tracker.insert_new(key.clone()).await;
 
         // Execute the actual request
         tracing::trace!(key = ?key, "executing new request");
@@ -617,19 +559,9 @@ impl<Env: Environment> ValidatorManager<Env> {
         let shared_result = Arc::new(result_for_broadcast);
 
         // Broadcast result and clean up
-        {
-            let mut in_flight = self.in_flight_requests.write().await;
-            if let Some(entry) = in_flight.remove(&key) {
-                tracing::info!(
-                    key = ?key,
-                    waiters = entry.sender.receiver_count(),
-                    "request completed; broadcasting result to waiters",
-                );
-                if entry.sender.receiver_count() != 0 {
-                    let _ = entry.sender.send(shared_result.clone()).unwrap();
-                }
-            }
-        }
+        self.in_flight_tracker
+            .complete_and_broadcast(&key, shared_result.clone())
+            .await;
 
         self.store_in_cache(key.clone(), shared_result).await;
         result
@@ -832,15 +764,6 @@ struct CacheEntry {
     cached_at: Instant,
 }
 
-/// In-flight request entry that tracks when the request was initiated
-#[derive(Debug)]
-struct InFlightEntry<N> {
-    sender: broadcast::Sender<Arc<RequestResult>>,
-    started_at: Instant,
-    /// Alternative peers that can provide this data if the primary request fails
-    alternative_peers: Arc<tokio::sync::RwLock<Vec<N>>>,
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::{
@@ -880,7 +803,8 @@ mod tests {
             cache_ttl,
             100,
         );
-        manager.in_flight_timeout = in_flight_timeout;
+        // Replace the tracker with one using the custom timeout
+        manager.in_flight_tracker = InFlightTracker::new(in_flight_timeout);
         Arc::new(manager)
     }
 
@@ -1161,7 +1085,8 @@ mod tests {
             Duration::from_secs(60),
             100,
         );
-        manager.in_flight_timeout = Duration::from_secs(60);
+        // Replace the tracker with one using a longer timeout for this test
+        manager.in_flight_tracker = InFlightTracker::new(Duration::from_secs(60));
         let manager = Arc::new(manager);
 
         // Track execution state
