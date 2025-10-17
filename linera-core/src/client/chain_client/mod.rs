@@ -1,7 +1,7 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod state;
 use std::{
     collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
@@ -9,7 +9,6 @@ use std::{
     sync::Arc,
 };
 
-use chain_client_state::ChainClientState;
 use custom_debug_derive::Debug;
 use futures::{
     future::{self, Either, FusedFuture, Future, FutureExt},
@@ -54,24 +53,30 @@ use linera_execution::{
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
-use linera_storage::ResultReadCertificates;
+use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
 use linera_views::ViewError;
 use rand::seq::SliceRandom;
-use received_log::ReceivedLogs;
 use serde::Serialize;
+pub use state::State;
 use thiserror::Error;
 use tokio::sync::{mpsc, OwnedRwLockReadGuard};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, instrument, trace, warn};
-use validator_trackers::ValidatorTrackers;
+use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
-use super::*;
+use super::{
+    create_bytecode_blobs, received_log::ReceivedLogs, validator_trackers::ValidatorTrackers,
+    AbortOnDrop, Client, ExecuteBlockOutcome, ListeningMode, PendingProposal,
+    ReceiveCertificateMode,
+};
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
     environment::Environment,
-    local_node::{LocalNodeClient, LocalNodeError},
-    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
+    local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
+    node::{
+        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
+        ValidatorNodeProvider as _,
+    },
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError},
     worker::{Notification, Reason, WorkerError},
@@ -402,7 +407,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace", skip(self, f))]
     fn update_state<F>(&self, f: F)
     where
-        F: Fn(&mut ChainClientState),
+        F: Fn(&mut State),
     {
         let chains = self.client.chains.pin();
         chains

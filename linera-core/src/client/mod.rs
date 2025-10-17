@@ -8,7 +8,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use chain_client_state::ChainClientState;
 use custom_debug_derive::Debug;
 use futures::{
     future::Future,
@@ -37,7 +36,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext,
 };
 use linera_execution::committee::Committee;
-use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
+use linera_storage::{ResultReadCertificates, Storage as _};
 use rand::{
     distributions::{Distribution, WeightedIndex},
     seq::SliceRandom,
@@ -45,7 +44,7 @@ use rand::{
 use received_log::ReceivedLogs;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
-use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, RoundTimeout},
@@ -61,7 +60,6 @@ use crate::{
 
 mod chain_client;
 pub use chain_client::*;
-mod chain_client_state;
 #[cfg(test)]
 #[path = "../unit_tests/client_tests.rs"]
 mod client_tests;
@@ -184,7 +182,7 @@ pub struct Client<Env: Environment> {
     /// References to clients waiting for chain notifications.
     notifier: Arc<ChannelNotifier<Notification>>,
     /// Chain state for the managed chains.
-    chains: papaya::HashMap<ChainId, ChainClientState>,
+    chains: papaya::HashMap<ChainId, chain_client::State>,
     /// Configuration options.
     options: ChainClientOptions,
 }
@@ -268,9 +266,9 @@ impl<Env: Environment> Client<Env> {
     ) -> ChainClient<Env> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
-        self.chains
-            .pin()
-            .get_or_insert_with(chain_id, || ChainClientState::new(pending_proposal.clone()));
+        self.chains.pin().get_or_insert_with(chain_id, || {
+            chain_client::State::new(pending_proposal.clone())
+        });
 
         ChainClient::new(
             self.clone(),
