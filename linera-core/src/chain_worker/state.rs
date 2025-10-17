@@ -478,17 +478,16 @@ where
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        for height in heights.range(next_block_height..) {
-            hashes.push(
-                self.chain
-                    .preprocessed_blocks
-                    .get(height)
-                    .await?
-                    .ok_or_else(|| WorkerError::PreprocessedBlocksEntryNotFound {
-                        height: *height,
-                        chain_id: self.chain_id(),
-                    })?,
-            );
+        let requested_heights: Vec<BlockHeight> = heights
+            .range(next_block_height..).copied()
+            .collect::<Vec<BlockHeight>>();
+        let read_hashes = self.chain.preprocessed_blocks.multi_get(&requested_heights).await?;
+        for (hash,height) in read_hashes.into_iter().zip(requested_heights) {
+            let hash = hash.ok_or_else(|| WorkerError::PreprocessedBlocksEntryNotFound {
+                height,
+                chain_id: self.chain_id(),
+            })?;
+            hashes.push(hash);
         }
         let certificates = self.storage.read_certificates(hashes.clone()).await?;
         let certificates = match ResultReadCertificates::new(certificates, hashes) {
