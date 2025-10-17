@@ -302,3 +302,11 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(())
     }
 }
+
+impl<N: ValidatorNode> PartialEq for RemoteNode<N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.public_key == other.public_key
+    }
+}
+
+impl<N: ValidatorNode> Eq for RemoteNode<N> {}

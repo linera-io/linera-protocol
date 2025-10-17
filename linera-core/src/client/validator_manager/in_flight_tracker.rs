@@ -149,14 +149,13 @@ impl<N: Clone> InFlightTracker<N> {
     /// # Returns
     /// - `Some(elapsed)`: Entry exists; returns elapsed time since request started
     /// - `None`: No entry exists for this key
-    pub(super) async fn register_alternative_and_check_timeout<F>(
+    pub(super) async fn register_alternative_and_check_timeout(
         &self,
         key: &RequestKey,
         peer: N,
-        already_registered: F,
     ) -> Option<Duration>
     where
-        F: Fn(&N) -> bool,
+        N: PartialEq + Eq,
     {
         let in_flight = self.entries.read().await;
 
@@ -166,7 +165,7 @@ impl<N: Clone> InFlightTracker<N> {
             // Register this peer as an alternative source if not already present
             {
                 let mut alt_peers = entry.alternative_peers.write().await;
-                if !alt_peers.iter().any(&already_registered) {
+                if !alt_peers.iter().any(|p| *p == peer) {
                     alt_peers.push(peer);
                 }
             }

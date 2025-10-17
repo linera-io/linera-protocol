@@ -292,9 +292,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         // If so, register this peer as an alternative source
         if let Some(elapsed) = self
             .in_flight_tracker
-            .register_alternative_and_check_timeout(&key, peer.clone(), |p| {
-                p.public_key == peer.public_key
-            })
+            .register_alternative_and_check_timeout(&key, peer.clone())
             .await
         {
             tracing::debug!(
