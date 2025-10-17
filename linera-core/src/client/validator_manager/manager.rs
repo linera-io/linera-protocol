@@ -287,57 +287,13 @@ impl<Env: Environment> ValidatorManager<Env> {
         Fut: Future<Output = Result<R, NodeError>>,
     {
         self.add_peer(peer.clone()).await;
-
-        // Check if there's an in-flight request for this key
-        // If so, register this peer as an alternative source
-        if let Some(elapsed) = self
-            .in_flight_tracker
-            .register_alternative_and_check_timeout(&key, peer.clone())
-            .await
-        {
-            tracing::debug!(
-                key = ?key,
-                peer = ?peer.public_key,
-                elapsed_ms = elapsed.as_millis(),
-                "registered peer as alternative source for in-flight request"
-            );
-
-            // If the in-flight request has timed out, execute immediately with this peer
-            // and broadcast the result to all waiters
-            if elapsed > Duration::from_millis(MAX_REQUEST_TTL_MS) {
-                tracing::debug!(
-                    key = ?key,
-                    peer = ?peer.public_key,
-                    elapsed_ms = elapsed.as_millis(),
-                    timeout_ms = MAX_REQUEST_TTL_MS,
-                    "in-flight exceeded time limit - executing immediately with alternative peer"
-                );
-
-                // Execute with alternative peer
-                let result = self.track_request(peer, operation).await;
-
-                // Convert result for broadcasting
-                let result_for_broadcast: Result<RequestResult, NodeError> =
-                    result.clone().map(Into::into);
-                let shared_result = Arc::new(result_for_broadcast);
-
-                // Broadcast to waiters and clean up in-flight entry
-                self.in_flight_tracker
-                    .complete_and_broadcast(&key, shared_result.clone())
-                    .await;
-
-                // Store in cache
-                if let Ok(success) = shared_result.as_ref() {
-                    self.store_in_cache(key.clone(), Arc::new(success.clone()))
-                        .await;
-                }
-
-                return result;
-            }
-        }
-
-        self.deduplicated_request(key, || async { self.track_request(peer, operation).await })
-            .await
+        self.in_flight_tracker
+            .add_alternative_peer(&key, peer.clone())
+            .await;
+        self.deduplicated_request(key, peer, |peer| async {
+            self.track_request(peer, operation).await
+        })
+        .await
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -394,7 +350,7 @@ impl<Env: Environment> ValidatorManager<Env> {
     pub async fn get_alternative_peers(
         &self,
         key: &RequestKey,
-    ) -> Option<Vec<RemoteNode<Env::ValidatorNode>>> {
+    ) -> Vec<RemoteNode<Env::ValidatorNode>> {
         self.in_flight_tracker.get_alternative_peers(key).await
     }
 
@@ -510,14 +466,15 @@ impl<Env: Environment> ValidatorManager<Env> {
     ///
     /// # Returns
     /// The result from either the in-flight request or the newly executed operation
-    async fn deduplicated_request<T, F, Fut>(
+    async fn deduplicated_request<T, F, Fut, N>(
         &self,
         key: RequestKey,
+        peer: N,
         operation: F,
     ) -> Result<T, NodeError>
     where
         T: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
-        F: FnOnce() -> Fut,
+        F: FnOnce(N) -> Fut,
         Fut: Future<Output = Result<T, NodeError>>,
     {
         // Check cache for exact match first
@@ -580,7 +537,6 @@ impl<Env: Environment> ValidatorManager<Env> {
                             timeout_ms = MAX_REQUEST_TTL_MS,
                             "in-flight request exceeded timeout - executing new request instead of deduplicating"
                         );
-                        // Don't join the in-flight request, fall through to execute a new one
                     }
                 },
                 InFlightMatch::Subsuming {
@@ -601,7 +557,7 @@ impl<Env: Environment> ValidatorManager<Env> {
                                 match result.as_ref() {
                                     Ok(res) => {
                                         if let Some(extracted) =
-                                            key.try_extract_result(&subsuming_key, &res)
+                                            key.try_extract_result(&subsuming_key, res)
                                         {
                                             tracing::trace!(
                                                 key = ?key,
@@ -646,14 +602,14 @@ impl<Env: Environment> ValidatorManager<Env> {
                     }
                 },
             }
-        }
+        };
 
         // Create new in-flight entry for this request
         self.in_flight_tracker.insert_new(key.clone()).await;
 
         // Execute the actual request
         tracing::trace!(key = ?key, "executing new request");
-        let result = operation().await;
+        let result = operation(peer).await;
         let result_for_broadcast: Result<RequestResult, NodeError> = result.clone().map(Into::into);
         let shared_result = Arc::new(result_for_broadcast);
 
@@ -877,16 +833,12 @@ mod tests {
         time::Duration,
     };
     use linera_chain::types::ConfirmedBlockCertificate;
-    use linera_storage::{DbStorage, TestClock};
-    use linera_views::memory::MemoryDatabase;
     use tokio::sync::oneshot;
 
     use super::{super::request::RequestKey, *};
-    use crate::{node::NodeError, test_utils::NodeProvider};
+    use crate::node::NodeError;
 
-    type TestStorage = DbStorage<MemoryDatabase, TestClock>;
-    type TestEnvironment =
-        crate::environment::Impl<TestStorage, NodeProvider<TestStorage>, InMemorySigner>;
+    type TestEnvironment = crate::environment::Test;
 
     /// Helper function to create a test ValidatorManager with custom configuration
     fn create_test_manager(
@@ -933,7 +885,7 @@ mod tests {
 
         // First call - should execute the operation and cache the result
         let result1: Result<Vec<ConfirmedBlockCertificate>, NodeError> = manager
-            .deduplicated_request(key.clone(), || async move {
+            .deduplicated_request(key.clone(), (), |_| async move {
                 execution_count_clone.fetch_add(1, Ordering::SeqCst);
                 test_result_ok()
             })
@@ -945,7 +897,7 @@ mod tests {
         // Second call - should return cached result without executing the operation
         let execution_count_clone2 = execution_count.clone();
         let result2: Result<Vec<ConfirmedBlockCertificate>, NodeError> = manager
-            .deduplicated_request(key.clone(), || async move {
+            .deduplicated_request(key.clone(), (), |_| async move {
                 execution_count_clone2.fetch_add(1, Ordering::SeqCst);
                 test_result_ok()
             })
@@ -973,7 +925,7 @@ mod tests {
         let execution_count_clone = execution_count.clone();
         let first_request = tokio::spawn(async move {
             manager_clone
-                .deduplicated_request(key_clone, || async move {
+                .deduplicated_request(key_clone, (), |_| async move {
                     execution_count_clone.fetch_add(1, Ordering::SeqCst);
                     // Wait for signal before completing
                     rx.await.unwrap();
@@ -989,7 +941,7 @@ mod tests {
         let execution_count_clone2 = execution_count.clone();
         let second_request = tokio::spawn(async move {
             manager
-                .deduplicated_request(key, || async move {
+                .deduplicated_request(key, (), |_| async move {
                     execution_count_clone2.fetch_add(1, Ordering::SeqCst);
                     test_result_ok()
                 })
@@ -1033,7 +985,7 @@ mod tests {
         let execution_count_clone = execution_count.clone();
         let first_request = tokio::spawn(async move {
             manager_clone1
-                .deduplicated_request(key_clone1, || async move {
+                .deduplicated_request(key_clone1, (), |_| async move {
                     execution_count_clone.fetch_add(1, Ordering::SeqCst);
                     rx.await.unwrap();
                     test_result_ok()
@@ -1052,7 +1004,7 @@ mod tests {
             let execution_count_clone = execution_count.clone();
             let handle = tokio::spawn(async move {
                 manager_clone
-                    .deduplicated_request(key_clone, || async move {
+                    .deduplicated_request(key_clone, (), |_| async move {
                         execution_count_clone.fetch_add(1, Ordering::SeqCst);
                         test_result_ok()
                     })
@@ -1100,7 +1052,7 @@ mod tests {
         let execution_count_clone = execution_count.clone();
         let first_request = tokio::spawn(async move {
             manager_clone
-                .deduplicated_request(key_clone, || async move {
+                .deduplicated_request(key_clone, (), |_| async move {
                     execution_count_clone.fetch_add(1, Ordering::SeqCst);
                     rx.await.unwrap();
                     test_result_ok()
@@ -1118,7 +1070,7 @@ mod tests {
         let execution_count_clone2 = execution_count.clone();
         let second_request = tokio::spawn(async move {
             manager
-                .deduplicated_request(key, || async move {
+                .deduplicated_request(key, (), |_| async move {
                     execution_count_clone2.fetch_add(1, Ordering::SeqCst);
                     test_result_ok()
                 })
@@ -1377,18 +1329,20 @@ mod tests {
 
         // Check that nodes 1 and 2 are registered as alternatives
         let alt_peers = manager.get_alternative_peers(&key).await;
-        assert!(alt_peers.is_some(), "Expected in-flight entry to exist");
-        if let Some(peers) = alt_peers {
-            assert_eq!(peers.len(), 2, "Expected two alternative peers");
-            assert!(
-                peers.iter().any(|p| p.public_key == nodes[1].public_key),
-                "Expected node 1 to be registered"
-            );
-            assert!(
-                peers.iter().any(|p| p.public_key == nodes[2].public_key),
-                "Expected node 2 to be registered"
-            );
-        }
+        assert!(!alt_peers.is_empty(), "Expected in-flight entry to exist");
+        assert_eq!(alt_peers.len(), 2, "Expected two alternative peers");
+        assert!(
+            alt_peers
+                .iter()
+                .any(|p| p.public_key == nodes[1].public_key),
+            "Expected node 1 to be registered"
+        );
+        assert!(
+            alt_peers
+                .iter()
+                .any(|p| p.public_key == nodes[2].public_key),
+            "Expected node 2 to be registered"
+        );
 
         // Signal first request to complete
         tx.send(()).unwrap();
@@ -1403,7 +1357,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await;
         let alt_peers = manager.get_alternative_peers(&key).await;
         assert!(
-            alt_peers.is_none(),
+            alt_peers.is_empty(),
             "Expected in-flight entry to be removed after completion"
         );
     }

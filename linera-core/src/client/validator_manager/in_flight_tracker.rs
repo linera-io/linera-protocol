@@ -123,7 +123,7 @@ impl<N: Clone> InFlightTracker<N> {
 
         if let Some(entry) = in_flight.remove(key) {
             let waiter_count = entry.sender.receiver_count();
-            tracing::info!(
+            tracing::trace!(
                 key = ?key,
                 waiters = waiter_count,
                 "request completed; broadcasting result to waiters",
@@ -136,45 +136,27 @@ impl<N: Clone> InFlightTracker<N> {
         0
     }
 
-    /// Registers an alternative peer for an in-flight request and checks if it has timed out.
+    /// Registers an alternative peer for an in-flight request.
     ///
     /// If an entry exists for the given key, registers the peer as an alternative source
-    /// (if not already registered) and returns the elapsed time since the request started.
-    /// The caller provides a predicate to check if the peer is already registered.
+    /// (if not already registered).
     ///
     /// # Arguments
     /// - `key`: The request key
     /// - `peer`: The peer to register as an alternative
-    /// - `already_registered`: Predicate to check if peer is already in the list
-    ///
-    /// # Returns
-    /// - `Some(elapsed)`: Entry exists; returns elapsed time since request started
-    /// - `None`: No entry exists for this key
-    pub(super) async fn register_alternative_and_check_timeout(
-        &self,
-        key: &RequestKey,
-        peer: N,
-    ) -> Option<Duration>
+    pub(super) async fn add_alternative_peer(&self, key: &RequestKey, peer: N)
     where
         N: PartialEq + Eq,
     {
-        let in_flight = self.entries.read().await;
-
-        if let Some(entry) = in_flight.get(key) {
-            let elapsed = Instant::now().duration_since(entry.started_at);
-
+        if let Some(entry) = self.entries.read().await.get(key) {
             // Register this peer as an alternative source if not already present
             {
                 let mut alt_peers = entry.alternative_peers.write().await;
-                if !alt_peers.iter().any(|p| *p == peer) {
+                if !alt_peers.contains(&peer) {
                     alt_peers.push(peer);
                 }
             }
-
-            return Some(elapsed);
         }
-
-        None
     }
 
     /// Retrieves the list of alternative peers registered for an in-flight request.
@@ -185,16 +167,15 @@ impl<N: Clone> InFlightTracker<N> {
     /// - `key`: The request key to look up
     ///
     /// # Returns
-    /// - `Some(peers)`: Entry exists; returns cloned list of alternative peers
-    /// - `None`: No entry exists for this key
-    pub(super) async fn get_alternative_peers(&self, key: &RequestKey) -> Option<Vec<N>> {
+    /// - `Vec<N>`: List of alternative peers (empty if no entry exists)
+    pub(super) async fn get_alternative_peers(&self, key: &RequestKey) -> Vec<N> {
         let in_flight = self.entries.read().await;
 
         if let Some(entry) = in_flight.get(key) {
             let peers = entry.alternative_peers.read().await;
-            Some(peers.clone())
+            peers.clone()
         } else {
-            None
+            vec![]
         }
     }
 }
