@@ -159,7 +159,7 @@ pub enum TimingType {
 }
 
 #[derive(Debug, Clone)]
-pub struct ChainClientOptions {
+pub struct Options {
     /// Maximum number of pending message bundles processed at a time in a block.
     pub max_pending_message_bundles: usize,
     /// The policy for automatically handling incoming messages.
@@ -187,11 +187,11 @@ pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
 
 #[cfg(with_testing)]
-impl ChainClientOptions {
+impl Options {
     pub fn test_default() -> Self {
         use crate::DEFAULT_GRACE_PERIOD;
 
-        ChainClientOptions {
+        Options {
             max_pending_message_bundles: 10,
             message_policy: MessagePolicy::new_accept_all(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
@@ -219,7 +219,7 @@ pub struct ChainClient<Env: Environment> {
     chain_id: ChainId,
     /// The client options.
     #[debug(skip)]
-    options: ChainClientOptions,
+    options: Options,
     /// The preferred owner of the chain used to sign proposals.
     /// `None` if we cannot propose on this chain.
     preferred_owner: Option<AccountOwner>,
@@ -363,7 +363,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub fn new(
         client: Arc<Client<Env>>,
         chain_id: ChainId,
-        options: ChainClientOptions,
+        options: Options,
         initial_block_hash: Option<CryptoHash>,
         initial_next_block_height: BlockHeight,
         preferred_owner: Option<AccountOwner>,
@@ -427,13 +427,13 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Gets a mutable reference to the per-`ChainClient` options.
     #[instrument(level = "trace", skip(self))]
-    pub fn options_mut(&mut self) -> &mut ChainClientOptions {
+    pub fn options_mut(&mut self) -> &mut Options {
         &mut self.options
     }
 
     /// Gets a reference to the per-`ChainClient` options.
     #[instrument(level = "trace", skip(self))]
-    pub fn options(&self) -> &ChainClientOptions {
+    pub fn options(&self) -> &Options {
         &self.options
     }
 

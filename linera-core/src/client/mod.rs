@@ -184,7 +184,7 @@ pub struct Client<Env: Environment> {
     /// Chain state for the managed chains.
     chains: papaya::HashMap<ChainId, chain_client::State>,
     /// Configuration options.
-    options: ChainClientOptions,
+    options: chain_client::Options,
 }
 
 impl<Env: Environment> Client<Env> {
@@ -199,7 +199,7 @@ impl<Env: Environment> Client<Env> {
         name: impl Into<String>,
         chain_worker_ttl: Duration,
         sender_chain_worker_ttl: Duration,
-        options: ChainClientOptions,
+        options: chain_client::Options,
         block_cache_size: usize,
         execution_state_cache_size: usize,
     ) -> Self {

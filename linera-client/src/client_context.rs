@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_chain::{manager::LockingBlock, types::ConfirmedBlockCertificate};
 use linera_core::{
-    client::{ChainClient, Client, ListeningMode},
+    client::{chain_client, ChainClient, Client, ListeningMode},
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
     node::ValidatorNode,
@@ -331,7 +331,7 @@ where
         block_cache_size: usize,
         execution_state_cache_size: usize,
     ) -> Self {
-        use linera_core::{client::ChainClientOptions, node::CrossChainMessageDelivery};
+        use linera_core::{client::chain_client, node::CrossChainMessageDelivery};
 
         let send_recv_timeout = Duration::from_millis(4000);
         let retry_delay = Duration::from_millis(1000);
@@ -363,9 +363,9 @@ where
             name,
             chain_worker_ttl,
             sender_chain_worker_ttl,
-            ChainClientOptions {
+            chain_client::Options {
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
-                ..ChainClientOptions::test_default()
+                ..chain_client::Options::test_default()
             },
             block_cache_size,
             execution_state_cache_size,

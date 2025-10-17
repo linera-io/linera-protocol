@@ -57,7 +57,6 @@ impl State {
             );
             return;
         }
-        let blobs = Vec::from_iter(blobs);
         assert_eq!(
             block.published_blob_ids(),
             BTreeSet::from_iter(blobs.iter().map(Blob::id))
