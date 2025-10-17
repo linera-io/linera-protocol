@@ -1193,9 +1193,6 @@ where
         self.map.multi_get(short_keys).await
     }
 
-
-
-    
     /// Obtains a mutable reference to a value at a given position if available
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -2185,7 +2182,7 @@ mod graphql {
 
             let values = self.multi_get(&keys).await?;
             Ok(values
-		.into_iter()
+                .into_iter()
                 .zip(keys)
                 .map(|(value, key)| Entry { value, key })
                 .collect())
@@ -2258,7 +2255,7 @@ mod graphql {
 
             let values = self.multi_get(&keys).await?;
             Ok(values
-		.into_iter()
+                .into_iter()
                 .zip(keys)
                 .map(|(value, key)| Entry { value, key })
                 .collect())
