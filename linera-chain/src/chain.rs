@@ -822,31 +822,43 @@ where
         }
 
         let recipients = block_execution_tracker.recipients();
-        let mut previous_message_blocks = BTreeMap::new();
-        for recipient in recipients {
-            if let Some(height) = previous_message_blocks_view.get(&recipient).await? {
-                let hash = confirmed_log
-                    .get(usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?)
-                    .await?
-                    .ok_or_else(|| {
-                        ChainError::InternalError("missing entry in confirmed_log".into())
-                    })?;
-                previous_message_blocks.insert(recipient, (hash, height));
+        let heights = previous_message_blocks_view.multi_get(&recipients).await?;
+        let mut recipient_heights = Vec::new();
+        let mut indices = Vec::new();
+        for (height, recipient) in heights.into_iter().zip(recipients) {
+            if let Some(height) = height {
+                let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
+                indices.push(index);
+                recipient_heights.push((recipient, height));
             }
+        }
+        let hashes = confirmed_log.multi_get(indices).await?;
+        let mut previous_message_blocks = BTreeMap::new();
+        for (hash, (recipient, height)) in hashes.into_iter().zip(recipient_heights) {
+            let hash = hash.ok_or_else(|| {
+                ChainError::InternalError("missing entry in confirmed_log".into())
+            })?;
+            previous_message_blocks.insert(recipient, (hash, height));
         }
 
         let streams = block_execution_tracker.event_streams();
-        let mut previous_event_blocks = BTreeMap::new();
-        for stream in streams {
-            if let Some(height) = previous_event_blocks_view.get(&stream).await? {
-                let hash = confirmed_log
-                    .get(usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?)
-                    .await?
-                    .ok_or_else(|| {
-                        ChainError::InternalError("missing entry in confirmed_log".into())
-                    })?;
-                previous_event_blocks.insert(stream, (hash, height));
+        let heights = previous_event_blocks_view.multi_get(&streams).await?;
+        let mut stream_heights = Vec::new();
+        let mut indices = Vec::new();
+        for (stream, height) in streams.into_iter().zip(heights) {
+            if let Some(height) = height {
+                let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
+                indices.push(index);
+                stream_heights.push((stream, height));
             }
+        }
+        let hashes = confirmed_log.multi_get(indices).await?;
+        let mut previous_event_blocks = BTreeMap::new();
+        for (hash, (stream, height)) in hashes.into_iter().zip(stream_heights) {
+            let hash = hash.ok_or_else(|| {
+                ChainError::InternalError("missing entry in confirmed_log".into())
+            })?;
+            previous_event_blocks.insert(stream, (hash, height));
         }
 
         let state_hash = {
@@ -1068,10 +1080,17 @@ where
             Vec::new()
         };
         // Everything after (including) next_height in preprocessed_blocks if we have it.
-        for height in start.max(next_height).0..=end.0 {
-            if let Some(hash) = self.preprocessed_blocks.get(&BlockHeight(height)).await? {
-                hashes.push(hash);
-            }
+        let block_heights = (start.max(next_height).0..=end.0)
+            .map(BlockHeight)
+            .collect::<Vec<_>>();
+        for hash in self
+            .preprocessed_blocks
+            .multi_get(&block_heights)
+            .await?
+            .into_iter()
+            .flatten()
+        {
+            hashes.push(hash);
         }
         Ok(hashes)
     }
