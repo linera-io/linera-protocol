@@ -166,6 +166,56 @@ kube-prometheus-stack:
               replacement: '$1$2'
               target_label: svr
 
+# Grafana Alloy
+alloy:
+  enabled: {{ env "LINERA_HELMFILE_SET_ALLOY_ENABLED" | default "false" }}
+  alloy:
+    configMap:
+      create: true
+      content: |-
+{{ readFile "alloy-config.river.tpl" | indent 8 }}
+    extraEnv:
+      - name: NAMESPACE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
+      - name: CLUSTER_NAME
+        value: {{ env "LINERA_HELMFILE_SET_CLUSTER_NAME" | default "validator-k8s" | quote }}
+      - name: VALIDATOR_NAME
+        value: {{ env "LINERA_HELMFILE_SET_VALIDATOR_NAME" | default "validator-1" | quote }}
+      - name: PROMETHEUS_OTLP_URL
+        value: {{ env "PROMETHEUS_OTLP_URL" | default "" | quote }}
+      - name: PROMETHEUS_OTLP_USER
+        value: {{ env "PROMETHEUS_OTLP_USER" | default "" | quote }}
+      - name: PROMETHEUS_OTLP_PASS
+        value: {{ env "PROMETHEUS_OTLP_PASS" | default "" | quote }}
+      - name: LOKI_PUSH_URL
+        value: {{ env "LOKI_PUSH_URL" | default "" | quote }}
+      - name: LOKI_PUSH_USER
+        value: {{ env "LOKI_PUSH_USER" | default "" | quote }}
+      - name: LOKI_PUSH_PASS
+        value: {{ env "LOKI_PUSH_PASS" | default "" | quote }}
+      - name: TEMPO_OTLP_URL
+        value: {{ env "TEMPO_OTLP_URL" | default "" | quote }}
+      - name: TEMPO_OTLP_USER
+        value: {{ env "TEMPO_OTLP_USER" | default "" | quote }}
+      - name: TEMPO_OTLP_PASS
+        value: {{ env "TEMPO_OTLP_PASS" | default "" | quote }}
+    controller:
+      type: daemonset
+    rbac:
+      create: true
+    serviceAccount:
+      create: true
+    # Resources for Alloy
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+
 # Environment
 environment: "kind"
 

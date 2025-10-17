@@ -8,5 +8,8 @@ dependencies:
 - name: pyroscope
   repository: https://grafana.github.io/helm-charts
   version: 1.14.2
-digest: sha256:7fe611b57ddb6d72aa31bac87568fdb8e531e988e2ce4067b931d3026332f027
-generated: "2025-09-01T16:56:59.19795-03:00"
+- name: alloy
+  repository: https://grafana.github.io/helm-charts
+  version: 1.3.1
+digest: sha256:46f1afae774e69e535e8465ad9de59485fbd63c070ca431aeab1f1563752a838
+generated: "2025-10-16T01:37:54.113778741+02:00"
