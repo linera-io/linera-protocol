@@ -562,14 +562,6 @@ where
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         self.initialize_and_save_if_needed().await?;
         let (chain_epoch, committee) = self.chain.current_committee()?;
-        ensure!(
-            certificate.inner().epoch() == chain_epoch,
-            WorkerError::InvalidEpoch {
-                chain_id: certificate.inner().chain_id(),
-                chain_epoch,
-                epoch: certificate.inner().epoch()
-            }
-        );
         certificate.check(committee)?;
         if self
             .chain
@@ -579,6 +571,14 @@ where
         {
             return Ok((self.chain_info_response(), NetworkActions::default()));
         }
+        ensure!(
+            certificate.inner().epoch() == chain_epoch,
+            WorkerError::InvalidEpoch {
+                chain_id: certificate.inner().chain_id(),
+                chain_epoch,
+                epoch: certificate.inner().epoch()
+            }
+        );
         let old_round = self.chain.manager.current_round();
         self.chain
             .manager
