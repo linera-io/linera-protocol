@@ -19,7 +19,7 @@ use linera_base::{
     task::NonBlockingFuture,
 };
 use linera_core::{
-    client::{AbortOnDrop, ChainClient, ChainClientError, ListeningMode},
+    client::{chain_client::{self, ChainClient}, AbortOnDrop, ListeningMode},
     node::NotificationStream,
     worker::{Notification, Reason},
     Environment,
@@ -332,7 +332,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             .storage
             .read_confirmed_block(hash)
             .await?
-            .ok_or(ChainClientError::MissingConfirmedBlock(hash))?
+            .ok_or(chain_client::Error::MissingConfirmedBlock(hash))?
             .into_block();
         let blobs = block.created_blobs().into_iter();
         let new_chains = blobs
@@ -359,7 +359,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     .signer()
                     .contains_key(&chain_owner)
                     .await
-                    .map_err(ChainClientError::signer_failure)?
+                    .map_err(chain_client::Error::signer_failure)?
                 {
                     context_guard
                         .update_wallet_for_new_chain(
@@ -583,7 +583,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             .process_inbox_without_prepare()
             .await
         {
-            Err(ChainClientError::CannotFindKeyForChain(chain_id)) => {
+            Err(chain_client::Error::CannotFindKeyForChain(chain_id)) => {
                 debug!(%chain_id, "Cannot find key for chain");
             }
             Err(error) => warn!(%error, "Failed to process inbox."),

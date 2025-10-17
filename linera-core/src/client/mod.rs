@@ -26,7 +26,7 @@ use linera_base::{
 use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
     data_types::{
-        BlockProposal, ChainAndHeight, LiteVote, MessageAction, ProposedBlock, Transaction,
+        BlockProposal, ChainAndHeight, LiteVote, MessageAction, ProposedBlock, Transaction, IncomingBundle
     },
     manager::LockingBlock,
     types::{
@@ -58,8 +58,9 @@ use crate::{
     CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
-mod chain_client;
-pub use chain_client::*;
+pub mod chain_client;
+pub use chain_client::ChainClient;
+
 #[cfg(test)]
 #[path = "../unit_tests/client_tests.rs"]
 mod client_tests;
@@ -118,6 +119,85 @@ mod metrics {
             exponential_bucket_latencies(500.0),
         )
     });
+}
+
+pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
+pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
+
+/// Policies for automatically handling incoming messages.
+#[derive(Clone, Debug)]
+pub struct MessagePolicy {
+    /// The blanket policy applied to all messages.
+    blanket: BlanketMessagePolicy,
+    /// A collection of chains which restrict the origin of messages to be
+    /// accepted. `Option::None` means that messages from all chains are accepted. An empty
+    /// `HashSet` denotes that messages from no chains are accepted.
+    restrict_chain_ids_to: Option<HashSet<ChainId>>,
+}
+
+#[derive(Copy, Clone, Debug, clap::ValueEnum)]
+pub enum BlanketMessagePolicy {
+    /// Automatically accept all incoming messages. Reject them only if execution fails.
+    Accept,
+    /// Automatically reject tracked messages, ignore or skip untracked messages, but accept
+    /// protected ones.
+    Reject,
+    /// Don't include any messages in blocks, and don't make any decision whether to accept or
+    /// reject.
+    Ignore,
+}
+
+impl MessagePolicy {
+    pub fn new(
+        blanket: BlanketMessagePolicy,
+        restrict_chain_ids_to: Option<HashSet<ChainId>>,
+    ) -> Self {
+        Self {
+            blanket,
+            restrict_chain_ids_to,
+        }
+    }
+
+    #[cfg(with_testing)]
+    pub fn new_accept_all() -> Self {
+        Self {
+            blanket: BlanketMessagePolicy::Accept,
+            restrict_chain_ids_to: None,
+        }
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    fn must_handle(&self, bundle: &mut IncomingBundle) -> bool {
+        if self.is_reject() {
+            if bundle.bundle.is_skippable() {
+                return false;
+            } else if !bundle.bundle.is_protected() {
+                bundle.action = MessageAction::Reject;
+            }
+        }
+        match &self.restrict_chain_ids_to {
+            None => true,
+            Some(chains) => chains.contains(&bundle.origin),
+        }
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    fn is_ignore(&self) -> bool {
+        matches!(self.blanket, BlanketMessagePolicy::Ignore)
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    fn is_reject(&self) -> bool {
+        matches!(self.blanket, BlanketMessagePolicy::Reject)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TimingType {
+    ExecuteOperations,
+    ExecuteBlock,
+    SubmitBlockProposal,
+    UpdateValidators,
 }
 
 /// Defines how we listen to a chain:
@@ -286,7 +366,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         chain_id: ChainId,
         validators: &[RemoteNode<Env::ValidatorNode>],
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         match self.local_node.chain_info(chain_id).await {
             Ok(info) => Ok(info),
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
@@ -321,7 +401,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let (_, committee) = self.admin_committee().await?;
         let mut remaining_validators = self.make_nodes(&committee)?;
         let mut info = self
@@ -356,7 +436,7 @@ impl<Env: Environment> Client<Env> {
         }
         ensure!(
             target_next_block_height <= info.next_block_height,
-            ChainClientError::CannotDownloadCertificates {
+            chain_client::Error::CannotDownloadCertificates {
                 chain_id,
                 target_next_block_height,
             }
@@ -372,7 +452,7 @@ impl<Env: Environment> Client<Env> {
         remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
         stop: BlockHeight,
-    ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
+    ) -> Result<Option<Box<ChainInfo>>, chain_client::Error> {
         let mut last_info = None;
         // First load any blocks from local storage, if available.
         let chain_info = self.local_node.chain_info(chain_id).await?;
@@ -388,7 +468,7 @@ impl<Env: Environment> Client<Env> {
         let certificates = match ResultReadCertificates::new(certificates, hashes) {
             ResultReadCertificates::Certificates(certificates) => certificates,
             ResultReadCertificates::InvalidHashes(hashes) => {
-                return Err(ChainClientError::ReadCertificatesError(hashes))
+                return Err(chain_client::Error::ReadCertificatesError(hashes))
             }
         };
         for certificate in certificates {
@@ -418,7 +498,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         remote_node: &RemoteNode<impl ValidatorNode>,
         blob_ids: impl IntoIterator<Item = BlobId>,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         self.local_node
             .store_blobs(
                 &futures::stream::iter(blob_ids.into_iter().map(|blob_id| async move {
@@ -439,7 +519,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         remote_node: &RemoteNode<impl ValidatorNode>,
         certificates: Vec<ConfirmedBlockCertificate>,
-    ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
+    ) -> Result<Option<Box<ChainInfo>>, chain_client::Error> {
         let mut info = None;
         let required_blob_ids: Vec<_> = certificates
             .iter()
@@ -513,7 +593,7 @@ impl<Env: Environment> Client<Env> {
     /// Obtains the validators for the latest epoch.
     async fn validator_nodes(
         &self,
-    ) -> Result<Vec<RemoteNode<Env::ValidatorNode>>, ChainClientError> {
+    ) -> Result<Vec<RemoteNode<Env::ValidatorNode>>, chain_client::Error> {
         let (_, committee) = self.admin_committee().await?;
         Ok(self.make_nodes(&committee)?)
     }
@@ -535,7 +615,7 @@ impl<Env: Environment> Client<Env> {
     pub async fn get_chain_description(
         &self,
         chain_id: ChainId,
-    ) -> Result<ChainDescription, ChainClientError> {
+    ) -> Result<ChainDescription, chain_client::Error> {
         let chain_desc_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
         let blob = self
             .local_node
@@ -584,7 +664,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
-    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
+    ) -> Result<ConfirmedBlockCertificate, chain_client::Error> {
         debug!(round = %certificate.round, "Submitting block for confirmation");
         let hashed_value = ConfirmedBlock::new(certificate.inner().block().clone());
         let finalize_action = CommunicateAction::FinalizeBlock {
@@ -606,7 +686,7 @@ impl<Env: Environment> Client<Env> {
         committee: &Committee,
         proposal: Box<BlockProposal>,
         value: T,
-    ) -> Result<GenericCertificate<T>, ChainClientError> {
+    ) -> Result<GenericCertificate<T>, chain_client::Error> {
         debug!(
             round = %proposal.content.round,
             "Submitting block proposal to validators"
@@ -631,7 +711,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
         communicate_with_quorum(
             &nodes,
@@ -666,7 +746,7 @@ impl<Env: Environment> Client<Env> {
         committee: &Committee,
         action: CommunicateAction,
         value: T,
-    ) -> Result<GenericCertificate<T>, ChainClientError> {
+    ) -> Result<GenericCertificate<T>, chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
             &nodes,
@@ -686,7 +766,7 @@ impl<Env: Environment> Client<Env> {
         .await?;
         ensure!(
             (votes_hash, votes_round) == (value.hash(), action.round()),
-            ChainClientError::UnexpectedQuorum {
+            chain_client::Error::UnexpectedQuorum {
                 hash: votes_hash,
                 round: votes_round,
                 expected_hash: value.hash(),
@@ -699,11 +779,11 @@ impl<Env: Environment> Client<Env> {
         // * each answer is a vote signed by the expected validator.
         let certificate = LiteCertificate::try_from_votes(votes)
             .ok_or_else(|| {
-                ChainClientError::InternalError("Vote values or rounds don't match; this is a bug")
+                chain_client::Error::InternalError("Vote values or rounds don't match; this is a bug")
             })?
             .with_value(value)
             .ok_or_else(|| {
-                ChainClientError::ProtocolError("A quorum voted for an unexpected value")
+                chain_client::Error::ProtocolError("A quorum voted for an unexpected value")
             })?;
         Ok(certificate)
     }
@@ -714,7 +794,7 @@ impl<Env: Environment> Client<Env> {
     async fn receive_certificate_with_checked_signatures(
         &self,
         certificate: ConfirmedBlockCertificate,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         let certificate = Box::new(certificate);
         let block = certificate.block();
 
@@ -755,7 +835,7 @@ impl<Env: Environment> Client<Env> {
         certificate: ConfirmedBlockCertificate,
         mode: ReceiveCertificateMode,
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         // Verify the certificate before doing any expensive networking.
         let (max_epoch, committees) = self.admin_committees().await?;
         if let ReceiveCertificateMode::NeedsCheck = mode {
@@ -928,7 +1008,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         remote_node: &RemoteNode<Env::ValidatorNode>,
         tracker: u64,
-    ) -> Result<Vec<ChainAndHeight>, ChainClientError> {
+    ) -> Result<Vec<ChainAndHeight>, chain_client::Error> {
         let mut offset = tracker;
 
         // Retrieve the list of newly received certificates from this validator.
@@ -970,7 +1050,7 @@ impl<Env: Environment> Client<Env> {
         sender_chain_id: ChainId,
         height: BlockHeight,
         remote_node: &RemoteNode<Env::ValidatorNode>,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         let next_outbox_height = self
             .local_node
             .next_outbox_heights(&[sender_chain_id], receiver_chain_id)
@@ -992,7 +1072,7 @@ impl<Env: Environment> Client<Env> {
                 .download_certificates_by_heights(sender_chain_id, vec![current_height])
                 .await?;
             let Some(certificate) = downloaded.into_iter().next() else {
-                return Err(ChainClientError::CannotDownloadMissingSenderBlock {
+                return Err(chain_client::Error::CannotDownloadMissingSenderBlock {
                     chain_id: sender_chain_id,
                     height: current_height,
                 });
@@ -1071,7 +1151,7 @@ impl<Env: Environment> Client<Env> {
     async fn synchronize_chain_state(
         &self,
         chain_id: ChainId,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let (_, committee) = self.admin_committee().await?;
         self.synchronize_chain_state_from_committee(chain_id, committee)
             .await
@@ -1084,7 +1164,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         chain_id: ChainId,
         committee: Committee,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         #[cfg(with_metrics)]
         let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
 
@@ -1115,7 +1195,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         let mut local_info = self.local_node.chain_info(chain_id).await?;
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
         let remote_info = remote_node.handle_chain_info_query(query).await?;
@@ -1264,7 +1344,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         remote_node: &RemoteNode<Env::ValidatorNode>,
         certificate: GenericCertificate<ValidatedBlock>,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         let chain_id = certificate.inner().chain_id();
         let certificate = Box::new(certificate);
         match self.process_certificate(certificate.clone()).await {
@@ -1294,7 +1374,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         blob_ids: Vec<BlobId>,
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],
-    ) -> Result<Vec<Blob>, ChainClientError> {
+    ) -> Result<Vec<Blob>, chain_client::Error> {
         let timeout = self.options.blob_download_timeout;
         // Deduplicate IDs.
         let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
@@ -1315,9 +1395,9 @@ impl<Env: Environment> Client<Env> {
                         .read_blob(blob_id)
                         .await?
                         .ok_or_else(|| LocalNodeError::BlobsNotFound(vec![blob_id]))?;
-                    Result::<_, ChainClientError>::Ok(blob)
+                    Result::<_, chain_client::Error>::Ok(blob)
                 },
-                move |_| ChainClientError::from(NodeError::BlobsNotFound(vec![blob_id])),
+                move |_| chain_client::Error::from(NodeError::BlobsNotFound(vec![blob_id])),
                 timeout,
             )
         }))
@@ -1338,12 +1418,12 @@ impl<Env: Environment> Client<Env> {
         mut block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
+    ) -> Result<(Block, ChainInfoResponse), chain_client::Error> {
         loop {
             let result = self
                 .stage_block_execution(block.clone(), round, published_blobs.clone())
                 .await;
-            if let Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+            if let Err(chain_client::Error::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(chain_error),
             ))) = &result
             {
@@ -1364,7 +1444,7 @@ impl<Env: Environment> Client<Env> {
                     };
                     ensure!(
                         !message.bundle.is_protected(),
-                        ChainClientError::BlockProposalError(
+                        chain_client::Error::BlockProposalError(
                             "Protected incoming message failed to execute locally"
                         )
                     );
@@ -1391,7 +1471,7 @@ impl<Env: Environment> Client<Env> {
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
+    ) -> Result<(Block, ChainInfoResponse), chain_client::Error> {
         loop {
             let result = self
                 .local_node
@@ -1487,11 +1567,11 @@ enum CheckCertificateResult {
 }
 
 impl CheckCertificateResult {
-    fn into_result(self) -> Result<(), ChainClientError> {
+    fn into_result(self) -> Result<(), chain_client::Error> {
         match self {
-            Self::OldEpoch => Err(ChainClientError::CommitteeDeprecationError),
+            Self::OldEpoch => Err(chain_client::Error::CommitteeDeprecationError),
             Self::New => Ok(()),
-            Self::FutureEpoch => Err(ChainClientError::CommitteeSynchronizationError),
+            Self::FutureEpoch => Err(chain_client::Error::CommitteeSynchronizationError),
         }
     }
 }

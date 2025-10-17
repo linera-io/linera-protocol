@@ -54,7 +54,7 @@ use linera_client::{
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
-    client::{ChainClientError, ListeningMode},
+    client::{chain_client, ListeningMode},
     data_types::ClientOutcome,
     node::{ValidatorNode, ValidatorNodeProvider},
     worker::Reason,
@@ -1700,7 +1700,7 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(chain_id);
                 let description = match chain_client.get_chain_description().await {
                     Ok(description) => description,
-                    Err(ChainClientError::LocalNodeError(LocalNodeError::BlobsNotFound(_))) => {
+                    Err(chain_client::Error::LocalNodeError(LocalNodeError::BlobsNotFound(_))) => {
                         println!("Could not find a chain description corresponding to the given chain ID.");
                         return Ok(());
                     }

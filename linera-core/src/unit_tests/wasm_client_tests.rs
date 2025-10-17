@@ -52,7 +52,7 @@ use crate::client::client_tests::ServiceStorageBuilder;
 use crate::{
     client::{
         client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
-        ChainClient, ChainClientError, ClientOutcome,
+        ChainClient, chain_client::Error, ClientOutcome,
     },
     local_node::LocalNodeError,
     test_utils::{ClientOutcomeResultExt as _, FaultType},
@@ -198,7 +198,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
         )) if matches!(&*chain_error, ChainError::ExecutionError(
             error, ChainExecutionContext::Block
@@ -209,7 +209,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
         )) if matches!(&*chain_error, ChainError::ExecutionError(
             error, ChainExecutionContext::Block
@@ -981,7 +981,7 @@ where
     let result = client_b
         .execute_operation(Operation::user(app_id, &move_op)?)
         .await;
-    assert_matches!(result, Err(ChainClientError::CommunicationError(_)));
+    assert_matches!(result, Err(chain_client::Error::CommunicationError(_)));
 
     // Advance the clock so much that player B times out.
     clock.add(timeouts.start_time * 2);
@@ -1151,7 +1151,7 @@ where
     let result = creator
         .execute_operation(Operation::user(app_id, &op1)?)
         .await;
-    assert_matches!(result, Err(ChainClientError::CommunicationError(_)));
+    assert_matches!(result, Err(chain_client::Error::CommunicationError(_)));
 
     // The proposal should be in round MultiLeader(0).
     let chain_info = creator.chain_info_with_manager_values().await?;
@@ -1166,7 +1166,7 @@ where
     let result = creator
         .execute_operation(Operation::user(app_id, &op2)?)
         .await;
-    assert_matches!(result, Err(ChainClientError::CommunicationError(_)));
+    assert_matches!(result, Err(chain_client::Error::CommunicationError(_)));
 
     // The proposal should now be in round MultiLeader(1).
     let chain_info = creator.chain_info_with_manager_values().await?;
@@ -1181,7 +1181,7 @@ where
     let result = creator
         .execute_operation(Operation::user(app_id, &op3)?)
         .await;
-    assert_matches!(result, Err(ChainClientError::CommunicationError(_)));
+    assert_matches!(result, Err(chain_client::Error::CommunicationError(_)));
 
     // The proposal should now be in round SingleLeader(0).
     let chain_info = creator.chain_info_with_manager_values().await?;

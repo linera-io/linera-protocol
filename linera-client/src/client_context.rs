@@ -36,7 +36,6 @@ use {
         data_types::Amount,
         identifiers::{ApplicationId, BlobType},
     },
-    linera_core::client::ChainClientError,
     linera_execution::{
         system::{OpenChainConfig, SystemOperation},
         Operation,
@@ -987,7 +986,7 @@ where
                 .map(|chain_client| async move {
                     chain_client.process_inbox().await?;
                     info!("Processed inbox for chain {:?}", chain_client.chain_id());
-                    Ok::<(), ChainClientError>(())
+                    Ok::<(), chain_client::Error>(())
                 })
                 .buffer_unordered(wrap_up_max_in_flight);
             stream.try_collect::<Vec<_>>().await?;
