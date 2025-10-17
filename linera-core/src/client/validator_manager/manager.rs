@@ -243,7 +243,7 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// ```
     pub async fn with_best<R, F, Fut>(&self, key: RequestKey, operation: F) -> Result<R, NodeError>
     where
-        Result<R, NodeError>: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
+        R: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
         F: FnOnce(RemoteNode<Env::ValidatorNode>) -> Fut,
         Fut: Future<Output = Result<R, NodeError>>,
     {
@@ -282,7 +282,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         operation: F,
     ) -> Result<R, NodeError>
     where
-        Result<R, NodeError>: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
+        R: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
         F: FnOnce(RemoteNode<Env::ValidatorNode>) -> Fut,
         Fut: Future<Output = Result<R, NodeError>>,
     {
@@ -317,7 +317,8 @@ impl<Env: Environment> ValidatorManager<Env> {
                 let result = self.track_request(peer, operation).await;
 
                 // Convert result for broadcasting
-                let result_for_broadcast: RequestResult = result.clone().into();
+                let result_for_broadcast: Result<RequestResult, NodeError> =
+                    result.clone().map(Into::into);
                 let shared_result = Arc::new(result_for_broadcast);
 
                 // Broadcast to waiters and clean up in-flight entry
@@ -326,7 +327,10 @@ impl<Env: Environment> ValidatorManager<Env> {
                     .await;
 
                 // Store in cache
-                self.store_in_cache(key.clone(), shared_result).await;
+                if let Ok(success) = shared_result.as_ref() {
+                    self.store_in_cache(key.clone(), Arc::new(success.clone()))
+                        .await;
+                }
 
                 return result;
             }
@@ -506,11 +510,15 @@ impl<Env: Environment> ValidatorManager<Env> {
     ///
     /// # Returns
     /// The result from either the in-flight request or the newly executed operation
-    async fn deduplicated_request<T, F, Fut>(&self, key: RequestKey, operation: F) -> T
+    async fn deduplicated_request<T, F, Fut>(
+        &self,
+        key: RequestKey,
+        operation: F,
+    ) -> Result<T, NodeError>
     where
         T: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
         F: FnOnce() -> Fut,
-        Fut: Future<Output = T>,
+        Fut: Future<Output = Result<T, NodeError>>,
     {
         // Check cache for exact match first
         {
@@ -522,13 +530,13 @@ impl<Env: Environment> ValidatorManager<Env> {
                 );
                 #[cfg(with_metrics)]
                 metrics::REQUEST_CACHE_HIT.inc();
-                return T::from((*entry.result).clone());
+                return Ok(T::from((*entry.result).clone()));
             }
 
             // Check cache for subsuming requests
             for (cached_key, entry) in cache.iter() {
                 if cached_key.subsumes(&key) {
-                    if let Some(extracted) = key.can_extract_result(cached_key, &entry.result) {
+                    if let Some(extracted) = key.try_extract_result(cached_key, &entry.result) {
                         tracing::trace!(
                             key = ?key,
                             subsumed_by = ?cached_key,
@@ -536,7 +544,7 @@ impl<Env: Environment> ValidatorManager<Env> {
                         );
                         #[cfg(with_metrics)]
                         metrics::REQUEST_CACHE_HIT.inc();
-                        return T::from(extracted);
+                        return Ok(T::from(extracted));
                     }
                 }
             }
@@ -555,7 +563,7 @@ impl<Env: Environment> ValidatorManager<Env> {
                         metrics::REQUEST_CACHE_DEDUPLICATION.inc();
                         // Wait for result from existing request
                         match receiver.recv().await {
-                            Ok(result) => return T::from((*result).clone()),
+                            Ok(result) => return result.as_ref().clone().map(T::from),
                             Err(_) => {
                                 tracing::trace!(
                                     key = ?key,
@@ -590,20 +598,32 @@ impl<Env: Environment> ValidatorManager<Env> {
                         // Wait for result from the subsuming request
                         match receiver.recv().await {
                             Ok(result) => {
-                                if let Some(extracted) =
-                                    key.can_extract_result(&subsuming_key, &result)
-                                {
-                                    tracing::trace!(
-                                        key = ?key,
-                                        "extracted subset result from larger in-flight request"
-                                    );
-                                    return T::from(extracted);
-                                } else {
-                                    // Extraction failed, fall through to execute our own request
-                                    tracing::trace!(
-                                        key = ?key,
-                                        "failed to extract from subsuming request, will execute independently"
-                                    );
+                                match result.as_ref() {
+                                    Ok(res) => {
+                                        if let Some(extracted) =
+                                            key.try_extract_result(&subsuming_key, &res)
+                                        {
+                                            tracing::trace!(
+                                                key = ?key,
+                                                "extracted subset result from larger in-flight request"
+                                            );
+                                            return Ok(T::from(extracted));
+                                        } else {
+                                            // Extraction failed, fall through to execute our own request
+                                            tracing::trace!(
+                                                key = ?key,
+                                                "failed to extract from subsuming request, will execute independently"
+                                            );
+                                        }
+                                    }
+                                    Err(e) => {
+                                        tracing::trace!(
+                                            key = ?key,
+                                            error = %e,
+                                            "subsuming in-flight request failed",
+                                        );
+                                        // Fall through to execute our own request
+                                    }
                                 }
                             }
                             Err(_) => {
@@ -634,7 +654,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         // Execute the actual request
         tracing::trace!(key = ?key, "executing new request");
         let result = operation().await;
-        let result_for_broadcast: RequestResult = result.clone().into();
+        let result_for_broadcast: Result<RequestResult, NodeError> = result.clone().map(Into::into);
         let shared_result = Arc::new(result_for_broadcast);
 
         // Broadcast result and clean up
@@ -642,7 +662,10 @@ impl<Env: Environment> ValidatorManager<Env> {
             .complete_and_broadcast(&key, shared_result.clone())
             .await;
 
-        self.store_in_cache(key.clone(), shared_result).await;
+        if let Ok(success) = shared_result.as_ref() {
+            self.store_in_cache(key.clone(), Arc::new(success.clone()))
+                .await;
+        }
         result
     }
 
@@ -651,9 +674,6 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// If the cache is at capacity, this method removes the oldest entry before
     /// inserting the new one. Entries are considered "oldest" based on their cached_at timestamp.
     async fn store_in_cache(&self, key: RequestKey, result: Arc<RequestResult>) {
-        if !result.is_ok() {
-            return; // Only cache successful results
-        }
         self.evict_expired_cache_entries().await; // Clean up expired entries first
         let mut cache = self.cache.write().await;
         // Insert new entry

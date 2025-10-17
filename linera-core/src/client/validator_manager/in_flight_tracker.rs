@@ -8,6 +8,7 @@ use linera_base::time::{Duration, Instant};
 use tokio::sync::broadcast;
 
 use super::request::{RequestKey, RequestResult};
+use crate::node::NodeError;
 
 /// Tracks in-flight requests to deduplicate concurrent requests for the same data.
 ///
@@ -116,7 +117,7 @@ impl<N: Clone> InFlightTracker<N> {
     pub(super) async fn complete_and_broadcast(
         &self,
         key: &RequestKey,
-        result: Arc<RequestResult>,
+        result: Arc<Result<RequestResult, NodeError>>,
     ) -> usize {
         let mut in_flight = self.entries.write().await;
 
@@ -216,7 +217,7 @@ pub(super) enum InFlightMatch {
 #[derive(Debug)]
 pub(super) enum SubscribeOutcome {
     /// Successfully subscribed; receiver will be notified when request completes
-    Subscribed(broadcast::Receiver<Arc<RequestResult>>),
+    Subscribed(broadcast::Receiver<Arc<Result<RequestResult, NodeError>>>),
     /// Request exists but has exceeded the timeout threshold
     TimedOut(Duration),
 }
@@ -225,7 +226,7 @@ pub(super) enum SubscribeOutcome {
 #[derive(Debug)]
 pub(super) struct InFlightEntry<N> {
     /// Broadcast sender for notifying waiters when the request completes
-    sender: broadcast::Sender<Arc<RequestResult>>,
+    sender: broadcast::Sender<Arc<Result<RequestResult, NodeError>>>,
     /// Time when this request was initiated
     started_at: Instant,
     /// Alternative peers that can provide this data if the primary request fails

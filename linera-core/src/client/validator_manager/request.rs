@@ -8,8 +8,6 @@ use linera_base::{
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 
-use crate::node::NodeError;
-
 /// Unique identifier for different types of download requests.
 ///
 /// Used for request deduplication to avoid redundant downloads of the same data.
@@ -109,14 +107,14 @@ impl RequestKey {
     /// # Returns
     /// - `Some(RequestResult)` with the extracted subset if possible
     /// - `None` if extraction is not possible (wrong variant, different chain, etc.)
-    pub fn can_extract_result(
+    pub fn try_extract_result(
         &self,
         from: &RequestKey,
         result: &RequestResult,
     ) -> Option<RequestResult> {
         // Only certificate results can be extracted
         let certificates = match result {
-            RequestResult::Certificates(Ok(certs)) => certs,
+            RequestResult::Certificates(certs) => certs,
             _ => return None,
         };
 
@@ -133,88 +131,76 @@ impl RequestKey {
             .cloned()
             .collect();
 
-        Some(RequestResult::Certificates(Ok(filtered)))
+        Some(RequestResult::Certificates(filtered))
     }
 }
 
 /// Result types that can be shared across deduplicated requests
 #[derive(Debug, Clone)]
 pub enum RequestResult {
-    Certificates(Result<Vec<ConfirmedBlockCertificate>, NodeError>),
-    Blob(Result<Option<Blob>, NodeError>),
-    BlobContent(Result<BlobContent, NodeError>),
-    Certificate(Box<Result<ConfirmedBlockCertificate, NodeError>>),
+    Certificates(Vec<ConfirmedBlockCertificate>),
+    Blob(Option<Blob>),
+    BlobContent(BlobContent),
+    Certificate(Box<ConfirmedBlockCertificate>),
 }
 
-impl RequestResult {
-    /// Returns true if the result represents a successful operation
-    pub(super) fn is_ok(&self) -> bool {
-        match self {
-            RequestResult::Certificates(result) => result.is_ok(),
-            RequestResult::Blob(result) => result.is_ok(),
-            RequestResult::BlobContent(result) => result.is_ok(),
-            RequestResult::Certificate(result) => result.is_ok(),
-        }
+impl From<Option<Blob>> for RequestResult {
+    fn from(blob: Option<Blob>) -> Self {
+        RequestResult::Blob(blob)
     }
 }
 
-impl From<RequestResult> for Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+impl From<Vec<ConfirmedBlockCertificate>> for RequestResult {
+    fn from(certs: Vec<ConfirmedBlockCertificate>) -> Self {
+        RequestResult::Certificates(certs)
+    }
+}
+
+impl From<BlobContent> for RequestResult {
+    fn from(content: BlobContent) -> Self {
+        RequestResult::BlobContent(content)
+    }
+}
+
+impl From<ConfirmedBlockCertificate> for RequestResult {
+    fn from(cert: ConfirmedBlockCertificate) -> Self {
+        RequestResult::Certificate(Box::new(cert))
+    }
+}
+
+impl From<RequestResult> for Option<Blob> {
     fn from(result: RequestResult) -> Self {
         match result {
-            RequestResult::Certificates(r) => r,
-            _ => panic!("Invalid RequestResult variant"),
+            RequestResult::Blob(blob) => blob,
+            _ => panic!("Cannot convert RequestResult to Option<Blob>"),
         }
     }
 }
 
-impl From<Result<Vec<ConfirmedBlockCertificate>, NodeError>> for RequestResult {
-    fn from(result: Result<Vec<ConfirmedBlockCertificate>, NodeError>) -> Self {
-        RequestResult::Certificates(result)
-    }
-}
-
-impl From<RequestResult> for Result<Option<Blob>, NodeError> {
+impl From<RequestResult> for Vec<ConfirmedBlockCertificate> {
     fn from(result: RequestResult) -> Self {
         match result {
-            RequestResult::Blob(r) => r,
-            _ => panic!("Invalid RequestResult variant"),
+            RequestResult::Certificates(certs) => certs,
+            _ => panic!("Cannot convert RequestResult to Vec<ConfirmedBlockCertificate>"),
         }
     }
 }
 
-impl From<Result<Option<Blob>, NodeError>> for RequestResult {
-    fn from(result: Result<Option<Blob>, NodeError>) -> Self {
-        RequestResult::Blob(result)
-    }
-}
-
-impl From<RequestResult> for Result<BlobContent, NodeError> {
+impl From<RequestResult> for BlobContent {
     fn from(result: RequestResult) -> Self {
         match result {
-            RequestResult::BlobContent(r) => r,
-            _ => panic!("Invalid RequestResult variant"),
+            RequestResult::BlobContent(content) => content,
+            _ => panic!("Cannot convert RequestResult to BlobContent"),
         }
     }
 }
 
-impl From<Result<BlobContent, NodeError>> for RequestResult {
-    fn from(result: Result<BlobContent, NodeError>) -> Self {
-        RequestResult::BlobContent(result)
-    }
-}
-
-impl From<RequestResult> for Result<ConfirmedBlockCertificate, NodeError> {
+impl From<RequestResult> for ConfirmedBlockCertificate {
     fn from(result: RequestResult) -> Self {
         match result {
-            RequestResult::Certificate(r) => *r,
-            _ => panic!("Invalid RequestResult variant"),
+            RequestResult::Certificate(cert) => *cert,
+            _ => panic!("Cannot convert RequestResult to ConfirmedBlockCertificate"),
         }
-    }
-}
-
-impl From<Result<ConfirmedBlockCertificate, NodeError>> for RequestResult {
-    fn from(result: Result<ConfirmedBlockCertificate, NodeError>) -> Self {
-        RequestResult::Certificate(Box::new(result))
     }
 }
 
