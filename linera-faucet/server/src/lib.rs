@@ -180,6 +180,7 @@ mod tests;
 pub struct QueryRoot<C: ClientContext> {
     client: ChainClient<C::Environment>,
     genesis_config: Arc<GenesisConfig>,
+    faucet_storage: Arc<FaucetDatabase>,
 }
 
 /// The root GraphQL mutation type.
@@ -264,6 +265,26 @@ where
     /// Returns the current committee, including weights and resource policy.
     async fn current_committee(&self) -> Result<Committee, Error> {
         Ok(self.client.local_committee().await?)
+    }
+
+    /// Find the existing a chain with the given authentication key, if any.
+    async fn chain_id(&self, owner: AccountOwner) -> Result<ChainId, Error> {
+        // Check if this owner already has a chain.
+        #[cfg(with_metrics)]
+        let db_start_time = std::time::Instant::now();
+
+        let chain_id = self
+            .faucet_storage
+            .get_chain_id(&owner)
+            .await
+            .map_err(|e| Error::new(e.to_string()))?;
+
+        #[cfg(with_metrics)]
+        metrics::DATABASE_OPERATION_LATENCY
+            .with_label_values(&["get_chain_id"])
+            .observe(db_start_time.elapsed().as_secs_f64() * 1000.0);
+
+        chain_id.ok_or(Error::new("This user has no chain yet"))
     }
 }
 
@@ -896,6 +917,7 @@ where
         let query_root = QueryRoot {
             genesis_config: Arc::clone(&self.genesis_config),
             client: self.client.clone(),
+            faucet_storage: Arc::clone(&self.faucet_storage),
         };
         Schema::build(query_root, mutation_root, EmptySubscription).finish()
     }
