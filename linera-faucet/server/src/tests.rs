@@ -399,6 +399,38 @@ async fn test_faucet_persistence() {
     // Create a new faucet instance with the same database path (simulating restart)
     let faucet_storage_2 = Arc::new(FaucetDatabase::new(&storage_path).await.unwrap());
 
+    // Test the chain_id query API through the database for owners that have claimed chains
+    let queried_chain_1 = faucet_storage_2
+        .get_chain_id(&test_owner_1)
+        .await
+        .expect("Query should succeed for owner 1")
+        .expect("Owner 1 should have a chain ID");
+    assert_eq!(
+        chain_1_id, queried_chain_1,
+        "Query should return correct chain ID for owner 1"
+    );
+
+    let queried_chain_2 = faucet_storage_2
+        .get_chain_id(&test_owner_2)
+        .await
+        .expect("Query should succeed for owner 2")
+        .expect("Owner 2 should have a chain ID");
+    assert_eq!(
+        chain_2_id, queried_chain_2,
+        "Query should return correct chain ID for owner 2"
+    );
+
+    // Test the chain_id query for an owner that hasn't claimed a chain yet
+    let test_owner_new = AccountPublicKey::test_key(99).into();
+    let result_new = faucet_storage_2
+        .get_chain_id(&test_owner_new)
+        .await
+        .expect("Query should succeed even for non-existent owner");
+    assert!(
+        result_new.is_none(),
+        "Query should return None for owner that hasn't claimed a chain"
+    );
+
     // Set up the new MutationRoot instance
     let pending_requests_2 = Arc::new(Mutex::new(VecDeque::new()));
     let request_notifier_2 = Arc::new(Notify::new());
