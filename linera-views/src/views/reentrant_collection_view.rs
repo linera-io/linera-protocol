@@ -214,19 +214,18 @@ impl<W: ClonableView> ClonableView for ReentrantByteCollectionView<W::Context, W
             .updates
             .iter()
             .map(|(key, value)| {
-                let cloned_value: Result<_, ViewError> = match value {
-                    Update::Removed => Ok(Update::Removed),
+                let cloned_value = match value {
+                    Update::Removed => Update::Removed,
                     Update::Set(view_lock) => {
                         let mut view = view_lock
                             .try_write()
-                            .expect("Unable to acquire write lock during clone_unchecked");
-
-                        Ok(Update::Set(Arc::new(RwLock::new(view.clone_unchecked()?))))
+                            .ok_or_else(|| ViewError::TryLockError(key.clone()))?;
+                        Update::Set(Arc::new(RwLock::new(view.clone_unchecked()?)))
                     }
                 };
-                cloned_value.map(|v| (key.clone(), v))
+                Ok::<_, ViewError>((key.clone(), cloned_value))
             })
-            .collect::<Result<_, ViewError>>()?;
+            .collect::<Result<_, _>>()?;
 
         Ok(ReentrantByteCollectionView {
             context: self.context.clone(),
