@@ -43,6 +43,8 @@ pub struct HistoricallyHashableView<C, W> {
     stored_hash: Option<HasherOutput>,
     /// The inner view.
     inner: W,
+    /// Memoized hash, if any.
+    hash: Option<HasherOutput>,
     /// Track context type.
     _phantom: PhantomData<C>,
 }
@@ -86,6 +88,7 @@ where
         HistoricallyHashableView {
             _phantom: PhantomData,
             stored_hash: self.stored_hash,
+            hash: self.hash,
             inner: self.inner.with_context(ctx).await,
         }
     }
@@ -122,6 +125,7 @@ where
         Ok(Self {
             _phantom: PhantomData,
             stored_hash: hash,
+            hash,
             inner,
         })
     }
@@ -134,6 +138,7 @@ where
 
     fn rollback(&mut self) {
         self.inner.rollback();
+        self.hash = self.stored_hash;
     }
 
     async fn has_pending_changes(&self) -> bool {
@@ -142,26 +147,25 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut inner_batch = Batch::new();
-        let delete_view = self.inner.flush(&mut inner_batch)?;
+        self.inner.flush(&mut inner_batch)?;
         let hash = self.make_hash(&inner_batch)?;
         batch.operations.extend(inner_batch.operations);
-        if delete_view {
-            let mut key_prefix = self.inner.context().base_key().bytes.clone();
-            key_prefix.pop();
-            batch.delete_key_prefix(key_prefix);
-            self.stored_hash = None;
-        } else if self.stored_hash != Some(hash) {
+        if self.stored_hash != Some(hash) {
             let mut key = self.inner.context().base_key().bytes.clone();
             let tag = key.last_mut().unwrap();
             *tag = KeyTag::Hash as u8;
             batch.put_key_value(key, &hash)?;
             self.stored_hash = Some(hash);
         }
-        Ok(delete_view)
+        // Remember the hash.
+        self.hash = Some(hash);
+        // Never delete the stored hash, even if the inner view was cleared.
+        Ok(false)
     }
 
     fn clear(&mut self) {
         self.inner.clear();
+        self.hash = None;
     }
 }
 
@@ -173,6 +177,7 @@ where
         Ok(HistoricallyHashableView {
             _phantom: PhantomData,
             stored_hash: self.stored_hash,
+            hash: self.hash,
             inner: self.inner.clone_unchecked()?,
         })
     }
@@ -181,12 +186,18 @@ where
 impl<W: ClonableView> HistoricallyHashableView<W::Context, W> {
     /// Obtain a hash of the history of the changes in the view.
     pub async fn historical_hash(&mut self) -> Result<HasherOutput, ViewError> {
+        if let Some(hash) = self.hash {
+            return Ok(hash);
+        }
         let mut batch = Batch::new();
-        if self.inner.has_pending_changes() {
+        if self.inner.has_pending_changes().await {
             let mut inner = self.inner.clone_unchecked()?;
             inner.flush(&mut batch)?;
         }
-        self.make_hash(&batch)
+        let hash = self.make_hash(&batch)?;
+        // Remember the hash that we just computed.
+        self.hash = Some(hash);
+        Ok(hash)
     }
 }
 
@@ -200,6 +211,8 @@ impl<C, W> Deref for HistoricallyHashableView<C, W> {
 
 impl<C, W> DerefMut for HistoricallyHashableView<C, W> {
     fn deref_mut(&mut self) -> &mut W {
+        // Clear the memoized hash.
+        self.hash = None;
         &mut self.inner
     }
 }
@@ -372,11 +385,11 @@ mod tests {
         // Flush the clear operation
         let mut batch = Batch::new();
         let delete_view = view.flush(&mut batch)?;
-        assert!(delete_view);
+        assert!(!delete_view);
         context.store().write_batch(batch).await?;
 
-        // Verify the view is reset to default
-        assert_eq!(view.historical_hash().await?, HasherOutput::default());
+        // Verify the view is not reset to default
+        assert_ne!(view.historical_hash().await?, HasherOutput::default());
 
         Ok(())
     }
