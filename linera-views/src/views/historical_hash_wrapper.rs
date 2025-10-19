@@ -182,8 +182,10 @@ impl<W: ClonableView> HistoricallyHashableView<W::Context, W> {
     /// Obtain a hash of the history of the changes in the view.
     pub async fn historical_hash(&mut self) -> Result<HasherOutput, ViewError> {
         let mut batch = Batch::new();
-        let mut inner = self.inner.clone_unchecked()?;
-        inner.flush(&mut batch)?;
+        if self.inner.has_pending_changes() {
+            let mut inner = self.inner.clone_unchecked()?;
+            inner.flush(&mut batch)?;
+        }
         self.make_hash(&batch)
     }
 }
