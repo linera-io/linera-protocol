@@ -70,8 +70,8 @@ impl SystemExecutionState {
     }
 
     pub async fn into_hash(self) -> CryptoHash {
-        let view = self.into_view().await;
-        view.crypto_hash()
+        let mut view = self.into_view().await;
+        view.crypto_hash_mut()
             .await
             .expect("hashing from memory should not fail")
     }
