@@ -298,15 +298,15 @@ impl<C: Clone, T: Clone, const N: usize> ClonableView for BucketQueueView<C, T, 
 where
     Self: View,
 {
-    fn clone_unchecked(&mut self) -> Self {
-        BucketQueueView {
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(BucketQueueView {
             context: self.context.clone(),
             stored_data: self.stored_data.clone(),
             new_back_values: self.new_back_values.clone(),
             stored_position: self.stored_position,
             cursor: self.cursor.clone(),
             delete_storage_first: self.delete_storage_first,
-        }
+        })
     }
 }
 

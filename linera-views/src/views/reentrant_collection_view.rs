@@ -209,30 +209,30 @@ impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
 }
 
 impl<W: ClonableView> ClonableView for ReentrantByteCollectionView<W::Context, W> {
-    fn clone_unchecked(&mut self) -> Self {
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         let cloned_updates = self
             .updates
             .iter()
             .map(|(key, value)| {
-                let cloned_value = match value {
-                    Update::Removed => Update::Removed,
+                let cloned_value: Result<_, ViewError> = match value {
+                    Update::Removed => Ok(Update::Removed),
                     Update::Set(view_lock) => {
                         let mut view = view_lock
                             .try_write()
                             .expect("Unable to acquire write lock during clone_unchecked");
 
-                        Update::Set(Arc::new(RwLock::new(view.clone_unchecked())))
+                        Ok(Update::Set(Arc::new(RwLock::new(view.clone_unchecked()?))))
                     }
                 };
-                (key.clone(), cloned_value)
+                cloned_value.map(|v| (key.clone(), v))
             })
-            .collect();
+            .collect::<Result<_, ViewError>>()?;
 
-        ReentrantByteCollectionView {
+        Ok(ReentrantByteCollectionView {
             context: self.context.clone(),
             delete_storage_first: self.delete_storage_first,
             updates: cloned_updates,
-        }
+        })
     }
 }
 
@@ -1102,11 +1102,11 @@ where
     W: ClonableView,
     I: Send + Sync + Serialize + DeserializeOwned,
 {
-    fn clone_unchecked(&mut self) -> Self {
-        ReentrantCollectionView {
-            collection: self.collection.clone_unchecked(),
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(ReentrantCollectionView {
+            collection: self.collection.clone_unchecked()?,
             _phantom: PhantomData,
-        }
+        })
     }
 }
 
@@ -1599,11 +1599,11 @@ where
     W: ClonableView,
     Self: View,
 {
-    fn clone_unchecked(&mut self) -> Self {
-        ReentrantCustomCollectionView {
-            collection: self.collection.clone_unchecked(),
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(ReentrantCustomCollectionView {
+            collection: self.collection.clone_unchecked()?,
             _phantom: PhantomData,
-        }
+        })
     }
 }
 

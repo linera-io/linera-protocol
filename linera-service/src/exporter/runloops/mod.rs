@@ -107,7 +107,7 @@ where
         options,
         limits.work_queue_size.into(),
         shutdown_signal.clone(),
-        exporter_storage.clone(),
+        exporter_storage.clone()?,
         destination_config.destinations.clone(),
     );
 

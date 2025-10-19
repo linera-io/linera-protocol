@@ -270,7 +270,7 @@ where
     let mut original = V::load(context).await?;
     let original_state = original.stage_initial_changes().await?;
 
-    let clone = original.clone_unchecked();
+    let clone = original.clone_unchecked()?;
     let clone_state = clone.read().await?;
 
     assert_eq!(original_state, clone_state);
@@ -297,8 +297,8 @@ where
     let mut original = V::load(context).await?;
     original.stage_initial_changes().await?;
 
-    let mut first_clone = original.clone_unchecked();
-    let second_clone = original.clone_unchecked();
+    let mut first_clone = original.clone_unchecked()?;
+    let second_clone = original.clone_unchecked()?;
 
     let original_state = original.stage_changes_to_be_discarded().await?;
     let first_clone_state = first_clone.stage_changes_to_be_persisted().await?;
