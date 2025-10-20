@@ -153,6 +153,12 @@ const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html>
 const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
 
+/// Maximum number of entries that can be obtained in a [`BatchGetItem`] operation.
+/// The two constraints are at most 100 operations and at most 16M in total.
+/// Since the maximum size of a value is 400K, this gets us 40 as upper limit
+const MAX_BATCH_GET_ITEM_SIZE: usize = 40;
+
+
 /// Builds the key attributes for a table item.
 ///
 /// The key is composed of two attributes that are both binary blobs. The first attribute is a
@@ -692,23 +698,23 @@ impl DynamoDbStoreInternal {
     async fn read_batch_values_bytes(
         &self,
         keys: &[Vec<u8>],
-        results: &mut [Option<Vec<u8>>],
-        start_idx: usize,
-    ) -> Result<(), DynamoDbStoreInternalError> {
-        use std::collections::HashMap;
-
+    ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbStoreInternalError> {
         // Early return for empty keys
         if keys.is_empty() {
-            return Ok(());
+            return Ok(Vec::new());
         }
+        let mut results = vec![None; keys.len()];
 
         // Build the request keys
         let mut request_keys = Vec::new();
-        let mut key_to_index = HashMap::new();
+        let mut key_to_index = HashMap::<Vec<u8>,Vec<usize>>::new();
 
         for (i, key) in keys.iter().enumerate() {
             let key_attrs = build_key(&self.start_key, key.clone());
-            key_to_index.insert(key.clone(), start_idx + i);
+            key_to_index
+                .entry(key.clone())
+                .or_default()
+                .push(i);
             request_keys.push(key_attrs);
         }
 
@@ -747,9 +753,14 @@ impl DynamoDbStoreInternal {
 
                         if let AttributeValue::B(blob) = key_attr {
                             let key = blob.as_ref();
-                            if let Some(&index) = key_to_index.get(key) {
-                                let value = extract_value_owned(&mut item)?;
-                                results[index] = Some(value);
+                            if let Some(indices) = key_to_index.get(key) {
+                                if let Some((&last, rest)) = indices.split_last() {
+                                    let value = extract_value_owned(&mut item)?;
+                                    for index in rest {
+                                        results[*index] = Some(value.clone());
+                                    }
+                                    results[last] = Some(value);
+                                }
                             }
                         }
                     }
@@ -760,7 +771,7 @@ impl DynamoDbStoreInternal {
             remaining_request_items = response.unprocessed_keys;
         }
 
-        Ok(())
+        Ok(results)
     }
 }
 
@@ -844,12 +855,11 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         }
 
         // BatchGetItem can handle up to 100 keys per request
-        const BATCH_SIZE: usize = 100;
-        let mut results = vec![None; keys.len()];
+        let mut results = Vec::new();
 
-        for (batch_start, key_batch) in keys.chunks(BATCH_SIZE).enumerate() {
-            let batch_start_idx = batch_start * BATCH_SIZE;
-            self.read_batch_values_bytes(key_batch, &mut results, batch_start_idx).await?;
+        for (batch_start, key_batch) in keys.chunks(MAX_BATCH_GET_ITEM_SIZE).enumerate() {
+            let block = self.read_batch_values_bytes(key_batch).await?;
+            results.extend(block);
         }
 
         Ok(results)
