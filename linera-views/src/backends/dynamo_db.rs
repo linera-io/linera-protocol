@@ -705,7 +705,7 @@ impl DynamoDbStoreInternal {
         // Build the request keys
         let mut request_keys = Vec::new();
         let mut key_to_index = HashMap::new();
-        
+
         for (i, key) in keys.iter().enumerate() {
             let key_attrs = build_key(&self.start_key, key.clone());
             key_to_index.insert(key.clone(), start_idx + i);
@@ -721,13 +721,13 @@ impl DynamoDbStoreInternal {
 
         // Execute batch get item request with retry for unprocessed keys
         let mut remaining_request_items = Some(request_items);
-        
+
         while let Some(request_items) = remaining_request_items {
             // Skip if the request items are empty
             if request_items.is_empty() {
                 break;
             }
-            
+
             let _guard = self.acquire().await;
             let response = self
                 .client
@@ -744,15 +744,12 @@ impl DynamoDbStoreInternal {
                         // Extract key to find the original index
                         let key_attr = item.get(KEY_ATTRIBUTE)
                             .ok_or(DynamoDbStoreInternalError::MissingKey)?;
-                        
+
                         if let AttributeValue::B(blob) = key_attr {
-                            let full_key = blob.as_ref();
-                            if full_key.len() >= self.start_key.len() {
-                                let original_key = &full_key[self.start_key.len()..];
-                                if let Some(&index) = key_to_index.get(original_key) {
-                                    let value = extract_value_owned(&mut item)?;
-                                    results[index] = Some(value);
-                                }
+                            let key = blob.as_ref();
+                            if let Some(&index) = key_to_index.get(key) {
+                                let value = extract_value_owned(&mut item)?;
+                                results[index] = Some(value);
                             }
                         }
                     }
@@ -849,7 +846,7 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         // BatchGetItem can handle up to 100 keys per request
         const BATCH_SIZE: usize = 100;
         let mut results = vec![None; keys.len()];
-        
+
         for (batch_start, key_batch) in keys.chunks(BATCH_SIZE).enumerate() {
             let batch_start_idx = batch_start * BATCH_SIZE;
             self.read_batch_values_bytes(key_batch, &mut results, batch_start_idx).await?;
