@@ -8,6 +8,8 @@ use linera_base::{
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 
+use crate::client::validator_manager::cache::SubsumingKey;
+
 /// Unique identifier for different types of download requests.
 ///
 /// Used for request deduplication to avoid redundant downloads of the same data.
@@ -51,7 +53,7 @@ impl RequestKey {
     /// # Returns
     /// - `Some((chain_id, heights))` for certificate requests, where heights are sorted
     /// - `None` for non-certificate requests (Blob, PendingBlob, CertificateForBlob)
-    pub(super) fn height_range(&self) -> Option<Vec<BlockHeight>> {
+    fn height_range(&self) -> Option<Vec<BlockHeight>> {
         match self {
             RequestKey::Certificates { start, limit, .. } => {
                 let heights: Vec<BlockHeight> = (0..*limit)
@@ -62,76 +64,6 @@ impl RequestKey {
             RequestKey::CertificatesByHeights { heights, .. } => Some(heights.clone()),
             _ => None,
         }
-    }
-
-    /// Checks if this request fully subsumes another request.
-    ///
-    /// Request A subsumes request B if A's result would contain all the data that
-    /// B's result would contain. This means B's request is redundant if A is already
-    /// in-flight or cached.
-    ///
-    /// # Examples
-    /// ```ignore
-    /// let large = RequestKey::Certificates { chain_id, start: 10, limit: 10 }; // [10..20]
-    /// let small = RequestKey::CertificatesByHeights { chain_id, heights: vec![12,13,14] };
-    /// assert!(large.subsumes(&small)); // large contains all of small's heights
-    /// ```
-    pub fn subsumes(&self, other: &RequestKey) -> bool {
-        // Different chains can't subsume each other
-        if self.chain_id() != other.chain_id() {
-            return false;
-        }
-
-        let heights1 = match self.height_range() {
-            Some(range) => range,
-            None => return self == other, // Non-certificate requests must match exactly
-        };
-        let heights2 = match other.height_range() {
-            Some(range) => range,
-            None => return false, // Can't subsume different variant types
-        };
-
-        // Check if all heights in other are contained in self
-        heights2.iter().all(|h| heights1.contains(h))
-    }
-
-    /// Attempts to extract a subset result for this request from a larger request's result.
-    ///
-    /// This is used when a request A subsumes this request B. We can extract B's result
-    /// from A's result by filtering the certificates to only those requested by B.
-    ///
-    /// # Arguments
-    /// - `from`: The key of the larger request that subsumes this one
-    /// - `result`: The result from the larger request
-    ///
-    /// # Returns
-    /// - `Some(RequestResult)` with the extracted subset if possible
-    /// - `None` if extraction is not possible (wrong variant, different chain, etc.)
-    pub fn try_extract_result(
-        &self,
-        from: &RequestKey,
-        result: &RequestResult,
-    ) -> Option<RequestResult> {
-        // Only certificate results can be extracted
-        let certificates = match result {
-            RequestResult::Certificates(certs) => certs,
-            _ => return None,
-        };
-
-        if self.chain_id().is_none() || from.chain_id().is_none() {
-            return None;
-        }
-
-        let heights_self = self.height_range()?;
-
-        // Filter certificates to only those at the requested heights
-        let filtered: Vec<_> = certificates
-            .iter()
-            .filter(|cert| heights_self.contains(&cert.value().height()))
-            .cloned()
-            .collect();
-
-        Some(RequestResult::Certificates(filtered))
     }
 }
 
@@ -204,11 +136,55 @@ impl From<RequestResult> for ConfirmedBlockCertificate {
     }
 }
 
+impl SubsumingKey<RequestResult> for super::request::RequestKey {
+    fn subsumes(&self, other: &Self) -> bool {
+        // Different chains can't subsume each other
+        if self.chain_id() != other.chain_id() {
+            return false;
+        }
+
+        let heights1 = match self.height_range() {
+            Some(range) => range,
+            None => return self == other, // Non-certificate requests must match exactly
+        };
+        let heights2 = match other.height_range() {
+            Some(range) => range,
+            None => return false, // Can't subsume different variant types
+        };
+
+        // Check if all heights in other are contained in self
+        heights2.iter().all(|h| heights1.contains(h))
+    }
+
+    fn try_extract_result(&self, from: &Self, result: &RequestResult) -> Option<RequestResult> {
+        // Only certificate results can be extracted
+        let certificates = match result {
+            RequestResult::Certificates(certs) => certs,
+            _ => return None,
+        };
+
+        if self.chain_id().is_none() || from.chain_id().is_none() {
+            return None;
+        }
+
+        let heights_self = self.height_range()?;
+
+        // Filter certificates to only those at the requested heights
+        let filtered: Vec<_> = certificates
+            .iter()
+            .filter(|cert| heights_self.contains(&cert.value().height()))
+            .cloned()
+            .collect();
+
+        Some(RequestResult::Certificates(filtered))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 
-    use super::RequestKey;
+    use super::{RequestKey, SubsumingKey};
 
     #[test]
     fn test_subsumes_complete_containment() {

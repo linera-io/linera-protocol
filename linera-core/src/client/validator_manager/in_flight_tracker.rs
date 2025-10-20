@@ -7,7 +7,10 @@ use std::{collections::HashMap, sync::Arc};
 use linera_base::time::{Duration, Instant};
 use tokio::sync::broadcast;
 
-use super::request::{RequestKey, RequestResult};
+use super::{
+    cache::SubsumingKey,
+    request::{RequestKey, RequestResult},
+};
 use crate::node::NodeError;
 
 /// Tracks in-flight requests to deduplicate concurrent requests for the same data.

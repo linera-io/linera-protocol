@@ -7,12 +7,11 @@ use linera_base::time::{Duration, Instant};
 
 #[cfg(with_metrics)]
 use super::manager::metrics;
-use super::request::{RequestKey, RequestResult};
 
 /// Cached result entry with timestamp for TTL expiration
 #[derive(Debug, Clone)]
-pub(super) struct CacheEntry {
-    pub(super) result: Arc<RequestResult>,
+pub(super) struct CacheEntry<R> {
+    pub(super) result: Arc<R>,
     pub(super) cached_at: Instant,
 }
 
@@ -24,17 +23,21 @@ pub(super) struct CacheEntry {
 /// - TTL-based expiration
 /// - Size-based LRU eviction
 #[derive(Debug, Clone)]
-pub(super) struct RequestsCache {
+pub(super) struct RequestsCache<K, R> {
     /// Cache of recently completed requests with their results and timestamps.
     /// Used to avoid re-executing requests for the same data within the TTL window.
-    cache: Arc<tokio::sync::RwLock<HashMap<RequestKey, CacheEntry>>>,
+    cache: Arc<tokio::sync::RwLock<HashMap<K, CacheEntry<R>>>>,
     /// Time-to-live for cached entries. Entries older than this duration are considered expired.
     cache_ttl: Duration,
     /// Maximum number of entries to store in the cache. When exceeded, oldest entries are evicted (LRU).
     max_cache_size: usize,
 }
 
-impl RequestsCache {
+impl<K, R> RequestsCache<K, R>
+where
+    K: Eq + std::hash::Hash + std::fmt::Debug + Clone + SubsumingKey<R>,
+    R: Clone + std::fmt::Debug,
+{
     /// Creates a new `RequestsCache` with the specified TTL and maximum size.
     ///
     /// # Arguments
@@ -57,9 +60,9 @@ impl RequestsCache {
     /// # Returns
     /// - `Some(T)` if a cached result is found (either exact or subsumed)
     /// - `None` if no suitable cached result exists
-    pub(super) async fn get<T>(&self, key: &RequestKey) -> Option<T>
+    pub(super) async fn get<T>(&self, key: &K) -> Option<T>
     where
-        T: From<RequestResult>,
+        T: From<R>,
     {
         let cache = self.cache.read().await;
 
@@ -101,7 +104,7 @@ impl RequestsCache {
     /// # Arguments
     /// - `key`: The request key to cache
     /// - `result`: The result to cache
-    pub(super) async fn store(&self, key: RequestKey, result: Arc<RequestResult>) {
+    pub(super) async fn store(&self, key: K, result: Arc<R>) {
         self.evict_expired_entries().await; // Clean up expired entries first
         let mut cache = self.cache.write().await;
         // Insert new entry
@@ -133,7 +136,7 @@ impl RequestsCache {
             return 0; // No need to evict if under max size
         }
 
-        let expired_keys: Vec<RequestKey> = cache
+        let expired_keys: Vec<_> = cache
             .iter()
             .filter_map(|(key, entry)| {
                 if now.duration_since(entry.cached_at) > self.cache_ttl {
@@ -153,4 +156,28 @@ impl RequestsCache {
         }
         expired_keys.len()
     }
+}
+
+/// Trait for request keys that support subsumption-based matching and result extraction.
+pub(super) trait SubsumingKey<R> {
+    /// Checks if this request fully subsumes another request.
+    ///
+    /// Request A subsumes request B if A's result would contain all the data that
+    /// B's result would contain. This means B's request is redundant if A is already
+    /// in-flight or cached.
+    fn subsumes(&self, other: &Self) -> bool;
+
+    /// Attempts to extract a subset result for this request from a larger request's result.
+    ///
+    /// This is used when a request A subsumes this request B. We can extract B's result
+    /// from A's result by filtering the certificates to only those requested by B.
+    ///
+    /// # Arguments
+    /// - `from`: The key of the larger request that subsumes this one
+    /// - `result`: The result from the larger request
+    ///
+    /// # Returns
+    /// - `Some(result)` with the extracted subset if possible
+    /// - `None` if extraction is not possible (wrong variant, different chain, etc.)
+    fn try_extract_result(&self, from: &Self, result: &R) -> Option<R>;
 }

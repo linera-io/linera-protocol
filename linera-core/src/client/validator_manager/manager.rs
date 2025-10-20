@@ -19,7 +19,7 @@ use rand::{
 use tracing::instrument;
 
 use super::{
-    cache::RequestsCache,
+    cache::{RequestsCache, SubsumingKey},
     in_flight_tracker::{InFlightMatch, InFlightTracker, SubscribeOutcome},
     node_info::NodeInfo,
     request::{RequestKey, RequestResult},
@@ -135,7 +135,7 @@ pub struct ValidatorManager<Env: Environment> {
     /// Tracks in-flight requests to deduplicate concurrent requests for the same data.
     in_flight_tracker: InFlightTracker<RemoteNode<Env::ValidatorNode>>,
     /// Cache of recently completed requests with their results and timestamps.
-    cache: RequestsCache,
+    cache: RequestsCache<RequestKey, RequestResult>,
 }
 
 impl<Env: Environment> ValidatorManager<Env> {
