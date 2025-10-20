@@ -572,6 +572,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             debug!("Not processing inbox for non-tracked chain {chain_id:.8}");
             return Ok(());
         }
+        if listening_client.client.preferred_owner().is_none() {
+            debug!("Not processing inbox for non-owned chain {chain_id:.8}");
+            return Ok(());
+        }
         debug!("Processing inbox for {chain_id:.8}");
         listening_client.timeout = Timestamp::from(u64::MAX);
         match listening_client
