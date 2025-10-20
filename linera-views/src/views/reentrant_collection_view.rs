@@ -569,6 +569,37 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             .collect()
     }
 
+    /// Load multiple entries for writing at once with their keys.
+    /// The entries in short_keys have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
+    ///     ReentrantByteCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let mut subview = view.try_load_entry_mut(&vec![0, 1]).await.unwrap();
+    ///     *subview.get_mut() = "Bonjour".to_string();
+    /// }
+    /// let short_keys = vec![vec![0, 1], vec![2, 3]];
+    /// let subviews = view.try_load_entries_pairs_mut(short_keys).await.unwrap();
+    /// let value1 = subviews[0].1.get();
+    /// let value2 = subviews[1].1.get();
+    /// assert_eq!(*value1, "Bonjour".to_string());
+    /// assert_eq!(*value2, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries_pairs_mut(
+        &mut self,
+        short_keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<(Vec<u8>, WriteGuardedView<W>)>, ViewError> {
+        let values = self.try_load_entries_mut(short_keys.clone()).await?;
+        Ok(short_keys.into_iter().zip(values).collect())
+    }
+
     /// Loads multiple entries for reading at once.
     /// The entries in `short_keys` have to be all distinct.
     /// ```rust
@@ -657,6 +688,35 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 None => Ok(None),
             })
             .collect()
+    }
+
+    /// Load multiple entries for reading at once with their keys.
+    /// The entries in short_keys have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
+    ///     ReentrantByteCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.try_load_entry_mut(&vec![0, 1]).await.unwrap();
+    /// }
+    /// let short_keys = vec![vec![0, 1], vec![0, 2]];
+    /// let subviews = view.try_load_entries_pairs(short_keys).await.unwrap();
+    /// assert!(subviews[1].1.is_none());
+    /// let value0 = subviews[0].1.as_ref().unwrap().get();
+    /// assert_eq!(*value0, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries_pairs(
+        &self,
+        short_keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<(Vec<u8>, Option<ReadGuardedView<W>>)>, ViewError> {
+        let values = self.try_load_entries(short_keys.clone()).await?;
+        Ok(short_keys.into_iter().zip(values).collect())
     }
 
     /// Loads all the entries for reading at once.
@@ -1302,6 +1362,37 @@ where
         self.collection.try_load_entries_mut(short_keys).await
     }
 
+    /// Load multiple entries for writing at once with their keys.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
+    ///     ReentrantCollectionView::load(context).await.unwrap();
+    /// let indices = vec![23, 42];
+    /// let subviews = view.try_load_entries_pairs_mut(indices).await.unwrap();
+    /// let value1 = subviews[0].1.get();
+    /// let value2 = subviews[1].1.get();
+    /// assert_eq!(*value1, String::default());
+    /// assert_eq!(*value2, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries_pairs_mut<Q>(
+        &mut self,
+        indices: Vec<Q>,
+    ) -> Result<Vec<(Q, WriteGuardedView<W>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + Clone,
+    {
+        let values = self.try_load_entries_mut(indices.iter()).await?;
+        Ok(indices.into_iter().zip(values).collect())
+    }
+
     /// Load multiple entries for reading at once.
     /// The entries in indices have to be all distinct.
     /// ```rust
@@ -1336,6 +1427,39 @@ where
             .map(|index| BaseKey::derive_short_key(index))
             .collect::<Result<_, _>>()?;
         self.collection.try_load_entries(short_keys).await
+    }
+
+    /// Load multiple entries for reading at once with their keys.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
+    ///     ReentrantCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    /// }
+    /// let indices = vec![23, 42];
+    /// let subviews = view.try_load_entries_pairs(indices).await.unwrap();
+    /// assert!(subviews[1].1.is_none());
+    /// let value0 = subviews[0].1.as_ref().unwrap().get();
+    /// assert_eq!(*value0, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries_pairs<Q>(
+        &self,
+        indices: Vec<Q>,
+    ) -> Result<Vec<(Q, Option<ReadGuardedView<W>>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + Clone,
+    {
+        let values = self.try_load_entries(indices.iter()).await?;
+        Ok(indices.into_iter().zip(values).collect())
     }
 
     /// Loads all entries for writing at once.
@@ -1798,6 +1922,37 @@ where
         self.collection.try_load_entries_mut(short_keys).await
     }
 
+    /// Load multiple entries for writing at once with their keys.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
+    ///     ReentrantCustomCollectionView::load(context).await.unwrap();
+    /// let indices = vec![23, 42];
+    /// let subviews = view.try_load_entries_pairs_mut(indices).await.unwrap();
+    /// let value1 = subviews[0].1.get();
+    /// let value2 = subviews[1].1.get();
+    /// assert_eq!(*value1, String::default());
+    /// assert_eq!(*value2, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries_pairs_mut<Q>(
+        &mut self,
+        indices: Vec<Q>,
+    ) -> Result<Vec<(Q, WriteGuardedView<W>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + Clone,
+    {
+        let values = self.try_load_entries_mut(indices.iter()).await?;
+        Ok(indices.into_iter().zip(values).collect())
+    }
+
     /// Load multiple entries for reading at once.
     /// The entries in indices have to be all distinct.
     /// ```rust
@@ -1831,6 +1986,39 @@ where
             .map(|index| index.to_custom_bytes())
             .collect::<Result<_, _>>()?;
         self.collection.try_load_entries(short_keys).await
+    }
+
+    /// Load multiple entries for reading at once with their keys.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
+    ///     ReentrantCustomCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    /// }
+    /// let indices = vec![23, 42];
+    /// let subviews = view.try_load_entries_pairs(indices).await.unwrap();
+    /// assert!(subviews[1].1.is_none());
+    /// let value0 = subviews[0].1.as_ref().unwrap().get();
+    /// assert_eq!(*value0, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries_pairs<Q>(
+        &self,
+        indices: Vec<Q>,
+    ) -> Result<Vec<(Q, Option<ReadGuardedView<W>>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + Clone,
+    {
+        let values = self.try_load_entries(indices.iter()).await?;
+        Ok(indices.into_iter().zip(values).collect())
     }
 
     /// Loads all entries for writing at once.
