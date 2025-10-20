@@ -565,7 +565,7 @@ mod tests {
     use crate::db_storage::DbStorage;
 
     /// Generic test function to test Storage trait features
-    async fn test_storage_features<S: Storage + Sync>(storage: &S) -> Result<(), ViewError>
+    async fn test_storage_chain_exporter<S: Storage + Sync>(storage: &S) -> Result<(), ViewError>
     where
         S::Context: Send + Sync,
     {
@@ -582,8 +582,14 @@ mod tests {
 
         // Test block exporter context
         let _block_exporter_context = storage.block_exporter_context(0).await?;
+        Ok(())
+    }
 
-        // Create test data
+    async fn test_storage_blob<S: Storage + Sync>(storage: &S) -> Result<(), ViewError>
+    where
+        S::Context: Send + Sync,
+    {
+        // Create test blobs
         let chain_description = ChainDescription::new(
             ChainOrigin::Root(0),
             InitialChainConfig {
@@ -597,13 +603,11 @@ mod tests {
             Timestamp::from(0),
         );
 
-        // ===================
-        // Test blob operations
-        // ===================
         let test_blob1 = Blob::new_chain_description(&chain_description);
         let test_blob2 = Blob::new_data(vec![10, 20, 30]);
         let test_blob3 = Blob::new_data(vec![40, 50, 60]);
 
+        // Testing blobs existence
         let blob_id1 = test_blob1.id();
         let blob_id2 = test_blob2.id();
         let blob_id3 = test_blob3.id();
@@ -681,11 +685,7 @@ mod tests {
 
         // Test single blob state read
         let read_blob_state = storage.read_blob_state(blob_id1).await?;
-        assert!(read_blob_state.is_some());
-        let retrieved_state = read_blob_state.unwrap();
-        assert_eq!(retrieved_state.chain_id, blob_state1.chain_id);
-        assert_eq!(retrieved_state.block_height, blob_state1.block_height);
-        assert_eq!(retrieved_state.epoch, blob_state1.epoch);
+        assert_eq!(read_blob_state, Some(blob_state1.clone()));
 
         // Test multiple blob state read (read_blob_states)
         let read_blob_states = storage.read_blob_states(&[blob_id1, blob_id2]).await?;
@@ -699,6 +699,13 @@ mod tests {
         let write_results = storage.maybe_write_blobs(&[test_blob1.clone()]).await?;
         assert_eq!(write_results, vec![true]);
 
+        Ok(())
+    }
+
+    async fn test_storage_certificate<S: Storage + Sync>(storage: &S) -> Result<(), ViewError>
+    where
+        S::Context: Send + Sync,
+    {
         // ======================
         // Test certificate operations (simplified - certificates are complex structures)
         // ======================
@@ -727,6 +734,13 @@ mod tests {
         let block_result = storage.read_confirmed_block(block_hash).await?;
         assert!(block_result.is_none());
 
+        Ok(())
+    }
+
+    async fn test_storage_event<S: Storage + Sync>(storage: &S) -> Result<(), ViewError>
+    where
+        S::Context: Send + Sync,
+    {
         // Note: write_blobs_and_certificate requires creating a complex ConfirmedBlockCertificate
         // which would require setting up validators, signatures, and proper block structure.
         // This is beyond the scope of a basic storage interface test.
@@ -789,6 +803,16 @@ mod tests {
             .read_events_from_index(&chain_id, &stream_id, 1)
             .await?;
         assert!(events_from_index.len() >= 2); // Should contain events at index 1 and 2
+        Ok(())
+    }
+
+    async fn test_storage_network_description<S: Storage + Sync>(
+        storage: &S,
+    ) -> Result<(), ViewError>
+    where
+        S::Context: Send + Sync,
+    {
+        let admin_chain_id = ChainId(CryptoHash::test_hash("test_chain_second"));
 
         // ===============================
         // Test network description operations
@@ -798,7 +822,7 @@ mod tests {
             genesis_config_hash: CryptoHash::test_hash("genesis_config"),
             genesis_timestamp: Timestamp::from(0),
             genesis_committee_blob_hash: CryptoHash::test_hash("committee"),
-            admin_chain_id: chain_id,
+            admin_chain_id,
         };
 
         // Test reading non-existent network description
@@ -811,6 +835,13 @@ mod tests {
         let read_desc = storage.read_network_description().await?;
         assert_eq!(read_desc, Some(network_desc));
 
+        Ok(())
+    }
+
+    async fn test_storage_committee<S: Storage + Sync>(storage: &S) -> Result<(), ViewError>
+    where
+        S::Context: Send + Sync,
+    {
         // ======================
         // Test committee operations
         // ======================
@@ -824,7 +855,20 @@ mod tests {
         let _committees = storage.committees_for(Epoch::ZERO..=Epoch::from(1)).await;
         // This might fail if network description or committee blobs aren't properly set up
         // but we test that the method can be called
+        Ok(())
+    }
 
+    /// Generic test function to test Storage trait features
+    async fn test_storage_features<S: Storage + Sync>(storage: &S) -> Result<(), ViewError>
+    where
+        S::Context: Send + Sync,
+    {
+        test_storage_chain_exporter(storage).await?;
+        test_storage_blob(storage).await?;
+        test_storage_certificate(storage).await?;
+        test_storage_event(storage).await?;
+        test_storage_network_description(storage).await?;
+        test_storage_committee(storage).await?;
         Ok(())
     }
 
