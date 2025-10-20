@@ -41,8 +41,8 @@ spec:
               value: {{ .Values.logLevel }}
             - name: RUST_BACKTRACE
               value: "1"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: {{ .Values.otelExporterEndpoint }}
+            - name: LINERA_OTLP_EXPORTER_ENDPOINT
+              value: {{ .Values.otlpExporterEndpoint }}
           volumeMounts:
             - name: config
               mountPath: "/config"
@@ -59,8 +59,8 @@ spec:
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: {{ .Values.otelExporterEndpoint }}
+            - name: LINERA_OTLP_EXPORTER_ENDPOINT
+              value: {{ .Values.otlpExporterEndpoint }}
             {{- if .Values.serverTokioThreads }}
             - name: LINERA_SERVER_TOKIO_THREADS
               value: "{{ .Values.serverTokioThreads }}"

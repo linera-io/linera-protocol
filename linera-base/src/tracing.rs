@@ -26,7 +26,7 @@ use tracing_subscriber::{
 };
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use crate::tracing_otel::{
+pub use crate::tracing_opentelemetry::{
     init_with_chrome_trace_exporter, init_with_opentelemetry, ChromeTraceGuard,
 };
 
