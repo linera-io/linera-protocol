@@ -96,6 +96,10 @@ pub struct ProxyOptions {
     /// Runs a specific proxy instance.
     #[arg(long)]
     id: Option<usize>,
+
+    /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
+    #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
+    otlp_exporter_endpoint: Option<String>,
 }
 
 /// A Linera Proxy, either gRPC or over 'Simple Transport', meaning TCP or UDP.
@@ -496,7 +500,7 @@ impl ProxyOptions {
         let public_key = &server_config.validator.public_key;
         linera_base::tracing::init_with_opentelemetry(
             &format!("validator-{public_key}-proxy"),
-            None,
+            self.otlp_exporter_endpoint.as_deref(),
         );
 
         let store_config = self
