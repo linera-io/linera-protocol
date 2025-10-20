@@ -5,7 +5,8 @@ use std::{collections::BTreeMap, vec};
 
 use futures::{FutureExt, StreamExt};
 use linera_base::{
-    data_types::{BlobContent, BlockHeight, StreamUpdate},
+    crypto::CryptoHash,
+    data_types::{BlobContent, BlockHeight, Epoch, StreamUpdate},
     identifiers::{AccountOwner, BlobId, StreamId},
     time::Instant,
 };
@@ -14,9 +15,10 @@ use linera_views::{
     key_value_store_view::KeyValueStoreView,
     map_view::MapView,
     reentrant_collection_view::HashedReentrantCollectionView,
-    views::{ClonableView, ReplaceContext, View},
+    views::{ClonableView, CryptoHashView, HashableView as _, ReplaceContext, View},
+    ViewError,
 };
-use linera_views_derive::CryptoHashView;
+use linera_views_derive::HashableView;
 #[cfg(with_testing)]
 use {
     crate::{
@@ -30,14 +32,14 @@ use {
 use super::{execution_state_actor::ExecutionRequest, runtime::ServiceRuntimeRequest};
 use crate::{
     execution_state_actor::ExecutionStateActor, resources::ResourceController,
-    system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ExecutionError,
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageContext, OperationContext,
-    ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime, Timestamp,
-    TransactionTracker,
+    system::SystemExecutionStateView, ApplicationDescription, ApplicationId, BcsHashable,
+    Deserialize, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageContext,
+    OperationContext, ProcessStreamsContext, Query, QueryContext, QueryOutcome, Serialize,
+    ServiceSyncRuntime, Timestamp, TransactionTracker,
 };
 
 /// A view accessing the execution state of a chain.
-#[derive(Debug, ClonableView, CryptoHashView)]
+#[derive(Debug, ClonableView, HashableView)]
 pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
@@ -45,6 +47,51 @@ pub struct ExecutionStateView<C> {
     pub users: HashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
     /// The number of events in the streams that this chain is writing to.
     pub stream_event_counts: MapView<C, StreamId, u32>,
+}
+
+// The epoch after which, instead of hashing the view, we just return zeroes for
+// performance.
+// Note: testnet-only! This should not survive to mainnet.
+const EPOCH_STOP_HASHING: Epoch = Epoch(20);
+
+impl<C> CryptoHashView for ExecutionStateView<C>
+where
+    C: Context + Clone + Send + Sync + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    async fn crypto_hash(&self) -> Result<CryptoHash, ViewError> {
+        if self
+            .system
+            .current_committee()
+            .is_some_and(|(epoch, _)| epoch > EPOCH_STOP_HASHING)
+        {
+            Ok(CryptoHash::from([0; 32]))
+        } else {
+            #[derive(Serialize, Deserialize)]
+            struct ExecutionStateHash([u8; 32]);
+            impl BcsHashable<'_> for ExecutionStateHash {}
+            self.hash()
+                .await
+                .map(|hash| CryptoHash::new(&ExecutionStateHash(hash.into())))
+        }
+    }
+
+    async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
+        if self
+            .system
+            .current_committee()
+            .is_some_and(|(epoch, _)| epoch > EPOCH_STOP_HASHING)
+        {
+            Ok(CryptoHash::from([0; 32]))
+        } else {
+            #[derive(Serialize, Deserialize)]
+            struct ExecutionStateHash([u8; 32]);
+            impl BcsHashable<'_> for ExecutionStateHash {}
+            self.hash_mut()
+                .await
+                .map(|hash| CryptoHash::new(&ExecutionStateHash(hash.into())))
+        }
+    }
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
