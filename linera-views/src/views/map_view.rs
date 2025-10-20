@@ -386,11 +386,23 @@ where
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut map = ByteMapView::load(context).await.unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
-    /// let pairs = map.multi_get_pairs(vec![vec![0, 1], vec![0, 2]]).await.unwrap();
-    /// assert_eq!(pairs, vec![(vec![0, 1], Some(String::from("Hello"))), (vec![0, 2], None)]);
+    /// let pairs = map
+    ///     .multi_get_pairs(vec![vec![0, 1], vec![0, 2]])
+    ///     .await
+    ///     .unwrap();
+    /// assert_eq!(
+    ///     pairs,
+    ///     vec![
+    ///         (vec![0, 1], Some(String::from("Hello"))),
+    ///         (vec![0, 2], None)
+    ///     ]
+    /// );
     /// # })
     /// ```
-    pub async fn multi_get_pairs(&self, short_keys: Vec<Vec<u8>>) -> Result<Vec<(Vec<u8>, Option<V>)>, ViewError> {
+    pub async fn multi_get_pairs(
+        &self,
+        short_keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<(Vec<u8>, Option<V>)>, ViewError> {
         let values = self.multi_get(short_keys.clone()).await?;
         Ok(short_keys.into_iter().zip(values).collect())
     }
@@ -1776,7 +1788,11 @@ where
     ///     map.multi_get_pairs([34 as u128, 12 as u128, 89 as u128])
     ///         .await
     ///         .unwrap(),
-    ///     vec![(34 as u128, Some(String::from("Hello"))), (12 as u128, Some(String::from("Hi"))), (89 as u128, None)]
+    ///     vec![
+    ///         (34 as u128, Some(String::from("Hello"))),
+    ///         (12 as u128, Some(String::from("Hi"))),
+    ///         (89 as u128, None)
+    ///     ]
     /// );
     /// # })
     /// ```

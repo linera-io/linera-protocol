@@ -479,9 +479,15 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
         let requested_heights: Vec<BlockHeight> = heights
-            .range(next_block_height..).copied()
+            .range(next_block_height..)
+            .copied()
             .collect::<Vec<BlockHeight>>();
-        for (height, hash) in self.chain.preprocessed_blocks.multi_get_pairs(requested_heights).await? {
+        for (height, hash) in self
+            .chain
+            .preprocessed_blocks
+            .multi_get_pairs(requested_heights)
+            .await?
+        {
             let hash = hash.ok_or_else(|| WorkerError::PreprocessedBlocksEntryNotFound {
                 height,
                 chain_id: self.chain_id(),

@@ -827,7 +827,10 @@ where
         let recipients = block_execution_tracker.recipients();
         let mut recipient_heights = Vec::new();
         let mut indices = Vec::new();
-        for (recipient, height) in previous_message_blocks_view.multi_get_pairs(recipients).await? {
+        for (recipient, height) in previous_message_blocks_view
+            .multi_get_pairs(recipients)
+            .await?
+        {
             if let Some(height) = height {
                 let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                 indices.push(index);
@@ -1239,7 +1242,13 @@ where
         }
 
         let mut updated_streams = BTreeSet::new();
-        for ((stream_id, next_index), indices) in self.next_expected_events.multi_get_pairs(stream_ids).await?.into_iter().zip(list_indices) {
+        for ((stream_id, next_index), indices) in self
+            .next_expected_events
+            .multi_get_pairs(stream_ids)
+            .await?
+            .into_iter()
+            .zip(list_indices)
+        {
             let initial_index = if stream_id == StreamId::system(EPOCH_STREAM_NAME) {
                 // we don't expect the epoch stream to contain event 0
                 1

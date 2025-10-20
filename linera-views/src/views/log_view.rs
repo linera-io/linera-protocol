@@ -296,7 +296,10 @@ where
     /// );
     /// # })
     /// ```
-    pub async fn multi_get_pairs(&self, indices: Vec<usize>) -> Result<Vec<(usize, Option<T>)>, ViewError> {
+    pub async fn multi_get_pairs(
+        &self,
+        indices: Vec<usize>,
+    ) -> Result<Vec<(usize, Option<T>)>, ViewError> {
         let values = self.multi_get(indices.clone()).await?;
         Ok(indices.into_iter().zip(values).collect())
     }
