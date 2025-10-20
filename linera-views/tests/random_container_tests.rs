@@ -48,7 +48,7 @@ async fn classic_collection_view_check() -> Result<()> {
     let nmax: u8 = 25;
     for _ in 0..n {
         let mut view = CollectionStateView::load(context.clone()).await?;
-        let hash = view.crypto_hash().await?;
+        let hash = view.crypto_hash_mut().await?;
         let save = rng.gen::<bool>();
         //
         let count_oper = rng.gen_range(0..25);
@@ -102,7 +102,7 @@ async fn classic_collection_view_check() -> Result<()> {
                 new_map = map.clone();
             }
             // Checking the hash
-            let new_hash = view.crypto_hash().await?;
+            let new_hash = view.crypto_hash_mut().await?;
             if map == new_map {
                 assert_eq!(new_hash, hash);
             } else {
@@ -262,7 +262,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
         let mut view = ByteMapStateView::load(context.clone()).await?;
         let save = rng.gen::<bool>();
         let read_state = view.map.key_values().await?;
-        let read_hash = view.crypto_hash().await?;
+        let read_hash = view.crypto_hash_mut().await?;
         let state_vec = state_map.clone().into_iter().collect::<Vec<_>>();
         assert_eq!(state_vec, read_state);
         //
@@ -351,7 +351,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
                 new_state_map.insert(key, new_value);
             }
             new_state_vec = new_state_map.clone().into_iter().collect();
-            let new_hash = view.crypto_hash().await?;
+            let new_hash = view.crypto_hash_mut().await?;
             if state_vec == new_state_vec {
                 assert_eq!(new_hash, read_hash);
             } else {
@@ -415,7 +415,7 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
     let n = 200;
     for _ in 0..n {
         let mut view = BucketQueueStateView::load(context.clone()).await?;
-        let hash = view.crypto_hash().await?;
+        let hash = view.crypto_hash_mut().await?;
         let save = rng.gen::<bool>();
         let elements = view.queue.elements().await?;
         assert_eq!(elements, vector);
@@ -469,7 +469,7 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
                 new_vector.clone_from(&vector);
             }
             let new_elements = view.queue.elements().await?;
-            let new_hash = view.crypto_hash().await?;
+            let new_hash = view.crypto_hash_mut().await?;
             if elements == new_elements {
                 assert_eq!(new_hash, hash);
             } else {
@@ -521,7 +521,7 @@ async fn queue_view_mutability_check() -> Result<()> {
     let n = 20;
     for _ in 0..n {
         let mut view = QueueStateView::load(context.clone()).await?;
-        let hash = view.crypto_hash().await?;
+        let hash = view.crypto_hash_mut().await?;
         let save = rng.gen::<bool>();
         let elements = view.queue.elements().await?;
         assert_eq!(elements, vector);
@@ -579,7 +579,7 @@ async fn queue_view_mutability_check() -> Result<()> {
             let front2 = new_vector.first().copied();
             assert_eq!(front1, front2);
             let new_elements = view.queue.elements().await?;
-            let new_hash = view.crypto_hash().await?;
+            let new_hash = view.crypto_hash_mut().await?;
             if elements == new_elements {
                 assert_eq!(new_hash, hash);
             } else {
@@ -630,7 +630,7 @@ async fn reentrant_collection_view_check() -> Result<()> {
     let nmax: u8 = 25;
     for _ in 0..n {
         let mut view = ReentrantCollectionStateView::load(context.clone()).await?;
-        let hash = view.crypto_hash().await?;
+        let hash = view.crypto_hash_mut().await?;
         let key_values = view.key_values().await?;
         assert_eq!(key_values, map);
         //
@@ -729,7 +729,7 @@ async fn reentrant_collection_view_check() -> Result<()> {
                 }
             }
             // Checking the hash
-            let new_hash = view.crypto_hash().await?;
+            let new_hash = view.crypto_hash_mut().await?;
             if new_map == map {
                 assert_eq!(hash, new_hash);
             } else {
