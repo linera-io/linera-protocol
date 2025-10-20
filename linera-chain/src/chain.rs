@@ -1239,10 +1239,7 @@ where
         }
 
         let mut updated_streams = BTreeSet::new();
-        let next_indices = self.next_expected_events.multi_get(&stream_ids).await?;
-        for ((next_index, indices), stream_id) in
-            next_indices.into_iter().zip(list_indices).zip(stream_ids)
-        {
+        for ((stream_id, next_index), indices) in self.next_expected_events.multi_get_pairs(stream_ids).await?.into_iter().zip(list_indices) {
             let initial_index = if stream_id == StreamId::system(EPOCH_STREAM_NAME) {
                 // we don't expect the epoch stream to contain event 0
                 1
