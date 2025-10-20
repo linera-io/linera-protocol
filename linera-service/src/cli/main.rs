@@ -2048,16 +2048,13 @@ fn init_tracing(
     if matches!(&options.command, ClientCommand::Faucet { .. }) {
         linera_base::tracing::init_with_opentelemetry(
             &options.command.log_file_name(),
-            options
-                .context_options
-                .otel_exporter_otlp_endpoint
-                .as_deref(),
+            options.context_options.otlp_exporter_endpoint.as_deref(),
         );
         Ok(None)
     } else if options.context_options.chrome_trace_exporter {
         let trace_file_path = options
             .context_options
-            .otel_trace_file
+            .chrome_trace_file
             .as_deref()
             .map_or_else(
                 || format!("{}.trace.json", options.command.log_file_name()),
@@ -2081,7 +2078,6 @@ fn init_tracing(options: &ClientOptions) {
 
 fn main() -> anyhow::Result<process::ExitCode> {
     let options = ClientOptions::init();
-    let _guard = init_tracing(&options)?;
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
     } else {
@@ -2119,6 +2115,7 @@ fn main() -> anyhow::Result<process::ExitCode> {
 }
 
 async fn run(options: &ClientOptions) -> Result<i32, Error> {
+    let _guard = init_tracing(options)?;
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();

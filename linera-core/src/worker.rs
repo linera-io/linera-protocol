@@ -633,11 +633,7 @@ where
     }
 
     /// Executes a [`Query`] for an application's state on a specific chain.
-    #[instrument(
-        level = "trace",
-        target = "telemetry_only",
-        skip(self, chain_id, query)
-    )]
+    #[instrument(level = "trace", skip(self, chain_id, query))]
     pub async fn query_application(
         &self,
         chain_id: ChainId,
@@ -649,7 +645,7 @@ where
         .await
     }
 
-    #[instrument(level = "trace", target = "telemetry_only", skip(self, chain_id, application_id), fields(
+    #[instrument(level = "trace", skip(self, chain_id, application_id), fields(
         nickname = %self.nickname,
         chain_id = %chain_id,
         application_id = %application_id
@@ -671,7 +667,6 @@ where
     /// Processes a confirmed block (aka a commit).
     #[instrument(
         level = "trace",
-        target = "telemetry_only",
         skip(self, certificate, notify_when_messages_are_delivered),
         fields(
             nickname = %self.nickname,
@@ -696,7 +691,7 @@ where
     }
 
     /// Processes a validated block issued from a multi-owner chain.
-    #[instrument(level = "trace", target = "telemetry_only", skip(self, certificate), fields(
+    #[instrument(level = "trace", skip(self, certificate), fields(
         nickname = %self.nickname,
         chain_id = %certificate.block().header.chain_id,
         block_height = %certificate.block().header.height
@@ -716,7 +711,7 @@ where
     }
 
     /// Processes a leader timeout issued from a multi-owner chain.
-    #[instrument(level = "trace", target = "telemetry_only", skip(self, certificate), fields(
+    #[instrument(level = "trace", skip(self, certificate), fields(
         nickname = %self.nickname,
         chain_id = %certificate.value().chain_id(),
         height = %certificate.value().height()
@@ -735,7 +730,7 @@ where
         .await
     }
 
-    #[instrument(level = "trace", target = "telemetry_only", skip(self, origin, recipient, bundles), fields(
+    #[instrument(level = "trace", skip(self, origin, recipient, bundles), fields(
         nickname = %self.nickname,
         origin = %origin,
         recipient = %recipient,
@@ -758,7 +753,7 @@ where
     }
 
     /// Returns a stored [`ConfirmedBlockCertificate`] for a chain's block.
-    #[instrument(level = "trace", target = "telemetry_only", skip(self, chain_id, height), fields(
+    #[instrument(level = "trace", skip(self, chain_id, height), fields(
         nickname = %self.nickname,
         chain_id = %chain_id,
         height = %height
@@ -780,7 +775,7 @@ where
     ///
     /// The returned view holds a lock on the chain state, which prevents the worker from changing
     /// the state of that chain.
-    #[instrument(level = "trace", target = "telemetry_only", skip(self), fields(
+    #[instrument(level = "trace", skip(self), fields(
         nickname = %self.nickname,
         chain_id = %chain_id
     ))]
@@ -795,7 +790,7 @@ where
     }
 
     /// Sends a request to the [`ChainWorker`] for a [`ChainId`] and waits for the `Response`.
-    #[instrument(level = "trace", target = "telemetry_only", skip(self, request_builder), fields(
+    #[instrument(level = "trace", skip(self, request_builder), fields(
         nickname = %self.nickname,
         chain_id = %chain_id
     ))]
@@ -860,7 +855,7 @@ where
     }
 
     /// Find an endpoint and call it. Create the endpoint if necessary.
-    #[instrument(level = "trace", target = "telemetry_only", skip(self), fields(
+    #[instrument(level = "trace", skip(self), fields(
         nickname = %self.nickname,
         chain_id = %chain_id
     ))]
@@ -1177,7 +1172,7 @@ where
     }
 
     /// Updates the received certificate trackers to at least the given values.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         nickname = %self.nickname,
         chain_id = %chain_id,
         num_trackers = %new_trackers.len()
@@ -1197,7 +1192,7 @@ where
     }
 
     /// Gets preprocessed block hashes in a given height range.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         nickname = %self.nickname,
         chain_id = %chain_id,
         start = %start,
@@ -1220,7 +1215,7 @@ where
     }
 
     /// Gets the next block height to receive from an inbox.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         nickname = %self.nickname,
         chain_id = %chain_id,
         origin = %origin
@@ -1238,7 +1233,7 @@ where
 
     /// Gets locking blobs for specific blob IDs.
     /// Returns `Ok(None)` if any of the blobs is not found.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         nickname = %self.nickname,
         chain_id = %chain_id,
         num_blob_ids = %blob_ids.len()
@@ -1255,7 +1250,7 @@ where
     }
 
     /// Reads a range from the confirmed log.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         nickname = %self.nickname,
         chain_id = %chain_id,
         start = %start,

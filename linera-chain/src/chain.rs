@@ -390,7 +390,7 @@ where
         self.context().extra().chain_id()
     }
 
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
     ))]
     pub async fn query_application(
@@ -410,7 +410,7 @@ where
             .with_execution_context(ChainExecutionContext::Query)
     }
 
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         application_id = %application_id
     ))]
@@ -425,7 +425,7 @@ where
             .with_execution_context(ChainExecutionContext::DescribeApplication)
     }
 
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         target = %target,
         height = %height
@@ -556,7 +556,7 @@ where
     /// round timeouts.
     ///
     /// Returns `true` if incoming `Subscribe` messages created new outbox entries.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         origin = %origin,
         bundle_height = %bundle.height
@@ -659,7 +659,7 @@ where
     /// If `must_be_present` is `true`, an error is returned if any of the bundles have not been
     /// added to the inbox yet. So this should be `true` if the bundles are in a block _proposal_,
     /// and `false` if the block is already confirmed.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
     ))]
     pub async fn remove_bundles_from_inboxes(
@@ -762,7 +762,7 @@ where
 
     /// Executes a block: first the incoming messages, then the main operation.
     /// Does not update chain state other than the execution state.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %block.chain_id,
         block_height = %block.height
     ))]
@@ -887,7 +887,7 @@ where
 
     /// Executes a block: first the incoming messages, then the main operation.
     /// Does not update chain state other than the execution state.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.height
     ))]
@@ -951,7 +951,7 @@ where
     /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain
     /// manager. This does not touch the execution state itself, which must be updated separately.
     /// Returns the set of event streams that were updated as a result of applying the block.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.inner().inner().header.height
     ))]
@@ -989,7 +989,7 @@ where
 
     /// Adds a block to `preprocessed_blocks`, and updates the outboxes where possible.
     /// Returns the set of streams that were updated as a result of preprocessing the block.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.inner().inner().header.height
     ))]
@@ -1019,7 +1019,7 @@ where
     }
 
     /// Verifies that the block is valid according to the chain's application permission settings.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         block_height = %block.height,
         num_transactions = %block.transactions.len()
     ))]
@@ -1065,7 +1065,7 @@ where
     }
 
     /// Returns the hashes of all blocks we have in the given range.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         next_block_height = %self.tip_state.get().next_block_height,
         start_height = ?range.start_bound(),
@@ -1123,7 +1123,7 @@ where
     /// Updates the outboxes with the messages sent in the block.
     ///
     /// Returns the set of all recipients.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.header.height
     ))]
@@ -1218,7 +1218,7 @@ where
     /// Updates the event streams with events emitted by the block if they form a contiguous
     /// sequence (might not be the case when preprocessing a block).
     /// Returns the set of updated event streams.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.header.height
     ))]
