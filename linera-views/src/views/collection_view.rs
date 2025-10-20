@@ -1093,7 +1093,7 @@ impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
     /// {
     ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
     /// }
-    /// let indices = vec![23, 24];
+    /// let indices = [23, 24];
     /// let subviews = view.try_load_entries_pairs(indices).await.unwrap();
     /// let value0 = subviews[0].1.as_ref().unwrap().get();
     /// assert_eq!(*value0, String::default());
@@ -1101,14 +1101,15 @@ impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
     /// ```
     pub async fn try_load_entries_pairs<Q>(
         &self,
-        indices: Vec<Q>,
+        indices: impl IntoIterator<Item = Q>,
     ) -> Result<Vec<(Q, Option<ReadGuardedView<W>>)>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + Clone,
     {
-        let values = self.try_load_entries(indices.iter()).await?;
-        Ok(indices.into_iter().zip(values).collect())
+        let indices_vec: Vec<Q> = indices.into_iter().collect();
+        let values = self.try_load_entries(indices_vec.iter()).await?;
+        Ok(indices_vec.into_iter().zip(values).collect())
     }
 
     /// Load all entries for reading at once.
@@ -1540,7 +1541,7 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     /// {
     ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
     /// }
-    /// let indices = vec![23, 42];
+    /// let indices = [23, 42];
     /// let subviews = view.try_load_entries_pairs(indices).await.unwrap();
     /// let value0 = subviews[0].1.as_ref().unwrap().get();
     /// assert_eq!(*value0, String::default());
@@ -1548,14 +1549,15 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     /// ```
     pub async fn try_load_entries_pairs<Q>(
         &self,
-        indices: Vec<Q>,
+        indices: impl IntoIterator<Item = Q>,
     ) -> Result<Vec<(Q, Option<ReadGuardedView<W>>)>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + Clone,
     {
-        let values = self.try_load_entries(indices.iter()).await?;
-        Ok(indices.into_iter().zip(values).collect())
+        let indices_vec: Vec<Q> = indices.into_iter().collect();
+        let values = self.try_load_entries(indices_vec.iter()).await?;
+        Ok(indices_vec.into_iter().zip(values).collect())
     }
 
     /// Load all entries for reading at once.
