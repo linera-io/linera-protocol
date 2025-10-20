@@ -158,7 +158,6 @@ const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
 /// Since the maximum size of a value is 400K, this gets us 40 as upper limit
 const MAX_BATCH_GET_ITEM_SIZE: usize = 40;
 
-
 /// Builds the key attributes for a table item.
 ///
 /// The key is composed of two attributes that are both binary blobs. The first attribute is a
@@ -707,15 +706,12 @@ impl DynamoDbStoreInternal {
 
         // Build the request keys
         let mut request_keys = Vec::new();
-        let mut key_to_index = HashMap::<Vec<u8>,Vec<usize>>::new();
+        let mut key_to_index = HashMap::<Vec<u8>, Vec<usize>>::new();
 
         for (i, key) in keys.iter().enumerate() {
             check_key_size(key)?;
             let key_attrs = build_key(&self.start_key, key.clone());
-            key_to_index
-                .entry(key.clone())
-                .or_default()
-                .push(i);
+            key_to_index.entry(key.clone()).or_default().push(i);
             request_keys.push(key_attrs);
         }
 
@@ -749,7 +745,8 @@ impl DynamoDbStoreInternal {
                 if let Some(items) = responses.remove(&self.namespace) {
                     for mut item in items {
                         // Extract key to find the original index
-                        let key_attr = item.get(KEY_ATTRIBUTE)
+                        let key_attr = item
+                            .get(KEY_ATTRIBUTE)
                             .ok_or(DynamoDbStoreInternalError::MissingKey)?;
 
                         if let AttributeValue::B(blob) = key_attr {
