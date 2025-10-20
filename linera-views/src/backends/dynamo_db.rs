@@ -710,6 +710,7 @@ impl DynamoDbStoreInternal {
         let mut key_to_index = HashMap::<Vec<u8>,Vec<usize>>::new();
 
         for (i, key) in keys.iter().enumerate() {
+            check_key_size(key)?;
             let key_attrs = build_key(&self.start_key, key.clone());
             key_to_index
                 .entry(key.clone())
@@ -849,20 +850,14 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
             return Ok(Vec::new());
         }
 
-        // Validate all keys first
-        for key in &keys {
-            check_key_size(key)?;
-        }
-
-        // BatchGetItem can handle up to 100 keys per request
-        let mut results = Vec::new();
-
-        for (batch_start, key_batch) in keys.chunks(MAX_BATCH_GET_ITEM_SIZE).enumerate() {
-            let block = self.read_batch_values_bytes(key_batch).await?;
-            results.extend(block);
-        }
-
-        Ok(results)
+        let handles = keys
+            .chunks(MAX_BATCH_GET_ITEM_SIZE)
+            .map(|key_batch| self.read_batch_values_bytes(key_batch));
+        let results: Vec<_> = join_all(handles)
+            .await
+            .into_iter()
+            .collect::<Result<_, _>>()?;
+        Ok(results.into_iter().flatten().collect())
     }
 
     async fn find_keys_by_prefix(
