@@ -50,9 +50,24 @@ jobs:
           filters: |
             paths:
               - '!docker/**'
-              - '!docker_scylla/**'
               - '!configuration/**'
               - '!kubernetes/**'
+              - '!CONTRIBUTING.md'
+              - '!INSTALL.md'
+  changed-files-kubernetes:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.files-changed.outputs.paths }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Filter paths
+        uses: dorny/paths-filter@v3
+        id: files-changed
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            paths:
+              - '!configuration/**'
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
   remote-net-test:
@@ -94,8 +109,8 @@ jobs:
         cargo test -p linera-service remote_net_grpc --features remote-net
 
   remote-kubernetes-net-test:
-    needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    needs: changed-files-kubernetes
+    if: needs.changed-files-kubernetes.outputs.should-run == 'true'
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 90
 
