@@ -5811,6 +5811,7 @@ dependencies = [
  "papaya",
  "prometheus",
  "serde",
+ "tokio",
  "tracing",
 ]
 
