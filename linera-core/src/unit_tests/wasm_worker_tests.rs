@@ -218,7 +218,7 @@ where
             previous_message_blocks: BTreeMap::new(),
             previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
-            state_hash: creator_state.crypto_hash().await?,
+            state_hash: creator_state.crypto_hash_mut().await?,
             oracle_responses: vec![vec![
                 OracleResponse::Blob(contract_blob_id),
                 OracleResponse::Blob(service_blob_id),
@@ -297,7 +297,7 @@ where
             previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
-            state_hash: creator_state.crypto_hash().await?,
+            state_hash: creator_state.crypto_hash_mut().await?,
             oracle_responses: vec![vec![]],
             operation_results: vec![OperationResult(bcs::to_bytes(&15u64)?)],
         }

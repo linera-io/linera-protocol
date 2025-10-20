@@ -499,7 +499,7 @@ where
             return Ok(());
         }
         // Recompute the state hash.
-        let hash = self.execution_state.crypto_hash().await?;
+        let hash = self.execution_state.crypto_hash_mut().await?;
         self.execution_state_hash.set(Some(hash));
         let maybe_committee = self.execution_state.system.current_committee().into_iter();
         // Last, reset the consensus state based on the current ownership.
@@ -864,7 +864,7 @@ where
         let state_hash = {
             #[cfg(with_metrics)]
             let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
-            chain.crypto_hash().await?
+            chain.crypto_hash_mut().await?
         };
 
         let (messages, oracle_responses, events, blobs, operation_results) =
