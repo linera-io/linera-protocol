@@ -2,12 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, HashMap},
-    future::Future,
-    sync::Arc,
-};
+use std::{cmp::Ordering, collections::BTreeMap, future::Future, sync::Arc};
 
 use custom_debug_derive::Debug;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -24,6 +19,7 @@ use rand::{
 use tracing::instrument;
 
 use super::{
+    cache::RequestsCache,
     in_flight_tracker::{InFlightMatch, InFlightTracker, SubscribeOutcome},
     node_info::NodeInfo,
     request::{RequestKey, RequestResult},
@@ -39,7 +35,7 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
+pub(super) mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
@@ -139,12 +135,7 @@ pub struct ValidatorManager<Env: Environment> {
     /// Tracks in-flight requests to deduplicate concurrent requests for the same data.
     in_flight_tracker: InFlightTracker<RemoteNode<Env::ValidatorNode>>,
     /// Cache of recently completed requests with their results and timestamps.
-    /// Used to avoid re-executing requests for the same data within the TTL window.
-    cache: Arc<tokio::sync::RwLock<HashMap<RequestKey, CacheEntry>>>,
-    /// Time-to-live for cached entries. Entries older than this duration are considered expired.
-    cache_ttl: Duration,
-    /// Maximum number of entries to store in the cache. When exceeded, oldest entries are evicted (LRU).
-    max_cache_size: usize,
+    cache: RequestsCache,
 }
 
 impl<Env: Environment> ValidatorManager<Env> {
@@ -205,9 +196,7 @@ impl<Env: Environment> ValidatorManager<Env> {
             default_alpha: alpha,
             default_max_expected_latency_ms: max_expected_latency_ms,
             in_flight_tracker: InFlightTracker::new(Duration::from_millis(MAX_REQUEST_TTL_MS)),
-            cache: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            cache_ttl,
-            max_cache_size,
+            cache: RequestsCache::new(cache_ttl, max_cache_size),
         }
     }
 
@@ -477,34 +466,9 @@ impl<Env: Environment> ValidatorManager<Env> {
         F: FnOnce(N) -> Fut,
         Fut: Future<Output = Result<T, NodeError>>,
     {
-        // Check cache for exact match first
-        {
-            let cache = self.cache.read().await;
-            if let Some(entry) = cache.get(&key) {
-                tracing::trace!(
-                    key = ?key,
-                    "cache hit (exact match) - returning cached result"
-                );
-                #[cfg(with_metrics)]
-                metrics::REQUEST_CACHE_HIT.inc();
-                return Ok(T::from((*entry.result).clone()));
-            }
-
-            // Check cache for subsuming requests
-            for (cached_key, entry) in cache.iter() {
-                if cached_key.subsumes(&key) {
-                    if let Some(extracted) = key.try_extract_result(cached_key, &entry.result) {
-                        tracing::trace!(
-                            key = ?key,
-                            subsumed_by = ?cached_key,
-                            "cache hit (subsumption) - extracted result from larger cached request"
-                        );
-                        #[cfg(with_metrics)]
-                        metrics::REQUEST_CACHE_HIT.inc();
-                        return Ok(T::from(extracted));
-                    }
-                }
-            }
+        // Check cache for exact or subsuming match
+        if let Some(result) = self.cache.get(&key).await {
+            return Ok(result);
         }
 
         // Check if there's an in-flight request (exact or subsuming)
@@ -619,64 +583,11 @@ impl<Env: Environment> ValidatorManager<Env> {
             .await;
 
         if let Ok(success) = shared_result.as_ref() {
-            self.store_in_cache(key.clone(), Arc::new(success.clone()))
+            self.cache
+                .store(key.clone(), Arc::new(success.clone()))
                 .await;
         }
         result
-    }
-
-    /// Stores a result in the cache with LRU eviction if cache is full.
-    ///
-    /// If the cache is at capacity, this method removes the oldest entry before
-    /// inserting the new one. Entries are considered "oldest" based on their cached_at timestamp.
-    async fn store_in_cache(&self, key: RequestKey, result: Arc<RequestResult>) {
-        self.evict_expired_cache_entries().await; // Clean up expired entries first
-        let mut cache = self.cache.write().await;
-        // Insert new entry
-        cache.insert(
-            key.clone(),
-            CacheEntry {
-                result,
-                cached_at: Instant::now(),
-            },
-        );
-        tracing::trace!(
-            key = ?key,
-            "stored result in cache"
-        );
-    }
-
-    /// Removes all cache entries that are older than the configured cache TTL.
-    ///
-    /// This method scans the cache and removes entries where the time elapsed since
-    /// `cached_at` exceeds `cache_ttl`. It's useful for explicitly cleaning up stale
-    /// cache entries rather than relying on lazy expiration checks.
-    async fn evict_expired_cache_entries(&self) -> usize {
-        let mut cache = self.cache.write().await;
-        let now = Instant::now();
-        if cache.len() <= self.max_cache_size {
-            return 0; // No need to evict if under max size
-        }
-
-        let expired_keys: Vec<RequestKey> = cache
-            .iter()
-            .filter_map(|(key, entry)| {
-                if now.duration_since(entry.cached_at) > self.cache_ttl {
-                    Some(key.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        for key in &expired_keys {
-            cache.remove(key);
-        }
-
-        if !expired_keys.is_empty() {
-            tracing::trace!(count = expired_keys.len(), "evicted expired cache entries");
-        }
-        expired_keys.len()
     }
 
     /// Returns all peers ordered by their score (highest first).
@@ -810,13 +721,6 @@ impl<Env: Environment> ValidatorManager<Env> {
             )
         });
     }
-}
-
-/// Cached result entry with timestamp for TTL expiration
-#[derive(Debug, Clone)]
-struct CacheEntry {
-    result: Arc<RequestResult>,
-    cached_at: Instant,
 }
 
 #[cfg(test)]
