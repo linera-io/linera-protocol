@@ -16,6 +16,7 @@ use async_lock::{Semaphore, SemaphoreGuard};
 use aws_sdk_dynamodb::{
     error::SdkError,
     operation::{
+        batch_get_item::BatchGetItemError,
         create_table::CreateTableError,
         delete_table::DeleteTableError,
         get_item::GetItemError,
@@ -25,7 +26,7 @@ use aws_sdk_dynamodb::{
     },
     primitives::Blob,
     types::{
-        AttributeDefinition, AttributeValue, Delete, KeySchemaElement, KeyType,
+        AttributeDefinition, AttributeValue, Delete, KeySchemaElement, KeyType, KeysAndAttributes,
         ProvisionedThroughput, Put, ScalarAttributeType, TransactWriteItem,
     },
     Client,
@@ -687,6 +688,83 @@ impl DynamoDbStoreInternal {
             responses,
         })
     }
+
+    async fn read_batch_values_bytes(
+        &self,
+        keys: &[Vec<u8>],
+        results: &mut [Option<Vec<u8>>],
+        start_idx: usize,
+    ) -> Result<(), DynamoDbStoreInternalError> {
+        use std::collections::HashMap;
+
+        // Early return for empty keys
+        if keys.is_empty() {
+            return Ok(());
+        }
+
+        // Build the request keys
+        let mut request_keys = Vec::new();
+        let mut key_to_index = HashMap::new();
+        
+        for (i, key) in keys.iter().enumerate() {
+            let key_attrs = build_key(&self.start_key, key.clone());
+            key_to_index.insert(key.clone(), start_idx + i);
+            request_keys.push(key_attrs);
+        }
+
+        let keys_and_attributes = KeysAndAttributes::builder()
+            .set_keys(Some(request_keys))
+            .build()?;
+
+        let mut request_items = HashMap::new();
+        request_items.insert(self.namespace.clone(), keys_and_attributes);
+
+        // Execute batch get item request with retry for unprocessed keys
+        let mut remaining_request_items = Some(request_items);
+        
+        while let Some(request_items) = remaining_request_items {
+            // Skip if the request items are empty
+            if request_items.is_empty() {
+                break;
+            }
+            
+            let _guard = self.acquire().await;
+            let response = self
+                .client
+                .batch_get_item()
+                .set_request_items(Some(request_items))
+                .send()
+                .boxed_sync()
+                .await?;
+
+            // Process returned items
+            if let Some(mut responses) = response.responses {
+                if let Some(items) = responses.remove(&self.namespace) {
+                    for mut item in items {
+                        // Extract key to find the original index
+                        let key_attr = item.get(KEY_ATTRIBUTE)
+                            .ok_or(DynamoDbStoreInternalError::MissingKey)?;
+                        
+                        if let AttributeValue::B(blob) = key_attr {
+                            let full_key = blob.as_ref();
+                            if full_key.len() >= self.start_key.len() {
+                                let original_key = &full_key[self.start_key.len()..];
+                                if let Some(&index) = key_to_index.get(original_key) {
+                                    let value = extract_value_owned(&mut item)?;
+                                    results[index] = Some(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Handle unprocessed keys
+            remaining_request_items = response.unprocessed_keys;
+        }
+
+        Ok(())
+    }
 }
 
 struct QueryResponses {
@@ -759,17 +837,25 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbStoreInternalError> {
-        let mut handles = Vec::new();
-        for key in keys {
-            check_key_size(&key)?;
-            let key_db = build_key(&self.start_key, key);
-            let handle = self.read_value_bytes_general(key_db);
-            handles.push(handle);
+        if keys.is_empty() {
+            return Ok(Vec::new());
         }
-        join_all(handles)
-            .await
-            .into_iter()
-            .collect::<Result<_, _>>()
+
+        // Validate all keys first
+        for key in &keys {
+            check_key_size(key)?;
+        }
+
+        // BatchGetItem can handle up to 100 keys per request
+        const BATCH_SIZE: usize = 100;
+        let mut results = vec![None; keys.len()];
+        
+        for (batch_start, key_batch) in keys.chunks(BATCH_SIZE).enumerate() {
+            let batch_start_idx = batch_start * BATCH_SIZE;
+            self.read_batch_values_bytes(key_batch, &mut results, batch_start_idx).await?;
+        }
+
+        Ok(results)
     }
 
     async fn find_keys_by_prefix(
@@ -860,6 +946,10 @@ pub enum DynamoDbStoreInternalError {
     /// An error occurred while getting the item.
     #[error(transparent)]
     Get(#[from] Box<SdkError<GetItemError>>),
+
+    /// An error occurred while batch getting items.
+    #[error(transparent)]
+    BatchGet(#[from] Box<SdkError<BatchGetItemError>>),
 
     /// An error occurred while writing a transaction of items.
     #[error(transparent)]
