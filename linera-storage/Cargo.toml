@@ -51,8 +51,8 @@ tracing.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
-tokio.workspace = true
 linera-storage = { path = ".", default-features = false, features = ["test"] }
+tokio.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
