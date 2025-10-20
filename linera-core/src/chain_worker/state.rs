@@ -481,8 +481,7 @@ where
         let requested_heights: Vec<BlockHeight> = heights
             .range(next_block_height..).copied()
             .collect::<Vec<BlockHeight>>();
-        let read_hashes = self.chain.preprocessed_blocks.multi_get(&requested_heights).await?;
-        for (hash,height) in read_hashes.into_iter().zip(requested_heights) {
+        for (height, hash) in self.chain.preprocessed_blocks.multi_get_pairs(requested_heights).await? {
             let hash = hash.ok_or_else(|| WorkerError::PreprocessedBlocksEntryNotFound {
                 height,
                 chain_id: self.chain_id(),
@@ -496,7 +495,7 @@ where
                 return Err(WorkerError::ReadCertificatesError(hashes))
             }
         };
-        let certificates = heights
+        let height_to_certificates = heights
             .into_iter()
             .zip(certificates)
             .collect::<HashMap<_, _>>();
@@ -505,7 +504,7 @@ where
         for (recipient, heights) in heights_by_recipient {
             let mut bundles = Vec::new();
             for height in heights {
-                let cert = certificates
+                let cert = height_to_certificates
                     .get(&height)
                     .ok_or_else(|| ChainError::InternalError("missing certificates".to_string()))?;
                 bundles.extend(cert.message_bundles_for(recipient));
