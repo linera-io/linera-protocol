@@ -1222,7 +1222,7 @@ where
     /// map.insert(&(37 as u32), String::from("Hello"));
     /// map.insert(&(49 as u32), String::from("Bonjour"));
     /// assert_eq!(
-    ///     map.multi_get_pairs(vec![37 as u32, 49 as u32, 64 as u32])
+    ///     map.multi_get_pairs([37 as u32, 49 as u32, 64 as u32])
     ///         .await
     ///         .unwrap(),
     ///     vec![
@@ -1235,14 +1235,15 @@ where
     /// ```
     pub async fn multi_get_pairs<Q>(
         &self,
-        indices: Vec<Q>,
+        indices: impl IntoIterator<Item = Q>,
     ) -> Result<Vec<(Q, Option<V>)>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + Clone,
     {
-        let values = self.multi_get(indices.iter()).await?;
-        Ok(indices.into_iter().zip(values).collect())
+        let indices_vec = indices.into_iter().collect::<Vec<Q>>();
+        let values = self.multi_get(indices_vec.iter()).await?;
+        Ok(indices_vec.into_iter().zip(values).collect())
     }
 
     /// Obtains a mutable reference to a value at a given position if available
@@ -1772,7 +1773,7 @@ where
     /// map.insert(&(34 as u128), String::from("Hello"));
     /// map.insert(&(12 as u128), String::from("Hi"));
     /// assert_eq!(
-    ///     map.multi_get_pairs(vec![34 as u128, 12 as u128, 89 as u128])
+    ///     map.multi_get_pairs([34 as u128, 12 as u128, 89 as u128])
     ///         .await
     ///         .unwrap(),
     ///     vec![(34 as u128, Some(String::from("Hello"))), (12 as u128, Some(String::from("Hi"))), (89 as u128, None)]
@@ -1781,14 +1782,15 @@ where
     /// ```
     pub async fn multi_get_pairs<Q>(
         &self,
-        indices: Vec<Q>,
+        indices: impl IntoIterator<Item = Q>,
     ) -> Result<Vec<(Q, Option<V>)>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + Clone,
     {
-        let values = self.multi_get(indices.iter()).await?;
-        Ok(indices.into_iter().zip(values).collect())
+        let indices_vec = indices.into_iter().collect::<Vec<Q>>();
+        let values = self.multi_get(indices_vec.iter()).await?;
+        Ok(indices_vec.into_iter().zip(values).collect())
     }
 
     /// Obtains a mutable reference to a value at a given position if available

@@ -825,10 +825,9 @@ where
         }
 
         let recipients = block_execution_tracker.recipients();
-        let heights = previous_message_blocks_view.multi_get(&recipients).await?;
         let mut recipient_heights = Vec::new();
         let mut indices = Vec::new();
-        for (height, recipient) in heights.into_iter().zip(recipients) {
+        for (recipient, height) in previous_message_blocks_view.multi_get_pairs(recipients).await? {
             if let Some(height) = height {
                 let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                 indices.push(index);
@@ -845,10 +844,9 @@ where
         }
 
         let streams = block_execution_tracker.event_streams();
-        let heights = previous_event_blocks_view.multi_get(&streams).await?;
         let mut stream_heights = Vec::new();
         let mut indices = Vec::new();
-        for (stream, height) in streams.into_iter().zip(heights) {
+        for (stream, height) in previous_event_blocks_view.multi_get_pairs(streams).await? {
             if let Some(height) = height {
                 let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                 indices.push(index);
