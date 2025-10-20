@@ -218,7 +218,7 @@ where
     );
 
     // First attempt that should be rejected.
-    sender
+    let cert1 = sender
         .claim(
             owner,
             receiver_id,
@@ -226,9 +226,15 @@ where
             Amount::from_tokens(5),
         )
         .await
-        .unwrap();
+        .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(2), 3)
+            .await,
+        Some(cert1)
+    );
     // Second attempt with a correct amount.
-    sender
+    let cert2 = sender
         .claim(
             owner,
             receiver_id,
@@ -237,6 +243,12 @@ where
         )
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(3), 3)
+            .await,
+        Some(cert2)
+    );
 
     receiver.synchronize_from_validators().await?;
     let cert = receiver.process_inbox().await?.0.pop().unwrap();
@@ -1175,7 +1187,7 @@ where
     assert_eq!(admin.chain_info().await?.epoch, Epoch::from(2));
 
     // Sending money from the admin chain is supported.
-    admin
+    let cert1 = admin
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
@@ -1183,7 +1195,13 @@ where
         )
         .await
         .unwrap_ok_committed();
-    admin
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(admin.chain_id, BlockHeight::from(5), 3)
+            .await,
+        Some(cert1)
+    );
+    let cert2 = admin
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::ONE,
@@ -1191,6 +1209,12 @@ where
         )
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(admin.chain_id, BlockHeight::from(6), 3)
+            .await,
+        Some(cert2)
+    );
 
     // User is still at the initial epoch, but we can receive transfers from future
     // epochs AFTER synchronizing the client with the admin chain.
@@ -1218,24 +1242,36 @@ where
     admin.revoke_epochs(Epoch::from(1)).await.unwrap();
 
     // Try to make a transfer back to the admin chain.
-    user.transfer_to_account(
+    let cert3 = user.transfer_to_account(
         AccountOwner::CHAIN,
         Amount::from_tokens(2),
         Account::chain(admin.chain_id()),
     )
     .await
     .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(user.chain_id, BlockHeight::from(3), 3)
+            .await,
+        Some(cert3)
+    );
     admin.synchronize_from_validators().await.unwrap();
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(2));
 
     // Try again to make a transfer back to the admin chain.
-    user.transfer_to_account(
+    let cert4 = user.transfer_to_account(
         AccountOwner::CHAIN,
         Amount::ONE,
         Account::chain(admin.chain_id()),
     )
     .await
     .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(user.chain_id, BlockHeight::from(4), 3)
+            .await,
+        Some(cert4)
+    );
     admin.synchronize_from_validators().await.unwrap();
     admin.process_inbox().await.unwrap();
     // Transfer goes through and the previous one as well thanks to block chaining.
