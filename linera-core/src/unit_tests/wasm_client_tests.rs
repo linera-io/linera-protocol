@@ -394,11 +394,16 @@ where
 
     // Try again with a value that will make the (untracked) message fail.
     let operation = meta_counter::Operation::fail(receiver_id);
-    creator
+    let cert = creator
         .execute_operation(Operation::user(application_id2, &operation)?)
         .await
         .unwrap_ok_committed();
-
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(creator.chain_id, BlockHeight::from(4), 3)
+            .await,
+        Some(cert)
+    );
     receiver.synchronize_from_validators().await.unwrap();
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
@@ -417,10 +422,16 @@ where
     // Try again with a value that will make the (tracked) message fail.
     let mut operation = meta_counter::Operation::fail(receiver_id);
     operation.is_tracked = true;
-    creator
+    let cert = creator
         .execute_operation(Operation::user(application_id2, &operation)?)
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(creator.chain_id, BlockHeight::from(5), 3)
+            .await,
+        Some(cert)
+    );
 
     receiver.synchronize_from_validators().await.unwrap();
     let mut certs = receiver.process_inbox().await.unwrap().0;
@@ -584,10 +595,16 @@ where
             owner: receiver_owner,
         },
     };
-    sender
+    let cert = sender
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(3), 3)
+            .await,
+        Some(cert)
+    );
 
     receiver.synchronize_from_validators().await.unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -621,10 +638,16 @@ where
             owner: receiver2_owner,
         },
     };
-    receiver
+    let certificate = receiver
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(receiver.chain_id, BlockHeight::from(2), 3)
+            .await,
+        Some(certificate)
+    );
 
     receiver2.synchronize_from_validators().await.unwrap();
 
@@ -760,10 +783,16 @@ where
     let request_unsubscribe = social::Operation::Unsubscribe {
         chain_id: sender.chain_id(),
     };
-    receiver
+    let cert = receiver
         .execute_operation(Operation::user(application_id, &request_unsubscribe)?)
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(receiver.chain_id, BlockHeight::from(4), 3)
+            .await,
+        Some(cert)
+    );
 
     // Unsubscribe the receiver.
     sender.synchronize_from_validators().await.unwrap();
@@ -774,10 +803,16 @@ where
         text: "Nobody will read this!".to_string(),
         image_url: None,
     };
-    sender
+    let cert = sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
+            .await,
+        Some(cert)
+    );
 
     // The post will not be received by the unsubscribed chain.
     receiver.synchronize_from_validators().await.unwrap();

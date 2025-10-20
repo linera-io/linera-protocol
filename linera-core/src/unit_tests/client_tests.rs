@@ -1242,13 +1242,14 @@ where
     admin.revoke_epochs(Epoch::from(1)).await.unwrap();
 
     // Try to make a transfer back to the admin chain.
-    let cert3 = user.transfer_to_account(
-        AccountOwner::CHAIN,
-        Amount::from_tokens(2),
-        Account::chain(admin.chain_id()),
-    )
-    .await
-    .unwrap_ok_committed();
+    let cert3 = user
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(2),
+            Account::chain(admin.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
     assert_eq!(
         builder
             .check_that_validators_have_certificate(user.chain_id, BlockHeight::from(3), 3)
@@ -1259,13 +1260,14 @@ where
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(2));
 
     // Try again to make a transfer back to the admin chain.
-    let cert4 = user.transfer_to_account(
-        AccountOwner::CHAIN,
-        Amount::ONE,
-        Account::chain(admin.chain_id()),
-    )
-    .await
-    .unwrap_ok_committed();
+    let cert4 = user
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(admin.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
     assert_eq!(
         builder
             .check_that_validators_have_certificate(user.chain_id, BlockHeight::from(4), 3)
