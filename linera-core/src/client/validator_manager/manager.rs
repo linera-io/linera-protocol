@@ -357,7 +357,10 @@ impl<Env: Environment> ValidatorManager<Env> {
 
         for (key, info) in nodes.iter() {
             let score = info.calculate_score().await;
-            result.insert(*key, (score, info.ema_success_rate, info.total_requests));
+            result.insert(
+                *key,
+                (score, info.ema_success_rate(), info.total_requests()),
+            );
         }
 
         result
@@ -396,7 +399,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         let nodes = self.nodes.read().await;
         let node = nodes.get(&public_key).expect("Node must exist");
         let semaphore = node.in_flight_semaphore.clone();
-        let _permit = semaphore.acquire().await.unwrap();
+        let permit = semaphore.acquire().await.unwrap();
         drop(nodes);
 
         // Execute the operation
@@ -404,7 +407,7 @@ impl<Env: Environment> ValidatorManager<Env> {
 
         // Update metrics and release slot
         let response_time_ms = start_time.elapsed().as_millis() as u64;
-        drop(_permit); // Explicitly drop the permit to release the slot
+        drop(permit); // Explicitly drop the permit to release the slot
         let is_success = result.is_ok();
         {
             let mut nodes = self.nodes.write().await;
@@ -417,7 +420,7 @@ impl<Env: Environment> ValidatorManager<Env> {
                     success = %is_success,
                     response_time_ms = %response_time_ms,
                     score = %score,
-                    total_requests = %info.total_requests,
+                    total_requests = %info.total_requests(),
                     "Request completed"
                 );
             }

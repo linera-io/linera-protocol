@@ -20,31 +20,33 @@ pub(super) struct NodeInfo<Env: Environment> {
     /// The underlying validator node connection
     pub(super) node: RemoteNode<Env::ValidatorNode>,
 
+    /// Semaphore to limit concurrent in-flight requests.
+    /// It's created with a limit set to `max_in_flight` from configuration.
+    pub(super) in_flight_semaphore: Arc<Semaphore>,
+
     /// Exponential Moving Average of latency in milliseconds
     /// Adapts quickly to changes in response time
-    pub(super) ema_latency_ms: f64,
+    ema_latency_ms: f64,
 
     /// Exponential Moving Average of success rate (0.0 to 1.0)
     /// Tracks recent success/failure patterns
-    pub(super) ema_success_rate: f64,
-
-    pub(super) in_flight_semaphore: Arc<Semaphore>,
+    ema_success_rate: f64,
 
     /// Total number of requests processed (for monitoring and cold-start handling)
-    pub(super) total_requests: u64,
+    total_requests: u64,
 
     /// Configuration for scoring weights
-    pub(super) weights: ScoringWeights,
+    weights: ScoringWeights,
 
     /// EMA smoothing factor (0 < alpha < 1)
     /// Higher values give more weight to recent observations
-    pub(super) alpha: f64,
+    alpha: f64,
 
     /// Maximum expected latency in milliseconds for score normalization
-    pub(super) max_expected_latency_ms: f64,
+    max_expected_latency_ms: f64,
 
     /// Maximum expected in-flight requests for score normalization
-    pub(super) max_in_flight: usize,
+    max_in_flight: usize,
 }
 
 impl<Env: Environment> NodeInfo<Env> {
@@ -152,5 +154,15 @@ impl<Env: Environment> NodeInfo<Env> {
             (self.alpha * success_value) + ((1.0 - self.alpha) * self.ema_success_rate);
 
         self.total_requests += 1;
+    }
+
+    /// Returns the current EMA success rate.
+    pub(super) fn ema_success_rate(&self) -> f64 {
+        self.ema_success_rate
+    }
+
+    /// Returns the total number of requests processed.
+    pub(super) fn total_requests(&self) -> u64 {
+        self.total_requests
     }
 }

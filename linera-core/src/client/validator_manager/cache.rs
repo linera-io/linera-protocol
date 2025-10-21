@@ -11,8 +11,8 @@ use super::manager::metrics;
 /// Cached result entry with timestamp for TTL expiration
 #[derive(Debug, Clone)]
 pub(super) struct CacheEntry<R> {
-    pub(super) result: Arc<R>,
-    pub(super) cached_at: Instant,
+    result: Arc<R>,
+    cached_at: Instant,
 }
 
 /// Cache for request results with TTL-based expiration and LRU eviction.
