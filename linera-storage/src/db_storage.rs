@@ -1034,7 +1034,7 @@ where
         Ok(())
     }
 
-    #[instrument(skip_all, fields(batch_size = batch.key_value_bytes.len()))]
+    #[instrument(skip_all, fields(batch_size = batch.keys_value_bytes.len()))]
     async fn write_batch(&self, batch: MultiPartitionBatch) -> Result<(), ViewError> {
         if batch.keys_value_bytes.is_empty() {
             return Ok(());
