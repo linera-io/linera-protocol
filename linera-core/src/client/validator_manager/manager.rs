@@ -19,14 +19,16 @@ use tracing::instrument;
 
 use super::{
     cache::{RequestsCache, SubsumingKey},
-    in_flight_tracker::{InFlightMatch, InFlightTracker, SubscribeOutcome},
+    in_flight_tracker::{InFlightMatch, InFlightTracker},
     node_info::NodeInfo,
     request::{RequestKey, RequestResult},
     scoring::ScoringWeights,
-    MAX_REQUEST_TTL_MS,
 };
 use crate::{
-    client::{communicate_concurrently, ValidatorManagerConfig},
+    client::{
+        communicate_concurrently, validator_manager::in_flight_tracker::Subscribed,
+        ValidatorManagerConfig,
+    },
     environment::Environment,
     node::{NodeError, ValidatorNode},
     remote_node::RemoteNode,
@@ -485,97 +487,75 @@ impl<Env: Environment> ValidatorManager<Env> {
         // Check if there's an in-flight request (exact or subsuming)
         if let Some(in_flight_match) = self.in_flight_tracker.try_subscribe(&key).await {
             match in_flight_match {
-                InFlightMatch::Exact(outcome) => match outcome {
-                    SubscribeOutcome::Subscribed(mut receiver) => {
-                        tracing::trace!(
-                            key = ?key,
-                            "deduplicating request (exact match) - joining existing in-flight request"
-                        );
-                        #[cfg(with_metrics)]
-                        metrics::REQUEST_CACHE_DEDUPLICATION.inc();
-                        // Wait for result from existing request
-                        match receiver.recv().await {
-                            Ok(result) => return result.as_ref().clone().map(T::from),
-                            Err(_) => {
-                                tracing::trace!(
-                                    key = ?key,
-                                    "in-flight request sender dropped"
-                                );
-                                // Fall through to execute a new request
-                            }
+                InFlightMatch::Exact(Subscribed(mut receiver)) => {
+                    tracing::trace!(
+                        key = ?key,
+                        "deduplicating request (exact match) - joining existing in-flight request"
+                    );
+                    #[cfg(with_metrics)]
+                    metrics::REQUEST_CACHE_DEDUPLICATION.inc();
+                    // Wait for result from existing request
+                    match receiver.recv().await {
+                        Ok(result) => return result.as_ref().clone().map(T::from),
+                        Err(_) => {
+                            tracing::trace!(
+                                key = ?key,
+                                "in-flight request sender dropped"
+                            );
+                            // Fall through to execute a new request
                         }
                     }
-                    SubscribeOutcome::TimedOut(elapsed) => {
-                        tracing::trace!(
-                            key = ?key,
-                            elapsed_ms = elapsed.as_millis(),
-                            timeout_ms = MAX_REQUEST_TTL_MS,
-                            "in-flight request exceeded timeout - executing new request instead of deduplicating"
-                        );
-                    }
-                },
+                }
                 InFlightMatch::Subsuming {
                     key: subsuming_key,
-                    outcome,
-                } => match outcome {
-                    SubscribeOutcome::Subscribed(mut receiver) => {
-                        tracing::trace!(
-                            key = ?key,
-                            subsumed_by = ?subsuming_key,
-                            "deduplicating request (subsumption) - joining larger in-flight request"
-                        );
-                        #[cfg(with_metrics)]
-                        metrics::REQUEST_CACHE_DEDUPLICATION.inc();
-                        // Wait for result from the subsuming request
-                        match receiver.recv().await {
-                            Ok(result) => {
-                                match result.as_ref() {
-                                    Ok(res) => {
-                                        if let Some(extracted) =
-                                            key.try_extract_result(&subsuming_key, res)
-                                        {
-                                            tracing::trace!(
-                                                key = ?key,
-                                                "extracted subset result from larger in-flight request"
-                                            );
-                                            return Ok(T::from(extracted));
-                                        } else {
-                                            // Extraction failed, fall through to execute our own request
-                                            tracing::trace!(
-                                                key = ?key,
-                                                "failed to extract from subsuming request, will execute independently"
-                                            );
-                                        }
-                                    }
-                                    Err(e) => {
+                    outcome: Subscribed(mut receiver),
+                } => {
+                    tracing::trace!(
+                    key = ?key,
+                    subsumed_by = ?subsuming_key,
+                        "deduplicating request (subsumption) - joining larger in-flight request"
+                    );
+                    #[cfg(with_metrics)]
+                    metrics::REQUEST_CACHE_DEDUPLICATION.inc();
+                    // Wait for result from the subsuming request
+                    match receiver.recv().await {
+                        Ok(result) => {
+                            match result.as_ref() {
+                                Ok(res) => {
+                                    if let Some(extracted) =
+                                        key.try_extract_result(&subsuming_key, res)
+                                    {
                                         tracing::trace!(
                                             key = ?key,
-                                            error = %e,
-                                            "subsuming in-flight request failed",
+                                            "extracted subset result from larger in-flight request"
                                         );
-                                        // Fall through to execute our own request
+                                        return Ok(T::from(extracted));
+                                    } else {
+                                        // Extraction failed, fall through to execute our own request
+                                        tracing::trace!(
+                                            key = ?key,
+                                            "failed to extract from subsuming request, will execute independently"
+                                        );
                                     }
                                 }
-                            }
-                            Err(_) => {
-                                tracing::trace!(
-                                    key = ?key,
-                                    "subsuming in-flight request sender dropped"
-                                );
+                                Err(e) => {
+                                    tracing::trace!(
+                                        key = ?key,
+                                        error = %e,
+                                        "subsuming in-flight request failed",
+                                    );
+                                    // Fall through to execute our own request
+                                }
                             }
                         }
+                        Err(_) => {
+                            tracing::trace!(
+                                key = ?key,
+                                "subsuming in-flight request sender dropped"
+                            );
+                        }
                     }
-                    SubscribeOutcome::TimedOut(elapsed) => {
-                        tracing::trace!(
-                            key = ?key,
-                            subsumed_by = ?subsuming_key,
-                            elapsed_ms = elapsed.as_millis(),
-                            timeout_ms = MAX_REQUEST_TTL_MS,
-                            "subsuming in-flight request exceeded timeout - will execute independently"
-                        );
-                        // Don't join the subsuming request, fall through to execute a new one
-                    }
-                },
+                }
             }
         };
 
@@ -695,7 +675,7 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::{super::request::RequestKey, *};
-    use crate::node::NodeError;
+    use crate::{client::validator_manager::MAX_REQUEST_TTL_MS, node::NodeError};
 
     type TestEnvironment = crate::environment::Test;
 

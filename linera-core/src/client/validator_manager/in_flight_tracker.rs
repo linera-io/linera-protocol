@@ -47,40 +47,30 @@ impl<N: Clone> InFlightTracker<N> {
     /// - `key`: The request key to look up
     ///
     /// # Returns
-    /// - `None`: No matching in-flight request found
-    /// - `Some(InFlightMatch::Exact(outcome))`: Exact key match found
+    /// - `None`: No matching in-flight request found. Also returned if the found request is stale (exceeds timeout).
     /// - `Some(InFlightMatch::Subsuming { key, outcome })`: Subsuming request found
     pub(super) async fn try_subscribe(&self, key: &RequestKey) -> Option<InFlightMatch> {
-        let in_flight = self.entries.write().await;
+        let in_flight = self.entries.read().await;
 
-        // First check for exact match
         if let Some(entry) = in_flight.get(key) {
             let elapsed = Instant::now().duration_since(entry.started_at);
 
-            let outcome = if elapsed > self.timeout {
-                SubscribeOutcome::TimedOut(elapsed)
-            } else {
-                SubscribeOutcome::Subscribed(entry.sender.subscribe())
-            };
-
-            return Some(InFlightMatch::Exact(outcome));
+            if elapsed <= self.timeout {
+                return Some(InFlightMatch::Exact(Subscribed(entry.sender.subscribe())));
+            }
         }
 
-        // Check for subsuming request
+        // Sometimes a request key may not have the exact match but may be subsumed by a larger one.
         for (in_flight_key, entry) in in_flight.iter() {
             if in_flight_key.subsumes(key) {
                 let elapsed = Instant::now().duration_since(entry.started_at);
 
-                let outcome = if elapsed > self.timeout {
-                    SubscribeOutcome::TimedOut(elapsed)
-                } else {
-                    SubscribeOutcome::Subscribed(entry.sender.subscribe())
-                };
-
-                return Some(InFlightMatch::Subsuming {
-                    key: in_flight_key.clone(),
-                    outcome,
-                });
+                if elapsed <= self.timeout {
+                    return Some(InFlightMatch::Subsuming {
+                        key: in_flight_key.clone(),
+                        outcome: Subscribed(entry.sender.subscribe()),
+                    });
+                }
             }
         }
 
@@ -192,24 +182,20 @@ impl<N: Clone> InFlightTracker<N> {
 #[derive(Debug)]
 pub(super) enum InFlightMatch {
     /// Exact key match found
-    Exact(SubscribeOutcome),
+    Exact(Subscribed),
     /// Subsuming key match found (larger request that contains this request)
     Subsuming {
         /// The key of the subsuming request
         key: RequestKey,
         /// Outcome of attempting to subscribe
-        outcome: SubscribeOutcome,
+        outcome: Subscribed,
     },
 }
 
 /// Outcome of attempting to subscribe to an in-flight request.
+/// Successfully subscribed; receiver will be notified when request completes
 #[derive(Debug)]
-pub(super) enum SubscribeOutcome {
-    /// Successfully subscribed; receiver will be notified when request completes
-    Subscribed(broadcast::Receiver<Arc<Result<RequestResult, NodeError>>>),
-    /// Request exists but has exceeded the timeout threshold
-    TimedOut(Duration),
-}
+pub(super) struct Subscribed(pub(super) broadcast::Receiver<Arc<Result<RequestResult, NodeError>>>);
 
 /// In-flight request entry that tracks when the request was initiated.
 #[derive(Debug)]
