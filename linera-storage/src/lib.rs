@@ -571,10 +571,6 @@ mod tests {
     {
         // Test clock functionality
         let _current_time = storage.clock().current_time();
-
-        // ===================
-        // Test chain operations
-        // ===================
         let test_chain_id = ChainId(CryptoHash::test_hash("test_chain"));
 
         // Test loading a chain (this creates a chain state view)
@@ -651,9 +647,7 @@ mod tests {
         let write_results = storage.maybe_write_blobs(&[test_blob1.clone()]).await?;
         assert_eq!(write_results, vec![false]);
 
-        // ==========================
         // Test blob state operations
-        // ==========================
         let blob_state1 = BlobState {
             last_used_by: None,
             chain_id: ChainId(CryptoHash::test_hash("chain1")),
@@ -706,10 +700,6 @@ mod tests {
     where
         S::Context: Send + Sync,
     {
-        // ======================
-        // Test certificate operations (simplified - certificates are complex structures)
-        // ======================
-        // Note: Creating actual ConfirmedBlockCertificate is complex, so we test the interface
         let cert_hash = CryptoHash::test_hash("certificate");
 
         // Test certificate existence (should be false initially)
@@ -741,14 +731,6 @@ mod tests {
     where
         S::Context: Send + Sync,
     {
-        // Note: write_blobs_and_certificate requires creating a complex ConfirmedBlockCertificate
-        // which would require setting up validators, signatures, and proper block structure.
-        // This is beyond the scope of a basic storage interface test.
-        // The method interface is tested indirectly through the other blob writing methods.
-
-        // ===================
-        // Test event operations
-        // ===================
         let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
         let stream_id = StreamId::system("test_stream");
 
@@ -814,9 +796,6 @@ mod tests {
     {
         let admin_chain_id = ChainId(CryptoHash::test_hash("test_chain_second"));
 
-        // ===============================
-        // Test network description operations
-        // ===============================
         let network_desc = NetworkDescription {
             name: "test_network".to_string(),
             genesis_config_hash: CryptoHash::test_hash("genesis_config"),
