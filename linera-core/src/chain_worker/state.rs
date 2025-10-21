@@ -249,7 +249,7 @@ where
         &mut self,
     ) -> Result<OwnedRwLockReadGuard<ChainStateView<StorageClient::Context>>, WorkerError> {
         if self.shared_chain_view.is_none() {
-            self.shared_chain_view = Some(Arc::new(RwLock::new(self.chain.clone_unchecked())));
+            self.shared_chain_view = Some(Arc::new(RwLock::new(self.chain.clone_unchecked()?)));
         }
 
         Ok(self

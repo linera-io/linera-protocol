@@ -112,7 +112,8 @@ where
 
     fn spawn(&mut self, id: DestinationId) {
         let exporter_builder = &self.exporters_builder;
-        let join_handle = exporter_builder.spawn(id.clone(), self.storage.clone());
+        let storage = self.storage.clone().expect("Failed to clone storage");
+        let join_handle = exporter_builder.spawn(id.clone(), storage);
         self.join_handles.insert(id, join_handle);
     }
 }

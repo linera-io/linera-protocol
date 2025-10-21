@@ -62,10 +62,10 @@ impl Exporter {
         let (mut task_queue, task_receiver) = TaskQueue::new(
             self.work_queue_size,
             destination_state.load(Ordering::Acquire) as usize,
-            storage.clone(),
+            storage.clone()?,
         );
 
-        let export_task = ExportTask::new(node, storage.clone(), destination_state);
+        let export_task = ExportTask::new(node, storage.clone()?, destination_state);
 
         tokio::select! {
 
