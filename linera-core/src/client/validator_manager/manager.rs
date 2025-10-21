@@ -125,11 +125,11 @@ pub struct ValidatorManager<Env: Environment> {
     /// Prevents overwhelming individual validators with too many parallel requests.
     max_requests_per_node: usize,
     /// Default scoring weights applied to new nodes.
-    default_weights: ScoringWeights,
+    weights: ScoringWeights,
     /// Default EMA smoothing factor for new nodes.
-    default_alpha: f64,
+    alpha: f64,
     /// Default maximum expected latency in milliseconds for score normalization.
-    default_max_expected_latency_ms: f64,
+    max_expected_latency: f64,
     /// Tracks in-flight requests to deduplicate concurrent requests for the same data.
     in_flight_tracker: InFlightTracker<RemoteNode<Env::ValidatorNode>>,
     /// Cache of recently completed requests with their results and timestamps.
@@ -197,9 +197,9 @@ impl<Env: Environment> ValidatorManager<Env> {
                     .collect(),
             )),
             max_requests_per_node,
-            default_weights: weights,
-            default_alpha: alpha,
-            default_max_expected_latency_ms: max_expected_latency_ms,
+            weights,
+            alpha,
+            max_expected_latency: max_expected_latency_ms,
             in_flight_tracker: InFlightTracker::new(max_request_ttl),
             cache: RequestsCache::new(cache_ttl, max_cache_size),
         }
@@ -671,9 +671,9 @@ impl<Env: Environment> ValidatorManager<Env> {
         nodes.entry(public_key).or_insert_with(|| {
             NodeInfo::with_config(
                 node,
-                self.default_weights,
-                self.default_alpha,
-                self.default_max_expected_latency_ms,
+                self.weights,
+                self.alpha,
+                self.max_expected_latency,
                 self.max_requests_per_node,
             )
         });
