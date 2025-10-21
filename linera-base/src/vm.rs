@@ -82,6 +82,7 @@ pub struct EvmOperation {
 }
 
 impl EvmOperation {
+    /// An EVM transaction with a specified amount and function input.
     pub fn new(amount: Amount, argument: Vec<u8>) -> Self {
         Self {
             value: amount.into(),
@@ -89,10 +90,12 @@ impl EvmOperation {
         }
     }
 
+    /// Convert the input to a `Vec<u8>` if possible.
     pub fn to_bytes(&self) -> Result<Vec<u8>, bcs::Error> {
         bcs::to_bytes(&self)
     }
 
+    /// Creates an `EvmQuery` from the input.
     pub fn to_evm_query(&self) -> Result<EvmQuery, bcs::Error> {
         Ok(EvmQuery::Operation(self.to_bytes()?))
     }

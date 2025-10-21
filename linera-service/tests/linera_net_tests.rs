@@ -444,6 +444,16 @@ fn get_zero_operation(operation: impl alloy_sol_types::SolCall) -> Result<EvmQue
 }
 
 #[cfg(with_revm)]
+fn get_zero_operations(
+    operation: impl alloy_sol_types::SolCall,
+    num_operations: usize,
+) -> Result<EvmQuery, bcs::Error> {
+    let operation = EvmOperation::new(Amount::ZERO, operation.abi_encode());
+    let operations = vec![operation.to_bytes()?; num_operations];
+    Ok(EvmQuery::Operations(operations))
+}
+
+#[cfg(with_revm)]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -772,15 +782,9 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     assert_eq!(balance_a_2, Amount::from_tokens(50));
     assert_eq!(balance_a_app, Amount::from_tokens(4));
 
-    let app_a = node_service_a
-        .make_application(&chain_a, &application_id)
-        .await?;
-    let app_b = node_service_b
-        .make_application(&chain_b, &application_id)
-        .await?;
-    let app_c = node_service_c
-        .make_application(&chain_c, &application_id)
-        .await?;
+    let app_a = node_service_a.make_application(&chain_a, &application_id)?;
+    let app_b = node_service_b.make_application(&chain_b, &application_id)?;
+    let app_c = node_service_c.make_application(&chain_c, &application_id)?;
 
     // Checking the balances on input
 
@@ -867,8 +871,7 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
-#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{Bytes, Log, U256};
@@ -1925,9 +1928,7 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
         to: address2,
         value: transfer1,
     };
-    let operation = get_zero_operation(operation)?;
-    let operations = vec![operation; num_operations];
-    let query = EvmQuery::Operations(operations);
+    let query = get_zero_operations(operation, num_operations)?;
     let time_start = Instant::now();
     application1.run_json_query(query).await?;
     let average_time = (time_start.elapsed().as_millis() as f64) / (num_operations as f64);
