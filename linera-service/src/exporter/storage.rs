@@ -142,14 +142,14 @@ where
         self.shared_canonical_state.push(block)
     }
 
-    fn clone(&mut self) -> Self {
-        Self {
+    fn clone(&mut self) -> Result<Self, ExporterError> {
+        Ok(Self {
             storage: self.storage.clone(),
-            shared_canonical_state: self.shared_canonical_state.clone(),
+            shared_canonical_state: self.shared_canonical_state.clone()?,
             blobs_cache: self.blobs_cache.clone(),
             blocks_cache: self.blocks_cache.clone(),
             destination_states: self.destination_states.clone(),
-        }
+        })
     }
 }
 
@@ -202,8 +202,8 @@ where
         self.shared_storage.destination_states.load_state(id)
     }
 
-    pub(crate) fn clone(&mut self) -> Self {
-        ExporterStorage::new(self.shared_storage.clone())
+    pub(crate) fn clone(&mut self) -> Result<Self, ExporterError> {
+        Ok(ExporterStorage::new(self.shared_storage.clone()?))
     }
 
     pub(crate) fn get_latest_index(&self) -> usize {
@@ -240,7 +240,7 @@ where
 
         let mut shared_storage =
             SharedStorage::new(storage, canonical_state, destination_states, limits);
-        let exporter_storage = ExporterStorage::new(shared_storage.clone());
+        let exporter_storage = ExporterStorage::new(shared_storage.clone()?);
 
         Ok((
             Self {
@@ -422,13 +422,13 @@ where
         }
     }
 
-    fn clone(&mut self) -> Self {
-        Self {
+    fn clone(&mut self) -> Result<Self, ExporterError> {
+        Ok(Self {
             count: self.count,
             state_cache: self.state_cache.clone(),
             state_updates_buffer: self.state_updates_buffer.clone(),
-            state_context: self.state_context.clone_unchecked(),
-        }
+            state_context: self.state_context.clone_unchecked()?,
+        })
     }
 
     /// Returns the latest index of the canonical state.

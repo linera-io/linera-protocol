@@ -195,12 +195,12 @@ impl<C: Clone, V: Clone> ClonableView for ByteMapView<C, V>
 where
     Self: View,
 {
-    fn clone_unchecked(&mut self) -> Self {
-        ByteMapView {
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(ByteMapView {
             context: self.context.clone(),
             updates: self.updates.clone(),
             deletion_set: self.deletion_set.clone(),
-        }
+        })
     }
 }
 
@@ -1066,11 +1066,11 @@ where
     Self: View,
     ByteMapView<C, V>: ClonableView,
 {
-    fn clone_unchecked(&mut self) -> Self {
-        MapView {
-            map: self.map.clone_unchecked(),
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(MapView {
+            map: self.map.clone_unchecked()?,
             _phantom: PhantomData,
-        }
+        })
     }
 }
 
@@ -1624,11 +1624,11 @@ where
     Self: View,
     ByteMapView<C, V>: ClonableView,
 {
-    fn clone_unchecked(&mut self) -> Self {
-        CustomMapView {
-            map: self.map.clone_unchecked(),
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(CustomMapView {
+            map: self.map.clone_unchecked()?,
             _phantom: PhantomData,
-        }
+        })
     }
 }
 

@@ -149,13 +149,13 @@ where
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
-    fn clone_unchecked(&mut self) -> Self {
-        WrappedHashableContainerView {
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(WrappedHashableContainerView {
             _phantom: PhantomData,
             stored_hash: self.stored_hash,
             hash: Mutex::new(*self.hash.get_mut().unwrap()),
-            inner: self.inner.clone_unchecked(),
-        }
+            inner: self.inner.clone_unchecked()?,
+        })
     }
 }
 

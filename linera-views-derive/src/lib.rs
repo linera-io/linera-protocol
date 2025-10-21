@@ -380,7 +380,7 @@ fn generate_clonable_view_code(input: ItemStruct) -> Result<TokenStream2, Error>
         let name = &field.ident;
         let ty = &field.ty;
         clone_constraints.push(quote! { #ty: ClonableView });
-        clone_fields.push(quote! { #name: self.#name.clone_unchecked() });
+        clone_fields.push(quote! { #name: self.#name.clone_unchecked()? });
     }
 
     Ok(quote! {
@@ -390,10 +390,10 @@ fn generate_clonable_view_code(input: ItemStruct) -> Result<TokenStream2, Error>
             #(#clone_constraints,)*
             Self: linera_views::views::View,
         {
-            fn clone_unchecked(&mut self) -> Self {
-                Self {
+            fn clone_unchecked(&mut self) -> Result<Self, linera_views::ViewError> {
+                Ok(Self {
                     #(#clone_fields,)*
-                }
+                })
             }
         }
     })
