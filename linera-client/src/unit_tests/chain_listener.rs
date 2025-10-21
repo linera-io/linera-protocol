@@ -119,6 +119,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             Duration::from_secs(30),
             Duration::from_secs(1),
             ChainClientOptions::test_default(),
+            linera_core::client::ValidatorManagerConfig::default(),
         )),
     };
     context
@@ -204,6 +205,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             Duration::from_secs(30),
             Duration::from_secs(1),
             ChainClientOptions::test_default(),
+            linera_core::client::ValidatorManagerConfig::default(),
         )),
     };
     let context = Arc::new(Mutex::new(context));

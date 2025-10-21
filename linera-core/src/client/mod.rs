@@ -87,9 +87,9 @@ mod chain_client_state;
 #[cfg(test)]
 #[path = "../unit_tests/client_tests.rs"]
 mod client_tests;
-mod validator_manager;
+pub mod validator_manager;
 
-pub use validator_manager::{ScoringWeights, ValidatorManager};
+pub use validator_manager::{ScoringWeights, ValidatorManager, ValidatorManagerConfig};
 mod received_log;
 mod validator_trackers;
 
@@ -181,6 +181,7 @@ impl<Env: Environment> Client<Env> {
         chain_worker_ttl: Duration,
         sender_chain_worker_ttl: Duration,
         options: ChainClientOptions,
+        validator_manager_config: validator_manager::ValidatorManagerConfig,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client(
@@ -194,7 +195,7 @@ impl<Env: Environment> Client<Env> {
         .with_chain_worker_ttl(chain_worker_ttl)
         .with_sender_chain_worker_ttl(sender_chain_worker_ttl);
         let local_node = LocalNodeClient::new(state);
-        let validator_manager = ValidatorManager::new(vec![]);
+        let validator_manager = ValidatorManager::new(vec![], validator_manager_config);
 
         Self {
             environment,

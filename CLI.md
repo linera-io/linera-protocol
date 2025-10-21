@@ -184,6 +184,21 @@ Client implementation and command-line tool for the Linera blockchain
 * `--max-joined-tasks <MAX_JOINED_TASKS>` — Maximum number of tasks that can are joined concurrently in the client
 
   Default value: `100`
+* `--max-in-flight-requests <MAX_IN_FLIGHT_REQUESTS>` — Maximum concurrent requests per validator node
+
+  Default value: `100`
+* `--max-accepted-latency-ms <MAX_ACCEPTED_LATENCY_MS>` — Maximum expected latency in milliseconds for score normalization
+
+  Default value: `5000`
+* `--cache-ttl-sec <CACHE_TTL_SEC>` — Time-to-live for cached responses in seconds
+
+  Default value: `2`
+* `--cache-max-size <CACHE_MAX_SIZE>` — Maximum number of entries in the cache
+
+  Default value: `1000`
+* `--max-request-ttl-ms <MAX_REQUEST_TTL_MS>` — Maximum latency for an in-flight request before we stop deduplicating it (in milliseconds)
+
+  Default value: `200`
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
 * `--storage-max-concurrent-queries <STORAGE_MAX_CONCURRENT_QUERIES>` — The maximal number of simultaneous queries to the database
 * `--storage-max-stream-queries <STORAGE_MAX_STREAM_QUERIES>` — The maximal number of simultaneous stream queries to the database

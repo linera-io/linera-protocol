@@ -24,11 +24,10 @@ use super::{
     node_info::NodeInfo,
     request::{RequestKey, RequestResult},
     scoring::ScoringWeights,
-    CACHE_MAX_SIZE, CACHE_TTL_SEC, MAX_ACCEPTED_LATENCY_MS, MAX_IN_FLIGHT_REQUESTS,
     MAX_REQUEST_TTL_MS,
 };
 use crate::{
-    client::communicate_concurrently,
+    client::{communicate_concurrently, ValidatorManagerConfig},
     environment::Environment,
     node::{NodeError, ValidatorNode},
     remote_node::RemoteNode,
@@ -139,16 +138,20 @@ pub struct ValidatorManager<Env: Environment> {
 }
 
 impl<Env: Environment> ValidatorManager<Env> {
-    /// Creates a new `ValidatorManager` with default configuration.
-    pub fn new(nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>) -> Self {
+    /// Creates a new `ValidatorManager` with the provided configuration.
+    pub fn new(
+        nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
+        config: ValidatorManagerConfig,
+    ) -> Self {
         Self::with_config(
             nodes,
-            MAX_IN_FLIGHT_REQUESTS,
+            config.max_in_flight_requests,
             ScoringWeights::default(),
             0.1,
-            MAX_ACCEPTED_LATENCY_MS,
-            Duration::from_secs(CACHE_TTL_SEC), // 60 second cache TTL
-            CACHE_MAX_SIZE,                     // cache up to 100 entries
+            config.max_accepted_latency_ms,
+            Duration::from_secs(config.cache_ttl_sec),
+            config.cache_max_size,
+            Duration::from_millis(config.max_request_ttl_ms),
         )
     }
 
@@ -162,6 +165,8 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// - `max_expected_latency_ms`: Maximum expected latency for score normalization
     /// - `cache_ttl`: Time-to-live for cached responses
     /// - `max_cache_size`: Maximum number of entries in the cache
+    /// - `max_request_ttl`: Maximum latency for an in-flight request before we stop deduplicating it
+    #[expect(clippy::too_many_arguments)]
     pub fn with_config(
         nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
         max_requests_per_node: usize,
@@ -170,6 +175,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         max_expected_latency_ms: f64,
         cache_ttl: Duration,
         max_cache_size: usize,
+        max_request_ttl: Duration,
     ) -> Self {
         assert!(alpha > 0.0 && alpha < 1.0, "Alpha must be in (0, 1) range");
         Self {
@@ -195,7 +201,7 @@ impl<Env: Environment> ValidatorManager<Env> {
             default_weights: weights,
             default_alpha: alpha,
             default_max_expected_latency_ms: max_expected_latency_ms,
-            in_flight_tracker: InFlightTracker::new(Duration::from_millis(MAX_REQUEST_TTL_MS)),
+            in_flight_tracker: InFlightTracker::new(max_request_ttl),
             cache: RequestsCache::new(cache_ttl, max_cache_size),
         }
     }
@@ -709,6 +715,7 @@ mod tests {
             1000.0,
             cache_ttl,
             100,
+            in_flight_timeout,
         );
         // Replace the tracker with one using the custom timeout
         manager.in_flight_tracker = InFlightTracker::new(in_flight_timeout);
@@ -991,6 +998,7 @@ mod tests {
             1000.0,
             Duration::from_secs(60),
             100,
+            Duration::from_secs(60),
         );
         // Replace the tracker with one using a longer timeout for this test
         manager.in_flight_tracker = InFlightTracker::new(Duration::from_secs(60));
@@ -1136,6 +1144,7 @@ mod tests {
                 1000.0,
                 Duration::from_secs(60),
                 100,
+                Duration::from_millis(MAX_REQUEST_TTL_MS),
             ));
 
         let key = RequestKey::Blob(BlobId::new(

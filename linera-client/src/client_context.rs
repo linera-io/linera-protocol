@@ -291,6 +291,7 @@ where
             options.chain_worker_ttl,
             options.sender_chain_worker_ttl,
             options.to_chain_client_options(),
+            options.to_validator_manager_config(),
         );
 
         #[cfg(not(web))]
@@ -351,6 +352,7 @@ where
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
                 ..ChainClientOptions::test_default()
             },
+            linera_core::client::ValidatorManagerConfig::default(),
         );
 
         ClientContext {
