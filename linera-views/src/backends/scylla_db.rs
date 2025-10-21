@@ -356,8 +356,11 @@ impl ScyllaDbClient {
 
         while let Some(row) = rows.next().await {
             let (key, value) = row?;
-            for i_key in &map[&key] {
-                values[*i_key] = Some(value.clone());
+            if let Some((&last, rest)) = map[&key].split_last() {
+                for position in rest {
+                    values[*position] = Some(value.clone());
+                }
+                values[last] = Some(value);
             }
         }
         Ok(values)
