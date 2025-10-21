@@ -197,20 +197,11 @@ where
     Self: View,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(self.clone_internal())
-    }
-}
-
-impl<C: Clone, V: Clone> ByteMapView<C, V>
-where
-    Self: View,
-{
-    pub(crate) fn clone_internal(&self) -> Self {
-        ByteMapView {
+        Ok(ByteMapView {
             context: self.context.clone(),
             updates: self.updates.clone(),
             deletion_set: self.deletion_set.clone(),
-        }
+        })
     }
 }
 
