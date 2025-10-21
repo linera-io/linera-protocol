@@ -43,7 +43,7 @@ pub(super) mod metrics {
     use prometheus::{HistogramVec, IntCounter, IntCounterVec};
 
     /// Histogram of response times per validator (in milliseconds)
-    pub static VALIDATOR_RESPONSE_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+    pub(super) static VALIDATOR_RESPONSE_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "validator_manager_response_time_ms",
             "Response time for requests to validators in milliseconds",
@@ -53,7 +53,7 @@ pub(super) mod metrics {
     });
 
     /// Counter of total requests made to each validator
-    pub static VALIDATOR_REQUEST_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub(super) static VALIDATOR_REQUEST_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "validator_manager_request_total",
             "Total number of requests made to each validator",
@@ -62,7 +62,7 @@ pub(super) mod metrics {
     });
 
     /// Counter of successful requests per validator
-    pub static VALIDATOR_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub(super) static VALIDATOR_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "validator_manager_request_success",
             "Number of successful requests to each validator",
@@ -71,7 +71,7 @@ pub(super) mod metrics {
     });
 
     /// Counter for requests that were resolved from the response cache.
-    pub static REQUEST_CACHE_DEDUPLICATION: LazyLock<IntCounter> = LazyLock::new(|| {
+    pub(super) static REQUEST_CACHE_DEDUPLICATION: LazyLock<IntCounter> = LazyLock::new(|| {
         register_int_counter(
             "validator_manager_request_deduplication_total",
             "Number of requests that were deduplicated by finding the result in the cache.",
