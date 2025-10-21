@@ -703,7 +703,7 @@ impl Runnable for Job {
                                 }
                                 RemoveValidator { public_key } => {
                                     if validators.remove(&public_key).is_none() {
-                                        warn!("Skipping removal of nonexistent validator");
+                                        warn!("Validator {public_key} does not exist; aborting.");
                                         return Ok(ClientOutcome::Committed(None));
                                     }
                                 }
