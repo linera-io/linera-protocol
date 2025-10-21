@@ -624,6 +624,7 @@ impl Runnable for Job {
 
             command @ (SetValidator { .. }
             | RemoveValidator { .. }
+            | ChangeValidators { .. }
             | ResourceControlPolicy { .. }) => {
                 info!("Starting operations to change validator set");
                 let time_start = Instant::now();
@@ -631,21 +632,39 @@ impl Runnable for Job {
 
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
-                if let SetValidator {
-                    public_key: _,
-                    account_key: _,
-                    address,
-                    votes: _,
-                    skip_online_check: false,
-                } = &command
-                {
-                    let node = context.make_node_provider().make_node(address)?;
-                    context
-                        .check_compatible_version_info(address, &node)
-                        .await?;
-                    context
-                        .check_matching_network_description(address, &node)
-                        .await?;
+                match &command {
+                    SetValidator {
+                        public_key: _,
+                        account_key: _,
+                        address,
+                        votes: _,
+                        skip_online_check: false,
+                    } => {
+                        let node = context.make_node_provider().make_node(address)?;
+                        context
+                            .check_compatible_version_info(address, &node)
+                            .await?;
+                        context
+                            .check_matching_network_description(address, &node)
+                            .await?;
+                    }
+                    ChangeValidators {
+                        add_validators,
+                        remove_validators: _,
+                        skip_online_check: false,
+                    } => {
+                        for validator in add_validators {
+                            let node =
+                                context.make_node_provider().make_node(&validator.address)?;
+                            context
+                                .check_compatible_version_info(&validator.address, &node)
+                                .await?;
+                            context
+                                .check_matching_network_description(&validator.address, &node)
+                                .await?;
+                        }
+                    }
+                    _ => {}
                 }
                 let chain_client = context.make_chain_client(context.wallet.genesis_admin_chain());
                 let n = context
@@ -686,6 +705,36 @@ impl Runnable for Job {
                                     if validators.remove(&public_key).is_none() {
                                         warn!("Skipping removal of nonexistent validator");
                                         return Ok(ClientOutcome::Committed(None));
+                                    }
+                                }
+                                ChangeValidators {
+                                    add_validators,
+                                    remove_validators,
+                                    skip_online_check: _,
+                                } => {
+                                    // Validate that all validators to remove exist.
+                                    for public_key in &remove_validators {
+                                        if !validators.contains_key(public_key) {
+                                            warn!(
+                                                "Cannot remove nonexistent validator: {public_key}. Aborting operation."
+                                            );
+                                            return Ok(ClientOutcome::Committed(None));
+                                        }
+                                    }
+                                    // Add validators
+                                    for validator in add_validators {
+                                        validators.insert(
+                                            validator.public_key,
+                                            ValidatorState {
+                                                network_address: validator.address,
+                                                votes: validator.votes,
+                                                account_public_key: validator.account_key,
+                                            },
+                                        );
+                                    }
+                                    // Remove validators
+                                    for public_key in remove_validators {
+                                        validators.remove(&public_key);
                                     }
                                 }
                                 ResourceControlPolicy {

@@ -26,6 +26,34 @@ const DEFAULT_WRAP_UP_MAX_IN_FLIGHT: usize = 5;
 const DEFAULT_NUM_CHAINS: usize = 10;
 const DEFAULT_BPS: usize = 10;
 
+/// Specification for a validator to be added to the committee.
+#[derive(Clone, Debug)]
+pub struct ValidatorToAdd {
+    pub public_key: ValidatorPublicKey,
+    pub account_key: AccountPublicKey,
+    pub address: String,
+    pub votes: u64,
+}
+
+impl std::str::FromStr for ValidatorToAdd {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split(',').collect();
+        anyhow::ensure!(
+            parts.len() == 4,
+            "Validator spec must be in format: public_key,account_key,address,votes"
+        );
+
+        Ok(ValidatorToAdd {
+            public_key: parts[0].parse()?,
+            account_key: parts[1].parse()?,
+            address: parts[2].to_string(),
+            votes: parts[3].parse()?,
+        })
+    }
+}
+
 #[derive(Clone, clap::Args, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct BenchmarkOptions {
@@ -405,6 +433,28 @@ pub enum ClientCommand {
         /// The public key of the validator.
         #[arg(long)]
         public_key: ValidatorPublicKey,
+    },
+
+    /// Add and/or remove multiple validators in a single epoch (admin only)
+    ///
+    /// This command allows you to make multiple validator changes (additions and removals)
+    /// in a single new epoch, avoiding the creation of unnecessary short-lived epochs.
+    ChangeValidators {
+        /// Validators to add, specified as "public_key,account_key,address,votes".
+        /// Can be specified multiple times.
+        /// Example: --add "public_key1,account_key1,address1,1"
+        #[arg(long = "add", value_name = "VALIDATOR_SPEC")]
+        add_validators: Vec<ValidatorToAdd>,
+
+        /// Validators to remove, specified by their public key.
+        /// Can be specified multiple times.
+        /// Example: --remove public_key1 --remove public_key2
+        #[arg(long = "remove")]
+        remove_validators: Vec<ValidatorPublicKey>,
+
+        /// Skip the version and genesis config checks for added validators.
+        #[arg(long)]
+        skip_online_check: bool,
     },
 
     /// Deprecates all committees up to and including the specified one.
@@ -1009,6 +1059,7 @@ impl ClientCommand {
             | ClientCommand::SyncAllValidators { .. }
             | ClientCommand::SetValidator { .. }
             | ClientCommand::RemoveValidator { .. }
+            | ClientCommand::ChangeValidators { .. }
             | ClientCommand::ResourceControlPolicy { .. }
             | ClientCommand::RevokeEpochs { .. }
             | ClientCommand::CreateGenesisConfig { .. }

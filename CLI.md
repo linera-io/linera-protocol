@@ -26,6 +26,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera sync-all-validators`↴](#linera-sync-all-validators)
 * [`linera set-validator`↴](#linera-set-validator)
 * [`linera remove-validator`↴](#linera-remove-validator)
+* [`linera change-validators`↴](#linera-change-validators)
 * [`linera revoke-epochs`↴](#linera-revoke-epochs)
 * [`linera resource-control-policy`↴](#linera-resource-control-policy)
 * [`linera benchmark`↴](#linera-benchmark)
@@ -100,6 +101,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `sync-all-validators` — Synchronizes all validators with the local state of chains
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
+* `change-validators` — Add and/or remove multiple validators in a single epoch (admin only)
 * `revoke-epochs` — Deprecates all committees up to and including the specified one
 * `resource-control-policy` — View or update the resource control policy
 * `benchmark` — Run benchmarks to test network performance
@@ -563,6 +565,22 @@ Remove a validator (admin only)
 ###### **Options:**
 
 * `--public-key <PUBLIC_KEY>` — The public key of the validator
+
+
+
+## `linera change-validators`
+
+Add and/or remove multiple validators in a single epoch (admin only)
+
+This command allows you to make multiple validator changes (additions and removals) in a single new epoch, avoiding the creation of unnecessary short-lived epochs.
+
+**Usage:** `linera change-validators [OPTIONS]`
+
+###### **Options:**
+
+* `--add <VALIDATOR_SPEC>` — Validators to add, specified as "public_key,account_key,address,votes". Can be specified multiple times. Example: --add "public_key1,account_key1,address1,1"
+* `--remove <REMOVE_VALIDATORS>` — Validators to remove, specified by their public key. Can be specified multiple times. Example: --remove public_key1 --remove public_key2
+* `--skip-online-check` — Skip the version and genesis config checks for added validators
 
 
 
