@@ -131,7 +131,13 @@ impl<N: Clone> InFlightTracker<N> {
                 "request completed; broadcasting result to waiters",
             );
             if waiter_count != 0 {
-                let _ = entry.sender.send(result);
+                if let Err(err) = entry.sender.send(result) {
+                    tracing::warn!(
+                        key = ?key,
+                        error = ?err,
+                        "failed to broadcast result to waiters"
+                    );
+                }
             }
             return waiter_count;
         }

@@ -657,6 +657,7 @@ impl<Env: Environment> ValidatorManager<Env> {
             Some(top_nodes[index].1.clone())
         } else {
             // Fallback to the best node if weights are invalid
+            tracing::warn!("failed to create weighted distribution, defaulting to best node");
             Some(scored_nodes[0].1.clone())
         }
     }
