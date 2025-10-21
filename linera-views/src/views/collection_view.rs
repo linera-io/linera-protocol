@@ -415,7 +415,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
         Ok(results)
     }
 
-    /// Load multiple entries for reading at once with their keys.
+    /// Loads multiple entries for reading at once with their keys.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
@@ -1079,7 +1079,7 @@ impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
         self.collection.try_load_entries(short_keys).await
     }
 
-    /// Load multiple entries for reading at once with their keys.
+    /// Loads multiple entries for reading at once with their keys.
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1527,7 +1527,7 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
         self.collection.try_load_entries(short_keys).await
     }
 
-    /// Load multiple entries for reading at once with their keys.
+    /// Loads multiple entries for reading at once with their keys.
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {

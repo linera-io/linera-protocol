@@ -569,7 +569,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             .collect()
     }
 
-    /// Load multiple entries for writing at once with their keys.
+    /// Loads multiple entries for writing at once with their keys.
     /// The entries in short_keys have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -690,7 +690,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             .collect()
     }
 
-    /// Load multiple entries for reading at once with their keys.
+    /// Loads multiple entries for reading at once with their keys.
     /// The entries in short_keys have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1362,7 +1362,7 @@ where
         self.collection.try_load_entries_mut(short_keys).await
     }
 
-    /// Load multiple entries for writing at once with their keys.
+    /// Loads multiple entries for writing at once with their keys.
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1430,7 +1430,7 @@ where
         self.collection.try_load_entries(short_keys).await
     }
 
-    /// Load multiple entries for reading at once with their keys.
+    /// Loads multiple entries for reading at once with their keys.
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1924,7 +1924,7 @@ where
         self.collection.try_load_entries_mut(short_keys).await
     }
 
-    /// Load multiple entries for writing at once with their keys.
+    /// Loads multiple entries for writing at once with their keys.
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1991,7 +1991,7 @@ where
         self.collection.try_load_entries(short_keys).await
     }
 
-    /// Load multiple entries for reading at once with their keys.
+    /// Loads multiple entries for reading at once with their keys.
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
