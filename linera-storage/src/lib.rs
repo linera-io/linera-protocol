@@ -559,7 +559,12 @@ mod tests {
         ownership::ChainOwnership,
     };
     use linera_execution::BlobState;
-    use linera_views::ViewError;
+    #[cfg(feature = "dynamodb")]
+    use linera_views::dynamo_db::DynamoDbDatabase;
+    #[cfg(feature = "scylladb")]
+    use linera_views::scylla_db::ScyllaDbDatabase;
+    use linera_views::{memory::MemoryDatabase, ViewError};
+    use test_case::test_case;
 
     use super::*;
     use crate::db_storage::DbStorage;
@@ -821,9 +826,6 @@ mod tests {
     where
         S::Context: Send + Sync,
     {
-        // ======================
-        // Test committee operations
-        // ======================
         // Test empty epoch range
         let empty_committees = storage
             .committees_for(Epoch::from(10)..=Epoch::from(5))
@@ -838,45 +840,20 @@ mod tests {
     }
 
     /// Generic test function to test Storage trait features
-    async fn test_storage_features<S: Storage + Sync>(storage: &S) -> Result<(), ViewError>
+    #[test_case(DbStorage::<MemoryDatabase, _>::make_test_storage(None).await; "memory")]
+    #[cfg_attr(feature = "dynamodb", test_case(DbStorage::<DynamoDbDatabase, _>::make_test_storage(None).await; "dynamo_db"))]
+    #[cfg_attr(feature = "scylladb", test_case(DbStorage::<ScyllaDbDatabase, _>::make_test_storage(None).await; "scylla_db"))]
+    #[test_log::test(tokio::test)]
+    async fn test_storage_features<S: Storage + Sync>(storage: S) -> Result<(), ViewError>
     where
         S::Context: Send + Sync,
     {
-        test_storage_chain_exporter(storage).await?;
-        test_storage_blob(storage).await?;
-        test_storage_certificate(storage).await?;
-        test_storage_event(storage).await?;
-        test_storage_network_description(storage).await?;
-        test_storage_committee(storage).await?;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_memory_storage() -> Result<(), anyhow::Error> {
-        use linera_views::memory::MemoryDatabase;
-
-        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
-        Box::pin(test_storage_features(&storage)).await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "scylladb")]
-    #[tokio::test]
-    async fn test_scylladb_storage() -> Result<(), anyhow::Error> {
-        use linera_views::scylla_db::ScyllaDbDatabase;
-
-        let storage = DbStorage::<ScyllaDbDatabase, _>::make_test_storage(None).await;
-        Box::pin(test_storage_features(&storage)).await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "dynamodb")]
-    #[tokio::test]
-    async fn test_dynamodb_storage() -> Result<(), anyhow::Error> {
-        use linera_views::dynamo_db::DynamoDbDatabase;
-
-        let storage = DbStorage::<DynamoDbDatabase, _>::make_test_storage(None).await;
-        Box::pin(test_storage_features(&storage)).await?;
+        test_storage_chain_exporter(&storage).await?;
+        test_storage_blob(&storage).await?;
+        test_storage_certificate(&storage).await?;
+        test_storage_event(&storage).await?;
+        test_storage_network_description(&storage).await?;
+        test_storage_committee(&storage).await?;
         Ok(())
     }
 }
