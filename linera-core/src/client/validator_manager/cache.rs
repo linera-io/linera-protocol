@@ -83,7 +83,6 @@ where
                 if let Some(extracted) = key.try_extract_result(cached_key, &entry.result) {
                     tracing::trace!(
                         key = ?key,
-                        subsumed_by = ?cached_key,
                         "cache hit (subsumption) - extracted result from larger cached request"
                     );
                     #[cfg(with_metrics)]

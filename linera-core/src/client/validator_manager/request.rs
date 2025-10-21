@@ -151,29 +151,59 @@ impl SubsumingKey<RequestResult> for super::request::RequestKey {
             None => return false, // Can't subsume different variant types
         };
 
-        // Check if all heights in other are contained in self
-        heights2.iter().all(|h| heights1.contains(h))
+        if heights1.is_empty() {
+            return false; // An empty set cannot subsume any non-empty set
+        }
+
+        if heights2.is_empty() {
+            return true; // An empty set is always subsumed
+        }
+
+        heights1.first().expect("heights1 is not empty")
+            <= heights2.first().expect("heights2 is not empty")
+            && heights1.last().expect("heights1 is not empty")
+                >= heights2.last().expect("heights2 is not empty")
     }
 
-    fn try_extract_result(&self, from: &Self, result: &RequestResult) -> Option<RequestResult> {
+    fn try_extract_result(
+        &self,
+        other: &RequestKey,
+        result: &RequestResult,
+    ) -> Option<RequestResult> {
         // Only certificate results can be extracted
         let certificates = match result {
             RequestResult::Certificates(certs) => certs,
             _ => return None,
         };
 
-        if self.chain_id().is_none() || from.chain_id().is_none() {
-            return None;
+        if !self.subsumes(other) {
+            return None; // Can't extract if not subsumed
         }
 
-        let heights_self = self.height_range()?;
+        let requested_heights = self.height_range()?;
+        if requested_heights.is_empty() {
+            return Some(RequestResult::Certificates(vec![])); // Nothing requested
+        }
+        let requested_start = requested_heights.first().unwrap();
+        let requested_end = requested_heights.last().unwrap();
 
         // Filter certificates to only those at the requested heights
         let filtered: Vec<_> = certificates
             .iter()
-            .filter(|cert| heights_self.contains(&cert.value().height()))
+            .filter(|cert| {
+                &cert.value().height() >= requested_start && &cert.value().height() <= requested_end
+            })
             .cloned()
             .collect();
+
+        if filtered.is_empty() {
+            return None; // No matching certificates found
+        }
+        if filtered.first().unwrap().value().height() != *requested_start
+            || filtered.last().unwrap().value().height() != *requested_end
+        {
+            return None; // Missing some requested heights
+        }
 
         Some(RequestResult::Certificates(filtered))
     }
