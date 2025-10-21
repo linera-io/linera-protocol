@@ -182,9 +182,8 @@ impl<Env: Environment> ValidatorManager<Env> {
                 nodes
                     .into_iter()
                     .map(|node| {
-                        let public_key = node.public_key;
                         (
-                            public_key,
+                            node.public_key,
                             NodeInfo::with_config(
                                 node,
                                 weights,
@@ -209,7 +208,7 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// tracking, and peer selection.
     ///
     /// This method provides a high-level API for executing operations against remote nodes
-    /// while leveraging the ValidatorManager's intelligent peer selection, performance tracking,
+    /// while leveraging the [`ValidatorManager`]'s intelligent peer selection, performance tracking,
     /// and request deduplication capabilities.
     ///
     /// # Type Parameters
@@ -431,7 +430,7 @@ impl<Env: Environment> ValidatorManager<Env> {
             }
         }
 
-        // Record prometheus metrics
+        // Record Prometheus metrics
         #[cfg(with_metrics)]
         {
             let validator_name = public_key.to_string();
@@ -453,13 +452,13 @@ impl<Env: Environment> ValidatorManager<Env> {
 
     /// Deduplicates concurrent requests for the same data.
     ///
-    /// If a request for the same key is already in-flight, this method waits for
+    /// If a request for the same key is already in flight, this method waits for
     /// the existing request to complete and returns its result. Otherwise, it
     /// executes the operation and broadcasts the result to all waiting callers.
     ///
     /// This method also performs **subsumption-based deduplication**: if a larger
     /// request that contains all the data needed by this request is already cached
-    /// or in-flight, we can extract the subset result instead of making a new request.
+    /// or in flight, we can extract the subset result instead of making a new request.
     ///
     /// # Arguments
     /// - `key`: Unique identifier for the request
