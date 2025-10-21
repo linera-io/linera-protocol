@@ -667,14 +667,6 @@ impl Runnable for Job {
                     _ => {}
                 }
                 let chain_client = context.make_chain_client(context.wallet.genesis_admin_chain());
-                let n = context
-                    .process_inbox(&chain_client)
-                    .await
-                    .unwrap()
-                    .into_iter()
-                    .map(|c| c.block().messages().len())
-                    .sum::<usize>();
-                info!("Subscribed {} chains to new committees", n);
                 let maybe_certificate = context
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
