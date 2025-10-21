@@ -34,6 +34,8 @@ mod wallet;
 use anyhow::Result;
 use async_trait::async_trait;
 pub use linera_faucet_client::Faucet;
+#[cfg(with_testing)]
+pub use wallet::NotificationsExt;
 pub use wallet::{ApplicationWrapper, ClientWrapper, FaucetService, NodeService, OnClientDrop};
 
 /// The information needed to start a Linera net of a particular kind.

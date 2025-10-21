@@ -26,7 +26,7 @@ use linera_sdk::linera_base_types::AccountSecretKey;
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, Database, LocalNetConfig, ProcessInbox},
-        ClientWrapper, LineraNet, LineraNetConfig, Network,
+        ClientWrapper, LineraNet, LineraNetConfig, Network, NotificationsExt,
     },
     test_name,
     util::eventually,
@@ -87,9 +87,11 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .open_and_assign(&client_2, Amount::from_tokens(3))
         .await?;
     let port = get_node_port().await;
-    let node_service_2 = match network {
+    let mut node_service_2 = match network {
         Network::Grpc | Network::Grpcs => {
-            Some(client_2.run_node_service(port, ProcessInbox::Skip).await?)
+            let service = client_2.run_node_service(port, ProcessInbox::Skip).await?;
+            let notifications = service.notifications(chain_1).await?;
+            Some((service, notifications))
         }
         Network::Tcp | Network::Udp => None,
     };
@@ -176,16 +178,14 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     }
     client.query_validators(None).await?;
     client.query_validators(Some(chain_1)).await?;
-    if let Some(service) = &node_service_2 {
-        assert!(
-            eventually(|| async { !service.process_inbox(&chain_2).await.unwrap().is_empty() })
-                .await
-        );
+    if let Some((service, notifications)) = &mut node_service_2 {
+        let admin_height = client.load_wallet()?.chains[&chain_1].next_block_height;
+        let event_height = admin_height.try_sub_one()?;
+        notifications.wait_for_events(Some(event_height)).await?;
+        assert!(!service.process_inbox(&chain_2).await?.is_empty());
         client.revoke_epochs(Epoch(2)).await?;
-        assert!(
-            eventually(|| async { !service.process_inbox(&chain_2).await.unwrap().is_empty() })
-                .await
-        );
+        notifications.wait_for_events(None).await?;
+        assert!(!service.process_inbox(&chain_2).await?.is_empty());
         let committees = service.query_committees(&chain_2).await?;
         let epochs = committees.into_keys().collect::<Vec<_>>();
         assert_eq!(&epochs, &[Epoch(3)]);
@@ -199,16 +199,12 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     for i in 0..4 {
         let validator_key = net.validator_keys(i).unwrap();
         client.remove_validator(&validator_key.0).await?;
-        if let Some(service) = &node_service_2 {
-            assert!(
-                eventually(|| async { !service.process_inbox(&chain_2).await.unwrap().is_empty() })
-                    .await
-            );
+        if let Some((service, notifications)) = &mut node_service_2 {
+            notifications.wait_for_events(None).await?;
+            assert!(!service.process_inbox(&chain_2).await?.is_empty());
             client.revoke_epochs(Epoch(3 + i as u32)).await?;
-            assert!(
-                eventually(|| async { !service.process_inbox(&chain_2).await.unwrap().is_empty() })
-                    .await
-            );
+            notifications.wait_for_events(None).await?;
+            assert!(!service.process_inbox(&chain_2).await?.is_empty());
             let committees = service.query_committees(&chain_2).await?;
             let epochs = committees.into_keys().collect::<Vec<_>>();
             assert_eq!(&epochs, &[Epoch(4 + i as u32)]);
@@ -231,11 +227,12 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         )
         .await?;
 
-    if let Some(mut service) = node_service_2 {
-        assert!(
-            eventually(|| async { !service.process_inbox(&chain_2).await.unwrap().is_empty() })
-                .await
-        );
+    if let Some((service, notifications)) = &mut node_service_2 {
+        let height = client.load_wallet()?.chains[&chain_1]
+            .next_block_height
+            .try_sub_one()?;
+        notifications.wait_for_block(height).await?;
+        assert!(!service.process_inbox(&chain_2).await?.is_empty());
         let balance = service.balance(&account_recipient).await?;
         assert_eq!(balance, Amount::from_tokens(5));
         let committees = service.query_committees(&chain_2).await?;
