@@ -1532,7 +1532,7 @@ where
                 runtime.schedule_operation(operation)?;
                 return Ok(Vec::new());
             }
-            EvmQuery::Mutations(operations) => {
+            EvmQuery::Operations(operations) => {
                 let mut runtime = self.db.runtime.lock().unwrap();
                 for operation in operations {
                     runtime.schedule_operation(operation)?;
