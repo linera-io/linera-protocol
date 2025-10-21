@@ -1,8 +1,7 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use linera_base::time::{Duration, Instant};
 use tokio::sync::broadcast;
@@ -171,14 +170,14 @@ impl<N: Clone> InFlightTracker<N> {
     ///
     /// # Returns
     /// - `Vec<N>`: List of alternative peers (empty if no entry exists)
-    pub(super) async fn get_alternative_peers(&self, key: &RequestKey) -> Vec<N> {
+    pub(super) async fn get_alternative_peers(&self, key: &RequestKey) -> Option<Vec<N>> {
         let in_flight = self.entries.read().await;
 
         if let Some(entry) = in_flight.get(key) {
             let peers = entry.alternative_peers.read().await;
-            peers.clone()
+            Some(peers.clone())
         } else {
-            vec![]
+            None
         }
     }
 }

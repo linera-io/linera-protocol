@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use custom_debug_derive::Debug;
+use tokio::sync::Semaphore;
 
 use super::{scoring::ScoringWeights, MAX_ACCEPTED_LATENCY_MS, MAX_IN_FLIGHT_REQUESTS};
 use crate::{environment::Environment, remote_node::RemoteNode};
@@ -27,13 +28,7 @@ pub(super) struct NodeInfo<Env: Environment> {
     /// Tracks recent success/failure patterns
     pub(super) ema_success_rate: f64,
 
-    /// Thread-safe counter tracking the number of concurrent requests currently in flight
-    /// Used to prevent overwhelming individual nodes with too many parallel requests
-    pub(super) in_flight_requests: Arc<tokio::sync::RwLock<usize>>,
-
-    /// Notifier for slot releases. Tasks waiting for a slot to become available
-    /// will be woken when a request completes and releases its slot.
-    pub(super) slot_available: Arc<tokio::sync::Notify>,
+    pub(super) in_flight_semaphore: Arc<Semaphore>,
 
     /// Total number of requests processed (for monitoring and cold-start handling)
     pub(super) total_requests: u64,
@@ -84,8 +79,7 @@ impl<Env: Environment> NodeInfo<Env> {
             node,
             ema_latency_ms: 100.0, // Start with reasonable latency expectation
             ema_success_rate: 1.0, // Start optimistically with 100% success
-            in_flight_requests: Arc::new(tokio::sync::RwLock::new(0)),
-            slot_available: Arc::new(tokio::sync::Notify::new()),
+            in_flight_semaphore: Arc::new(tokio::sync::Semaphore::new(max_in_flight)),
             total_requests: 0,
             weights,
             alpha: alpha.clamp(0.01, 0.5), // Ensure alpha is in reasonable range
@@ -112,7 +106,8 @@ impl<Env: Environment> NodeInfo<Env> {
         let success_score = self.ema_success_rate;
 
         // 3. Normalize Load (lower is better, so we invert)
-        let current_load = *self.in_flight_requests.read().await as f64;
+        let current_load =
+            (self.max_in_flight as f64) - (self.in_flight_semaphore.available_permits() as f64);
         let load_score =
             1.0 - (current_load.min(self.max_in_flight as f64) / self.max_in_flight as f64);
 
@@ -132,36 +127,8 @@ impl<Env: Environment> NodeInfo<Env> {
     ///
     /// This is a read-only check that doesn't reserve a slot.
     /// Use `acquire_request_slot` to atomically check and reserve.
-    pub(super) async fn can_accept_request(&self, max_requests: usize) -> bool {
-        let current = *self.in_flight_requests.read().await;
-        current < max_requests
-    }
-
-    /// Atomically attempts to reserve a request slot for this node.
-    ///
-    /// Returns `true` if a slot was successfully acquired, `false` if the node
-    /// is already at maximum capacity. This prevents overwhelming individual
-    /// nodes with too many concurrent requests.
-    pub(super) async fn acquire_request_slot(&self, max_requests: usize) -> bool {
-        let mut current = self.in_flight_requests.write().await;
-        if *current < max_requests {
-            *current += 1;
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Releases a previously acquired request slot.
-    ///
-    /// Should be called when a request completes (successfully or not) to free
-    /// capacity for new requests. Uses saturating subtraction to prevent underflow.
-    /// Notifies one waiting task that a slot is now available.
-    pub(super) async fn release_request_slot(&self) {
-        let mut current = self.in_flight_requests.write().await;
-        *current = current.saturating_sub(1);
-        drop(current); // Release the lock before notifying
-        self.slot_available.notify_one();
+    pub(super) async fn can_accept_request(&self) -> bool {
+        self.in_flight_semaphore.available_permits() > 0
     }
 
     /// Updates performance metrics using Exponential Moving Average.

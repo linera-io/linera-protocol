@@ -339,7 +339,7 @@ impl<Env: Environment> ValidatorManager<Env> {
     pub async fn get_alternative_peers(
         &self,
         key: &RequestKey,
-    ) -> Vec<RemoteNode<Env::ValidatorNode>> {
+    ) -> Option<Vec<RemoteNode<Env::ValidatorNode>>> {
         self.in_flight_tracker.get_alternative_peers(key).await
     }
 
@@ -393,19 +393,23 @@ impl<Env: Environment> ValidatorManager<Env> {
         let public_key = peer.public_key;
 
         // Acquire request slot
-        self.try_acquire_slot(&public_key).await;
+        let nodes = self.nodes.read().await;
+        let node = nodes.get(&public_key).expect("Node must exist");
+        let semaphore = node.in_flight_semaphore.clone();
+        let _permit = semaphore.acquire().await.unwrap();
+        drop(nodes);
 
         // Execute the operation
         let result = operation(peer).await;
 
         // Update metrics and release slot
         let response_time_ms = start_time.elapsed().as_millis() as u64;
+        drop(_permit); // Explicitly drop the permit to release the slot
         let is_success = result.is_ok();
         {
             let mut nodes = self.nodes.write().await;
             if let Some(info) = nodes.get_mut(&public_key) {
                 info.update_metrics(is_success, response_time_ms);
-                info.release_request_slot().await;
                 let score = info.calculate_score().await;
                 tracing::trace!(
                     node = %public_key,
@@ -604,7 +608,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         // Filter nodes that can accept requests and calculate their scores
         let mut scored_nodes = Vec::new();
         for info in nodes.values() {
-            if info.can_accept_request(self.max_requests_per_node).await {
+            if info.can_accept_request().await {
                 let score = info.calculate_score().await;
                 scored_nodes.push((score, info.node.clone()));
             }
@@ -649,61 +653,6 @@ impl<Env: Environment> ValidatorManager<Env> {
         } else {
             // Fallback to the best node if weights are invalid
             Some(scored_nodes[0].1.clone())
-        }
-    }
-
-    /// Attempts to acquire a request slot for a specific peer, blocking until one is available.
-    ///
-    /// This method uses async notifications to efficiently wait for slot availability without
-    /// polling. When a slot is not immediately available, the task will be suspended and woken
-    /// by the async runtime when another task releases a slot.
-    ///
-    /// # Arguments
-    /// - `peer_key`: The public key of the validator peer
-    ///
-    /// # Behavior
-    /// The method will:
-    /// - Subscribe to slot release notifications first (critical for avoiding missed notifications)
-    /// - Try to acquire a slot
-    /// - If unsuccessful, wait to be notified when a slot becomes available
-    /// - Retry acquisition when notified
-    /// - Continue until a slot is successfully acquired
-    async fn try_acquire_slot(&self, peer_key: &ValidatorPublicKey) {
-        // CRITICAL: Get the notifier and subscribe BEFORE checking availability.
-        // This ensures we don't miss any notifications that happen between
-        // checking and waiting. We clone the Arc to the Notify so we can
-        // hold it beyond the lock scope.
-        let notify = {
-            let nodes = self.nodes.read().await;
-            nodes.get(peer_key).map(|info| info.slot_available.clone())
-        };
-
-        // If peer doesn't exist, return immediately
-        let notify = match notify {
-            Some(n) => n,
-            None => return,
-        };
-
-        loop {
-            // Subscribe to notifications before trying to acquire
-            let notified = notify.notified();
-
-            // Try to acquire a slot
-            let nodes = self.nodes.read().await;
-            let slot_available = if let Some(info) = nodes.get(peer_key) {
-                info.acquire_request_slot(self.max_requests_per_node).await
-            } else {
-                false
-            };
-            drop(nodes);
-
-            // If we acquired a slot, return immediately
-            if slot_available {
-                return;
-            }
-            // Wait to be notified when a slot becomes available
-            notified.await;
-            // Loop and retry acquisition
         }
     }
 
@@ -1178,7 +1127,7 @@ mod tests {
         let manager: Arc<ValidatorManager<TestEnvironment>> =
             Arc::new(ValidatorManager::with_config(
                 nodes.clone(),
-                10,
+                1,
                 ScoringWeights::default(),
                 0.1,
                 1000.0,
@@ -1229,23 +1178,20 @@ mod tests {
             .collect();
 
         // Give time for alternative peers to register
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(500)).await;
 
         // Check that nodes 1 and 2 are registered as alternatives
-        let alt_peers = manager.get_alternative_peers(&key).await;
-        assert!(!alt_peers.is_empty(), "Expected in-flight entry to exist");
-        assert_eq!(alt_peers.len(), 2, "Expected two alternative peers");
-        assert!(
-            alt_peers
-                .iter()
-                .any(|p| p.public_key == nodes[1].public_key),
-            "Expected node 1 to be registered"
-        );
-        assert!(
-            alt_peers
-                .iter()
-                .any(|p| p.public_key == nodes[2].public_key),
-            "Expected node 2 to be registered"
+        let alt_peers = manager
+            .get_alternative_peers(&key)
+            .await
+            .expect("in-flight entry")
+            .into_iter()
+            .map(|p| p.public_key)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            alt_peers,
+            vec![nodes[1].public_key, nodes[2].public_key],
+            "expected nodes 2 and 3 to be registered as alternative peers"
         );
 
         // Signal first request to complete
@@ -1261,7 +1207,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await;
         let alt_peers = manager.get_alternative_peers(&key).await;
         assert!(
-            alt_peers.is_empty(),
+            alt_peers.is_none(),
             "Expected in-flight entry to be removed after completion"
         );
     }
