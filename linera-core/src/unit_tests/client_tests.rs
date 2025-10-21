@@ -125,9 +125,8 @@ where
         assert_eq!(
             builder
                 .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
-                .await
-                .unwrap(),
-            certificate
+                .await,
+            Some(certificate)
         );
     }
     assert_matches!(
@@ -159,7 +158,7 @@ where
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let receiver_id = receiver.chain_id();
     let friend = receiver.identity().await?;
-    sender
+    let cert = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(3),
@@ -167,7 +166,13 @@ where
         )
         .await
         .unwrap_ok_committed();
-    sender
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+            .await,
+        Some(cert)
+    );
+    let cert = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_millis(100),
@@ -175,6 +180,12 @@ where
         )
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
+            .await,
+        Some(cert)
+    );
     assert_eq!(
         sender.local_balance().await.unwrap(),
         Amount::from_millis(900)
@@ -207,7 +218,7 @@ where
     );
 
     // First attempt that should be rejected.
-    sender
+    let cert1 = sender
         .claim(
             owner,
             receiver_id,
@@ -215,9 +226,15 @@ where
             Amount::from_tokens(5),
         )
         .await
-        .unwrap();
+        .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(2), 3)
+            .await,
+        Some(cert1)
+    );
     // Second attempt with a correct amount.
-    sender
+    let cert2 = sender
         .claim(
             owner,
             receiver_id,
@@ -226,6 +243,12 @@ where
         )
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(3), 3)
+            .await,
+        Some(cert2)
+    );
 
     receiver.synchronize_from_validators().await?;
     let cert = receiver.process_inbox().await?.0.pop().unwrap();
@@ -282,9 +305,8 @@ where
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
-            .await
-            .unwrap(),
-        certificate
+            .await,
+        Some(certificate)
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -329,9 +351,8 @@ where
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
-            .await
-            .unwrap(),
-        certificate
+            .await,
+        Some(certificate)
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -375,9 +396,8 @@ where
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
-            .await
-            .unwrap(),
-        certificate
+            .await,
+        Some(certificate)
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -545,14 +565,20 @@ where
         ChainDescription::new(new_chain_origin, new_chain_config, clock.current_time()).id();
 
     // Transfer before creating the chain. The validators will ignore the cross-chain messages.
-    sender
+    let cert = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
             Account::chain(new_id),
         )
         .await
-        .unwrap();
+        .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
+            .await,
+        Some(cert)
+    );
     // Open the new chain.
     let (new_description2, certificate) = parent
         .open_chain(
@@ -581,10 +607,9 @@ where
     );
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(parent.chain_id, BlockHeight::from(0), 3)
-            .await
-            .unwrap(),
-        certificate
+            .check_that_validators_have_certificate(parent.chain_id, BlockHeight::ZERO, 3)
+            .await,
+        Some(certificate)
     );
     // Make a client to try the new chain.
     let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
@@ -592,7 +617,7 @@ where
     client.synchronize_from_validators().await.unwrap();
     // Make another block on top of the one that sent the two tokens, so that the validators
     // process the cross-chain messages.
-    sender
+    let cert = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(1),
@@ -600,6 +625,12 @@ where
         )
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
+            .await,
+        Some(cert)
+    );
     client.synchronize_from_validators().await.unwrap();
     assert_eq!(
         client.query_balance().await.unwrap(),
@@ -637,7 +668,7 @@ where
         .unwrap_ok_committed();
     let new_id = new_description.id();
     // Transfer after creating the chain.
-    sender
+    let cert = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(3),
@@ -645,6 +676,12 @@ where
         )
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
+            .await,
+        Some(cert)
+    );
     assert_eq!(
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(2)
@@ -707,9 +744,8 @@ where
     assert_eq!(
         builder
             .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
-            .await
-            .unwrap(),
-        certificate
+            .await,
+        Some(certificate)
     );
     // Cannot use the chain for operations any more.
     let result = client1
@@ -727,7 +763,7 @@ where
     );
 
     // Incoming messages now get rejected.
-    client2
+    let cert = client2
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(3),
@@ -735,6 +771,12 @@ where
         )
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(client2.chain_id, BlockHeight::from(0), 3)
+            .await,
+        Some(cert)
+    );
     client1.synchronize_from_validators().await.unwrap();
     let (certificates, _) = client1.process_inbox().await.unwrap();
     let block = certificates[0].block();
@@ -870,9 +912,8 @@ where
     assert_eq!(
         builder
             .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
-            .await
-            .unwrap(),
-        certificate
+            .await,
+        Some(certificate)
     );
     // Local balance is lagging.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
@@ -895,14 +936,20 @@ where
         client2.chain_info().await?.next_block_height,
         BlockHeight::ZERO
     );
-    client2
+    let cert = client2
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::ONE,
             Account::chain(client1.chain_id),
         )
         .await
-        .unwrap();
+        .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(client2.chain_id, BlockHeight::from(0), 3)
+            .await,
+        Some(cert)
+    );
     assert_eq!(
         client2.chain_info().await?.next_block_height,
         BlockHeight::from(1)
@@ -945,7 +992,7 @@ where
         .with_policy(ResourceControlPolicy::only_fuel());
     let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
-    client1
+    let cert = client1
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
@@ -953,6 +1000,12 @@ where
         )
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::from(0), 3)
+            .await,
+        Some(cert)
+    );
     // Transfer was executed locally.
     assert_eq!(
         client1.local_balance().await.unwrap(),
@@ -995,22 +1048,34 @@ where
 
     // Transferring funds from client1 to client2.
     // Confirming to a quorum of nodes only at the end.
-    client1
+    let cert1 = client1
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::ONE,
             Account::chain(client2.chain_id),
         )
         .await
-        .unwrap();
-    client1
+        .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::from(0), 3)
+            .await,
+        Some(cert1)
+    );
+    let cert2 = client1
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::ONE,
             Account::chain(client2.chain_id),
         )
         .await
-        .unwrap();
+        .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::from(1), 3)
+            .await,
+        Some(cert2)
+    );
     client1
         .communicate_chain_updates(&builder.initial_committee)
         .await
@@ -1034,7 +1099,7 @@ where
         .is_none());
     // Retrying the whole command works after synchronization.
     client2.synchronize_from_validators().await.unwrap();
-    client2
+    let cert3 = client2
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
@@ -1042,6 +1107,12 @@ where
         )
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(client2.chain_id, BlockHeight::from(0), 3)
+            .await,
+        Some(cert3)
+    );
     // Blocks were executed locally.
     assert_eq!(client1.local_balance().await.unwrap(), Amount::ONE);
     assert_eq!(
@@ -1116,7 +1187,7 @@ where
     assert_eq!(admin.chain_info().await?.epoch, Epoch::from(2));
 
     // Sending money from the admin chain is supported.
-    admin
+    let cert1 = admin
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
@@ -1124,7 +1195,13 @@ where
         )
         .await
         .unwrap_ok_committed();
-    admin
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(admin.chain_id, BlockHeight::from(5), 3)
+            .await,
+        Some(cert1)
+    );
+    let cert2 = admin
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::ONE,
@@ -1132,6 +1209,12 @@ where
         )
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(admin.chain_id, BlockHeight::from(6), 3)
+            .await,
+        Some(cert2)
+    );
 
     // User is still at the initial epoch, but we can receive transfers from future
     // epochs AFTER synchronizing the client with the admin chain.
@@ -1159,24 +1242,38 @@ where
     admin.revoke_epochs(Epoch::from(1)).await.unwrap();
 
     // Try to make a transfer back to the admin chain.
-    user.transfer_to_account(
-        AccountOwner::CHAIN,
-        Amount::from_tokens(2),
-        Account::chain(admin.chain_id()),
-    )
-    .await
-    .unwrap_ok_committed();
+    let cert3 = user
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(2),
+            Account::chain(admin.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(user.chain_id, BlockHeight::from(2), 3)
+            .await,
+        Some(cert3)
+    );
     admin.synchronize_from_validators().await.unwrap();
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(2));
 
     // Try again to make a transfer back to the admin chain.
-    user.transfer_to_account(
-        AccountOwner::CHAIN,
-        Amount::ONE,
-        Account::chain(admin.chain_id()),
-    )
-    .await
-    .unwrap_ok_committed();
+    let cert4 = user
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(admin.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(user.chain_id, BlockHeight::from(3), 3)
+            .await,
+        Some(cert4)
+    );
     admin.synchronize_from_validators().await.unwrap();
     admin.process_inbox().await.unwrap();
     // Transfer goes through and the previous one as well thanks to block chaining.
