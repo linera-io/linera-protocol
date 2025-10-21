@@ -435,24 +435,33 @@ pub enum ClientCommand {
         public_key: ValidatorPublicKey,
     },
 
-    /// Add and/or remove multiple validators in a single epoch (admin only)
+    /// Add, modify, and/or remove multiple validators in a single epoch (admin only)
     ///
-    /// This command allows you to make multiple validator changes (additions and removals)
-    /// in a single new epoch, avoiding the creation of unnecessary short-lived epochs.
+    /// This command allows you to make multiple validator changes (additions, modifications,
+    /// and removals) in a single new epoch, avoiding the creation of unnecessary short-lived epochs.
     ChangeValidators {
         /// Validators to add, specified as "public_key,account_key,address,votes".
+        /// Fails if the validator already exists in the committee.
         /// Can be specified multiple times.
         /// Example: --add "public_key1,account_key1,address1,1"
         #[arg(long = "add", value_name = "VALIDATOR_SPEC")]
         add_validators: Vec<ValidatorToAdd>,
 
+        /// Validators to modify, specified as "public_key,account_key,address,votes".
+        /// Fails if the validator does not exist in the committee.
+        /// Can be specified multiple times.
+        /// Example: --set "public_key1,account_key1,address1,2"
+        #[arg(long = "set", value_name = "VALIDATOR_SPEC")]
+        set_validators: Vec<ValidatorToAdd>,
+
         /// Validators to remove, specified by their public key.
+        /// Fails if the validator does not exist in the committee.
         /// Can be specified multiple times.
         /// Example: --remove public_key1 --remove public_key2
         #[arg(long = "remove")]
         remove_validators: Vec<ValidatorPublicKey>,
 
-        /// Skip the version and genesis config checks for added validators.
+        /// Skip the version and genesis config checks for added and modified validators.
         #[arg(long)]
         skip_online_check: bool,
     },

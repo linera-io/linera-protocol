@@ -650,10 +650,11 @@ impl Runnable for Job {
                     }
                     ChangeValidators {
                         add_validators,
+                        set_validators,
                         remove_validators: _,
                         skip_online_check: false,
                     } => {
-                        for validator in add_validators {
+                        for validator in add_validators.iter().chain(set_validators.iter()) {
                             let node =
                                 context.make_node_provider().make_node(&validator.address)?;
                             context
@@ -701,9 +702,45 @@ impl Runnable for Job {
                                 }
                                 ChangeValidators {
                                     add_validators,
+                                    set_validators,
                                     remove_validators,
                                     skip_online_check: _,
                                 } => {
+                                    // Validate that all validators to add do not already exist.
+                                    for validator in &add_validators {
+                                        if validators.contains_key(&validator.public_key) {
+                                            warn!(
+                                                "Cannot add existing validator: {}. Aborting operation.",
+                                                validator.public_key
+                                            );
+                                            return Ok(ClientOutcome::Committed(None));
+                                        }
+                                    }
+                                    // Validate that all validators to set already exist and are actually modified.
+                                    for validator in &set_validators {
+                                        match validators.get(&validator.public_key) {
+                                            None => {
+                                                warn!(
+                                                    "Cannot modify nonexistent validator: {}. Aborting operation.",
+                                                    validator.public_key
+                                                );
+                                                return Ok(ClientOutcome::Committed(None));
+                                            }
+                                            Some(existing) => {
+                                                // Check that at least one field is different.
+                                                if existing.network_address == validator.address
+                                                    && existing.account_public_key == validator.account_key
+                                                    && existing.votes == validator.votes
+                                                {
+                                                    warn!(
+                                                        "Validator {} is not being modified. Aborting operation.",
+                                                        validator.public_key
+                                                    );
+                                                    return Ok(ClientOutcome::Committed(None));
+                                                }
+                                            }
+                                        }
+                                    }
                                     // Validate that all validators to remove exist.
                                     for public_key in &remove_validators {
                                         if !validators.contains_key(public_key) {
@@ -715,6 +752,17 @@ impl Runnable for Job {
                                     }
                                     // Add validators
                                     for validator in add_validators {
+                                        validators.insert(
+                                            validator.public_key,
+                                            ValidatorState {
+                                                network_address: validator.address,
+                                                votes: validator.votes,
+                                                account_public_key: validator.account_key,
+                                            },
+                                        );
+                                    }
+                                    // Update validators
+                                    for validator in set_validators {
                                         validators.insert(
                                             validator.public_key,
                                             ValidatorState {

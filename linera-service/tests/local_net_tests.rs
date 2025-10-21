@@ -152,6 +152,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
                 ),
             ],
             &[],
+            &[],
         )
         .await?;
 
@@ -199,7 +200,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     let validators_to_remove: Vec<String> = (0..4)
         .map(|i| net.validator_keys(i).unwrap().0.clone())
         .collect();
-    client.change_validators(&[], &validators_to_remove).await?;
+    client
+        .change_validators(&[], &[], &validators_to_remove)
+        .await?;
 
     if let Some(service) = &node_service_2 {
         assert!(
