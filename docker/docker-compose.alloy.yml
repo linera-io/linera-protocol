@@ -1,0 +1,49 @@
+# Docker Compose override file to enable Grafana Alloy for central observability
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.alloy.yml up -d
+#
+# Documentation: See MONITORING.md for complete setup and configuration guide
+#
+# Required environment variables for remote push:
+#   PROMETHEUS_OTLP_URL: https://your-prometheus-endpoint/otlp
+#   PROMETHEUS_OTLP_USER: your-username
+#   PROMETHEUS_OTLP_PASS: your-password
+#   LOKI_PUSH_URL: https://your-loki-endpoint/loki/api/v1/push
+#   LOKI_PUSH_USER: your-username
+#   LOKI_PUSH_PASS: your-password
+#   TEMPO_OTLP_URL: https://your-tempo-endpoint/tempo/otlp
+#   TEMPO_OTLP_USER: your-username
+#   TEMPO_OTLP_PASS: your-password
+
+services:
+  alloy:
+    image: grafana/alloy:latest
+    container_name: alloy
+    ports:
+      - "12345:12345"  # Prometheus metrics exposition
+      - "4317:4317"    # OTLP gRPC receiver
+      - "4318:4318"    # OTLP HTTP receiver
+    volumes:
+      - ./alloy-config.river:/etc/alloy/config.river:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - "run"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "/etc/alloy/config.river"
+    environment:
+      - HOSTNAME=${HOSTNAME:-validator}
+      - PROMETHEUS_OTLP_URL=${PROMETHEUS_OTLP_URL:-}
+      - PROMETHEUS_OTLP_USER=${PROMETHEUS_OTLP_USER:-}
+      - PROMETHEUS_OTLP_PASS=${PROMETHEUS_OTLP_PASS:-}
+      - LOKI_PUSH_URL=${LOKI_PUSH_URL:-}
+      - LOKI_PUSH_USER=${LOKI_PUSH_USER:-}
+      - LOKI_PUSH_PASS=${LOKI_PUSH_PASS:-}
+      - TEMPO_OTLP_URL=${TEMPO_OTLP_URL:-}
+      - TEMPO_OTLP_USER=${TEMPO_OTLP_USER:-}
+      - TEMPO_OTLP_PASS=${TEMPO_OTLP_PASS:-}
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      - proxy
+      - shard

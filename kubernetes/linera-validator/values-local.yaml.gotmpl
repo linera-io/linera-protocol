@@ -53,6 +53,10 @@ explorer:
           - path: /
             pathType: Prefix
 
+# Alloy (optional centralized monitoring)
+alloy:
+  enabled: {{ env "LINERA_HELMFILE_SET_ALLOY_ENABLED" | default "false" }}
+
 # Loki
 loki-stack:
   loki:
