@@ -616,10 +616,8 @@ impl<Env: Environment> ValidatorManager<Env> {
         // Filter nodes that can accept requests and calculate their scores
         let mut scored_nodes = Vec::new();
         for info in nodes.values() {
-            if info.can_accept_request().await {
-                let score = info.calculate_score().await;
-                scored_nodes.push((score, info.node.clone()));
-            }
+            let score = info.calculate_score().await;
+            scored_nodes.push((score, info.node.clone()));
         }
 
         // Sort by score (highest first)

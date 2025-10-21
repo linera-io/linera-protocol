@@ -125,14 +125,6 @@ impl<Env: Environment> NodeInfo<Env> {
         raw_score * (0.5 + 0.5 * confidence_factor)
     }
 
-    /// Checks if the node can accept another request without exceeding capacity.
-    ///
-    /// This is a read-only check that doesn't reserve a slot.
-    /// Use `acquire_request_slot` to atomically check and reserve.
-    pub(super) async fn can_accept_request(&self) -> bool {
-        self.in_flight_semaphore.available_permits() > 0
-    }
-
     /// Updates performance metrics using Exponential Moving Average.
     ///
     /// # Arguments
