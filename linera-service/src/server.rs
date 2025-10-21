@@ -370,7 +370,7 @@ enum ServerCommand {
 
         /// Common storage options.
         #[command(flatten)]
-        common_storage_options: CommonStorageOptions,
+        common_storage_options: Box<CommonStorageOptions>,
 
         /// Configuration for cross-chain requests
         #[command(flatten)]
@@ -409,6 +409,10 @@ enum ServerCommand {
             env = "LINERA_SERVER_CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES",
         )]
         chain_info_max_received_log_entries: usize,
+
+        /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
+        #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
+        otlp_exporter_endpoint: Option<String>,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -485,6 +489,16 @@ fn main() {
 }
 
 /// Returns the log file name to use based on the [`ServerCommand`] that will run.
+fn otlp_exporter_endpoint_for(command: &ServerCommand) -> Option<&str> {
+    match command {
+        ServerCommand::Run {
+            otlp_exporter_endpoint,
+            ..
+        } => otlp_exporter_endpoint.as_deref(),
+        ServerCommand::Generate { .. } | ServerCommand::EditShards { .. } => None,
+    }
+}
+
 fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
     match command {
         ServerCommand::Run {
@@ -508,7 +522,10 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
 }
 
 async fn run(options: ServerOptions) {
-    linera_base::tracing::init_with_opentelemetry(&log_file_name_for(&options.command), None);
+    linera_base::tracing::init_with_opentelemetry(
+        &log_file_name_for(&options.command),
+        otlp_exporter_endpoint_for(&options.command),
+    );
 
     match options.command {
         ServerCommand::Run {
@@ -522,6 +539,7 @@ async fn run(options: ServerOptions) {
             wasm_runtime,
             chain_worker_ttl,
             chain_info_max_received_log_entries,
+            otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
 
