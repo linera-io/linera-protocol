@@ -377,6 +377,36 @@ where
         Ok(results)
     }
 
+    /// Reads the key-value pairs at the given positions, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::map_view::ByteMapView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// let pairs = map
+    ///     .multi_get_pairs(vec![vec![0, 1], vec![0, 2]])
+    ///     .await
+    ///     .unwrap();
+    /// assert_eq!(
+    ///     pairs,
+    ///     vec![
+    ///         (vec![0, 1], Some(String::from("Hello"))),
+    ///         (vec![0, 2], None)
+    ///     ]
+    /// );
+    /// # })
+    /// ```
+    pub async fn multi_get_pairs(
+        &self,
+        short_keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<(Vec<u8>, Option<V>)>, ViewError> {
+        let values = self.multi_get(short_keys.clone()).await?;
+        Ok(short_keys.into_iter().zip(values).collect())
+    }
+
     /// Obtains a mutable reference to a value at a given position if available.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1193,6 +1223,41 @@ where
         self.map.multi_get(short_keys).await
     }
 
+    /// Reads the index-value pairs at the given positions, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::map_view::MapView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut map: MapView<_, u32, _> = MapView::load(context).await.unwrap();
+    /// map.insert(&(37 as u32), String::from("Hello"));
+    /// map.insert(&(49 as u32), String::from("Bonjour"));
+    /// assert_eq!(
+    ///     map.multi_get_pairs([37 as u32, 49 as u32, 64 as u32])
+    ///         .await
+    ///         .unwrap(),
+    ///     vec![
+    ///         (37 as u32, Some(String::from("Hello"))),
+    ///         (49 as u32, Some(String::from("Bonjour"))),
+    ///         (64 as u32, None)
+    ///     ]
+    /// );
+    /// # })
+    /// ```
+    pub async fn multi_get_pairs<Q>(
+        &self,
+        indices: impl IntoIterator<Item = Q>,
+    ) -> Result<Vec<(Q, Option<V>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + Clone,
+    {
+        let indices_vec = indices.into_iter().collect::<Vec<Q>>();
+        let values = self.multi_get(indices_vec.iter()).await?;
+        Ok(indices_vec.into_iter().zip(values).collect())
+    }
+
     /// Obtains a mutable reference to a value at a given position if available
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1706,6 +1771,42 @@ where
             .map(|index| index.to_custom_bytes())
             .collect::<Result<_, _>>()?;
         self.map.multi_get(short_keys).await
+    }
+
+    /// Read index-value pairs at several positions, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::map_view::CustomMapView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut map: CustomMapView<MemoryContext<()>, u128, String> =
+    ///     CustomMapView::load(context).await.unwrap();
+    /// map.insert(&(34 as u128), String::from("Hello"));
+    /// map.insert(&(12 as u128), String::from("Hi"));
+    /// assert_eq!(
+    ///     map.multi_get_pairs([34 as u128, 12 as u128, 89 as u128])
+    ///         .await
+    ///         .unwrap(),
+    ///     vec![
+    ///         (34 as u128, Some(String::from("Hello"))),
+    ///         (12 as u128, Some(String::from("Hi"))),
+    ///         (89 as u128, None)
+    ///     ]
+    /// );
+    /// # })
+    /// ```
+    pub async fn multi_get_pairs<Q>(
+        &self,
+        indices: impl IntoIterator<Item = Q>,
+    ) -> Result<Vec<(Q, Option<V>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + Clone,
+    {
+        let indices_vec = indices.into_iter().collect::<Vec<Q>>();
+        let values = self.multi_get(indices_vec.iter()).await?;
+        Ok(indices_vec.into_iter().zip(values).collect())
     }
 
     /// Obtains a mutable reference to a value at a given position if available

@@ -280,6 +280,30 @@ where
         Ok(result)
     }
 
+    /// Reads the index-value pairs at the given positions.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::log_view::LogView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut log = LogView::load(context).await.unwrap();
+    /// log.push(34);
+    /// log.push(42);
+    /// assert_eq!(
+    ///     log.multi_get_pairs(vec![0, 1, 5]).await.unwrap(),
+    ///     vec![(0, Some(34)), (1, Some(42)), (5, None)]
+    /// );
+    /// # })
+    /// ```
+    pub async fn multi_get_pairs(
+        &self,
+        indices: Vec<usize>,
+    ) -> Result<Vec<(usize, Option<T>)>, ViewError> {
+        let values = self.multi_get(indices.clone()).await?;
+        Ok(indices.into_iter().zip(values).collect())
+    }
+
     async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
         let count = range.len();
         let mut keys = Vec::with_capacity(count);
