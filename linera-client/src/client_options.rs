@@ -226,6 +226,18 @@ pub struct ClientContextOptions {
         env = "LINERA_VALIDATOR_MANAGER_MAX_REQUEST_TTL_MS"
     )]
     pub max_request_ttl_ms: u64,
+
+    /// Smoothing factor for Exponential Moving Averages (0 < alpha < 1)
+    /// Higher values give more weight to recent observations
+    /// Typical values are between 0.01 and 0.5
+    /// A value of 0.1 means that 10% of the new observation is considered
+    /// and 90% of the previous average is retained
+    #[arg(
+        long,
+        default_value_t = linera_core::client::validator_manager::ALPHA_SMOOTHING_FACTOR,
+        env = "LINERA_VALIDATOR_MANAGER_ALPHA"
+    )]
+    pub alpha: f64,
 }
 
 impl ClientContextOptions {
@@ -269,6 +281,7 @@ impl ClientContextOptions {
             cache_ttl_sec: self.cache_ttl_sec,
             cache_max_size: self.cache_max_size,
             max_request_ttl_ms: self.max_request_ttl_ms,
+            alpha: self.alpha,
         }
     }
 }

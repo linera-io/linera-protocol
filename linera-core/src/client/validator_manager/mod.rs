@@ -21,6 +21,7 @@ pub const MAX_ACCEPTED_LATENCY_MS: f64 = 5000.0;
 pub const CACHE_TTL_SEC: u64 = 2;
 pub const CACHE_MAX_SIZE: usize = 1000;
 pub const MAX_REQUEST_TTL_MS: u64 = 200;
+pub const ALPHA_SMOOTHING_FACTOR: f64 = 0.1;
 
 /// Configuration for the `ValidatorManager`.
 #[derive(Debug, Clone)]
@@ -35,6 +36,8 @@ pub struct ValidatorManagerConfig {
     pub cache_max_size: usize,
     /// Maximum latency for an in-flight request before we stop deduplicating it (in milliseconds)
     pub max_request_ttl_ms: u64,
+    /// Smoothing factor for Exponential Moving Averages (0 < alpha < 1)
+    pub alpha: f64,
 }
 
 impl Default for ValidatorManagerConfig {
@@ -45,6 +48,7 @@ impl Default for ValidatorManagerConfig {
             cache_ttl_sec: CACHE_TTL_SEC,
             cache_max_size: CACHE_MAX_SIZE,
             max_request_ttl_ms: MAX_REQUEST_TTL_MS,
+            alpha: ALPHA_SMOOTHING_FACTOR,
         }
     }
 }

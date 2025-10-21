@@ -98,6 +98,7 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     cache_ttl_sec: linera_core::client::validator_manager::CACHE_TTL_SEC,
     cache_max_size: linera_core::client::validator_manager::CACHE_MAX_SIZE,
     max_request_ttl_ms: linera_core::client::validator_manager::MAX_REQUEST_TTL_MS,
+    alpha: linera_core::client::validator_manager::ALPHA_SMOOTHING_FACTOR,
 
     // TODO(linera-protocol#2944): separate these out from the
     // `ClientOptions` struct, since they apply only to the CLI/native

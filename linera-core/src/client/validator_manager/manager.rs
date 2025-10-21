@@ -146,7 +146,7 @@ impl<Env: Environment> ValidatorManager<Env> {
             nodes,
             config.max_in_flight_requests,
             ScoringWeights::default(),
-            0.1,
+            config.alpha,
             config.max_accepted_latency_ms,
             Duration::from_secs(config.cache_ttl_sec),
             config.cache_max_size,

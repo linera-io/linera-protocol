@@ -6,7 +6,7 @@ use std::sync::Arc;
 use custom_debug_derive::Debug;
 use tokio::sync::Semaphore;
 
-use super::{scoring::ScoringWeights, MAX_ACCEPTED_LATENCY_MS, MAX_IN_FLIGHT_REQUESTS};
+use super::scoring::ScoringWeights;
 use crate::{environment::Environment, remote_node::RemoteNode};
 
 /// Tracks performance metrics and request capacity for a validator node using
@@ -50,25 +50,6 @@ pub(super) struct NodeInfo<Env: Environment> {
 }
 
 impl<Env: Environment> NodeInfo<Env> {
-    /// Creates a new `NodeInfo` with optimistic initial values.
-    ///
-    /// New nodes start with:
-    /// - 100ms expected latency (reasonable default)
-    /// - 100% success rate (optimistic start)
-    /// - Zero in-flight requests
-    /// - Default weights and smoothing factor
-    /// - Default normalization bounds
-    #[allow(unused)]
-    pub(super) fn new(node: RemoteNode<Env::ValidatorNode>) -> Self {
-        Self::with_config(
-            node,
-            ScoringWeights::default(),
-            0.1,
-            MAX_ACCEPTED_LATENCY_MS,
-            MAX_IN_FLIGHT_REQUESTS,
-        )
-    }
-
     /// Creates a new `NodeInfo` with custom configuration.
     pub(super) fn with_config(
         node: RemoteNode<Env::ValidatorNode>,
@@ -77,6 +58,7 @@ impl<Env: Environment> NodeInfo<Env> {
         max_expected_latency_ms: f64,
         max_in_flight: usize,
     ) -> Self {
+        assert!(alpha > 0.0 && alpha < 1.0, "Alpha must be in (0, 1) range");
         Self {
             node,
             ema_latency_ms: 100.0, // Start with reasonable latency expectation
@@ -84,7 +66,7 @@ impl<Env: Environment> NodeInfo<Env> {
             in_flight_semaphore: Arc::new(tokio::sync::Semaphore::new(max_in_flight)),
             total_requests: 0,
             weights,
-            alpha: alpha.clamp(0.01, 0.5), // Ensure alpha is in reasonable range
+            alpha,
             max_expected_latency_ms,
             max_in_flight,
         }
