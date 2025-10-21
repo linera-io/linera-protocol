@@ -70,11 +70,11 @@ pub(super) mod metrics {
         )
     });
 
-    /// Counter for requests that were deduplicated (joined an in-flight request)
+    /// Counter for requests that were resolved from the response cache.
     pub static REQUEST_CACHE_DEDUPLICATION: LazyLock<IntCounter> = LazyLock::new(|| {
         register_int_counter(
             "validator_manager_request_deduplication_total",
-            "Number of requests that were deduplicated by joining an in-flight request",
+            "Number of requests that were deduplicated by finding the result in the cache.",
         )
     });
 
