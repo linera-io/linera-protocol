@@ -79,7 +79,7 @@ use linera_service::{
     cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     node_service::NodeService,
     project::{self, Project},
-    storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig},
+    storage::{CommonStorageOptions, StorageMigration, Runnable, RunnableWithStore, StorageConfig},
     util, wallet,
 };
 use linera_storage::{DbStorage, Storage};
@@ -1895,6 +1895,10 @@ impl ClientOptions {
         debug!("Running command using storage configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common_storage_options)?;
+        store_config
+            .clone()
+            .run_with_store(StorageMigration)
+            .await?;
         let output =
             Box::pin(store_config.run_with_storage(self.wasm_runtime.with_wasm_default(), job))
                 .await?;
@@ -1906,6 +1910,10 @@ impl ClientOptions {
         debug!("Running command using storage configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common_storage_options)?;
+        store_config
+            .clone()
+            .run_with_store(StorageMigration)
+            .await?;
         let output = Box::pin(store_config.run_with_store(job)).await?;
         Ok(output)
     }
@@ -1915,6 +1923,10 @@ impl ClientOptions {
         debug!("Initializing storage using configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common_storage_options)?;
+        store_config
+            .clone()
+            .run_with_store(StorageMigration)
+            .await?;
         let wallet = self.wallet()?;
         store_config.initialize(wallet.genesis_config()).await?;
         Ok(())

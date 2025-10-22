@@ -7,7 +7,7 @@ use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use linera_client::config::GenesisConfig;
 use linera_execution::WasmRuntime;
-use linera_storage::{DbStorage, Storage, DEFAULT_NAMESPACE};
+use linera_storage::{DbStorage, Storage, WallClock, DEFAULT_NAMESPACE};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
     client::StorageServiceDatabase,
@@ -752,6 +752,32 @@ impl RunnableWithStore for InitializeStorageJob<'_> {
         let mut storage =
             DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
         self.0.initialize_storage(&mut storage).await?;
+        Ok(())
+    }
+}
+
+pub struct MigrationStorage;
+
+#[async_trait]
+impl RunnableWithStore for MigrationStorage {
+    type Output = ();
+
+    async fn run<D>(
+        self,
+        config: D::Config,
+        namespace: String,
+    ) -> Result<Self::Output, anyhow::Error>
+    where
+        D: KeyValueDatabase + Clone + Send + Sync + 'static,
+        D::Store: KeyValueStore + Clone + Send + Sync + 'static,
+        D::Error: Send + Sync,
+    {
+        if D::exists(&config, &namespace).await? {
+            let wasm_runtime = None;
+            let storage =
+                DbStorage::<D, WallClock>::connect(&config, &namespace, wasm_runtime).await?;
+            storage.migrate_if_needed().await?;
+        }
         Ok(())
     }
 }

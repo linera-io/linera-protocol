@@ -98,6 +98,7 @@ impl RocksDbRunner {
             inner_config,
             storage_cache_config,
         };
+        store_config.clone().migrate_if_needed().await?;
         let namespace = config.client.namespace.clone();
         let database = RocksDbDatabase::maybe_create_and_connect(&store_config, &namespace).await?;
         Self::new(config, database).await

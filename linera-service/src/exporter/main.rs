@@ -176,6 +176,7 @@ impl ExporterOptions {
                 .storage_config
                 .add_common_storage_options(&self.common_storage_options)
                 .unwrap();
+            store_config.clone().migrate_if_needed().await?;
             store_config.run_with_storage(None, context).boxed().await
         };
 
