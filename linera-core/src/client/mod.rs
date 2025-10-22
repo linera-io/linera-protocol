@@ -68,7 +68,6 @@ use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 use validator_trackers::ValidatorTrackers;
 
 use crate::{
-    client::validator_manager::RequestKey,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout},
     environment::Environment,
     local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
@@ -359,18 +358,7 @@ impl<Env: Environment> Client<Env> {
 
             let certificates = self
                 .validator_manager
-                .with_peer(
-                    RequestKey::Certificates {
-                        chain_id,
-                        start: next_height,
-                        limit,
-                    },
-                    remote_node.clone(),
-                    async move |peer| {
-                        peer.download_certificates_from(chain_id, next_height, limit)
-                            .await
-                    },
-                )
+                .download_certificates(remote_node, chain_id, next_height, limit)
                 .await?;
             let Some(info) = self.process_certificates(remote_node, certificates).await? else {
                 break;
@@ -791,16 +779,13 @@ impl<Env: Environment> Client<Env> {
                         // anything from the validator - let the function try the other validators
                         return Err(());
                     }
-                    let request_key = RequestKey::CertificatesByHeights {
-                        chain_id: sender_chain_id,
-                        heights: remote_heights.clone(),
-                    };
                     let certificates = self
                         .validator_manager
-                        .with_peer(request_key, remote_node, |peer| async move {
-                            peer.download_certificates_by_heights(sender_chain_id, remote_heights)
-                                .await
-                        })
+                        .download_certificates_by_heights(
+                            &remote_node,
+                            sender_chain_id,
+                            remote_heights,
+                        )
                         .await
                         .map_err(|_| ())?;
                     let mut certificates_with_check_results = vec![];
@@ -956,16 +941,13 @@ impl<Env: Environment> Client<Env> {
         // Stop if we've reached the height we've already processed.
         while current_height >= next_outbox_height {
             // Download the certificate for this height.
-            let request_key = RequestKey::CertificatesByHeights {
-                chain_id: sender_chain_id,
-                heights: vec![current_height],
-            };
             let downloaded = self
                 .validator_manager
-                .with_peer(request_key, remote_node.clone(), |peer| async move {
-                    peer.download_certificates_by_heights(sender_chain_id, vec![current_height])
-                        .await
-                })
+                .download_certificates_by_heights(
+                    remote_node,
+                    sender_chain_id,
+                    vec![current_height],
+                )
                 .await?;
             let Some(certificate) = downloaded.into_iter().next() else {
                 return Err(ChainClientError::CannotDownloadMissingSenderBlock {
@@ -1151,13 +1133,7 @@ impl<Env: Environment> Client<Env> {
                         for blob_id in required_blob_ids {
                             let blob_content = match self
                                 .validator_manager
-                                .with_peer(
-                                    RequestKey::Blob(blob_id),
-                                    remote_node.clone(),
-                                    async move |peer| {
-                                        peer.node.download_pending_blob(chain_id, blob_id).await
-                                    },
-                                )
+                                .download_pending_blob(remote_node, chain_id, blob_id)
                                 .await
                             {
                                 Ok(content) => content,
@@ -1253,12 +1229,9 @@ impl<Env: Environment> Client<Env> {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
                 let mut blobs = Vec::new();
                 for blob_id in blob_ids {
-                    let key = RequestKey::PendingBlob { chain_id, blob_id };
                     let blob_content = self
                         .validator_manager
-                        .with_peer(key, remote_node.clone(), |peer| async move {
-                            peer.node.download_pending_blob(chain_id, blob_id).await
-                        })
+                        .download_pending_blob(remote_node, chain_id, blob_id)
                         .await?;
                     blobs.push(Blob::new(blob_content));
                 }
@@ -1289,11 +1262,7 @@ impl<Env: Environment> Client<Env> {
                 async move |remote_node| {
                     let certificate = self
                         .validator_manager
-                        .with_peer(
-                            RequestKey::CertificateForBlob(blob_id),
-                            remote_node.clone(),
-                            async move |peer| peer.download_certificate_for_blob(blob_id).await,
-                        )
+                        .download_certificate_for_blob(&remote_node, blob_id)
                         .await?;
                     self.receive_sender_certificate(
                         certificate,

@@ -14,14 +14,8 @@ use crate::client::validator_manager::cache::SubsumingKey;
 /// Used for request deduplication to avoid redundant downloads of the same data.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RequestKey {
-    /// Download certificates from a starting height
-    Certificates {
-        chain_id: ChainId,
-        start: BlockHeight,
-        limit: u64,
-    },
     /// Download certificates by specific heights
-    CertificatesByHeights {
+    Certificates {
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
     },
@@ -38,7 +32,6 @@ impl RequestKey {
     pub(super) fn chain_id(&self) -> Option<ChainId> {
         match self {
             RequestKey::Certificates { chain_id, .. } => Some(*chain_id),
-            RequestKey::CertificatesByHeights { chain_id, .. } => Some(*chain_id),
             RequestKey::PendingBlob { chain_id, .. } => Some(*chain_id),
             _ => None,
         }
@@ -52,15 +45,9 @@ impl RequestKey {
     /// # Returns
     /// - `Some((chain_id, heights))` for certificate requests, where heights are sorted
     /// - `None` for non-certificate requests (Blob, PendingBlob, CertificateForBlob)
-    fn height_range(&self) -> Option<Vec<BlockHeight>> {
+    fn heights(&self) -> Option<Vec<BlockHeight>> {
         match self {
-            RequestKey::Certificates { start, limit, .. } => {
-                let heights: Vec<BlockHeight> = (0..*limit)
-                    .map(|offset| BlockHeight(start.0 + offset))
-                    .collect();
-                Some(heights)
-            }
-            RequestKey::CertificatesByHeights { heights, .. } => Some(heights.clone()),
+            RequestKey::Certificates { heights, .. } => Some(heights.clone()),
             _ => None,
         }
     }
@@ -147,11 +134,10 @@ impl SubsumingKey<RequestResult> for super::request::RequestKey {
             return false;
         }
 
-        let (in_flight_req_heights, new_req_heights) =
-            match (self.height_range(), other.height_range()) {
-                (Some(range1), Some(range2)) => (range1, range2),
-                _ => return false, // We subsume only certificate requests
-            };
+        let (in_flight_req_heights, new_req_heights) = match (self.heights(), other.heights()) {
+            (Some(range1), Some(range2)) => (range1, range2),
+            _ => return false, // We subsume only certificate requests
+        };
 
         if new_req_heights.is_empty() {
             return true; // An empty set is always subsumed
@@ -184,7 +170,7 @@ impl SubsumingKey<RequestResult> for super::request::RequestKey {
             return None; // Can't extract if not subsumed
         }
 
-        let requested_heights = self.height_range()?;
+        let requested_heights = self.heights()?;
         if requested_heights.is_empty() {
             return Some(RequestResult::Certificates(vec![])); // Nothing requested
         }
@@ -224,12 +210,11 @@ mod tests {
         let chain_id = ChainId(CryptoHash::test_hash("chain1"));
         let large = RequestKey::Certificates {
             chain_id,
-            start: BlockHeight(10),
-            limit: 10,
-        }; // [10..20]
-        let small = RequestKey::CertificatesByHeights {
+            heights: vec![BlockHeight(11), BlockHeight(12), BlockHeight(13)],
+        };
+        let small = RequestKey::Certificates {
             chain_id,
-            heights: vec![BlockHeight(12), BlockHeight(13), BlockHeight(14)],
+            heights: vec![BlockHeight(12)],
         };
         assert!(large.subsumes(&small));
         assert!(!small.subsumes(&large));
@@ -240,14 +225,13 @@ mod tests {
         let chain_id = ChainId(CryptoHash::test_hash("chain1"));
         let req1 = RequestKey::Certificates {
             chain_id,
-            start: BlockHeight(10),
-            limit: 5,
-        }; // [10,11,12,13,14]
-        let req2 = RequestKey::CertificatesByHeights {
-            chain_id,
-            heights: vec![BlockHeight(12), BlockHeight(15)], // 15 is outside range
+            heights: vec![BlockHeight(12), BlockHeight(13)],
         };
-        assert!(!req1.subsumes(&req2)); // Can't subsume, 15 is not in req1
+        let req2 = RequestKey::Certificates {
+            chain_id,
+            heights: vec![BlockHeight(12), BlockHeight(14)],
+        };
+        assert!(!req1.subsumes(&req2));
     }
 
     #[test]
@@ -256,10 +240,9 @@ mod tests {
         let chain2 = ChainId(CryptoHash::test_hash("chain2"));
         let req1 = RequestKey::Certificates {
             chain_id: chain1,
-            start: BlockHeight(10),
-            limit: 10,
+            heights: vec![BlockHeight(12)],
         };
-        let req2 = RequestKey::CertificatesByHeights {
+        let req2 = RequestKey::Certificates {
             chain_id: chain2,
             heights: vec![BlockHeight(12)],
         };
@@ -314,10 +297,9 @@ mod tests {
         let chain_id = ChainId(CryptoHash::test_hash("chain1"));
         let req1 = RequestKey::Certificates {
             chain_id,
-            start: BlockHeight(10),
-            limit: 5,
+            heights: vec![BlockHeight(12)],
         };
-        let req2 = RequestKey::CertificatesByHeights {
+        let req2 = RequestKey::Certificates {
             chain_id,
             heights: vec![BlockHeight(12)],
         };
@@ -334,12 +316,11 @@ mod tests {
         let chain_id = ChainId(CryptoHash::test_hash("chain1"));
         let req1 = RequestKey::Certificates {
             chain_id,
-            start: BlockHeight(10),
-            limit: 0, // Empty request
-        };
-        let req2 = RequestKey::CertificatesByHeights {
-            chain_id,
             heights: vec![],
+        };
+        let req2 = RequestKey::Certificates {
+            chain_id,
+            heights: vec![BlockHeight(10)],
         };
 
         let certs = vec![make_test_cert(10, chain_id)];
@@ -361,10 +342,9 @@ mod tests {
         let chain_id = ChainId(CryptoHash::test_hash("chain1"));
         let req1 = RequestKey::Certificates {
             chain_id,
-            start: BlockHeight(10),
-            limit: 5,
+            heights: vec![BlockHeight(12)],
         };
-        let req2 = RequestKey::CertificatesByHeights {
+        let req2 = RequestKey::Certificates {
             chain_id,
             heights: vec![BlockHeight(12)],
         };
@@ -382,10 +362,9 @@ mod tests {
         let chain_id = ChainId(CryptoHash::test_hash("chain1"));
         let new_req = RequestKey::Certificates {
             chain_id,
-            start: BlockHeight(10),
-            limit: 5,
-        }; // [10..14]
-        let in_flight_req = RequestKey::CertificatesByHeights {
+            heights: vec![BlockHeight(10)],
+        };
+        let in_flight_req = RequestKey::Certificates {
             chain_id,
             heights: vec![BlockHeight(11)],
         };
@@ -407,21 +386,15 @@ mod tests {
         let chain_id = ChainId(CryptoHash::test_hash("chain1"));
         let req1 = RequestKey::Certificates {
             chain_id,
-            start: BlockHeight(10),
-            limit: 5,
-        }; // [10..14]
-        let req2 = RequestKey::CertificatesByHeights {
+            heights: vec![BlockHeight(10), BlockHeight(11), BlockHeight(12)],
+        };
+        let req2 = RequestKey::Certificates {
             chain_id,
             heights: vec![BlockHeight(11), BlockHeight(12)],
         };
 
         // Result missing the first height (10)
-        let certs = vec![
-            make_test_cert(11, chain_id),
-            make_test_cert(12, chain_id),
-            make_test_cert(13, chain_id),
-            make_test_cert(14, chain_id),
-        ];
+        let certs = vec![make_test_cert(11, chain_id), make_test_cert(12, chain_id)];
         let result = RequestResult::Certificates(certs);
 
         // Missing start height, should return None
@@ -435,21 +408,15 @@ mod tests {
         let chain_id = ChainId(CryptoHash::test_hash("chain1"));
         let req1 = RequestKey::Certificates {
             chain_id,
-            start: BlockHeight(10),
-            limit: 5,
-        }; // [10..14]
-        let req2 = RequestKey::CertificatesByHeights {
+            heights: vec![BlockHeight(10), BlockHeight(11), BlockHeight(12)],
+        };
+        let req2 = RequestKey::Certificates {
             chain_id,
-            heights: vec![BlockHeight(11), BlockHeight(12)],
+            heights: vec![BlockHeight(10), BlockHeight(11)],
         };
 
         // Result missing the last height (14)
-        let certs = vec![
-            make_test_cert(10, chain_id),
-            make_test_cert(11, chain_id),
-            make_test_cert(12, chain_id),
-            make_test_cert(13, chain_id),
-        ];
+        let certs = vec![make_test_cert(10, chain_id), make_test_cert(11, chain_id)];
         let result = RequestResult::Certificates(certs);
 
         // Missing end height, should return None
@@ -463,10 +430,9 @@ mod tests {
         let chain_id = ChainId(CryptoHash::test_hash("chain1"));
         let new_req = RequestKey::Certificates {
             chain_id,
-            start: BlockHeight(10),
-            limit: 5,
-        }; // [10..14]
-        let in_flight_req = RequestKey::CertificatesByHeights {
+            heights: vec![BlockHeight(10), BlockHeight(11), BlockHeight(12)],
+        };
+        let in_flight_req = RequestKey::Certificates {
             chain_id,
             heights: vec![BlockHeight(11), BlockHeight(13), BlockHeight(14)],
         };
@@ -491,10 +457,9 @@ mod tests {
         let chain_id = ChainId(CryptoHash::test_hash("chain1"));
         let req1 = RequestKey::Certificates {
             chain_id,
-            start: BlockHeight(10),
-            limit: 3,
+            heights: vec![BlockHeight(10), BlockHeight(11), BlockHeight(12)],
         }; // [10, 11, 12]
-        let req2 = RequestKey::CertificatesByHeights {
+        let req2 = RequestKey::Certificates {
             chain_id,
             heights: vec![BlockHeight(10), BlockHeight(11), BlockHeight(12)],
         };
@@ -524,10 +489,9 @@ mod tests {
         let chain_id = ChainId(CryptoHash::test_hash("chain1"));
         let req1 = RequestKey::Certificates {
             chain_id,
-            start: BlockHeight(12),
-            limit: 2,
-        }; // [12, 13]
-        let req2 = RequestKey::CertificatesByHeights {
+            heights: vec![BlockHeight(12), BlockHeight(13)],
+        };
+        let req2 = RequestKey::Certificates {
             chain_id,
             heights: vec![BlockHeight(12), BlockHeight(13)],
         };
@@ -562,12 +526,11 @@ mod tests {
         let chain_id = ChainId(CryptoHash::test_hash("chain1"));
         let req1 = RequestKey::Certificates {
             chain_id,
-            start: BlockHeight(15),
-            limit: 1,
-        }; // [15]
-        let req2 = RequestKey::CertificatesByHeights {
-            chain_id,
             heights: vec![BlockHeight(15)],
+        }; // [15]
+        let req2 = RequestKey::Certificates {
+            chain_id,
+            heights: vec![BlockHeight(10), BlockHeight(15), BlockHeight(20)],
         };
 
         let certs = vec![
@@ -597,10 +560,9 @@ mod tests {
         let chain2 = ChainId(CryptoHash::test_hash("chain2"));
         let req1 = RequestKey::Certificates {
             chain_id: chain1,
-            start: BlockHeight(10),
-            limit: 5,
+            heights: vec![BlockHeight(12)],
         };
-        let req2 = RequestKey::CertificatesByHeights {
+        let req2 = RequestKey::Certificates {
             chain_id: chain2,
             heights: vec![BlockHeight(12)],
         };

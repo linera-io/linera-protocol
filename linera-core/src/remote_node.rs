@@ -18,7 +18,6 @@ use linera_chain::{
         TimeoutCertificate, ValidatedBlockCertificate,
     },
 };
-use rand::seq::SliceRandom as _;
 use tracing::{debug, info, instrument};
 
 use crate::{
@@ -159,21 +158,6 @@ impl<N: ValidatorNode> RemoteNode<N> {
             NodeError::InvalidChainInfoResponse
         );
         Ok(response.info)
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub(crate) async fn download_certificates_from(
-        &self,
-        chain_id: ChainId,
-        start: BlockHeight,
-        limit: u64,
-    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        tracing::debug!(name = ?self.public_key, ?chain_id, ?start, ?limit, "Querying certificates");
-        let heights = (start.0..start.0 + limit)
-            .map(BlockHeight)
-            .collect::<Vec<_>>();
-        self.download_certificates_by_heights(chain_id, heights)
-            .await
     }
 
     #[instrument(level = "trace")]

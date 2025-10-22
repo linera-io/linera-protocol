@@ -7,10 +7,11 @@ use custom_debug_derive::Debug;
 use futures::stream::{FuturesUnordered, StreamExt};
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::Blob,
-    identifiers::BlobId,
+    data_types::{Blob, BlobContent, BlockHeight},
+    identifiers::{BlobId, ChainId},
     time::{Duration, Instant},
 };
+use linera_chain::types::ConfirmedBlockCertificate;
 use rand::{
     distributions::{Distribution, WeightedIndex},
     prelude::SliceRandom as _,
@@ -237,7 +238,8 @@ impl<Env: Environment> ValidatorManager<Env> {
     ///     )
     ///     .await;
     /// ```
-    pub async fn with_best<R, F, Fut>(&self, key: RequestKey, operation: F) -> Result<R, NodeError>
+    #[allow(unused)]
+    async fn with_best<R, F, Fut>(&self, key: RequestKey, operation: F) -> Result<R, NodeError>
     where
         R: Cacheable + Clone + Send + 'static,
         F: FnOnce(RemoteNode<Env::ValidatorNode>) -> Fut,
@@ -271,7 +273,7 @@ impl<Env: Environment> ValidatorManager<Env> {
     ///
     /// # Returns
     /// The result from the operation, potentially from cache or a deduplicated in-flight request
-    pub async fn with_peer<R, F, Fut>(
+    async fn with_peer<R, F, Fut>(
         &self,
         key: RequestKey,
         peer: RemoteNode<Env::ValidatorNode>,
@@ -337,6 +339,77 @@ impl<Env: Environment> ValidatorManager<Env> {
             blobs.push(maybe_blob?);
         }
         Ok(blobs.into_iter().collect::<Option<Vec<_>>>())
+    }
+
+    pub async fn download_certificates(
+        &self,
+        peer: &RemoteNode<Env::ValidatorNode>,
+        chain_id: ChainId,
+        start: BlockHeight,
+        limit: u64,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        let heights = (start.0..start.0 + limit)
+            .map(BlockHeight)
+            .collect::<Vec<_>>();
+        self.with_peer(
+            RequestKey::Certificates {
+                chain_id,
+                heights: heights.clone(),
+            },
+            peer.clone(),
+            |peer| async move {
+                peer.download_certificates_by_heights(chain_id, heights)
+                    .await
+            },
+        )
+        .await
+    }
+
+    pub async fn download_certificates_by_heights(
+        &self,
+        peer: &RemoteNode<Env::ValidatorNode>,
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        self.with_peer(
+            RequestKey::Certificates {
+                chain_id,
+                heights: heights.clone(),
+            },
+            peer.clone(),
+            |peer| async move {
+                peer.download_certificates_by_heights(chain_id, heights)
+                    .await
+            },
+        )
+        .await
+    }
+
+    pub async fn download_certificate_for_blob(
+        &self,
+        peer: &RemoteNode<Env::ValidatorNode>,
+        blob_id: BlobId,
+    ) -> Result<ConfirmedBlockCertificate, NodeError> {
+        self.with_peer(
+            RequestKey::CertificateForBlob(blob_id),
+            peer.clone(),
+            |peer| async move { peer.download_certificate_for_blob(blob_id).await },
+        )
+        .await
+    }
+
+    pub async fn download_pending_blob(
+        &self,
+        peer: &RemoteNode<Env::ValidatorNode>,
+        chain_id: ChainId,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, NodeError> {
+        self.with_peer(
+            RequestKey::PendingBlob { chain_id, blob_id },
+            peer.clone(),
+            |peer| async move { peer.node.download_pending_blob(chain_id, blob_id).await },
+        )
+        .await
     }
 
     /// Returns the alternative peers registered for an in-flight request, if any.
@@ -709,8 +782,7 @@ mod tests {
     fn test_key() -> RequestKey {
         RequestKey::Certificates {
             chain_id: ChainId(CryptoHash::test_hash("test")),
-            start: BlockHeight(0),
-            limit: 10,
+            heights: vec![BlockHeight(0), BlockHeight(1)],
         }
     }
 

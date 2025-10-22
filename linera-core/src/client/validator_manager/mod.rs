@@ -12,7 +12,6 @@ mod request;
 mod scoring;
 
 pub use manager::ValidatorManager;
-pub use request::RequestKey;
 pub use scoring::ScoringWeights;
 
 // Module constants - default values for ValidatorManagerConfig
