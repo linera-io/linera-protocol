@@ -8,7 +8,6 @@ use std::{
 };
 
 use allocative::Allocative;
-use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{

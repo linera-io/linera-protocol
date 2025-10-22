@@ -233,7 +233,19 @@ impl TransactionMetadata {
 }
 
 /// A chain ID with a block height.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize, SimpleObject, Allocative)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    SimpleObject,
+    Allocative,
+)]
 pub struct ChainAndHeight {
     pub chain_id: ChainId,
     pub height: BlockHeight,
