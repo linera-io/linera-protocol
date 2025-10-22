@@ -181,7 +181,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     if let Some((service, notifications)) = &mut node_service_2 {
         let admin_height = client.load_wallet()?.chains[&chain_1].next_block_height;
         let event_height = admin_height.try_sub_one()?;
-        notifications.wait_for_events(Some(event_height)).await?;
+        notifications.wait_for_events(event_height).await?;
         assert!(!service.process_inbox(&chain_2).await?.is_empty());
         client.revoke_epochs(Epoch(2)).await?;
         notifications.wait_for_events(None).await?;
