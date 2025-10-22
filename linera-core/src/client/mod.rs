@@ -3227,7 +3227,7 @@ impl<Env: Environment> ChainClient<Env> {
         if let Some(round_timeout) = info.manager.round_timeout {
             if round_timeout <= self.storage_client().clock().current_time() {
                 if let Err(e) = self.request_leader_timeout().await {
-                    warn!("Failed to obtain a timeout certificate: {}", e);
+                    debug!("Failed to obtain a timeout certificate: {}", e);
                 } else {
                     info = self.chain_info_with_manager_values().await?;
                 }
