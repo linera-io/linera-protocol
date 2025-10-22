@@ -22,7 +22,7 @@ use linera_chain::{
     },
 };
 use rand::seq::SliceRandom as _;
-use tracing::{debug, instrument, warn};
+use tracing::{debug, info, instrument};
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
@@ -186,7 +186,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
         let certificate = self.node.blob_last_used_by_certificate(blob_id).await?;
         if !certificate.block().requires_or_creates_blob(&blob_id) {
-            warn!(
+            info!(
                 "Got invalid last used by certificate for blob {} from validator {}",
                 blob_id, self.public_key
             );
@@ -338,13 +338,13 @@ impl<N: ValidatorNode> RemoteNode<N> {
         let public_key = &self.public_key;
         for blob_id in blob_ids {
             if !required.contains(blob_id) {
-                warn!("validator {public_key} requested blob {blob_id:?} but it is not required");
+                info!("validator {public_key} requested blob {blob_id:?} but it is not required");
                 return Err(NodeError::UnexpectedEntriesInBlobsNotFound);
             }
         }
         let unique_missing_blob_ids = blob_ids.iter().copied().collect::<HashSet<_>>();
         if blob_ids.len() > unique_missing_blob_ids.len() {
-            warn!("blobs requested by validator {public_key} contain duplicates");
+            info!("blobs requested by validator {public_key} contain duplicates");
             return Err(NodeError::DuplicatesInBlobsNotFound);
         }
         Ok(())
