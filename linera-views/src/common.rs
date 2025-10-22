@@ -12,8 +12,8 @@ use std::{
     slice::ChunksExact,
 };
 
-use itertools::Either;
 use allocative::Allocative;
+use itertools::Either;
 use serde::de::DeserializeOwned;
 
 use crate::ViewError;
