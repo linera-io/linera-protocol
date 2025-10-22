@@ -226,10 +226,10 @@ pub mod metrics {
 }
 
 /// The default key used when the root_key contains the information.
-const DEFAULT_KEY: &[u8] = &[0];
+pub(crate) const DEFAULT_KEY: &[u8] = &[0];
 
 /// The second key used when the root_key contains the information.
-const ONE_KEY: &[u8] = &[1];
+pub(crate) const ONE_KEY: &[u8] = &[1];
 
 fn get_01_keys() -> Vec<Vec<u8>> {
     vec![vec![0], vec![1]]
@@ -328,7 +328,7 @@ pub struct DbStorage<Database, Clock = WallClock> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum RootKey {
+pub(crate) enum RootKey {
     ChainState(ChainId),
     CryptoHash(CryptoHash),
     Blob(BlobId),
@@ -343,7 +343,7 @@ impl RootKey {
     }
 }
 
-fn event_key(event_id: &EventId) -> Vec<u8> {
+pub(crate) fn event_key(event_id: &EventId) -> Vec<u8> {
     let mut key = bcs::to_bytes(&event_id.stream_id).unwrap();
     key.extend(bcs::to_bytes(&event_id.index).unwrap());
     key

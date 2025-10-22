@@ -5,6 +5,8 @@
 
 mod db_storage;
 
+mod migration;
+
 use std::{collections::BTreeMap, ops::RangeInclusive, sync::Arc};
 
 use async_trait::async_trait;
