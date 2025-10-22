@@ -235,7 +235,44 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     /// # })
     /// ```
     pub async fn load_entry_mut(&mut self, short_key: &[u8]) -> Result<&mut W, ViewError> {
-        self.do_load_entry_mut(short_key).await
+        match self.updates.get_mut().entry(short_key.to_vec()) {
+            btree_map::Entry::Occupied(entry) => {
+                let entry = entry.into_mut();
+                match entry {
+                    Update::Set(view) => Ok(view),
+                    Update::Removed => {
+                        let key = self
+                            .context
+                            .base_key()
+                            .base_tag_index(KeyTag::Subview as u8, short_key);
+                        let context = self.context.clone_with_base_key(key);
+                        // Obtain a view and set its pending state to the default (e.g. empty) state
+                        let view = W::new(context)?;
+                        *entry = Update::Set(view);
+                        let Update::Set(view) = entry else {
+                            unreachable!();
+                        };
+                        Ok(view)
+                    }
+                }
+            }
+            btree_map::Entry::Vacant(entry) => {
+                let key = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Subview as u8, short_key);
+                let context = self.context.clone_with_base_key(key);
+                let view = if self.delete_storage_first {
+                    W::new(context)?
+                } else {
+                    W::load(context).await?
+                };
+                let Update::Set(view) = entry.insert(Update::Set(view)) else {
+                    unreachable!();
+                };
+                Ok(view)
+            }
+        }
     }
 
     /// Loads a subview for the data at the given index in the collection. If an entry
@@ -601,47 +638,6 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     /// Gets the extra data.
     pub fn extra(&self) -> &<W::Context as Context>::Extra {
         self.context.extra()
-    }
-
-    async fn do_load_entry_mut(&mut self, short_key: &[u8]) -> Result<&mut W, ViewError> {
-        match self.updates.get_mut().entry(short_key.to_vec()) {
-            btree_map::Entry::Occupied(entry) => {
-                let entry = entry.into_mut();
-                match entry {
-                    Update::Set(view) => Ok(view),
-                    Update::Removed => {
-                        let key = self
-                            .context
-                            .base_key()
-                            .base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = self.context.clone_with_base_key(key);
-                        // Obtain a view and set its pending state to the default (e.g. empty) state
-                        let view = W::new(context)?;
-                        *entry = Update::Set(view);
-                        let Update::Set(view) = entry else {
-                            unreachable!();
-                        };
-                        Ok(view)
-                    }
-                }
-            }
-            btree_map::Entry::Vacant(entry) => {
-                let key = self
-                    .context
-                    .base_key()
-                    .base_tag_index(KeyTag::Subview as u8, short_key);
-                let context = self.context.clone_with_base_key(key);
-                let view = if self.delete_storage_first {
-                    W::new(context)?
-                } else {
-                    W::load(context).await?
-                };
-                let Update::Set(view) = entry.insert(Update::Set(view)) else {
-                    unreachable!();
-                };
-                Ok(view)
-            }
-        }
     }
 }
 
