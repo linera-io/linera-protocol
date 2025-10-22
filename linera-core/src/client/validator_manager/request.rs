@@ -171,7 +171,7 @@ impl SubsumingKey<RequestResult> for super::request::RequestKey {
 
     fn try_extract_result(
         &self,
-        other: &RequestKey,
+        in_flight_request: &RequestKey,
         result: &RequestResult,
     ) -> Option<RequestResult> {
         // Only certificate results can be extracted
@@ -180,7 +180,7 @@ impl SubsumingKey<RequestResult> for super::request::RequestKey {
             _ => return None,
         };
 
-        if !self.subsumes(other) {
+        if !in_flight_request.subsumes(self) {
             return None; // Can't extract if not subsumed
         }
 
@@ -264,5 +264,351 @@ mod tests {
             heights: vec![BlockHeight(12)],
         };
         assert!(!req1.subsumes(&req2));
+    }
+
+    // Helper function to create a test certificate at a specific height
+    fn make_test_cert(
+        height: u64,
+        chain_id: ChainId,
+    ) -> linera_chain::types::ConfirmedBlockCertificate {
+        use linera_base::{
+            crypto::ValidatorKeypair,
+            data_types::{Round, Timestamp},
+        };
+        use linera_chain::{
+            block::ConfirmedBlock,
+            data_types::{BlockExecutionOutcome, LiteValue, LiteVote},
+            test::{make_first_block, BlockTestExt, VoteTestExt},
+        };
+
+        let keypair = ValidatorKeypair::generate();
+        let mut proposed_block = make_first_block(chain_id).with_timestamp(Timestamp::from(height));
+
+        // Set the correct height
+        proposed_block.height = BlockHeight(height);
+
+        // Create a Block from the proposed block with default execution outcome
+        let block = BlockExecutionOutcome::default().with(proposed_block);
+
+        // Create a ConfirmedBlock
+        let confirmed_block = ConfirmedBlock::new(block);
+
+        // Create a LiteVote and convert to Vote
+        let lite_vote = LiteVote::new(
+            LiteValue::new(&confirmed_block),
+            Round::MultiLeader(0),
+            &keypair.secret_key,
+        );
+
+        // Convert to full vote
+        let vote = lite_vote.with_value(confirmed_block).unwrap();
+
+        // Convert vote to certificate
+        vote.into_certificate(keypair.secret_key.public())
+    }
+
+    #[test]
+    fn test_try_extract_result_non_certificate_result() {
+        use super::RequestResult;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let req1 = RequestKey::Certificates {
+            chain_id,
+            start: BlockHeight(10),
+            limit: 5,
+        };
+        let req2 = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: vec![BlockHeight(12)],
+        };
+
+        // Non-certificate result should return None
+        let blob_result = RequestResult::Blob(None);
+        assert!(req1.try_extract_result(&req2, &blob_result).is_none());
+    }
+
+    #[test]
+    fn test_try_extract_result_empty_request_range() {
+        use super::RequestResult;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let req1 = RequestKey::Certificates {
+            chain_id,
+            start: BlockHeight(10),
+            limit: 0, // Empty request
+        };
+        let req2 = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: vec![],
+        };
+
+        let certs = vec![make_test_cert(10, chain_id)];
+        let result = RequestResult::Certificates(certs);
+
+        // Empty request is always extractable, should return empty result
+        match req1.try_extract_result(&req2, &result) {
+            Some(RequestResult::Certificates(extracted_certs)) => {
+                assert!(extracted_certs.is_empty());
+            }
+            _ => panic!("Expected Some empty Certificates result"),
+        }
+    }
+
+    #[test]
+    fn test_try_extract_result_empty_result_range() {
+        use super::RequestResult;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let req1 = RequestKey::Certificates {
+            chain_id,
+            start: BlockHeight(10),
+            limit: 5,
+        };
+        let req2 = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: vec![BlockHeight(12)],
+        };
+
+        let result = RequestResult::Certificates(vec![]); // Empty result
+
+        // Empty result should return None
+        assert!(req1.try_extract_result(&req2, &result).is_none());
+    }
+
+    #[test]
+    fn test_try_extract_result_non_overlapping_ranges() {
+        use super::RequestResult;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let new_req = RequestKey::Certificates {
+            chain_id,
+            start: BlockHeight(10),
+            limit: 5,
+        }; // [10..14]
+        let in_flight_req = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: vec![BlockHeight(11)],
+        };
+
+        // Result does not contain all requested heights
+        let certs = vec![make_test_cert(11, chain_id)];
+        let result = RequestResult::Certificates(certs);
+
+        // No overlap, should return None
+        assert!(new_req
+            .try_extract_result(&in_flight_req, &result)
+            .is_none());
+    }
+
+    #[test]
+    fn test_try_extract_result_partial_overlap_missing_start() {
+        use super::RequestResult;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let req1 = RequestKey::Certificates {
+            chain_id,
+            start: BlockHeight(10),
+            limit: 5,
+        }; // [10..14]
+        let req2 = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: vec![BlockHeight(11), BlockHeight(12)],
+        };
+
+        // Result missing the first height (10)
+        let certs = vec![
+            make_test_cert(11, chain_id),
+            make_test_cert(12, chain_id),
+            make_test_cert(13, chain_id),
+            make_test_cert(14, chain_id),
+        ];
+        let result = RequestResult::Certificates(certs);
+
+        // Missing start height, should return None
+        assert!(req1.try_extract_result(&req2, &result).is_none());
+    }
+
+    #[test]
+    fn test_try_extract_result_partial_overlap_missing_end() {
+        use super::RequestResult;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let req1 = RequestKey::Certificates {
+            chain_id,
+            start: BlockHeight(10),
+            limit: 5,
+        }; // [10..14]
+        let req2 = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: vec![BlockHeight(11), BlockHeight(12)],
+        };
+
+        // Result missing the last height (14)
+        let certs = vec![
+            make_test_cert(10, chain_id),
+            make_test_cert(11, chain_id),
+            make_test_cert(12, chain_id),
+            make_test_cert(13, chain_id),
+        ];
+        let result = RequestResult::Certificates(certs);
+
+        // Missing end height, should return None
+        assert!(req1.try_extract_result(&req2, &result).is_none());
+    }
+
+    #[test]
+    fn test_try_extract_result_partial_overlap_missing_middle() {
+        use super::RequestResult;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let new_req = RequestKey::Certificates {
+            chain_id,
+            start: BlockHeight(10),
+            limit: 5,
+        }; // [10..14]
+        let in_flight_req = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: vec![BlockHeight(11), BlockHeight(13), BlockHeight(14)],
+        };
+
+        // Result missing middle height (12)
+        let certs = vec![
+            make_test_cert(11, chain_id),
+            make_test_cert(13, chain_id),
+            make_test_cert(14, chain_id),
+        ];
+        let result = RequestResult::Certificates(certs);
+
+        // Missing cert for height 12, should return None.
+        let extracted = new_req.try_extract_result(&in_flight_req, &result);
+        assert!(extracted.is_none());
+    }
+
+    #[test]
+    fn test_try_extract_result_exact_match() {
+        use super::RequestResult;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let req1 = RequestKey::Certificates {
+            chain_id,
+            start: BlockHeight(10),
+            limit: 3,
+        }; // [10, 11, 12]
+        let req2 = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: vec![BlockHeight(10), BlockHeight(11), BlockHeight(12)],
+        };
+
+        let certs = vec![
+            make_test_cert(10, chain_id),
+            make_test_cert(11, chain_id),
+            make_test_cert(12, chain_id),
+        ];
+        let result = RequestResult::Certificates(certs.clone());
+
+        // Exact match should return all certificates
+        let extracted = req1.try_extract_result(&req2, &result);
+        assert!(extracted.is_some());
+        match extracted.unwrap() {
+            RequestResult::Certificates(extracted_certs) => {
+                assert_eq!(extracted_certs, certs);
+            }
+            _ => panic!("Expected Certificates result"),
+        }
+    }
+
+    #[test]
+    fn test_try_extract_result_superset_extraction() {
+        use super::RequestResult;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let req1 = RequestKey::Certificates {
+            chain_id,
+            start: BlockHeight(12),
+            limit: 2,
+        }; // [12, 13]
+        let req2 = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: vec![BlockHeight(12), BlockHeight(13)],
+        };
+
+        // Result has more certificates than requested
+        let certs = vec![
+            make_test_cert(10, chain_id),
+            make_test_cert(11, chain_id),
+            make_test_cert(12, chain_id),
+            make_test_cert(13, chain_id),
+            make_test_cert(14, chain_id),
+        ];
+        let result = RequestResult::Certificates(certs);
+
+        // Should extract only the requested range [12, 13]
+        let extracted = req1.try_extract_result(&req2, &result);
+        assert!(extracted.is_some());
+        match extracted.unwrap() {
+            RequestResult::Certificates(extracted_certs) => {
+                assert_eq!(extracted_certs.len(), 2);
+                assert_eq!(extracted_certs[0].value().height(), BlockHeight(12));
+                assert_eq!(extracted_certs[1].value().height(), BlockHeight(13));
+            }
+            _ => panic!("Expected Certificates result"),
+        }
+    }
+
+    #[test]
+    fn test_try_extract_result_single_height() {
+        use super::RequestResult;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let req1 = RequestKey::Certificates {
+            chain_id,
+            start: BlockHeight(15),
+            limit: 1,
+        }; // [15]
+        let req2 = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: vec![BlockHeight(15)],
+        };
+
+        let certs = vec![
+            make_test_cert(10, chain_id),
+            make_test_cert(15, chain_id),
+            make_test_cert(20, chain_id),
+        ];
+        let result = RequestResult::Certificates(certs);
+
+        // Should extract only height 15
+        let extracted = req1.try_extract_result(&req2, &result);
+        assert!(extracted.is_some());
+        match extracted.unwrap() {
+            RequestResult::Certificates(extracted_certs) => {
+                assert_eq!(extracted_certs.len(), 1);
+                assert_eq!(extracted_certs[0].value().height(), BlockHeight(15));
+            }
+            _ => panic!("Expected Certificates result"),
+        }
+    }
+
+    #[test]
+    fn test_try_extract_result_different_chains() {
+        use super::RequestResult;
+
+        let chain1 = ChainId(CryptoHash::test_hash("chain1"));
+        let chain2 = ChainId(CryptoHash::test_hash("chain2"));
+        let req1 = RequestKey::Certificates {
+            chain_id: chain1,
+            start: BlockHeight(10),
+            limit: 5,
+        };
+        let req2 = RequestKey::CertificatesByHeights {
+            chain_id: chain2,
+            heights: vec![BlockHeight(12)],
+        };
+
+        let certs = vec![make_test_cert(12, chain1)];
+        let result = RequestResult::Certificates(certs);
+
+        // Different chains should return None
+        assert!(req1.try_extract_result(&req2, &result).is_none());
     }
 }

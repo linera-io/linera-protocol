@@ -157,8 +157,8 @@ where
 pub(super) trait SubsumingKey<R> {
     /// Checks if this request fully subsumes another request.
     ///
-    /// Request A subsumes request B if A's result would contain all the data that
-    /// B's result would contain. This means B's request is redundant if A is already
+    /// Request `self` subsumes request `other` if `self`'s result would contain all the data that
+    /// `other`'s result would contain. This means `other`'s request is redundant if `self` is already
     /// in-flight or cached.
     fn subsumes(&self, other: &Self) -> bool;
 
