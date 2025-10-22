@@ -63,7 +63,7 @@ where
         if self
             .system
             .current_committee()
-            .is_some_and(|(epoch, _)| epoch > EPOCH_STOP_HASHING)
+            .is_some_and(|(epoch, _)| epoch >= EPOCH_STOP_HASHING)
         {
             Ok(CryptoHash::from([0; 32]))
         } else {
@@ -80,7 +80,7 @@ where
         if self
             .system
             .current_committee()
-            .is_some_and(|(epoch, _)| epoch > EPOCH_STOP_HASHING)
+            .is_some_and(|(epoch, _)| epoch >= EPOCH_STOP_HASHING)
         {
             Ok(CryptoHash::from([0; 32]))
         } else {
