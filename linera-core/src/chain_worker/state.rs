@@ -723,6 +723,7 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let block = certificate.block();
+        let block_hash = certificate.hash();
         let height = block.header.height;
         let chain_id = block.header.chain_id;
 
@@ -871,29 +872,28 @@ where
             .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
-        let verified_outcome = if let Some(mut execution_state) =
-            self.execution_state_cache.remove(&outcome.state_hash)
-        {
-            chain.execution_state = execution_state
-                .with_context(|ctx| {
-                    chain
-                        .execution_state
-                        .context()
-                        .clone_with_base_key(ctx.base_key().bytes.clone())
-                })
-                .await;
-            outcome.clone()
-        } else {
-            chain
-                .execute_block(
-                    &proposed_block,
-                    local_time,
-                    None,
-                    &published_blobs,
-                    oracle_responses,
-                )
-                .await?
-        };
+        let verified_outcome =
+            if let Some(mut execution_state) = self.execution_state_cache.remove(&block_hash) {
+                chain.execution_state = execution_state
+                    .with_context(|ctx| {
+                        chain
+                            .execution_state
+                            .context()
+                            .clone_with_base_key(ctx.base_key().bytes.clone())
+                    })
+                    .await;
+                outcome.clone()
+            } else {
+                chain
+                    .execute_block(
+                        &proposed_block,
+                        local_time,
+                        None,
+                        &published_blobs,
+                        oracle_responses,
+                    )
+                    .await?
+            };
         // We should always agree on the messages and state hash.
         ensure!(
             outcome == verified_outcome,
@@ -1301,7 +1301,7 @@ where
         let (_, committee) = self.chain.current_committee()?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
-        let outcome = self
+        let executed_block = self
             .execute_block(&block, local_time, round, published_blobs)
             .await?;
 
@@ -1317,7 +1317,7 @@ where
                 .await?;
         }
 
-        Ok((outcome.with(block), response))
+        Ok((executed_block, response))
     }
 
     /// Validates and executes a block proposed to extend this chain.
@@ -1426,15 +1426,15 @@ where
         self.chain
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
-        let outcome = if let Some(outcome) = outcome {
-            outcome.clone()
+        let block = if let Some(outcome) = outcome {
+            outcome.clone().with(proposal.content.block.clone())
         } else {
             self.execute_block(block, local_time, round.multi_leader(), &published_blobs)
                 .await?
         };
 
         ensure!(
-            !round.is_fast() || !outcome.has_oracle_responses(),
+            !round.is_fast() || !block.has_oracle_responses(),
             WorkerError::FastBlockUsingOracles
         );
         let chain = &mut self.chain;
@@ -1442,12 +1442,11 @@ where
         chain
             .tip_state
             .get_mut()
-            .update_counters(&block.transactions, &outcome.messages)?;
+            .update_counters(&block.body.transactions, &block.body.messages)?;
         // Don't save the changes since the block is not confirmed yet.
         chain.rollback();
 
         // Create the vote and store it in the chain state.
-        let block = outcome.with(proposal.content.block.clone());
         let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
         let blobs = self
             .get_required_blobs(proposal.expected_blob_ids(), &created_blobs)
@@ -1553,21 +1552,23 @@ where
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
-    ) -> Result<BlockExecutionOutcome, WorkerError> {
+    ) -> Result<Block, WorkerError> {
         let outcome =
             Box::pin(
                 self.chain
                     .execute_block(block, local_time, round, published_blobs, None),
             )
             .await?;
+        let block = Block::new(block.clone(), outcome);
+        let block_hash = CryptoHash::new(&block);
         self.execution_state_cache.insert_owned(
-            &outcome.state_hash,
+            &block_hash,
             self.chain
                 .execution_state
                 .with_context(|ctx| InactiveContext(ctx.base_key().clone()))
                 .await,
         );
-        Ok(outcome)
+        Ok(block)
     }
 
     /// Initializes and saves the current chain if it is not active yet.
