@@ -142,27 +142,26 @@ impl SubsumingKey<RequestResult> for super::request::RequestKey {
             return false;
         }
 
-        let heights1 = match self.height_range() {
-            Some(range) => range,
-            None => return self == other, // Non-certificate requests must match exactly
-        };
-        let heights2 = match other.height_range() {
-            Some(range) => range,
-            None => return false, // Can't subsume different variant types
-        };
+        let (in_flight_req_heights, new_req_heights) =
+            match (self.height_range(), other.height_range()) {
+                (Some(range1), Some(range2)) => (range1, range2),
+                _ => return false, // We subsume only certificate requests
+            };
 
-        if heights1.is_empty() {
-            return false; // An empty set cannot subsume any non-empty set
-        }
-
-        if heights2.is_empty() {
+        if new_req_heights.is_empty() {
             return true; // An empty set is always subsumed
         }
 
-        heights1.first().expect("heights1 is not empty")
-            <= heights2.first().expect("heights2 is not empty")
-            && heights1.last().expect("heights1 is not empty")
-                >= heights2.last().expect("heights2 is not empty")
+        if in_flight_req_heights.is_empty() {
+            return false; // An empty set cannot subsume non-empty
+        }
+
+        in_flight_req_heights
+            .first()
+            .expect("heights1 is not empty")
+            <= new_req_heights.first().expect("heights2 is not empty")
+            && in_flight_req_heights.last().expect("heights1 is not empty")
+                >= new_req_heights.last().expect("heights2 is not empty")
     }
 
     fn try_extract_result(
