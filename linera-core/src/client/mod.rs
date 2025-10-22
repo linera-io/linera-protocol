@@ -3941,7 +3941,7 @@ impl<Env: Environment> ChainClient<Env> {
                             .await?
                             <= height
                         {
-                            error!("NewBlock: Fail to synchronize new block after notification");
+                            info!("NewBlock: Fail to synchronize new block after notification");
                         }
                         trace!(
                             chain_id = %self.chain_id,
@@ -4034,7 +4034,7 @@ impl<Env: Environment> ChainClient<Env> {
                     return Ok(());
                 };
                 if (info.next_block_height, info.manager.current_round) < (height, round) {
-                    error!(
+                    info!(
                         chain_id = %self.chain_id,
                         "NewRound: Fail to synchronize new block after notification"
                     );
