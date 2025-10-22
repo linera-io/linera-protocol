@@ -134,26 +134,22 @@ where
         if cache.len() <= self.max_cache_size {
             return 0; // No need to evict if under max size
         }
+        let mut expired_keys = 0usize;
 
-        let expired_keys: Vec<_> = cache
-            .iter()
-            .filter_map(|(key, entry)| {
-                if now.duration_since(entry.cached_at) > self.cache_ttl {
-                    Some(key.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
+        cache.retain(|_key, entry| {
+            if now.duration_since(entry.cached_at) > self.cache_ttl {
+                expired_keys += 1;
+                false
+            } else {
+                true
+            }
+        });
 
-        for key in &expired_keys {
-            cache.remove(key);
+        if expired_keys > 0 {
+            tracing::trace!(count = expired_keys, "evicted expired cache entries");
         }
 
-        if !expired_keys.is_empty() {
-            tracing::trace!(count = expired_keys.len(), "evicted expired cache entries");
-        }
-        expired_keys.len()
+        expired_keys
     }
 }
 
