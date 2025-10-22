@@ -78,10 +78,6 @@ impl<C: Context> View for ByteSetView<C> {
         })
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        Self::post_load(context, &[])
-    }
-
     fn rollback(&mut self) {
         self.delete_storage_first = false;
         self.updates.clear();
@@ -414,10 +410,6 @@ impl<C: Context, I: Send + Sync + Serialize> View for SetView<C, I> {
         })
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        Self::post_load(context, &[])
-    }
-
     fn rollback(&mut self) {
         self.set.rollback()
     }
@@ -677,10 +669,6 @@ where
             set,
             _phantom: PhantomData,
         })
-    }
-
-    async fn load(context: C) -> Result<Self, ViewError> {
-        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
