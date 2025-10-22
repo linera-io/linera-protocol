@@ -52,8 +52,7 @@ type WebEnvironment =
 
 type JsResult<T> = Result<T, JsError>;
 
-async fn get_storage(
-) -> Result<WebStorage, <linera_views::memory::MemoryDatabase as WithError>::Error> {
+async fn get_storage() -> Result<WebStorage, ViewError> {
     linera_storage::DbStorage::maybe_create_and_connect(
         &linera_views::memory::MemoryStoreConfig {
             max_stream_queries: 1,

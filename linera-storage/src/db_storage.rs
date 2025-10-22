@@ -1056,7 +1056,11 @@ where
     Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
 {
-    async fn new(database: Database, wasm_runtime: Option<WasmRuntime>, clock: C) -> Result<Self, ViewError> {
+    async fn new(
+        database: Database,
+        wasm_runtime: Option<WasmRuntime>,
+        clock: C,
+    ) -> Result<Self, ViewError> {
         let storage = Self {
             database: Arc::new(database),
             clock,
@@ -1199,7 +1203,6 @@ const MOVABLE_KEYS_0_1: &[u8] = &[1, 2, 3, 4, 5, 7];
 /// we use chunks to avoid OOM
 const BLOCK_KEY_SIZE: usize = 90;
 
-
 fn map_base_key(base_key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ViewError> {
     let base_key = bcs::from_bytes::<BaseKey>(base_key)?;
     match base_key {
@@ -1246,16 +1249,28 @@ where
     C: Clock + Clone + Send + Sync + 'static,
     Database::Error: Send + Sync,
 {
-    async fn migrate_key_set(&self, first_byte: &u8, base_keys: Vec<Vec<u8>>) -> Result<(), ViewError> {
-        tracing::info!("migrate_key_set with first_byte={first_byte} for |base_keys|={}", base_keys.len());
+    async fn migrate_key_set(
+        &self,
+        first_byte: &u8,
+        base_keys: Vec<Vec<u8>>,
+    ) -> Result<(), ViewError> {
+        tracing::info!(
+            "migrate_key_set with first_byte={first_byte} for |base_keys|={}",
+            base_keys.len()
+        );
         for (index, chunk_base_keys) in base_keys.chunks(BLOCK_KEY_SIZE).enumerate() {
-            tracing::info!("index={index} processing chunk of size {}", chunk_base_keys.len());
+            tracing::info!(
+                "index={index} processing chunk of size {}",
+                chunk_base_keys.len()
+            );
             let store = self.database.open_shared(&[])?;
-            let values = store.read_multi_values_bytes(chunk_base_keys.to_vec()).await?;
+            let values = store
+                .read_multi_values_bytes(chunk_base_keys.to_vec())
+                .await?;
             let values = values
                 .into_iter()
                 .map(|value| value.ok_or(ViewError::MissingEntries))
-                .collect::<Result<Vec<Vec<u8>>,ViewError>>()?;
+                .collect::<Result<Vec<Vec<u8>>, ViewError>>()?;
             let mut batch = MultiPartitionBatch::new();
             for (base_key, value) in chunk_base_keys.iter().zip(values) {
                 let (root_key, key) = map_base_key(base_key)?;
@@ -1276,16 +1291,18 @@ where
         for first_byte in MOVABLE_KEYS_0_1 {
             let store = self.database.open_shared(&[])?;
             let keys = store.find_keys_by_prefix(&[*first_byte]).await?;
-            let base_keys = keys.into_iter().map(|key| {
-                let mut base_key = vec![*first_byte];
-                base_key.extend(key);
-                base_key
-            }).collect::<Vec<Vec<u8>>>();
+            let base_keys = keys
+                .into_iter()
+                .map(|key| {
+                    let mut base_key = vec![*first_byte];
+                    base_key.extend(key);
+                    base_key
+                })
+                .collect::<Vec<Vec<u8>>>();
             self.migrate_key_set(first_byte, base_keys).await?;
         }
         Ok(())
     }
-
 
     async fn get_database_schema(&self) -> Result<SchemaDescription, ViewError> {
         let store = self.database.open_shared(SCHEMA_ROOT_KEY)?;
@@ -1306,7 +1323,8 @@ where
         if schema == SchemaDescription::Version0SingleBlobPartition {
             self.migrate_0_to_1().await?;
         }
-        self.write_database_schema(&SchemaDescription::Version1MultiBlobPartition).await?;
+        self.write_database_schema(&SchemaDescription::Version1MultiBlobPartition)
+            .await?;
         Ok(())
     }
 }
