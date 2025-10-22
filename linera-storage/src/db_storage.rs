@@ -1294,11 +1294,19 @@ where
         Ok(value)
     }
 
+    async fn write_database_schema(&self, schema: &SchemaDescription) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        batch.put_key_value(DEFAULT_KEY.to_vec(), schema)?;
+        let store = self.database.open_shared(SCHEMA_ROOT_KEY)?;
+        Ok(store.write_batch(batch).await?)
+    }
+
     async fn migrate_if_needed(&self) -> Result<(), ViewError> {
         let schema = self.get_database_schema().await?;
         if schema == SchemaDescription::Version0SingleBlobPartition {
             self.migrate_0_to_1().await?;
         }
+        self.write_database_schema(&SchemaDescription::Version1MultiBlobPartition).await?;
         Ok(())
     }
 }
