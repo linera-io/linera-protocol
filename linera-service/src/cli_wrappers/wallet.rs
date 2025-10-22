@@ -1043,7 +1043,7 @@ impl ClientWrapper {
     pub async fn change_validators(
         &self,
         add_validators: &[(String, String, usize, usize)], // (public_key, account_key, port, votes)
-        set_validators: &[(String, String, usize, usize)], // (public_key, account_key, port, votes)
+        modify_validators: &[(String, String, usize, usize)], // (public_key, account_key, port, votes)
         remove_validators: &[String],
     ) -> Result<()> {
         let mut command = self.command().await?;
@@ -1055,10 +1055,10 @@ impl ClientWrapper {
             command.args(["--add", &validator_spec]);
         }
 
-        for (public_key, account_key, port, votes) in set_validators {
+        for (public_key, account_key, port, votes) in modify_validators {
             let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
             let validator_spec = format!("{public_key},{account_key},{address},{votes}");
-            command.args(["--set", &validator_spec]);
+            command.args(["--modify", &validator_spec]);
         }
 
         for validator_key in remove_validators {

@@ -579,7 +579,7 @@ This command allows you to make multiple validator changes (additions, modificat
 ###### **Options:**
 
 * `--add <VALIDATOR_SPEC>` — Validators to add, specified as "public_key,account_key,address,votes". Fails if the validator already exists in the committee. Can be specified multiple times. Example: --add "public_key1,account_key1,address1,1"
-* `--set <VALIDATOR_SPEC>` — Validators to modify, specified as "public_key,account_key,address,votes". Fails if the validator does not exist in the committee. Can be specified multiple times. Example: --set "public_key1,account_key1,address1,2"
+* `--modify <VALIDATOR_SPEC>` — Validators to modify, specified as "public_key,account_key,address,votes". Fails if the validator does not exist in the committee. Can be specified multiple times. Example: --modify "public_key1,account_key1,address1,2"
 * `--remove <REMOVE_VALIDATORS>` — Validators to remove, specified by their public key. Fails if the validator does not exist in the committee. Can be specified multiple times. Example: --remove public_key1 --remove public_key2
 * `--skip-online-check` — Skip the version and genesis config checks for added and modified validators
 

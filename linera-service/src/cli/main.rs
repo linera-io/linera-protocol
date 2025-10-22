@@ -650,11 +650,11 @@ impl Runnable for Job {
                     }
                     ChangeValidators {
                         add_validators,
-                        set_validators,
+                        modify_validators,
                         remove_validators: _,
                         skip_online_check: false,
                     } => {
-                        for validator in add_validators.iter().chain(set_validators.iter()) {
+                        for validator in add_validators.iter().chain(modify_validators.iter()) {
                             let node =
                                 context.make_node_provider().make_node(&validator.address)?;
                             context
@@ -702,7 +702,7 @@ impl Runnable for Job {
                                 }
                                 ChangeValidators {
                                     add_validators,
-                                    set_validators,
+                                    modify_validators,
                                     remove_validators,
                                     skip_online_check: _,
                                 } => {
@@ -716,8 +716,8 @@ impl Runnable for Job {
                                             return Ok(ClientOutcome::Committed(None));
                                         }
                                     }
-                                    // Validate that all validators to set already exist and are actually modified.
-                                    for validator in &set_validators {
+                                    // Validate that all validators to modify already exist and are actually modified.
+                                    for validator in &modify_validators {
                                         match validators.get(&validator.public_key) {
                                             None => {
                                                 warn!(
@@ -761,8 +761,8 @@ impl Runnable for Job {
                                             },
                                         );
                                     }
-                                    // Update validators
-                                    for validator in set_validators {
+                                    // Modify validators
+                                    for validator in modify_validators {
                                         validators.insert(
                                             validator.public_key,
                                             ValidatorState {

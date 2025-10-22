@@ -450,9 +450,9 @@ pub enum ClientCommand {
         /// Validators to modify, specified as "public_key,account_key,address,votes".
         /// Fails if the validator does not exist in the committee.
         /// Can be specified multiple times.
-        /// Example: --set "public_key1,account_key1,address1,2"
-        #[arg(long = "set", value_name = "VALIDATOR_SPEC")]
-        set_validators: Vec<ValidatorToAdd>,
+        /// Example: --modify "public_key1,account_key1,address1,2"
+        #[arg(long = "modify", value_name = "VALIDATOR_SPEC")]
+        modify_validators: Vec<ValidatorToAdd>,
 
         /// Validators to remove, specified by their public key.
         /// Fails if the validator does not exist in the committee.
