@@ -1049,16 +1049,24 @@ where
     }
 }
 
-impl<Database, C> DbStorage<Database, C> {
-    fn new(database: Database, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
-        Self {
+impl<Database, C> DbStorage<Database, C>
+where
+    Database: KeyValueDatabase + Clone + Send + Sync + 'static,
+    Database::Error: Send + Sync,
+    Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
+    C: Clock + Clone + Send + Sync + 'static,
+{
+    async fn new(database: Database, wasm_runtime: Option<WasmRuntime>, clock: C) -> Result<Self, ViewError> {
+        let storage = Self {
             database: Arc::new(database),
             clock,
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
-        }
+        };
+        storage.migrate_if_needed().await?;
+        Ok(storage)
     }
 }
 
@@ -1072,18 +1080,18 @@ where
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Database::Error> {
+    ) -> Result<Self, ViewError> {
         let database = Database::maybe_create_and_connect(config, namespace).await?;
-        Ok(Self::new(database, wasm_runtime, WallClock))
+        Self::new(database, wasm_runtime, WallClock).await
     }
 
     pub async fn connect(
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Database::Error> {
+    ) -> Result<Self, ViewError> {
         let database = Database::connect(config, namespace).await?;
-        Ok(Self::new(database, wasm_runtime, WallClock))
+        Self::new(database, wasm_runtime, WallClock).await
     }
 
     /// Lists the blob IDs of the storage.
@@ -1152,9 +1160,9 @@ where
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
-    ) -> Result<Self, Database::Error> {
+    ) -> Result<Self, ViewError> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
-        Ok(Self::new(database, wasm_runtime, clock))
+        Self::new(database, wasm_runtime, clock).await
     }
 }
 
@@ -1197,7 +1205,7 @@ fn map_base_key(base_key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ViewError> {
     match base_key {
         BaseKey::ChainState(chain_id) => {
             let root_key = RootKey::ChainState(chain_id).bytes();
-            Ok((root_key, DEFAULT_KEY.to_vec()))
+            Ok((root_key, EMPTY_KEY.to_vec()))
         }
         BaseKey::Certificate(hash) => {
             let root_key = RootKey::CryptoHash(hash).bytes();
@@ -1222,7 +1230,7 @@ fn map_base_key(base_key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ViewError> {
         }
         BaseKey::BlockExporterState(index) => {
             let root_key = RootKey::BlockExporterState(index).bytes();
-            Ok((root_key, DEFAULT_KEY.to_vec()))
+            Ok((root_key, EMPTY_KEY.to_vec()))
         }
         BaseKey::NetworkDescription => {
             let root_key = RootKey::NetworkDescription.bytes();
