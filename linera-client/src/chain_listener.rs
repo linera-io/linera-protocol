@@ -19,7 +19,10 @@ use linera_base::{
     task::NonBlockingFuture,
 };
 use linera_core::{
-    client::{chain_client::{self, ChainClient}, AbortOnDrop, ListeningMode},
+    client::{
+        chain_client::{self, ChainClient},
+        AbortOnDrop, ListeningMode,
+    },
     node::NotificationStream,
     worker::{Notification, Reason},
     Environment,

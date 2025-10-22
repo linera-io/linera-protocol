@@ -19,14 +19,15 @@ use linera_base::{
     crypto::{CryptoHash, Signer, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch},
     ensure,
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId, ModuleId, StreamId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId, StreamId},
     time::Duration,
 };
 #[cfg(not(target_arch = "wasm32"))]
-use linera_base::{data_types::Bytecode, vm::VmRuntime};
+use linera_base::{data_types::Bytecode, identifiers::ModuleId, vm::VmRuntime};
 use linera_chain::{
     data_types::{
-        BlockProposal, ChainAndHeight, LiteVote, MessageAction, ProposedBlock, Transaction, IncomingBundle
+        BlockProposal, ChainAndHeight, IncomingBundle, LiteVote, MessageAction, ProposedBlock,
+        Transaction,
     },
     manager::LockingBlock,
     types::{
@@ -60,6 +61,8 @@ use crate::{
 
 pub mod chain_client;
 pub use chain_client::ChainClient;
+
+pub use crate::data_types::ClientOutcome;
 
 #[cfg(test)]
 #[path = "../unit_tests/client_tests.rs"]
@@ -779,7 +782,9 @@ impl<Env: Environment> Client<Env> {
         // * each answer is a vote signed by the expected validator.
         let certificate = LiteCertificate::try_from_votes(votes)
             .ok_or_else(|| {
-                chain_client::Error::InternalError("Vote values or rounds don't match; this is a bug")
+                chain_client::Error::InternalError(
+                    "Vote values or rounds don't match; this is a bug",
+                )
             })?
             .with_value(value)
             .ok_or_else(|| {

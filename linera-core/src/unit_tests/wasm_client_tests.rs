@@ -51,8 +51,9 @@ use crate::client::client_tests::ScyllaDbStorageBuilder;
 use crate::client::client_tests::ServiceStorageBuilder;
 use crate::{
     client::{
+        chain_client::{self, ChainClient},
         client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
-        ChainClient, chain_client::Error, ClientOutcome,
+        ClientOutcome,
     },
     local_node::LocalNodeError,
     test_utils::{ClientOutcomeResultExt as _, FaultType},
@@ -400,7 +401,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(creator.chain_id, BlockHeight::from(4), 3)
+            .check_that_validators_have_certificate(creator.chain_id(), BlockHeight::from(4), 3)
             .await,
         Some(cert)
     );
@@ -428,7 +429,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(creator.chain_id, BlockHeight::from(5), 3)
+            .check_that_validators_have_certificate(creator.chain_id(), BlockHeight::from(5), 3)
             .await,
         Some(cert)
     );
@@ -537,9 +538,9 @@ where
     let module_id = sender.publish_wasm_example("fungible").await?;
     let module_id = module_id.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
 
-    let sender_owner = sender.preferred_owner.unwrap();
-    let receiver_owner = receiver.preferred_owner.unwrap();
-    let receiver2_owner = receiver2.preferred_owner.unwrap();
+    let sender_owner = sender.preferred_owner().unwrap();
+    let receiver_owner = receiver.preferred_owner().unwrap();
+    let receiver2_owner = receiver2.preferred_owner().unwrap();
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
     let state = InitialState { accounts };
@@ -601,7 +602,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(3), 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(3), 3)
             .await,
         Some(cert)
     );
@@ -644,7 +645,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(receiver.chain_id, BlockHeight::from(2), 3)
+            .check_that_validators_have_certificate(receiver.chain_id(), BlockHeight::from(2), 3)
             .await,
         Some(certificate)
     );
@@ -769,7 +770,7 @@ where
             async_graphql::Value::from_json(json!({
                 "receivedPosts": {
                     "keys": [
-                        { "author": sender.chain_id, "index": 0 }
+                        { "author": sender.chain_id(), "index": 0 }
                     ]
                 }
             }))
@@ -789,7 +790,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(receiver.chain_id, BlockHeight::from(4), 3)
+            .check_that_validators_have_certificate(receiver.chain_id(), BlockHeight::from(4), 3)
             .await,
         Some(cert)
     );
@@ -809,7 +810,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(1), 3)
             .await,
         Some(cert)
     );
@@ -829,7 +830,7 @@ where
         response: async_graphql::Response::new(
             async_graphql::Value::from_json(json!({
                 "receivedPosts": {
-                    "keys": [ { "author": sender.chain_id, "index": 0 } ]
+                    "keys": [ { "author": sender.chain_id(), "index": 0 } ]
                 }
             }))
             .unwrap(),

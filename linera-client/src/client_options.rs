@@ -11,9 +11,8 @@ use linera_base::{
 };
 use linera_core::{
     client::{
-        chain_client,
-        BlanketMessagePolicy, MessagePolicy,
-        DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+        chain_client, BlanketMessagePolicy, MessagePolicy, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+        DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
     DEFAULT_GRACE_PERIOD,

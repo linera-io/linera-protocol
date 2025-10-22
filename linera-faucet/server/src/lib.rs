@@ -686,12 +686,10 @@ where
                     }
                     chain_err => {
                         Self::send_err(requests, chain_err.to_string());
-                        return Err(
-                            chain_client::Error::LocalNodeError(LocalNodeError::WorkerError(
-                                WorkerError::ChainError(chain_err.into()),
-                            ))
-                            .into(),
-                        );
+                        return Err(chain_client::Error::LocalNodeError(
+                            LocalNodeError::WorkerError(WorkerError::ChainError(chain_err.into())),
+                        )
+                        .into());
                     }
                 }
             }

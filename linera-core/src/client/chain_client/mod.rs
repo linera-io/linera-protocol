@@ -35,9 +35,7 @@ use linera_base::{
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
-    data_types::{
-        BlockProposal, ChainAndHeight, IncomingBundle, ProposedBlock, Transaction,
-    },
+    data_types::{BlockProposal, ChainAndHeight, IncomingBundle, ProposedBlock, Transaction},
     manager::LockingBlock,
     types::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, Timeout, TimeoutCertificate,
@@ -65,9 +63,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
 use super::{
-    create_bytecode_blobs, received_log::ReceivedLogs, validator_trackers::ValidatorTrackers,
-    AbortOnDrop, Client, ExecuteBlockOutcome, ListeningMode, PendingProposal,
-    ReceiveCertificateMode, TimingType, MessagePolicy,
+    received_log::ReceivedLogs, validator_trackers::ValidatorTrackers, AbortOnDrop, Client,
+    ExecuteBlockOutcome, ListeningMode, MessagePolicy, PendingProposal, ReceiveCertificateMode,
+    TimingType,
 };
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
@@ -110,6 +108,9 @@ pub struct Options {
 #[cfg(with_testing)]
 impl Options {
     pub fn test_default() -> Self {
+        use super::{
+            DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+        };
         use crate::DEFAULT_GRACE_PERIOD;
 
         Options {
@@ -135,7 +136,7 @@ impl Options {
 pub struct ChainClient<Env: Environment> {
     /// The Linera [`Client`] that manages operations for this chain client.
     #[debug(skip)]
-    client: Arc<Client<Env>>,
+    pub(crate) client: Arc<Client<Env>>,
     /// The off-chain chain ID.
     chain_id: ChainId,
     /// The client options.
@@ -712,10 +713,7 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Attempts to update all validators about the local chain.
     #[instrument(level = "trace", skip(old_committee))]
-    pub async fn update_validators(
-        &self,
-        old_committee: Option<&Committee>,
-    ) -> Result<(), Error> {
+    pub async fn update_validators(&self, old_committee: Option<&Committee>) -> Result<(), Error> {
         let update_validators_start = linera_base::time::Instant::now();
         // Communicate the new certificate now.
         if let Some(old_committee) = old_committee {
@@ -734,10 +732,7 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Broadcasts certified blocks to validators.
     #[instrument(level = "trace", skip(committee))]
-    pub async fn communicate_chain_updates(
-        &self,
-        committee: &Committee,
-    ) -> Result<(), Error> {
+    pub async fn communicate_chain_updates(&self, committee: &Committee) -> Result<(), Error> {
         let delivery = self.options.cross_chain_message_delivery;
         let height = self.chain_info().await?.next_block_height;
         self.client
@@ -992,9 +987,9 @@ impl<Env: Environment> ChainClient<Env> {
 
         drop(sender);
 
-        let validator_trackers = update_trackers.await.map_err(|_| {
-            Error::InternalError("could not join the update_trackers task")
-        })?;
+        let validator_trackers = update_trackers
+            .await
+            .map_err(|_| Error::InternalError("could not join the update_trackers task"))?;
 
         debug!(
             num_other_chains = %other_sender_chains.len(),
@@ -1229,11 +1224,9 @@ impl<Env: Environment> ChainClient<Env> {
         let transactions = self.prepend_epochs_messages_and_events(operations).await?;
 
         if transactions.is_empty() {
-            return Err(Error::LocalNodeError(
-                LocalNodeError::WorkerError(WorkerError::ChainError(Box::new(
-                    ChainError::EmptyBlock,
-                ))),
-            ));
+            return Err(Error::LocalNodeError(LocalNodeError::WorkerError(
+                WorkerError::ChainError(Box::new(ChainError::EmptyBlock)),
+            )));
         }
 
         self.execute_prepared_transactions(transactions, blobs)
@@ -1272,9 +1265,9 @@ impl<Env: Environment> ChainClient<Env> {
                 Ok(ExecuteBlockOutcome::Conflict(certificate))
             }
             // Should be unreachable: We did set a pending block.
-            ClientOutcome::Committed(None) => Err(Error::BlockProposalError(
-                "Unexpected block proposal error",
-            )),
+            ClientOutcome::Committed(None) => {
+                Err(Error::BlockProposalError("Unexpected block proposal error"))
+            }
             ClientOutcome::WaitForTimeout(timeout) => {
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
             }
@@ -1418,9 +1411,7 @@ impl<Env: Environment> ChainClient<Env> {
                 response,
                 operations,
             }),
-            _ => Err(Error::InternalError(
-                "Unexpected response for system query",
-            )),
+            _ => Err(Error::InternalError("Unexpected response for system query")),
         }
     }
 
@@ -1444,9 +1435,7 @@ impl<Env: Environment> ChainClient<Env> {
                     operations,
                 })
             }
-            _ => Err(Error::InternalError(
-                "Unexpected response for user query",
-            )),
+            _ => Err(Error::InternalError("Unexpected response for user query")),
         }
     }
 
@@ -1469,10 +1458,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
     /// block.
     #[instrument(level = "trace", skip(owner))]
-    pub async fn query_owner_balance(
-        &self,
-        owner: AccountOwner,
-    ) -> Result<Amount, Error> {
+    pub async fn query_owner_balance(&self, owner: AccountOwner) -> Result<Amount, Error> {
         if owner.is_chain() {
             self.query_balance().await
         } else {
@@ -1491,7 +1477,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
     /// block.
     #[instrument(level = "trace", skip(owner))]
-    async fn query_balances_with_owner(
+    pub(crate) async fn query_balances_with_owner(
         &self,
         owner: AccountOwner,
     ) -> Result<(Amount, Option<Amount>), Error> {
@@ -1531,9 +1517,9 @@ impl<Env: Environment> ChainClient<Env> {
                 response.info.chain_balance,
                 response.info.requested_owner_balance,
             )),
-            Err(Error::LocalNodeError(LocalNodeError::WorkerError(
-                WorkerError::ChainError(error),
-            ))) if matches!(
+            Err(Error::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(
+                error,
+            )))) if matches!(
                 &*error,
                 ChainError::ExecutionError(
                     execution_error,
@@ -1564,10 +1550,7 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// Does not process the inbox or attempt to synchronize with validators.
     #[instrument(level = "trace", skip(owner))]
-    pub async fn local_owner_balance(
-        &self,
-        owner: AccountOwner,
-    ) -> Result<Amount, Error> {
+    pub async fn local_owner_balance(&self, owner: AccountOwner) -> Result<Amount, Error> {
         if owner.is_chain() {
             self.local_balance().await
         } else {
@@ -1583,7 +1566,7 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// Does not process the inbox or attempt to synchronize with validators.
     #[instrument(level = "trace", skip(owner))]
-    async fn local_balances_with_owner(
+    pub(crate) async fn local_balances_with_owner(
         &self,
         owner: AccountOwner,
     ) -> Result<(Amount, Option<Amount>), Error> {
@@ -1682,9 +1665,7 @@ impl<Env: Environment> ChainClient<Env> {
                     let blobs = local_node
                         .get_locking_blobs(&blob_ids, self.chain_id)
                         .await?
-                        .ok_or_else(|| {
-                            Error::InternalError("Missing local locking blobs")
-                        })?;
+                        .ok_or_else(|| Error::InternalError("Missing local locking blobs"))?;
                     debug!("Retrying locking block from round {}", certificate.round);
                     (certificate.block().clone(), blobs)
                 }
@@ -1694,9 +1675,7 @@ impl<Env: Environment> ChainClient<Env> {
                     let blobs = local_node
                         .get_locking_blobs(&blob_ids, self.chain_id)
                         .await?
-                        .ok_or_else(|| {
-                            Error::InternalError("Missing local locking blobs")
-                        })?;
+                        .ok_or_else(|| Error::InternalError("Missing local locking blobs"))?;
                     let block = self
                         .client
                         .stage_block_execution(proposed_block, None, blobs.clone())
@@ -2029,8 +2008,7 @@ impl<Env: Environment> ChainClient<Env> {
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<ClientOutcome<(ChainDescription, ConfirmedBlockCertificate)>, Error>
-    {
+    ) -> Result<ClientOutcome<(ChainDescription, ConfirmedBlockCertificate)>, Error> {
         loop {
             let config = OpenChainConfig {
                 ownership: ownership.clone(),
@@ -2072,9 +2050,9 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, Error> {
         match self.execute_operation(SystemOperation::CloseChain).await {
             Ok(outcome) => Ok(outcome.map(Some)),
-            Err(Error::LocalNodeError(LocalNodeError::WorkerError(
-                WorkerError::ChainError(chain_error),
-            ))) if matches!(*chain_error, ChainError::ClosedChain) => {
+            Err(Error::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(
+                chain_error,
+            )))) if matches!(*chain_error, ChainError::ClosedChain) => {
                 Ok(ClientOutcome::Committed(None)) // Chain is already closed.
             }
             Err(error) => Err(error),
@@ -2090,7 +2068,7 @@ impl<Env: Environment> ChainClient<Env> {
         service: Bytecode,
         vm_runtime: VmRuntime,
     ) -> Result<ClientOutcome<(ModuleId, ConfirmedBlockCertificate)>, Error> {
-        let (blobs, module_id) = create_bytecode_blobs(contract, service, vm_runtime).await;
+        let (blobs, module_id) = super::create_bytecode_blobs(contract, service, vm_runtime).await;
         self.publish_module_blobs(blobs, module_id).await
     }
 
@@ -2155,8 +2133,7 @@ impl<Env: Environment> ChainClient<Env> {
         parameters: &Parameters,
         instantiation_argument: &InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
-    ) -> Result<ClientOutcome<(ApplicationId<A>, ConfirmedBlockCertificate)>, Error>
-    {
+    ) -> Result<ClientOutcome<(ApplicationId<A>, ConfirmedBlockCertificate)>, Error> {
         let instantiation_argument = serde_json::to_vec(instantiation_argument)?;
         let parameters = serde_json::to_vec(parameters)?;
         Ok(self
@@ -2325,11 +2302,7 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Returns whether the system event on the admin chain with the given stream name and key
     /// exists in storage.
-    async fn has_admin_event(
-        &self,
-        stream_name: &[u8],
-        index: u32,
-    ) -> Result<bool, Error> {
+    async fn has_admin_event(&self, stream_name: &[u8], index: u32) -> Result<bool, Error> {
         let event_id = EventId {
             chain_id: self.client.admin_id,
             stream_id: StreamId::system(stream_name),
@@ -2409,10 +2382,7 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     #[instrument(level = "trace", skip(hash))]
-    pub async fn read_confirmed_block(
-        &self,
-        hash: CryptoHash,
-    ) -> Result<ConfirmedBlock, Error> {
+    pub async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<ConfirmedBlock, Error> {
         let block = self
             .client
             .storage_client()
@@ -2463,10 +2433,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Returns the next height we expect to receive from the given sender chain, according to the
     /// local inbox.
     #[instrument(level = "trace")]
-    async fn local_next_height_to_receive(
-        &self,
-        origin: ChainId,
-    ) -> Result<BlockHeight, Error> {
+    async fn local_next_height_to_receive(&self, origin: ChainId) -> Result<BlockHeight, Error> {
         Ok(self
             .client
             .local_node
@@ -2801,10 +2768,7 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Attempts to update a validator with the local information.
     #[instrument(level = "trace", skip(remote_node))]
-    pub async fn sync_validator(
-        &self,
-        remote_node: Env::ValidatorNode,
-    ) -> Result<(), Error> {
+    pub async fn sync_validator(&self, remote_node: Env::ValidatorNode) -> Result<(), Error> {
         let validator_next_block_height = match remote_node
             .handle_chain_info_query(ChainInfoQuery::new(self.chain_id))
             .await
