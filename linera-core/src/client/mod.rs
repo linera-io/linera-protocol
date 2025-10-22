@@ -384,18 +384,14 @@ impl<Env: Environment> Client<Env> {
 
     async fn download_blobs(
         &self,
-        remote_node: &RemoteNode<Env::ValidatorNode>,
+        remote_nodes: &[RemoteNode<Env::ValidatorNode>],
         blob_ids: &[BlobId],
     ) -> Result<(), ChainClientError> {
         self.local_node
             .store_blobs(
                 &self
                     .validator_manager
-                    .download_blobs(
-                        &[remote_node.clone()],
-                        blob_ids,
-                        self.options.blob_download_timeout,
-                    )
+                    .download_blobs(remote_nodes, blob_ids, self.options.blob_download_timeout)
                     .await?
                     .ok_or_else(|| {
                         ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(
@@ -427,20 +423,8 @@ impl<Env: Environment> Client<Env> {
             .await
         {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                let blobs = self
-                    .validator_manager
-                    .download_blobs(
-                        &[remote_node.clone()],
-                        &blob_ids,
-                        self.options.blob_download_timeout,
-                    )
-                    .await?
-                    .ok_or_else(|| {
-                        ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(
-                            blob_ids.to_vec(),
-                        ))
-                    })?;
-                self.local_node.store_blobs(&blobs).await?;
+                self.download_blobs(&[remote_node.clone()], &blob_ids)
+                    .await?;
             }
             x => {
                 x?;
@@ -451,7 +435,8 @@ impl<Env: Environment> Client<Env> {
             info = Some(
                 match self.handle_certificate(certificate.clone()).await {
                     Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                        self.download_blobs(remote_node, &blob_ids).await?;
+                        self.download_blobs(&[remote_node.clone()], &blob_ids)
+                            .await?;
                         self.handle_certificate(certificate).await?
                     }
                     x => x?,
@@ -713,16 +698,9 @@ impl<Env: Environment> Client<Env> {
         if let Err(err) = self.process_certificate(certificate.clone()).await {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
-                    let blobs = self
-                        .validator_manager
-                        .download_blobs(
-                            &self.validator_nodes().await?,
-                            blob_ids,
-                            self.options.blob_download_timeout,
-                        )
-                        .await?
-                        .ok_or(err)?;
-                    self.local_node.store_blobs(&blobs).await?;
+                    self.download_blobs(&self.validator_nodes().await?, blob_ids)
+                        .await
+                        .map_err(|_| err)?;
                     self.process_certificate(certificate).await?;
                 }
                 _ => {
@@ -759,13 +737,7 @@ impl<Env: Environment> Client<Env> {
         if let Err(err) = self.handle_certificate(certificate.clone()).await {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
-                    let blobs = self
-                        .validator_manager
-                        .download_blobs(&nodes, blob_ids, self.options.blob_download_timeout)
-                        .await?
-                        .ok_or(err)?;
-
-                    self.local_node.store_blobs(&blobs).await?;
+                    self.download_blobs(&nodes, blob_ids).await?;
                     self.handle_certificate(certificate.clone()).await?;
                 }
                 _ => {
