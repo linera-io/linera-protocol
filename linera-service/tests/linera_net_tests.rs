@@ -2059,8 +2059,12 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
     let mut notifications3 = node_service3.notifications(chain2).await?;
     // Wait until clients 2 and 3 see the initialized application state.
     let (_, height) = node_service1.chain_tip(chain2).await?.unwrap();
-    notifications2.wait_for_block(height).await?;
-    notifications3.wait_for_block(height).await?;
+    if node_service2.chain_tip(chain2).await?.unwrap().1 < height {
+        notifications2.wait_for_block(height).await?;
+    }
+    if node_service3.chain_tip(chain2).await?.unwrap().1 < height {
+        notifications3.wait_for_block(height).await?;
+    }
 
     let expected_balances = [
         (owner1, Amount::from_tokens(9)),
