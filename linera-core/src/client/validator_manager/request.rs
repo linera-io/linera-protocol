@@ -75,6 +75,11 @@ pub enum RequestResult {
     Certificate(Box<ConfirmedBlockCertificate>),
 }
 
+/// Marker trait for types that can be converted to/from `RequestResult`
+/// for use in the requests cache.
+pub trait Cacheable: From<RequestResult> + Into<RequestResult> {}
+impl<T> Cacheable for T where T: From<RequestResult> + Into<RequestResult> {}
+
 impl From<Option<Blob>> for RequestResult {
     fn from(blob: Option<Blob>) -> Self {
         RequestResult::Blob(blob)

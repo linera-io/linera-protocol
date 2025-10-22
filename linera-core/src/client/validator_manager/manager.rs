@@ -26,7 +26,8 @@ use super::{
 };
 use crate::{
     client::{
-        communicate_concurrently, validator_manager::in_flight_tracker::Subscribed,
+        communicate_concurrently,
+        validator_manager::{in_flight_tracker::Subscribed, request::Cacheable},
         ValidatorManagerConfig,
     },
     environment::Environment,
@@ -238,7 +239,7 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// ```
     pub async fn with_best<R, F, Fut>(&self, key: RequestKey, operation: F) -> Result<R, NodeError>
     where
-        R: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
+        R: Cacheable + Clone + Send + 'static,
         F: FnOnce(RemoteNode<Env::ValidatorNode>) -> Fut,
         Fut: Future<Output = Result<R, NodeError>>,
     {
@@ -277,7 +278,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         operation: F,
     ) -> Result<R, NodeError>
     where
-        R: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
+        R: Cacheable + Clone + Send + 'static,
         F: FnOnce(RemoteNode<Env::ValidatorNode>) -> Fut,
         Fut: Future<Output = Result<R, NodeError>>,
     {
@@ -475,7 +476,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         operation: F,
     ) -> Result<T, NodeError>
     where
-        T: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
+        T: Cacheable + Clone + Send + 'static,
         F: FnOnce(N) -> Fut,
         Fut: Future<Output = Result<T, NodeError>>,
     {
