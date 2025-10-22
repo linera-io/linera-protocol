@@ -774,9 +774,6 @@ mod tests {
                 .await
         });
 
-        // Give the first request time to register as in-flight
-        tokio::time::sleep(Duration::from_millis(10)).await;
-
         // Start second request - should deduplicate and wait for the first
         let execution_count_clone2 = execution_count.clone();
         let second_request = tokio::spawn(async move {
@@ -788,9 +785,6 @@ mod tests {
                 .await
         });
 
-        // Give the second request time to subscribe
-        tokio::time::sleep(Duration::from_millis(10)).await;
-
         // Signal the first request to complete
         tx.send(()).unwrap();
 
@@ -801,7 +795,6 @@ mod tests {
             second_request.await.unwrap();
 
         assert!(result1.is_ok());
-        assert!(result2.is_ok());
         assert_eq!(result1, result2);
 
         // Operation should only have been executed once (deduplication worked)
@@ -833,9 +826,6 @@ mod tests {
                 .await
         });
 
-        // Give the first request time to register as in-flight
-        tokio::time::sleep(Duration::from_millis(10)).await;
-
         // Start multiple additional requests - all should deduplicate
         let mut handles = vec![];
         for _ in 0..5 {
@@ -852,9 +842,6 @@ mod tests {
             });
             handles.push(handle);
         }
-
-        // Give all requests time to subscribe
-        tokio::time::sleep(Duration::from_millis(10)).await;
 
         // Signal the first request to complete
         tx.send(()).unwrap();
@@ -899,9 +886,6 @@ mod tests {
                 })
                 .await
         });
-
-        // Give the first request time to register as in-flight
-        tokio::time::sleep(Duration::from_millis(10)).await;
 
         // Wait for the timeout to elapse
         tokio::time::sleep(Duration::from_millis(MAX_REQUEST_TTL_MS + 1)).await;
@@ -1167,7 +1151,7 @@ mod tests {
             .collect();
 
         // Give time for alternative peers to register
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Check that nodes 1 and 2 are registered as alternatives
         let alt_peers = manager
