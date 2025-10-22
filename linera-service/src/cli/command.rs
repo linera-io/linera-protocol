@@ -344,6 +344,7 @@ pub enum ClientCommand {
         /// The chain to query. If omitted, query the default chain of the wallet.
         chain_id: Option<ChainId>,
         /// Skip validators with less voting weight that this.
+        #[arg(long)]
         min_votes: Option<u64>,
     },
 
