@@ -723,6 +723,7 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let block = certificate.block();
+        let block_hash = certificate.hash();
         let height = block.header.height;
         let chain_id = block.header.chain_id;
 
@@ -871,29 +872,28 @@ where
             .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
-        let verified_outcome = if let Some(mut execution_state) =
-            self.execution_state_cache.remove(&outcome.state_hash)
-        {
-            chain.execution_state = execution_state
-                .with_context(|ctx| {
-                    chain
-                        .execution_state
-                        .context()
-                        .clone_with_base_key(ctx.base_key().bytes.clone())
-                })
-                .await;
-            outcome.clone()
-        } else {
-            chain
-                .execute_block(
-                    &proposed_block,
-                    local_time,
-                    None,
-                    &published_blobs,
-                    oracle_responses,
-                )
-                .await?
-        };
+        let verified_outcome =
+            if let Some(mut execution_state) = self.execution_state_cache.remove(&block_hash) {
+                chain.execution_state = execution_state
+                    .with_context(|ctx| {
+                        chain
+                            .execution_state
+                            .context()
+                            .clone_with_base_key(ctx.base_key().bytes.clone())
+                    })
+                    .await;
+                outcome.clone()
+            } else {
+                chain
+                    .execute_block(
+                        &proposed_block,
+                        local_time,
+                        None,
+                        &published_blobs,
+                        oracle_responses,
+                    )
+                    .await?
+            };
         // We should always agree on the messages and state hash.
         ensure!(
             outcome == verified_outcome,
@@ -1560,8 +1560,10 @@ where
                     .execute_block(block, local_time, round, published_blobs, None),
             )
             .await?;
+        let block = Block::new(block.clone(), outcome.clone());
+        let block_hash = CryptoHash::new(&block);
         self.execution_state_cache.insert_owned(
-            &outcome.state_hash,
+            &block_hash,
             self.chain
                 .execution_state
                 .with_context(|ctx| InactiveContext(ctx.base_key().clone()))
