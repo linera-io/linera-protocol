@@ -706,7 +706,7 @@ where
         let value = ConfirmedBlock::new(
             BlockExecutionOutcome {
                 state_hash,
-                messages: vec![vec![]],
+                messages: vec![vec![direct_credit_message(chain_2, small_transfer)]],
                 oracle_responses: vec![vec![]],
                 events: vec![vec![]],
                 blobs: vec![vec![]],
@@ -4185,14 +4185,14 @@ where
 
     let value = ConfirmedBlock::new(
         BlockExecutionOutcome {
-            messages: vec![vec![]],
+            messages: vec![vec![direct_credit_message(chain_2, small_transfer)]],
             previous_message_blocks: BTreeMap::new(),
             previous_event_blocks: BTreeMap::new(),
             events: vec![vec![]],
             blobs: vec![vec![]],
             state_hash: state.crypto_hash_mut().await?,
             oracle_responses: vec![vec![]],
-            operation_results: vec![],
+            operation_results: vec![OperationResult::default()],
         }
         .with(block),
     );
