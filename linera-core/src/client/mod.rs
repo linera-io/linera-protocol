@@ -375,20 +375,14 @@ impl<Env: Environment> Client<Env> {
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],
         blob_ids: &[BlobId],
     ) -> Result<(), ChainClientError> {
-        self.local_node
-            .store_blobs(
-                &self
-                    .validator_manager
-                    .download_blobs(remote_nodes, blob_ids, self.options.blob_download_timeout)
-                    .await?
-                    .ok_or_else(|| {
-                        ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(
-                            blob_ids.to_vec(),
-                        ))
-                    })?,
-            )
-            .await
-            .map_err(Into::into)
+        let blobs = &self
+            .validator_manager
+            .download_blobs(remote_nodes, blob_ids, self.options.blob_download_timeout)
+            .await?
+            .ok_or_else(|| {
+                ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(blob_ids.to_vec()))
+            })?;
+        self.local_node.store_blobs(blobs).await.map_err(Into::into)
     }
 
     /// Tries to process all the certificates, requesting any missing blobs from the given node.
