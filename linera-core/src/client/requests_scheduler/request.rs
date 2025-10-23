@@ -147,9 +147,14 @@ impl SubsumingKey<RequestResult> for super::request::RequestKey {
             _ => return false, // We subsume only certificate requests
         };
 
-        new_req_heights
-            .iter()
-            .all(|height| in_flight_req_heights.contains(height))
+        let mut in_flight_req_heights_iter = in_flight_req_heights.into_iter();
+
+        for new_height in new_req_heights {
+            if !in_flight_req_heights_iter.any(|h| h == new_height) {
+                return false; // Found a height not covered by in-flight request
+            }
+        }
+        true
     }
 
     fn try_extract_result(
@@ -171,13 +176,12 @@ impl SubsumingKey<RequestResult> for super::request::RequestKey {
         if requested_heights.is_empty() {
             return Some(RequestResult::Certificates(vec![])); // Nothing requested
         }
+        let mut certificates_iter = certificates.iter();
         let mut collected = vec![];
         while let Some(height) = requested_heights.first() {
-            if let Some(pos) = certificates
-                .iter()
-                .position(|cert| &cert.value().height() == height)
-            {
-                collected.push(certificates[pos].clone());
+            // Remove certs below the requested height.
+            if let Some(cert) = certificates_iter.find(|cert| &cert.value().height() == height) {
+                collected.push(cert.clone());
                 requested_heights.remove(0);
             } else {
                 return None; // Missing a requested height
