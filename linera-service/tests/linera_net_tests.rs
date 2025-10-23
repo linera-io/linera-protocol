@@ -4601,11 +4601,15 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
         source: ChainId,
         target: ChainId,
     ) -> ClientWrapper {
+        let duration = Duration::from_secs(60);
         async {
-            while client
-                .transfer_with_silent_logs(Amount::ONE, source, target)
-                .await
-                .is_ok()
+            while tokio::time::timeout(
+                duration,
+                client.transfer_with_silent_logs(Amount::ONE, source, target),
+            )
+            .await
+            .expect("Transfer timed out")
+            .is_ok()
             {
                 notifier.try_send(()).unwrap();
             }
