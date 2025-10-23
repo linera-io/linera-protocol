@@ -358,8 +358,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
             },
             peer.clone(),
             |peer| async move {
-                peer.download_certificates_by_heights(chain_id, heights)
-                    .await
+                Box::pin(peer.download_certificates_by_heights(chain_id, heights)).await
             },
         )
         .await
