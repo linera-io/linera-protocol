@@ -18,7 +18,7 @@ use async_graphql::InputType;
 use futures::{
     channel::mpsc,
     future::{self, Either},
-    SinkExt, StreamExt,
+    StreamExt,
 };
 use guard::INTEGRATION_TEST_GUARD;
 use linera_base::{
@@ -4607,7 +4607,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
                 .await
                 .is_ok()
             {
-                notifier.send(()).await.unwrap();
+                notifier.try_send(()).unwrap();
             }
         }
         .await;
@@ -4642,7 +4642,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
     client2.sync(chain2).await?;
 
     // Both clients make transfers from chain 2 to chain 1 in a loop. We use a channel with
-    // capacity 8, the number of expected transfers. (This will stall if there are more.)
+    // capacity 8, the number of expected transfers.
     let (tx, rx) = mpsc::channel(8);
     let (_client1, _client2) = futures::join!(
         run_client(client1, tx.clone(), chain2, chain1),
