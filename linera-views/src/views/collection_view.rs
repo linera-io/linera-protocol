@@ -121,10 +121,6 @@ impl<W: View> View for ByteCollectionView<W::Context, W> {
         })
     }
 
-    async fn load(context: Self::Context) -> Result<Self, ViewError> {
-        Self::post_load(context, &[])
-    }
-
     fn rollback(&mut self) {
         self.delete_storage_first = false;
         self.updates.get_mut().clear();
@@ -891,10 +887,6 @@ where
         })
     }
 
-    async fn load(context: Self::Context) -> Result<Self, ViewError> {
-        Self::post_load(context, &[])
-    }
-
     fn rollback(&mut self) {
         self.collection.rollback()
     }
@@ -1308,10 +1300,6 @@ impl<I: Send + Sync, W: View> View for CustomCollectionView<W::Context, I, W> {
             collection,
             _phantom: PhantomData,
         })
-    }
-
-    async fn load(context: Self::Context) -> Result<Self, ViewError> {
-        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {

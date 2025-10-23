@@ -13,7 +13,6 @@ use crate::{
     batch::Batch,
     common::from_bytes_option,
     context::Context,
-    store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -94,12 +93,6 @@ where
             hash: Mutex::new(hash),
             inner,
         })
-    }
-
-    async fn load(context: Self::Context) -> Result<Self, ViewError> {
-        let keys = Self::pre_load(&context)?;
-        let values = context.store().read_multi_values_bytes(keys).await?;
-        Self::post_load(context, &values)
     }
 
     fn rollback(&mut self) {
