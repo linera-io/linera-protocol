@@ -48,8 +48,7 @@ CREATE TABLE IF NOT EXISTS operations (
     authenticated_owner TEXT,
     data BLOB NOT NULL, -- Serialized operation
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (block_hash) REFERENCES blocks(hash),
-    UNIQUE(block_hash, operation_index)
+    FOREIGN KEY (block_hash) REFERENCES blocks(hash)
 );
 
 CREATE INDEX IF NOT EXISTS idx_operations_block_hash ON operations(block_hash);
@@ -79,8 +78,7 @@ CREATE TABLE IF NOT EXISTS outgoing_messages (
     system_recipient TEXT, -- Withdraw recipient
     data BLOB NOT NULL, -- Serialized message content
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (block_hash) REFERENCES blocks(hash),
-    UNIQUE(block_hash, transaction_index, message_index)
+    FOREIGN KEY (block_hash) REFERENCES blocks(hash)
 );
 
 CREATE INDEX IF NOT EXISTS idx_outgoing_messages_block_hash ON outgoing_messages(block_hash);
@@ -101,8 +99,7 @@ CREATE TABLE IF NOT EXISTS events (
     stream_index INTEGER NOT NULL,
     data BLOB NOT NULL, -- Event payload
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (block_hash) REFERENCES blocks(hash),
-    UNIQUE(block_hash, transaction_index, event_index)
+    FOREIGN KEY (block_hash) REFERENCES blocks(hash)
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_block_hash ON events(block_hash);
@@ -120,8 +117,7 @@ CREATE TABLE IF NOT EXISTS oracle_responses (
     blob_hash TEXT, -- For blob responses
     data BLOB, -- For service responses
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (block_hash) REFERENCES blocks(hash),
-    UNIQUE(block_hash, transaction_index, response_index)
+    FOREIGN KEY (block_hash) REFERENCES blocks(hash)
 );
 
 CREATE INDEX IF NOT EXISTS idx_oracle_responses_block_hash ON oracle_responses(block_hash);
