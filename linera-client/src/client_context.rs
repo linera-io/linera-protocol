@@ -36,7 +36,7 @@ use {
         data_types::Amount,
         identifiers::{ApplicationId, BlobType},
     },
-    linera_core::client::ChainClientError,
+    linera_core::client::chain_client,
     linera_execution::{
         system::{OpenChainConfig, SystemOperation},
         Operation,
@@ -331,7 +331,7 @@ where
         block_cache_size: usize,
         execution_state_cache_size: usize,
     ) -> Self {
-        use linera_core::{client::ChainClientOptions, node::CrossChainMessageDelivery};
+        use linera_core::{client::chain_client, node::CrossChainMessageDelivery};
 
         let send_recv_timeout = Duration::from_millis(4000);
         let retry_delay = Duration::from_millis(1000);
@@ -363,9 +363,9 @@ where
             name,
             chain_worker_ttl,
             sender_chain_worker_ttl,
-            ChainClientOptions {
+            chain_client::Options {
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
-                ..ChainClientOptions::test_default()
+                ..chain_client::Options::test_default()
             },
             block_cache_size,
             execution_state_cache_size,
@@ -987,7 +987,7 @@ where
                 .map(|chain_client| async move {
                     chain_client.process_inbox().await?;
                     info!("Processed inbox for chain {:?}", chain_client.chain_id());
-                    Ok::<(), ChainClientError>(())
+                    Ok::<(), chain_client::Error>(())
                 })
                 .buffer_unordered(wrap_up_max_in_flight);
             stream.try_collect::<Vec<_>>().await?;

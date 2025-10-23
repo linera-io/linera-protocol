@@ -8,12 +8,12 @@ use linera_base::data_types::Blob;
 use linera_chain::data_types::ProposedBlock;
 use tokio::sync::Mutex;
 
-use super::PendingProposal;
+use super::super::PendingProposal;
 use crate::data_types::ChainInfo;
 
 /// The state of our interaction with a particular chain: how far we have synchronized it and
 /// whether we are currently attempting to propose a new block.
-pub struct ChainClientState {
+pub struct State {
     /// The block we are currently trying to propose for the next height, if any.
     ///
     /// This is always at the same height as `next_block_height`.
@@ -24,9 +24,9 @@ pub struct ChainClientState {
     client_mutex: Arc<Mutex<()>>,
 }
 
-impl ChainClientState {
-    pub fn new(pending_proposal: Option<PendingProposal>) -> ChainClientState {
-        ChainClientState {
+impl State {
+    pub fn new(pending_proposal: Option<PendingProposal>) -> State {
+        State {
             pending_proposal,
             client_mutex: Arc::default(),
         }
@@ -34,8 +34,8 @@ impl ChainClientState {
 
     /// Clones the state. This must only be used to update the state, and one of the two clones
     /// must be dropped.
-    pub(super) fn clone_for_update_unchecked(&self) -> ChainClientState {
-        ChainClientState {
+    pub(crate) fn clone_for_update_unchecked(&self) -> State {
+        State {
             pending_proposal: self.pending_proposal.clone(),
             client_mutex: Arc::clone(&self.client_mutex),
         }
@@ -57,7 +57,6 @@ impl ChainClientState {
             );
             return;
         }
-        let blobs = Vec::from_iter(blobs);
         assert_eq!(
             block.published_blob_ids(),
             BTreeSet::from_iter(blobs.iter().map(Blob::id))
@@ -65,7 +64,7 @@ impl ChainClientState {
         self.pending_proposal = Some(PendingProposal { block, blobs });
     }
 
-    pub(super) fn update_from_info(&mut self, info: &ChainInfo) {
+    pub(crate) fn update_from_info(&mut self, info: &ChainInfo) {
         if let Some(pending) = &self.pending_proposal {
             if pending.block.height < info.next_block_height {
                 tracing::debug!(

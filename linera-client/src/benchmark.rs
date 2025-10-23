@@ -16,7 +16,7 @@ use linera_base::{
     time::Instant,
 };
 use linera_core::{
-    client::{ChainClient, ChainClientError},
+    client::chain_client::{self, ChainClient},
     Environment,
 };
 use linera_execution::{system::SystemOperation, Operation};
@@ -42,7 +42,7 @@ pub enum BenchmarkError {
     #[error("Failed to join task: {0}")]
     JoinError(#[from] task::JoinError),
     #[error("Chain client error: {0}")]
-    ChainClient(#[from] ChainClientError),
+    ChainClient(#[from] chain_client::Error),
     #[error("Current histogram count is less than previous histogram count")]
     HistogramCountMismatch,
     #[error("Expected histogram value, got {0:?}")]

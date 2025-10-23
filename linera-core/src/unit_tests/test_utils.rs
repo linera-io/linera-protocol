@@ -48,7 +48,7 @@ use {
 };
 
 use crate::{
-    client::{ChainClientOptions, Client},
+    client::{chain_client, Client},
     data_types::*,
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
@@ -1060,7 +1060,7 @@ where
             format!("Client node for {:.8}", chain_id),
             Duration::from_secs(30),
             Duration::from_secs(1),
-            ChainClientOptions::test_default(),
+            chain_client::Options::test_default(),
             5_000,
             10_000,
         ));

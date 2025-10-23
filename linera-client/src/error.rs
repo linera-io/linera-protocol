@@ -21,7 +21,7 @@ pub(crate) enum Inner {
     #[error("chain error: {0}")]
     Chain(#[from] linera_chain::ChainError),
     #[error("chain client error: {0}")]
-    ChainClient(#[from] linera_core::client::ChainClientError),
+    ChainClient(#[from] linera_core::client::chain_client::Error),
     #[error("options error: {0}")]
     Options(#[from] crate::client_options::Error),
     #[error("persistence error: {0}")]
