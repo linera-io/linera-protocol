@@ -10,7 +10,6 @@ use crate::{
     common::{from_bytes_option_or_default, HasherOutput},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
-    store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View},
     ViewError,
 };
@@ -90,12 +89,6 @@ where
             stored_value,
             update: None,
         })
-    }
-
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let keys = Self::pre_load(&context)?;
-        let values = context.store().read_multi_values_bytes(keys).await?;
-        Self::post_load(context, &values)
     }
 
     fn rollback(&mut self) {
