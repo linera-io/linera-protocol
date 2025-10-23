@@ -653,7 +653,11 @@ impl Runnable for Job {
                     }
                     _ => {}
                 }
-                let chain_client = context.make_chain_client(context.wallet.genesis_admin_chain());
+                let admin_id = context.wallet.genesis_admin_chain();
+                let chain_client = context.make_chain_client(admin_id);
+                // Synchronize the chain state to make sure we're applying the changes to the
+                // latest committee.
+                chain_client.synchronize_chain_state(admin_id).await?;
                 let maybe_certificate = context
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
