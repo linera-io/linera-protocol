@@ -4,10 +4,13 @@
 use linera_base::data_types::{Blob, BlockHeight, Bytecode};
 #[cfg(with_testing)]
 use linera_base::vm::VmRuntime;
-use linera_views::context::MemoryContext;
+use linera_views::{context::MemoryContext, views::CryptoHashView};
 
 use super::*;
-use crate::{test_utils::dummy_chain_description, ExecutionStateView, TestExecutionRuntimeContext};
+use crate::{
+    test_utils::dummy_chain_description, ExecutionStateView, TestExecutionRuntimeContext,
+    EPOCH_STOP_HASHING,
+};
 
 /// Returns an execution state view and a matching operation context, for epoch 1, with root
 /// chain 0 as the admin ID and one empty committee.
@@ -126,6 +129,31 @@ async fn empty_accounts_are_removed() -> anyhow::Result<()> {
     view.system.debit(&owner, amount).await?;
 
     assert!(view.system.balances.indices().await?.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn hashing_test() -> anyhow::Result<()> {
+    let (mut view, _) = new_view_and_context().await;
+
+    let zero_hash = CryptoHash::from([0u8; 32]);
+
+    assert_ne!(view.crypto_hash_mut().await?, zero_hash);
+
+    let epoch = EPOCH_STOP_HASHING.try_sub_one()?;
+    let mut committees = BTreeMap::new();
+    committees.insert(epoch, Committee::default());
+    view.system.committees.set(committees.clone());
+    view.system.epoch.set(epoch);
+    // The hash should still be nonzero before the threshold epoch.
+    assert_ne!(view.crypto_hash_mut().await?, zero_hash);
+
+    committees.insert(EPOCH_STOP_HASHING, Committee::default());
+    view.system.committees.set(committees);
+    view.system.epoch.set(EPOCH_STOP_HASHING);
+    // Starting from this epoch, the hash should be all zeros.
+    assert_eq!(view.crypto_hash_mut().await?, zero_hash);
 
     Ok(())
 }
