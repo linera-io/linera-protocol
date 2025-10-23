@@ -13,6 +13,7 @@ use std::{
     str::FromStr,
 };
 
+use allocative::{Allocative, Visitor};
 use k256::{
     ecdsa::{Signature, SigningKey, VerifyingKey},
     elliptic_curve::sec1::FromEncodedPoint,
@@ -43,6 +44,12 @@ pub struct Secp256k1SecretKey(pub SigningKey);
 /// A secp256k1 public key.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone)]
 pub struct Secp256k1PublicKey(pub VerifyingKey);
+
+impl Allocative for Secp256k1PublicKey {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        visitor.visit_simple_sized::<Self>();
+    }
+}
 
 impl Hash for Secp256k1PublicKey {
     fn hash<H: Hasher>(&self, state: &mut H) {

@@ -38,6 +38,7 @@ wasmtime = ["dep:wasmtime", "linera-witty/wasmtime"]
 web = ["linera-base/web", "linera-views/web", "js-sys"]
 
 [dependencies]
+allocative.workspace = true
 alloy-primitives = { workspace = true, optional = true }
 alloy-sol-types = { workspace = true, optional = true }
 anyhow.workspace = true
