@@ -99,6 +99,10 @@ where
 {
     type NotificationStream = NotificationStream;
 
+    fn address(&self) -> String {
+        format!("local:{}", self.public_key)
+    }
+
     async fn handle_block_proposal(
         &self,
         proposal: BlockProposal,
@@ -1048,6 +1052,7 @@ where
             Duration::from_secs(30),
             Duration::from_secs(1),
             ChainClientOptions::test_default(),
+            crate::client::RequestsSchedulerConfig::default(),
         ));
         Ok(client.create_chain_client(
             chain_id,
