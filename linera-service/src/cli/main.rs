@@ -696,7 +696,7 @@ impl Runnable for Job {
                                 }
                                 RemoveValidator { public_key } => {
                                     if validators.remove(&public_key).is_none() {
-                                        warn!("Validator {public_key} does not exist; aborting.");
+                                        error!("Validator {public_key} does not exist; aborting.");
                                         return Ok(ClientOutcome::Committed(None));
                                     }
                                 }
@@ -709,7 +709,7 @@ impl Runnable for Job {
                                     // Validate that all validators to add do not already exist.
                                     for validator in &add_validators {
                                         if validators.contains_key(&validator.public_key) {
-                                            warn!(
+                                            error!(
                                                 "Cannot add existing validator: {}. Aborting operation.",
                                                 validator.public_key
                                             );
@@ -720,7 +720,7 @@ impl Runnable for Job {
                                     for validator in &modify_validators {
                                         match validators.get(&validator.public_key) {
                                             None => {
-                                                warn!(
+                                                error!(
                                                     "Cannot modify nonexistent validator: {}. Aborting operation.",
                                                     validator.public_key
                                                 );
@@ -732,7 +732,7 @@ impl Runnable for Job {
                                                     && existing.account_public_key == validator.account_key
                                                     && existing.votes == validator.votes
                                                 {
-                                                    warn!(
+                                                    error!(
                                                         "Validator {} is not being modified. Aborting operation.",
                                                         validator.public_key
                                                     );
@@ -744,7 +744,7 @@ impl Runnable for Job {
                                     // Validate that all validators to remove exist.
                                     for public_key in &remove_validators {
                                         if !validators.contains_key(public_key) {
-                                            warn!(
+                                            error!(
                                                 "Cannot remove nonexistent validator: {public_key}. Aborting operation."
                                             );
                                             return Ok(ClientOutcome::Committed(None));

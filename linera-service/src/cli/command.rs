@@ -406,6 +406,9 @@ pub enum ClientCommand {
     },
 
     /// Add or modify a validator (admin only)
+    ///
+    /// Deprecated: Use change-validators instead, which allows adding, changing and removing
+    /// any number of validators in a single operation.
     SetValidator {
         /// The public key of the validator.
         #[arg(long)]
@@ -429,6 +432,9 @@ pub enum ClientCommand {
     },
 
     /// Remove a validator (admin only)
+    ///
+    /// Deprecated: Use change-validators instead, which allows adding, changing and removing
+    /// any number of validators in a single operation.
     RemoveValidator {
         /// The public key of the validator.
         #[arg(long)]

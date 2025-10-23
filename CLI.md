@@ -542,6 +542,8 @@ Synchronizes all validators with the local state of chains
 
 Add or modify a validator (admin only)
 
+Deprecated: Use change-validators instead, which allows adding, changing and removing any number of validators in a single operation.
+
 **Usage:** `linera set-validator [OPTIONS] --public-key <PUBLIC_KEY> --account-key <ACCOUNT_KEY> --address <ADDRESS>`
 
 ###### **Options:**
@@ -559,6 +561,8 @@ Add or modify a validator (admin only)
 ## `linera remove-validator`
 
 Remove a validator (admin only)
+
+Deprecated: Use change-validators instead, which allows adding, changing and removing any number of validators in a single operation.
 
 **Usage:** `linera remove-validator --public-key <PUBLIC_KEY>`
 
