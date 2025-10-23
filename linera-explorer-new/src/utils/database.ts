@@ -1,6 +1,7 @@
 import { Block, BlockInfo, IncomingBundle, PostedMessage, ChainInfo, Operation, Message, Event, OracleResponse, IncomingBundleWithMessages } from '../types/blockchain';
 
-const API_BASE_URL = 'http://localhost:3002/api';
+// Use relative path for API calls - works in all environments (local dev via proxy, production via ingress)
+const API_BASE_URL = '/api';
 
 export class BlockchainAPI {
   // Get all blocks with pagination
