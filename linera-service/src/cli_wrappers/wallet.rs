@@ -8,6 +8,7 @@ use std::{
     marker::PhantomData,
     mem,
     path::{Path, PathBuf},
+    pin::Pin,
     process::Stdio,
     str::FromStr,
     sync,
@@ -23,7 +24,7 @@ use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, InMemorySigner},
-    data_types::{Amount, Bytecode, Epoch},
+    data_types::{Amount, BlockHeight, Bytecode, Epoch},
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId,
     },
@@ -42,6 +43,12 @@ use tokio::{
     process::{Child, Command},
     sync::oneshot,
     task::JoinHandle,
+};
+#[cfg(with_testing)]
+use {
+    futures::FutureExt as _,
+    linera_core::worker::Reason,
+    std::{collections::BTreeSet, future::Future},
 };
 
 use crate::{
@@ -1532,18 +1539,27 @@ impl NodeService {
             .with_abi())
     }
 
-    /// Obtains the hash of the `chain`'s tip block, as known by this node service.
-    pub async fn chain_tip_hash(&self, chain: ChainId) -> Result<Option<CryptoHash>> {
-        let query = format!(r#"query {{ block(chainId: "{chain}") {{ hash }} }}"#);
+    /// Obtains the hash and height of the `chain`'s tip block, as known by this node service.
+    pub async fn chain_tip(&self, chain: ChainId) -> Result<Option<(CryptoHash, BlockHeight)>> {
+        let query = format!(
+            r#"query {{ block(chainId: "{chain}") {{
+                hash
+                block {{ header {{ height }} }}
+            }} }}"#
+        );
 
         let mut response = self.query_node(&query).await?;
 
-        match mem::take(&mut response["block"]["hash"]) {
-            Value::Null => Ok(None),
-            Value::String(hash) => Ok(Some(
+        match (
+            mem::take(&mut response["block"]["hash"]),
+            mem::take(&mut response["block"]["block"]["header"]["height"]),
+        ) {
+            (Value::Null, Value::Null) => Ok(None),
+            (Value::String(hash), Value::Number(height)) => Ok(Some((
                 hash.parse()
                     .context("Received an invalid hash {hash:?} for chain tip")?,
-            )),
+                BlockHeight(height.as_u64().unwrap()),
+            ))),
             invalid_data => bail!("Expected a tip hash string, but got {invalid_data:?} instead"),
         }
     }
@@ -1552,7 +1568,7 @@ impl NodeService {
     pub async fn notifications(
         &self,
         chain_id: ChainId,
-    ) -> Result<impl Stream<Item = Result<Notification>>> {
+    ) -> Result<Pin<Box<impl Stream<Item = Result<Notification>>>>> {
         let query = format!("subscription {{ notifications(chainId: \"{chain_id}\") }}",);
         let url = format!("ws://localhost:{}/ws", self.port);
         let mut request = url.into_client_request()?;
@@ -1585,9 +1601,8 @@ impl NodeService {
           }
         });
         websocket.send(query_json.to_string().into()).await?;
-        Ok(websocket
-            .map_err(anyhow::Error::from)
-            .and_then(|message| async {
+        Ok(Box::pin(websocket.map_err(anyhow::Error::from).and_then(
+            |message| async {
                 let text = message.into_text()?;
                 let value: Value = serde_json::from_str(&text).context("invalid JSON")?;
                 if let Some(errors) = value["payload"].get("errors") {
@@ -1595,7 +1610,8 @@ impl NodeService {
                 }
                 serde_json::from_value(value["payload"]["data"]["notifications"].clone())
                     .context("Failed to deserialize notification")
-            }))
+            },
+        )))
     }
 }
 
@@ -1724,6 +1740,106 @@ impl<A> From<String> for ApplicationWrapper<A> {
         ApplicationWrapper {
             uri,
             _phantom: PhantomData,
+        }
+    }
+}
+
+/// Returns the timeout for tests that wait for notifications, either read from the env
+/// variable `LINERA_TEST_NOTIFICATION_TIMEOUT_MS`, or the default value of 10 seconds.
+#[cfg(with_testing)]
+fn notification_timeout() -> Duration {
+    const NOTIFICATION_TIMEOUT_MS_ENV: &str = "LINERA_TEST_NOTIFICATION_TIMEOUT_MS";
+    const NOTIFICATION_TIMEOUT_MS_DEFAULT: u64 = 10_000;
+
+    match env::var(NOTIFICATION_TIMEOUT_MS_ENV) {
+        Ok(var) => Duration::from_millis(var.parse().unwrap_or_else(|error| {
+            panic!("{NOTIFICATION_TIMEOUT_MS_ENV} is not a valid number: {error}")
+        })),
+        Err(env::VarError::NotPresent) => Duration::from_millis(NOTIFICATION_TIMEOUT_MS_DEFAULT),
+        Err(env::VarError::NotUnicode(_)) => {
+            panic!("{NOTIFICATION_TIMEOUT_MS_ENV} must be valid Unicode")
+        }
+    }
+}
+
+#[cfg(with_testing)]
+pub trait NotificationsExt {
+    /// Waits for a notification for which `f` returns `Some(t)`, and returns `t`.
+    fn wait_for<T>(
+        &mut self,
+        f: impl FnMut(Notification) -> Option<T>,
+    ) -> impl Future<Output = Result<T>>;
+
+    /// Waits for a `NewEvents` notification for the given block height. If no height is specified,
+    /// any height is accepted.
+    fn wait_for_events(
+        &mut self,
+        expected_height: impl Into<Option<BlockHeight>>,
+    ) -> impl Future<Output = Result<BTreeSet<StreamId>>> {
+        let expected_height = expected_height.into();
+        self.wait_for(move |notification| {
+            if let Reason::NewEvents {
+                height,
+                event_streams,
+                ..
+            } = notification.reason
+            {
+                if expected_height.is_none_or(|h| h == height) {
+                    return Some(event_streams);
+                }
+            }
+            None
+        })
+    }
+
+    /// Waits for a `NewBlock` notification for the given block height. If no height is specified,
+    /// any height is accepted.
+    fn wait_for_block(
+        &mut self,
+        expected_height: impl Into<Option<BlockHeight>>,
+    ) -> impl Future<Output = Result<CryptoHash>> {
+        let expected_height = expected_height.into();
+        self.wait_for(move |notification| {
+            if let Reason::NewBlock { height, hash, .. } = notification.reason {
+                if expected_height.is_none_or(|h| h == height) {
+                    return Some(hash);
+                }
+            }
+            None
+        })
+    }
+
+    /// Waits for a `NewIncomingBundle` notification for the given sender chain and sender block
+    /// height. If no height is specified, any height is accepted.
+    fn wait_for_bundle(
+        &mut self,
+        expected_origin: ChainId,
+        expected_height: impl Into<Option<BlockHeight>>,
+    ) -> impl Future<Output = Result<()>> {
+        let expected_height = expected_height.into();
+        self.wait_for(move |notification| {
+            if let Reason::NewIncomingBundle { height, origin } = notification.reason {
+                if expected_height.is_none_or(|h| h == height) && origin == expected_origin {
+                    return Some(());
+                }
+            }
+            None
+        })
+    }
+}
+
+#[cfg(with_testing)]
+impl<S: Stream<Item = Result<Notification>>> NotificationsExt for Pin<Box<S>> {
+    async fn wait_for<T>(&mut self, mut f: impl FnMut(Notification) -> Option<T>) -> Result<T> {
+        let mut timeout = Box::pin(linera_base::time::timer::sleep(notification_timeout())).fuse();
+        loop {
+            let notification = futures::select! {
+                () = timeout => bail!("Timeout waiting for notification"),
+                notification = self.next().fuse() => notification.context("Stream closed")??,
+            };
+            if let Some(t) = f(notification) {
+                return Ok(t);
+            }
         }
     }
 }
