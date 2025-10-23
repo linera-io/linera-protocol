@@ -116,10 +116,26 @@ impl Runnable for ExporterContext {
         );
 
         let service = ExporterService::new(sender);
-        service
-            .run(shutdown_notifier, self.config.service_config.port)
-            .await?;
-        handle.join().unwrap()
+
+        // Monitor the block processor thread in a blocking task
+        let mut handle_monitor = tokio::task::spawn_blocking(move || handle.join().unwrap());
+
+        // Run service and monitor block processor thread concurrently
+        // If the block processor fails, we need to detect it and propagate the error
+        tokio::select! {
+            service_result = service.run(shutdown_notifier.clone(), self.config.service_config.port) => {
+                // Service completed first (shutdown signal received)
+                service_result?;
+                // Now wait for the block processor to finish
+                handle_monitor.await.expect("Failed to join block processor thread")
+            }
+            processor_result = &mut handle_monitor => {
+                // Block processor thread completed first - likely an error
+                let result = processor_result.expect("Failed to join block processor thread");
+                shutdown_notifier.cancel();
+                result
+            }
+        }
     }
 }
 

@@ -11,6 +11,7 @@ use std::{
 use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
 use linera_service::config::{Destination, DestinationId, DestinationKind};
 use linera_storage::Storage;
+use tokio::task::{AbortHandle, JoinSet};
 
 use crate::{runloops::logging_exporter::LoggingExporter, storage::ExporterStorage};
 
@@ -25,8 +26,10 @@ where
     storage: ExporterStorage<S>,
     startup_destinations: HashSet<DestinationId>,
     current_committee_destinations: HashSet<DestinationId>,
-    // Handles to all the exporter tasks spawned. Allows to join them later and shut down the thread gracefully.
-    join_handles: HashMap<DestinationId, tokio::task::JoinHandle<anyhow::Result<()>>>,
+    // JoinSet to monitor all exporter tasks and detect failures immediately
+    pub(super) join_set: JoinSet<(DestinationId, anyhow::Result<()>)>,
+    // AbortHandles to selectively abort tasks when needed (e.g., old committee members)
+    abort_handles: HashMap<DestinationId, AbortHandle>,
 }
 
 impl<F, S> ExportersTracker<F, S>
@@ -52,7 +55,8 @@ where
                 .map(|destination| destination.id())
                 .collect(),
             current_committee_destinations: HashSet::new(),
-            join_handles: HashMap::new(),
+            join_set: JoinSet::new(),
+            abort_handles: HashMap::new(),
         }
     }
 
@@ -89,23 +93,31 @@ where
 
     /// Shuts down block exporters for destinations that are not in the new committee.
     pub(super) fn shutdown_old_committee(&mut self, new_committee: Vec<DestinationId>) {
+        let new_committee_set: HashSet<_> = new_committee.iter().cloned().collect();
         // Shutdown the old committee members that are not in the new committee.
         for id in self
             .current_committee_destinations
-            .difference(&new_committee.iter().cloned().collect())
+            .difference(&new_committee_set)
         {
             tracing::trace!(id=?id, "shutting down old committee member");
-            if let Some(abort_handle) = self.join_handles.remove(id) {
+            if let Some(abort_handle) = self.abort_handles.remove(id) {
                 abort_handle.abort();
             }
         }
     }
 
-    pub(super) async fn join_all(self) {
-        for (id, handle) in self.join_handles {
-            // Wait for all tasks to finish.
-            if let Err(e) = handle.await.unwrap() {
-                tracing::error!(id=?id, error=?e, "failed to join task");
+    pub(super) async fn join_all(mut self) {
+        while let Some(result) = self.join_set.join_next().await {
+            match result {
+                Ok((id, Ok(()))) => {
+                    tracing::info!(destination_id=?id, "Exporter task completed successfully");
+                }
+                Ok((id, Err(e))) => {
+                    tracing::error!(destination_id=?id, error=?e, "Exporter task failed");
+                }
+                Err(join_err) => {
+                    tracing::error!(error=?join_err, "Task panicked or was cancelled");
+                }
             }
         }
     }
@@ -114,7 +126,18 @@ where
         let exporter_builder = &self.exporters_builder;
         let storage = self.storage.clone().expect("Failed to clone storage");
         let join_handle = exporter_builder.spawn(id.clone(), storage);
-        self.join_handles.insert(id, join_handle);
+
+        // Spawn task into JoinSet with ID for tracking and store abort handle
+        let id_for_task = id.clone();
+        let abort_handle = self.join_set.spawn(async move {
+            let result = match join_handle.await {
+                Ok(r) => r, // Task completed, propagate its Result
+                Err(join_err) => Err(anyhow::anyhow!("Task panicked: {}", join_err)),
+            };
+            (id_for_task, result)
+        });
+
+        self.abort_handles.insert(id, abort_handle);
     }
 }
 

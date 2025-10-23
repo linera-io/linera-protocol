@@ -78,6 +78,30 @@ where
 
                 _ = interval.tick() => self.storage.save().await?,
 
+                Some(result) = self.exporters_tracker.join_set.join_next() => {
+                    // A task completed - check if it failed
+                    match result {
+                        Ok((id, Ok(()))) => {
+                            tracing::info!(destination_id=?id, "Exporter task completed successfully during execution");
+                        }
+                        Ok((id, Err(e))) => {
+                            tracing::error!(
+                                destination_id=?id,
+                                error=%e,
+                                "Exporter task failed"
+                            );
+                            return Err(ExporterError::GenericError(e.into()));
+                        }
+                        Err(join_err) => {
+                            tracing::error!(
+                                error=%join_err,
+                                "Exporter task panicked"
+                            );
+                            return Err(ExporterError::GenericError(Box::new(join_err)));
+                        }
+                    }
+                },
+
                 Some(next_block_notification) = self.new_block_queue.recv() => {
                     let walker = Walker::new(&mut self.storage);
                     match walker.walk(next_block_notification).await {
