@@ -31,7 +31,7 @@ use thiserror::Error;
 use tracing::{instrument, Level};
 
 use crate::{
-    client::ChainClientError,
+    client::chain_client,
     data_types::{ChainInfo, ChainInfoQuery},
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
@@ -119,7 +119,7 @@ pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
 where
     A: ValidatorNode + Clone + 'static,
     F: Clone + Fn(RemoteNode<A>) -> R,
-    R: Future<Output = Result<V, ChainClientError>> + 'a,
+    R: Future<Output = Result<V, chain_client::Error>> + 'a,
     G: Fn(&V) -> K,
     K: Hash + PartialEq + Eq + Clone + 'static,
     V: 'static,
@@ -163,7 +163,7 @@ where
             Err(err) => {
                 // TODO(#2857): Handle non-remote errors properly.
                 let err = match err {
-                    ChainClientError::RemoteNodeError(err) => err,
+                    chain_client::Error::RemoteNodeError(err) => err,
                     err => NodeError::ResponseHandlingError {
                         error: err.to_string(),
                     },
@@ -228,7 +228,7 @@ where
         &mut self,
         certificate: GenericCertificate<ConfirmedBlock>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let mut result = self
             .remote_node
             .handle_optimized_confirmed_certificate(&certificate, delivery)
@@ -275,7 +275,7 @@ where
         &mut self,
         certificate: GenericCertificate<ValidatedBlock>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let result = self
             .remote_node
             .handle_optimized_validated_certificate(&certificate, delivery)
@@ -311,7 +311,7 @@ where
         chain_id: ChainId,
         round: Round,
         height: BlockHeight,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let query = ChainInfoQuery::new(chain_id).with_timeout(height, round);
         match self
             .remote_node
@@ -348,7 +348,7 @@ where
         &mut self,
         proposal: Box<BlockProposal>,
         mut blob_ids: Vec<BlobId>,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let chain_id = proposal.content.block.chain_id;
         let mut sent_cross_chain_updates = BTreeMap::new();
         let mut publisher_chain_ids_sent = BTreeSet::new();
@@ -499,7 +499,7 @@ where
         }
     }
 
-    async fn update_admin_chain(&mut self) -> Result<(), ChainClientError> {
+    async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
         let local_admin_info = self.local_node.chain_info(self.admin_id).await?;
         Box::pin(self.send_chain_information(
             self.admin_id,
@@ -514,7 +514,7 @@ where
         chain_id: ChainId,
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         let info = if let Ok(height) = target_block_height.try_sub_one() {
             // Figure out which certificates this validator is missing. In many cases, it's just the
             // last one, so we optimistically send that one right away.
@@ -527,7 +527,7 @@ where
                 .into_iter()
                 .next()
                 .ok_or_else(|| {
-                    ChainClientError::InternalError(
+                    chain_client::Error::InternalError(
                         "send_chain_information called with invalid target_block_height",
                     )
                 })?;
@@ -536,9 +536,9 @@ where
                 .storage_client()
                 .read_certificate(hash)
                 .await?
-                .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
+                .ok_or_else(|| chain_client::Error::MissingConfirmedBlock(hash))?;
             let info = match self.send_confirmed_certificate(certificate, delivery).await {
-                Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(event_ids)))
+                Err(chain_client::Error::RemoteNodeError(NodeError::EventsNotFound(event_ids)))
                     if event_ids.iter().all(|event_id| {
                         event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
                             && event_id.chain_id == self.admin_id
@@ -574,7 +574,7 @@ where
                     match ResultReadCertificates::new(certificates, validator_missing_hashes) {
                         ResultReadCertificates::Certificates(certificates) => certificates,
                         ResultReadCertificates::InvalidHashes(hashes) => {
-                            return Err(ChainClientError::ReadCertificatesError(hashes))
+                            return Err(chain_client::Error::ReadCertificatesError(hashes))
                         }
                     };
                 for certificate in certificates {
@@ -665,7 +665,7 @@ where
         &mut self,
         chain_heights: impl IntoIterator<Item = (ChainId, BlockHeight)>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         FuturesUnordered::from_iter(chain_heights.into_iter().map(|(chain_id, height)| {
             let mut updater = self.clone();
             async move {
@@ -682,7 +682,7 @@ where
     pub async fn send_chain_update(
         &mut self,
         action: CommunicateAction,
-    ) -> Result<LiteVote, ChainClientError> {
+    ) -> Result<LiteVote, chain_client::Error> {
         let chain_id = match &action {
             CommunicateAction::SubmitBlock { proposal, .. } => proposal.content.block.chain_id,
             CommunicateAction::FinalizeBlock { certificate, .. } => {

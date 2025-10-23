@@ -11,7 +11,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
-    client::{ChainClient, ChainClientOptions, Client},
+    client::{chain_client, ChainClient, Client},
     environment,
     test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
 };
@@ -122,7 +122,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             format!("Client node for {:.8}", chain_id0),
             Duration::from_secs(30),
             Duration::from_secs(1),
-            ChainClientOptions::test_default(),
+            chain_client::Options::test_default(),
             5_000,
             10_000,
         )),
@@ -210,7 +210,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             "Client node with no chains".to_string(),
             Duration::from_secs(30),
             Duration::from_secs(1),
-            ChainClientOptions::test_default(),
+            chain_client::Options::test_default(),
             5_000,
             10_000,
         )),

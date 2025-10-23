@@ -44,8 +44,8 @@ use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
     client::{
-        BlanketMessagePolicy, ChainClient, ChainClientError, ClientOutcome, ListeningMode,
-        MessageAction, MessagePolicy,
+        chain_client::{self, ChainClient},
+        BlanketMessagePolicy, ClientOutcome, ListeningMode, MessageAction, MessagePolicy,
     },
     local_node::LocalNodeError,
     node::{
@@ -72,7 +72,7 @@ fn test_listener_is_send() {
 
     async fn check_listener(
         chain_client: ChainClient<impl Environment>,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         let (listener, _abort_notifications, _notifications) =
             chain_client.listen(ListeningMode::FullChain).await?;
         ensure_send(&listener);
@@ -124,7 +124,7 @@ where
         );
         assert_eq!(
             builder
-                .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+                .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
                 .await,
             Some(certificate)
         );
@@ -168,7 +168,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
             .await,
         Some(cert)
     );
@@ -182,7 +182,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(1), 3)
             .await,
         Some(cert)
     );
@@ -229,7 +229,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(2), 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(2), 3)
             .await,
         Some(cert1)
     );
@@ -245,7 +245,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(3), 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(3), 3)
             .await,
         Some(cert2)
     );
@@ -304,7 +304,7 @@ where
     assert_eq!(sender.identity().await?, new_owner);
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
             .await,
         Some(certificate)
     );
@@ -346,11 +346,11 @@ where
     assert!(sender.pending_proposal().is_none());
     assert_matches!(
         sender.identity().await,
-        Err(ChainClientError::NotAnOwner(_))
+        Err(chain_client::Error::NotAnOwner(_))
     );
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
             .await,
         Some(certificate)
     );
@@ -364,7 +364,7 @@ where
         sender
             .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
             .await,
-        Err(ChainClientError::NotAnOwner(_))
+        Err(chain_client::Error::NotAnOwner(_))
     );
     Ok(())
 }
@@ -392,10 +392,10 @@ where
         BlockHeight::from(1)
     );
     assert!(sender.pending_proposal().is_none());
-    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
+    assert_eq!(sender.identity().await?, sender.preferred_owner().unwrap());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
             .await,
         Some(certificate)
     );
@@ -414,7 +414,7 @@ where
     // Make a client to try the new key.
     let mut client = builder
         .make_client(
-            sender.chain_id,
+            sender.chain_id(),
             sender_info.block_hash,
             BlockHeight::from(2),
         )
@@ -424,7 +424,7 @@ where
     // the blocks yet.
     assert_matches!(
         client.local_balance().await,
-        Err(ChainClientError::WalletSynchronizationError)
+        Err(chain_client::Error::WalletSynchronizationError)
     );
     client.synchronize_from_validators().await.unwrap();
     assert_eq!(
@@ -437,7 +437,7 @@ where
     let result = client.burn(AccountOwner::CHAIN, Amount::ONE).await;
     assert_matches!(
         result,
-        Err(ChainClientError::CommunicationError(
+        Err(chain_client::Error::CommunicationError(
             CommunicationError::Trusted(ClientIoError { .. }),
         ))
     );
@@ -445,7 +445,7 @@ where
     builder.set_fault_type([2, 3], FaultType::Offline);
     assert_matches!(
         sender.burn(AccountOwner::CHAIN, Amount::ONE).await,
-        Err(ChainClientError::CommunicationError(
+        Err(chain_client::Error::CommunicationError(
             CommunicationError::Trusted(ClientIoError { .. })
         ))
     );
@@ -517,7 +517,7 @@ where
         BlockHeight::from(1)
     );
     assert!(sender.pending_proposal().is_none());
-    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
+    assert_eq!(sender.identity().await?, sender.preferred_owner().unwrap());
     // Make a client to try the new chain.
     let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
     client.set_preferred_owner(new_public_key.into());
@@ -575,7 +575,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(0), 3)
             .await,
         Some(cert)
     );
@@ -599,7 +599,7 @@ where
         BlockHeight::from(1)
     );
     assert!(sender.pending_proposal().is_none());
-    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
+    assert_eq!(sender.identity().await?, sender.preferred_owner().unwrap());
     assert_matches!(
         &certificate.block().body.transactions[0],
         Transaction::ExecuteOperation(Operation::System(system_op)) if matches!(**system_op, SystemOperation::OpenChain(_)),
@@ -607,7 +607,7 @@ where
     );
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(parent.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(parent.chain_id(), BlockHeight::ZERO, 3)
             .await,
         Some(certificate)
     );
@@ -627,7 +627,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(1), 3)
             .await,
         Some(cert)
     );
@@ -678,7 +678,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(1), 3)
             .await,
         Some(cert)
     );
@@ -687,7 +687,7 @@ where
         BlockHeight::from(2)
     );
     assert!(sender.pending_proposal().is_none());
-    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
+    assert_eq!(sender.identity().await?, sender.preferred_owner().unwrap());
     // Make a client to try the new chain.
     let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
     client.set_preferred_owner(new_public_key.into());
@@ -743,7 +743,7 @@ where
     assert!(client1.identity().await.is_ok());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(client1.chain_id(), BlockHeight::ZERO, 3)
             .await,
         Some(certificate)
     );
@@ -754,7 +754,7 @@ where
     assert!(
         matches!(
             &result,
-            Err(ChainClientError::LocalNodeError(
+            Err(chain_client::Error::LocalNodeError(
                 LocalNodeError::WorkerError(WorkerError::ChainError(err))
             )) if matches!(**err, ChainError::ClosedChain)
         ),
@@ -773,7 +773,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client2.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(client2.chain_id(), BlockHeight::from(0), 3)
             .await,
         Some(cert)
     );
@@ -802,7 +802,7 @@ where
     // Since blocks are free of charge on closed chains, empty blocks are not allowed.
     assert_matches!(
         client1.execute_operations(vec![], vec![]).await,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
         )) if matches!(*error, ChainError::EmptyBlock)
     );
@@ -838,7 +838,7 @@ where
     // Malicious validators always return ArithmeticError when handling a proposal.
     assert_matches!(
         result,
-        Err(ChainClientError::CommunicationError(
+        Err(chain_client::Error::CommunicationError(
             CommunicationError::Trusted(NodeError::InactiveChain(_))
         )),
         "unexpected result"
@@ -887,7 +887,7 @@ where
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(3),
-            Account::chain(client2.chain_id),
+            Account::chain(client2.chain_id()),
         )
         .await
         .unwrap_ok_committed();
@@ -911,7 +911,7 @@ where
 
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(client1.chain_id(), BlockHeight::ZERO, 3)
             .await,
         Some(certificate)
     );
@@ -940,13 +940,13 @@ where
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Account::chain(client1.chain_id),
+            Account::chain(client1.chain_id()),
         )
         .await
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client2.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(client2.chain_id(), BlockHeight::from(0), 3)
             .await,
         Some(cert)
     );
@@ -996,13 +996,13 @@ where
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
-            Account::chain(client2.chain_id),
+            Account::chain(client2.chain_id()),
         )
         .await
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(client1.chain_id(), BlockHeight::from(0), 3)
             .await,
         Some(cert)
     );
@@ -1052,13 +1052,13 @@ where
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Account::chain(client2.chain_id),
+            Account::chain(client2.chain_id()),
         )
         .await
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(client1.chain_id(), BlockHeight::from(0), 3)
             .await,
         Some(cert1)
     );
@@ -1066,13 +1066,13 @@ where
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Account::chain(client2.chain_id),
+            Account::chain(client2.chain_id()),
         )
         .await
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::from(1), 3)
+            .check_that_validators_have_certificate(client1.chain_id(), BlockHeight::from(1), 3)
             .await,
         Some(cert2)
     );
@@ -1087,7 +1087,7 @@ where
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
-            Account::chain(client3.chain_id),
+            Account::chain(client3.chain_id()),
         )
         .await;
     assert_insufficient_funding(obtained_error, ChainExecutionContext::Operation(0));
@@ -1103,13 +1103,13 @@ where
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
-            Account::chain(client3.chain_id),
+            Account::chain(client3.chain_id()),
         )
         .await
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client2.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(client2.chain_id(), BlockHeight::from(0), 3)
             .await,
         Some(cert3)
     );
@@ -1197,7 +1197,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(admin.chain_id, BlockHeight::from(5), 3)
+            .check_that_validators_have_certificate(admin.chain_id(), BlockHeight::from(5), 3)
             .await,
         Some(cert1)
     );
@@ -1211,7 +1211,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(admin.chain_id, BlockHeight::from(6), 3)
+            .check_that_validators_have_certificate(admin.chain_id(), BlockHeight::from(6), 3)
             .await,
         Some(cert2)
     );
@@ -1231,11 +1231,11 @@ where
     // Revoking the current or an already revoked epoch fails.
     assert_matches!(
         admin.revoke_epochs(Epoch::ZERO).await,
-        Err(ChainClientError::EpochAlreadyRevoked)
+        Err(chain_client::Error::EpochAlreadyRevoked)
     );
     assert_matches!(
         admin.revoke_epochs(Epoch::from(3)).await,
-        Err(ChainClientError::CannotRevokeCurrentEpoch(Epoch(2)))
+        Err(chain_client::Error::CannotRevokeCurrentEpoch(Epoch(2)))
     );
 
     // Have the admin chain deprecate the previous epoch.
@@ -1252,7 +1252,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(user.chain_id, BlockHeight::from(2), 3)
+            .check_that_validators_have_certificate(user.chain_id(), BlockHeight::from(2), 3)
             .await,
         Some(cert3)
     );
@@ -1270,7 +1270,7 @@ where
         .unwrap_ok_committed();
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(user.chain_id, BlockHeight::from(3), 3)
+            .check_that_validators_have_certificate(user.chain_id(), BlockHeight::from(3), 3)
             .await,
         Some(cert4)
     );
@@ -1460,7 +1460,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids)))
+        Err(chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids)))
             if not_found_blob_ids == [blob0_id]
     );
 
@@ -2083,11 +2083,11 @@ where
     let result = client.request_leader_timeout().await;
     if !matches!(
         result,
-        Err(ChainClientError::CommunicationError(
+        Err(chain_client::Error::CommunicationError(
             CommunicationError::Trusted(NodeError::ChainError { .. })
         ))
     ) && !matches!(&result,
-        Err(ChainClientError::CommunicationError(CommunicationError::Sample(samples)))
+        Err(chain_client::Error::CommunicationError(CommunicationError::Sample(samples)))
         if samples.iter().any(|(err, _)| matches!(err, NodeError::ChainError { .. }))
     ) {
         panic!("unexpected leader timeout result: {:?}", result);
@@ -2194,7 +2194,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client0.chain_id();
-    let owner0 = client0.preferred_owner.unwrap();
+    let owner0 = client0.preferred_owner().unwrap();
 
     let owners = [(owner0, 100), (owner1, 100)];
     let timeout_config = TimeoutConfig {
@@ -2679,14 +2679,14 @@ where
     let result = client1.publish_data_blobs(blob_bytes).await;
     assert_matches!(
         result,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
         )) if matches!(*chain_error, ChainError::BlockProposalTooLarge(_))
     );
 
     assert_matches!(
         client1.publish_data_blob(large_blob_bytes).await,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
         )) if matches!(&*chain_error, ChainError::ExecutionError(
             error, ChainExecutionContext::Block

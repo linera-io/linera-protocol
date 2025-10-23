@@ -28,7 +28,7 @@ use linera_chain::{
 };
 use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
 use linera_core::{
-    client::{ChainClient, ChainClientError},
+    client::chain_client::{self, ChainClient},
     data_types::ClientOutcome,
     worker::Notification,
 };
@@ -75,7 +75,7 @@ pub struct MutationRoot<C> {
 #[derive(Debug, ThisError)]
 enum NodeServiceError {
     #[error(transparent)]
-    ChainClientError(#[from] ChainClientError),
+    ChainClientError(#[from] chain_client::Error),
     #[error(transparent)]
     BcsHexError(#[from] BcsHexParseError),
     #[error(transparent)]
@@ -968,7 +968,7 @@ where
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             let mut stream = client.subscribe().map_err(|_| {
-                ChainClientError::InternalError("Could not subscribe to the local node.")
+                chain_client::Error::InternalError("Could not subscribe to the local node.")
             })?;
             util::wait_for_next_round(&mut stream, timeout).await;
         };

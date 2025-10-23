@@ -23,7 +23,7 @@ use linera_storage::ChainRuntimeContext;
 use linera_views::context::Context;
 use serde::{Deserialize, Serialize};
 
-use crate::client::ChainClientError;
+use crate::client::chain_client;
 
 /// A range of block heights as used in `ChainInfoQuery`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -390,9 +390,9 @@ impl<T> ClientOutcome<T> {
         }
     }
 
-    pub fn try_map<F, S>(self, f: F) -> Result<ClientOutcome<S>, ChainClientError>
+    pub fn try_map<F, S>(self, f: F) -> Result<ClientOutcome<S>, chain_client::Error>
     where
-        F: FnOnce(T) -> Result<S, ChainClientError>,
+        F: FnOnce(T) -> Result<S, chain_client::Error>,
     {
         match self {
             ClientOutcome::Committed(t) => Ok(ClientOutcome::Committed(f(t)?)),

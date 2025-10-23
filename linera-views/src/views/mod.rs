@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Debug, io::Write};
+use std::{fmt::Debug, future::Future, io::Write};
 
 use linera_base::crypto::CryptoHash;
 pub use linera_views_derive::{
@@ -68,7 +68,18 @@ pub trait View: Sized {
     fn post_load(context: Self::Context, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError>;
 
     /// Loads a view
-    async fn load(context: Self::Context) -> Result<Self, ViewError>;
+    fn load(context: Self::Context) -> impl Future<Output = Result<Self, ViewError>> {
+        async {
+            if Self::NUM_INIT_KEYS == 0 {
+                Self::post_load(context, &[])
+            } else {
+                use crate::{context::Context, store::ReadableKeyValueStore};
+                let keys = Self::pre_load(&context)?;
+                let values = context.store().read_multi_values_bytes(keys).await?;
+                Self::post_load(context, &values)
+            }
+        }
+    }
 
     /// Discards all pending changes. After that `flush` should have no effect to storage.
     fn rollback(&mut self);
