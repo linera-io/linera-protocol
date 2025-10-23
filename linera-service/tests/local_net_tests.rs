@@ -134,32 +134,33 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         net.genesis_config()?.hash()
     );
 
-    // Add 5th validator
+    // Add 5th and 6th validators in a single epoch using change-validators
+    let key_4 = net.validator_keys(4).unwrap();
+    let key_5 = net.validator_keys(5).unwrap();
     client
-        .set_validator(
-            net.validator_keys(4).unwrap(),
-            net.proxy_public_port(4, 0),
-            100,
+        .change_validators(
+            &[
+                (
+                    key_4.0.clone(),
+                    key_4.1.clone(),
+                    net.proxy_public_port(4, 0),
+                    100,
+                ),
+                (
+                    key_5.0.clone(),
+                    key_5.1.clone(),
+                    net.proxy_public_port(5, 0),
+                    100,
+                ),
+            ],
+            &[],
+            &[],
         )
         .await?;
 
     client.query_validators(None).await?;
     client.query_validators(Some(chain_1)).await?;
 
-    if matches!(network, Network::Grpc) {
-        assert!(
-            eventually(|| async { faucet.current_validators().await.unwrap().len() == 5 }).await
-        );
-    }
-
-    // Add 6th validator
-    client
-        .set_validator(
-            net.validator_keys(5).unwrap(),
-            net.proxy_public_port(5, 0),
-            100,
-        )
-        .await?;
     if matches!(network, Network::Grpc) {
         assert!(
             eventually(|| async { faucet.current_validators().await.unwrap().len() == 6 }).await
@@ -183,6 +184,29 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         let event_height = admin_height.try_sub_one()?;
         notifications.wait_for_events(event_height).await?;
         assert!(!service.process_inbox(&chain_2).await?.is_empty());
+        client.revoke_epochs(Epoch(1)).await?;
+        notifications.wait_for_events(None).await?;
+        assert!(!service.process_inbox(&chain_2).await.unwrap().is_empty());
+        let committees = service.query_committees(&chain_2).await?;
+        let epochs = committees.into_keys().collect::<Vec<_>>();
+        assert_eq!(&epochs, &[Epoch(2)]);
+    } else {
+        client_2.process_inbox(chain_2).await?;
+        client.revoke_epochs(Epoch(1)).await?;
+        client_2.process_inbox(chain_2).await?;
+    }
+
+    // Remove the first 4 validators in a single epoch using change-validators.
+    let validators_to_remove: Vec<String> = (0..4)
+        .map(|i| net.validator_keys(i).unwrap().0.clone())
+        .collect();
+    client
+        .change_validators(&[], &[], &validators_to_remove)
+        .await?;
+
+    if let Some((service, notifications)) = &mut node_service_2 {
+        notifications.wait_for_events(None).await?;
+        assert!(!service.process_inbox(&chain_2).await.unwrap().is_empty());
         client.revoke_epochs(Epoch(2)).await?;
         notifications.wait_for_events(None).await?;
         assert!(!service.process_inbox(&chain_2).await?.is_empty());
@@ -194,25 +218,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         client.revoke_epochs(Epoch(2)).await?;
         client_2.process_inbox(chain_2).await?;
     }
-
-    // Remove the first 4 validators, so only the last one remains.
     for i in 0..4 {
-        let validator_key = net.validator_keys(i).unwrap();
-        client.remove_validator(&validator_key.0).await?;
-        if let Some((service, notifications)) = &mut node_service_2 {
-            notifications.wait_for_events(None).await?;
-            assert!(!service.process_inbox(&chain_2).await?.is_empty());
-            client.revoke_epochs(Epoch(3 + i as u32)).await?;
-            notifications.wait_for_events(None).await?;
-            assert!(!service.process_inbox(&chain_2).await?.is_empty());
-            let committees = service.query_committees(&chain_2).await?;
-            let epochs = committees.into_keys().collect::<Vec<_>>();
-            assert_eq!(&epochs, &[Epoch(4 + i as u32)]);
-        } else {
-            client_2.process_inbox(chain_2).await?;
-            client.revoke_epochs(Epoch(3 + i as u32)).await?;
-            client_2.process_inbox(chain_2).await?;
-        }
         net.remove_validator(i)?;
     }
 
@@ -237,7 +243,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         assert_eq!(balance, Amount::from_tokens(5));
         let committees = service.query_committees(&chain_2).await?;
         let epochs = committees.into_keys().collect::<Vec<_>>();
-        assert_eq!(&epochs, &[Epoch(7)]);
+        assert_eq!(&epochs, &[Epoch(3)]);
 
         service.ensure_is_running()?;
     } else {

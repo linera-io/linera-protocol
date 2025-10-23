@@ -373,7 +373,7 @@ impl<Env: Environment> Client<Env> {
                 .download_certificates_from(&remote_node, chain_id, target_next_block_height)
                 .await
             {
-                Err(err) => warn!(
+                Err(err) => info!(
                     "Failed to download certificates from validator {:?}: {err}",
                     remote_node.public_key
                 ),
@@ -1207,7 +1207,7 @@ impl<Env: Environment> Client<Env> {
                             {
                                 Ok(content) => content,
                                 Err(err) => {
-                                    warn!(
+                                    info!(
                                         "Skipping proposal from {owner} and validator {} at \
                                         height {}; failed to download {blob_id}: {err}",
                                         remote_node.public_key, local_info.next_block_height
@@ -3227,7 +3227,7 @@ impl<Env: Environment> ChainClient<Env> {
         if let Some(round_timeout) = info.manager.round_timeout {
             if round_timeout <= self.storage_client().clock().current_time() {
                 if let Err(e) = self.request_leader_timeout().await {
-                    warn!("Failed to obtain a timeout certificate: {}", e);
+                    debug!("Failed to obtain a timeout certificate: {}", e);
                 } else {
                     info = self.chain_info_with_manager_values().await?;
                 }
@@ -3912,7 +3912,7 @@ impl<Env: Environment> ChainClient<Env> {
                     )
                     .await?;
                 if self.local_next_height_to_receive(origin).await? <= height {
-                    warn!(
+                    info!(
                         chain_id = %self.chain_id,
                         "NewIncomingBundle: Fail to synchronize new message after notification"
                     );
@@ -3941,7 +3941,7 @@ impl<Env: Environment> ChainClient<Env> {
                             .await?
                             <= height
                         {
-                            error!("NewBlock: Fail to synchronize new block after notification");
+                            info!("NewBlock: Fail to synchronize new block after notification");
                         }
                         trace!(
                             chain_id = %self.chain_id,
@@ -4034,7 +4034,7 @@ impl<Env: Environment> ChainClient<Env> {
                     return Ok(());
                 };
                 if (info.next_block_height, info.manager.current_round) < (height, round) {
-                    error!(
+                    info!(
                         chain_id = %self.chain_id,
                         "NewRound: Fail to synchronize new block after notification"
                     );
@@ -4173,7 +4173,7 @@ impl<Env: Environment> ChainClient<Env> {
             })
             .filter_map(move |result| async move {
                 if let Err(error) = &result {
-                    warn!(?error, "Could not connect to validator {public_key}");
+                    info!(?error, "Could not connect to validator {public_key}");
                 } else {
                     debug!("Connected to validator {public_key}");
                 }
@@ -4197,7 +4197,7 @@ impl<Env: Environment> ChainClient<Env> {
                         )
                         .await
                     {
-                        tracing::warn!(
+                        tracing::info!(
                             chain_id = %this.chain_id,
                             validator_public_key = ?remote_node.public_key,
                             ?notification,

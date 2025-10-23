@@ -83,12 +83,6 @@ where
         })
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let keys = Self::pre_load(&context)?;
-        let values = context.store().read_multi_values_bytes(keys).await?;
-        Self::post_load(context, &values)
-    }
-
     fn rollback(&mut self) {
         self.delete_storage_first = false;
         self.new_values.clear();
