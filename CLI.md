@@ -190,16 +190,16 @@ Client implementation and command-line tool for the Linera blockchain
 * `--max-accepted-latency-ms <MAX_ACCEPTED_LATENCY_MS>` — Maximum expected latency in milliseconds for score normalization
 
   Default value: `5000`
-* `--cache-ttl-sec <CACHE_TTL_SEC>` — Time-to-live for cached responses in seconds
+* `--cache-ttl-ms <CACHE_TTL_MS>` — Time-to-live for cached responses in milliseconds
 
-  Default value: `2`
+  Default value: `2000`
 * `--cache-max-size <CACHE_MAX_SIZE>` — Maximum number of entries in the cache
 
   Default value: `1000`
 * `--max-request-ttl-ms <MAX_REQUEST_TTL_MS>` — Maximum latency for an in-flight request before we stop deduplicating it (in milliseconds)
 
   Default value: `200`
-* `--alpha <ALPHA>` — Smoothing factor for Exponential Moving Averages (0 < alpha < 1) Higher values give more weight to recent observations Typical values are between 0.01 and 0.5 A value of 0.1 means that 10% of the new observation is considered and 90% of the previous average is retained
+* `--alpha <ALPHA>` — Smoothing factor for Exponential Moving Averages (0 < alpha < 1). Higher values give more weight to recent observations. Typical values are between 0.01 and 0.5. A value of 0.1 means that 10% of the new observation is considered and 90% of the previous average is retained
 
   Default value: `0.1`
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
