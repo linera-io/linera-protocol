@@ -4641,7 +4641,8 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
     client2.assign(owner2, chain2).await?;
     client2.sync(chain2).await?;
 
-    // Both clients make transfers from chain 2 to chain 1 in a loop.
+    // Both clients make transfers from chain 2 to chain 1 in a loop. We use a channel with
+    // capacity 8, the number of expected transfers. (This will stall if there are more.)
     let (tx, rx) = mpsc::channel(8);
     let (_client1, _client2) = futures::join!(
         run_client(client1, tx.clone(), chain2, chain1),
