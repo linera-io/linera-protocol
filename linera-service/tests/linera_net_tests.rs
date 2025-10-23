@@ -57,10 +57,9 @@ use linera_service::cli_wrappers::{remote_net::RemoteNetTestingConfig, OnClientD
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, ProcessInbox},
-        ApplicationWrapper, ClientWrapper, LineraNet, LineraNetConfig,
+        ApplicationWrapper, ClientWrapper, LineraNet, LineraNetConfig, NotificationsExt,
     },
     test_name,
-    util::eventually,
 };
 use serde_json::{json, Value};
 use test_case::test_case;
@@ -988,6 +987,7 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     let port2 = get_node_port().await;
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+    let mut notifications2 = node_service2.notifications(chain2).await?;
 
     // Creating the applications.
 
@@ -1019,16 +1019,8 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     let mutation = EvmQuery::Mutation(mutation);
     application1.run_json_query(mutation).await?;
 
-    assert!(
-        eventually(|| async {
-            !node_service2
-                .process_inbox(&chain2)
-                .await
-                .unwrap()
-                .is_empty()
-        })
-        .await
-    );
+    notifications2.wait_for_bundle(chain1, None).await?;
+    assert!(!node_service2.process_inbox(&chain2).await?.is_empty());
 
     // Third: Checking the values after the move
 
@@ -1200,6 +1192,7 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
     let application1 = node_service1.make_application(&chain1, &evm_application_id)?;
 
     let application2 = node_service2.make_application(&chain2, &evm_application_id)?;
+    let mut notifications2 = node_service2.notifications(chain1).await?;
 
     let result = application2.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
@@ -1228,16 +1221,8 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
 
     // Third: process the inbox on chain2
 
-    assert!(
-        eventually(|| async {
-            !node_service2
-                .process_inbox(&chain2)
-                .await
-                .unwrap()
-                .is_empty()
-        })
-        .await
-    );
+    notifications2.wait_for_events(None).await?;
+    assert!(!node_service2.process_inbox(&chain2).await?.is_empty());
 
     // Fourth: getting the value
 
@@ -1593,6 +1578,7 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let application1 = node_service1.make_application(&chain1, &application_id)?;
 
     let application2 = node_service2.make_application(&chain2, &application_id)?;
+    let mut notifications2 = node_service2.notifications(chain2).await?;
 
     // Checking the total supply
 
@@ -1634,16 +1620,8 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let mutation = EvmQuery::Mutation(mutation.abi_encode());
     application1.run_json_query(mutation).await?;
 
-    assert!(
-        eventually(|| async {
-            !node_service2
-                .process_inbox(&chain2)
-                .await
-                .unwrap()
-                .is_empty()
-        })
-        .await
-    );
+    notifications2.wait_for_bundle(chain1, None).await?;
+    assert!(!node_service2.process_inbox(&chain2).await?.is_empty());
 
     // Checking the balances on both chains.
 
@@ -1789,7 +1767,6 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(LeakChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig) -> Result<()> {
-    use linera_base::time::Instant;
     use social::SocialAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1802,7 +1779,6 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
 
     let chain1 = client1.load_wallet()?.default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
-    client2.sync(chain2).await?;
     let (contract, service) = client1.build_example("social").await?;
     let module_id = client1
         .publish_module::<SocialAbi, (), ()>(contract, service, VmRuntime::Wasm, None)
@@ -1823,8 +1799,9 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     let app2 = node_service2.make_application(&chain2, &application_id)?;
     app2.mutate(format!("subscribe(chainId: \"{chain1}\")"))
         .await?;
+    let (_, height2) = node_service2.chain_tip(chain2).await?.unwrap();
 
-    let mut notifications = Box::pin(node_service2.notifications(chain2).await?);
+    let mut notifications = node_service2.notifications(chain2).await?;
 
     let app1 = node_service1.make_application(&chain1, &application_id)?;
     app1.mutate("post(text: \"Linera Social is the new Mastodon!\")")
@@ -1838,19 +1815,41 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
             ]
         }
     });
-    let deadline = Instant::now() + Duration::from_secs(20);
-    loop {
-        let result =
-            linera_base::time::timer::timeout(deadline - Instant::now(), notifications.next())
-                .await?;
-        anyhow::ensure!(result.transpose()?.is_some(), "Failed to confirm post");
-        let response = app2.query(query).await?;
-        if response == expected_response {
-            tracing::info!("Confirmed post");
-            break;
+    notifications.wait_for_block(height2.try_add_one()?).await?;
+    assert_eq!(app2.query(query).await?, expected_response);
+
+    let tip_after_first_post = node_service2.chain_tip(chain1).await?;
+
+    // Perform an operation that does not emit events, or messages that client 2 listens to - to be
+    // safe, we just transfer from chain1 to itself.
+    node_service1
+        .transfer(
+            chain1,
+            AccountOwner::CHAIN,
+            Account::chain(chain1),
+            Amount::ONE,
+        )
+        .await?;
+
+    let (_, height2) = node_service2.chain_tip(chain2).await?.unwrap();
+    app1.mutate("post(text: \"Second post!\")").await?;
+
+    let query = "receivedPosts { keys { author, index } }";
+    let expected_response = json!({
+        "receivedPosts": {
+            "keys": [
+                { "author": chain1, "index": 1 },
+                { "author": chain1, "index": 0 }
+            ]
         }
-        tracing::warn!("Waiting to confirm post: {}", response);
-    }
+    });
+    notifications.wait_for_block(height2.try_add_one()?).await?;
+    assert_eq!(app2.query(query).await?, expected_response);
+
+    let tip_after_second_post = node_service2.chain_tip(chain1).await?;
+    // The second post should not have moved the tip hash - client 2 should have only preprocessed
+    // that block, without downloading the transfer block in between.
+    assert_eq!(tip_after_first_post, tip_after_second_post);
 
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
@@ -1929,10 +1928,6 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
         )
         .await?;
 
-    // Synchronize the chain in clients 2 and 3, so they see the initialized application state.
-    client2.sync(chain2).await?;
-    client3.sync(chain2).await?;
-
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
     let port3 = get_node_port().await;
@@ -1943,6 +1938,17 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
     let app1 = FungibleApp(node_service1.make_application(&chain2, &application_id)?);
     let app2 = FungibleApp(node_service2.make_application(&chain2, &application_id)?);
     let app3 = FungibleApp(node_service3.make_application(&chain2, &application_id)?);
+
+    let mut notifications2 = node_service2.notifications(chain2).await?;
+    let mut notifications3 = node_service3.notifications(chain2).await?;
+    // Wait until clients 2 and 3 see the initialized application state.
+    let (_, height) = node_service1.chain_tip(chain2).await?.unwrap();
+    if node_service2.chain_tip(chain2).await?.unwrap().1 < height {
+        notifications2.wait_for_block(height).await?;
+    }
+    if node_service3.chain_tip(chain2).await?.unwrap().1 < height {
+        notifications3.wait_for_block(height).await?;
+    }
 
     let expected_balances = [
         (owner1, Amount::from_tokens(9)),
@@ -1959,11 +1965,11 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
     app1.assert_allowance(&owner1, &owner2, Amount::from_tokens(93))
         .await;
 
-    assert!(
-        eventually(|| async {
-            app2.get_allowance(&owner1, &owner2).await == Amount::from_tokens(93)
-        })
-        .await
+    let (_, height) = node_service1.chain_tip(chain2).await?.unwrap();
+    notifications2.wait_for_block(height).await?;
+    assert_eq!(
+        app2.get_allowance(&owner1, &owner2).await,
+        Amount::from_tokens(93)
     );
 
     // Doing the transfer from owner 1.
@@ -2093,6 +2099,8 @@ async fn test_wasm_end_to_end_fungible(
     let port2 = get_node_port().await;
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+    let mut notifications1 = node_service1.notifications(chain1).await?;
+    let mut notifications2 = node_service2.notifications(chain2).await?;
 
     let app1 = NativeFungibleApp(node_service1.make_application(&chain1, &application_id)?);
 
@@ -2124,10 +2132,8 @@ async fn test_wasm_end_to_end_fungible(
     app1.assert_entries(expected_balances).await;
     app1.assert_keys([account_owner1, account_owner2]).await;
 
-    assert!(
-        eventually(|| async { node_service2.process_inbox(&chain2).await.unwrap().len() == 1 })
-            .await
-    );
+    notifications2.wait_for_bundle(chain1, None).await?;
+    assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
 
     // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
     let app2 = NativeFungibleApp(node_service2.make_application(&chain2, &application_id)?);
@@ -2155,15 +2161,11 @@ async fn test_wasm_end_to_end_fungible(
     )
     .await;
 
-    // Make sure that the cross-chain communication happens fast enough.
-    assert!(
-        eventually(|| async { node_service1.process_inbox(&chain1).await.unwrap().len() == 1 })
-            .await
-    );
-    assert!(
-        eventually(|| async { node_service2.process_inbox(&chain2).await.unwrap().len() == 1 })
-            .await
-    );
+    // Let chain 1 process the claim and then chain 2 process the credit.
+    notifications1.wait_for_bundle(chain2, None).await?;
+    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
+    notifications2.wait_for_bundle(chain1, None).await?;
+    assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
 
     // Checking the final value
     let expected_balances = [
@@ -2248,6 +2250,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 
     let port = get_node_port().await;
     let mut node_service = client1.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut notifications2 = node_service.notifications(chain2).await?;
 
     let app1 = NativeFungibleApp(node_service.make_application(&chain1, &application_id)?);
 
@@ -2256,7 +2259,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     app1.assert_balances(expected_balances.clone()).await;
     app1.assert_entries(expected_balances).await;
     app1.assert_keys([account_owner1, account_owner2]).await;
-    // Transferring
+    // Making multiple transfers in a single block.
     app1.transfer(
         &account_owner1,
         Amount::ONE,
@@ -2267,10 +2270,8 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     )
     .await;
 
-    assert!(
-        eventually(|| async { node_service.process_inbox(&chain2).await.unwrap().len() == 1 })
-            .await
-    );
+    notifications2.wait_for_bundle(chain1, None).await?;
+    assert_eq!(node_service.process_inbox(&chain2).await?.len(), 1);
 
     // Checking the final values on chain1 and chain2.
     let expected_balances = [
@@ -2338,6 +2339,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     let port2 = get_node_port().await;
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+    let mut notifications1 = node_service1.notifications(chain1).await?;
+    let mut notifications2 = node_service2.notifications(chain2).await?;
 
     let app1 = NonFungibleApp(node_service1.make_application(&chain1, &application_id)?);
 
@@ -2390,10 +2393,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     )
     .await;
 
-    assert!(
-        eventually(|| async { node_service2.process_inbox(&chain2).await.unwrap().len() == 1 })
-            .await
-    );
+    notifications2.wait_for_bundle(chain1, None).await?;
+    assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
 
     // Checking the NFT is removed from chain1
     assert!(app1.get_nft(&nft1_id).await.is_err());
@@ -2426,15 +2427,11 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     )
     .await;
 
-    // Make sure that the cross-chain communication happens fast enough.
-    assert!(
-        eventually(|| async { node_service2.process_inbox(&chain2).await.unwrap().len() == 1 })
-            .await
-    );
-    assert!(
-        eventually(|| async { node_service1.process_inbox(&chain1).await.unwrap().len() == 1 })
-            .await
-    );
+    // Let chain 2 process the claim and then chain 1 process the credit.
+    notifications2.wait_for_bundle(chain1, None).await?;
+    assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
+    notifications1.wait_for_bundle(chain2, None).await?;
+    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
 
     // Checking the NFT is removed from chain2
     assert!(app2.get_nft(&nft1_id).await.is_err());
@@ -2460,10 +2457,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     .await;
 
     // The transfer is received by chain2 and needs to be processed.
-    assert!(
-        eventually(|| async { node_service2.process_inbox(&chain2).await.unwrap().len() == 1 })
-            .await
-    );
+    notifications2.wait_for_bundle(chain1, None).await?;
+    assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
 
     // Checking the NFT is removed from chain1
     assert!(app1.get_nft(&nft1_id).await.is_err());
@@ -2531,10 +2526,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     .await;
 
     // The transfer from chain2 has to be received from chain1.
-    assert!(
-        eventually(|| async { node_service1.process_inbox(&chain1).await.unwrap().len() == 1 })
-            .await
-    );
+    notifications1.wait_for_bundle(chain2, None).await?;
+    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
 
     // Checking the NFT is removed from chain2
     assert!(app2.get_nft(&nft2_id).await.is_err());
@@ -2563,15 +2556,11 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     )
     .await;
 
-    // Make sure that the cross-chain communication happens fast enough.
-    assert!(
-        eventually(|| async { node_service1.process_inbox(&chain1).await.unwrap().len() == 1 })
-            .await
-    );
-    assert!(
-        eventually(|| async { node_service2.process_inbox(&chain2).await.unwrap().len() == 1 })
-            .await
-    );
+    // Let chain 1 process the claim and then chain 2 process the credit.
+    notifications1.wait_for_bundle(chain2, None).await?;
+    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
+    notifications2.wait_for_bundle(chain1, None).await?;
+    assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
 
     // Checking the final state
 
@@ -2668,6 +2657,8 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     let port2 = get_node_port().await;
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+    let mut notifications1 = node_service1.notifications(chain1).await?;
+    let mut notifications2 = node_service2.notifications(chain2).await?;
 
     let app_fungible1 =
         FungibleApp(node_service1.make_application(&chain1, &application_id_fungible)?);
@@ -2687,10 +2678,8 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
         .await;
 
     // Make sure that the transfer is received before we try to pledge.
-    assert!(
-        eventually(|| async { node_service2.process_inbox(&chain2).await.unwrap().len() == 1 })
-            .await
-    );
+    notifications2.wait_for_bundle(chain1, None).await?;
+    assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
 
     let app_crowd2 = node_service2.make_application(&chain2, &application_id_crowd)?;
 
@@ -2702,11 +2691,9 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     );
     app_crowd2.mutate(mutation).await?;
 
-    // Make sure that the pledge is processed fast enough by client1.
-    assert!(
-        eventually(|| async { node_service1.process_inbox(&chain1).await.unwrap().len() == 1 })
-            .await
-    );
+    // Let client1 process the pledge.
+    notifications1.wait_for_bundle(chain2, None).await?;
+    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
 
     // Ending the campaign.
     app_crowd1.mutate("collect").await?;
@@ -2802,10 +2789,17 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let port2 = get_node_port().await;
     let port3 = get_node_port().await;
     let mut node_service_admin = client_admin
-        .run_node_service(port1, ProcessInbox::Skip)
+        .run_node_service(port1, ProcessInbox::Automatic)
         .await?;
-    let mut node_service_a = client_a.run_node_service(port2, ProcessInbox::Skip).await?;
-    let mut node_service_b = client_b.run_node_service(port3, ProcessInbox::Skip).await?;
+    let mut node_service_a = client_a
+        .run_node_service(port2, ProcessInbox::Automatic)
+        .await?;
+    let mut node_service_b = client_b
+        .run_node_service(port3, ProcessInbox::Automatic)
+        .await?;
+
+    let mut notifications_a = node_service_a.notifications(chain_a).await?;
+    let mut notifications_b = node_service_b.notifications(chain_b).await?;
 
     let app_fungible0_a = FungibleApp(node_service_a.make_application(&chain_a, &token0)?);
     let app_fungible1_a = FungibleApp(node_service_a.make_application(&chain_a, &token1)?);
@@ -2897,18 +2891,11 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             })
             .await;
     }
-    // The orders are sent on chain_a / chain_b. First they are
-    // rerouted to the admin chain for processing. This leads
-    // to order being sent to chain_a / chain_b.
-    node_service_admin.sync(&chain_admin).await?;
-    assert_eq!(
-        node_service_admin.process_inbox(&chain_admin).await?.len(),
-        1
-    );
-    node_service_a.sync(&chain_a).await?;
-    assert_eq!(node_service_a.process_inbox(&chain_a).await?.len(), 1);
-    node_service_b.sync(&chain_b).await?;
-    assert_eq!(node_service_b.process_inbox(&chain_b).await?.len(), 1);
+    // Chains a and b receive their swapped tokens from the admin chain.
+    notifications_a.wait_for_bundle(chain_admin, None).await?;
+    notifications_a.wait_for_block(None).await?;
+    notifications_b.wait_for_bundle(chain_admin, None).await?;
+    notifications_b.wait_for_block(None).await?;
 
     // Now reading the order_ids
     let order_ids_a = app_matching_admin.get_account_info(&owner_a).await;
@@ -2935,16 +2922,15 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             .await;
     }
 
-    node_service_admin.sync(&chain_admin).await?;
-    // Same logic as for the insertion of orders.
-    assert_eq!(
-        node_service_admin.process_inbox(&chain_admin).await?.len(),
-        1
-    );
-    node_service_a.sync(&chain_a).await?;
-    assert_eq!(node_service_a.process_inbox(&chain_a).await?.len(), 1);
-    node_service_b.sync(&chain_b).await?;
-    assert_eq!(node_service_b.process_inbox(&chain_b).await?.len(), 1);
+    // Chain a will receive one message with a refund, chain b will get two.
+    notifications_a.wait_for_bundle(chain_admin, None).await?;
+    notifications_a.wait_for_block(None).await?;
+    notifications_b.wait_for_bundle(chain_admin, None).await?;
+    notifications_b.wait_for_bundle(chain_admin, None).await?;
+    notifications_b.wait_for_block(None).await?;
+    // Depending on timing, chain b may process the two bundles in one or two blocks, so
+    // we explicitly process the inbox to be sure.
+    node_service_b.process_inbox(&chain_b).await?;
 
     // Check balances
     app_fungible0_a
@@ -3023,6 +3009,9 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .await?;
     let mut node_service0 = client0.run_node_service(port2, ProcessInbox::Skip).await?;
     let mut node_service1 = client1.run_node_service(port3, ProcessInbox::Skip).await?;
+    let mut notifications_amm = node_service_amm.notifications(chain_amm).await?;
+    let mut notifications0 = node_service0.notifications(chain0).await?;
+    let mut notifications1 = node_service1.notifications(chain1).await?;
 
     // Amounts of token0 that will be owned by each user
     let state_fungible0 = fungible::InitialState {
@@ -3102,6 +3091,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
             },
         )
         .await;
+    let (_, msg0_height) = node_service_amm.chain_tip(chain_amm).await?.unwrap();
     app_fungible1_amm
         .transfer(
             &owner_amm_chain,
@@ -3112,15 +3102,18 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
             },
         )
         .await;
+    let (_, msg1_height) = node_service_amm.chain_tip(chain_amm).await?.unwrap();
 
-    assert!(
-        eventually(|| async { node_service0.process_inbox(&chain0).await.unwrap().len() == 1 })
-            .await
-    );
-    assert!(
-        eventually(|| async { node_service1.process_inbox(&chain1).await.unwrap().len() == 1 })
-            .await
-    );
+    // The chains receive multiple bundles. Wait for the notifications about the last ones, so
+    // that process_inbox processes all of them.
+    notifications0
+        .wait_for_bundle(chain_amm, msg0_height)
+        .await?;
+    assert_eq!(node_service0.process_inbox(&chain0).await?.len(), 1);
+    notifications1
+        .wait_for_bundle(chain_amm, msg1_height)
+        .await?;
+    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
 
     let app_fungible0_0 = FungibleApp(node_service0.make_application(&chain0, &token0)?);
     let app_fungible1_0 = FungibleApp(node_service0.make_application(&chain0, &token1)?);
@@ -3216,17 +3209,8 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .add_liquidity(owner0, Amount::from_tokens(100), Amount::from_tokens(100))
         .await?;
 
-    assert!(
-        eventually(|| async {
-            node_service_amm
-                .process_inbox(&chain_amm)
-                .await
-                .unwrap()
-                .len()
-                == 1
-        })
-        .await
-    );
+    notifications_amm.wait_for_bundle(chain0, None).await?;
+    assert_eq!(node_service_amm.process_inbox(&chain_amm).await?.len(), 1);
 
     // Ownership of the used owner_amm_chain's tokens should be with the AMM now
     app_fungible0_amm
@@ -3285,21 +3269,10 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .add_liquidity(owner1, Amount::from_tokens(120), Amount::from_tokens(100))
         .await?;
 
-    assert!(
-        eventually(|| async {
-            node_service_amm
-                .process_inbox(&chain_amm)
-                .await
-                .unwrap()
-                .len()
-                == 1
-        })
-        .await
-    );
-    assert!(
-        eventually(|| async { node_service1.process_inbox(&chain1).await.unwrap().len() == 1 })
-            .await
-    );
+    notifications_amm.wait_for_bundle(chain1, None).await?;
+    assert_eq!(node_service_amm.process_inbox(&chain_amm).await?.len(), 1);
+    notifications1.wait_for_bundle(chain_amm, None).await?;
+    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
 
     app_fungible0_amm
         .assert_balances([
@@ -3358,21 +3331,10 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .expect_err("Swapping from the AMM chain should fail");
 
     app_amm1.swap(owner1, 0, Amount::from_tokens(50)).await?;
-    assert!(
-        eventually(|| async {
-            node_service_amm
-                .process_inbox(&chain_amm)
-                .await
-                .unwrap()
-                .len()
-                == 1
-        })
-        .await
-    );
-    assert!(
-        eventually(|| async { node_service1.process_inbox(&chain1).await.unwrap().len() == 1 })
-            .await
-    );
+    notifications_amm.wait_for_bundle(chain1, None).await?;
+    assert_eq!(node_service_amm.process_inbox(&chain_amm).await?.len(), 1);
+    notifications1.wait_for_bundle(chain_amm, None).await?;
+    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
 
     app_fungible0_amm
         .assert_balances([
@@ -3440,17 +3402,8 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     app_amm1
         .remove_liquidity(owner1, 0, Amount::from_tokens(500))
         .await?;
-    assert!(
-        eventually(|| async {
-            node_service_amm
-                .process_inbox(&chain_amm)
-                .await
-                .unwrap()
-                .len()
-                == 1
-        })
-        .await
-    );
+    notifications_amm.wait_for_bundle(chain1, None).await?;
+    assert_eq!(node_service_amm.process_inbox(&chain_amm).await?.len(), 1);
 
     // Balances will be unaltered
     app_fungible0_amm
@@ -3505,21 +3458,10 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .await;
 
     app_amm1.swap(owner1, 1, Amount::from_tokens(40)).await?;
-    assert!(
-        eventually(|| async {
-            node_service_amm
-                .process_inbox(&chain_amm)
-                .await
-                .unwrap()
-                .len()
-                == 1
-        })
-        .await
-    );
-    assert!(
-        eventually(|| async { node_service1.process_inbox(&chain1).await.unwrap().len() == 1 })
-            .await
-    );
+    notifications_amm.wait_for_bundle(chain1, None).await?;
+    assert_eq!(node_service_amm.process_inbox(&chain_amm).await?.len(), 1);
+    notifications1.wait_for_bundle(chain_amm, None).await?;
+    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
 
     app_fungible0_amm
         .assert_balances([
@@ -3575,21 +3517,11 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     app_amm1
         .remove_liquidity(owner1, 0, Amount::from_tokens(100))
         .await?;
-    assert!(
-        eventually(|| async {
-            node_service_amm
-                .process_inbox(&chain_amm)
-                .await
-                .unwrap()
-                .len()
-                == 1
-        })
-        .await
-    );
-    assert!(
-        eventually(|| async { node_service1.process_inbox(&chain1).await.unwrap().len() == 1 })
-            .await
-    );
+
+    notifications_amm.wait_for_bundle(chain1, None).await?;
+    assert_eq!(node_service_amm.process_inbox(&chain_amm).await?.len(), 1);
+    notifications1.wait_for_bundle(chain_amm, None).await?;
+    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
 
     app_fungible0_amm
         .assert_balances([
@@ -3643,21 +3575,10 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .await;
 
     app_amm0.swap(owner0, 1, Amount::from_tokens(25)).await?;
-    assert!(
-        eventually(|| async {
-            node_service_amm
-                .process_inbox(&chain_amm)
-                .await
-                .unwrap()
-                .len()
-                == 1
-        })
-        .await
-    );
-    assert!(
-        eventually(|| async { node_service0.process_inbox(&chain0).await.unwrap().len() == 1 })
-            .await
-    );
+    notifications_amm.wait_for_bundle(chain0, None).await?;
+    assert_eq!(node_service_amm.process_inbox(&chain_amm).await?.len(), 1);
+    notifications0.wait_for_bundle(chain_amm, None).await?;
+    assert_eq!(node_service0.process_inbox(&chain0).await?.len(), 1);
 
     app_fungible0_amm
         .assert_balances([
@@ -3711,21 +3632,10 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .await;
 
     app_amm0.remove_all_added_liquidity(owner0).await?;
-    assert!(
-        eventually(|| async {
-            node_service_amm
-                .process_inbox(&chain_amm)
-                .await
-                .unwrap()
-                .len()
-                == 1
-        })
-        .await
-    );
-    assert!(
-        eventually(|| async { node_service0.process_inbox(&chain0).await.unwrap().len() == 1 })
-            .await
-    );
+    notifications_amm.wait_for_bundle(chain0, None).await?;
+    assert_eq!(node_service_amm.process_inbox(&chain_amm).await?.len(), 1);
+    notifications0.wait_for_bundle(chain_amm, None).await?;
+    assert_eq!(node_service0.process_inbox(&chain0).await?.len(), 1);
 
     app_fungible0_amm
         .assert_balances([
@@ -3828,6 +3738,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     let node_service = client
         .run_node_service(port, ProcessInbox::Automatic)
         .await?;
+    let mut notifications1 = node_service.notifications(chain1).await?;
 
     // Open a new chain with the same public key.
     // The node service should automatically create a client for it internally.
@@ -3855,6 +3766,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     );
     let data = node_service.query_node(query).await?;
     let chain2: ChainId = serde_json::from_value(data["openMultiOwnerChain"].clone())?;
+    let mut notifications2 = node_service.notifications(chain2).await?;
 
     // Send 8 tokens to the new chain.
     let app1 = FungibleApp(node_service.make_application(&chain1, &application_id)?);
@@ -3868,9 +3780,11 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     )
     .await;
 
-    // The chain2 must receive the transfer
+    // The chain2 must receive the transfer and automatically process it in a new block.
     let app2 = FungibleApp(node_service.make_application(&chain2, &application_id)?);
-    assert!(eventually(|| async { app2.get_amount(&owner).await == Amount::from_tokens(8) }).await);
+    notifications2.wait_for_block(BlockHeight::ZERO).await?;
+    assert_eq!(app2.get_amount(&owner).await, Amount::from_tokens(8));
+    let (_, height1) = node_service.chain_tip(chain1).await?.unwrap();
 
     // Send 4 tokens back.
     app2.transfer(
@@ -3883,16 +3797,13 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     )
     .await;
 
+    // Now chain1 must process the transfer in a new block.
+    notifications1
+        .wait_for_block(height1.try_add_one()?)
+        .await?;
     // Verify that the default chain now has 6 and the new one has 4 tokens.
-    assert!(
-        eventually(|| async {
-            let balance1 = app1.get_amount(&owner).await;
-            let balance2 = app2.get_amount(&owner).await;
-            balance1 == Amount::from_tokens(6) && balance2 == Amount::from_tokens(4)
-        })
-        .await,
-        "Failed to receive new block"
-    );
+    assert_eq!(app1.get_amount(&owner).await, Amount::from_tokens(6));
+    assert_eq!(app2.get_amount(&owner).await, Amount::from_tokens(4));
     net.ensure_is_running().await?;
     net.terminate().await?;
     Ok(())
