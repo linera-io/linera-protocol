@@ -63,11 +63,11 @@ where
             Ok(CryptoHash::from([0; 32]))
         } else {
             #[derive(Serialize, Deserialize)]
-            struct ExecutionStateHash([u8; 32]);
-            impl BcsHashable<'_> for ExecutionStateHash {}
+            struct ExecutionStateViewHash([u8; 32]);
+            impl BcsHashable<'_> for ExecutionStateViewHash {}
             self.hash()
                 .await
-                .map(|hash| CryptoHash::new(&ExecutionStateHash(hash.into())))
+                .map(|hash| CryptoHash::new(&ExecutionStateViewHash(hash.into())))
         }
     }
 
@@ -80,11 +80,11 @@ where
             Ok(CryptoHash::from([0; 32]))
         } else {
             #[derive(Serialize, Deserialize)]
-            struct ExecutionStateHash([u8; 32]);
-            impl BcsHashable<'_> for ExecutionStateHash {}
+            struct ExecutionStateViewHash([u8; 32]);
+            impl BcsHashable<'_> for ExecutionStateViewHash {}
             self.hash_mut()
                 .await
-                .map(|hash| CryptoHash::new(&ExecutionStateHash(hash.into())))
+                .map(|hash| CryptoHash::new(&ExecutionStateViewHash(hash.into())))
         }
     }
 }
