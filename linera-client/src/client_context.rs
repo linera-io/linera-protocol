@@ -301,6 +301,7 @@ where
             options.to_chain_client_options(),
             block_cache_size,
             execution_state_cache_size,
+            options.to_requests_scheduler_config(),
         );
 
         #[cfg(not(web))]
@@ -369,6 +370,7 @@ where
             },
             block_cache_size,
             execution_state_cache_size,
+            linera_core::client::RequestsSchedulerConfig::default(),
         );
 
         ClientContext {

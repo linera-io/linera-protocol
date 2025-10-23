@@ -186,6 +186,58 @@ pub struct ClientContextOptions {
     /// Maximum number of tasks that can are joined concurrently in the client.
     #[arg(long, default_value = "100")]
     pub max_joined_tasks: usize,
+
+    /// Maximum concurrent requests per validator node.
+    #[arg(
+        long,
+        default_value_t = linera_core::client::requests_scheduler::MAX_IN_FLIGHT_REQUESTS,
+        env = "LINERA_REQUESTS_SCHEDULER_MAX_IN_FLIGHT_REQUESTS"
+    )]
+    pub max_in_flight_requests: usize,
+
+    /// Maximum expected latency in milliseconds for score normalization.
+    #[arg(
+        long,
+        default_value_t = linera_core::client::requests_scheduler::MAX_ACCEPTED_LATENCY_MS,
+        env = "LINERA_REQUESTS_SCHEDULER_MAX_ACCEPTED_LATENCY_MS"
+    )]
+    pub max_accepted_latency_ms: f64,
+
+    /// Time-to-live for cached responses in milliseconds.
+    #[arg(
+        long,
+        default_value_t = linera_core::client::requests_scheduler::CACHE_TTL_MS,
+        env = "LINERA_REQUESTS_SCHEDULER_CACHE_TTL_MS"
+    )]
+    pub cache_ttl_ms: u64,
+
+    /// Maximum number of entries in the cache.
+    #[arg(
+        long,
+        default_value_t = linera_core::client::requests_scheduler::CACHE_MAX_SIZE,
+        env = "LINERA_REQUESTS_SCHEDULER_CACHE_MAX_SIZE"
+    )]
+    pub cache_max_size: usize,
+
+    /// Maximum latency for an in-flight request before we stop deduplicating it (in milliseconds).
+    #[arg(
+        long,
+        default_value_t = linera_core::client::requests_scheduler::MAX_REQUEST_TTL_MS,
+        env = "LINERA_REQUESTS_SCHEDULER_MAX_REQUEST_TTL_MS"
+    )]
+    pub max_request_ttl_ms: u64,
+
+    /// Smoothing factor for Exponential Moving Averages (0 < alpha < 1).
+    /// Higher values give more weight to recent observations.
+    /// Typical values are between 0.01 and 0.5.
+    /// A value of 0.1 means that 10% of the new observation is considered
+    /// and 90% of the previous average is retained.
+    #[arg(
+        long,
+        default_value_t = linera_core::client::requests_scheduler::ALPHA_SMOOTHING_FACTOR,
+        env = "LINERA_REQUESTS_SCHEDULER_ALPHA"
+    )]
+    pub alpha: f64,
 }
 
 impl ClientContextOptions {
@@ -216,6 +268,20 @@ impl ClientContextOptions {
         TimingConfig {
             enabled: self.timings,
             report_interval_secs: self.timing_interval,
+        }
+    }
+
+    /// Creates [`RequestsSchedulerConfig`] with the corresponding values.
+    pub(crate) fn to_requests_scheduler_config(
+        &self,
+    ) -> linera_core::client::RequestsSchedulerConfig {
+        linera_core::client::RequestsSchedulerConfig {
+            max_in_flight_requests: self.max_in_flight_requests,
+            max_accepted_latency_ms: self.max_accepted_latency_ms,
+            cache_ttl_ms: self.cache_ttl_ms,
+            cache_max_size: self.cache_max_size,
+            max_request_ttl_ms: self.max_request_ttl_ms,
+            alpha: self.alpha,
         }
     }
 }

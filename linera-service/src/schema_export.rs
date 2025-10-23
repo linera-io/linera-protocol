@@ -41,6 +41,10 @@ struct DummyValidatorNode;
 impl ValidatorNode for DummyValidatorNode {
     type NotificationStream = NotificationStream;
 
+    fn address(&self) -> String {
+        "dummy".to_string()
+    }
+
     async fn handle_block_proposal(
         &self,
         _: BlockProposal,
