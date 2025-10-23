@@ -33,7 +33,11 @@ hooks:
         )
 
         echo "Installing Prometheus ServiceMonitor CRD…"
-        kubectl "${kube_args[@]}" apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
+        if ! kubectl "${kube_args[@]}" get crd servicemonitors.monitoring.coreos.com &>/dev/null; then
+          kubectl "${kube_args[@]}" apply -f crds/servicemonitor.yaml
+        else
+          echo "ServiceMonitor CRD already exists, skipping..."
+        fi
 {{- if and .Values.gcpRun .Values.usingLocalSsd }}
   - events: ["prepare"]
     showlogs: true
