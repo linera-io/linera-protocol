@@ -1735,42 +1735,20 @@ fn notification_timeout() -> Duration {
 
 #[cfg(with_testing)]
 pub trait NotificationsExt {
+    /// Waits for a notification for which `f` returns `Some(t)`, and returns `t`.
+    fn wait_for<T>(
+        &mut self,
+        f: impl FnMut(Notification) -> Option<T>,
+    ) -> impl Future<Output = Result<T>>;
+
     /// Waits for a `NewEvents` notification for the given block height. If no height is specified,
     /// any height is accepted.
     fn wait_for_events(
         &mut self,
-        height: impl Into<Option<BlockHeight>>,
-    ) -> impl Future<Output = Result<BTreeSet<StreamId>>>;
-
-    /// Waits for a `NewBlock` notification for the given block height. If no height is specified,
-    /// any height is accepted.
-    fn wait_for_block(
-        &mut self,
-        height: impl Into<Option<BlockHeight>>,
-    ) -> impl Future<Output = Result<CryptoHash>>;
-
-    /// Waits for a `NewIncomingBundle` notification for the given sender chain and sender block
-    /// height. If no height is specified, any height is accepted.
-    fn wait_for_bundle(
-        &mut self,
-        origin: ChainId,
-        height: impl Into<Option<BlockHeight>>,
-    ) -> impl Future<Output = Result<()>>;
-}
-
-#[cfg(with_testing)]
-impl<T: Stream<Item = Result<Notification>>> NotificationsExt for Pin<Box<T>> {
-    async fn wait_for_events(
-        &mut self,
         expected_height: impl Into<Option<BlockHeight>>,
-    ) -> Result<BTreeSet<StreamId>> {
+    ) -> impl Future<Output = Result<BTreeSet<StreamId>>> {
         let expected_height = expected_height.into();
-        let mut timeout = Box::pin(linera_base::time::timer::sleep(notification_timeout())).fuse();
-        loop {
-            let notification = futures::select! {
-                () = timeout => bail!("Timeout waiting for notification"),
-                notification = self.next().fuse() => notification.context("Stream closed")??,
-            };
+        self.wait_for(move |notification| {
             if let Reason::NewEvents {
                 height,
                 event_streams,
@@ -1778,47 +1756,60 @@ impl<T: Stream<Item = Result<Notification>>> NotificationsExt for Pin<Box<T>> {
             } = notification.reason
             {
                 if expected_height.is_none_or(|h| h == height) {
-                    return Ok(event_streams);
+                    return Some(event_streams);
                 }
             }
-        }
+            None
+        })
     }
 
-    async fn wait_for_block(
+    /// Waits for a `NewBlock` notification for the given block height. If no height is specified,
+    /// any height is accepted.
+    fn wait_for_block(
         &mut self,
         expected_height: impl Into<Option<BlockHeight>>,
-    ) -> Result<CryptoHash> {
+    ) -> impl Future<Output = Result<CryptoHash>> {
         let expected_height = expected_height.into();
-        let mut timeout = Box::pin(linera_base::time::timer::sleep(notification_timeout())).fuse();
-        loop {
-            let notification = futures::select! {
-                () = timeout => bail!("Timeout waiting for notification"),
-                notification = self.next().fuse() => notification.context("Stream closed")??,
-            };
+        self.wait_for(move |notification| {
             if let Reason::NewBlock { height, hash, .. } = notification.reason {
                 if expected_height.is_none_or(|h| h == height) {
-                    return Ok(hash);
+                    return Some(hash);
                 }
             }
-        }
+            None
+        })
     }
 
-    async fn wait_for_bundle(
+    /// Waits for a `NewIncomingBundle` notification for the given sender chain and sender block
+    /// height. If no height is specified, any height is accepted.
+    fn wait_for_bundle(
         &mut self,
         expected_origin: ChainId,
         expected_height: impl Into<Option<BlockHeight>>,
-    ) -> Result<()> {
+    ) -> impl Future<Output = Result<()>> {
         let expected_height = expected_height.into();
+        self.wait_for(move |notification| {
+            if let Reason::NewIncomingBundle { height, origin } = notification.reason {
+                if expected_height.is_none_or(|h| h == height) && origin == expected_origin {
+                    return Some(());
+                }
+            }
+            None
+        })
+    }
+}
+
+#[cfg(with_testing)]
+impl<S: Stream<Item = Result<Notification>>> NotificationsExt for Pin<Box<S>> {
+    async fn wait_for<T>(&mut self, mut f: impl FnMut(Notification) -> Option<T>) -> Result<T> {
         let mut timeout = Box::pin(linera_base::time::timer::sleep(notification_timeout())).fuse();
         loop {
             let notification = futures::select! {
                 () = timeout => bail!("Timeout waiting for notification"),
                 notification = self.next().fuse() => notification.context("Stream closed")??,
             };
-            if let Reason::NewIncomingBundle { height, origin } = notification.reason {
-                if expected_height.is_none_or(|h| h == height) && origin == expected_origin {
-                    return Ok(());
-                }
+            if let Some(t) = f(notification) {
+                return Ok(t);
             }
         }
     }
