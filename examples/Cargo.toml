@@ -20,7 +20,7 @@ members = [
 ]
 
 [workspace.dependencies]
-alloy-primitives = { version = "1.0.0", default-features = false }
+alloy-primitives = { version = "1.3.0", default-features = false }
 alloy-sol-types = { version = "1.0.0", default-features = false }
 anyhow = "1.0.80"
 assert_matches = "1.5.0"
