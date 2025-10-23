@@ -64,8 +64,8 @@ pub enum RequestResult {
 
 /// Marker trait for types that can be converted to/from `RequestResult`
 /// for use in the requests cache.
-pub trait Cacheable: From<RequestResult> + Into<RequestResult> {}
-impl<T> Cacheable for T where T: From<RequestResult> + Into<RequestResult> {}
+pub trait Cacheable: TryFrom<RequestResult> + Into<RequestResult> {}
+impl<T> Cacheable for T where T: TryFrom<RequestResult> + Into<RequestResult> {}
 
 impl From<Option<Blob>> for RequestResult {
     fn from(blob: Option<Blob>) -> Self {
@@ -91,38 +91,46 @@ impl From<ConfirmedBlockCertificate> for RequestResult {
     }
 }
 
-impl From<RequestResult> for Option<Blob> {
-    fn from(result: RequestResult) -> Self {
+impl TryFrom<RequestResult> for Option<Blob> {
+    type Error = ();
+
+    fn try_from(result: RequestResult) -> Result<Self, Self::Error> {
         match result {
-            RequestResult::Blob(blob) => blob,
-            _ => panic!("Cannot convert RequestResult to Option<Blob>"),
+            RequestResult::Blob(blob) => Ok(blob),
+            _ => Err(()),
         }
     }
 }
 
-impl From<RequestResult> for Vec<ConfirmedBlockCertificate> {
-    fn from(result: RequestResult) -> Self {
+impl TryFrom<RequestResult> for Vec<ConfirmedBlockCertificate> {
+    type Error = ();
+
+    fn try_from(result: RequestResult) -> Result<Self, Self::Error> {
         match result {
-            RequestResult::Certificates(certs) => certs,
-            _ => panic!("Cannot convert RequestResult to Vec<ConfirmedBlockCertificate>"),
+            RequestResult::Certificates(certs) => Ok(certs),
+            _ => Err(()),
         }
     }
 }
 
-impl From<RequestResult> for BlobContent {
-    fn from(result: RequestResult) -> Self {
+impl TryFrom<RequestResult> for BlobContent {
+    type Error = ();
+
+    fn try_from(result: RequestResult) -> Result<Self, Self::Error> {
         match result {
-            RequestResult::BlobContent(content) => content,
-            _ => panic!("Cannot convert RequestResult to BlobContent"),
+            RequestResult::BlobContent(content) => Ok(content),
+            _ => Err(()),
         }
     }
 }
 
-impl From<RequestResult> for ConfirmedBlockCertificate {
-    fn from(result: RequestResult) -> Self {
+impl TryFrom<RequestResult> for ConfirmedBlockCertificate {
+    type Error = ();
+
+    fn try_from(result: RequestResult) -> Result<Self, Self::Error> {
         match result {
-            RequestResult::Certificate(cert) => *cert,
-            _ => panic!("Cannot convert RequestResult to ConfirmedBlockCertificate"),
+            RequestResult::Certificate(cert) => Ok(*cert),
+            _ => Err(()),
         }
     }
 }

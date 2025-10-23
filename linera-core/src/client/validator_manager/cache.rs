@@ -62,7 +62,7 @@ where
     /// - `None` if no suitable cached result exists
     pub(super) async fn get<T>(&self, key: &K) -> Option<T>
     where
-        T: From<R>,
+        T: TryFrom<R>,
     {
         let cache = self.cache.read().await;
 
@@ -74,7 +74,7 @@ where
             );
             #[cfg(with_metrics)]
             metrics::REQUEST_CACHE_HIT.inc();
-            return Some(T::from((*entry.result).clone()));
+            return T::try_from((*entry.result).clone()).ok();
         }
 
         // Check cache for subsuming requests
@@ -87,7 +87,7 @@ where
                     );
                     #[cfg(with_metrics)]
                     metrics::REQUEST_CACHE_HIT.inc();
-                    return Some(T::from(extracted));
+                    return T::try_from(extracted).ok();
                 }
             }
         }

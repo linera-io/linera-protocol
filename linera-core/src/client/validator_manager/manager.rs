@@ -570,7 +570,31 @@ impl<Env: Environment> ValidatorManager<Env> {
                     metrics::REQUEST_CACHE_DEDUPLICATION.inc();
                     // Wait for result from existing request
                     match receiver.recv().await {
-                        Ok(result) => return result.as_ref().clone().map(T::from),
+                        Ok(result) => match result.as_ref().clone() {
+                            Ok(res) => match T::try_from(res) {
+                                Ok(converted) => {
+                                    tracing::trace!(
+                                        key = ?key,
+                                        "received result from deduplicated in-flight request"
+                                    );
+                                    return Ok(converted);
+                                }
+                                Err(_) => {
+                                    tracing::trace!(
+                                        key = ?key,
+                                        "failed to convert result from deduplicated in-flight request, will execute independently"
+                                    );
+                                }
+                            },
+                            Err(e) => {
+                                tracing::trace!(
+                                    key = ?key,
+                                    error = %e,
+                                    "in-flight request failed",
+                                );
+                                // Fall through to execute a new request
+                            }
+                        },
                         Err(_) => {
                             tracing::trace!(
                                 key = ?key,
@@ -603,7 +627,15 @@ impl<Env: Environment> ValidatorManager<Env> {
                                             key = ?key,
                                             "extracted subset result from larger in-flight request"
                                         );
-                                        return Ok(T::from(extracted));
+                                        match T::try_from(extracted) {
+                                            Ok(converted) => return Ok(converted),
+                                            Err(_) => {
+                                                tracing::trace!(
+                                                    key = ?key,
+                                                    "failed to convert extracted result, will execute independently"
+                                                );
+                                            }
+                                        }
                                     } else {
                                         // Extraction failed, fall through to execute our own request
                                         tracing::trace!(
