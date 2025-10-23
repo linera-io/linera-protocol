@@ -1039,6 +1039,35 @@ impl ClientWrapper {
         Ok(())
     }
 
+    pub async fn change_validators(
+        &self,
+        add_validators: &[(String, String, usize, usize)], // (public_key, account_key, port, votes)
+        modify_validators: &[(String, String, usize, usize)], // (public_key, account_key, port, votes)
+        remove_validators: &[String],
+    ) -> Result<()> {
+        let mut command = self.command().await?;
+        command.arg("change-validators");
+
+        for (public_key, account_key, port, votes) in add_validators {
+            let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
+            let validator_spec = format!("{public_key},{account_key},{address},{votes}");
+            command.args(["--add", &validator_spec]);
+        }
+
+        for (public_key, account_key, port, votes) in modify_validators {
+            let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
+            let validator_spec = format!("{public_key},{account_key},{address},{votes}");
+            command.args(["--modify", &validator_spec]);
+        }
+
+        for validator_key in remove_validators {
+            command.args(["--remove", validator_key]);
+        }
+
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
     pub async fn revoke_epochs(&self, epoch: Epoch) -> Result<()> {
         self.command()
             .await?
