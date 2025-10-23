@@ -203,13 +203,13 @@ pub struct ClientContextOptions {
     )]
     pub max_accepted_latency_ms: f64,
 
-    /// Time-to-live for cached responses in seconds
+    /// Time-to-live for cached responses in milliseconds
     #[arg(
         long,
-        default_value_t = linera_core::client::validator_manager::CACHE_TTL_SEC,
-        env = "LINERA_VALIDATOR_MANAGER_CACHE_TTL_SEC"
+        default_value_t = linera_core::client::validator_manager::CACHE_TTL_MS,
+        env = "LINERA_VALIDATOR_MANAGER_CACHE_TTL_MS"
     )]
-    pub cache_ttl_sec: u64,
+    pub cache_ttl_ms: u64,
 
     /// Maximum number of entries in the cache
     #[arg(
@@ -278,7 +278,7 @@ impl ClientContextOptions {
         linera_core::client::ValidatorManagerConfig {
             max_in_flight_requests: self.max_in_flight_requests,
             max_accepted_latency_ms: self.max_accepted_latency_ms,
-            cache_ttl_sec: self.cache_ttl_sec,
+            cache_ttl_ms: self.cache_ttl_ms,
             cache_max_size: self.cache_max_size,
             max_request_ttl_ms: self.max_request_ttl_ms,
             alpha: self.alpha,

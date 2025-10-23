@@ -152,7 +152,7 @@ impl<Env: Environment> ValidatorManager<Env> {
             ScoringWeights::default(),
             config.alpha,
             config.max_accepted_latency_ms,
-            Duration::from_secs(config.cache_ttl_sec),
+            Duration::from_millis(config.cache_ttl_ms),
             config.cache_max_size,
             Duration::from_millis(config.max_request_ttl_ms),
         )

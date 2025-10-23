@@ -17,7 +17,7 @@ pub use scoring::ScoringWeights;
 // Module constants - default values for ValidatorManagerConfig
 pub const MAX_IN_FLIGHT_REQUESTS: usize = 100;
 pub const MAX_ACCEPTED_LATENCY_MS: f64 = 5000.0;
-pub const CACHE_TTL_SEC: u64 = 2;
+pub const CACHE_TTL_MS: u64 = 2000;
 pub const CACHE_MAX_SIZE: usize = 1000;
 pub const MAX_REQUEST_TTL_MS: u64 = 200;
 pub const ALPHA_SMOOTHING_FACTOR: f64 = 0.1;
@@ -29,8 +29,8 @@ pub struct ValidatorManagerConfig {
     pub max_in_flight_requests: usize,
     /// Maximum expected latency in milliseconds for score normalization
     pub max_accepted_latency_ms: f64,
-    /// Time-to-live for cached responses in seconds
-    pub cache_ttl_sec: u64,
+    /// Time-to-live for cached responses in milliseconds
+    pub cache_ttl_ms: u64,
     /// Maximum number of entries in the cache
     pub cache_max_size: usize,
     /// Maximum latency for an in-flight request before we stop deduplicating it (in milliseconds)
@@ -44,7 +44,7 @@ impl Default for ValidatorManagerConfig {
         Self {
             max_in_flight_requests: MAX_IN_FLIGHT_REQUESTS,
             max_accepted_latency_ms: MAX_ACCEPTED_LATENCY_MS,
-            cache_ttl_sec: CACHE_TTL_SEC,
+            cache_ttl_ms: CACHE_TTL_MS,
             cache_max_size: CACHE_MAX_SIZE,
             max_request_ttl_ms: MAX_REQUEST_TTL_MS,
             alpha: ALPHA_SMOOTHING_FACTOR,
