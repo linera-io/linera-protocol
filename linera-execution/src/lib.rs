@@ -85,8 +85,8 @@ pub const LINERA_TYPES_SOL: &str = include_str!("../solidity/LineraTypes.sol");
 /// The maximum length of a stream name.
 const MAX_STREAM_NAME_LEN: usize = 64;
 
-// The epoch after which, instead of hashing the view, we just return zeroes for
-// performance.
+/// The epoch after which, instead of hashing the view, we just return zeroes for
+/// performance.
 // Note: testnet-only! This should not survive to mainnet.
 const EPOCH_STOP_HASHING: Epoch = Epoch(20);
 
