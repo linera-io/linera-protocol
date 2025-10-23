@@ -4591,12 +4591,28 @@ async fn test_end_to_end_fungible_client_benchmark(config: impl LineraNetConfig)
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> Result<()> {
-    use std::{
-        sync::{Arc, Barrier},
-        thread,
-    };
-
-    use tokio::task::JoinHandle;
+    /// Runs the `client` in a task, so that it can race to produce blocks transferring tokens.
+    ///
+    /// Stops when transferring fails or the `notifier` channel is closed. Returns the client
+    /// wrapper, because dropping it would make it attempt to close the chain and block the thread.
+    async fn run_client(
+        client: ClientWrapper,
+        mut notifier: mpsc::Sender<()>,
+        source: ChainId,
+        target: ChainId,
+    ) -> ClientWrapper {
+        async {
+            while client
+                .transfer_with_silent_logs(Amount::ONE, source, target)
+                .await
+                .is_ok()
+            {
+                notifier.send(()).await.unwrap();
+            }
+        }
+        .await;
+        client
+    }
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -4607,78 +4623,33 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
     client2.wallet_init(None).await?;
     let chain1 = *client1.load_wallet()?.owned_chain_ids().first().unwrap();
 
-    // Open a chain owned by both clients, with only single-leader rounds.
+    // Open a chain owned by both clients, with only single-leader rounds that don't time out:
+    // The first round should always succeed, because both leaders are active.
     let owner1 = client1.keygen().await?;
     let owner2 = client2.keygen().await?;
     let chain2 = client1
         .open_multi_owner_chain(
             chain1,
             vec![owner1, owner2],
-            vec![100, 100],
-            0,
-            Amount::from_tokens(11),
-            u64::MAX,
+            vec![100, 100],            // Both owners have equal weight.
+            0,                         // No multi-leader rounds.
+            Amount::from_millis(8900), // Only 8 transfers can be made.
+            u64::MAX,                  // 585 million years
         )
         .await?;
     client1.assign(owner1, chain2).await?;
     client2.assign(owner2, chain2).await?;
     client2.sync(chain2).await?;
 
-    let (tx, mut rx) = mpsc::channel(8);
-    let drop_barrier = Arc::new(Barrier::new(3));
-    let handle1 = tokio::spawn(run_client(
-        drop_barrier.clone(),
-        client1,
-        tx.clone(),
-        chain2,
-        chain1,
-    ));
-    let handle2 = tokio::spawn(run_client(
-        drop_barrier.clone(),
-        client2,
-        tx,
-        chain2,
-        chain1,
-    ));
-    /// Runs the `client` in a task, so that it can race to produce blocks transferring tokens.
-    ///
-    /// Stops when transferring fails or the `notifier` channel is closed. When exiting, it will
-    /// drop the client in a separate thread so that the synchronous `Drop` implementation
-    /// can close the chains without blocking the asynchronous worker thread, which might be
-    /// shared with the other client's task. If the asynchronous thread is blocked, the
-    /// other client might have the round but not be able to execute and propose a block,
-    /// deadlocking the test.
-    async fn run_client(
-        drop_barrier: Arc<Barrier>,
-        client: ClientWrapper,
-        mut notifier: mpsc::Sender<()>,
-        source: ChainId,
-        target: ChainId,
-    ) -> Result<JoinHandle<Result<()>>> {
-        let result = async {
-            loop {
-                client.transfer(Amount::ONE, source, target).await?;
-                notifier.send(()).await?;
-            }
-        }
-        .await;
-        thread::spawn(move || {
-            drop(client);
-            drop_barrier.wait();
-        });
-        result
-    }
+    // Both clients make transfers from chain 2 to chain 1 in a loop.
+    let (tx, rx) = mpsc::channel(8);
+    let (_client1, _client2) = futures::join!(
+        run_client(client1, tx.clone(), chain2, chain1),
+        run_client(client2, tx, chain2, chain1)
+    );
+    // 8 transfers succeeded, the ninth failed because the chain ran out of tokens.
+    assert_eq!(rx.count().await, 8);
 
-    for _ in 0..8 {
-        let () = rx.next().await.unwrap();
-    }
-    drop(rx);
-
-    let (result1, result2) = futures::join!(handle1, handle2);
-    assert!(result1?.is_err());
-    assert!(result2?.is_err());
-
-    drop_barrier.wait();
     net.ensure_is_running().await?;
     net.terminate().await?;
 
