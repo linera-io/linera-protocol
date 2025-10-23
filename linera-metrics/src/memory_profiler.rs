@@ -51,7 +51,7 @@ impl MemoryProfiler {
 
     /// HTTP endpoint for heap profile - returns fresh pprof data
     pub async fn heap_profile() -> Result<impl IntoResponse, StatusCode> {
-        info!("Serving heap profile via /debug/pprof");
+        trace!("Serving heap profile via /debug/pprof");
 
         match Self::collect_heap_profile().await {
             Ok(profile_data) => {
