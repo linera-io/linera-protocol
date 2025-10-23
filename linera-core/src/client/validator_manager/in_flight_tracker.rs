@@ -169,12 +169,9 @@ impl<N: Clone> InFlightTracker<N> {
     pub(super) async fn get_alternative_peers(&self, key: &RequestKey) -> Option<Vec<N>> {
         let in_flight = self.entries.read().await;
 
-        if let Some(entry) = in_flight.get(key) {
-            let peers = entry.alternative_peers.read().await;
-            Some(peers.clone())
-        } else {
-            None
-        }
+        let entry = in_flight.get(key)?;
+        let peers = entry.alternative_peers.read().await;
+        Some(peers.clone())
     }
 }
 
