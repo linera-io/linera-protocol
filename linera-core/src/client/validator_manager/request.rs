@@ -147,20 +147,9 @@ impl SubsumingKey<RequestResult> for super::request::RequestKey {
             _ => return false, // We subsume only certificate requests
         };
 
-        if new_req_heights.is_empty() {
-            return true; // An empty set is always subsumed
-        }
-
-        if in_flight_req_heights.is_empty() {
-            return false; // An empty set cannot subsume non-empty
-        }
-
-        in_flight_req_heights
-            .first()
-            .expect("heights1 is not empty")
-            <= new_req_heights.first().expect("heights2 is not empty")
-            && in_flight_req_heights.last().expect("heights1 is not empty")
-                >= new_req_heights.last().expect("heights2 is not empty")
+        new_req_heights
+            .iter()
+            .all(|height| in_flight_req_heights.contains(height))
     }
 
     fn try_extract_result(
@@ -178,32 +167,24 @@ impl SubsumingKey<RequestResult> for super::request::RequestKey {
             return None; // Can't extract if not subsumed
         }
 
-        let requested_heights = self.heights()?;
+        let mut requested_heights = self.heights()?;
         if requested_heights.is_empty() {
             return Some(RequestResult::Certificates(vec![])); // Nothing requested
         }
-        let requested_start = requested_heights.first().unwrap();
-        let requested_end = requested_heights.last().unwrap();
-
-        // Filter certificates to only those at the requested heights
-        let filtered: Vec<_> = certificates
-            .iter()
-            .filter(|cert| {
-                &cert.value().height() >= requested_start && &cert.value().height() <= requested_end
-            })
-            .cloned()
-            .collect();
-
-        if filtered.is_empty() {
-            return None; // No matching certificates found
-        }
-        if filtered.first().unwrap().value().height() != *requested_start
-            || filtered.last().unwrap().value().height() != *requested_end
-        {
-            return None; // Missing some requested heights
+        let mut collected = vec![];
+        while let Some(height) = requested_heights.first() {
+            if let Some(pos) = certificates
+                .iter()
+                .position(|cert| &cert.value().height() == height)
+            {
+                collected.push(certificates[pos].clone());
+                requested_heights.remove(0);
+            } else {
+                return None; // Missing a requested height
+            }
         }
 
-        Some(RequestResult::Certificates(filtered))
+        Some(RequestResult::Certificates(collected))
     }
 }
 
@@ -240,6 +221,7 @@ mod tests {
             heights: vec![BlockHeight(12), BlockHeight(14)],
         };
         assert!(!req1.subsumes(&req2));
+        assert!(!req2.subsumes(&req1));
     }
 
     #[test]
@@ -438,24 +420,31 @@ mod tests {
         let chain_id = ChainId(CryptoHash::test_hash("chain1"));
         let new_req = RequestKey::Certificates {
             chain_id,
-            heights: vec![BlockHeight(10), BlockHeight(11), BlockHeight(12)],
+            heights: vec![BlockHeight(10), BlockHeight(12), BlockHeight(13)],
         };
         let in_flight_req = RequestKey::Certificates {
             chain_id,
-            heights: vec![BlockHeight(11), BlockHeight(13), BlockHeight(14)],
+            heights: vec![
+                BlockHeight(10),
+                BlockHeight(12),
+                BlockHeight(13),
+                BlockHeight(14),
+            ],
         };
 
-        // Result missing middle height (12)
         let certs = vec![
-            make_test_cert(11, chain_id),
+            make_test_cert(10, chain_id),
             make_test_cert(13, chain_id),
             make_test_cert(14, chain_id),
         ];
         let result = RequestResult::Certificates(certs);
 
-        // Missing cert for height 12, should return None.
-        let extracted = new_req.try_extract_result(&in_flight_req, &result);
-        assert!(extracted.is_none());
+        assert!(new_req
+            .try_extract_result(&in_flight_req, &result)
+            .is_none());
+        assert!(in_flight_req
+            .try_extract_result(&new_req, &result)
+            .is_none());
     }
 
     #[test]

@@ -21,7 +21,7 @@ pub(super) struct CacheEntry<R> {
 /// - Exact match lookups
 /// - Subsumption-based lookups (larger requests can satisfy smaller ones)
 /// - TTL-based expiration
-/// - Size-based LRU eviction
+/// - LRU eviction
 #[derive(Debug, Clone)]
 pub(super) struct RequestsCache<K, R> {
     /// Cache of recently completed requests with their results and timestamps.
