@@ -187,7 +187,7 @@ pub struct ClientContextOptions {
     #[arg(long, default_value = "100")]
     pub max_joined_tasks: usize,
 
-    /// Maximum concurrent requests per validator node
+    /// Maximum concurrent requests per validator node.
     #[arg(
         long,
         default_value_t = linera_core::client::validator_manager::MAX_IN_FLIGHT_REQUESTS,
@@ -195,7 +195,7 @@ pub struct ClientContextOptions {
     )]
     pub max_in_flight_requests: usize,
 
-    /// Maximum expected latency in milliseconds for score normalization
+    /// Maximum expected latency in milliseconds for score normalization.
     #[arg(
         long,
         default_value_t = linera_core::client::validator_manager::MAX_ACCEPTED_LATENCY_MS,
@@ -203,7 +203,7 @@ pub struct ClientContextOptions {
     )]
     pub max_accepted_latency_ms: f64,
 
-    /// Time-to-live for cached responses in milliseconds
+    /// Time-to-live for cached responses in milliseconds.
     #[arg(
         long,
         default_value_t = linera_core::client::validator_manager::CACHE_TTL_MS,
@@ -211,7 +211,7 @@ pub struct ClientContextOptions {
     )]
     pub cache_ttl_ms: u64,
 
-    /// Maximum number of entries in the cache
+    /// Maximum number of entries in the cache.
     #[arg(
         long,
         default_value_t = linera_core::client::validator_manager::CACHE_MAX_SIZE,
@@ -219,7 +219,7 @@ pub struct ClientContextOptions {
     )]
     pub cache_max_size: usize,
 
-    /// Maximum latency for an in-flight request before we stop deduplicating it (in milliseconds)
+    /// Maximum latency for an in-flight request before we stop deduplicating it (in milliseconds).
     #[arg(
         long,
         default_value_t = linera_core::client::validator_manager::MAX_REQUEST_TTL_MS,
@@ -227,11 +227,11 @@ pub struct ClientContextOptions {
     )]
     pub max_request_ttl_ms: u64,
 
-    /// Smoothing factor for Exponential Moving Averages (0 < alpha < 1)
-    /// Higher values give more weight to recent observations
-    /// Typical values are between 0.01 and 0.5
+    /// Smoothing factor for Exponential Moving Averages (0 < alpha < 1).
+    /// Higher values give more weight to recent observations.
+    /// Typical values are between 0.01 and 0.5.
     /// A value of 0.1 means that 10% of the new observation is considered
-    /// and 90% of the previous average is retained
+    /// and 90% of the previous average is retained.
     #[arg(
         long,
         default_value_t = linera_core::client::validator_manager::ALPHA_SMOOTHING_FACTOR,
