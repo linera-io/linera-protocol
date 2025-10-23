@@ -6,15 +6,15 @@
 
 mod cache;
 mod in_flight_tracker;
-mod manager;
 mod node_info;
 mod request;
+mod scheduler;
 mod scoring;
 
-pub use manager::ValidatorManager;
+pub use scheduler::RequestsScheduler;
 pub use scoring::ScoringWeights;
 
-// Module constants - default values for ValidatorManagerConfig
+// Module constants - default values for RequestsSchedulerConfig
 pub const MAX_IN_FLIGHT_REQUESTS: usize = 100;
 pub const MAX_ACCEPTED_LATENCY_MS: f64 = 5000.0;
 pub const CACHE_TTL_MS: u64 = 2000;
@@ -22,9 +22,9 @@ pub const CACHE_MAX_SIZE: usize = 1000;
 pub const MAX_REQUEST_TTL_MS: u64 = 200;
 pub const ALPHA_SMOOTHING_FACTOR: f64 = 0.1;
 
-/// Configuration for the `ValidatorManager`.
+/// Configuration for the `RequestsScheduler`.
 #[derive(Debug, Clone)]
-pub struct ValidatorManagerConfig {
+pub struct RequestsSchedulerConfig {
     /// Maximum concurrent requests per validator node
     pub max_in_flight_requests: usize,
     /// Maximum expected latency in milliseconds for score normalization
@@ -39,7 +39,7 @@ pub struct ValidatorManagerConfig {
     pub alpha: f64,
 }
 
-impl Default for ValidatorManagerConfig {
+impl Default for RequestsSchedulerConfig {
     fn default() -> Self {
         Self {
             max_in_flight_requests: MAX_IN_FLIGHT_REQUESTS,

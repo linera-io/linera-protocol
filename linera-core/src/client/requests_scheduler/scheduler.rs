@@ -28,8 +28,8 @@ use super::{
 use crate::{
     client::{
         communicate_concurrently,
-        validator_manager::{in_flight_tracker::Subscribed, request::Cacheable},
-        ValidatorManagerConfig,
+        requests_scheduler::{in_flight_tracker::Subscribed, request::Cacheable},
+        RequestsSchedulerConfig,
     },
     environment::Environment,
     node::{NodeError, ValidatorNode},
@@ -49,7 +49,7 @@ pub(super) mod metrics {
     /// Histogram of response times per validator (in milliseconds)
     pub(super) static VALIDATOR_RESPONSE_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
-            "validator_manager_response_time_ms",
+            "requests_scheduler_response_time_ms",
             "Response time for requests to validators in milliseconds",
             &["validator"],
             exponential_bucket_latencies(10000.0), // up to 10 seconds
@@ -59,7 +59,7 @@ pub(super) mod metrics {
     /// Counter of total requests made to each validator
     pub(super) static VALIDATOR_REQUEST_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
-            "validator_manager_request_total",
+            "requests_scheduler_request_total",
             "Total number of requests made to each validator",
             &["validator"],
         )
@@ -68,7 +68,7 @@ pub(super) mod metrics {
     /// Counter of successful requests per validator
     pub(super) static VALIDATOR_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
-            "validator_manager_request_success",
+            "requests_scheduler_request_success",
             "Number of successful requests to each validator",
             &["validator"],
         )
@@ -77,7 +77,7 @@ pub(super) mod metrics {
     /// Counter for requests that were resolved from the response cache.
     pub(super) static REQUEST_CACHE_DEDUPLICATION: LazyLock<IntCounter> = LazyLock::new(|| {
         register_int_counter(
-            "validator_manager_request_deduplication_total",
+            "requests_scheduler_request_deduplication_total",
             "Number of requests that were deduplicated by finding the result in the cache.",
         )
     });
@@ -85,7 +85,7 @@ pub(super) mod metrics {
     /// Counter for requests that were served from cache
     pub static REQUEST_CACHE_HIT: LazyLock<IntCounter> = LazyLock::new(|| {
         register_int_counter(
-            "validator_manager_request_cache_hit_total",
+            "requests_scheduler_request_cache_hit_total",
             "Number of requests that were served from cache",
         )
     });
@@ -93,7 +93,7 @@ pub(super) mod metrics {
 
 /// Manages a pool of validator nodes with intelligent load balancing and performance tracking.
 ///
-/// The `ValidatorManager` maintains performance metrics for each validator node using
+/// The `RequestsScheduler` maintains performance metrics for each validator node using
 /// Exponential Moving Averages (EMA) and uses these metrics to make intelligent routing
 /// decisions. It prevents node overload through request capacity limits and automatically
 /// retries failed requests on alternative nodes.
@@ -102,7 +102,7 @@ pub(super) mod metrics {
 ///
 /// ```ignore
 /// // Create with default configuration (balanced scoring)
-/// let manager = ValidatorManager::new(validator_nodes);
+/// let manager = RequestsScheduler::new(validator_nodes);
 ///
 /// // Create with custom configuration prioritizing low latency
 /// let latency_weights = ScoringWeights {
@@ -110,7 +110,7 @@ pub(super) mod metrics {
 ///     success: 0.3,
 ///     load: 0.1,
 /// };
-/// let manager = ValidatorManager::with_config(
+/// let manager = RequestsScheduler::with_config(
 ///     validator_nodes,
 ///     15,                      // max 15 concurrent requests per node
 ///     latency_weights,         // custom scoring weights
@@ -121,7 +121,7 @@ pub(super) mod metrics {
 /// );
 /// ```
 #[derive(Debug, Clone)]
-pub struct ValidatorManager<Env: Environment> {
+pub struct RequestsScheduler<Env: Environment> {
     /// Thread-safe map of validator nodes indexed by their public keys.
     /// Each node is wrapped with EMA-based performance tracking information.
     nodes: Arc<tokio::sync::RwLock<BTreeMap<ValidatorPublicKey, NodeInfo<Env>>>>,
@@ -140,11 +140,11 @@ pub struct ValidatorManager<Env: Environment> {
     cache: RequestsCache<RequestKey, RequestResult>,
 }
 
-impl<Env: Environment> ValidatorManager<Env> {
-    /// Creates a new `ValidatorManager` with the provided configuration.
+impl<Env: Environment> RequestsScheduler<Env> {
+    /// Creates a new `RequestsScheduler` with the provided configuration.
     pub fn new(
         nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
-        config: ValidatorManagerConfig,
+        config: RequestsSchedulerConfig,
     ) -> Self {
         Self::with_config(
             nodes,
@@ -158,7 +158,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         )
     }
 
-    /// Creates a new `ValidatorManager` with custom configuration.
+    /// Creates a new `RequestsScheduler` with custom configuration.
     ///
     /// # Arguments
     /// - `nodes`: Initial set of validator nodes
@@ -212,7 +212,7 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// tracking, and peer selection.
     ///
     /// This method provides a high-level API for executing operations against remote nodes
-    /// while leveraging the [`ValidatorManager`]'s intelligent peer selection, performance tracking,
+    /// while leveraging the [`RequestsScheduler`]'s intelligent peer selection, performance tracking,
     /// and request deduplication capabilities.
     ///
     /// # Type Parameters
@@ -229,7 +229,7 @@ impl<Env: Environment> ValidatorManager<Env> {
     ///
     /// # Example
     /// ```ignore
-    /// let result: Result<Vec<ConfirmedBlockCertificate>, NodeError> = validator_manager
+    /// let result: Result<Vec<ConfirmedBlockCertificate>, NodeError> = requests_scheduler
     ///     .with_best(
     ///         RequestKey::Certificates { chain_id, start, limit },
     ///         |peer| async move {
@@ -781,16 +781,16 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::{super::request::RequestKey, *};
-    use crate::{client::validator_manager::MAX_REQUEST_TTL_MS, node::NodeError};
+    use crate::{client::requests_scheduler::MAX_REQUEST_TTL_MS, node::NodeError};
 
     type TestEnvironment = crate::environment::Test;
 
-    /// Helper function to create a test ValidatorManager with custom configuration
+    /// Helper function to create a test RequestsScheduler with custom configuration
     fn create_test_manager(
         in_flight_timeout: Duration,
         cache_ttl: Duration,
-    ) -> Arc<ValidatorManager<TestEnvironment>> {
-        let mut manager = ValidatorManager::with_config(
+    ) -> Arc<RequestsScheduler<TestEnvironment>> {
+        let mut manager = RequestsScheduler::with_config(
             vec![], // No actual nodes needed for these tests
             10,
             ScoringWeights::default(),
@@ -1024,7 +1024,7 @@ mod tests {
     #[tokio::test]
     async fn test_slot_limiting_blocks_excess_requests() {
         // Tests the slot limiting mechanism:
-        // - Creates a ValidatorManager with max_requests_per_node = 2
+        // - Creates a RequestsScheduler with max_requests_per_node = 2
         // - Starts two slow requests that acquire both available slots
         // - Starts a third request and verifies it's blocked waiting for a slot (execution count stays at 2)
         // - Completes the first request to release a slot
@@ -1054,9 +1054,9 @@ mod tests {
             node: validator_node,
         };
 
-        // Create a ValidatorManager with max_requests_per_node = 2
+        // Create a RequestsScheduler with max_requests_per_node = 2
         let max_slots = 2;
-        let mut manager: ValidatorManager<TestEnvironment> = ValidatorManager::with_config(
+        let mut manager: RequestsScheduler<TestEnvironment> = RequestsScheduler::with_config(
             vec![remote_node.clone()],
             max_slots,
             ScoringWeights::default(),
@@ -1200,9 +1200,9 @@ mod tests {
             })
             .collect();
 
-        // Create a ValidatorManager
-        let manager: Arc<ValidatorManager<TestEnvironment>> =
-            Arc::new(ValidatorManager::with_config(
+        // Create a RequestsScheduler
+        let manager: Arc<RequestsScheduler<TestEnvironment>> =
+            Arc::new(RequestsScheduler::with_config(
                 nodes.clone(),
                 1,
                 ScoringWeights::default(),

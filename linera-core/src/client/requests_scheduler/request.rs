@@ -7,7 +7,7 @@ use linera_base::{
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 
-use crate::client::validator_manager::cache::SubsumingKey;
+use crate::client::requests_scheduler::cache::SubsumingKey;
 
 /// Unique identifier for different types of download requests.
 ///

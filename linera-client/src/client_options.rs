@@ -190,40 +190,40 @@ pub struct ClientContextOptions {
     /// Maximum concurrent requests per validator node.
     #[arg(
         long,
-        default_value_t = linera_core::client::validator_manager::MAX_IN_FLIGHT_REQUESTS,
-        env = "LINERA_VALIDATOR_MANAGER_MAX_IN_FLIGHT_REQUESTS"
+        default_value_t = linera_core::client::requests_scheduler::MAX_IN_FLIGHT_REQUESTS,
+        env = "LINERA_REQUESTS_SCHEDULER_MAX_IN_FLIGHT_REQUESTS"
     )]
     pub max_in_flight_requests: usize,
 
     /// Maximum expected latency in milliseconds for score normalization.
     #[arg(
         long,
-        default_value_t = linera_core::client::validator_manager::MAX_ACCEPTED_LATENCY_MS,
-        env = "LINERA_VALIDATOR_MANAGER_MAX_ACCEPTED_LATENCY_MS"
+        default_value_t = linera_core::client::requests_scheduler::MAX_ACCEPTED_LATENCY_MS,
+        env = "LINERA_REQUESTS_SCHEDULER_MAX_ACCEPTED_LATENCY_MS"
     )]
     pub max_accepted_latency_ms: f64,
 
     /// Time-to-live for cached responses in milliseconds.
     #[arg(
         long,
-        default_value_t = linera_core::client::validator_manager::CACHE_TTL_MS,
-        env = "LINERA_VALIDATOR_MANAGER_CACHE_TTL_MS"
+        default_value_t = linera_core::client::requests_scheduler::CACHE_TTL_MS,
+        env = "LINERA_REQUESTS_SCHEDULER_CACHE_TTL_MS"
     )]
     pub cache_ttl_ms: u64,
 
     /// Maximum number of entries in the cache.
     #[arg(
         long,
-        default_value_t = linera_core::client::validator_manager::CACHE_MAX_SIZE,
-        env = "LINERA_VALIDATOR_MANAGER_CACHE_MAX_SIZE"
+        default_value_t = linera_core::client::requests_scheduler::CACHE_MAX_SIZE,
+        env = "LINERA_REQUESTS_SCHEDULER_CACHE_MAX_SIZE"
     )]
     pub cache_max_size: usize,
 
     /// Maximum latency for an in-flight request before we stop deduplicating it (in milliseconds).
     #[arg(
         long,
-        default_value_t = linera_core::client::validator_manager::MAX_REQUEST_TTL_MS,
-        env = "LINERA_VALIDATOR_MANAGER_MAX_REQUEST_TTL_MS"
+        default_value_t = linera_core::client::requests_scheduler::MAX_REQUEST_TTL_MS,
+        env = "LINERA_REQUESTS_SCHEDULER_MAX_REQUEST_TTL_MS"
     )]
     pub max_request_ttl_ms: u64,
 
@@ -234,8 +234,8 @@ pub struct ClientContextOptions {
     /// and 90% of the previous average is retained.
     #[arg(
         long,
-        default_value_t = linera_core::client::validator_manager::ALPHA_SMOOTHING_FACTOR,
-        env = "LINERA_VALIDATOR_MANAGER_ALPHA"
+        default_value_t = linera_core::client::requests_scheduler::ALPHA_SMOOTHING_FACTOR,
+        env = "LINERA_REQUESTS_SCHEDULER_ALPHA"
     )]
     pub alpha: f64,
 }
@@ -271,11 +271,11 @@ impl ClientContextOptions {
         }
     }
 
-    /// Creates [`ValidatorManagerConfig`] with the corresponding values.
-    pub(crate) fn to_validator_manager_config(
+    /// Creates [`RequestsSchedulerConfig`] with the corresponding values.
+    pub(crate) fn to_requests_scheduler_config(
         &self,
-    ) -> linera_core::client::ValidatorManagerConfig {
-        linera_core::client::ValidatorManagerConfig {
+    ) -> linera_core::client::RequestsSchedulerConfig {
+        linera_core::client::RequestsSchedulerConfig {
             max_in_flight_requests: self.max_in_flight_requests,
             max_accepted_latency_ms: self.max_accepted_latency_ms,
             cache_ttl_ms: self.cache_ttl_ms,

@@ -1052,7 +1052,7 @@ where
             Duration::from_secs(30),
             Duration::from_secs(1),
             ChainClientOptions::test_default(),
-            crate::client::ValidatorManagerConfig::default(),
+            crate::client::RequestsSchedulerConfig::default(),
         ));
         Ok(client.create_chain_client(
             chain_id,

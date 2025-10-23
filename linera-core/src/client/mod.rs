@@ -86,9 +86,9 @@ mod chain_client_state;
 #[cfg(test)]
 #[path = "../unit_tests/client_tests.rs"]
 mod client_tests;
-pub mod validator_manager;
+pub mod requests_scheduler;
 
-pub use validator_manager::{ScoringWeights, ValidatorManager, ValidatorManagerConfig};
+pub use requests_scheduler::{RequestsScheduler, RequestsSchedulerConfig, ScoringWeights};
 mod received_log;
 mod validator_trackers;
 
@@ -153,7 +153,7 @@ pub struct Client<Env: Environment> {
     /// tracking.
     local_node: LocalNodeClient<Env::Storage>,
     /// Manages the requests sent to validator nodes.
-    validator_manager: ValidatorManager<Env>,
+    requests_scheduler: RequestsScheduler<Env>,
     /// The admin chain ID.
     admin_id: ChainId,
     /// Chains that should be tracked by the client.
@@ -180,7 +180,7 @@ impl<Env: Environment> Client<Env> {
         chain_worker_ttl: Duration,
         sender_chain_worker_ttl: Duration,
         options: ChainClientOptions,
-        validator_manager_config: validator_manager::ValidatorManagerConfig,
+        requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client(
@@ -194,12 +194,12 @@ impl<Env: Environment> Client<Env> {
         .with_chain_worker_ttl(chain_worker_ttl)
         .with_sender_chain_worker_ttl(sender_chain_worker_ttl);
         let local_node = LocalNodeClient::new(state);
-        let validator_manager = ValidatorManager::new(vec![], validator_manager_config);
+        let requests_scheduler = RequestsScheduler::new(vec![], requests_scheduler_config);
 
         Self {
             environment,
             local_node,
-            validator_manager,
+            requests_scheduler,
             chains: papaya::HashMap::new(),
             admin_id,
             tracked_chains,
@@ -357,7 +357,7 @@ impl<Env: Environment> Client<Env> {
                 .min(self.options.certificate_download_batch_size);
 
             let certificates = self
-                .validator_manager
+                .requests_scheduler
                 .download_certificates(remote_node, chain_id, next_height, limit)
                 .await?;
             let Some(info) = self.process_certificates(remote_node, certificates).await? else {
@@ -376,7 +376,7 @@ impl<Env: Environment> Client<Env> {
         blob_ids: &[BlobId],
     ) -> Result<(), ChainClientError> {
         let blobs = &self
-            .validator_manager
+            .requests_scheduler
             .download_blobs(remote_nodes, blob_ids, self.options.blob_download_timeout)
             .await?
             .ok_or_else(|| {
@@ -774,7 +774,7 @@ impl<Env: Environment> Client<Env> {
                         return Err(());
                     }
                     let certificates = self
-                        .validator_manager
+                        .requests_scheduler
                         .download_certificates_by_heights(
                             &remote_node,
                             sender_chain_id,
@@ -936,7 +936,7 @@ impl<Env: Environment> Client<Env> {
         while current_height >= next_outbox_height {
             // Download the certificate for this height.
             let downloaded = self
-                .validator_manager
+                .requests_scheduler
                 .download_certificates_by_heights(
                     remote_node,
                     sender_chain_id,
@@ -1126,7 +1126,7 @@ impl<Env: Environment> Client<Env> {
                         let mut blobs = Vec::new();
                         for blob_id in required_blob_ids {
                             let blob_content = match self
-                                .validator_manager
+                                .requests_scheduler
                                 .download_pending_blob(remote_node, chain_id, blob_id)
                                 .await
                             {
@@ -1224,7 +1224,7 @@ impl<Env: Environment> Client<Env> {
                 let mut blobs = Vec::new();
                 for blob_id in blob_ids {
                     let blob_content = self
-                        .validator_manager
+                        .requests_scheduler
                         .download_pending_blob(remote_node, chain_id, blob_id)
                         .await?;
                     blobs.push(Blob::new(blob_content));
@@ -1255,7 +1255,7 @@ impl<Env: Environment> Client<Env> {
                 remote_nodes,
                 async move |remote_node| {
                     let certificate = self
-                        .validator_manager
+                        .requests_scheduler
                         .download_certificate_for_blob(&remote_node, blob_id)
                         .await?;
                     self.receive_sender_certificate(

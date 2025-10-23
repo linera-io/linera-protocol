@@ -6,7 +6,7 @@ use std::{collections::HashMap, sync::Arc};
 use linera_base::time::{Duration, Instant};
 
 #[cfg(with_metrics)]
-use super::manager::metrics;
+use super::scheduler::metrics;
 
 /// Cached result entry with timestamp for TTL expiration
 #[derive(Debug, Clone)]
