@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, vec};
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlobContent, BlockHeight, Epoch, StreamUpdate},
+    data_types::{BlobContent, BlockHeight, StreamUpdate},
     identifiers::{AccountOwner, BlobId, StreamId},
     time::Instant,
 };
@@ -35,7 +35,7 @@ use crate::{
     system::SystemExecutionStateView, ApplicationDescription, ApplicationId, BcsHashable,
     Deserialize, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageContext,
     OperationContext, ProcessStreamsContext, Query, QueryContext, QueryOutcome, Serialize,
-    ServiceSyncRuntime, Timestamp, TransactionTracker,
+    ServiceSyncRuntime, Timestamp, TransactionTracker, EPOCH_STOP_HASHING,
 };
 
 /// A view accessing the execution state of a chain.
@@ -48,11 +48,6 @@ pub struct ExecutionStateView<C> {
     /// The number of events in the streams that this chain is writing to.
     pub stream_event_counts: MapView<C, StreamId, u32>,
 }
-
-// The epoch after which, instead of hashing the view, we just return zeroes for
-// performance.
-// Note: testnet-only! This should not survive to mainnet.
-const EPOCH_STOP_HASHING: Epoch = Epoch(20);
 
 impl<C> CryptoHashView for ExecutionStateView<C>
 where
