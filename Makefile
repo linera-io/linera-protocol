@@ -251,7 +251,7 @@ build-demo-counter: ## Build counter web frontend
 			echo "LINERA_APPLICATION_ID=$$LINERA_APPLICATION_ID" > .env && \
 			echo "LINERA_FAUCET_URL=$$LINERA_FAUCET_URL" >> .env; \
 		fi && \
-		pnpm install --ignore-scripts && \
+		pnpm install && \
 		pnpm build; \
 	else \
 		printf "$(YELLOW)   No web interface to build for counter (using static HTML)$(NC)\n"; \
@@ -267,7 +267,7 @@ build-demo-fungible: ## Build fungible web frontend
 			echo "LINERA_APPLICATION_ID=$$LINERA_APPLICATION_ID" > .env && \
 			echo "LINERA_FAUCET_URL=$$LINERA_FAUCET_URL" >> .env; \
 		fi && \
-		pnpm install --ignore-scripts && \
+		pnpm install && \
 		pnpm build; \
 	elif [ -f "$(EXAMPLES_DIR)/fungible/package.json" ]; then \
 		cd $(EXAMPLES_DIR)/fungible && \
@@ -276,7 +276,7 @@ build-demo-fungible: ## Build fungible web frontend
 			echo "LINERA_APPLICATION_ID=$$LINERA_APPLICATION_ID" > .env && \
 			echo "LINERA_FAUCET_URL=$$LINERA_FAUCET_URL" >> .env; \
 		fi && \
-		pnpm install --ignore-scripts && \
+		pnpm install && \
 		pnpm build; \
 	else \
 		printf "$(YELLOW)   No web interface to build for fungible token$(NC)\n"; \
@@ -292,7 +292,7 @@ build-demo-metamask: ## Build MetaMask web frontend
 			echo "LINERA_APPLICATION_ID=$$LINERA_APPLICATION_ID" > .env && \
 			echo "LINERA_FAUCET_URL=$$LINERA_FAUCET_URL" >> .env; \
 		fi && \
-		pnpm install --ignore-scripts && \
+		pnpm install && \
 		pnpm build; \
 	elif [ -f "$(EXAMPLES_DIR)/counter/metamask/index.html" ]; then \
 		printf "$(YELLOW)   MetaMask frontend uses static HTML$(NC)\n"; \
