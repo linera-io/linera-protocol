@@ -1056,11 +1056,7 @@ where
     Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
 {
-    fn new(
-        database: Database,
-        wasm_runtime: Option<WasmRuntime>,
-        clock: C,
-    ) -> Self {
+    fn new(database: Database, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
         Self {
             database: Arc::new(database),
             clock,

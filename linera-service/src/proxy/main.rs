@@ -494,30 +494,30 @@ fn main() -> Result<()> {
     runtime.enable_all().build()?.block_on(options.run())
 }
 
-
-
-
-
 struct InitialMigration;
 
 #[async_trait]
 impl RunnableWithStore for InitialMigration {
     type Output = ();
 
-    async fn run<D>(self, config: D::Config, namespace: String) -> Result<Self::Output, anyhow::Error>
+    async fn run<D>(
+        self,
+        config: D::Config,
+        namespace: String,
+    ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
-	D::Store: KeyValueStore + Clone + Send + Sync + 'static,
+        D::Store: KeyValueStore + Clone + Send + Sync + 'static,
         D::Error: Send + Sync,
     {
         if D::exists(&config, &namespace).await? {
             let wasm_runtime = None;
-            let storage = DbStorage::<D,WallClock>::maybe_create_and_connect(&config, &namespace, wasm_runtime).await?;
+            let storage =
+                DbStorage::<D, WallClock>::connect(&config, &namespace, wasm_runtime).await?;
             storage.migrate_if_needed().await?;
         }
         Ok(())
     }
-
 }
 
 impl ProxyOptions {
@@ -535,7 +535,8 @@ impl ProxyOptions {
             .add_common_storage_options(&self.common_storage_options)?;
         store_config
             .clone()
-            .run_with_store(InitialMigration).await?;
+            .run_with_store(InitialMigration)
+            .await?;
         store_config
             .run_with_storage(None, ProxyContext::from_options(self)?)
             .boxed()
