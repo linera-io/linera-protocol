@@ -351,13 +351,13 @@ invalidate-cache: ## Invalidate CDN cache for a specific path
 		printf "$(YELLOW)   Usage: make invalidate-cache CACHE_PATH=/testnet/counter/*$(NC)\n"; \
 		exit 1; \
 	fi
-	@printf "$(YELLOW)🔄 Do you want to invalidate CDN cache for path: $(CACHE_PATH)?$(NC)\n"
-	@printf "Type 'YES' (all uppercase) to continue: " && read confirm && [ "$$confirm" = "YES" ] || { printf "$(RED)Cache invalidation cancelled$(NC)\n"; exit 1; }
-	@printf "$(YELLOW)🗑️  Invalidating CDN cache...$(NC)\n"
+	@printf "$(YELLOW)🔄 Invalidating CDN cache for path: $(CACHE_PATH)$(NC)\n"
 	@gcloud compute url-maps invalidate-cdn-cache $(URL_MAP) \
 		--path "$(CACHE_PATH)" \
-		--global --async
+		--global \
+		--async
 	@printf "$(GREEN)✅ Cache invalidation initiated for $(CACHE_PATH)$(NC)\n"
+	@printf "$(BLUE)   Note: Cache invalidation may take a few minutes to propagate globally$(NC)\n"
 
 # ===== GCS Deployment (Per Demo) =====
 deploy-gcs-counter: check-gcloud-auth build-demo-counter ## Deploy counter to GCS
