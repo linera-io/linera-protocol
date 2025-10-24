@@ -11,7 +11,7 @@ LINERA_BIN := ./target/release/linera
 # These defaults point to the public Linera demo infrastructure
 # Override these variables for private/internal deployments
 PUBLIC_GCS_BUCKET := gs://demos.linera.net
-PUBLIC_URL_MAP := linera-apps-url-map
+PUBLIC_URL_MAP := demos-linera-net
 
 # Allow overrides for private deployments
 GCS_BUCKET ?= $(PUBLIC_GCS_BUCKET)
