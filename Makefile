@@ -11,7 +11,7 @@ LINERA_BIN := ./target/release/linera
 # These defaults point to the public Linera demo infrastructure
 # Override these variables for private/internal deployments
 PUBLIC_GCS_BUCKET := gs://demos.linera.net
-PUBLIC_URL_MAP := linera-apps-url-map
+PUBLIC_URL_MAP := demos-linera-net
 
 # Allow overrides for private deployments
 GCS_BUCKET ?= $(PUBLIC_GCS_BUCKET)
@@ -78,7 +78,7 @@ help: ## Show this help message
 	@grep -E '^(counter-full|fungible-full|full-deploy|counter-quick|fungible-quick|quick-deploy):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-25s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@printf "$(GREEN)━━━ 8. Utilities ━━━$(NC)\n"
-	@grep -E '^(verify|invalidate-cache|create-env):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-25s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(verify|invalidate-cache|create-env|fetch-env-counter|fetch-env-fungible|fetch-env-all):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-25s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@printf "$(GREEN)━━━ 9. Cleanup ━━━$(NC)\n"
 	@grep -E '^(clean|clean-cargo-all|clean-cargo-main|clean-cargo-counter|clean-cargo-fungible|clean-all):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-25s$(NC) %s\n", $$1, $$2}'
@@ -251,7 +251,7 @@ build-demo-counter: ## Build counter web frontend
 			echo "LINERA_APPLICATION_ID=$$LINERA_APPLICATION_ID" > .env && \
 			echo "LINERA_FAUCET_URL=$$LINERA_FAUCET_URL" >> .env; \
 		fi && \
-		pnpm install --ignore-scripts && \
+		pnpm install && \
 		pnpm build; \
 	else \
 		printf "$(YELLOW)   No web interface to build for counter (using static HTML)$(NC)\n"; \
@@ -267,7 +267,7 @@ build-demo-fungible: ## Build fungible web frontend
 			echo "LINERA_APPLICATION_ID=$$LINERA_APPLICATION_ID" > .env && \
 			echo "LINERA_FAUCET_URL=$$LINERA_FAUCET_URL" >> .env; \
 		fi && \
-		pnpm install --ignore-scripts && \
+		pnpm install && \
 		pnpm build; \
 	elif [ -f "$(EXAMPLES_DIR)/fungible/package.json" ]; then \
 		cd $(EXAMPLES_DIR)/fungible && \
@@ -276,7 +276,7 @@ build-demo-fungible: ## Build fungible web frontend
 			echo "LINERA_APPLICATION_ID=$$LINERA_APPLICATION_ID" > .env && \
 			echo "LINERA_FAUCET_URL=$$LINERA_FAUCET_URL" >> .env; \
 		fi && \
-		pnpm install --ignore-scripts && \
+		pnpm install && \
 		pnpm build; \
 	else \
 		printf "$(YELLOW)   No web interface to build for fungible token$(NC)\n"; \
@@ -292,10 +292,8 @@ build-demo-metamask: ## Build MetaMask web frontend
 			echo "LINERA_APPLICATION_ID=$$LINERA_APPLICATION_ID" > .env && \
 			echo "LINERA_FAUCET_URL=$$LINERA_FAUCET_URL" >> .env; \
 		fi && \
-		pnpm install --ignore-scripts && \
+		pnpm install && \
 		pnpm build; \
-	elif [ -f "$(EXAMPLES_DIR)/counter/metamask/index.html" ]; then \
-		printf "$(YELLOW)   MetaMask frontend uses static HTML$(NC)\n"; \
 	else \
 		printf "$(YELLOW)   No MetaMask frontend found$(NC)\n"; \
 	fi
@@ -321,6 +319,31 @@ check-gcloud-auth: ## Verify gcloud authentication for GCS
 	fi
 	@printf "$(GREEN)✅ GCloud authentication verified$(NC)\n"
 
+# ===== Fetch .env from GCS =====
+fetch-env-counter: check-gcloud-auth ## Fetch counter .env from GCS
+	@printf "$(YELLOW)📥 Fetching counter .env from GCS...$(NC)\n"
+	@if gcloud storage cp '$(DEMO_PATH)/counter/.env' .env.counter 2>/dev/null; then \
+		printf "$(GREEN)✅ Counter .env downloaded to .env.counter$(NC)\n"; \
+		cat .env.counter; \
+	else \
+		printf "$(RED)❌ Failed to fetch .env from $(DEMO_PATH)/counter/.env$(NC)\n"; \
+		printf "$(YELLOW)   Make sure the app has been deployed to GCS first$(NC)\n"; \
+		exit 1; \
+	fi
+
+fetch-env-fungible: check-gcloud-auth ## Fetch fungible .env from GCS
+	@printf "$(YELLOW)📥 Fetching fungible .env from GCS...$(NC)\n"
+	@if gcloud storage cp '$(DEMO_PATH)/fungible/.env' .env.fungible 2>/dev/null; then \
+		printf "$(GREEN)✅ Fungible .env downloaded to .env.fungible$(NC)\n"; \
+		cat .env.fungible; \
+	else \
+		printf "$(RED)❌ Failed to fetch .env from $(DEMO_PATH)/fungible/.env$(NC)\n"; \
+		printf "$(YELLOW)   Make sure the app has been deployed to GCS first$(NC)\n"; \
+		exit 1; \
+	fi
+
+fetch-env-all: fetch-env-counter fetch-env-fungible ## Fetch all .env files from GCS
+
 # ===== CDN Cache Invalidation =====
 invalidate-cache: ## Invalidate CDN cache for a specific path
 	@if [ -z "$(CACHE_PATH)" ]; then \
@@ -328,13 +351,13 @@ invalidate-cache: ## Invalidate CDN cache for a specific path
 		printf "$(YELLOW)   Usage: make invalidate-cache CACHE_PATH=/testnet/counter/*$(NC)\n"; \
 		exit 1; \
 	fi
-	@printf "$(YELLOW)🔄 Do you want to invalidate CDN cache for path: $(CACHE_PATH)?$(NC)\n"
-	@printf "Type 'YES' (all uppercase) to continue: " && read confirm && [ "$$confirm" = "YES" ] || { printf "$(RED)Cache invalidation cancelled$(NC)\n"; exit 1; }
-	@printf "$(YELLOW)🗑️  Invalidating CDN cache...$(NC)\n"
+	@printf "$(YELLOW)🔄 Invalidating CDN cache for path: $(CACHE_PATH)$(NC)\n"
 	@gcloud compute url-maps invalidate-cdn-cache $(URL_MAP) \
 		--path "$(CACHE_PATH)" \
-		--global --async
+		--global \
+		--async
 	@printf "$(GREEN)✅ Cache invalidation initiated for $(CACHE_PATH)$(NC)\n"
+	@printf "$(BLUE)   Note: Cache invalidation may take a few minutes to propagate globally$(NC)\n"
 
 # ===== GCS Deployment (Per Demo) =====
 deploy-gcs-counter: check-gcloud-auth build-demo-counter ## Deploy counter to GCS
@@ -346,11 +369,8 @@ deploy-gcs-counter: check-gcloud-auth build-demo-counter ## Deploy counter to GC
 		gcloud storage rsync -r --delete-unmatched-destination-objects \
 			$(EXAMPLES_DIR)/counter/dist/ \
 			'$(DEMO_PATH)/counter/'; \
-	elif [ -f "$(EXAMPLES_DIR)/counter/index.html" ]; then \
-		gcloud storage cp $(EXAMPLES_DIR)/counter/index.html '$(DEMO_PATH)/counter/index.html'; \
-		if [ -d "$(EXAMPLES_DIR)/counter/public" ]; then \
-			gcloud storage rsync -r $(EXAMPLES_DIR)/counter/public/ '$(DEMO_PATH)/counter/'; \
-		fi; \
+	else \
+		printf "$(YELLOW)   No counter demo found$(NC)\n"; \
 	fi
 	@if [ -f .env.counter ]; then \
 		gcloud storage cp .env.counter '$(DEMO_PATH)/counter/.env'; \
@@ -367,14 +387,8 @@ deploy-gcs-fungible: check-gcloud-auth build-demo-fungible ## Deploy fungible to
 		gcloud storage rsync -r --delete-unmatched-destination-objects \
 			$(EXAMPLES_DIR)/native-fungible/dist/ \
 			'$(DEMO_PATH)/fungible/'; \
-	elif [ -d "$(EXAMPLES_DIR)/fungible/dist" ]; then \
-		gcloud storage rsync -r --delete-unmatched-destination-objects \
-			$(EXAMPLES_DIR)/fungible/dist/ \
-			'$(DEMO_PATH)/fungible/'; \
-	elif [ -f "$(EXAMPLES_DIR)/native-fungible/index.html" ]; then \
-		gcloud storage cp $(EXAMPLES_DIR)/native-fungible/index.html '$(DEMO_PATH)/fungible/index.html'; \
 	else \
-		printf "$(YELLOW)   No web interface found for fungible token$(NC)\n"; \
+		printf "$(YELLOW)   No fungible token demo found$(NC)\n"; \
 	fi
 	@if [ -f .env.fungible ]; then \
 		gcloud storage cp .env.fungible '$(DEMO_PATH)/fungible/.env'; \
@@ -391,9 +405,6 @@ deploy-gcs-metamask: check-gcloud-auth build-demo-metamask ## Deploy MetaMask to
 		gcloud storage rsync -r --delete-unmatched-destination-objects \
 			$(EXAMPLES_DIR)/counter/metamask/dist/ \
 			'$(DEMO_PATH)/metamask/'; \
-	elif [ -f "$(EXAMPLES_DIR)/counter/metamask/index.html" ]; then \
-		gcloud storage cp $(EXAMPLES_DIR)/counter/metamask/*.html '$(DEMO_PATH)/metamask/'; \
-		gcloud storage cp $(EXAMPLES_DIR)/counter/metamask/*.js '$(DEMO_PATH)/metamask/' 2>/dev/null || true; \
 	else \
 		printf "$(YELLOW)   No MetaMask demo found$(NC)\n"; \
 	fi
@@ -496,9 +507,9 @@ fungible-full: setup init-wallet deploy-app-fungible deploy-gcs-fungible verify 
 full-deploy: setup init-wallet deploy-apps-all deploy-gcs-all verify ## Complete deployment of all apps (wallet to GCS)
 
 # Quick deployments (assumes wallet and apps deployed)
-counter-quick: build-demo-counter deploy-gcs-counter verify ## Quick counter frontend update (no blockchain)
-fungible-quick: build-demo-fungible deploy-gcs-fungible verify ## Quick fungible frontend update (no blockchain)
-quick-deploy: build-demos-all deploy-gcs-all verify ## Quick frontend update all demos (no blockchain)
+counter-quick: fetch-env-counter build-demo-counter deploy-gcs-counter verify ## Quick counter frontend update (no blockchain)
+fungible-quick: fetch-env-fungible build-demo-fungible deploy-gcs-fungible verify ## Quick fungible frontend update (no blockchain)
+quick-deploy: fetch-env-all build-demos-all deploy-gcs-all verify ## Quick frontend update all demos (no blockchain)
 
 # ===== Build Linera Binary =====
 build-linera: ## Build the linera binary (required first)
