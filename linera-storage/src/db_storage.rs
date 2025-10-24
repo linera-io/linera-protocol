@@ -226,10 +226,10 @@ pub mod metrics {
 }
 
 /// The default key used when the root_key contains the information.
-pub(crate) const DEFAULT_KEY: &[u8] = &[0];
+const DEFAULT_KEY: &[u8] = &[0];
 
 /// The second key used when the root_key contains the information.
-pub(crate) const ONE_KEY: &[u8] = &[1];
+const ONE_KEY: &[u8] = &[1];
 
 fn get_01_keys() -> Vec<Vec<u8>> {
     vec![vec![0], vec![1]]
@@ -328,7 +328,7 @@ pub struct DbStorage<Database, Clock = WallClock> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) enum RootKey {
+enum RootKey {
     ChainState(ChainId),
     CryptoHash(CryptoHash),
     Blob(BlobId),
@@ -343,7 +343,7 @@ impl RootKey {
     }
 }
 
-pub(crate) fn event_key(event_id: &EventId) -> Vec<u8> {
+fn event_key(event_id: &EventId) -> Vec<u8> {
     let mut key = bcs::to_bytes(&event_id.stream_id).unwrap();
     key.extend(bcs::to_bytes(&event_id.index).unwrap());
     key
@@ -1056,21 +1056,19 @@ where
     Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
 {
-    async fn new(
+    fn new(
         database: Database,
         wasm_runtime: Option<WasmRuntime>,
         clock: C,
-    ) -> Result<Self, ViewError> {
-        let storage = Self {
+    ) -> Self {
+        Self {
             database: Arc::new(database),
             clock,
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
-        };
-        storage.migrate_if_needed().await?;
-        Ok(storage)
+        }
     }
 }
 
@@ -1084,18 +1082,18 @@ where
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, ViewError> {
+    ) -> Result<Self, Database::Error> {
         let database = Database::maybe_create_and_connect(config, namespace).await?;
-        Self::new(database, wasm_runtime, WallClock).await
+        Ok(Self::new(database, wasm_runtime, WallClock))
     }
 
     pub async fn connect(
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, ViewError> {
+    ) -> Result<Self, Database::Error> {
         let database = Database::connect(config, namespace).await?;
-        Self::new(database, wasm_runtime, WallClock).await
+        Ok(Self::new(database, wasm_runtime, WallClock))
     }
 
     /// Lists the blob IDs of the storage.
@@ -1164,9 +1162,9 @@ where
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
-    ) -> Result<Self, ViewError> {
+    ) -> Result<Self, Database::Error> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
-        Self::new(database, wasm_runtime, clock).await
+        Ok(Self::new(database, wasm_runtime, clock))
     }
 }
 
@@ -1197,6 +1195,7 @@ enum BaseKey {
 }
 
 const EMPTY_KEY: &[u8] = &[];
+// The keys corresponding to `ChainState` and `BlockExporterState` are not moved.
 const MOVABLE_KEYS_0_1: &[u8] = &[1, 2, 3, 4, 5, 7];
 
 /// The total number of keys being migrated in a block.
@@ -1318,7 +1317,7 @@ where
         Ok(store.write_batch(batch).await?)
     }
 
-    async fn migrate_if_needed(&self) -> Result<(), ViewError> {
+    pub async fn migrate_if_needed(&self) -> Result<(), ViewError> {
         let schema = self.get_database_schema().await?;
         if schema == SchemaDescription::Version0SingleBlobPartition {
             self.migrate_0_to_1().await?;
