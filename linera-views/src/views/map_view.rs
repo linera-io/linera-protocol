@@ -2164,10 +2164,7 @@ mod graphql {
             })
         }
 
-        async fn entry(
-            &self,
-            key: Vec<u8>,
-        ) -> Result<Entry<Vec<u8>, Option<V>>, async_graphql::Error> {
+        async fn entry(&self, key: Vec<u8>) -> Result<Entry<Vec<u8>, V>, async_graphql::Error> {
             Ok(Entry {
                 value: self.get(&key).await?,
                 key,
@@ -2177,7 +2174,7 @@ mod graphql {
         async fn entries(
             &self,
             input: Option<MapInput<Vec<u8>>>,
-        ) -> Result<Vec<Entry<Vec<u8>, Option<V>>>, async_graphql::Error> {
+        ) -> Result<Vec<Entry<Vec<u8>, V>>, async_graphql::Error> {
             let keys = input
                 .and_then(|input| input.filters)
                 .and_then(|filters| filters.keys);
@@ -2249,7 +2246,7 @@ mod graphql {
             Ok(self.count().await? as u32)
         }
 
-        async fn entry(&self, key: I) -> Result<Entry<I, Option<V>>, async_graphql::Error> {
+        async fn entry(&self, key: I) -> Result<Entry<I, V>, async_graphql::Error> {
             Ok(Entry {
                 value: self.get(&key).await?,
                 key,
@@ -2259,7 +2256,7 @@ mod graphql {
         async fn entries(
             &self,
             input: Option<MapInput<I>>,
-        ) -> Result<Vec<Entry<I, Option<V>>>, async_graphql::Error> {
+        ) -> Result<Vec<Entry<I, V>>, async_graphql::Error> {
             let keys = input
                 .and_then(|input| input.filters)
                 .and_then(|filters| filters.keys);
@@ -2322,7 +2319,7 @@ mod graphql {
             })
         }
 
-        async fn entry(&self, key: I) -> Result<Entry<I, Option<V>>, async_graphql::Error> {
+        async fn entry(&self, key: I) -> Result<Entry<I, V>, async_graphql::Error> {
             Ok(Entry {
                 value: self.get(&key).await?,
                 key,
@@ -2332,7 +2329,7 @@ mod graphql {
         async fn entries(
             &self,
             input: Option<MapInput<I>>,
-        ) -> Result<Vec<Entry<I, Option<V>>>, async_graphql::Error> {
+        ) -> Result<Vec<Entry<I, V>>, async_graphql::Error> {
             let keys = input
                 .and_then(|input| input.filters)
                 .and_then(|filters| filters.keys);
