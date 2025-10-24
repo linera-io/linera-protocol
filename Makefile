@@ -294,8 +294,6 @@ build-demo-metamask: ## Build MetaMask web frontend
 		fi && \
 		pnpm install && \
 		pnpm build; \
-	elif [ -f "$(EXAMPLES_DIR)/counter/metamask/index.html" ]; then \
-		printf "$(YELLOW)   MetaMask frontend uses static HTML$(NC)\n"; \
 	else \
 		printf "$(YELLOW)   No MetaMask frontend found$(NC)\n"; \
 	fi
@@ -346,11 +344,8 @@ deploy-gcs-counter: check-gcloud-auth build-demo-counter ## Deploy counter to GC
 		gcloud storage rsync -r --delete-unmatched-destination-objects \
 			$(EXAMPLES_DIR)/counter/dist/ \
 			'$(DEMO_PATH)/counter/'; \
-	elif [ -f "$(EXAMPLES_DIR)/counter/index.html" ]; then \
-		gcloud storage cp $(EXAMPLES_DIR)/counter/index.html '$(DEMO_PATH)/counter/index.html'; \
-		if [ -d "$(EXAMPLES_DIR)/counter/public" ]; then \
-			gcloud storage rsync -r $(EXAMPLES_DIR)/counter/public/ '$(DEMO_PATH)/counter/'; \
-		fi; \
+	else \
+		printf "$(YELLOW)   No counter demo found$(NC)\n"; \
 	fi
 	@if [ -f .env.counter ]; then \
 		gcloud storage cp .env.counter '$(DEMO_PATH)/counter/.env'; \
@@ -367,14 +362,8 @@ deploy-gcs-fungible: check-gcloud-auth build-demo-fungible ## Deploy fungible to
 		gcloud storage rsync -r --delete-unmatched-destination-objects \
 			$(EXAMPLES_DIR)/native-fungible/dist/ \
 			'$(DEMO_PATH)/fungible/'; \
-	elif [ -d "$(EXAMPLES_DIR)/fungible/dist" ]; then \
-		gcloud storage rsync -r --delete-unmatched-destination-objects \
-			$(EXAMPLES_DIR)/fungible/dist/ \
-			'$(DEMO_PATH)/fungible/'; \
-	elif [ -f "$(EXAMPLES_DIR)/native-fungible/index.html" ]; then \
-		gcloud storage cp $(EXAMPLES_DIR)/native-fungible/index.html '$(DEMO_PATH)/fungible/index.html'; \
 	else \
-		printf "$(YELLOW)   No web interface found for fungible token$(NC)\n"; \
+		printf "$(YELLOW)   No fungible token demo found$(NC)\n"; \
 	fi
 	@if [ -f .env.fungible ]; then \
 		gcloud storage cp .env.fungible '$(DEMO_PATH)/fungible/.env'; \
@@ -391,9 +380,6 @@ deploy-gcs-metamask: check-gcloud-auth build-demo-metamask ## Deploy MetaMask to
 		gcloud storage rsync -r --delete-unmatched-destination-objects \
 			$(EXAMPLES_DIR)/counter/metamask/dist/ \
 			'$(DEMO_PATH)/metamask/'; \
-	elif [ -f "$(EXAMPLES_DIR)/counter/metamask/index.html" ]; then \
-		gcloud storage cp $(EXAMPLES_DIR)/counter/metamask/*.html '$(DEMO_PATH)/metamask/'; \
-		gcloud storage cp $(EXAMPLES_DIR)/counter/metamask/*.js '$(DEMO_PATH)/metamask/' 2>/dev/null || true; \
 	else \
 		printf "$(YELLOW)   No MetaMask demo found$(NC)\n"; \
 	fi
