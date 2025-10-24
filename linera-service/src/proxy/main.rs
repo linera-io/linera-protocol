@@ -510,9 +510,11 @@ impl RunnableWithStore for InitialMigration {
 	D::Store: KeyValueStore + Clone + Send + Sync + 'static,
         D::Error: Send + Sync,
     {
-        let wasm_runtime = None;
-        let storage = DbStorage::<D,WallClock>::maybe_create_and_connect(&config, &namespace, wasm_runtime).await?;
-        storage.migrate_if_needed().await?;
+        if D::exists(&config, &namespace).await? {
+            let wasm_runtime = None;
+            let storage = DbStorage::<D,WallClock>::maybe_create_and_connect(&config, &namespace, wasm_runtime).await?;
+            storage.migrate_if_needed().await?;
+        }
         Ok(())
     }
 
