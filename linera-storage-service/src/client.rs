@@ -304,14 +304,14 @@ impl WritableKeyValueStore for StorageServiceStoreInternal {
             chunk_size += self.start_key.len();
         }
 
-        let root_key_len = self.start_key.len() - self.prefix_len;
+        let bcs_root_key_len = self.start_key.len() - self.prefix_len;
         for operation in batch.operations {
             let (key_len, value_len) = match &operation {
                 WriteOperation::Delete { key } => (key.len(), 0),
                 WriteOperation::Put { key, value } => (key.len(), value.len()),
                 WriteOperation::DeletePrefix { key_prefix } => (key_prefix.len(), 0),
             };
-            let operation_size = key_len + value_len + root_key_len;
+            let operation_size = key_len + value_len + bcs_root_key_len;
             ensure!(
                 key_len <= MAX_KEY_SIZE,
                 StorageServiceStoreError::KeyTooLong
@@ -488,7 +488,7 @@ impl KeyValueDatabase for StorageServiceDatabaseInternal {
         let max_stream_queries = self.max_stream_queries;
         let mut start_key = vec![KeyPrefix::Key as u8];
         start_key.extend(&self.namespace);
-        start_key.extend(root_key);
+        start_key.extend(bcs::to_bytes(root_key)?);
         let prefix_len = self.namespace.len() + 1;
         Ok(StorageServiceStoreInternal {
             channel,
