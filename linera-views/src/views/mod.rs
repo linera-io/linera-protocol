@@ -42,8 +42,11 @@ pub mod reentrant_collection_view;
 /// The implementation of a key-value store view.
 pub mod key_value_store_view;
 
-/// Wrapping a view to compute a hash.
+/// Wrapping a view to memoize hashing.
 pub mod hashable_wrapper;
+
+/// Wrapping a view to compute hash based on the history of modifications to the view.
+pub mod historical_hash_wrapper;
 
 /// The minimum value for the view tags. Values in `0..MIN_VIEW_TAG` are used for other purposes.
 pub const MIN_VIEW_TAG: u8 = 1;
@@ -128,14 +131,10 @@ pub trait HashableView: View {
     /// Implementations do not need to include a type tag. However, the usual precautions
     /// to enforce collision resistance must be applied (e.g. including the length of a
     /// collection of values).
-    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
-
-    /// Computes the hash of the values.
-    ///
-    /// Implementations do not need to include a type tag. However, the usual precautions
-    /// to enforce collision resistance must be applied (e.g. including the length of a
-    /// collection of values).
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
+
+    /// Same as `hash` but guaranteed to be wait-free.
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
 }
 
 /// The requirement for the hasher type in [`HashableView`].
@@ -177,10 +176,10 @@ pub trait RootView: View {
 /// A [`View`] that also supports crypto hash
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait CryptoHashView: HashableView {
-    /// Computing the hash and attributing the type to it.
+    /// Computing the hash and attributing the type to it. May require locking.
     async fn crypto_hash(&self) -> Result<CryptoHash, ViewError>;
 
-    /// Computing the hash and attributing the type to it.
+    /// Same as `crypto_hash` but guaranteed to be wait-free.
     async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError>;
 }
 
@@ -188,13 +187,11 @@ pub trait CryptoHashView: HashableView {
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait CryptoHashRootView: RootView + CryptoHashView {}
 
-/// A [`ClonableView`] supports being shared (unsafely) by cloning it.
+/// A view that can be shared (unsafely) by cloning it.
 ///
-/// Sharing is unsafe because by having two view instances for the same data, they may have invalid
-/// state if both are used for writing.
-///
-/// Sharing the view is guaranteed to not cause data races if only one of the shared view instances
-/// is used for writing at any given point in time.
+/// Note: Calling `flush` on any of the shared views will break the other views. Therefore,
+/// cloning views is only safe if `flush` only ever happens after all the copies but one
+/// have been dropped.
 pub trait ClonableView: View {
     /// Creates a clone of this view, sharing the underlying storage context but prone to
     /// data races which can corrupt the view state.

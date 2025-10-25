@@ -12,6 +12,7 @@ use crate::{
     common::{CustomSerialize, HasherOutput, Update},
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
+    historical_hash_wrapper::HistoricallyHashableView,
     store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError},
 };
@@ -916,12 +917,21 @@ where
 /// Type wrapping `ByteSetView` while memoizing the hash.
 pub type HashedByteSetView<C> = WrappedHashableContainerView<C, ByteSetView<C>, HasherOutput>;
 
+/// Wrapper around `ByteSetView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedByteSetView<C> = HistoricallyHashableView<C, ByteSetView<C>>;
+
 /// Type wrapping `SetView` while memoizing the hash.
 pub type HashedSetView<C, I> = WrappedHashableContainerView<C, SetView<C, I>, HasherOutput>;
+
+/// Wrapper around `SetView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedSetView<C, I> = HistoricallyHashableView<C, SetView<C, I>>;
 
 /// Type wrapping `CustomSetView` while memoizing the hash.
 pub type HashedCustomSetView<C, I> =
     WrappedHashableContainerView<C, CustomSetView<C, I>, HasherOutput>;
+
+/// Wrapper around `CustomSetView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedCustomSetView<C, I> = HistoricallyHashableView<C, CustomSetView<C, I>>;
 
 #[cfg(with_graphql)]
 mod graphql {
