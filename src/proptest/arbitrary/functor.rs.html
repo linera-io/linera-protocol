@@ -1,0 +1,220 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proptest-1.7.0/src/arbitrary/functor.rs`."><title>functor.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="proptest" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">proptest/arbitrary/</div>functor.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">//-
+<a href=#2 id=2 data-nosnippet>2</a>// Copyright 2017, 2018 The proptest developers
+<a href=#3 id=3 data-nosnippet>3</a>//
+<a href=#4 id=4 data-nosnippet>4</a>// Licensed under the Apache License, Version 2.0 &lt;LICENSE-APACHE or
+<a href=#5 id=5 data-nosnippet>5</a>// http://www.apache.org/licenses/LICENSE-2.0&gt; or the MIT license
+<a href=#6 id=6 data-nosnippet>6</a>// &lt;LICENSE-MIT or http://opensource.org/licenses/MIT&gt;, at your
+<a href=#7 id=7 data-nosnippet>7</a>// option. This file may not be copied, modified, or distributed
+<a href=#8 id=8 data-nosnippet>8</a>// except according to those terms.
+<a href=#9 id=9 data-nosnippet>9</a>
+<a href=#10 id=10 data-nosnippet>10</a></span><span class="doccomment">//! Provides higher order `Arbitrary` traits.
+<a href=#11 id=11 data-nosnippet>11</a>//! This is mainly for use by `proptest_derive`.
+<a href=#12 id=12 data-nosnippet>12</a>//!
+<a href=#13 id=13 data-nosnippet>13</a>//! ## Stability note
+<a href=#14 id=14 data-nosnippet>14</a>//!
+<a href=#15 id=15 data-nosnippet>15</a>//! This trait is mainly defined for `proptest_derive` to simplify the
+<a href=#16 id=16 data-nosnippet>16</a>//! mechanics of deriving recursive types. If you have custom containers
+<a href=#17 id=17 data-nosnippet>17</a>//! and want to support recursive for those, it is a good idea to implement
+<a href=#18 id=18 data-nosnippet>18</a>//! this trait.
+<a href=#19 id=19 data-nosnippet>19</a>//!
+<a href=#20 id=20 data-nosnippet>20</a>//! There are clearer and terser ways that work better with
+<a href=#21 id=21 data-nosnippet>21</a>//! inference such as using `proptest::collection::vec(..)`
+<a href=#22 id=22 data-nosnippet>22</a>//! to achieve the same result.
+<a href=#23 id=23 data-nosnippet>23</a>//!
+<a href=#24 id=24 data-nosnippet>24</a>//! For these reasons, the traits here are deliberately
+<a href=#25 id=25 data-nosnippet>25</a>//! not exported in a convenient way.
+<a href=#26 id=26 data-nosnippet>26</a>
+<a href=#27 id=27 data-nosnippet>27</a></span><span class="kw">use </span><span class="kw">crate</span>::std_facade::fmt;
+<a href=#28 id=28 data-nosnippet>28</a>
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span><span class="kw">crate</span>::strategy::{BoxedStrategy, Strategy};
+<a href=#30 id=30 data-nosnippet>30</a>
+<a href=#31 id=31 data-nosnippet>31</a><span class="doccomment">/// `ArbitraryF1` lets you lift a [`Strategy`] to unary
+<a href=#32 id=32 data-nosnippet>32</a>/// type constructors such as `Box`, `Vec`, and `Option`.
+<a href=#33 id=33 data-nosnippet>33</a>///
+<a href=#34 id=34 data-nosnippet>34</a>/// The trait corresponds to
+<a href=#35 id=35 data-nosnippet>35</a>/// [Haskell QuickCheck's `Arbitrary1` type class][HaskellQC].
+<a href=#36 id=36 data-nosnippet>36</a>///
+<a href=#37 id=37 data-nosnippet>37</a>/// [HaskellQC]:
+<a href=#38 id=38 data-nosnippet>38</a>/// https://hackage.haskell.org/package/QuickCheck-2.10.1/docs/Test-QuickCheck-Arbitrary.html#t:Arbitrary1
+<a href=#39 id=39 data-nosnippet>39</a>///
+<a href=#40 id=40 data-nosnippet>40</a>/// [`Strategy`]: ../proptest/strategy/trait.Strategy.html
+<a href=#41 id=41 data-nosnippet>41</a></span><span class="kw">pub trait </span>ArbitraryF1&lt;A: fmt::Debug&gt;: fmt::Debug + Sized {
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="comment">//==========================================================================
+<a href=#43 id=43 data-nosnippet>43</a>    // Implementation note #1
+<a href=#44 id=44 data-nosnippet>44</a>    //==========================================================================
+<a href=#45 id=45 data-nosnippet>45</a>    // It might be better to do this with generic associated types by
+<a href=#46 id=46 data-nosnippet>46</a>    // having an associated type:
+<a href=#47 id=47 data-nosnippet>47</a>    //
+<a href=#48 id=48 data-nosnippet>48</a>    // `type Strategy&lt;A&gt;: Strategy&lt;Value = Self&gt;;`
+<a href=#49 id=49 data-nosnippet>49</a>    //
+<a href=#50 id=50 data-nosnippet>50</a>    // But with this setup we will likely loose the ability to add bounds
+<a href=#51 id=51 data-nosnippet>51</a>    // such as `Hash + Eq` on `A` which is needed for `HashSet`. We might
+<a href=#52 id=52 data-nosnippet>52</a>    // be able to regain this ability with a ConstraintKinds feature.
+<a href=#53 id=53 data-nosnippet>53</a>    //
+<a href=#54 id=54 data-nosnippet>54</a>    // This alternate formulation will likely work better with type inference.
+<a href=#55 id=55 data-nosnippet>55</a>    //
+<a href=#56 id=56 data-nosnippet>56</a>    //==========================================================================
+<a href=#57 id=57 data-nosnippet>57</a>    // Implementation note #2
+<a href=#58 id=58 data-nosnippet>58</a>    //==========================================================================
+<a href=#59 id=59 data-nosnippet>59</a>    //
+<a href=#60 id=60 data-nosnippet>60</a>    // Until `-&gt; impl Trait` has been stabilized, `BoxedStrategy` must be
+<a href=#61 id=61 data-nosnippet>61</a>    // used. This incurs an unfortunate performance penalty - but since
+<a href=#62 id=62 data-nosnippet>62</a>    // we are dealing with testing, it is better to provide slowed down and
+<a href=#63 id=63 data-nosnippet>63</a>    // somewhat less general functionality than no functionality at all.
+<a href=#64 id=64 data-nosnippet>64</a>    // Implementations should just use `.boxed()` in the end.
+<a href=#65 id=65 data-nosnippet>65</a>    //==========================================================================
+<a href=#66 id=66 data-nosnippet>66</a>
+<a href=#67 id=67 data-nosnippet>67</a>    </span><span class="doccomment">/// The type of parameters that [`lift1_with`] accepts for
+<a href=#68 id=68 data-nosnippet>68</a>    /// configuration of the lifted and generated [`Strategy`]. Parameters
+<a href=#69 id=69 data-nosnippet>69</a>    /// must implement [`Default`].
+<a href=#70 id=70 data-nosnippet>70</a>    ///
+<a href=#71 id=71 data-nosnippet>71</a>    /// [`lift1_with`]:
+<a href=#72 id=72 data-nosnippet>72</a>    ///     trait.ArbitraryF1.html#tymethod.lift1_with
+<a href=#73 id=73 data-nosnippet>73</a>    ///
+<a href=#74 id=74 data-nosnippet>74</a>    /// [`Strategy`]: ../proptest/strategy/trait.Strategy.html
+<a href=#75 id=75 data-nosnippet>75</a>    /// [`Default`]:
+<a href=#76 id=76 data-nosnippet>76</a>    ///     https://doc.rust-lang.org/nightly/std/default/trait.Default.html
+<a href=#77 id=77 data-nosnippet>77</a>    </span><span class="kw">type </span>Parameters: Default;
+<a href=#78 id=78 data-nosnippet>78</a>
+<a href=#79 id=79 data-nosnippet>79</a>    <span class="doccomment">/// Lifts a given [`Strategy`] to a new [`Strategy`] for the (presumably)
+<a href=#80 id=80 data-nosnippet>80</a>    /// bigger type. This is useful for lifting a `Strategy` for `SomeType`
+<a href=#81 id=81 data-nosnippet>81</a>    /// to a container such as `Vec&lt;SomeType&gt;`.
+<a href=#82 id=82 data-nosnippet>82</a>    ///
+<a href=#83 id=83 data-nosnippet>83</a>    /// Calling this for the type `X` is the equivalent of using
+<a href=#84 id=84 data-nosnippet>84</a>    /// [`X::lift1_with(base, Default::default())`].
+<a href=#85 id=85 data-nosnippet>85</a>    ///
+<a href=#86 id=86 data-nosnippet>86</a>    /// This method is defined in the trait for optimization for the
+<a href=#87 id=87 data-nosnippet>87</a>    /// default if you want to do that. It is a logic error to not
+<a href=#88 id=88 data-nosnippet>88</a>    /// preserve the semantics when overriding.
+<a href=#89 id=89 data-nosnippet>89</a>    ///
+<a href=#90 id=90 data-nosnippet>90</a>    /// [`Strategy`]: ../proptest/strategy/trait.Strategy.html
+<a href=#91 id=91 data-nosnippet>91</a>    ///
+<a href=#92 id=92 data-nosnippet>92</a>    /// [`X::lift1_with(base, Default::default())`]:
+<a href=#93 id=93 data-nosnippet>93</a>    ///     trait.ArbitraryF1.html#tymethod.lift1_with
+<a href=#94 id=94 data-nosnippet>94</a>    </span><span class="kw">fn </span>lift1&lt;AS&gt;(base: AS) -&gt; BoxedStrategy&lt;<span class="self">Self</span>&gt;
+<a href=#95 id=95 data-nosnippet>95</a>    <span class="kw">where
+<a href=#96 id=96 data-nosnippet>96</a>        </span>AS: Strategy&lt;Value = A&gt; + <span class="lifetime">'static</span>,
+<a href=#97 id=97 data-nosnippet>97</a>    {
+<a href=#98 id=98 data-nosnippet>98</a>        <span class="self">Self</span>::lift1_with(base, <span class="self">Self</span>::Parameters::default())
+<a href=#99 id=99 data-nosnippet>99</a>    }
+<a href=#100 id=100 data-nosnippet>100</a>
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="doccomment">/// Lifts a given [`Strategy`] to a new [`Strategy`] for the (presumably)
+<a href=#102 id=102 data-nosnippet>102</a>    /// bigger type. This is useful for lifting a `Strategy` for `SomeType`
+<a href=#103 id=103 data-nosnippet>103</a>    /// to a container such as `Vec` of `SomeType`. The composite strategy is
+<a href=#104 id=104 data-nosnippet>104</a>    /// passed the arguments given in `args`.
+<a href=#105 id=105 data-nosnippet>105</a>    ///
+<a href=#106 id=106 data-nosnippet>106</a>    /// If you wish to use the [`default()`] arguments,
+<a href=#107 id=107 data-nosnippet>107</a>    /// use [`lift1`] instead.
+<a href=#108 id=108 data-nosnippet>108</a>    ///
+<a href=#109 id=109 data-nosnippet>109</a>    /// [`Strategy`]: ../proptest/strategy/trait.Strategy.html
+<a href=#110 id=110 data-nosnippet>110</a>    ///
+<a href=#111 id=111 data-nosnippet>111</a>    /// [`lift1`]: trait.ArbitraryF1.html#method.lift1
+<a href=#112 id=112 data-nosnippet>112</a>    ///
+<a href=#113 id=113 data-nosnippet>113</a>    /// [`default()`]:
+<a href=#114 id=114 data-nosnippet>114</a>    ///     https://doc.rust-lang.org/nightly/std/default/trait.Default.html
+<a href=#115 id=115 data-nosnippet>115</a>    </span><span class="kw">fn </span>lift1_with&lt;AS&gt;(base: AS, args: <span class="self">Self</span>::Parameters) -&gt; BoxedStrategy&lt;<span class="self">Self</span>&gt;
+<a href=#116 id=116 data-nosnippet>116</a>    <span class="kw">where
+<a href=#117 id=117 data-nosnippet>117</a>        </span>AS: Strategy&lt;Value = A&gt; + <span class="lifetime">'static</span>;
+<a href=#118 id=118 data-nosnippet>118</a>}
+<a href=#119 id=119 data-nosnippet>119</a>
+<a href=#120 id=120 data-nosnippet>120</a><span class="doccomment">/// `ArbitraryF2` lets you lift [`Strategy`] to binary
+<a href=#121 id=121 data-nosnippet>121</a>/// type constructors such as `Result`, `HashMap`.
+<a href=#122 id=122 data-nosnippet>122</a>///
+<a href=#123 id=123 data-nosnippet>123</a>/// The trait corresponds to
+<a href=#124 id=124 data-nosnippet>124</a>/// [Haskell QuickCheck's `Arbitrary2` type class][HaskellQC].
+<a href=#125 id=125 data-nosnippet>125</a>///
+<a href=#126 id=126 data-nosnippet>126</a>/// [HaskellQC]:
+<a href=#127 id=127 data-nosnippet>127</a>/// https://hackage.haskell.org/package/QuickCheck-2.10.1/docs/Test-QuickCheck-Arbitrary.html#t:Arbitrary2
+<a href=#128 id=128 data-nosnippet>128</a>///
+<a href=#129 id=129 data-nosnippet>129</a>/// [`Strategy`]: ../proptest/strategy/trait.Strategy.html
+<a href=#130 id=130 data-nosnippet>130</a></span><span class="kw">pub trait </span>ArbitraryF2&lt;A: fmt::Debug, B: fmt::Debug&gt;:
+<a href=#131 id=131 data-nosnippet>131</a>    fmt::Debug + Sized
+<a href=#132 id=132 data-nosnippet>132</a>{
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="doccomment">/// The type of parameters that [`lift2_with`] accepts for
+<a href=#134 id=134 data-nosnippet>134</a>    /// configuration of the lifted and generated [`Strategy`]. Parameters
+<a href=#135 id=135 data-nosnippet>135</a>    /// must implement [`Default`].
+<a href=#136 id=136 data-nosnippet>136</a>    ///
+<a href=#137 id=137 data-nosnippet>137</a>    /// [`lift2_with`]: trait.ArbitraryF2.html#tymethod.lift2_with
+<a href=#138 id=138 data-nosnippet>138</a>    ///
+<a href=#139 id=139 data-nosnippet>139</a>    /// [`Strategy`]: ../proptest/strategy/trait.Strategy.html
+<a href=#140 id=140 data-nosnippet>140</a>    ///
+<a href=#141 id=141 data-nosnippet>141</a>    /// [`Default`]:
+<a href=#142 id=142 data-nosnippet>142</a>    ///     https://doc.rust-lang.org/nightly/std/default/trait.Default.html
+<a href=#143 id=143 data-nosnippet>143</a>    </span><span class="kw">type </span>Parameters: Default;
+<a href=#144 id=144 data-nosnippet>144</a>
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="doccomment">/// Lifts two given strategies to a new [`Strategy`] for the (presumably)
+<a href=#146 id=146 data-nosnippet>146</a>    /// bigger type. This is useful for lifting a `Strategy` for `Type1`
+<a href=#147 id=147 data-nosnippet>147</a>    /// and one for `Type2` to a container such as `HashMap&lt;Type1, Type2&gt;`.
+<a href=#148 id=148 data-nosnippet>148</a>    ///
+<a href=#149 id=149 data-nosnippet>149</a>    /// Calling this for the type `X` is the equivalent of using
+<a href=#150 id=150 data-nosnippet>150</a>    /// [`X::lift2_with(base, Default::default())`].
+<a href=#151 id=151 data-nosnippet>151</a>    ///
+<a href=#152 id=152 data-nosnippet>152</a>    /// This method is defined in the trait for optimization for the
+<a href=#153 id=153 data-nosnippet>153</a>    /// default if you want to do that. It is a logic error to not
+<a href=#154 id=154 data-nosnippet>154</a>    /// preserve the semantics when overriding.
+<a href=#155 id=155 data-nosnippet>155</a>    ///
+<a href=#156 id=156 data-nosnippet>156</a>    /// [`Strategy`]: ../proptest/strategy/trait.Strategy.html
+<a href=#157 id=157 data-nosnippet>157</a>    ///
+<a href=#158 id=158 data-nosnippet>158</a>    /// [`X::lift2_with(base, Default::default())`]:
+<a href=#159 id=159 data-nosnippet>159</a>    ///     trait.Arbitrary.html#tymethod.lift2_with
+<a href=#160 id=160 data-nosnippet>160</a>    </span><span class="kw">fn </span>lift2&lt;AS, BS&gt;(fst: AS, snd: BS) -&gt; BoxedStrategy&lt;<span class="self">Self</span>&gt;
+<a href=#161 id=161 data-nosnippet>161</a>    <span class="kw">where
+<a href=#162 id=162 data-nosnippet>162</a>        </span>AS: Strategy&lt;Value = A&gt; + <span class="lifetime">'static</span>,
+<a href=#163 id=163 data-nosnippet>163</a>        BS: Strategy&lt;Value = B&gt; + <span class="lifetime">'static</span>,
+<a href=#164 id=164 data-nosnippet>164</a>    {
+<a href=#165 id=165 data-nosnippet>165</a>        <span class="self">Self</span>::lift2_with(fst, snd, <span class="self">Self</span>::Parameters::default())
+<a href=#166 id=166 data-nosnippet>166</a>    }
+<a href=#167 id=167 data-nosnippet>167</a>
+<a href=#168 id=168 data-nosnippet>168</a>    <span class="doccomment">/// Lifts two given strategies to a new [`Strategy`] for the (presumably)
+<a href=#169 id=169 data-nosnippet>169</a>    /// bigger type. This is useful for lifting a `Strategy` for `Type1`
+<a href=#170 id=170 data-nosnippet>170</a>    /// and one for `Type2` to a container such as `HashMap&lt;Type1, Type2&gt;`.
+<a href=#171 id=171 data-nosnippet>171</a>    /// The composite strategy is passed the arguments given in `args`.
+<a href=#172 id=172 data-nosnippet>172</a>    ///
+<a href=#173 id=173 data-nosnippet>173</a>    /// If you wish to use the [`default()`] arguments,
+<a href=#174 id=174 data-nosnippet>174</a>    /// use [`lift2`] instead.
+<a href=#175 id=175 data-nosnippet>175</a>    ///
+<a href=#176 id=176 data-nosnippet>176</a>    /// [`Strategy`]: ../proptest/strategy/trait.Strategy.html
+<a href=#177 id=177 data-nosnippet>177</a>    ///
+<a href=#178 id=178 data-nosnippet>178</a>    /// [`lift2`]: trait.ArbitraryF2.html#method.lift2
+<a href=#179 id=179 data-nosnippet>179</a>    ///
+<a href=#180 id=180 data-nosnippet>180</a>    /// [`default()`]:
+<a href=#181 id=181 data-nosnippet>181</a>    ///     https://doc.rust-lang.org/nightly/std/default/trait.Default.html
+<a href=#182 id=182 data-nosnippet>182</a>    </span><span class="kw">fn </span>lift2_with&lt;AS, BS&gt;(
+<a href=#183 id=183 data-nosnippet>183</a>        fst: AS,
+<a href=#184 id=184 data-nosnippet>184</a>        snd: BS,
+<a href=#185 id=185 data-nosnippet>185</a>        args: <span class="self">Self</span>::Parameters,
+<a href=#186 id=186 data-nosnippet>186</a>    ) -&gt; BoxedStrategy&lt;<span class="self">Self</span>&gt;
+<a href=#187 id=187 data-nosnippet>187</a>    <span class="kw">where
+<a href=#188 id=188 data-nosnippet>188</a>        </span>AS: Strategy&lt;Value = A&gt; + <span class="lifetime">'static</span>,
+<a href=#189 id=189 data-nosnippet>189</a>        BS: Strategy&lt;Value = B&gt; + <span class="lifetime">'static</span>;
+<a href=#190 id=190 data-nosnippet>190</a>}
+<a href=#191 id=191 data-nosnippet>191</a>
+<a href=#192 id=192 data-nosnippet>192</a><span class="macro">macro_rules!</span> lift1 {
+<a href=#193 id=193 data-nosnippet>193</a>    ([$(<span class="macro-nonterminal">$bounds </span>: tt)<span class="kw-2">*</span>] <span class="macro-nonterminal">$typ</span>: ty, <span class="macro-nonterminal">$params</span>: ty;
+<a href=#194 id=194 data-nosnippet>194</a>     <span class="macro-nonterminal">$base</span>: ident, <span class="macro-nonterminal">$args</span>: ident =&gt; <span class="macro-nonterminal">$logic</span>: expr) =&gt; {
+<a href=#195 id=195 data-nosnippet>195</a>        <span class="kw">impl</span>&lt;A: ::core::fmt::Debug + $(<span class="macro-nonterminal">$bounds</span>)<span class="kw-2">*</span>&gt;
+<a href=#196 id=196 data-nosnippet>196</a>        <span class="macro-nonterminal">$crate::arbitrary::functor::ArbitraryF1</span>&lt;A&gt;
+<a href=#197 id=197 data-nosnippet>197</a>        <span class="kw">for </span><span class="macro-nonterminal">$typ </span>{
+<a href=#198 id=198 data-nosnippet>198</a>            <span class="kw">type </span>Parameters = <span class="macro-nonterminal">$params</span>;
+<a href=#199 id=199 data-nosnippet>199</a>
+<a href=#200 id=200 data-nosnippet>200</a>            <span class="kw">fn </span>lift1_with&lt;S&gt;(<span class="macro-nonterminal">$base</span>: S, <span class="macro-nonterminal">$args</span>: <span class="self">Self</span>::Parameters)
+<a href=#201 id=201 data-nosnippet>201</a>                -&gt; <span class="macro-nonterminal">$crate::strategy::BoxedStrategy</span>&lt;<span class="self">Self</span>&gt;
+<a href=#202 id=202 data-nosnippet>202</a>            <span class="kw">where
+<a href=#203 id=203 data-nosnippet>203</a>                </span>S: <span class="macro-nonterminal">$crate::strategy::Strategy</span>&lt;Value = A&gt; + <span class="lifetime">'static
+<a href=#204 id=204 data-nosnippet>204</a>            </span>{
+<a href=#205 id=205 data-nosnippet>205</a>                <span class="macro-nonterminal">$crate::strategy::Strategy::boxed</span>(<span class="macro-nonterminal">$logic</span>)
+<a href=#206 id=206 data-nosnippet>206</a>            }
+<a href=#207 id=207 data-nosnippet>207</a>        }
+<a href=#208 id=208 data-nosnippet>208</a>    };
+<a href=#209 id=209 data-nosnippet>209</a>    ([$(<span class="macro-nonterminal">$bounds </span>: tt)<span class="kw-2">*</span>] <span class="macro-nonterminal">$typ</span>: ty; <span class="macro-nonterminal">$base</span>: ident =&gt; <span class="macro-nonterminal">$logic</span>: expr) =&gt; {
+<a href=#210 id=210 data-nosnippet>210</a>        <span class="macro">lift1!</span>([$(<span class="macro-nonterminal">$bounds</span>)<span class="kw-2">*</span>] <span class="macro-nonterminal">$typ</span>, (); <span class="macro-nonterminal">$base</span>, _args =&gt; <span class="macro-nonterminal">$logic</span>);
+<a href=#211 id=211 data-nosnippet>211</a>    };
+<a href=#212 id=212 data-nosnippet>212</a>    ([$(<span class="macro-nonterminal">$bounds </span>: tt)<span class="kw-2">*</span>] <span class="macro-nonterminal">$typ</span>: ty; <span class="macro-nonterminal">$mapper</span>: expr) =&gt; {
+<a href=#213 id=213 data-nosnippet>213</a>        <span class="macro">lift1!</span>([<span class="lifetime">'static </span>+ $(<span class="macro-nonterminal">$bounds</span>)<span class="kw-2">*</span>] <span class="macro-nonterminal">$typ</span>; base =&gt;
+<a href=#214 id=214 data-nosnippet>214</a>            <span class="macro-nonterminal">$crate::strategy::Strategy::prop_map</span>(base, <span class="macro-nonterminal">$mapper</span>));
+<a href=#215 id=215 data-nosnippet>215</a>    };
+<a href=#216 id=216 data-nosnippet>216</a>    ([$(<span class="macro-nonterminal">$bounds </span>: tt)<span class="kw-2">*</span>] <span class="macro-nonterminal">$typ</span>: ty) =&gt; {
+<a href=#217 id=217 data-nosnippet>217</a>        <span class="macro">lift1!</span>([<span class="lifetime">'static </span>+ $(<span class="macro-nonterminal">$bounds</span>)<span class="kw-2">*</span>] <span class="macro-nonterminal">$typ</span>; base =&gt;
+<a href=#218 id=218 data-nosnippet>218</a>            <span class="macro-nonterminal">$crate::strategy::Strategy::prop_map_into</span>(base));
+<a href=#219 id=219 data-nosnippet>219</a>    };
+<a href=#220 id=220 data-nosnippet>220</a>}</code></pre></div></section></main></body></html>

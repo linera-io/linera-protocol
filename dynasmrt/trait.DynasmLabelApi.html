@@ -1,0 +1,171 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This trait extends DynasmApi to not only allow assembling, but also labels and various directives"><title>DynasmLabelApi in dynasmrt - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="dynasmrt" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../dynasmrt/index.html">dynasmrt</a><span class="version">1.2.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Dynasm<wbr>Label<wbr>Api</a></h2><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Relocation" title="Relocation">Relocation</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.backward_relocation" title="backward_relocation">backward_relocation</a></li><li><a href="#tymethod.bare_relocation" title="bare_relocation">bare_relocation</a></li><li><a href="#tymethod.dynamic_label" title="dynamic_label">dynamic_label</a></li><li><a href="#tymethod.dynamic_relocation" title="dynamic_relocation">dynamic_relocation</a></li><li><a href="#tymethod.forward_relocation" title="forward_relocation">forward_relocation</a></li><li><a href="#tymethod.global_label" title="global_label">global_label</a></li><li><a href="#tymethod.global_relocation" title="global_relocation">global_relocation</a></li><li><a href="#tymethod.local_label" title="local_label">local_label</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.backward_reloc" title="backward_reloc">backward_reloc</a></li><li><a href="#method.bare_reloc" title="bare_reloc">bare_reloc</a></li><li><a href="#method.dynamic_reloc" title="dynamic_reloc">dynamic_reloc</a></li><li><a href="#method.forward_reloc" title="forward_reloc">forward_reloc</a></li><li><a href="#method.global_reloc" title="global_reloc">global_reloc</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate dynasmrt</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">dynasmrt</a></div><h1>Trait <span class="trait">DynasmLabelApi</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/dynasmrt/lib.rs.html#241-283">Source</a> </span></div><pre class="rust item-decl"><code>pub trait DynasmLabelApi: <a class="trait" href="trait.DynasmApi.html" title="trait dynasmrt::DynasmApi">DynasmApi</a> {
+    type <a href="#associatedtype.Relocation" class="associatedtype">Relocation</a>: <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>;
+
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 13 methods</span></summary>    // Required methods
+    fn <a href="#tymethod.local_label" class="fn">local_label</a>(&amp;mut self, name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.global_label" class="fn">global_label</a>(&amp;mut self, name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.dynamic_label" class="fn">dynamic_label</a>(&amp;mut self, id: <a class="struct" href="struct.DynamicLabel.html" title="struct dynasmrt::DynamicLabel">DynamicLabel</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.forward_relocation" class="fn">forward_relocation</a>(
+        &amp;mut self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+        target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+        field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        kind: Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a>,
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.backward_relocation" class="fn">backward_relocation</a>(
+        &amp;mut self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+        target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+        field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        kind: Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a>,
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.global_relocation" class="fn">global_relocation</a>(
+        &amp;mut self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+        target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+        field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        kind: Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a>,
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.dynamic_relocation" class="fn">dynamic_relocation</a>(
+        &amp;mut self,
+        id: <a class="struct" href="struct.DynamicLabel.html" title="struct dynasmrt::DynamicLabel">DynamicLabel</a>,
+        target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+        field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        kind: Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a>,
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.bare_relocation" class="fn">bare_relocation</a>(
+        &amp;mut self,
+        target: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>,
+        field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        kind: Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a>,
+    );
+
+    // Provided methods
+    fn <a href="#method.forward_reloc" class="fn">forward_reloc</a>(
+        &amp;mut self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+        target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+        field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        kind: &lt;Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a> as <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>&gt;::<a class="associatedtype" href="relocations/trait.Relocation.html#associatedtype.Encoding" title="type dynasmrt::relocations::Relocation::Encoding">Encoding</a>,
+    ) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.backward_reloc" class="fn">backward_reloc</a>(
+        &amp;mut self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+        target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+        field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        kind: &lt;Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a> as <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>&gt;::<a class="associatedtype" href="relocations/trait.Relocation.html#associatedtype.Encoding" title="type dynasmrt::relocations::Relocation::Encoding">Encoding</a>,
+    ) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.global_reloc" class="fn">global_reloc</a>(
+        &amp;mut self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+        target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+        field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        kind: &lt;Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a> as <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>&gt;::<a class="associatedtype" href="relocations/trait.Relocation.html#associatedtype.Encoding" title="type dynasmrt::relocations::Relocation::Encoding">Encoding</a>,
+    ) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.dynamic_reloc" class="fn">dynamic_reloc</a>(
+        &amp;mut self,
+        id: <a class="struct" href="struct.DynamicLabel.html" title="struct dynasmrt::DynamicLabel">DynamicLabel</a>,
+        target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+        field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        kind: &lt;Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a> as <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>&gt;::<a class="associatedtype" href="relocations/trait.Relocation.html#associatedtype.Encoding" title="type dynasmrt::relocations::Relocation::Encoding">Encoding</a>,
+    ) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.bare_reloc" class="fn">bare_reloc</a>(
+        &amp;mut self,
+        target: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>,
+        field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        kind: &lt;Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a> as <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>&gt;::<a class="associatedtype" href="relocations/trait.Relocation.html#associatedtype.Encoding" title="type dynasmrt::relocations::Relocation::Encoding">Encoding</a>,
+    ) { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This trait extends DynasmApi to not only allow assembling, but also labels and various directives</p>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Relocation" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#243">Source</a><h4 class="code-header">type <a href="#associatedtype.Relocation" class="associatedtype">Relocation</a>: <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a></h4></section></summary><div class="docblock"><p>The relocation info type this assembler uses.</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.local_label" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#246">Source</a><h4 class="code-header">fn <a href="#tymethod.local_label" class="fn">local_label</a>(&amp;mut self, name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>)</h4></section></summary><div class="docblock"><p>Record the definition of a local label</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.global_label" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#248">Source</a><h4 class="code-header">fn <a href="#tymethod.global_label" class="fn">global_label</a>(&amp;mut self, name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>)</h4></section></summary><div class="docblock"><p>Record the definition of a global label</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.dynamic_label" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#250">Source</a><h4 class="code-header">fn <a href="#tymethod.dynamic_label" class="fn">dynamic_label</a>(&amp;mut self, id: <a class="struct" href="struct.DynamicLabel.html" title="struct dynasmrt::DynamicLabel">DynamicLabel</a>)</h4></section></summary><div class="docblock"><p>Record the definition of a dynamic label</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.forward_relocation" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#274">Source</a><h4 class="code-header">fn <a href="#tymethod.forward_relocation" class="fn">forward_relocation</a>(
+    &amp;mut self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+    target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+    field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    kind: Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a>,
+)</h4></section></summary><div class="docblock"><p>Equivalent of forward_reloc, but takes a non-encoded relocation</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.backward_relocation" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#276">Source</a><h4 class="code-header">fn <a href="#tymethod.backward_relocation" class="fn">backward_relocation</a>(
+    &amp;mut self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+    target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+    field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    kind: Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a>,
+)</h4></section></summary><div class="docblock"><p>Equivalent of backward_reloc, but takes a non-encoded relocation</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.global_relocation" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#278">Source</a><h4 class="code-header">fn <a href="#tymethod.global_relocation" class="fn">global_relocation</a>(
+    &amp;mut self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+    target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+    field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    kind: Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a>,
+)</h4></section></summary><div class="docblock"><p>Equivalent of global_reloc, but takes a non-encoded relocation</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.dynamic_relocation" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#280">Source</a><h4 class="code-header">fn <a href="#tymethod.dynamic_relocation" class="fn">dynamic_relocation</a>(
+    &amp;mut self,
+    id: <a class="struct" href="struct.DynamicLabel.html" title="struct dynasmrt::DynamicLabel">DynamicLabel</a>,
+    target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+    field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    kind: Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a>,
+)</h4></section></summary><div class="docblock"><p>Equivalent of dynamic_reloc, but takes a non-encoded relocation</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.bare_relocation" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#282">Source</a><h4 class="code-header">fn <a href="#tymethod.bare_relocation" class="fn">bare_relocation</a>(
+    &amp;mut self,
+    target: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>,
+    field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    kind: Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a>,
+)</h4></section></summary><div class="docblock"><p>Equivalent of bare_reloc, but takes a non-encoded relocation</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.forward_reloc" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#253-255">Source</a><h4 class="code-header">fn <a href="#method.forward_reloc" class="fn">forward_reloc</a>(
+    &amp;mut self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+    target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+    field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    kind: &lt;Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a> as <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>&gt;::<a class="associatedtype" href="relocations/trait.Relocation.html#associatedtype.Encoding" title="type dynasmrt::relocations::Relocation::Encoding">Encoding</a>,
+)</h4></section></summary><div class="docblock"><p>Record a relocation spot for a forward reference to a local label</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.backward_reloc" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#257-259">Source</a><h4 class="code-header">fn <a href="#method.backward_reloc" class="fn">backward_reloc</a>(
+    &amp;mut self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+    target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+    field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    kind: &lt;Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a> as <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>&gt;::<a class="associatedtype" href="relocations/trait.Relocation.html#associatedtype.Encoding" title="type dynasmrt::relocations::Relocation::Encoding">Encoding</a>,
+)</h4></section></summary><div class="docblock"><p>Record a relocation spot for a backward reference to a local label</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.global_reloc" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#261-263">Source</a><h4 class="code-header">fn <a href="#method.global_reloc" class="fn">global_reloc</a>(
+    &amp;mut self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+    target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+    field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    kind: &lt;Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a> as <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>&gt;::<a class="associatedtype" href="relocations/trait.Relocation.html#associatedtype.Encoding" title="type dynasmrt::relocations::Relocation::Encoding">Encoding</a>,
+)</h4></section></summary><div class="docblock"><p>Record a relocation spot for a reference to a global label</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.dynamic_reloc" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#265-267">Source</a><h4 class="code-header">fn <a href="#method.dynamic_reloc" class="fn">dynamic_reloc</a>(
+    &amp;mut self,
+    id: <a class="struct" href="struct.DynamicLabel.html" title="struct dynasmrt::DynamicLabel">DynamicLabel</a>,
+    target_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.isize.html">isize</a>,
+    field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    kind: &lt;Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a> as <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>&gt;::<a class="associatedtype" href="relocations/trait.Relocation.html#associatedtype.Encoding" title="type dynasmrt::relocations::Relocation::Encoding">Encoding</a>,
+)</h4></section></summary><div class="docblock"><p>Record a relocation spot for a reference to a dynamic label</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.bare_reloc" class="method"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#269-271">Source</a><h4 class="code-header">fn <a href="#method.bare_reloc" class="fn">bare_reloc</a>(
+    &amp;mut self,
+    target: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>,
+    field_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    ref_offset: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    kind: &lt;Self::<a class="associatedtype" href="trait.DynasmLabelApi.html#associatedtype.Relocation" title="type dynasmrt::DynasmLabelApi::Relocation">Relocation</a> as <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>&gt;::<a class="associatedtype" href="relocations/trait.Relocation.html#associatedtype.Encoding" title="type dynasmrt::relocations::Relocation::Encoding">Encoding</a>,
+)</h4></section></summary><div class="docblock"><p>Record a relocation spot to an arbitrary target.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><details class="toggle implementors-toggle"><summary><section id="impl-DynasmLabelApi-for-Modifier%3C'a,+R%3E" class="impl"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#926-995">Source</a><a href="#impl-DynasmLabelApi-for-Modifier%3C'a,+R%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a, R: <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>&gt; <a class="trait" href="trait.DynasmLabelApi.html" title="trait dynasmrt::DynasmLabelApi">DynasmLabelApi</a> for <a class="struct" href="struct.Modifier.html" title="struct dynasmrt::Modifier">Modifier</a>&lt;'a, R&gt;</h3></section></summary><div class="impl-items"><section id="associatedtype.Relocation-1" class="associatedtype trait-impl"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#927">Source</a><a href="#associatedtype.Relocation-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Relocation" class="associatedtype">Relocation</a> = R</h4></section></div></details><details class="toggle implementors-toggle"><summary><section id="impl-DynasmLabelApi-for-Assembler%3CR%3E" class="impl"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#729-795">Source</a><a href="#impl-DynasmLabelApi-for-Assembler%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>&gt; <a class="trait" href="trait.DynasmLabelApi.html" title="trait dynasmrt::DynasmLabelApi">DynasmLabelApi</a> for <a class="struct" href="struct.Assembler.html" title="struct dynasmrt::Assembler">Assembler</a>&lt;R&gt;</h3></section></summary><div class="impl-items"><section id="associatedtype.Relocation-2" class="associatedtype trait-impl"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#730">Source</a><a href="#associatedtype.Relocation-2" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Relocation" class="associatedtype">Relocation</a> = R</h4></section></div></details><details class="toggle implementors-toggle"><summary><section id="impl-DynasmLabelApi-for-VecAssembler%3CR%3E" class="impl"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#458-518">Source</a><a href="#impl-DynasmLabelApi-for-VecAssembler%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="relocations/trait.Relocation.html" title="trait dynasmrt::relocations::Relocation">Relocation</a>&gt; <a class="trait" href="trait.DynasmLabelApi.html" title="trait dynasmrt::DynasmLabelApi">DynasmLabelApi</a> for <a class="struct" href="struct.VecAssembler.html" title="struct dynasmrt::VecAssembler">VecAssembler</a>&lt;R&gt;</h3></section></summary><div class="impl-items"><section id="associatedtype.Relocation-3" class="associatedtype trait-impl"><a class="src rightside" href="../src/dynasmrt/lib.rs.html#459">Source</a><a href="#associatedtype.Relocation-3" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Relocation" class="associatedtype">Relocation</a> = R</h4></section></div></details></div><script src="../trait.impl/dynasmrt/trait.DynasmLabelApi.js" async></script></section></div></main></body></html>

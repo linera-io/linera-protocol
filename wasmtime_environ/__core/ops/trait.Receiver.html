@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Indicates that a struct can be used as a method receiver. That is, a type can use this type as a type of `self`, like this:"><title>Receiver in wasmtime_environ::__core::ops - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_<wbr>environ</a><span class="version">25.0.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Receiver</a></h2><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Target" title="Target">Target</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In wasmtime_<wbr>environ::<wbr>__<wbr>core::<wbr>ops</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">ops</a></div><h1>Trait <span class="trait">Receiver</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="https://doc.rust-lang.org/1.86.0/src/core/ops/deref.rs.html#366">Source</a> </span></div><pre class="rust item-decl"><code>pub trait Receiver {
+    type <a href="#associatedtype.Target" class="associatedtype">Target</a>: ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>;
+}</code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>arbitrary_self_types</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Indicates that a struct can be used as a method receiver.
+That is, a type can use this type as a type of <code>self</code>, like this:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::ops::Receiver;
+
+<span class="kw">struct </span>SmartPointer&lt;T&gt;(T);
+
+<span class="kw">impl</span>&lt;T&gt; Receiver <span class="kw">for </span>SmartPointer&lt;T&gt; {
+   <span class="kw">type </span>Target = T;
+}
+
+<span class="kw">struct </span>MyContainedType;
+
+<span class="kw">impl </span>MyContainedType {
+  <span class="kw">fn </span>method(<span class="self">self</span>: SmartPointer&lt;<span class="self">Self</span>&gt;) {
+    <span class="comment">// ...
+  </span>}
+}
+
+<span class="kw">fn </span>main() {
+  <span class="kw">let </span>ptr = SmartPointer(MyContainedType);
+  ptr.method();
+}</code></pre></div>
+<p>This trait is blanket implemented for any type which implements
+<a href="trait.Deref.html" title="trait wasmtime_environ::__core::ops::Deref"><code>Deref</code></a>, which includes stdlib pointer types like <code>Box&lt;T&gt;</code>,<code>Rc&lt;T&gt;</code>, <code>&amp;T</code>,
+and <code>Pin&lt;P&gt;</code>. For that reason, it’s relatively rare to need to
+implement this directly. You’ll typically do this only if you need
+to implement a smart pointer type which can’t implement <a href="trait.Deref.html" title="trait wasmtime_environ::__core::ops::Deref"><code>Deref</code></a>; perhaps
+because you’re interfacing with another programming language and can’t
+guarantee that references comply with Rust’s aliasing rules.</p>
+<p>When looking for method candidates, Rust will explore a chain of possible
+<code>Receiver</code>s, so for example each of the following methods work:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::boxed::Box;
+<span class="kw">use </span>std::rc::Rc;
+
+<span class="comment">// Both `Box` and `Rc` (indirectly) implement Receiver
+
+</span><span class="kw">struct </span>MyContainedType;
+
+<span class="kw">fn </span>main() {
+  <span class="kw">let </span>t = Rc::new(Box::new(MyContainedType));
+  t.method_a();
+  t.method_b();
+  t.method_c();
+}
+
+<span class="kw">impl </span>MyContainedType {
+  <span class="kw">fn </span>method_a(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+
+  }
+  <span class="kw">fn </span>method_b(<span class="self">self</span>: <span class="kw-2">&amp;</span>Box&lt;<span class="self">Self</span>&gt;) {
+
+  }
+  <span class="kw">fn </span>method_c(<span class="self">self</span>: <span class="kw-2">&amp;</span>Rc&lt;Box&lt;<span class="self">Self</span>&gt;&gt;) {
+
+  }
+}</code></pre></div>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Target" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/ops/deref.rs.html#371">Source</a><h4 class="code-header">type <a href="#associatedtype.Target" class="associatedtype">Target</a>: ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>arbitrary_self_types</code>)</span></div></span></summary><div class="docblock"><p>The target type on which the method may be called.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><details class="toggle implementors-toggle"><summary><section id="impl-Receiver-for-P" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/ops/deref.rs.html#375-377">Source</a><a href="#impl-Receiver-for-P" class="anchor">§</a><h3 class="code-header">impl&lt;P, T&gt; <a class="trait" href="trait.Receiver.html" title="trait wasmtime_environ::__core::ops::Receiver">Receiver</a> for P<div class="where">where
+    P: <a class="trait" href="trait.Deref.html" title="trait wasmtime_environ::__core::ops::Deref">Deref</a>&lt;Target = T&gt; + ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,
+    T: ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><section id="associatedtype.Target-1" class="associatedtype trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/ops/deref.rs.html#379">Source</a><a href="#associatedtype.Target-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Target" class="associatedtype">Target</a> = T</h4></section></div></details></div><script src="../../../trait.impl/core/ops/deref/trait.Receiver.js" async></script></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["hashing","models","pairing","scalar_mul"],"trait":["AdditiveGroup","AffineRepr","CurveCycle","CurveGroup","PairingFriendlyCycle","PrimeGroup"]};

@@ -1,0 +1,160 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The interface for constructing `Span`s."><title>Tracer in opentelemetry::trace - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="opentelemetry" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../opentelemetry/index.html"><img src="https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/main/assets/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../opentelemetry/index.html"><img src="https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/main/assets/logo.svg" alt="logo"></a><h2><a href="../../opentelemetry/index.html">opentelemetry</a><span class="version">0.30.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Tracer</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#in-synchronous-code" title="In Synchronous Code">In Synchronous Code</a></li><li><a href="#in-asynchronous-code" title="In Asynchronous Code">In Asynchronous Code</a></li></ul><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Span" title="Span">Span</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.build_with_context" title="build_with_context">build_with_context</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.build" title="build">build</a></li><li><a href="#method.in_span" title="in_span">in_span</a></li><li><a href="#method.span_builder" title="span_builder">span_builder</a></li><li><a href="#method.start" title="start">start</a></li><li><a href="#method.start_with_context" title="start_with_context">start_with_context</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In opentelemetry::<wbr>trace</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">opentelemetry</a>::<wbr><a href="index.html">trace</a></div><h1>Trait <span class="trait">Tracer</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/opentelemetry/trace/tracer.rs.html#121-215">Source</a> </span></div><pre class="rust item-decl"><code>pub trait Tracer {
+    type <a href="#associatedtype.Span" class="associatedtype">Span</a>: <a class="trait" href="trait.Span.html" title="trait opentelemetry::trace::Span">Span</a>;
+
+    // Required method
+    fn <a href="#tymethod.build_with_context" class="fn">build_with_context</a>(
+        &amp;self,
+        builder: <a class="struct" href="struct.SpanBuilder.html" title="struct opentelemetry::trace::SpanBuilder">SpanBuilder</a>,
+        parent_cx: &amp;<a class="struct" href="../context/struct.Context.html" title="struct opentelemetry::context::Context">Context</a>,
+    ) -&gt; Self::<a class="associatedtype" href="trait.Tracer.html#associatedtype.Span" title="type opentelemetry::trace::Tracer::Span">Span</a>;
+
+    // Provided methods
+    fn <a href="#method.start" class="fn">start</a>&lt;T&gt;(&amp;self, name: T) -&gt; Self::<a class="associatedtype" href="trait.Tracer.html#associatedtype.Span" title="type opentelemetry::trace::Tracer::Span">Span</a>
+       <span class="where">where T: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.start_with_context" class="fn">start_with_context</a>&lt;T&gt;(&amp;self, name: T, parent_cx: &amp;<a class="struct" href="../context/struct.Context.html" title="struct opentelemetry::context::Context">Context</a>) -&gt; Self::<a class="associatedtype" href="trait.Tracer.html#associatedtype.Span" title="type opentelemetry::trace::Tracer::Span">Span</a>
+       <span class="where">where T: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.span_builder" class="fn">span_builder</a>&lt;T&gt;(&amp;self, name: T) -&gt; <a class="struct" href="struct.SpanBuilder.html" title="struct opentelemetry::trace::SpanBuilder">SpanBuilder</a>
+       <span class="where">where T: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.build" class="fn">build</a>(&amp;self, builder: <a class="struct" href="struct.SpanBuilder.html" title="struct opentelemetry::trace::SpanBuilder">SpanBuilder</a>) -&gt; Self::<a class="associatedtype" href="trait.Tracer.html#associatedtype.Span" title="type opentelemetry::trace::Tracer::Span">Span</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.in_span" class="fn">in_span</a>&lt;T, F, N&gt;(&amp;self, name: N, f: F) -&gt; T
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="struct" href="../context/struct.Context.html" title="struct opentelemetry::context::Context">Context</a>) -&gt; T,
+             N: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;,
+             Self::<a class="associatedtype" href="trait.Tracer.html#associatedtype.Span" title="type opentelemetry::trace::Tracer::Span">Span</a>: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static</span> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The interface for constructing <a href="trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a>s.</p>
+<h3 id="in-synchronous-code"><a class="doc-anchor" href="#in-synchronous-code">§</a>In Synchronous Code</h3>
+<p>Spans can be created and nested manually:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{global, trace::{Span, Tracer, TraceContextExt}, Context};
+
+<span class="kw">let </span>tracer = global::tracer(<span class="string">"my-component"</span>);
+
+<span class="kw">let </span>parent = tracer.start(<span class="string">"foo"</span>);
+<span class="kw">let </span>parent_cx = Context::current_with_span(parent);
+<span class="kw">let </span><span class="kw-2">mut </span>child = tracer.start_with_context(<span class="string">"bar"</span>, <span class="kw-2">&amp;</span>parent_cx);
+
+<span class="comment">// ...
+
+</span>child.end(); <span class="comment">// explicitly end
+</span>drop(parent_cx) <span class="comment">// or implicitly end on drop</span></code></pre></div>
+<p>Spans can also use the current thread’s <a href="../context/struct.Context.html" title="struct opentelemetry::context::Context"><code>Context</code></a> to track which span is active:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{global, trace::{SpanKind, Tracer}};
+
+<span class="kw">let </span>tracer = global::tracer(<span class="string">"my-component"</span>);
+
+<span class="comment">// Create simple spans with `in_span`
+</span>tracer.in_span(<span class="string">"foo"</span>, |_foo_cx| {
+    <span class="comment">// parent span is active
+    </span>tracer.in_span(<span class="string">"bar"</span>, |_bar_cx| {
+        <span class="comment">// child span is now the active span and associated with the parent span
+    </span>});
+    <span class="comment">// child has ended, parent now the active span again
+</span>});
+<span class="comment">// parent has ended, no active spans</span></code></pre></div>
+<p>Spans can also be marked as active, and the resulting guard allows for
+greater control over when the span is no longer considered active.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{global, trace::{Span, Tracer, mark_span_as_active}};
+<span class="kw">let </span>tracer = global::tracer(<span class="string">"my-component"</span>);
+
+<span class="kw">let </span>parent_span = tracer.start(<span class="string">"foo"</span>);
+<span class="kw">let </span>parent_active = mark_span_as_active(parent_span);
+
+{
+    <span class="kw">let </span>child = tracer.start(<span class="string">"bar"</span>);
+    <span class="kw">let </span>_child_active = mark_span_as_active(child);
+
+    <span class="comment">// do work in the context of the child span...
+
+    // exiting the scope drops the guard, child is no longer active
+</span>}
+<span class="comment">// Parent is active span again
+
+// Parent can be dropped manually, or allowed to go out of scope as well.
+</span>drop(parent_active);
+
+<span class="comment">// no active span</span></code></pre></div>
+<h3 id="in-asynchronous-code"><a class="doc-anchor" href="#in-asynchronous-code">§</a>In Asynchronous Code</h3>
+<p>If you are instrumenting code that make use of <a href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future"><code>std::future::Future</code></a> or
+async/await, be sure to use the <a href="../context/trait.FutureExt.html" title="trait opentelemetry::context::FutureExt"><code>FutureExt</code></a> trait. This is needed because
+the following example <em>will not</em> work:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">async </span>{
+    <span class="comment">// Does not work
+    </span><span class="kw">let </span>_g = mark_span_as_active(span);
+    <span class="comment">// ...
+</span>};</code></pre></div>
+<p>The context guard <code>_g</code> will not exit until the future generated by the
+<code>async</code> block is complete. Since futures can be entered and exited
+<em>multiple</em> times without them completing, the span remains active for as
+long as the future exists, rather than only when it is polled, leading to
+very confusing and incorrect output.</p>
+<p>In order to trace asynchronous code, the <a href="../context/trait.FutureExt.html#method.with_context" title="method opentelemetry::context::FutureExt::with_context"><code>Future::with_context</code></a> combinator
+can be used:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{trace::FutureExt, Context};
+<span class="kw">let </span>cx = Context::current();
+
+<span class="kw">let </span>my_future = <span class="kw">async </span>{
+    <span class="comment">// ...
+</span>};
+
+my_future
+    .with_context(cx)
+    .<span class="kw">await</span>;</code></pre></div>
+<p><a href="../context/trait.FutureExt.html#method.with_context" title="method opentelemetry::context::FutureExt::with_context"><code>Future::with_context</code></a> attaches a context to the future, ensuring that the
+context’s lifetime is as long as the future’s.</p>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Span" class="method"><a class="src rightside" href="../../src/opentelemetry/trace/tracer.rs.html#123">Source</a><h4 class="code-header">type <a href="#associatedtype.Span" class="associatedtype">Span</a>: <a class="trait" href="trait.Span.html" title="trait opentelemetry::trace::Span">Span</a></h4></section></summary><div class="docblock"><p>The <a href="trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a> type used by this tracer.</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.build_with_context" class="method"><a class="src rightside" href="../../src/opentelemetry/trace/tracer.rs.html#175">Source</a><h4 class="code-header">fn <a href="#tymethod.build_with_context" class="fn">build_with_context</a>(
+    &amp;self,
+    builder: <a class="struct" href="struct.SpanBuilder.html" title="struct opentelemetry::trace::SpanBuilder">SpanBuilder</a>,
+    parent_cx: &amp;<a class="struct" href="../context/struct.Context.html" title="struct opentelemetry::context::Context">Context</a>,
+) -&gt; Self::<a class="associatedtype" href="trait.Tracer.html#associatedtype.Span" title="type opentelemetry::trace::Tracer::Span">Span</a></h4></section></summary><div class="docblock"><p>Start a span from a <a href="struct.SpanBuilder.html" title="struct opentelemetry::trace::SpanBuilder"><code>SpanBuilder</code></a> with a parent context.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.start" class="method"><a class="src rightside" href="../../src/opentelemetry/trace/tracer.rs.html#134-139">Source</a><h4 class="code-header">fn <a href="#method.start" class="fn">start</a>&lt;T&gt;(&amp;self, name: T) -&gt; Self::<a class="associatedtype" href="trait.Tracer.html#associatedtype.Span" title="type opentelemetry::trace::Tracer::Span">Span</a><div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;,</div></h4></section></summary><div class="docblock"><p>Starts a new <a href="trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a>.</p>
+<p>By default the currently active <code>Span</code> is set as the new <code>Span</code>’s parent.</p>
+<p>Each span has zero or one parent span and zero or more child spans, which
+represent causally related operations. A tree of related spans comprises a
+trace. A span is said to be a root span if it does not have a parent. Each
+trace includes a single root span, which is the shared ancestor of all other
+spans in the trace.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.start_with_context" class="method"><a class="src rightside" href="../../src/opentelemetry/trace/tracer.rs.html#151-156">Source</a><h4 class="code-header">fn <a href="#method.start_with_context" class="fn">start_with_context</a>&lt;T&gt;(&amp;self, name: T, parent_cx: &amp;<a class="struct" href="../context/struct.Context.html" title="struct opentelemetry::context::Context">Context</a>) -&gt; Self::<a class="associatedtype" href="trait.Tracer.html#associatedtype.Span" title="type opentelemetry::trace::Tracer::Span">Span</a><div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;,</div></h4></section></summary><div class="docblock"><p>Starts a new <a href="trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a> with a given context.</p>
+<p>If this context contains a span, the newly created span will be a child of
+that span.</p>
+<p>Each span has zero or one parent span and zero or more child spans, which
+represent causally related operations. A tree of related spans comprises a
+trace. A span is said to be a root span if it does not have a parent. Each
+trace includes a single root span, which is the shared ancestor of all other
+spans in the trace.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.span_builder" class="method"><a class="src rightside" href="../../src/opentelemetry/trace/tracer.rs.html#162-167">Source</a><h4 class="code-header">fn <a href="#method.span_builder" class="fn">span_builder</a>&lt;T&gt;(&amp;self, name: T) -&gt; <a class="struct" href="struct.SpanBuilder.html" title="struct opentelemetry::trace::SpanBuilder">SpanBuilder</a><div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;,</div></h4></section></summary><div class="docblock"><p>Creates a span builder.</p>
+<p><a href="struct.SpanBuilder.html" title="struct opentelemetry::trace::SpanBuilder"><code>SpanBuilder</code></a>s allow you to specify all attributes of a <a href="trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a> before
+the span is started.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.build" class="method"><a class="src rightside" href="../../src/opentelemetry/trace/tracer.rs.html#170-172">Source</a><h4 class="code-header">fn <a href="#method.build" class="fn">build</a>(&amp;self, builder: <a class="struct" href="struct.SpanBuilder.html" title="struct opentelemetry::trace::SpanBuilder">SpanBuilder</a>) -&gt; Self::<a class="associatedtype" href="trait.Tracer.html#associatedtype.Span" title="type opentelemetry::trace::Tracer::Span">Span</a></h4></section></summary><div class="docblock"><p>Start a <a href="trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a> from a <a href="struct.SpanBuilder.html" title="struct opentelemetry::trace::SpanBuilder"><code>SpanBuilder</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.in_span" class="method"><a class="src rightside" href="../../src/opentelemetry/trace/tracer.rs.html#204-214">Source</a><h4 class="code-header">fn <a href="#method.in_span" class="fn">in_span</a>&lt;T, F, N&gt;(&amp;self, name: N, f: F) -&gt; T<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="struct" href="../context/struct.Context.html" title="struct opentelemetry::context::Context">Context</a>) -&gt; T,
+    N: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'static, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;,
+    Self::<a class="associatedtype" href="trait.Tracer.html#associatedtype.Span" title="type opentelemetry::trace::Tracer::Span">Span</a>: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static,</div></h4></section></summary><div class="docblock"><p>Start a new span and execute the given closure with reference to the context
+in which the span is active.</p>
+<p>This method starts a new span and sets it as the active span for the given
+function. It then executes the body. It ends the span before returning the
+execution result.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{global, trace::{Span, Tracer, get_active_span}, KeyValue};
+
+<span class="kw">fn </span>my_function() {
+    <span class="comment">// start an active span in one function
+    </span>global::tracer(<span class="string">"my-component"</span>).in_span(<span class="string">"span-name"</span>, |_cx| {
+        <span class="comment">// anything happening in functions we call can still access the active span...
+        </span>my_other_function();
+    })
+}
+
+<span class="kw">fn </span>my_other_function() {
+    <span class="comment">// call methods on the current span from
+    </span>get_active_span(|span| {
+        span.add_event(<span class="string">"An event!"</span>.to_string(), <span class="macro">vec!</span>[KeyValue::new(<span class="string">"happened"</span>, <span class="bool-val">true</span>)]);
+    })
+}</code></pre></div>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><details class="toggle implementors-toggle"><summary><section id="impl-Tracer-for-BoxedTracer" class="impl"><a class="src rightside" href="../../src/opentelemetry/global/trace.rs.html#258-267">Source</a><a href="#impl-Tracer-for-BoxedTracer" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Tracer.html" title="trait opentelemetry::trace::Tracer">Tracer</a> for <a class="struct" href="../global/struct.BoxedTracer.html" title="struct opentelemetry::global::BoxedTracer">BoxedTracer</a></h3></section></summary><div class="impl-items"><section id="associatedtype.Span-1" class="associatedtype trait-impl"><a class="src rightside" href="../../src/opentelemetry/global/trace.rs.html#261">Source</a><a href="#associatedtype.Span-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Span" class="associatedtype">Span</a> = <a class="struct" href="../global/struct.BoxedSpan.html" title="struct opentelemetry::global::BoxedSpan">BoxedSpan</a></h4></section></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Tracer-for-NoopTracer" class="impl"><a class="src rightside" href="../../src/opentelemetry/trace/noop.rs.html#120-132">Source</a><a href="#impl-Tracer-for-NoopTracer" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Tracer.html" title="trait opentelemetry::trace::Tracer">Tracer</a> for <a class="struct" href="noop/struct.NoopTracer.html" title="struct opentelemetry::trace::noop::NoopTracer">NoopTracer</a></h3></section></summary><div class="impl-items"><section id="associatedtype.Span-2" class="associatedtype trait-impl"><a class="src rightside" href="../../src/opentelemetry/trace/noop.rs.html#121">Source</a><a href="#associatedtype.Span-2" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Span" class="associatedtype">Span</a> = <a class="struct" href="noop/struct.NoopSpan.html" title="struct opentelemetry::trace::noop::NoopSpan">NoopSpan</a></h4></section></div></details></div><script src="../../trait.impl/opentelemetry/trace/tracer/trait.Tracer.js" async></script></section></div></main></body></html>

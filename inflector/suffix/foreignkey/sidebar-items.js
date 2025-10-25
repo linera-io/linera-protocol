@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_foreign_key","to_foreign_key"]};

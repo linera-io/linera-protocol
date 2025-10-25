@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["init_tracing","kill_all_processes","main","read_json","run"],"static":["ALLOC","malloc_conf"],"struct":["ClientOptions","DatabaseToolJob","Job"]};
