@@ -426,7 +426,7 @@ where
                 assert!(!view.set.contains(&42).await?);
             }
             if config.with_collection {
-                let subview = view.collection.load_entry_or_insert("hola").await?;
+                let subview = view.collection.load_entry_mut("hola").await?;
                 assert_eq!(subview.read(0..10).await?, Vec::<u32>::new());
                 let subview = view.collection2.load_entry_mut("ciao").await?;
                 let subsubview = subview.load_entry_mut("!").await?;
@@ -597,7 +597,7 @@ where
         {
             let mut view = store.load(1).await?;
             if config.with_collection {
-                let subview = view.collection.load_entry_or_insert("hola").await?;
+                let subview = view.collection.load_entry_mut("hola").await?;
                 assert_eq!(subview.read(0..10).await?, Vec::<u32>::new());
             }
             if config.with_queue {
