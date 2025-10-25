@@ -21,8 +21,11 @@ echo "NOTE: The process must be actively using CPU for samples to be collected."
 echo "      If profiling an idle server, generate load during this time."
 echo ""
 
-# Profile using perf (works without kernel headers)
-perf record -F 99 -p $PID -g -o $PERF_DATA -- sleep $DURATION
+perf record -F 99 -p $PID -g -o $PERF_DATA &
+PERF_PID=$!
+sleep $DURATION
+kill -INT $PERF_PID 2>/dev/null
+wait $PERF_PID
 
 if [ $? -ne 0 ]; then
     echo "ERROR: perf record failed. The process may have exited or perf may not have permissions."
@@ -32,7 +35,6 @@ fi
 echo "Perf data: $PERF_DATA"
 
 echo "Converting to folded format..."
-# Convert perf data to folded format
 perf script -i $PERF_DATA | stackcollapse-perf > $FOLDED_FILE
 
 if [ ! -s "$FOLDED_FILE" ]; then
@@ -47,7 +49,6 @@ fi
 echo "Folded output: $FOLDED_FILE"
 
 echo "Generating flamegraph..."
-# Generate flamegraph
 flamegraph $FOLDED_FILE > $SVG_FILE
 echo "SVG output: $SVG_FILE"
 
