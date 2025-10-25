@@ -41,11 +41,10 @@ use linera_rpc::{
 };
 use linera_sdk::linera_base_types::Blob;
 use linera_service::{
-    storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig},
+    storage::{CommonStorageOptions, Runnable, StorageConfig},
     util,
 };
-use linera_storage::{DbStorage, ResultReadCertificates, Storage, WallClock};
-use linera_views::store::{KeyValueDatabase, KeyValueStore};
+use linera_storage::{ResultReadCertificates, Storage};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
@@ -494,32 +493,6 @@ fn main() -> Result<()> {
     runtime.enable_all().build()?.block_on(options.run())
 }
 
-struct InitialMigration;
-
-#[async_trait]
-impl RunnableWithStore for InitialMigration {
-    type Output = ();
-
-    async fn run<D>(
-        self,
-        config: D::Config,
-        namespace: String,
-    ) -> Result<Self::Output, anyhow::Error>
-    where
-        D: KeyValueDatabase + Clone + Send + Sync + 'static,
-        D::Store: KeyValueStore + Clone + Send + Sync + 'static,
-        D::Error: Send + Sync,
-    {
-        if D::exists(&config, &namespace).await? {
-            let wasm_runtime = None;
-            let storage =
-                DbStorage::<D, WallClock>::connect(&config, &namespace, wasm_runtime).await?;
-            storage.migrate_if_needed(false).await?;
-        }
-        Ok(())
-    }
-}
-
 impl ProxyOptions {
     async fn run(&self) -> Result<()> {
         let server_config: ValidatorServerConfig =
@@ -533,10 +506,6 @@ impl ProxyOptions {
         let store_config = self
             .storage_config
             .add_common_storage_options(&self.common_storage_options)?;
-        store_config
-            .clone()
-            .run_with_store(InitialMigration)
-            .await?;
         store_config
             .run_with_storage(None, ProxyContext::from_options(self)?)
             .boxed()

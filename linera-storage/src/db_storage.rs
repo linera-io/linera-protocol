@@ -1248,7 +1248,6 @@ where
         &self,
         first_byte: &u8,
         base_keys: Vec<Vec<u8>>,
-        delete_after_migration: bool,
     ) -> Result<(), ViewError> {
         tracing::info!(
             "migrate_key_set with first_byte={first_byte} for |base_keys|={}",
@@ -1275,18 +1274,16 @@ where
             }
             self.write_batch(batch).await?;
             // Now delete the keys
-            if delete_after_migration {
-                let mut batch = Batch::new();
-                for key in chunk_base_keys {
-                    batch.delete_key(key.to_vec());
-                }
-                store.write_batch(batch).await?;
+            let mut batch = Batch::new();
+            for key in chunk_base_keys {
+                batch.delete_key(key.to_vec());
             }
+            store.write_batch(batch).await?;
         }
         Ok(())
     }
 
-    async fn migrate_0_to_1(&self, delete_after_migration: bool) -> Result<(), ViewError> {
+    async fn migrate_0_to_1(&self) -> Result<(), ViewError> {
         for first_byte in MOVABLE_KEYS_0_1 {
             let store = self.database.open_shared(&[])?;
             let keys = store.find_keys_by_prefix(&[*first_byte]).await?;
@@ -1298,14 +1295,11 @@ where
                     base_key
                 })
                 .collect::<Vec<Vec<u8>>>();
-            self.migrate_key_set(first_byte, base_keys, delete_after_migration)
-                .await?;
-            if delete_after_migration {
-                // Some keys can be left in the value-splitting.
-                let mut batch = Batch::new();
-                batch.delete_key_prefix(vec![*first_byte]);
-                store.write_batch(batch).await?;
-            }
+            self.migrate_key_set(first_byte, base_keys).await?;
+            // Some keys can be left in the value-splitting.
+            let mut batch = Batch::new();
+            batch.delete_key_prefix(vec![*first_byte]);
+            store.write_batch(batch).await?;
         }
         Ok(())
     }
@@ -1324,10 +1318,10 @@ where
         Ok(store.write_batch(batch).await?)
     }
 
-    pub async fn migrate_if_needed(&self, delete_after_migration: bool) -> Result<(), ViewError> {
+    pub async fn migrate_if_needed(&self) -> Result<(), ViewError> {
         let schema = self.get_database_schema().await?;
         if schema == SchemaDescription::Version0SingleBlobPartition {
-            self.migrate_0_to_1(delete_after_migration).await?;
+            self.migrate_0_to_1().await?;
         }
         self.write_database_schema(&SchemaDescription::Version1MultiBlobPartition)
             .await?;

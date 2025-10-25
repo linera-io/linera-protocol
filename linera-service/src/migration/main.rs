@@ -3,9 +3,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use linera_service::{
-    storage::{CommonStorageOptions, RunnableWithStore, StorageConfig},
-};
+use linera_service::storage::{CommonStorageOptions, RunnableWithStore, StorageConfig};
 use linera_storage::{DbStorage, WallClock};
 use linera_views::store::{KeyValueDatabase, KeyValueStore};
 
@@ -54,7 +52,7 @@ impl RunnableWithStore for InitialMigration {
             let wasm_runtime = None;
             let storage =
                 DbStorage::<D, WallClock>::connect(&config, &namespace, wasm_runtime).await?;
-            storage.migrate_if_needed(false).await?;
+            storage.migrate_if_needed().await?;
         }
         Ok(())
     }
@@ -65,9 +63,7 @@ impl MigrationOptions {
         let store_config = self
             .storage_config
             .add_common_storage_options(&self.common_storage_options)?;
-        store_config
-            .run_with_store(InitialMigration)
-            .await?;
+        store_config.run_with_store(InitialMigration).await?;
         Ok(())
     }
 }
