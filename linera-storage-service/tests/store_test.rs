@@ -9,7 +9,6 @@ use linera_storage_service::{
 };
 use linera_views::{
     batch::Batch,
-    random::generate_test_namespace,
     store::{TestKeyValueDatabase as _, KeyValueDatabase as _, ReadableKeyValueStore as _, WritableKeyValueStore as _},
     test_utils::{
         get_random_byte_vector, get_random_test_scenarios, namespace_admin_test,
@@ -66,9 +65,7 @@ async fn test_storage_service_big_raw_write() -> Result<()> {
 
 #[tokio::test]
 async fn test_storage_service_open_shared() -> Result<()> {
-    let config = StorageServiceDatabase::new_test_config().await?;
-    let namespace = generate_test_namespace();
-    let database = StorageServiceDatabase::maybe_create_and_connect(&config, &namespace).await?;
+    let database = StorageServiceDatabase::connect_test_namespace().await?;
     let store1 = database.open_shared(&[2, 3, 4, 5])?;
     let mut batch = Batch::new();
     batch.put_key_value_bytes(vec![6, 7], vec![123, 135]);
