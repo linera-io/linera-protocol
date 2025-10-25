@@ -514,7 +514,7 @@ impl RunnableWithStore for InitialMigration {
             let wasm_runtime = None;
             let storage =
                 DbStorage::<D, WallClock>::connect(&config, &namespace, wasm_runtime).await?;
-            storage.migrate_if_needed().await?;
+            storage.migrate_if_needed(false).await?;
         }
         Ok(())
     }
