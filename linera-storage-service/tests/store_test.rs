@@ -4,12 +4,13 @@
 #![cfg(feature = "storage-service")]
 
 use anyhow::Result;
-use linera_storage_service::{
-    client::{StorageServiceDatabase, StorageServiceDatabaseInternal},
-};
+use linera_storage_service::client::{StorageServiceDatabase, StorageServiceDatabaseInternal};
 use linera_views::{
     batch::Batch,
-    store::{TestKeyValueDatabase as _, KeyValueDatabase as _, ReadableKeyValueStore as _, WritableKeyValueStore as _},
+    store::{
+        KeyValueDatabase as _, ReadableKeyValueStore as _, TestKeyValueDatabase as _,
+        WritableKeyValueStore as _,
+    },
     test_utils::{
         get_random_byte_vector, get_random_test_scenarios, namespace_admin_test,
         root_key_admin_test, run_reads, run_test_batch_from_blank, run_writes_from_blank,
@@ -76,4 +77,3 @@ async fn test_storage_service_open_shared() -> Result<()> {
     assert_eq!(key_values.len(), 0);
     Ok(())
 }
-
