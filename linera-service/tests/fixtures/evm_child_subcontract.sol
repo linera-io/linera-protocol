@@ -6,7 +6,7 @@
 contract Counter {
     uint256 public count;
 
-    constructor(uint256 _initialValue) {
+    constructor(uint256 _initialValue) payable {
         count = _initialValue;
     }
 
@@ -23,8 +23,11 @@ contract Counter {
 contract CounterFactory {
     Counter[] public counters;
 
+    constructor() payable {
+    }
+
     function createCounter(uint256 initialValue) public returns (address) {
-        Counter newCounter = new Counter(initialValue);
+        Counter newCounter = new Counter{value: 1000000000000000000}(initialValue);
         counters.push(newCounter);
         return address(newCounter);
     }
