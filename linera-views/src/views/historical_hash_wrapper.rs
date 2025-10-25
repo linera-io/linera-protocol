@@ -485,24 +485,32 @@ mod tests {
 
     #[tokio::test]
     async fn test_historically_hashable_view_sequential_modifications() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut view =
-            HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
+        async fn get_hash(values: &[u32]) -> Result<HasherOutput, ViewError> {
+            let context = MemoryContext::new_for_testing(());
+            let mut view =
+                HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
-        let mut previous_hash = view.historical_hash().await?;
-        let values = [10, 20, 30, 40, 50];
-
-        for &value in &values {
-            view.set(value);
-            let mut batch = Batch::new();
-            view.flush(&mut batch)?;
-            context.store().write_batch(batch).await?;
-
-            let current_hash = view.historical_hash().await?;
-            assert_ne!(previous_hash, current_hash);
-            previous_hash = current_hash;
+            let mut previous_hash = view.historical_hash().await?;
+            for &value in values {
+                view.set(value);
+                if value % 2 == 0 {
+                    // Immediately save after odd values.
+                    let mut batch = Batch::new();
+                    view.flush(&mut batch)?;
+                    context.store().write_batch(batch).await?;
+                }
+                let current_hash = view.historical_hash().await?;
+                assert_ne!(previous_hash, current_hash);
+                previous_hash = current_hash;
+            }
+            Ok(previous_hash)
         }
 
+        let h1 = get_hash(&[10, 20, 30, 40, 50]).await?;
+        let h2 = get_hash(&[20, 30, 40, 50]).await?;
+        let h3 = get_hash(&[20, 21, 30, 40, 50]).await?;
+        assert_ne!(h1, h2);
+        assert_eq!(h2, h3);
         Ok(())
     }
 
