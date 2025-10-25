@@ -49,6 +49,28 @@ spec:
         effect: NoSchedule
       {{- end }}
       initContainers:
+        - name: linera-exporter-initializer
+          image: {{ .Values.indexer.image }}
+          imagePullPolicy: {{ .Values.indexer.imagePullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              while true; do
+                ./linera storage check-existence --storage "{{ .Values.storage }}"
+                status=$?
+                if [ "$status" -eq 0 ]; then
+                  echo "Database already exists, no need to initialize."
+                  exit 0
+                else
+                  if [ "$status" -eq 1 ]; then
+                    echo "Database does not exist, retrying in 5 seconds..."
+                  else
+                    echo "An unexpected error occurred (status: $status), retrying in 5 seconds..."
+                  fi
+                  sleep 5
+                fi
+              done
         - name: config-selector
           image: busybox
           command:
@@ -62,6 +84,40 @@ spec:
               mountPath: /configmap
             - name: config
               mountPath: /config
+        - name: indexer-readiness-check
+          image: curlimages/curl:latest
+          command:
+            - sh
+            - -c
+            - |
+              # Extract indexer endpoint from config
+              INDEXER_ENDPOINT=$(grep "^endpoint" /config/exporter-config.toml | sed 's/.*"\(.*\)".*/\1/')
+              INDEXER_PORT=$(grep "^port" /config/exporter-config.toml | grep -v "metrics_port" | tail -1 | sed 's/.*= //')
+              INDEXER_TLS=$(grep "^tls" /config/exporter-config.toml | sed 's/.*"\(.*\)".*/\1/')
+
+              if [ "$INDEXER_TLS" = "Tls" ]; then
+                INDEXER_URL="https://${INDEXER_ENDPOINT}:${INDEXER_PORT}"
+              else
+                INDEXER_URL="http://${INDEXER_ENDPOINT}:${INDEXER_PORT}"
+              fi
+
+              echo "Checking indexer readiness at ${INDEXER_URL}..."
+
+              while true; do
+                # Try to connect to the indexer (just check if it's listening)
+                if curl --max-time 5 --connect-timeout 5 --silent --fail --insecure "${INDEXER_URL}" > /dev/null 2>&1 || \
+                   curl --max-time 5 --connect-timeout 5 --silent --head --insecure "${INDEXER_URL}" > /dev/null 2>&1; then
+                  echo "Indexer is reachable, exporter can start."
+                  exit 0
+                else
+                  echo "Indexer not ready yet, retrying in 5 seconds..."
+                  sleep 5
+                fi
+              done
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
       containers:
         - name: linera-block-exporter
           image: {{ .Values.indexer.image }}

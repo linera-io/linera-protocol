@@ -15,9 +15,15 @@ kind = "Logging"
 
 [[destination_config.destinations]]
 kind = "Indexer"
+{{- if .Values.blockExporter.indexerEndpoint }}
+tls = "Tls"
+port = 443
+endpoint = "{{ .Values.blockExporter.indexerEndpoint }}"
+{{- else }}
 tls = "ClearText"
-port = {{ .Values.indexer.port }}
-endpoint = "linera-indexer"
+port = {{ .Values.blockExporter.indexerPort }}
+endpoint = "linera-indexer-{{ .Values.networkName }}.linera-indexer.svc.cluster.local"
+{{- end }}
 
 [limits]
 persistence_period_ms = 299000
