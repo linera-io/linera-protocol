@@ -54,6 +54,7 @@ use crate::{
     },
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
+    historical_hash_wrapper::HistoricallyHashableView,
     store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError},
 };
@@ -2113,12 +2114,22 @@ where
 /// Type wrapping `ByteMapView` while memoizing the hash.
 pub type HashedByteMapView<C, V> = WrappedHashableContainerView<C, ByteMapView<C, V>, HasherOutput>;
 
+/// Wrapper around `ByteMapView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedByteMapView<C, V> = HistoricallyHashableView<C, ByteMapView<C, V>>;
+
 /// Type wrapping `MapView` while memoizing the hash.
 pub type HashedMapView<C, I, V> = WrappedHashableContainerView<C, MapView<C, I, V>, HasherOutput>;
+
+/// Wrapper around `MapView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedMapView<C, I, V> = HistoricallyHashableView<C, MapView<C, I, V>>;
 
 /// Type wrapping `CustomMapView` while memoizing the hash.
 pub type HashedCustomMapView<C, I, V> =
     WrappedHashableContainerView<C, CustomMapView<C, I, V>, HasherOutput>;
+
+/// Wrapper around `CustomMapView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedCustomMapView<C, I, V> =
+    HistoricallyHashableView<C, CustomMapView<C, I, V>>;
 
 #[cfg(with_graphql)]
 mod graphql {
