@@ -122,7 +122,7 @@ pub trait HashableView: View {
     /// collection of values).
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
 
-    /// Same as `hash` but guaranteed to be lock-free.
+    /// Same as `hash` but guaranteed to be wait-free.
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
 }
 
@@ -168,7 +168,7 @@ pub trait CryptoHashView: HashableView {
     /// Computing the hash and attributing the type to it. May require locking.
     async fn crypto_hash(&self) -> Result<CryptoHash, ViewError>;
 
-    /// Same as `crypto_hash` but guaranteed to be lock-free.
+    /// Same as `crypto_hash` but guaranteed to be wait-free.
     async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError>;
 }
 

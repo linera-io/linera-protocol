@@ -59,10 +59,13 @@ enum KeyTag {
 }
 
 impl<C, W> HistoricallyHashableView<C, W> {
-    fn make_hash(&self, batch: &Batch) -> Result<HasherOutput, ViewError> {
+    fn make_hash(
+        stored_hash: Option<HasherOutput>,
+        batch: &Batch,
+    ) -> Result<HasherOutput, ViewError> {
         #[cfg(with_metrics)]
         let _hash_latency = metrics::HISTORICALLY_HASHABLE_VIEW_HASH_RUNTIME.measure_latency();
-        let stored_hash = self.stored_hash.unwrap_or_default();
+        let stored_hash = stored_hash.unwrap_or_default();
         if batch.is_empty() {
             return Ok(stored_hash);
         }
@@ -148,7 +151,7 @@ where
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut inner_batch = Batch::new();
         self.inner.flush(&mut inner_batch)?;
-        let hash = self.make_hash(&inner_batch)?;
+        let hash = Self::make_hash(self.stored_hash, &inner_batch)?;
         batch.operations.extend(inner_batch.operations);
         if self.stored_hash != Some(hash) {
             let mut key = self.inner.context().base_key().bytes.clone();
@@ -184,7 +187,7 @@ where
 }
 
 impl<W: ClonableView> HistoricallyHashableView<W::Context, W> {
-    /// Obtain a hash of the history of the changes in the view.
+    /// Obtains a hash of the history of the changes in the view.
     pub async fn historical_hash(&mut self) -> Result<HasherOutput, ViewError> {
         if let Some(hash) = self.hash {
             return Ok(hash);
@@ -194,7 +197,7 @@ impl<W: ClonableView> HistoricallyHashableView<W::Context, W> {
             let mut inner = self.inner.clone_unchecked()?;
             inner.flush(&mut batch)?;
         }
-        let hash = self.make_hash(&batch)?;
+        let hash = Self::make_hash(self.stored_hash, &batch)?;
         // Remember the hash that we just computed.
         self.hash = Some(hash);
         Ok(hash)
@@ -290,6 +293,9 @@ mod tests {
 
         // Hash should change after modification
         let hash1 = view.historical_hash().await?;
+
+        // Calling `historical_hash` doesn't flush changes.
+        assert!(view.has_pending_changes().await);
         assert_ne!(hash0, hash1);
 
         // Flush and verify hash is stored
