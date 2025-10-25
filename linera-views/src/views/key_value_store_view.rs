@@ -27,6 +27,8 @@ use crate::{
         DeletionSet, HasherOutput, SuffixClosedSetIterator, Update,
     },
     context::Context,
+    hashable_wrapper::WrappedHashableContainerView,
+    historical_hash_wrapper::HistoricallyHashableView,
     map_view::ByteMapView,
     store::ReadableKeyValueStore,
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
@@ -1192,6 +1194,13 @@ impl<C: Context> HashableView for KeyValueStoreView<C> {
         }
     }
 }
+
+/// Type wrapping `KeyValueStoreView` while memoizing the hash.
+pub type HashedKeyValueStoreView<C> =
+    WrappedHashableContainerView<C, KeyValueStoreView<C>, HasherOutput>;
+
+/// Wrapper around `KeyValueStoreView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedKeyValueStoreView<C> = HistoricallyHashableView<C, KeyValueStoreView<C>>;
 
 /// A virtual DB client using a `KeyValueStoreView` as a backend (testing only).
 #[cfg(with_testing)]

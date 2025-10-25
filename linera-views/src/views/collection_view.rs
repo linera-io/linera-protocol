@@ -19,6 +19,7 @@ use crate::{
     common::{CustomSerialize, HasherOutput, SliceExt as _, Update},
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
+    historical_hash_wrapper::HistoricallyHashableView,
     store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
@@ -1687,13 +1688,25 @@ where
 pub type HashedByteCollectionView<C, W> =
     WrappedHashableContainerView<C, ByteCollectionView<C, W>, HasherOutput>;
 
+/// Wrapper around `ByteCollectionView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedByteCollectionView<C, W> =
+    HistoricallyHashableView<C, ByteCollectionView<C, W>>;
+
 /// Type wrapping `CollectionView` while memoizing the hash.
 pub type HashedCollectionView<C, I, W> =
     WrappedHashableContainerView<C, CollectionView<C, I, W>, HasherOutput>;
 
+/// Wrapper around `CollectionView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedCollectionView<C, I, W> =
+    HistoricallyHashableView<C, CollectionView<C, I, W>>;
+
 /// Type wrapping `CustomCollectionView` while memoizing the hash.
 pub type HashedCustomCollectionView<C, I, W> =
     WrappedHashableContainerView<C, CustomCollectionView<C, I, W>, HasherOutput>;
+
+/// Wrapper around `CustomCollectionView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedCustomCollectionView<C, I, W> =
+    HistoricallyHashableView<C, CustomCollectionView<C, I, W>>;
 
 #[cfg(with_graphql)]
 mod graphql {

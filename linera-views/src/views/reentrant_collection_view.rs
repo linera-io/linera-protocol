@@ -20,6 +20,7 @@ use crate::{
     common::{CustomSerialize, HasherOutput, SliceExt as _, Update},
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
+    historical_hash_wrapper::HistoricallyHashableView,
     store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
@@ -2035,6 +2036,18 @@ pub type HashedReentrantCollectionView<C, I, W> =
 /// Type wrapping `ReentrantCustomCollectionView` while memoizing the hash.
 pub type HashedReentrantCustomCollectionView<C, I, W> =
     WrappedHashableContainerView<C, ReentrantCustomCollectionView<C, I, W>, HasherOutput>;
+
+/// Wrapper around `ReentrantByteCollectionView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedReentrantByteCollectionView<C, W> =
+    HistoricallyHashableView<C, ReentrantByteCollectionView<C, W>>;
+
+/// Wrapper around `ReentrantCollectionView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedReentrantCollectionView<C, I, W> =
+    HistoricallyHashableView<C, ReentrantCollectionView<C, I, W>>;
+
+/// Wrapper around `ReentrantCustomCollectionView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedReentrantCustomCollectionView<C, I, W> =
+    HistoricallyHashableView<C, ReentrantCustomCollectionView<C, I, W>>;
 
 #[cfg(with_graphql)]
 mod graphql {
