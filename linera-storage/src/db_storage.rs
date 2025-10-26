@@ -1091,7 +1091,8 @@ where
         config: &Database::Config,
         namespace: &str,
     ) -> Result<Vec<BlobId>, ViewError> {
-        let root_keys = Database::list_root_keys(config, namespace).await?;
+        let database = Database::connect(config, namespace).await?;
+        let root_keys = database.list_root_keys().await?;
         let mut blob_ids = Vec::new();
         for root_key in root_keys {
             if root_key.len() == 1 + BLOB_ID_LENGTH && root_key[0] == BLOB_ID_TAG {
@@ -1114,7 +1115,8 @@ where
         config: &Database::Config,
         namespace: &str,
     ) -> Result<Vec<ChainId>, ViewError> {
-        let root_keys = Database::list_root_keys(config, namespace).await?;
+        let database = Database::connect(config, namespace).await?;
+        let root_keys = database.list_root_keys().await?;
         let mut chain_ids = Vec::new();
         for root_key in root_keys {
             if root_key.len() == 1 + CHAIN_ID_LENGTH && root_key[0] == CHAIN_ID_TAG {
