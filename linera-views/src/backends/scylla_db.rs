@@ -822,7 +822,9 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
     }
 
     async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, ScyllaDbStoreInternalError> {
-        let statement = self.store.session
+        let statement = self
+            .store
+            .session
             .prepare(format!(
                 "SELECT root_key FROM {}.\"{}\" ALLOW FILTERING",
                 KEYSPACE, self.store.namespace

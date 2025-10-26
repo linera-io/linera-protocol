@@ -305,7 +305,8 @@ where
     }
 
     async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let mut root_keys = self.first_database
+        let mut root_keys = self
+            .first_database
             .list_root_keys()
             .await
             .map_err(DualStoreError::First)?;
