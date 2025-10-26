@@ -315,15 +315,101 @@ impl<N: ValidatorNode> RemoteNode<N> {
         validators: &[Self],
         timeout: Duration,
     ) -> Option<Vec<Blob>> {
-        let mut stream = blob_ids
-            .iter()
-            .map(|blob_id| Self::download_blob(validators, *blob_id, timeout))
-            .collect::<FuturesUnordered<_>>();
-        let mut blobs = Vec::new();
-        while let Some(maybe_blob) = stream.next().await {
-            blobs.push(maybe_blob?);
+        use futures::FutureExt as _;
+        use std::collections::{HashMap, VecDeque};
+
+        let validators: HashMap<_, _> = validators.into_iter().map(|v| (&v.public_key, v)).collect();
+
+        // randomize the blobs
+        // assign slots to validators
+        // sort the validators by slots
+        // for each blob, ready a timeout event with no validator
+        // for each event:
+        // - if okay, amend the completed blobs and add a slot to the validator (and cancel)
+        // - if cancel, add a slot to the validator
+        // - if timeout or error, put the task back on the queue (but don't increase slots)
+        // - if validator slots and tasks in queue, assign task to validator and start new task and timeout
+        // if incomplete, return None, else return all blobs
+
+        enum Event {
+            Complete {
+                node: ValidatorPublicKey,
+                // `None` if the task was canceled (another task already completed the blob).
+                blob: Option<Blob>,
+            },
+            Incomplete {
+                blob_id: BlobId,
+            },
         }
-        Some(blobs)
+
+        let mut events = FuturesUnordered::default();
+        for blob_id in blob_ids {
+            let blob_id = *blob_id;
+            events.push(async move {
+                Event::Incomplete { blob_id }
+            }.boxed_local());
+        }
+
+        let num_slots = blob_ids.len().div_ceil(validators.len());
+        let mut slots: HashMap<_, _> = validators.keys().map(|v| (**v, num_slots)).collect();
+        let mut remaining_blobs = VecDeque::new();
+        let mut completed_blobs = HashMap::new();
+
+        while let Some(event) = events.next().await {
+            match event {
+                Event::Complete { node, blob } => {
+                    // TODO cancel blob
+                    *slots.entry(node).or_default() += 1;
+
+                    if let Some(blob) = blob {
+                        completed_blobs.insert(blob.id(), blob);
+                    }
+                }
+
+                Event::Incomplete { blob_id } => {
+                    remaining_blobs.push_back(blob_id);
+                }
+            }
+
+            let mut available_validators = slots
+                .iter_mut()
+                .filter(|(_name, slots)| **slots > 0)
+                .collect::<VecDeque<_>>();
+
+            loop {
+                let Some((node, slots)) = available_validators.front_mut() else { break };
+                assert!(**slots > 0);
+                let Some(blob_id) = remaining_blobs.pop_front() else { break };
+                let node = **node;
+                let validator = validators.get(&node).unwrap();
+
+                events.push(async move {
+                    if let Some(blob) = validator.try_download_blob(blob_id).await {
+                        Event::Complete { node, blob: Some(blob) }
+                    } else {
+                        Event::Incomplete { blob_id }
+                    }
+                }.boxed_local());
+
+                events.push(async move {
+                    linera_base::time::timer::sleep(timeout).await;
+                    Event::Incomplete { blob_id }
+                }.boxed_local());
+
+                **slots -= 1;
+                if **slots == 0 { available_validators.pop_front(); }
+            }
+        }
+
+        if !remaining_blobs.is_empty() {
+            None
+        } else {
+            let mut blobs = Vec::new();
+            for blob_id in blob_ids {
+                blobs.push(completed_blobs.remove(blob_id).expect("missing blob"));
+            }
+            Some(blobs)
+        }
     }
 
     /// Checks that requesting these blobs when trying to handle this certificate is legitimate,
