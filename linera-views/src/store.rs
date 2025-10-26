@@ -165,10 +165,7 @@ pub trait KeyValueDatabase: WithError + Sized {
 
     /// Lists the root keys of the namespace.
     /// It is possible that some root keys have no keys.
-    async fn list_root_keys(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, Self::Error>;
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, Self::Error>;
 
     /// Deletes all the existing namespaces.
     fn delete_all(config: &Self::Config) -> impl Future<Output = Result<(), Self::Error>> {

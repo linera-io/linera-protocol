@@ -304,15 +304,14 @@ where
         Ok(namespaces)
     }
 
-    async fn list_root_keys(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let mut root_keys = D1::list_root_keys(&config.first_config, namespace)
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, Self::Error> {
+        let mut root_keys = self.first_database
+            .list_root_keys()
             .await
             .map_err(DualStoreError::First)?;
         root_keys.extend(
-            D2::list_root_keys(&config.second_config, namespace)
+            self.second_database
+                .list_root_keys()
                 .await
                 .map_err(DualStoreError::Second)?,
         );
