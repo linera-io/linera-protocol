@@ -834,6 +834,20 @@ where
         }
     }
     assert_eq!(keys, read_keys);
+
+    // Checking prefix freeness of the
+    let database = D::connect_test_namespace().await.expect("database");
+    let store1 = database.open_shared(&[2, 3, 4, 5]).expect("store1");
+    let mut batch = Batch::new();
+    batch.put_key_value_bytes(vec![6, 7], vec![123, 135]);
+    store1.write_batch(batch).await.expect("write_batch");
+
+    let store2 = database.open_shared(&[]).expect("store2");
+    let key_values = store2
+        .find_key_values_by_prefix(&[2])
+        .await
+        .expect("key_values");
+    assert_eq!(key_values.len(), 0);
 }
 
 /// A store can be in exclusive access where it stores the absence of values
