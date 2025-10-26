@@ -519,7 +519,9 @@ impl KeyValueDatabase for StorageServiceDatabaseInternal {
     }
 
     async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, StorageServiceStoreError> {
-        let query = RequestListRootKeys { namespace: self.namespace.clone() };
+        let query = RequestListRootKeys {
+            namespace: self.namespace.clone(),
+        };
         let request = tonic::Request::new(query);
         let mut client = StorageServiceClient::new(self.channel.clone());
         let response = client.process_list_root_keys(request).make_sync().await?;
