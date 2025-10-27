@@ -301,13 +301,9 @@ impl KeyValueDatabase for IndexedDbDatabase {
             .collect())
     }
 
-    async fn list_root_keys(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, IndexedDbStoreError> {
-        let database = Self::connect(config, namespace).await?;
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, IndexedDbStoreError> {
         let start_key = STORED_ROOT_KEYS_PREFIX.to_vec();
-        let store = database.open_internal(start_key);
+        let store = self.open_internal(start_key);
         store.find_keys_by_prefix(&[]).await
     }
 

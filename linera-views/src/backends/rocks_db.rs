@@ -582,12 +582,9 @@ impl KeyValueDatabase for RocksDbDatabaseInternal {
         Ok(namespaces)
     }
 
-    async fn list_root_keys(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
-        let start_key = vec![STORED_ROOT_KEYS_PREFIX];
-        let store = RocksDbStoreInternal::build(config, namespace, start_key)?;
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
+        let mut store = self.open_shared(&[])?;
+        store.executor.start_key = vec![STORED_ROOT_KEYS_PREFIX];
         store.find_keys_by_prefix(&[]).await
     }
 

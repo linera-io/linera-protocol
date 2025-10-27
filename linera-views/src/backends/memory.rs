@@ -304,14 +304,11 @@ impl KeyValueDatabase for MemoryDatabase {
         Ok(databases.sync_list_all())
     }
 
-    async fn list_root_keys(
-        _config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
         let databases = MEMORY_DATABASES
             .lock()
             .expect("MEMORY_DATABASES lock should not be poisoned");
-        Ok(databases.sync_list_root_keys(namespace))
+        Ok(databases.sync_list_root_keys(&self.namespace))
     }
 
     async fn exists(_config: &Self::Config, namespace: &str) -> Result<bool, MemoryStoreError> {
