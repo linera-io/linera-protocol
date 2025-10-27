@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Clock,
-    db_storage::{DbStorage, DEFAULT_KEY, event_key, MultiPartitionBatch, ONE_KEY, RootKey},
+    db_storage::{DbStorage, DEFAULT_KEY, to_event_key, MultiPartitionBatch, ONE_KEY, RootKey},
 };
 
 #[derive(Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -80,7 +80,7 @@ fn map_base_key(base_key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ViewError> {
         }
         BaseKey::Event(event_id) => {
             let root_key = RootKey::Event(event_id.chain_id).bytes();
-            let key = event_key(&event_id);
+            let key = to_event_key(&event_id);
             Ok((root_key, key))
         }
         BaseKey::BlockExporterState(index) => {
@@ -254,7 +254,7 @@ where
         if &name == "lru caching value splitting rocksdb internal" {
             return self.migrate_client_v0_to_v1().await;
         }
-        if &name == "lru caching value splitting journaling dynamodb internal"
+        if &name == "memory" || &name == "lru caching value splitting journaling dynamodb internal"
             || &name == "lru caching value splitting journaling scylladb internal"
         {
             return self.migrate_storage_v0_to_v1().await;
@@ -310,31 +310,32 @@ mod tests {
     use linera_views::{
         batch::Batch,
         random::make_deterministic_rng,
-        store::{KeyValueStore, TestKeyValueDatabase, KeyValueDatabase, WritableKeyValueStore},
+        store::{KeyValueStore, TestKeyValueDatabase, KeyValueDatabase, ReadableKeyValueStore, WritableKeyValueStore},
         memory::MemoryDatabase,
         ViewError,
     };
     use rand::Rng;
     use test_case::test_case;
 
-    use std::marker::PhantomData;
+    use std::{collections::BTreeMap, marker::PhantomData, ops::Deref};
 
     use crate::{
         DbStorage,
-        migration::BaseKey,
+        db_storage::RestrictedEventId,
+        migration::{BaseKey, DEFAULT_KEY, ONE_KEY, RootKey},
         WallClock,
     };
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Eq, PartialEq)]
     #[allow(clippy::type_complexity)]
     struct StorageState {
-        chain_ids_key_values: Vec<(ChainId, Vec<(Vec<u8>,Vec<u8>)>)>,
-        certificates: Vec<(CryptoHash, Vec<u8>)>,
-        confirmed_blocks: Vec<(CryptoHash, Vec<u8>)>,
-        blobs: Vec<(BlobId, Vec<u8>)>,
-        blob_states: Vec<(BlobId, Vec<u8>)>,
-        events: Vec<(EventId, Vec<u8>)>,
-        block_exporter_states: Vec<(u32, Vec<(Vec<u8>, Vec<u8>)>)>,
+        chain_ids_key_values: BTreeMap<ChainId, Vec<(Vec<u8>,Vec<u8>)>>,
+        certificates: BTreeMap<CryptoHash, Vec<u8>>,
+        confirmed_blocks: BTreeMap<CryptoHash, Vec<u8>>,
+        blobs: BTreeMap<BlobId, Vec<u8>>,
+        blob_states: BTreeMap<BlobId, Vec<u8>>,
+        events: BTreeMap<EventId, Vec<u8>>,
+        block_exporter_states: BTreeMap<u32, Vec<(Vec<u8>, Vec<u8>)>>,
         network_description: Option<Vec<u8>>,
     }
 
@@ -366,6 +367,15 @@ mod tests {
         EventId { chain_id, stream_id, index }
     }
 
+    fn reorder_key_values(key_values: Vec<(Vec<u8>, Vec<u8>)>) -> Vec<(Vec<u8>,Vec<u8>)> {
+        let map = key_values
+            .into_iter()
+            .collect::<BTreeMap<Vec<u8>,Vec<u8>>>();
+        map
+            .into_iter()
+            .collect::<Vec<(Vec<u8>,Vec<u8>)>>()
+    }
+
     fn get_storage_state() -> StorageState {
         let mut rng = make_deterministic_rng();
         let key_size = 10;
@@ -373,7 +383,7 @@ mod tests {
         // 0: the chain states.
         let n_chain_id = 10;
         let n_key = 100;
-        let mut chain_ids_key_values = Vec::new();
+        let mut chain_ids_key_values = BTreeMap::new();
         for _i_chain in 0..n_chain_id {
             let hash = get_hash(&mut rng);
             let chain_id = ChainId(hash);
@@ -383,54 +393,54 @@ mod tests {
                 let value = get_vector(&mut rng, value_size);
                 key_values.push((key, value));
             }
-            chain_ids_key_values.push((chain_id, key_values));
+            chain_ids_key_values.insert(chain_id, reorder_key_values(key_values));
         }
         // 1: the certificates
         let n_certificate = 10;
-        let mut certificates = Vec::new();
+        let mut certificates = BTreeMap::new();
         for _i_certificate in 0..n_certificate {
             let hash = get_hash(&mut rng);
             let value = get_vector(&mut rng, value_size);
-            certificates.push((hash, value));
+            certificates.insert(hash, value);
         }
         // 2: the confirmed blocks
         let n_blocks = 10;
-        let mut confirmed_blocks = Vec::new();
+        let mut confirmed_blocks = BTreeMap::new();
         for _i_block in 0..n_blocks {
             let hash = get_hash(&mut rng);
             let value = get_vector(&mut rng, value_size);
-            confirmed_blocks.push((hash, value));
+            confirmed_blocks.insert(hash, value);
         }
         // 3: the blobs
         let n_blobs = 10;
-        let mut blobs = Vec::new();
+        let mut blobs = BTreeMap::new();
         for _i_blob in 0..n_blobs {
             let hash = get_hash(&mut rng);
             let blob_id = BlobId { blob_type: BlobType::Data, hash };
             let value = get_vector(&mut rng, value_size);
-            blobs.push((blob_id, value));
+            blobs.insert(blob_id, value);
         }
         // 4: the blob states
         let n_blob_states = 10;
-        let mut blob_states = Vec::new();
+        let mut blob_states = BTreeMap::new();
         for _i_blob_state in 0..n_blob_states {
             let hash = get_hash(&mut rng);
             let blob_id = BlobId { blob_type: BlobType::Data, hash };
             let value = get_vector(&mut rng, value_size);
-            blob_states.push((blob_id, value));
+            blob_states.insert(blob_id, value);
         }
         // 5: the events
         let n_events = 10;
-        let mut events = Vec::new();
+        let mut events = BTreeMap::new();
         for _i_event in 0..n_events {
             let event_id = get_event_id(&mut rng);
             let value = get_vector(&mut rng, value_size);
-            events.push((event_id, value));
+            events.insert(event_id, value);
         }
         // 6: the block exports
         let n_block_exports = 10;
         let n_key = 10;
-        let mut block_exporter_states = Vec::new();
+        let mut block_exporter_states = BTreeMap::new();
         for _i_block_export in 0..n_block_exports {
             let index = rng.gen::<u32>();
             let mut key_values = Vec::new();
@@ -439,7 +449,7 @@ mod tests {
                 let value = get_vector(&mut rng, value_size);
                 key_values.push((key, value));
             }
-            block_exporter_states.push((index, key_values));
+            block_exporter_states.insert(index, reorder_key_values(key_values));
         }
         // 7: network description
         let network_description = Some(get_vector(&mut rng, value_size));
@@ -510,6 +520,86 @@ mod tests {
         Ok(())
     }
 
+    async fn read_storage_state_new_schema<D>(database: &D) -> Result<StorageState, ViewError>
+    where
+        D: KeyValueDatabase + Clone + Send + Sync + 'static,
+        D::Store: KeyValueStore + Clone + Send + Sync + 'static,
+        D::Error: Send + Sync,
+    {
+        let mut chain_ids_key_values = BTreeMap::new();
+        let mut certificates = BTreeMap::new();
+        let mut confirmed_blocks = BTreeMap::new();
+        let mut blobs = BTreeMap::new();
+        let mut blob_states = BTreeMap::new();
+        let mut events = BTreeMap::new();
+        let mut block_exporter_states = BTreeMap::new();
+        let mut network_description = None;
+        let bcs_root_keys = database.list_root_keys().await?;
+        for bcs_root_key in bcs_root_keys {
+            let root_key = bcs::from_bytes(&bcs_root_key)?;
+            match root_key {
+                RootKey::ChainState(chain_id) => {
+                    let store = database.open_shared(&bcs_root_key)?;
+                    let key_values = store.find_key_values_by_prefix(&[]).await?;
+                    chain_ids_key_values.insert(chain_id, key_values);
+                }
+                RootKey::CryptoHash(hash) => {
+                    let store = database.open_shared(&bcs_root_key)?;
+                    let value = store.read_value_bytes(DEFAULT_KEY).await?;
+                    if let Some(value) = value {
+                        certificates.insert(hash, value);
+                    }
+                    let value = store.read_value_bytes(ONE_KEY).await?;
+                    if let Some(value) = value {
+                        confirmed_blocks.insert(hash, value);
+                    }
+                }
+                RootKey::Blob(blob_id) => {
+                    let store = database.open_shared(&bcs_root_key)?;
+                    let value = store.read_value_bytes(DEFAULT_KEY).await?;
+                    if let Some(value) = value {
+                        blobs.insert(blob_id, value);
+                    }
+                    let value = store.read_value_bytes(ONE_KEY).await?;
+                    if let Some(value) = value {
+                        blob_states.insert(blob_id, value);
+                    }
+                }
+                RootKey::Event(chain_id) => {
+                    let store = database.open_shared(&bcs_root_key)?;
+                    let key_values = store.find_key_values_by_prefix(&[]).await?;
+                    for (key, value) in key_values {
+                        let restricted_event_id = bcs::from_bytes::<RestrictedEventId>(&key)?;
+                        let event_id = EventId { chain_id, stream_id: restricted_event_id.stream_id, index: restricted_event_id.index };
+                        events.insert(event_id, value);
+                    }
+                }
+                RootKey::BlockExporterState(index) => {
+                    let store = database.open_shared(&bcs_root_key)?;
+                    let key_values = store.find_key_values_by_prefix(&[]).await?;
+                    block_exporter_states.insert(index, key_values);
+                }
+                RootKey::NetworkDescription => {
+                    let store = database.open_shared(&bcs_root_key)?;
+                    let value = store.read_value_bytes(DEFAULT_KEY).await?;
+                    if let Some(value) = value {
+                        network_description = Some(value);
+                    }
+                }
+            }
+        }
+        Ok(StorageState {
+            chain_ids_key_values,
+            certificates,
+            confirmed_blocks,
+            blobs,
+            blob_states,
+            events,
+            block_exporter_states,
+            network_description,
+        })
+    }
+
     async fn test_storage_migration<D>() -> Result<(), ViewError>
     where
         D: TestKeyValueDatabase + Clone + Send + Sync + 'static,
@@ -518,9 +608,11 @@ mod tests {
     {
         let database = D::connect_test_namespace().await?;
         let storage_state = get_storage_state();
-        write_storage_state_old_schema(&database, storage_state).await?;
+        write_storage_state_old_schema(&database, storage_state.clone()).await?;
         let storage = DbStorage::<D, WallClock>::new(database, None, WallClock);
         storage.migrate_if_needed().await?;
+        let read_storage_state = read_storage_state_new_schema(storage.database.deref()).await?;
+        assert_eq!(read_storage_state, storage_state);
         Ok(())
     }
 

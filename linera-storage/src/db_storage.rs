@@ -296,7 +296,7 @@ impl MultiPartitionBatch {
     fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
-        let key = event_key(&event_id);
+        let key = to_event_key(&event_id);
         let root_key = RootKey::Event(event_id.chain_id).bytes();
         self.put_key_value_bytes(root_key, key, value);
         Ok(())
@@ -343,10 +343,18 @@ impl RootKey {
     }
 }
 
-pub(crate) fn event_key(event_id: &EventId) -> Vec<u8> {
-    let mut key = bcs::to_bytes(&event_id.stream_id).unwrap();
-    key.extend(bcs::to_bytes(&event_id.index).unwrap());
-    key
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct RestrictedEventId {
+    pub stream_id: StreamId,
+    pub index: u32,
+}
+
+pub(crate) fn to_event_key(event_id: &EventId) -> Vec<u8> {
+    let restricted_event_id = RestrictedEventId {
+        stream_id: event_id.stream_id.clone(),
+        index: event_id.index,
+    };
+    bcs::to_bytes(&restricted_event_id).unwrap()
 }
 
 fn is_chain_state(root_key: &[u8]) -> bool {
@@ -372,7 +380,7 @@ mod tests {
     };
 
     use crate::db_storage::{
-        event_key, RootKey, BLOB_ID_LENGTH, BLOB_ID_TAG, CHAIN_ID_LENGTH, CHAIN_ID_TAG,
+        to_event_key, RootKey, BLOB_ID_LENGTH, BLOB_ID_TAG, CHAIN_ID_LENGTH, CHAIN_ID_TAG,
     };
 
     // Several functionalities of the storage rely on the way that the serialization
@@ -424,7 +432,7 @@ mod tests {
             stream_id,
             index,
         };
-        let key = event_key(&event_id);
+        let key = to_event_key(&event_id);
         assert!(key.starts_with(&prefix));
     }
 }
@@ -887,7 +895,7 @@ where
 
     #[instrument(skip_all, fields(event_id = ?event_id))]
     async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
-        let event_key = event_key(&event_id);
+        let event_key = to_event_key(&event_id);
         let root_key = RootKey::Event(event_id.chain_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let event = store.read_value_bytes(&event_key).await?;
@@ -898,7 +906,7 @@ where
 
     #[instrument(skip_all, fields(event_id = ?event_id))]
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
-        let event_key = event_key(&event_id);
+        let event_key = to_event_key(&event_id);
         let root_key = RootKey::Event(event_id.chain_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let exists = store.contains_key(&event_key).await?;

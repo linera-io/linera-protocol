@@ -604,6 +604,8 @@ impl std::str::FromStr for StreamId {
     Debug,
     PartialEq,
     Eq,
+    Ord,
+    PartialOrd,
     Hash,
     Clone,
     Serialize,
