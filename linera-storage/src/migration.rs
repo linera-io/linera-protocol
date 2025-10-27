@@ -322,7 +322,7 @@ mod tests {
     use crate::{
         DbStorage,
         db_storage::RestrictedEventId,
-        migration::{BaseKey, DEFAULT_KEY, ONE_KEY, RootKey, SCHEMA_ROOT_KEY},
+        migration::{BaseKey, BASE_KEY_BLOCK_EXPORTER, DEFAULT_KEY, ONE_KEY, RootKey, SCHEMA_ROOT_KEY},
         WallClock,
     };
 
@@ -381,7 +381,7 @@ mod tests {
         let key_size = 10;
         let value_size = 100;
         // 0: the chain states.
-        let n_chain_id = 0;
+        let n_chain_id = 1;
         let n_key = 1;
         let mut chain_ids_key_values = BTreeMap::new();
         for _i_chain in 0..n_chain_id {
@@ -438,7 +438,7 @@ mod tests {
             events.insert(event_id, value);
         }
         // 6: the block exports
-        let n_block_exports = 2;
+        let n_block_exports = 0;
         let n_key = 2;
         let mut block_exporter_states = BTreeMap::new();
         for _i_block_export in 0..n_block_exports {
@@ -525,9 +525,15 @@ mod tests {
 
     fn is_valid_root_key(root_key: &[u8]) -> bool {
         if root_key.is_empty() {
+            // It corresponds to the &[]
             return false;
         }
         if root_key == SCHEMA_ROOT_KEY {
+            // It corresponds to the key of the schema database.
+            return false;
+        }
+        if root_key[0] == BASE_KEY_BLOCK_EXPORTER {
+            // It corresponds to a block exporter root key.
             return false;
         }
         true
