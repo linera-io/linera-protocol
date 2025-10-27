@@ -1249,7 +1249,10 @@ where
     C: Clock + Clone + Send + Sync + 'static,
     Database::Error: Send + Sync,
 {
-    async fn migrate_single_block_export(&self, root_base_key: Vec<u8>) -> Result<(), ViewError> {
+    async fn migrate_single_block_export_partition(
+        &self,
+        root_base_key: Vec<u8>,
+    ) -> Result<(), ViewError> {
         let store_read = self.database.open_exclusive(&root_base_key)?;
         let key_values = store_read.find_key_values_by_prefix(&[]).await?;
         let root_key = map_base_key(&root_base_key)?.0;
@@ -1265,11 +1268,11 @@ where
         Ok(())
     }
 
-    async fn migrate_all_block_exports(&self) -> Result<(), ViewError> {
+    async fn migrate_all_block_exports_partitions(&self) -> Result<(), ViewError> {
         let root_keys = self.database.list_root_keys().await?;
         for root_key in root_keys {
             if !root_key.is_empty() && root_key[0] == BASE_KEY_BLOCK_EXPORTER {
-                self.migrate_single_block_export(root_key).await?;
+                self.migrate_single_block_export_partition(root_key).await?;
             }
         }
         Ok(())
@@ -1278,17 +1281,25 @@ where
     async fn migrate_storage_shared_partition(
         &self,
         first_byte: &u8,
-        base_keys: Vec<Vec<u8>>,
+        keys: Vec<Vec<u8>>,
     ) -> Result<(), ViewError> {
         tracing::info!(
             "migrate_storage_shared_partition with first_byte={first_byte} for |base_keys|={}",
-            base_keys.len()
+            keys.len()
         );
-        for (index, chunk_base_keys) in base_keys.chunks(BLOCK_KEY_SIZE).enumerate() {
+        for (index, chunk_keys) in keys.chunks(BLOCK_KEY_SIZE).enumerate() {
             tracing::info!(
                 "index={index} processing chunk of size {}",
-                chunk_base_keys.len()
+                chunk_keys.len()
             );
+            let chunk_base_keys = chunk_keys
+                .iter()
+                .map(|key| {
+                    let mut base_key = vec![*first_byte];
+                    base_key.extend(key);
+                    base_key
+                })
+                .collect::<Vec<Vec<u8>>>();
             let store = self.database.open_shared(&[])?;
             let values = store
                 .read_multi_values_bytes(chunk_base_keys.to_vec())
@@ -1314,17 +1325,26 @@ where
     async fn migrate_client_shared_partition(
         &self,
         first_byte: &u8,
-        base_keys: Vec<Vec<u8>>,
+        keys: Vec<Vec<u8>>,
     ) -> Result<(), ViewError> {
         tracing::info!(
             "migrate_storage_shared_partition with first_byte={first_byte} for |base_keys|={}",
-            base_keys.len()
+            keys.len()
         );
-        for (index, chunk_base_keys) in base_keys.chunks(BLOCK_KEY_SIZE).enumerate() {
+        for (index, chunk_keys) in keys.chunks(BLOCK_KEY_SIZE).enumerate() {
             tracing::info!(
                 "index={index} processing chunk of size {}",
-                chunk_base_keys.len()
+                chunk_keys.len()
             );
+            // full_keys, since they are of the form root_key + key
+            let chunk_base_keys = chunk_keys
+                .iter()
+                .map(|key| {
+                    let mut base_key = vec![*first_byte];
+                    base_key.extend(key);
+                    base_key
+                })
+                .collect::<Vec<Vec<u8>>>();
             let store = self.database.open_shared(&[])?;
             let values = store
                 .read_multi_values_bytes(chunk_base_keys.to_vec())
@@ -1354,15 +1374,7 @@ where
         for first_byte in MOVABLE_KEYS_0_1 {
             let store = self.database.open_shared(&[])?;
             let keys = store.find_keys_by_prefix(&[*first_byte]).await?;
-            let base_keys = keys
-                .into_iter()
-                .map(|key| {
-                    let mut base_key = vec![*first_byte];
-                    base_key.extend(key);
-                    base_key
-                })
-                .collect::<Vec<Vec<u8>>>();
-            self.migrate_storage_shared_partition(first_byte, base_keys)
+            self.migrate_storage_shared_partition(first_byte, keys)
                 .await?;
             // Some keys can be left in the value-splitting.
             let mut batch = Batch::new();
@@ -1376,22 +1388,13 @@ where
         for first_byte in MOVABLE_KEYS_0_1 {
             let store = self.database.open_shared(&[])?;
             let keys = store.find_keys_by_prefix(&[*first_byte]).await?;
-            // full_keys, since they are of the form root_key + key
-            let full_keys = keys
-                .into_iter()
-                .map(|key| {
-                    let mut base_key = vec![*first_byte];
-                    base_key.extend(key);
-                    base_key
-                })
-                .collect::<Vec<Vec<u8>>>();
-            self.migrate_client_shared_partition(first_byte, full_keys)
+            self.migrate_client_shared_partition(first_byte, keys)
                 .await?;
         }
         Ok(())
     }
     async fn migrate_v0_to_v1(&self) -> Result<(), ViewError> {
-        self.migrate_all_block_exports().await?;
+        self.migrate_all_block_exports_partitions().await?;
         let name = Database::get_name();
         if &name == "lru caching value splitting rocksdb internal" {
             return self.migrate_client_v0_to_v1().await;
