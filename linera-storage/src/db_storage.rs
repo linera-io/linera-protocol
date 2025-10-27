@@ -1172,9 +1172,9 @@ enum SchemaDescription {
     /// Version 0, all the blobs, certificates, confirmed blocks, events and network description on the same partition.
     /// This is marked as default since it does not exist in the old scheme and would be obtained from unwrap_or_default
     #[default]
-    Version0SingleBlobPartition,
+    Version0,
     /// Version 1, spreading by ChainId, CryptoHash, and BlobId.
-    Version1MultiBlobPartition,
+    Version1,
 }
 
 /// The key containing the schema of the storage.
@@ -1192,13 +1192,12 @@ enum BaseKey {
     NetworkDescription,
 }
 
-const BASE_KEY_BLOCK_EXPORTER: usize = 6;
+const BASE_KEY_BLOCK_EXPORTER: u8 = 6;
 
 const UNUSED_EMPTY_KEY: &[u8] = &[];
 // The keys corresponding to `ChainState` are not moved.
 // The keys in `BlockExporterState` are moved, but belong to separate root keys.
 const MOVABLE_KEYS_0_1: &[u8] = &[1, 2, 3, 4, 5, 7];
-
 
 /// The total number of keys being migrated in a block.
 /// we use chunks to avoid OOM
@@ -1251,7 +1250,7 @@ where
     Database::Error: Send + Sync,
 {
     async fn migrate_single_block_export(&self, root_base_key: Vec<u8>) -> Result<(), ViewError> {
-        let store_read = self.database,open_exclusive(&root_base_key)?;
+        let store_read = self.database.open_exclusive(&root_base_key)?;
         let key_values = store_read.find_key_values_by_prefix(&[]).await?;
         let root_key = map_base_key(&root_base_key)?.0;
         let mut batch_write = Batch::new();
@@ -1261,9 +1260,9 @@ where
             batch_delete.delete_key(key);
         }
         let store_write = self.database.open_exclusive(&root_key)?;
-        store_write.write_batch(batch_write)?;
-        store_read.write_batch(batch_delete)?;
-        OK(())
+        store_write.write_batch(batch_write).await?;
+        store_read.write_batch(batch_delete).await?;
+        Ok(())
     }
 
     async fn migrate_all_block_exports(&self) -> Result<(), ViewError> {
@@ -1276,13 +1275,49 @@ where
         Ok(())
     }
 
-    async fn migrate_storage_key_set(
+    async fn migrate_storage_shared_partition(
         &self,
         first_byte: &u8,
         base_keys: Vec<Vec<u8>>,
     ) -> Result<(), ViewError> {
         tracing::info!(
-            "migrate_storage_key_set with first_byte={first_byte} for |base_keys|={}",
+            "migrate_storage_shared_partition with first_byte={first_byte} for |base_keys|={}",
+            base_keys.len()
+        );
+        for (index, chunk_base_keys) in base_keys.chunks(BLOCK_KEY_SIZE).enumerate() {
+            tracing::info!(
+                "index={index} processing chunk of size {}",
+                chunk_base_keys.len()
+            );
+            let store = self.database.open_shared(&[])?;
+            let values = store
+                .read_multi_values_bytes(chunk_base_keys.to_vec())
+                .await?;
+            let mut batch = MultiPartitionBatch::new();
+            for (base_key, value) in chunk_base_keys.iter().zip(values) {
+                let value = value.ok_or(ViewError::MissingEntries)?;
+                tracing::info!("base_key={base_key:?} value={value:?}");
+                let (root_key, key) = map_base_key(base_key)?;
+                batch.put_key_value_bytes(root_key, key, value);
+            }
+            self.write_batch(batch).await?;
+            // Now delete the keys
+            let mut batch = Batch::new();
+            for key in chunk_base_keys {
+                batch.delete_key(key.to_vec());
+            }
+            store.write_batch(batch).await?;
+        }
+        Ok(())
+    }
+
+    async fn migrate_client_shared_partition(
+        &self,
+        first_byte: &u8,
+        base_keys: Vec<Vec<u8>>,
+    ) -> Result<(), ViewError> {
+        tracing::info!(
+            "migrate_storage_shared_partition with first_byte={first_byte} for |base_keys|={}",
             base_keys.len()
         );
         for (index, chunk_base_keys) in base_keys.chunks(BLOCK_KEY_SIZE).enumerate() {
@@ -1315,46 +1350,7 @@ where
         Ok(())
     }
 
-    async fn migrate_client_key_set(
-        &self,
-        first_byte: &u8,
-        base_keys: Vec<Vec<u8>>,
-    ) -> Result<(), ViewError> {
-        tracing::info!(
-            "migrate_storage_key_set with first_byte={first_byte} for |base_keys|={}",
-            base_keys.len()
-        );
-        for (index, chunk_base_keys) in base_keys.chunks(BLOCK_KEY_SIZE).enumerate() {
-            tracing::info!(
-                "index={index} processing chunk of size {}",
-                chunk_base_keys.len()
-            );
-            let store = self.database.open_shared(&[])?;
-            let values = store
-                .read_multi_values_bytes(chunk_base_keys.to_vec())
-                .await?;
-            let values = values
-                .into_iter()
-                .map(|value| value.ok_or(ViewError::MissingEntries))
-                .collect::<Result<Vec<Vec<u8>>, ViewError>>()?;
-            let mut batch = MultiPartitionBatch::new();
-            for (base_key, value) in chunk_base_keys.iter().zip(values) {
-                tracing::info!("base_key={base_key:?} value={value:?}");
-                let (root_key, key) = map_base_key(base_key)?;
-                batch.put_key_value_bytes(root_key, key, value);
-            }
-            self.write_batch(batch).await?;
-            // Now delete the keys
-            let mut batch = Batch::new();
-            for key in chunk_base_keys {
-                batch.delete_key(key.to_vec());
-            }
-            store.write_batch(batch).await?;
-        }
-        Ok(())
-    }
-
-    async fn migrate_storage_0_to_1(&self) -> Result<(), ViewError> {
+    async fn migrate_storage_v0_to_v1(&self) -> Result<(), ViewError> {
         for first_byte in MOVABLE_KEYS_0_1 {
             let store = self.database.open_shared(&[])?;
             let keys = store.find_keys_by_prefix(&[*first_byte]).await?;
@@ -1366,7 +1362,8 @@ where
                     base_key
                 })
                 .collect::<Vec<Vec<u8>>>();
-            self.migrate_storage_key_set(first_byte, base_keys).await?;
+            self.migrate_storage_shared_partition(first_byte, base_keys)
+                .await?;
             // Some keys can be left in the value-splitting.
             let mut batch = Batch::new();
             batch.delete_key_prefix(vec![*first_byte]);
@@ -1375,7 +1372,7 @@ where
         Ok(())
     }
 
-    async fn migrate_client_0_to_1(&self) -> Result<(), ViewError> {
+    async fn migrate_client_v0_to_v1(&self) -> Result<(), ViewError> {
         for first_byte in MOVABLE_KEYS_0_1 {
             let store = self.database.open_shared(&[])?;
             let keys = store.find_keys_by_prefix(&[*first_byte]).await?;
@@ -1388,18 +1385,21 @@ where
                     base_key
                 })
                 .collect::<Vec<Vec<u8>>>();
-            self.migrate_client_key_set(first_byte, full_keys).await?;
+            self.migrate_client_shared_partition(first_byte, full_keys)
+                .await?;
         }
         Ok(())
     }
-    async fn migrate_0_to_1(&self) -> Result<(), ViewError> {
+    async fn migrate_v0_to_v1(&self) -> Result<(), ViewError> {
         self.migrate_all_block_exports().await?;
         let name = Database::get_name();
         if &name == "lru caching value splitting rocksdb internal" {
-            return self.migrate_client_0_to_1().await;
+            return self.migrate_client_v0_to_v1().await;
         }
-        if &name == "lru caching value splitting journaling dynamodb internal" || &name == "lru caching value splitting journaling scylladb internal" {
-            return self.migrate_storage_0_to_1().await;
+        if &name == "lru caching value splitting journaling dynamodb internal"
+            || &name == "lru caching value splitting journaling scylladb internal"
+        {
+            return self.migrate_storage_v0_to_v1().await;
         }
         let error = format!("No support for migration of storage named {name}");
         Err(ViewError::NotFound(error))
@@ -1421,10 +1421,10 @@ where
 
     pub async fn migrate_if_needed(&self) -> Result<(), ViewError> {
         let schema = self.get_database_schema().await?;
-        if schema == SchemaDescription::Version0SingleBlobPartition {
-            self.migrate_client_0_to_1().await?;
+        if schema == SchemaDescription::Version0 {
+            self.migrate_v0_to_v1().await?;
         }
-        self.write_database_schema(&SchemaDescription::Version1MultiBlobPartition)
+        self.write_database_schema(&SchemaDescription::Version1)
             .await?;
         Ok(())
     }

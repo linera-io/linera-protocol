@@ -5451,6 +5451,7 @@ dependencies = [
  "linera-chain",
  "linera-core",
  "linera-execution",
+ "linera-service",
  "linera-service-graphql-client",
  "linera-version",
  "linera-views",

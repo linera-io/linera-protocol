@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_service::storage::{StorageMigration, StoreConfig};
 use linera_views::{
     lru_prefix_cache::StorageCacheConfig,
     scylla_db::{ScyllaDbDatabase, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
@@ -88,13 +89,21 @@ impl ScyllaDbRunner {
             max_concurrent_queries: config.client.max_concurrent_queries,
             replication_factor: config.client.replication_factor,
         };
-        let store_config = ScyllaDbStoreConfig {
+        let scylladb_store_config = ScyllaDbStoreConfig {
             inner_config,
             storage_cache_config,
         };
-        store_config.clone().migrate_if_needed().await?;
         let namespace = config.client.table.clone();
-        let database = ScyllaDbDatabase::connect(&store_config, &namespace).await?;
+        let store_config = StoreConfig::ScyllaDb {
+            config: scylladb_store_config.clone(),
+            namespace: namespace.clone(),
+        };
+        store_config
+            .clone()
+            .run_with_store(StorageMigration)
+            .await
+            .expect("ScyllaDb migration failed");
+        let database = ScyllaDbDatabase::connect(&scylladb_store_config, &namespace).await?;
         Self::new(config, database).await
     }
 }

@@ -79,7 +79,7 @@ use linera_service::{
     cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     node_service::NodeService,
     project::{self, Project},
-    storage::{CommonStorageOptions, StorageMigration, Runnable, RunnableWithStore, StorageConfig},
+    storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig, StorageMigration},
     util, wallet,
 };
 use linera_storage::{DbStorage, Storage};

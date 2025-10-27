@@ -756,10 +756,10 @@ impl RunnableWithStore for InitializeStorageJob<'_> {
     }
 }
 
-pub struct MigrationStorage;
+pub struct StorageMigration;
 
 #[async_trait]
-impl RunnableWithStore for MigrationStorage {
+impl RunnableWithStore for StorageMigration {
     type Output = ();
 
     async fn run<D>(

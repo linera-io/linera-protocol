@@ -37,6 +37,7 @@ linera-base = { workspace = true, features = ["test"] }
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true
+linera-service.workspace = true
 linera-service-graphql-client.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true

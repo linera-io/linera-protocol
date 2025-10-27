@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use clap::Parser as _;
+use linera_service::storage::{StorageMigration, StoreConfig};
 use linera_views::{
     lru_prefix_cache::StorageCacheConfig,
     rocks_db::{
@@ -94,13 +95,22 @@ impl RocksDbRunner {
             path_with_guard,
             max_stream_queries: config.client.max_stream_queries,
         };
-        let store_config = RocksDbStoreConfig {
+        let rocksdb_store_config = RocksDbStoreConfig {
             inner_config,
             storage_cache_config,
         };
-        store_config.clone().migrate_if_needed().await?;
         let namespace = config.client.namespace.clone();
-        let database = RocksDbDatabase::maybe_create_and_connect(&store_config, &namespace).await?;
+        let store_config = StoreConfig::RocksDb {
+            config: rocksdb_store_config.clone(),
+            namespace: namespace.clone(),
+        };
+        store_config
+            .clone()
+            .run_with_store(StorageMigration)
+            .await
+            .expect("Failure to migrate the database");
+        let database =
+            RocksDbDatabase::maybe_create_and_connect(&rocksdb_store_config, &namespace).await?;
         Self::new(config, database).await
     }
 }

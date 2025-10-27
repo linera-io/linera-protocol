@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use linera_service::storage::{CommonStorageOptions, StorageMigration, StorageConfig};
+use linera_service::storage::{CommonStorageOptions, StorageConfig, StorageMigration};
 
 /// Options for running the proxy.
 #[derive(clap::Parser, Debug, Clone)]
