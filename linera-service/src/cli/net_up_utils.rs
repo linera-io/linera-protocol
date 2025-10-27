@@ -364,7 +364,7 @@ async fn print_messages_and_create_faucet(
             "{}",
             format!("export LINERA_FAUCET_URL=\"http://localhost:{faucet_port}\"").bold(),
         );
-        
+
         let service = client
             .run_faucet(Some(faucet_port.into()), faucet_chain, faucet_amount)
             .await?;
