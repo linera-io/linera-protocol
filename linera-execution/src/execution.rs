@@ -15,7 +15,7 @@ use linera_views::{
     key_value_store_view::KeyValueStoreView,
     map_view::MapView,
     reentrant_collection_view::HashedReentrantCollectionView,
-    views::{ClonableView, CryptoHashView, HashableView as _, ReplaceContext, View},
+    views::{ClonableView, HashableView as _, ReplaceContext, View},
     ViewError,
 };
 use linera_views_derive::HashableView;
@@ -49,29 +49,12 @@ pub struct ExecutionStateView<C> {
     pub stream_event_counts: MapView<C, StreamId, u32>,
 }
 
-impl<C> CryptoHashView for ExecutionStateView<C>
+impl<C> ExecutionStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
-    async fn crypto_hash(&self) -> Result<CryptoHash, ViewError> {
-        if self
-            .system
-            .current_committee()
-            .is_some_and(|(epoch, _)| epoch >= EPOCH_STOP_HASHING)
-        {
-            Ok(CryptoHash::from([0; 32]))
-        } else {
-            #[derive(Serialize, Deserialize)]
-            struct ExecutionStateViewHash([u8; 32]);
-            impl BcsHashable<'_> for ExecutionStateViewHash {}
-            self.hash()
-                .await
-                .map(|hash| CryptoHash::new(&ExecutionStateViewHash(hash.into())))
-        }
-    }
-
-    async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
+    pub async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
         if self
             .system
             .current_committee()

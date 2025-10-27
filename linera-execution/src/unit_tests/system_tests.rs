@@ -4,7 +4,7 @@
 use linera_base::data_types::{Blob, BlockHeight, Bytecode};
 #[cfg(with_testing)]
 use linera_base::vm::VmRuntime;
-use linera_views::{context::MemoryContext, views::CryptoHashView};
+use linera_views::context::MemoryContext;
 
 use super::*;
 use crate::{
@@ -139,7 +139,6 @@ async fn hashing_test() -> anyhow::Result<()> {
 
     let zero_hash = CryptoHash::from([0u8; 32]);
 
-    assert_ne!(view.crypto_hash().await?, zero_hash);
     assert_ne!(view.crypto_hash_mut().await?, zero_hash);
 
     let epoch = EPOCH_STOP_HASHING.try_sub_one()?;
@@ -148,14 +147,12 @@ async fn hashing_test() -> anyhow::Result<()> {
     view.system.committees.set(committees.clone());
     view.system.epoch.set(epoch);
     // The hash should still be nonzero before the threshold epoch.
-    assert_ne!(view.crypto_hash().await?, zero_hash);
     assert_ne!(view.crypto_hash_mut().await?, zero_hash);
 
     committees.insert(EPOCH_STOP_HASHING, Committee::default());
     view.system.committees.set(committees);
     view.system.epoch.set(EPOCH_STOP_HASHING);
     // Starting from this epoch, the hash should be all zeros.
-    assert_eq!(view.crypto_hash().await?, zero_hash);
     assert_eq!(view.crypto_hash_mut().await?, zero_hash);
 
     Ok(())

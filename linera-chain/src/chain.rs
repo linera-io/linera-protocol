@@ -30,7 +30,7 @@ use linera_views::{
     reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
     register_view::RegisterView,
     set_view::SetView,
-    views::{ClonableView, CryptoHashView, RootView, View},
+    views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
 use tracing::instrument;

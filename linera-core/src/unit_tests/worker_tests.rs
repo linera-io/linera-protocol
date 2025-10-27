@@ -52,11 +52,8 @@ use linera_execution::{
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
-    context::Context,
-    memory::MemoryDatabase,
-    random::generate_test_namespace,
-    store::TestKeyValueDatabase as _,
-    views::{CryptoHashView, RootView},
+    context::Context, memory::MemoryDatabase, random::generate_test_namespace,
+    store::TestKeyValueDatabase as _, views::RootView,
 };
 use test_case::test_case;
 use test_log::test;
