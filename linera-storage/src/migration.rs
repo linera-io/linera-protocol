@@ -95,7 +95,7 @@ where
     C: Clock + Clone + Send + Sync + 'static,
     Database::Error: From<bcs::Error> + Send + Sync,
 {
-    async fn migrate_storage_shared_partition(
+    async fn migrate_shared_partition(
         &self,
         first_byte: &u8,
         keys: Vec<Vec<u8>>,
@@ -139,90 +139,13 @@ where
         Ok(())
     }
 
-    async fn migrate_client_shared_partition(
-        &self,
-        first_byte: &u8,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<(), ViewError> {
-        tracing::info!(
-            "migrate_storage_shared_partition with first_byte={first_byte} for |keys|={}",
-            keys.len()
-        );
-        for (index, chunk_keys) in keys.chunks(BLOCK_KEY_SIZE).enumerate() {
-            tracing::info!(
-                "index={index} processing chunk of size {}",
-                chunk_keys.len()
-            );
-            // full_keys, since they are of the form root_key + key
-            let chunk_base_keys = chunk_keys
-                .iter()
-                .map(|key| {
-                    let mut base_key = vec![*first_byte];
-                    base_key.extend(key);
-                    base_key
-                })
-                .collect::<Vec<Vec<u8>>>();
-            let store = self.database.open_shared(&[])?;
-            let values = store
-                .read_multi_values_bytes(chunk_base_keys.to_vec())
-                .await?;
-            let values = values
-                .into_iter()
-                .map(|value| value.ok_or(ViewError::MissingEntries))
-                .collect::<Result<Vec<Vec<u8>>, ViewError>>()?;
-            let mut batch = MultiPartitionBatch::new();
-            for (base_key, value) in chunk_base_keys.iter().zip(values) {
-                tracing::info!("base_key={base_key:?} value={value:?}");
-                let (root_key, key) = map_base_key(base_key)?;
-                batch.put_key_value_bytes(root_key, key, value);
-            }
-            self.write_batch(batch).await?;
-            // Now delete the keys
-            let mut batch = Batch::new();
-            for key in chunk_base_keys {
-                batch.delete_key(key.to_vec());
-            }
-            store.write_batch(batch).await?;
-        }
-        Ok(())
-    }
-
-    async fn migrate_storage_v0_to_v1(&self) -> Result<(), ViewError> {
-        for first_byte in MOVABLE_KEYS_0_1 {
-            let store = self.database.open_shared(&[])?;
-            let keys = store.find_keys_by_prefix(&[*first_byte]).await?;
-            self.migrate_storage_shared_partition(first_byte, keys)
-                .await?;
-            // Some keys can be left in the value-splitting.
-            let mut batch = Batch::new();
-            batch.delete_key_prefix(vec![*first_byte]);
-            store.write_batch(batch).await?;
-        }
-        Ok(())
-    }
-
-    async fn migrate_client_v0_to_v1(&self) -> Result<(), ViewError> {
-        for first_byte in MOVABLE_KEYS_0_1 {
-            let store = self.database.open_shared(&[])?;
-            let keys = store.find_keys_by_prefix(&[*first_byte]).await?;
-            self.migrate_client_shared_partition(first_byte, keys)
-                .await?;
-        }
-        Ok(())
-    }
     async fn migrate_v0_to_v1(&self) -> Result<(), ViewError> {
-        let name = Database::get_name();
-        if &name == "lru caching value splitting rocksdb internal" {
-            return self.migrate_client_v0_to_v1().await;
+        for first_byte in MOVABLE_KEYS_0_1 {
+            let store = self.database.open_shared(&[])?;
+            let keys = store.find_keys_by_prefix(&[*first_byte]).await?;
+            self.migrate_shared_partition(first_byte, keys).await?;
         }
-        if &name == "memory"
-            || &name == "lru caching value splitting journaling dynamodb internal"
-            || &name == "lru caching value splitting journaling scylladb internal"
-        {
-            return self.migrate_storage_v0_to_v1().await;
-        }
-        let error = format!("No support for migration of storage named {name}");
-        Err(ViewError::NotFound(error))
+        Ok(())
     }
 
     async fn get_database_schema(&self) -> Result<SchemaDescription, ViewError> {
