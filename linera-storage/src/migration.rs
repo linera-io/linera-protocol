@@ -12,10 +12,9 @@ use linera_views::{
 };
 use serde::{Deserialize, Serialize};
 
-
 use crate::{
+    db_storage::{to_event_key, DbStorage, MultiPartitionBatch, RootKey, DEFAULT_KEY, ONE_KEY},
     Clock,
-    db_storage::{DbStorage, DEFAULT_KEY, to_event_key, MultiPartitionBatch, ONE_KEY, RootKey},
 };
 
 #[derive(Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -140,13 +139,15 @@ where
         Ok(())
     }
 
-
     async fn migrate_client_shared_partition(
         &self,
         first_byte: &u8,
         keys: Vec<Vec<u8>>,
     ) -> Result<(), ViewError> {
-        tracing::info!("migrate_storage_shared_partition with first_byte={first_byte} for |keys|={}", keys.len());
+        tracing::info!(
+            "migrate_storage_shared_partition with first_byte={first_byte} for |keys|={}",
+            keys.len()
+        );
         for (index, chunk_keys) in keys.chunks(BLOCK_KEY_SIZE).enumerate() {
             tracing::info!(
                 "index={index} processing chunk of size {}",
@@ -186,7 +187,6 @@ where
         Ok(())
     }
 
-
     async fn migrate_storage_v0_to_v1(&self) -> Result<(), ViewError> {
         for first_byte in MOVABLE_KEYS_0_1 {
             let store = self.database.open_shared(&[])?;
@@ -215,7 +215,8 @@ where
         if &name == "lru caching value splitting rocksdb internal" {
             return self.migrate_client_v0_to_v1().await;
         }
-        if &name == "memory" || &name == "lru caching value splitting journaling dynamodb internal"
+        if &name == "memory"
+            || &name == "lru caching value splitting journaling dynamodb internal"
             || &name == "lru caching value splitting journaling scylladb internal"
         {
             return self.migrate_storage_v0_to_v1().await;
@@ -266,14 +267,21 @@ where
         }
         Ok(())
     }
-
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::{BTreeMap, HashMap},
+        marker::PhantomData,
+        ops::Deref,
+    };
+
     use linera_base::{
         crypto::CryptoHash,
-        identifiers::{BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId, StreamName},
+        identifiers::{
+            BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId, StreamName,
+        },
     };
     #[cfg(feature = "rocksdb")]
     use linera_views::rocks_db::RocksDbDatabase;
@@ -281,32 +289,32 @@ mod tests {
     use linera_views::scylla_db::ScyllaDbDatabase;
     use linera_views::{
         batch::Batch,
-        random::make_deterministic_rng,
-        store::{KeyValueStore, TestKeyValueDatabase, KeyValueDatabase, ReadableKeyValueStore, WritableKeyValueStore},
         memory::MemoryDatabase,
+        random::make_deterministic_rng,
+        store::{
+            KeyValueDatabase, KeyValueStore, ReadableKeyValueStore, TestKeyValueDatabase,
+            WritableKeyValueStore,
+        },
         ViewError,
     };
     use rand::Rng;
     use test_case::test_case;
 
-    use std::{collections::BTreeMap, marker::PhantomData, ops::Deref};
-
     use crate::{
-        DbStorage,
         db_storage::RestrictedEventId,
-        migration::{BaseKey, DEFAULT_KEY, ONE_KEY, RootKey},
-        WallClock,
+        migration::{BaseKey, RootKey, DEFAULT_KEY, ONE_KEY},
+        DbStorage, WallClock,
     };
 
     #[derive(Clone, Debug, Eq, PartialEq)]
     #[allow(clippy::type_complexity)]
     struct StorageState {
-        chain_ids_key_values: BTreeMap<ChainId, Vec<(Vec<u8>,Vec<u8>)>>,
+        chain_ids_key_values: BTreeMap<ChainId, Vec<(Vec<u8>, Vec<u8>)>>,
         certificates: BTreeMap<CryptoHash, Vec<u8>>,
         confirmed_blocks: BTreeMap<CryptoHash, Vec<u8>>,
         blobs: BTreeMap<BlobId, Vec<u8>>,
         blob_states: BTreeMap<BlobId, Vec<u8>>,
-        events: BTreeMap<EventId, Vec<u8>>,
+        events: HashMap<EventId, Vec<u8>>,
         block_exporter_states: BTreeMap<u32, Vec<(Vec<u8>, Vec<u8>)>>,
         network_description: Option<Vec<u8>>,
     }
@@ -328,7 +336,10 @@ mod tests {
     fn get_stream_id(rng: &mut impl Rng) -> StreamId {
         let application_id = GenericApplicationId::System;
         let stream_name = StreamName(get_vector(rng, 10));
-        StreamId { application_id, stream_name }
+        StreamId {
+            application_id,
+            stream_name,
+        }
     }
 
     fn get_event_id(rng: &mut impl Rng) -> EventId {
@@ -336,16 +347,18 @@ mod tests {
         let chain_id = ChainId(hash);
         let stream_id = get_stream_id(rng);
         let index = rng.gen::<u32>();
-        EventId { chain_id, stream_id, index }
+        EventId {
+            chain_id,
+            stream_id,
+            index,
+        }
     }
 
-    fn reorder_key_values(key_values: Vec<(Vec<u8>, Vec<u8>)>) -> Vec<(Vec<u8>,Vec<u8>)> {
+    fn reorder_key_values(key_values: Vec<(Vec<u8>, Vec<u8>)>) -> Vec<(Vec<u8>, Vec<u8>)> {
         let map = key_values
             .into_iter()
-            .collect::<BTreeMap<Vec<u8>,Vec<u8>>>();
-        map
-            .into_iter()
-            .collect::<Vec<(Vec<u8>,Vec<u8>)>>()
+            .collect::<BTreeMap<Vec<u8>, Vec<u8>>>();
+        map.into_iter().collect::<Vec<(Vec<u8>, Vec<u8>)>>()
     }
 
     fn get_storage_state() -> StorageState {
@@ -388,7 +401,10 @@ mod tests {
         let mut blobs = BTreeMap::new();
         for _i_blob in 0..n_blobs {
             let hash = get_hash(&mut rng);
-            let blob_id = BlobId { blob_type: BlobType::Data, hash };
+            let blob_id = BlobId {
+                blob_type: BlobType::Data,
+                hash,
+            };
             let value = get_vector(&mut rng, value_size);
             blobs.insert(blob_id, value);
         }
@@ -397,13 +413,16 @@ mod tests {
         let mut blob_states = BTreeMap::new();
         for _i_blob_state in 0..n_blob_states {
             let hash = get_hash(&mut rng);
-            let blob_id = BlobId { blob_type: BlobType::Data, hash };
+            let blob_id = BlobId {
+                blob_type: BlobType::Data,
+                hash,
+            };
             let value = get_vector(&mut rng, value_size);
             blob_states.insert(blob_id, value);
         }
         // 5: the events
         let n_events = 2;
-        let mut events = BTreeMap::new();
+        let mut events = HashMap::new();
         for _i_event in 0..n_events {
             let event_id = get_event_id(&mut rng);
             let value = get_vector(&mut rng, value_size);
@@ -437,7 +456,10 @@ mod tests {
         }
     }
 
-    async fn write_storage_state_old_schema<D>(database: &D, storage_state: StorageState) -> Result<(), ViewError>
+    async fn write_storage_state_old_schema<D>(
+        database: &D,
+        storage_state: StorageState,
+    ) -> Result<(), ViewError>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
         D::Store: KeyValueStore + Clone + Send + Sync + 'static,
@@ -497,7 +519,7 @@ mod tests {
             // It corresponds to the &[]
             return false;
         }
-        if root_key == &[4] {
+        if root_key == [4] {
             // It corresponds to the key of the schema database.
             return false;
         }
@@ -515,7 +537,7 @@ mod tests {
         let mut confirmed_blocks = BTreeMap::new();
         let mut blobs = BTreeMap::new();
         let mut blob_states = BTreeMap::new();
-        let mut events = BTreeMap::new();
+        let mut events = HashMap::new();
         let mut block_exporter_states = BTreeMap::new();
         let mut network_description = None;
         let bcs_root_keys = database.list_root_keys().await?;
@@ -555,7 +577,11 @@ mod tests {
                         let key_values = store.find_key_values_by_prefix(&[]).await?;
                         for (key, value) in key_values {
                             let restricted_event_id = bcs::from_bytes::<RestrictedEventId>(&key)?;
-                            let event_id = EventId { chain_id, stream_id: restricted_event_id.stream_id, index: restricted_event_id.index };
+                            let event_id = EventId {
+                                chain_id,
+                                stream_id: restricted_event_id.stream_id,
+                                index: restricted_event_id.index,
+                            };
                             events.insert(event_id, value);
                         }
                     }
