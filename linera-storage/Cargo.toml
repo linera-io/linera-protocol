@@ -19,6 +19,8 @@ revm = ["linera-execution/revm"]
 test = ["linera-execution/test", "linera-views/test"]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
+scylladb = ["linera-views/scylladb"]
+rocksdb = ["linera-views/rocksdb"]
 metrics = [
     "linera-base/metrics",
     "linera-chain/metrics",
@@ -50,6 +52,10 @@ tracing.workspace = true
 [dev-dependencies]
 anyhow.workspace = true
 linera-storage = { path = ".", default-features = false, features = ["test"] }
+rand.workspace = true
+test-case.workspace = true
+test-log = { workspace = true, features = ["trace"] }
+tokio.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
