@@ -85,10 +85,11 @@ pub const LINERA_TYPES_SOL: &str = include_str!("../solidity/LineraTypes.sol");
 /// The maximum length of a stream name.
 const MAX_STREAM_NAME_LEN: usize = 64;
 
-/// The epoch after which, instead of hashing the view, we just return zeroes for
-/// performance.
+/// The flag that, if present in `http_request_allow_list` field of the content policy of
+/// current committee, causes the execution state not to be hashed, and instead the hash
+/// returned to be all zeros.
 // Note: testnet-only! This should not survive to mainnet.
-const EPOCH_STOP_HASHING: Epoch = Epoch(20);
+const FLAG_ZERO_HASH: &str = "FLAG_ZERO_HASH.linera.network";
 
 /// An implementation of [`UserContractModule`].
 #[derive(Clone)]

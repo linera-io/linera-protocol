@@ -9,7 +9,7 @@ use linera_views::context::MemoryContext;
 use super::*;
 use crate::{
     test_utils::dummy_chain_description, ExecutionStateView, TestExecutionRuntimeContext,
-    EPOCH_STOP_HASHING,
+    FLAG_ZERO_HASH,
 };
 
 /// Returns an execution state view and a matching operation context, for epoch 1, with root
@@ -141,17 +141,21 @@ async fn hashing_test() -> anyhow::Result<()> {
 
     assert_ne!(view.crypto_hash_mut().await?, zero_hash);
 
-    let epoch = EPOCH_STOP_HASHING.try_sub_one()?;
     let mut committees = BTreeMap::new();
-    committees.insert(epoch, Committee::default());
+    committees.insert(Epoch(0), Committee::default());
     view.system.committees.set(committees.clone());
-    view.system.epoch.set(epoch);
+    view.system.epoch.set(Epoch(0));
     // The hash should still be nonzero before the threshold epoch.
     assert_ne!(view.crypto_hash_mut().await?, zero_hash);
 
-    committees.insert(EPOCH_STOP_HASHING, Committee::default());
+    let mut committee = Committee::default();
+    committee
+        .policy_mut()
+        .http_request_allow_list
+        .insert(FLAG_ZERO_HASH.to_owned());
+    committees.insert(Epoch(1), committee);
     view.system.committees.set(committees);
-    view.system.epoch.set(EPOCH_STOP_HASHING);
+    view.system.epoch.set(Epoch(1));
     // Starting from this epoch, the hash should be all zeros.
     assert_eq!(view.crypto_hash_mut().await?, zero_hash);
 

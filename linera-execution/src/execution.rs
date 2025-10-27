@@ -35,7 +35,7 @@ use crate::{
     system::SystemExecutionStateView, ApplicationDescription, ApplicationId, BcsHashable,
     Deserialize, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageContext,
     OperationContext, ProcessStreamsContext, Query, QueryContext, QueryOutcome, Serialize,
-    ServiceSyncRuntime, Timestamp, TransactionTracker, EPOCH_STOP_HASHING,
+    ServiceSyncRuntime, Timestamp, TransactionTracker, FLAG_ZERO_HASH,
 };
 
 /// A view accessing the execution state of a chain.
@@ -58,7 +58,12 @@ where
         if self
             .system
             .current_committee()
-            .is_some_and(|(epoch, _)| epoch >= EPOCH_STOP_HASHING)
+            .is_some_and(|(_epoch, committee)| {
+                committee
+                    .policy()
+                    .http_request_allow_list
+                    .contains(FLAG_ZERO_HASH)
+            })
         {
             Ok(CryptoHash::from([0; 32]))
         } else {
