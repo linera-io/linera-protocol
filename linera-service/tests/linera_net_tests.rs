@@ -4461,29 +4461,30 @@ async fn test_end_to_end_fungible_client_benchmark(config: impl LineraNetConfig)
 async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> Result<()> {
     /// Runs the `client` in a task, so that it can race to produce blocks transferring tokens.
     ///
-    /// Stops when transferring fails or the `notifier` channel is closed. Returns the client
-    /// wrapper, because dropping it would make it attempt to close the chain and block the thread.
+    /// Stops when transferring fails or the `notifier` channel is closed.
+    ///
+    /// Drops the client wrapper in a separate thread: Only one of the clients can close the chain,
+    /// and the `Drop` implementation blocks the thread until the command returns.
     async fn run_client(
         client: ClientWrapper,
         mut notifier: mpsc::Sender<()>,
         source: ChainId,
         target: ChainId,
-    ) -> ClientWrapper {
+    ) {
         let duration = Duration::from_secs(60);
-        async {
-            while tokio::time::timeout(
-                duration,
-                client.transfer_with_silent_logs(Amount::ONE, source, target),
-            )
-            .await
-            .expect("Transfer timed out")
-            .is_ok()
-            {
-                notifier.try_send(()).unwrap();
-            }
+        while tokio::time::timeout(
+            duration,
+            client.transfer_with_silent_logs(Amount::ONE, source, target),
+        )
+        .await
+        .expect("Transfer timed out")
+        .is_ok()
+        {
+            notifier.try_send(()).unwrap();
         }
-        .await;
-        client
+        tokio::task::spawn_blocking(move || drop(client))
+            .await
+            .unwrap();
     }
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -4516,7 +4517,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
     // Both clients make transfers from chain 2 to chain 1 in a loop. We use a channel with
     // capacity 8, the number of expected transfers.
     let (tx, rx) = mpsc::channel(8);
-    let (_client1, _client2) = futures::join!(
+    futures::join!(
         run_client(client1, tx.clone(), chain2, chain1),
         run_client(client2, tx, chain2, chain1)
     );
