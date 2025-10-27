@@ -19,6 +19,7 @@ use crate::{
     common::{CustomSerialize, HasherOutput, SliceExt as _, Update},
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
+    historical_hash_wrapper::HistoricallyHashableView,
     store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
@@ -231,29 +232,44 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     /// # })
     /// ```
     pub async fn load_entry_mut(&mut self, short_key: &[u8]) -> Result<&mut W, ViewError> {
-        self.do_load_entry_mut(short_key).await
-    }
-
-    /// Loads a subview for the data at the given index in the collection. If an entry
-    /// is absent then a default entry is added to the collection. The resulting view
-    /// is read-only.
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::collection_view::ByteCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use linera_views::views::View;
-    /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view: ByteCollectionView<_, RegisterView<_, String>> =
-    ///     ByteCollectionView::load(context).await.unwrap();
-    /// view.load_entry_mut(&[0, 1]).await.unwrap();
-    /// let subview = view.load_entry_or_insert(&[0, 1]).await.unwrap();
-    /// let value = subview.get();
-    /// assert_eq!(*value, String::default());
-    /// # })
-    /// ```
-    pub async fn load_entry_or_insert(&mut self, short_key: &[u8]) -> Result<&W, ViewError> {
-        Ok(self.do_load_entry_mut(short_key).await?)
+        match self.updates.get_mut().entry(short_key.to_vec()) {
+            btree_map::Entry::Occupied(entry) => {
+                let entry = entry.into_mut();
+                match entry {
+                    Update::Set(view) => Ok(view),
+                    Update::Removed => {
+                        let key = self
+                            .context
+                            .base_key()
+                            .base_tag_index(KeyTag::Subview as u8, short_key);
+                        let context = self.context.clone_with_base_key(key);
+                        // Obtain a view and set its pending state to the default (e.g. empty) state
+                        let view = W::new(context)?;
+                        *entry = Update::Set(view);
+                        let Update::Set(view) = entry else {
+                            unreachable!();
+                        };
+                        Ok(view)
+                    }
+                }
+            }
+            btree_map::Entry::Vacant(entry) => {
+                let key = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Subview as u8, short_key);
+                let context = self.context.clone_with_base_key(key);
+                let view = if self.delete_storage_first {
+                    W::new(context)?
+                } else {
+                    W::load(context).await?
+                };
+                let Update::Set(view) = entry.insert(Update::Set(view)) else {
+                    unreachable!();
+                };
+                Ok(view)
+            }
+        }
     }
 
     /// Loads a subview for the data at the given index in the collection. If an entry
@@ -269,7 +285,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     /// let mut view: ByteCollectionView<_, RegisterView<_, String>> =
     ///     ByteCollectionView::load(context).await.unwrap();
     /// {
-    ///     let _subview = view.load_entry_or_insert(&[0, 1]).await.unwrap();
+    ///     let _subview = view.load_entry_mut(&[0, 1]).await.unwrap();
     /// }
     /// {
     ///     let subview = view.try_load_entry(&[0, 1]).await.unwrap().unwrap();
@@ -329,7 +345,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     /// let mut view: ByteCollectionView<_, RegisterView<_, String>> =
     ///     ByteCollectionView::load(context).await.unwrap();
     /// {
-    ///     let _subview = view.load_entry_or_insert(&[0, 1]).await.unwrap();
+    ///     let _subview = view.load_entry_mut(&[0, 1]).await.unwrap();
     /// }
     /// let short_keys = vec![vec![0, 1], vec![2, 3]];
     /// let subviews = view.try_load_entries(short_keys).await.unwrap();
@@ -453,7 +469,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     /// let mut view: ByteCollectionView<_, RegisterView<_, String>> =
     ///     ByteCollectionView::load(context).await.unwrap();
     /// {
-    ///     let _subview = view.load_entry_or_insert(&[0, 1]).await.unwrap();
+    ///     let _subview = view.load_entry_mut(&[0, 1]).await.unwrap();
     /// }
     /// let subviews = view.try_load_all_entries().await.unwrap();
     /// assert_eq!(subviews.len(), 1);
@@ -619,47 +635,6 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     /// Gets the extra data.
     pub fn extra(&self) -> &<W::Context as Context>::Extra {
         self.context.extra()
-    }
-
-    async fn do_load_entry_mut(&mut self, short_key: &[u8]) -> Result<&mut W, ViewError> {
-        match self.updates.get_mut().entry(short_key.to_vec()) {
-            btree_map::Entry::Occupied(entry) => {
-                let entry = entry.into_mut();
-                match entry {
-                    Update::Set(view) => Ok(view),
-                    Update::Removed => {
-                        let key = self
-                            .context
-                            .base_key()
-                            .base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = self.context.clone_with_base_key(key);
-                        // Obtain a view and set its pending state to the default (e.g. empty) state
-                        let view = W::new(context)?;
-                        *entry = Update::Set(view);
-                        let Update::Set(view) = entry else {
-                            unreachable!();
-                        };
-                        Ok(view)
-                    }
-                }
-            }
-            btree_map::Entry::Vacant(entry) => {
-                let key = self
-                    .context
-                    .base_key()
-                    .base_tag_index(KeyTag::Subview as u8, short_key);
-                let context = self.context.clone_with_base_key(key);
-                let view = if self.delete_storage_first {
-                    W::new(context)?
-                } else {
-                    W::load(context).await?
-                };
-                let Update::Set(view) = entry.insert(Update::Set(view)) else {
-                    unreachable!();
-                };
-                Ok(view)
-            }
-        }
     }
 }
 
@@ -975,33 +950,6 @@ impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
     }
 
     /// Loads a subview for the data at the given index in the collection. If an entry
-    /// is absent then a default entry is added to the collection. The resulting view
-    /// is read-only.
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::collection_view::CollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use linera_views::views::View;
-    /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view: CollectionView<_, u64, RegisterView<_, String>> =
-    ///     CollectionView::load(context).await.unwrap();
-    /// view.load_entry_mut(&23).await.unwrap();
-    /// let subview = view.load_entry_or_insert(&23).await.unwrap();
-    /// let value = subview.get();
-    /// assert_eq!(*value, String::default());
-    /// # })
-    /// ```
-    pub async fn load_entry_or_insert<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + ?Sized,
-    {
-        let short_key = BaseKey::derive_short_key(index)?;
-        self.collection.load_entry_or_insert(&short_key).await
-    }
-
-    /// Loads a subview for the data at the given index in the collection. If an entry
     /// is absent then `None` is returned. The resulting view cannot be modified.
     /// May fail if one subview is already being visited.
     /// ```rust
@@ -1014,7 +962,7 @@ impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
     /// let mut view: CollectionView<_, u64, RegisterView<_, String>> =
     ///     CollectionView::load(context).await.unwrap();
     /// {
-    ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
+    ///     let _subview = view.load_entry_mut(&23).await.unwrap();
     /// }
     /// {
     ///     let subview = view.try_load_entry(&23).await.unwrap().unwrap();
@@ -1048,7 +996,7 @@ impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
     /// let mut view: CollectionView<_, u64, RegisterView<_, String>> =
     ///     CollectionView::load(context).await.unwrap();
     /// {
-    ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
+    ///     let _subview = view.load_entry_mut(&23).await.unwrap();
     /// }
     /// let indices = vec![23, 24];
     /// let subviews = view.try_load_entries(&indices).await.unwrap();
@@ -1083,7 +1031,7 @@ impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
     /// let mut view: CollectionView<_, u64, RegisterView<_, String>> =
     ///     CollectionView::load(context).await.unwrap();
     /// {
-    ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
+    ///     let _subview = view.load_entry_mut(&23).await.unwrap();
     /// }
     /// let indices = [23, 24];
     /// let subviews = view.try_load_entries_pairs(indices).await.unwrap();
@@ -1115,7 +1063,7 @@ impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
     /// let mut view: CollectionView<_, u64, RegisterView<_, String>> =
     ///     CollectionView::load(context).await.unwrap();
     /// {
-    ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
+    ///     let _subview = view.load_entry_mut(&23).await.unwrap();
     /// }
     /// let subviews = view.try_load_all_entries().await.unwrap();
     /// assert_eq!(subviews.len(), 1);
@@ -1420,33 +1368,6 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     }
 
     /// Loads a subview for the data at the given index in the collection. If an entry
-    /// is absent then a default entry is added to the collection. The resulting view
-    /// is read-only.
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::collection_view::CustomCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use linera_views::views::View;
-    /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view: CustomCollectionView<_, u128, RegisterView<_, String>> =
-    ///     CustomCollectionView::load(context).await.unwrap();
-    /// view.load_entry_mut(&23).await.unwrap();
-    /// let subview = view.load_entry_or_insert(&23).await.unwrap();
-    /// let value = subview.get();
-    /// assert_eq!(*value, String::default());
-    /// # })
-    /// ```
-    pub async fn load_entry_or_insert<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: CustomSerialize,
-    {
-        let short_key = index.to_custom_bytes()?;
-        self.collection.load_entry_or_insert(&short_key).await
-    }
-
-    /// Loads a subview for the data at the given index in the collection. If an entry
     /// is absent then `None` is returned. The resulting view cannot be modified.
     /// May fail if one subview is already being visited.
     /// ```rust
@@ -1459,7 +1380,7 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     /// let mut view: CustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     CustomCollectionView::load(context).await.unwrap();
     /// {
-    ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
+    ///     let _subview = view.load_entry_mut(&23).await.unwrap();
     /// }
     /// {
     ///     let subview = view.try_load_entry(&23).await.unwrap().unwrap();
@@ -1493,7 +1414,7 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     /// let mut view: CustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     CustomCollectionView::load(context).await.unwrap();
     /// {
-    ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
+    ///     let _subview = view.load_entry_mut(&23).await.unwrap();
     /// }
     /// let subviews = view.try_load_entries(&[23, 42]).await.unwrap();
     /// let value0 = subviews[0].as_ref().unwrap().get();
@@ -1527,7 +1448,7 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     /// let mut view: CustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     CustomCollectionView::load(context).await.unwrap();
     /// {
-    ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
+    ///     let _subview = view.load_entry_mut(&23).await.unwrap();
     /// }
     /// let indices = [23, 42];
     /// let subviews = view.try_load_entries_pairs(indices).await.unwrap();
@@ -1559,7 +1480,7 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     /// let mut view: CustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     CustomCollectionView::load(context).await.unwrap();
     /// {
-    ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
+    ///     let _subview = view.load_entry_mut(&23).await.unwrap();
     /// }
     /// let subviews = view.try_load_all_entries().await.unwrap();
     /// assert_eq!(subviews.len(), 1);
@@ -1784,13 +1705,25 @@ where
 pub type HashedByteCollectionView<C, W> =
     WrappedHashableContainerView<C, ByteCollectionView<C, W>, HasherOutput>;
 
+/// Wrapper around `ByteCollectionView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedByteCollectionView<C, W> =
+    HistoricallyHashableView<C, ByteCollectionView<C, W>>;
+
 /// Type wrapping `CollectionView` while memoizing the hash.
 pub type HashedCollectionView<C, I, W> =
     WrappedHashableContainerView<C, CollectionView<C, I, W>, HasherOutput>;
 
+/// Wrapper around `CollectionView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedCollectionView<C, I, W> =
+    HistoricallyHashableView<C, CollectionView<C, I, W>>;
+
 /// Type wrapping `CustomCollectionView` while memoizing the hash.
 pub type HashedCustomCollectionView<C, I, W> =
     WrappedHashableContainerView<C, CustomCollectionView<C, I, W>, HasherOutput>;
+
+/// Wrapper around `CustomCollectionView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedCustomCollectionView<C, I, W> =
+    HistoricallyHashableView<C, CustomCollectionView<C, I, W>>;
 
 #[cfg(with_graphql)]
 mod graphql {

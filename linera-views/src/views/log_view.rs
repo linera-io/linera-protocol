@@ -15,6 +15,7 @@ use crate::{
     common::{from_bytes_option_or_default, HasherOutput},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
+    historical_hash_wrapper::HistoricallyHashableView,
     store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
@@ -401,6 +402,9 @@ where
 
 /// Type wrapping `LogView` while memoizing the hash.
 pub type HashedLogView<C, T> = WrappedHashableContainerView<C, LogView<C, T>, HasherOutput>;
+
+/// Wrapper around `LogView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedLogView<C, T> = HistoricallyHashableView<C, LogView<C, T>>;
 
 #[cfg(not(web))]
 mod graphql {

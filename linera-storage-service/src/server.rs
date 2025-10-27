@@ -186,7 +186,14 @@ impl StorageServer {
     pub async fn list_root_keys(&self, namespace: &[u8]) -> Result<Vec<Vec<u8>>, Status> {
         let mut full_key = vec![KeyPrefix::RootKey as u8];
         full_key.extend(namespace);
-        self.find_keys_by_prefix(&full_key).await
+        let bcs_root_keys = self.find_keys_by_prefix(&full_key).await?;
+        let mut root_keys = Vec::new();
+        for bcs_root_key in bcs_root_keys {
+            let root_key = bcs::from_bytes::<Vec<u8>>(&bcs_root_key)
+                .map_err(|e| Status::unknown(format!("Bcs error {e:?} at list_root_keys")))?;
+            root_keys.push(root_key);
+        }
+        Ok(root_keys)
     }
 
     pub async fn delete_all(&self) -> Result<(), Status> {

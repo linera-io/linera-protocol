@@ -809,9 +809,10 @@ where
         }
     }
 
-    let read_root_keys = D::list_root_keys(&config, &namespace)
-        .await
-        .expect("read_root_keys");
+    let read_root_keys = {
+        let store = D::connect(&config, &namespace).await.expect("store");
+        store.list_root_keys().await.expect("read_root_keys")
+    };
     let set_root_keys = root_keys.iter().cloned().collect::<HashSet<_>>();
     for read_root_key in &read_root_keys {
         assert!(set_root_keys.contains(read_root_key));

@@ -190,11 +190,8 @@ where
         D::list_all(config).await
     }
 
-    async fn list_root_keys(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        D::list_root_keys(config, namespace).await
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, Self::Error> {
+        self.database.list_root_keys().await
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {

@@ -9,10 +9,10 @@ export const useAPI = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Test API connection
+    // Test API connection using relative path
     const testConnection = async () => {
       try {
-        const response = await fetch('http://localhost:3002/api/health');
+        const response = await fetch('/api/health');
         if (response.ok) {
           setIsConnected(true);
         } else {
