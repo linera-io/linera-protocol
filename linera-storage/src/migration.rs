@@ -251,8 +251,19 @@ where
     }
 
     pub async fn assert_is_migrated_database(&self) -> Result<(), ViewError> {
-        let schema = self.get_database_schema().await?;
-        assert_eq!(schema, SchemaDescription::Version1);
+        let root_key = RootKey::SchemaDescription.bytes();
+        let store = self.database.open_shared(&root_key)?;
+        if store.contains_key(DEFAULT_KEY).await? {
+            // The network description exists. Therefore, we are not starting
+            // from scratch
+            let schema = self.get_database_schema().await?;
+            assert_eq!(schema, SchemaDescription::Version1);
+        } else {
+            // Starting from scratch, so write the Schema to avoid migrating
+            // later.
+            self.write_database_schema(&SchemaDescription::Version1)
+                .await?;
+        }
         Ok(())
     }
 
