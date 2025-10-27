@@ -5811,7 +5811,11 @@ dependencies = [
  "linera-views",
  "papaya",
  "prometheus",
+ "rand 0.8.5",
  "serde",
+ "test-case",
+ "test-log",
+ "tokio",
  "tracing",
 ]
 

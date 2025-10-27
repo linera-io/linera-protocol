@@ -294,3 +294,245 @@ where
     }
 
 }
+
+#[cfg(test)]
+mod tests {
+    use linera_base::{
+        crypto::{AccountPublicKey, CryptoHash},
+        data_types::{
+            Amount, ApplicationPermissions, Blob, BlockHeight, ChainDescription, ChainOrigin,
+            Epoch, InitialChainConfig, NetworkDescription, Timestamp,
+        },
+        identifiers::{BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId, StreamName},
+        ownership::ChainOwnership,
+    };
+    use linera_execution::BlobState;
+    #[cfg(feature = "dynamodb")]
+    use linera_views::dynamo_db::DynamoDbDatabase;
+    #[cfg(feature = "rocksdb")]
+    use linera_views::rocks_db::RocksDbDatabase;
+    #[cfg(feature = "scylladb")]
+    use linera_views::scylla_db::ScyllaDbDatabase;
+    use linera_views::{
+        batch::Batch,
+        random::make_deterministic_rng,
+        store::{KeyValueStore, TestKeyValueDatabase, KeyValueDatabase, WritableKeyValueStore},
+        memory::MemoryDatabase,
+        ViewError,
+    };
+    use rand::Rng;
+    use test_case::test_case;
+
+    use std::marker::PhantomData;
+
+    use crate::migration::BaseKey;
+    
+
+    #[derive(Clone)]
+    struct ValidatorState {
+        chain_ids_key_values: Vec<(ChainId, Vec<(Vec<u8>,Vec<u8>)>)>,
+        certificates: Vec<(CryptoHash, Vec<u8>)>,
+        confirmed_blocks: Vec<(CryptoHash, Vec<u8>)>,
+        blobs: Vec<(BlobId, Vec<u8>)>,
+        blob_states: Vec<(BlobId, Vec<u8>)>,
+        events: Vec<(EventId, Vec<u8>)>,
+        block_exporter_states: Vec<(u32, Vec<(Vec<u8>, Vec<u8>)>)>,
+        network_description: Vec<u8>,
+    }
+
+    fn get_vector(rng: &mut impl Rng, len: usize) -> Vec<u8> {
+        let mut v = Vec::new();
+        for _ in 0..len {
+            let value = rng.gen::<u8>();
+            v.push(value);
+        }
+        v
+    }
+
+    fn get_hash(rng: &mut impl Rng) -> CryptoHash {
+        let rnd_val = rng.gen::<usize>();
+        CryptoHash::test_hash(&format!("rnd_val={rnd_val}"))
+    }
+
+    fn get_stream_id(rng: &mut impl Rng) -> StreamId {
+        let application_id = GenericApplicationId::System;
+        let stream_name = StreamName(get_vector(rng, 10));
+        StreamId { application_id, stream_name }
+    }
+
+    fn get_event_id(rng: &mut impl Rng) -> EventId {
+        let hash = get_hash(rng);
+        let chain_id = ChainId(hash);
+        let stream_id = get_stream_id(rng);
+        let index = rng.gen::<u32>();
+        EventId { chain_id, stream_id, index }
+    }
+
+    fn get_type_test() -> ValidatorState {
+        let mut rng = make_deterministic_rng();
+        let key_size = 10;
+        let value_size = 100;
+        // 0: the chain states.
+        let n_chain_id = 10;
+        let n_key = 100;
+        let mut chain_ids_key_values = Vec::new();
+        for _i_chain in 0..n_chain_id {
+            let hash = get_hash(&mut rng);
+            let chain_id = ChainId(hash);
+            let mut key_values = Vec::new();
+            for _i_key in 0..n_key {
+                let key = get_vector(&mut rng, key_size);
+                let value = get_vector(&mut rng, value_size);
+                key_values.push((key, value));
+            }
+            chain_ids_key_values.push((chain_id, key_values));
+        }
+        // 1: the certificates
+        let n_certificate = 10;
+        let mut certificates = Vec::new();
+        for _i_certificate in 0..n_certificate {
+            let hash = get_hash(&mut rng);
+            let value = get_vector(&mut rng, value_size);
+            certificates.push((hash, value));
+        }
+        // 2: the confirmed blocks
+        let n_blocks = 10;
+        let mut confirmed_blocks = Vec::new();
+        for _i_block in 0..n_blocks {
+            let hash = get_hash(&mut rng);
+            let value = get_vector(&mut rng, value_size);
+            confirmed_blocks.push((hash, value));
+        }
+        // 3: the blobs
+        let n_blobs = 10;
+        let mut blobs = Vec::new();
+        for _i_blob in 0..n_blobs {
+            let hash = get_hash(&mut rng);
+            let blob_id = BlobId { blob_type: BlobType::Data, hash };
+            let value = get_vector(&mut rng, value_size);
+            blobs.push((blob_id, value));
+        }
+        // 4: the blob states
+        let n_blob_states = 10;
+        let mut blob_states = Vec::new();
+        for _i_blob_state in 0..n_blob_states {
+            let hash = get_hash(&mut rng);
+            let blob_id = BlobId { blob_type: BlobType::Data, hash };
+            let value = get_vector(&mut rng, value_size);
+            blob_states.push((blob_id, value));
+        }
+        // 5: the events
+        let n_events = 10;
+        let mut events = Vec::new();
+        for _i_event in 0..n_events {
+            let event_id = get_event_id(&mut rng);
+            let value = get_vector(&mut rng, value_size);
+            events.push((event_id, value));
+        }
+        // 6: the block exports
+        let n_block_exports = 10;
+        let n_key = 10;
+        let mut block_exporter_states = Vec::new();
+        for _i_block_export in 0..n_block_exports {
+            let index = rng.gen::<u32>();
+            let mut key_values = Vec::new();
+            for _i_key in 0..n_key {
+                let key = get_vector(&mut rng, key_size);
+                let value = get_vector(&mut rng, value_size);
+                key_values.push((key, value));
+            }
+            block_exporter_states.push((index, key_values));
+        }
+        // 7: network description
+        let network_description = get_vector(&mut rng, value_size);
+        ValidatorState {
+            chain_ids_key_values,
+            certificates,
+            confirmed_blocks,
+            blobs,
+            blob_states,
+            events,
+            block_exporter_states,
+            network_description,
+        }
+    }
+
+    async fn write_validator_state_old_schema<D>(database: &D, validator_state: ValidatorState) -> Result<(), ViewError>
+    where
+        D: KeyValueDatabase + Clone + Send + Sync + 'static,
+        D::Store: KeyValueStore + Clone + Send + Sync + 'static,
+        D::Error: Send + Sync,
+    {
+        for (chain_id, key_values) in validator_state.chain_ids_key_values {
+            let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
+            let store = database.open_shared(&root_key)?;
+            let mut batch = Batch::new();
+            for (key, value) in key_values {
+                batch.put_key_value_bytes(key, value);
+            }
+            store.write_batch(batch).await?;
+        }
+        for (index, key_values) in validator_state.block_exporter_states {
+            let root_key = bcs::to_bytes(&BaseKey::BlockExporterState(index))?;
+            let store = database.open_shared(&root_key)?;
+            let mut batch = Batch::new();
+            for (key, value) in key_values {
+                batch.put_key_value_bytes(key, value);
+            }
+            store.write_batch(batch).await?;
+        }
+        // Writing in the shared partition
+        let mut batch = Batch::new();
+        for (hash, value) in validator_state.certificates {
+            let key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
+            batch.put_key_value_bytes(key, value);
+        }
+        for (hash, value) in validator_state.confirmed_blocks {
+            let key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
+            batch.put_key_value_bytes(key, value);
+        }
+        for (blob_id, value) in validator_state.blobs {
+            let key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
+            batch.put_key_value_bytes(key, value);
+        }
+        for (blob_id, value) in validator_state.blob_states {
+            let key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
+            batch.put_key_value_bytes(key, value);
+        }
+        for (event_id, value) in validator_state.events {
+            let key = bcs::to_bytes(&BaseKey::Event(event_id))?;
+            batch.put_key_value_bytes(key, value);
+        }
+        let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
+        batch.put_key_value_bytes(key, validator_state.network_description);
+        let store = database.open_shared(&[])?;
+        store.write_batch(batch).await?;
+        Ok(())
+    }
+
+    async fn test_storage_migration<D>() -> Result<(), ViewError>
+    where
+        D: TestKeyValueDatabase + Clone + Send + Sync + 'static,
+        D::Store: KeyValueStore + Clone + Send + Sync + 'static,
+        D::Error: Send + Sync,
+    {
+        let mut batch = Batch::new();
+        // Writing some chainstate
+
+        Ok(())
+    }
+
+    #[test_case(PhantomData::<MemoryDatabase>; "MemoryDatabase")]
+    #[cfg_attr(with_rocksdb, test_case(PhantomData::<RocksDbDatabase>; "RocksDbDatabase"))]
+    #[cfg_attr(with_dynamodb, test_case(PhantomData::<DynamoDbDatabase>; "DynamoDbDatabase"))]
+    #[cfg_attr(with_scylladb, test_case(PhantomData::<ScyllaDbDatabase>; "ScyllaDbDatabase"))]
+    #[tokio::test]
+    async fn test_storage_migration_cases<D>(_view_type: PhantomData<D>) -> Result<(), ViewError>
+    where
+        D: TestKeyValueDatabase + Clone + Send + Sync + 'static,
+        D::Store: KeyValueStore + Clone + Send + Sync + 'static,
+        D::Error: Send + Sync,
+    {
+        test_storage_migration::<D>().await
+    }
+}
