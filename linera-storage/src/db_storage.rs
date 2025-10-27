@@ -333,8 +333,9 @@ pub(crate) enum RootKey {
     CryptoHash(CryptoHash),
     Blob(BlobId),
     Event(ChainId),
-    BlockExporterState(u32),
+    SchemaDescription,
     NetworkDescription,
+    BlockExporterState(u32),
 }
 
 impl RootKey {

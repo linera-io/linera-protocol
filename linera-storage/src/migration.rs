@@ -29,9 +29,6 @@ enum SchemaDescription {
     Version1,
 }
 
-/// The key containing the schema of the storage.
-const SCHEMA_ROOT_KEY: &[u8] = &[13, 21, 34, 55, 89, 144, 233];
-
 #[derive(Debug, Serialize, Deserialize)]
 enum BaseKey {
     ChainState(ChainId),
@@ -43,8 +40,6 @@ enum BaseKey {
     BlockExporterState(u32),
     NetworkDescription,
 }
-
-const BASE_KEY_BLOCK_EXPORTER: u8 = 6;
 
 const UNUSED_EMPTY_KEY: &[u8] = &[];
 // The keys corresponding to `ChainState` are not moved.
@@ -101,36 +96,6 @@ where
     C: Clock + Clone + Send + Sync + 'static,
     Database::Error: From<bcs::Error> + Send + Sync,
 {
-    async fn migrate_single_block_export_partition(
-        &self,
-        root_base_key: Vec<u8>,
-    ) -> Result<(), ViewError> {
-        let store_read = self.database.open_exclusive(&root_base_key)?;
-        let key_values = store_read.find_key_values_by_prefix(&[]).await?;
-        let root_key = map_base_key(&root_base_key)?.0;
-        let mut batch_write = Batch::new();
-        let mut batch_delete = Batch::new();
-        for (key, value) in key_values {
-            batch_write.put_key_value_bytes(key.clone(), value);
-            batch_delete.delete_key(key);
-        }
-        let store_write = self.database.open_exclusive(&root_key)?;
-        store_write.write_batch(batch_write).await?;
-        store_read.write_batch(batch_delete).await?;
-        Ok(())
-    }
-
-    async fn migrate_all_block_exports_partitions(&self) -> Result<(), ViewError> {
-        let root_keys = self.database.list_root_keys().await?;
-        for root_key in root_keys {
-            if !root_key.is_empty() && root_key[0] == BASE_KEY_BLOCK_EXPORTER {
-                self.migrate_single_block_export_partition(root_key).await?;
-            }
-        }
-        Ok(())
-    }
-
-
     async fn migrate_storage_shared_partition(
         &self,
         first_byte: &u8,
@@ -182,14 +147,11 @@ where
         keys: Vec<Vec<u8>>,
     ) -> Result<(), ViewError> {
         tracing::info!("migrate_storage_shared_partition with first_byte={first_byte} for |keys|={}", keys.len());
-        println!("migrate_storage_shared_partition with first_byte={first_byte} for |keys|={}", keys.len());
-        println!("keys={keys:?}");
         for (index, chunk_keys) in keys.chunks(BLOCK_KEY_SIZE).enumerate() {
             tracing::info!(
                 "index={index} processing chunk of size {}",
                 chunk_keys.len()
             );
-            println!("chunk_keys={chunk_keys:?}");
             // full_keys, since they are of the form root_key + key
             let chunk_base_keys = chunk_keys
                 .iter()
@@ -199,7 +161,6 @@ where
                     base_key
                 })
                 .collect::<Vec<Vec<u8>>>();
-            println!("chunk_base_keys={chunk_base_keys:?}");
             let store = self.database.open_shared(&[])?;
             let values = store
                 .read_multi_values_bytes(chunk_base_keys.to_vec())
@@ -241,20 +202,17 @@ where
     }
 
     async fn migrate_client_v0_to_v1(&self) -> Result<(), ViewError> {
-        let list_root_keys = self.list_root_keys().await?;
         for first_byte in MOVABLE_KEYS_0_1 {
             let store = self.database.open_shared(&[])?;
             let keys = store.find_keys_by_prefix(&[*first_byte]).await?;
-            self.migrate_client_shared_partition(first_byte, keys, list_root_keys)
+            self.migrate_client_shared_partition(first_byte, keys)
                 .await?;
         }
         Ok(())
     }
     async fn migrate_v0_to_v1(&self) -> Result<(), ViewError> {
-        self.migrate_all_block_exports_partitions().await?;
         let name = Database::get_name();
         if &name == "lru caching value splitting rocksdb internal" {
-            println!("Calling migrate_client_v0_to_v1");
             return self.migrate_client_v0_to_v1().await;
         }
         if &name == "memory" || &name == "lru caching value splitting journaling dynamodb internal"
@@ -267,16 +225,18 @@ where
     }
 
     async fn get_database_schema(&self) -> Result<SchemaDescription, ViewError> {
-        let store = self.database.open_shared(SCHEMA_ROOT_KEY)?;
+        let root_key = RootKey::SchemaDescription.bytes();
+        let store = self.database.open_shared(&root_key)?;
         let value = store.read_value::<SchemaDescription>(DEFAULT_KEY).await?;
         let value = value.unwrap_or_default();
         Ok(value)
     }
 
     async fn write_database_schema(&self, schema: &SchemaDescription) -> Result<(), ViewError> {
+        let root_key = RootKey::SchemaDescription.bytes();
         let mut batch = Batch::new();
         batch.put_key_value(DEFAULT_KEY.to_vec(), schema)?;
-        let store = self.database.open_shared(SCHEMA_ROOT_KEY)?;
+        let store = self.database.open_shared(&root_key)?;
         Ok(store.write_batch(batch).await?)
     }
 
@@ -304,8 +264,6 @@ mod tests {
         crypto::CryptoHash,
         identifiers::{BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId, StreamName},
     };
-    #[cfg(feature = "dynamodb")]
-    use linera_views::dynamo_db::DynamoDbDatabase;
     #[cfg(feature = "rocksdb")]
     use linera_views::rocks_db::RocksDbDatabase;
     #[cfg(feature = "scylladb")]
@@ -325,7 +283,7 @@ mod tests {
     use crate::{
         DbStorage,
         db_storage::RestrictedEventId,
-        migration::{BaseKey, BASE_KEY_BLOCK_EXPORTER, DEFAULT_KEY, ONE_KEY, RootKey, SCHEMA_ROOT_KEY},
+        migration::{BaseKey, DEFAULT_KEY, ONE_KEY, RootKey},
         WallClock,
     };
 
@@ -384,7 +342,7 @@ mod tests {
         let key_size = 5;
         let value_size = 10;
         // 0: the chain states.
-        let n_chain_id = 0;
+        let n_chain_id = 2;
         let n_key = 1;
         let mut chain_ids_key_values = BTreeMap::new();
         for _i_chain in 0..n_chain_id {
@@ -399,7 +357,7 @@ mod tests {
             chain_ids_key_values.insert(chain_id, reorder_key_values(key_values));
         }
         // 1: the certificates
-        let n_certificate = 0;
+        let n_certificate = 2;
         let mut certificates = BTreeMap::new();
         for _i_certificate in 0..n_certificate {
             let hash = get_hash(&mut rng);
@@ -407,7 +365,7 @@ mod tests {
             certificates.insert(hash, value);
         }
         // 2: the confirmed blocks
-        let n_blocks = 0;
+        let n_blocks = 2;
         let mut confirmed_blocks = BTreeMap::new();
         for _i_block in 0..n_blocks {
             let hash = get_hash(&mut rng);
@@ -415,7 +373,7 @@ mod tests {
             confirmed_blocks.insert(hash, value);
         }
         // 3: the blobs
-        let n_blobs = 0;
+        let n_blobs = 2;
         let mut blobs = BTreeMap::new();
         for _i_blob in 0..n_blobs {
             let hash = get_hash(&mut rng);
@@ -424,7 +382,7 @@ mod tests {
             blobs.insert(blob_id, value);
         }
         // 4: the blob states
-        let n_blob_states = 0;
+        let n_blob_states = 2;
         let mut blob_states = BTreeMap::new();
         for _i_blob_state in 0..n_blob_states {
             let hash = get_hash(&mut rng);
@@ -433,7 +391,7 @@ mod tests {
             blob_states.insert(blob_id, value);
         }
         // 5: the events
-        let n_events = 0;
+        let n_events = 2;
         let mut events = BTreeMap::new();
         for _i_event in 0..n_events {
             let event_id = get_event_id(&mut rng);
@@ -441,7 +399,7 @@ mod tests {
             events.insert(event_id, value);
         }
         // 6: the block exports
-        let n_block_exports = 1;
+        let n_block_exports = 2;
         let n_key = 1;
         let mut block_exporter_states = BTreeMap::new();
         for _i_block_export in 0..n_block_exports {
@@ -481,7 +439,6 @@ mod tests {
             for (key, value) in key_values {
                 batch.put_key_value_bytes(key, value);
             }
-            println!("chain_id={chain_id} batch={batch:?}");
             store.write_batch(batch).await?;
         }
         for (index, key_values) in storage_state.block_exporter_states {
@@ -491,7 +448,6 @@ mod tests {
             for (key, value) in key_values {
                 batch.put_key_value_bytes(key, value);
             }
-            println!("index={index} batch={batch:?}");
             store.write_batch(batch).await?;
         }
         // Writing in the shared partition
@@ -520,7 +476,6 @@ mod tests {
             let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
             batch.put_key_value_bytes(key, network_description);
         }
-        println!("shared batch={batch:?}");
         let store = database.open_shared(&[])?;
         store.write_batch(batch).await?;
         Ok(())
@@ -531,12 +486,8 @@ mod tests {
             // It corresponds to the &[]
             return false;
         }
-        if root_key == SCHEMA_ROOT_KEY {
+        if root_key == &[4] {
             // It corresponds to the key of the schema database.
-            return false;
-        }
-        if root_key[0] == BASE_KEY_BLOCK_EXPORTER {
-            // It corresponds to a block exporter root key.
             return false;
         }
         true
@@ -557,13 +508,9 @@ mod tests {
         let mut block_exporter_states = BTreeMap::new();
         let mut network_description = None;
         let bcs_root_keys = database.list_root_keys().await?;
-        println!("|bcs_root_keys|={}", bcs_root_keys.len());
-        println!("bcs_root_keys={bcs_root_keys:?}");
         for bcs_root_key in bcs_root_keys {
             if is_valid_root_key(&bcs_root_key) {
-                println!("|bcs_root_key|={} bcs_root_key={bcs_root_key:?}", bcs_root_key.len());
                 let root_key = bcs::from_bytes(&bcs_root_key)?;
-                println!("root_key={root_key:?}");
                 match root_key {
                     RootKey::ChainState(chain_id) => {
                         let store = database.open_shared(&bcs_root_key)?;
@@ -601,10 +548,8 @@ mod tests {
                             events.insert(event_id, value);
                         }
                     }
-                    RootKey::BlockExporterState(index) => {
-                        let store = database.open_shared(&bcs_root_key)?;
-                        let key_values = store.find_key_values_by_prefix(&[]).await?;
-                        block_exporter_states.insert(index, key_values);
+                    RootKey::SchemaDescription => {
+                        // Not part of the state
                     }
                     RootKey::NetworkDescription => {
                         let store = database.open_shared(&bcs_root_key)?;
@@ -612,6 +557,11 @@ mod tests {
                         if let Some(value) = value {
                             network_description = Some(value);
                         }
+                    }
+                    RootKey::BlockExporterState(index) => {
+                        let store = database.open_shared(&bcs_root_key)?;
+                        let key_values = store.find_key_values_by_prefix(&[]).await?;
+                        block_exporter_states.insert(index, key_values);
                     }
                 }
             }
@@ -634,21 +584,13 @@ mod tests {
         D::Store: KeyValueStore + Clone + Send + Sync + 'static,
         D::Error: Send + Sync,
     {
-        println!("test_storage_migration, step 1");
         let database = D::connect_test_namespace().await?;
-        println!("test_storage_migration, step 2");
         let storage_state = get_storage_state();
-        println!("test_storage_migration, step 3");
         write_storage_state_old_schema(&database, storage_state.clone()).await?;
-        println!("test_storage_migration, step 4");
         let storage = DbStorage::<D, WallClock>::new(database, None, WallClock);
-        println!("test_storage_migration, step 5");
         storage.migrate_if_needed().await?;
-        println!("test_storage_migration, step 6");
         let read_storage_state = read_storage_state_new_schema(storage.database.deref()).await?;
-        println!("test_storage_migration, step 7");
         assert_eq!(read_storage_state, storage_state);
-        println!("test_storage_migration, step 8");
         Ok(())
     }
 
