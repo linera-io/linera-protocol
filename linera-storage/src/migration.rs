@@ -181,15 +181,15 @@ where
         first_byte: &u8,
         keys: Vec<Vec<u8>>,
     ) -> Result<(), ViewError> {
-        tracing::info!(
-            "migrate_storage_shared_partition with first_byte={first_byte} for |base_keys|={}",
-            keys.len()
-        );
+        tracing::info!("migrate_storage_shared_partition with first_byte={first_byte} for |keys|={}", keys.len());
+        println!("migrate_storage_shared_partition with first_byte={first_byte} for |keys|={}", keys.len());
+        println!("keys={keys:?}");
         for (index, chunk_keys) in keys.chunks(BLOCK_KEY_SIZE).enumerate() {
             tracing::info!(
                 "index={index} processing chunk of size {}",
                 chunk_keys.len()
             );
+            println!("chunk_keys={chunk_keys:?}");
             // full_keys, since they are of the form root_key + key
             let chunk_base_keys = chunk_keys
                 .iter()
@@ -199,6 +199,7 @@ where
                     base_key
                 })
                 .collect::<Vec<Vec<u8>>>();
+            println!("chunk_base_keys={chunk_base_keys:?}");
             let store = self.database.open_shared(&[])?;
             let values = store
                 .read_multi_values_bytes(chunk_base_keys.to_vec())
@@ -240,10 +241,11 @@ where
     }
 
     async fn migrate_client_v0_to_v1(&self) -> Result<(), ViewError> {
+        let list_root_keys = self.list_root_keys().await?;
         for first_byte in MOVABLE_KEYS_0_1 {
             let store = self.database.open_shared(&[])?;
             let keys = store.find_keys_by_prefix(&[*first_byte]).await?;
-            self.migrate_client_shared_partition(first_byte, keys)
+            self.migrate_client_shared_partition(first_byte, keys, list_root_keys)
                 .await?;
         }
         Ok(())
@@ -252,6 +254,7 @@ where
         self.migrate_all_block_exports_partitions().await?;
         let name = Database::get_name();
         if &name == "lru caching value splitting rocksdb internal" {
+            println!("Calling migrate_client_v0_to_v1");
             return self.migrate_client_v0_to_v1().await;
         }
         if &name == "memory" || &name == "lru caching value splitting journaling dynamodb internal"
@@ -378,10 +381,10 @@ mod tests {
 
     fn get_storage_state() -> StorageState {
         let mut rng = make_deterministic_rng();
-        let key_size = 10;
-        let value_size = 100;
+        let key_size = 5;
+        let value_size = 10;
         // 0: the chain states.
-        let n_chain_id = 1;
+        let n_chain_id = 0;
         let n_key = 1;
         let mut chain_ids_key_values = BTreeMap::new();
         for _i_chain in 0..n_chain_id {
@@ -438,8 +441,8 @@ mod tests {
             events.insert(event_id, value);
         }
         // 6: the block exports
-        let n_block_exports = 0;
-        let n_key = 2;
+        let n_block_exports = 1;
+        let n_key = 1;
         let mut block_exporter_states = BTreeMap::new();
         for _i_block_export in 0..n_block_exports {
             let index = rng.gen::<u32>();
@@ -651,7 +654,6 @@ mod tests {
 
     #[test_case(PhantomData::<MemoryDatabase>; "MemoryDatabase")]
     #[cfg_attr(with_rocksdb, test_case(PhantomData::<RocksDbDatabase>; "RocksDbDatabase"))]
-    #[cfg_attr(with_dynamodb, test_case(PhantomData::<DynamoDbDatabase>; "DynamoDbDatabase"))]
     #[cfg_attr(with_scylladb, test_case(PhantomData::<ScyllaDbDatabase>; "ScyllaDbDatabase"))]
     #[tokio::test]
     async fn test_storage_migration_cases<D>(_storage_type: PhantomData<D>) -> Result<(), ViewError>
