@@ -347,12 +347,6 @@ async fn print_messages_and_create_faucet(
                  with_faucet is true"
             );
 
-            eprintln!("To connect to this network, you can use the following faucet URL:");
-            println!(
-                "{}",
-                format!("export LINERA_FAUCET_URL=\"http://localhost:{faucet_port}\"").bold(),
-            );
-
             // This picks a lexicographically faucet_chain_idx-th non-admin chain.
             Some(
                 chains
@@ -364,6 +358,13 @@ async fn print_messages_and_create_faucet(
         } else {
             None
         };
+
+        eprintln!("To connect to this network, you can use the following faucet URL:");
+        println!(
+            "{}",
+            format!("export LINERA_FAUCET_URL=\"http://localhost:{faucet_port}\"").bold(),
+        );
+        
         let service = client
             .run_faucet(Some(faucet_port.into()), faucet_chain, faucet_amount)
             .await?;
