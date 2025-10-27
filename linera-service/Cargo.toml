@@ -189,6 +189,10 @@ name = "linera-proxy"
 path = "src/proxy/main.rs"
 
 [[bin]]
+name = "linera-migration"
+path = "src/migration/main.rs"
+
+[[bin]]
 name = "linera-schema-export"
 path = "src/schema_export.rs"
 
