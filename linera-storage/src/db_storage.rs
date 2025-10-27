@@ -1056,7 +1056,7 @@ where
     Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
 {
-    fn new(database: Database, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
+    pub(crate) fn new(database: Database, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
         Self {
             database: Arc::new(database),
             clock,
@@ -1078,18 +1078,22 @@ where
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Database::Error> {
+    ) -> Result<Self, ViewError> {
         let database = Database::maybe_create_and_connect(config, namespace).await?;
-        Ok(Self::new(database, wasm_runtime, WallClock))
+        let storage = Self::new(database, wasm_runtime, WallClock);
+        storage.assert_is_migrated_database().await?;
+        Ok(storage)
     }
 
     pub async fn connect(
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Database::Error> {
+    ) -> Result<Self, ViewError> {
         let database = Database::connect(config, namespace).await?;
-        Ok(Self::new(database, wasm_runtime, WallClock))
+        let storage = Self::new(database, wasm_runtime, WallClock);
+        storage.assert_is_migrated_database().await?;
+        Ok(storage)
     }
 
     /// Lists the blob IDs of the storage.
@@ -1160,8 +1164,10 @@ where
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
-    ) -> Result<Self, Database::Error> {
+    ) -> Result<Self, ViewError> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
-        Ok(Self::new(database, wasm_runtime, clock))
+        let storage = Self::new(database, wasm_runtime, clock);
+        storage.assert_is_migrated_database().await?;
+        Ok(storage)
     }
 }

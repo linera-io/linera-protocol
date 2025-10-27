@@ -99,7 +99,7 @@ where
     Database: KeyValueDatabase + Clone + Send + Sync + 'static,
     Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
-    Database::Error: Send + Sync,
+    Database::Error: From<bcs::Error> + Send + Sync,
 {
     async fn migrate_single_block_export_partition(
         &self,
@@ -298,15 +298,9 @@ where
 #[cfg(test)]
 mod tests {
     use linera_base::{
-        crypto::{AccountPublicKey, CryptoHash},
-        data_types::{
-            Amount, ApplicationPermissions, Blob, BlockHeight, ChainDescription, ChainOrigin,
-            Epoch, InitialChainConfig, NetworkDescription, Timestamp,
-        },
+        crypto::CryptoHash,
         identifiers::{BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId, StreamName},
-        ownership::ChainOwnership,
     };
-    use linera_execution::BlobState;
     #[cfg(feature = "dynamodb")]
     use linera_views::dynamo_db::DynamoDbDatabase;
     #[cfg(feature = "rocksdb")]
@@ -325,11 +319,15 @@ mod tests {
 
     use std::marker::PhantomData;
 
-    use crate::migration::BaseKey;
-    
+    use crate::{
+        DbStorage,
+        migration::BaseKey,
+        WallClock,
+    };
 
     #[derive(Clone)]
-    struct ValidatorState {
+    #[allow(clippy::type_complexity)]
+    struct StorageState {
         chain_ids_key_values: Vec<(ChainId, Vec<(Vec<u8>,Vec<u8>)>)>,
         certificates: Vec<(CryptoHash, Vec<u8>)>,
         confirmed_blocks: Vec<(CryptoHash, Vec<u8>)>,
@@ -337,7 +335,7 @@ mod tests {
         blob_states: Vec<(BlobId, Vec<u8>)>,
         events: Vec<(EventId, Vec<u8>)>,
         block_exporter_states: Vec<(u32, Vec<(Vec<u8>, Vec<u8>)>)>,
-        network_description: Vec<u8>,
+        network_description: Option<Vec<u8>>,
     }
 
     fn get_vector(rng: &mut impl Rng, len: usize) -> Vec<u8> {
@@ -351,7 +349,7 @@ mod tests {
 
     fn get_hash(rng: &mut impl Rng) -> CryptoHash {
         let rnd_val = rng.gen::<usize>();
-        CryptoHash::test_hash(&format!("rnd_val={rnd_val}"))
+        CryptoHash::test_hash(format!("rnd_val={rnd_val}"))
     }
 
     fn get_stream_id(rng: &mut impl Rng) -> StreamId {
@@ -368,7 +366,7 @@ mod tests {
         EventId { chain_id, stream_id, index }
     }
 
-    fn get_type_test() -> ValidatorState {
+    fn get_storage_state() -> StorageState {
         let mut rng = make_deterministic_rng();
         let key_size = 10;
         let value_size = 100;
@@ -444,8 +442,8 @@ mod tests {
             block_exporter_states.push((index, key_values));
         }
         // 7: network description
-        let network_description = get_vector(&mut rng, value_size);
-        ValidatorState {
+        let network_description = Some(get_vector(&mut rng, value_size));
+        StorageState {
             chain_ids_key_values,
             certificates,
             confirmed_blocks,
@@ -457,13 +455,13 @@ mod tests {
         }
     }
 
-    async fn write_validator_state_old_schema<D>(database: &D, validator_state: ValidatorState) -> Result<(), ViewError>
+    async fn write_storage_state_old_schema<D>(database: &D, storage_state: StorageState) -> Result<(), ViewError>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
         D::Store: KeyValueStore + Clone + Send + Sync + 'static,
         D::Error: Send + Sync,
     {
-        for (chain_id, key_values) in validator_state.chain_ids_key_values {
+        for (chain_id, key_values) in storage_state.chain_ids_key_values {
             let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
             let store = database.open_shared(&root_key)?;
             let mut batch = Batch::new();
@@ -472,7 +470,7 @@ mod tests {
             }
             store.write_batch(batch).await?;
         }
-        for (index, key_values) in validator_state.block_exporter_states {
+        for (index, key_values) in storage_state.block_exporter_states {
             let root_key = bcs::to_bytes(&BaseKey::BlockExporterState(index))?;
             let store = database.open_shared(&root_key)?;
             let mut batch = Batch::new();
@@ -483,28 +481,30 @@ mod tests {
         }
         // Writing in the shared partition
         let mut batch = Batch::new();
-        for (hash, value) in validator_state.certificates {
+        for (hash, value) in storage_state.certificates {
             let key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
             batch.put_key_value_bytes(key, value);
         }
-        for (hash, value) in validator_state.confirmed_blocks {
+        for (hash, value) in storage_state.confirmed_blocks {
             let key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
             batch.put_key_value_bytes(key, value);
         }
-        for (blob_id, value) in validator_state.blobs {
+        for (blob_id, value) in storage_state.blobs {
             let key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
             batch.put_key_value_bytes(key, value);
         }
-        for (blob_id, value) in validator_state.blob_states {
+        for (blob_id, value) in storage_state.blob_states {
             let key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
             batch.put_key_value_bytes(key, value);
         }
-        for (event_id, value) in validator_state.events {
+        for (event_id, value) in storage_state.events {
             let key = bcs::to_bytes(&BaseKey::Event(event_id))?;
             batch.put_key_value_bytes(key, value);
         }
-        let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
-        batch.put_key_value_bytes(key, validator_state.network_description);
+        if let Some(network_description) = storage_state.network_description {
+            let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
+            batch.put_key_value_bytes(key, network_description);
+        }
         let store = database.open_shared(&[])?;
         store.write_batch(batch).await?;
         Ok(())
@@ -516,9 +516,11 @@ mod tests {
         D::Store: KeyValueStore + Clone + Send + Sync + 'static,
         D::Error: Send + Sync,
     {
-        let mut batch = Batch::new();
-        // Writing some chainstate
-
+        let database = D::connect_test_namespace().await?;
+        let storage_state = get_storage_state();
+        write_storage_state_old_schema(&database, storage_state).await?;
+        let storage = DbStorage::<D, WallClock>::new(database, None, WallClock);
+        storage.migrate_if_needed().await?;
         Ok(())
     }
 
@@ -527,7 +529,7 @@ mod tests {
     #[cfg_attr(with_dynamodb, test_case(PhantomData::<DynamoDbDatabase>; "DynamoDbDatabase"))]
     #[cfg_attr(with_scylladb, test_case(PhantomData::<ScyllaDbDatabase>; "ScyllaDbDatabase"))]
     #[tokio::test]
-    async fn test_storage_migration_cases<D>(_view_type: PhantomData<D>) -> Result<(), ViewError>
+    async fn test_storage_migration_cases<D>(_storage_type: PhantomData<D>) -> Result<(), ViewError>
     where
         D: TestKeyValueDatabase + Clone + Send + Sync + 'static,
         D::Store: KeyValueStore + Clone + Send + Sync + 'static,
