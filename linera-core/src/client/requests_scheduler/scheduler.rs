@@ -165,7 +165,6 @@ impl<Env: Environment> RequestsScheduler<Env> {
     /// - `cache_ttl`: Time-to-live for cached responses
     /// - `max_cache_size`: Maximum number of entries in the cache
     /// - `max_request_ttl`: Maximum latency for an in-flight request before we stop deduplicating it
-    #[expect(clippy::too_many_arguments)]
     pub fn with_config(
         nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
         weights: ScoringWeights,

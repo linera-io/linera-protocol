@@ -208,7 +208,8 @@ impl<N: ValidatorNode> RemoteNode<N> {
             Err(NodeError::BlobsNotFound(_error)) => {
                 tracing::debug!(
                     ?blob_id,
-                    validator=?self.public_key,
+                    validator = ?self.public_key,
+                    address = ?self.node.address(),
                     "validator is missing the blob",
                 );
                 Ok(None)
