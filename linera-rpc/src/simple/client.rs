@@ -77,6 +77,13 @@ impl SimpleClient {
 impl ValidatorNode for SimpleClient {
     type NotificationStream = NotificationStream;
 
+    fn address(&self) -> String {
+        format!(
+            "{}://{}:{}",
+            self.network.protocol, self.network.host, self.network.port
+        )
+    }
+
     /// Initiates a new block.
     async fn handle_block_proposal(
         &self,

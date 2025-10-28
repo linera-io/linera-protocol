@@ -125,6 +125,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             chain_client::Options::test_default(),
             5_000,
             10_000,
+            linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
     context
@@ -213,6 +214,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             chain_client::Options::test_default(),
             5_000,
             10_000,
+            linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
     let context = Arc::new(Mutex::new(context));

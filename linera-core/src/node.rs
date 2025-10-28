@@ -51,6 +51,8 @@ pub trait ValidatorNode {
     #[cfg(web)]
     type NotificationStream: Stream<Item = Notification> + Unpin;
 
+    fn address(&self) -> String;
+
     /// Proposes a new block.
     async fn handle_block_proposal(
         &self,
