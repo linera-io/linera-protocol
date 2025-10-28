@@ -186,9 +186,6 @@ Client implementation and command-line tool for the Linera blockchain
 * `--max-joined-tasks <MAX_JOINED_TASKS>` — Maximum number of tasks that can are joined concurrently in the client
 
   Default value: `100`
-* `--max-in-flight-requests <MAX_IN_FLIGHT_REQUESTS>` — Maximum concurrent requests per validator node
-
-  Default value: `100`
 * `--max-accepted-latency-ms <MAX_ACCEPTED_LATENCY_MS>` — Maximum expected latency in milliseconds for score normalization
 
   Default value: `5000`
