@@ -40,8 +40,8 @@ enum BaseKey {
     NetworkDescription,
 }
 
-/// The key used the the database schema
-const DATABASE_SCHEMA_KEY: &[u8] = &[];
+/// The key used for the database schema version.
+const DATABASE_SCHEMA_KEY: &[u8] = &[0];
 
 const UNUSED_EMPTY_KEY: &[u8] = &[];
 // We choose the ordering of the variants in `BaseKey` and `RootKey` so that
@@ -246,6 +246,36 @@ mod tests {
         events: HashMap<EventId, Vec<u8>>,
         block_exporter_states: BTreeMap<u32, Vec<(Vec<u8>, Vec<u8>)>>,
         network_description: Option<Vec<u8>>,
+    }
+
+    impl StorageState {
+        fn append_storage_state(&mut self, storage_state: StorageState) {
+            for (chain_id, key_values) in storage_state.chain_ids_key_values {
+                self.chain_ids_key_values.insert(chain_id, key_values);
+            }
+            for (hash, value) in storage_state.certificates {
+                self.certificates.insert(hash, value);
+            }
+            for (hash, value) in storage_state.confirmed_blocks {
+                self.confirmed_blocks.insert(hash, value);
+            }
+            for (blob_id, value) in storage_state.blobs {
+                self.blobs.insert(blob_id, value);
+            }
+            for (blob_id, value) in storage_state.blob_states {
+                self.blob_states.insert(blob_id, value);
+            }
+            for (event_id, value) in storage_state.events {
+                self.events.insert(event_id, value);
+            }
+            for (index, key_values) in storage_state.block_exporter_states {
+                self.block_exporter_states.insert(index, key_values);
+            }
+            if let Some(value) = storage_state.network_description {
+                assert!(self.network_description.is_none());
+                self.network_description = Some(value);
+            }
+        }
     }
 
     fn create_vector(rng: &mut impl Rng, len: usize) -> Vec<u8> {
