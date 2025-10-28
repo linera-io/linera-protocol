@@ -704,6 +704,7 @@ impl StoreConfig {
     }
 
     pub async fn initialize(self, config: &GenesisConfig) -> Result<(), anyhow::Error> {
+        self.clone().run_with_store(StorageMigration).await?;
         self.run_with_store(InitializeStorageJob(config)).await
     }
 }
