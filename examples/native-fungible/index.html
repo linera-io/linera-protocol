@@ -163,8 +163,8 @@
           parent.insertBefore(entry, parent.firstChild);
       }
 
-      async function updateBalance(application, owner) {
-          const response = JSON.parse(await application.query(gql(`query { tickerSymbol, accounts { entry(key: "${owner}") { value } } }`)));
+      async function updateBalance(application, owner, state_hash) {
+          const response = JSON.parse(await application.query(gql(`query { tickerSymbol, accounts { entry(key: "${owner}") { value } } }`), state_hash || ''));
           console.debug('application response:', response);
           document.querySelector('#ticker-symbol').textContent = response.data.tickerSymbol;
           document.querySelector('#balance').textContent = (+( response.data.accounts.entry?.value || 0)).toFixed(2);
@@ -193,7 +193,7 @@
                   recipient: { owner: match[1], chainId: match[2] },
               });
 
-              errors = JSON.parse(await application.query(query)).errors || [];
+              errors = JSON.parse(await application.query(query, '')).errors || [];
           } catch (e) {
               console.error(e);
               errors.push({ message: e.message });
@@ -236,13 +236,18 @@
 
           const application = await client.application(import.meta.env.LINERA_APPLICATION_ID);
 
-          await updateBalance(application, owner);
+          await updateBalance(application, owner, null);
 
           client.onNotification(notification => {
               let newBlock = notification.reason.NewBlock;
-              if (!newBlock) return;
-              prependEntry(document.querySelector('#logs'), newBlock);
-              updateBalance(application, owner);
+              if (notification.reason.BlockExecuted) {
+                let stateHash = notification.reason.BlockExecuted.hash;
+                updateBalance(application, owner, stateHash);
+              } else {
+                if (!newBlock) return;
+                prependEntry(document.querySelector('#logs'), newBlock);
+                updateBalance(application, owner, null);
+              }
           });
 
           submitButton.disabled = false;
