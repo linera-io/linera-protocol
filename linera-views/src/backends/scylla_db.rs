@@ -607,6 +607,10 @@ pub enum ScyllaDbStoreInternalError {
     /// A next row error in ScyllaDB
     #[error(transparent)]
     NextRowError(#[from] NextRowError),
+
+    /// Empty root keys are not supported
+    #[error("Empty root keys are not supported with ScyllaDB")]
+    EmptyRootKey,
 }
 
 impl KeyValueStoreError for ScyllaDbStoreInternalError {
@@ -724,10 +728,12 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
 }
 
 // ScyllaDB requires that the keys are non-empty.
-fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
-    let mut big_key = vec![0];
-    big_key.extend(root_key);
-    big_key
+// Empty root keys are not allowed.
+fn get_big_root_key(root_key: &[u8]) -> Result<Vec<u8>, ScyllaDbStoreInternalError> {
+    if root_key.is_empty() {
+        return Err(ScyllaDbStoreInternalError::EmptyRootKey);
+    }
+    Ok(root_key.to_vec())
 }
 
 /// The type for building a new ScyllaDB Key Value Store
@@ -774,7 +780,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         let store = self.store.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
-        let root_key = get_big_root_key(root_key);
+        let root_key = get_big_root_key(root_key)?;
         Ok(ScyllaDbStoreInternal {
             store,
             semaphore,
@@ -837,7 +843,6 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         let mut root_keys = BTreeSet::new();
         while let Some(row) = rows.next().await {
             let (root_key,) = row?;
-            let root_key = root_key[1..].to_vec();
             root_keys.insert(root_key);
         }
         Ok(root_keys.into_iter().collect::<Vec<_>>())
