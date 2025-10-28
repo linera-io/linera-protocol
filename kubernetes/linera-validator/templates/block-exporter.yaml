@@ -67,7 +67,7 @@ spec:
               memory: "128Mi"
               cpu: "100m"
           command:
-            - sh
+            - bash
             - -c
             - |
               set -euo pipefail
@@ -128,7 +128,7 @@ spec:
             - sh
             - -c
             - |
-              set -euo pipefail
+              set -eu
               # Validate extracted values
               if [ -z "$INDEXER_ENDPOINT" ] || [ -z "$INDEXER_PORT" ]; then
                 echo "Error: INDEXER_ENDPOINT or INDEXER_PORT is empty"
