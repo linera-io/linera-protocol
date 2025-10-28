@@ -1378,12 +1378,16 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Queries an application.
     #[instrument(level = "trace", skip(query))]
-    pub async fn query_application(&self, query: Query) -> Result<QueryOutcome, Error> {
+    pub async fn query_application(
+        &self,
+        query: Query,
+        state_hash: Option<CryptoHash>,
+    ) -> Result<QueryOutcome, Error> {
         loop {
             let result = self
                 .client
                 .local_node
-                .query_application(self.chain_id, query.clone())
+                .query_application(self.chain_id, query.clone(), state_hash)
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let validators = self.client.validator_nodes().await?;
@@ -1405,7 +1409,7 @@ impl<Env: Environment> ChainClient<Env> {
         let QueryOutcome {
             response,
             operations,
-        } = self.query_application(Query::System(query)).await?;
+        } = self.query_application(Query::System(query), None).await?;
         match response {
             QueryResponse::System(response) => Ok(QueryOutcome {
                 response,
@@ -1417,6 +1421,7 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Queries a user application.
     #[instrument(level = "trace", skip(application_id, query))]
+    #[cfg(with_testing)]
     pub async fn query_user_application<A: Abi>(
         &self,
         application_id: ApplicationId<A>,
@@ -1426,7 +1431,7 @@ impl<Env: Environment> ChainClient<Env> {
         let QueryOutcome {
             response,
             operations,
-        } = self.query_application(query).await?;
+        } = self.query_application(query, None).await?;
         match response {
             QueryResponse::User(response_bytes) => {
                 let response = serde_json::from_slice(&response_bytes)?;

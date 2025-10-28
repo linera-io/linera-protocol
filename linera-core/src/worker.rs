@@ -642,9 +642,14 @@ where
         &self,
         chain_id: ChainId,
         query: Query,
+        state_hash: Option<CryptoHash>,
     ) -> Result<QueryOutcome, WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::QueryApplication { query, callback }
+            ChainWorkerRequest::QueryApplication {
+                query,
+                state_hash,
+                callback,
+            }
         })
         .await
     }
