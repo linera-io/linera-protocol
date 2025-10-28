@@ -89,7 +89,7 @@ const MAX_STREAM_NAME_LEN: usize = 64;
 /// current committee, causes the execution state not to be hashed, and instead the hash
 /// returned to be all zeros.
 // Note: testnet-only! This should not survive to mainnet.
-const FLAG_ZERO_HASH: &str = "FLAG_ZERO_HASH.linera.network";
+pub const FLAG_ZERO_HASH: &str = "FLAG_ZERO_HASH.linera.network";
 
 /// An implementation of [`UserContractModule`].
 #[derive(Clone)]

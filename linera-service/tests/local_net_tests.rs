@@ -22,6 +22,7 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
+use linera_execution::FLAG_ZERO_HASH;
 use linera_sdk::linera_base_types::AccountSecretKey;
 use linera_service::{
     cli_wrappers::{
@@ -87,7 +88,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .open_and_assign(&client_2, Amount::from_tokens(3))
         .await?;
     let port = get_node_port().await;
-    let node_service_2 = match network {
+    let mut node_service_2 = match network {
         Network::Grpc | Network::Grpcs => {
             Some(client_2.run_node_service(port, ProcessInbox::Skip).await?)
         }
@@ -237,7 +238,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         )
         .await?;
 
-    if let Some(mut service) = node_service_2 {
+    if let Some(service) = &mut node_service_2 {
         assert!(
             eventually(|| async { !service.process_inbox(&chain_2).await.unwrap().is_empty() })
                 .await
@@ -269,6 +270,54 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         service
             .publish_data_blob(&chain_id, b"blob bytes".to_vec())
             .await?;
+    }
+
+    // Test whether setting the zero hash flag works
+    client.change_http_whitelist(&[FLAG_ZERO_HASH]).await?;
+
+    if let Some(service) = &mut node_service_2 {
+        assert!(
+            eventually(|| async { !service.process_inbox(&chain_2).await.unwrap().is_empty() })
+                .await
+        );
+        let committees = service.query_committees(&chain_2).await?;
+        let epochs = committees.into_keys().collect::<Vec<_>>();
+        assert_eq!(&epochs, &[Epoch(3), Epoch(4)]);
+
+        service.ensure_is_running()?;
+    } else {
+        client_2.sync(chain_2).await?;
+        client_2.process_inbox(chain_2).await?;
+    }
+
+    // Check that we can still produce blocks
+    let recipient =
+        AccountOwner::from(AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public());
+    let account_recipient = Account::new(chain_2, recipient);
+    client
+        .transfer_with_accounts(
+            Amount::from_tokens(5),
+            Account::chain(chain_1),
+            account_recipient,
+        )
+        .await?;
+
+    if let Some(mut service) = node_service_2 {
+        assert!(
+            eventually(|| async { !service.process_inbox(&chain_2).await.unwrap().is_empty() })
+                .await
+        );
+        let balance = service.balance(&account_recipient).await?;
+        assert_eq!(balance, Amount::from_tokens(5));
+
+        service.ensure_is_running()?;
+    } else {
+        client_2.sync(chain_2).await?;
+        client_2.process_inbox(chain_2).await?;
+        assert_eq!(
+            client_2.local_balance(account_recipient).await?,
+            Amount::from_tokens(5),
+        );
     }
 
     net.ensure_is_running().await?;
