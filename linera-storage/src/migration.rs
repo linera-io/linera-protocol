@@ -19,12 +19,12 @@ use crate::{
 
 #[derive(Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]
-enum SchemaDescription {
+enum SchemaVersion {
     /// Version 0, all the blobs, certificates, confirmed blocks, events and network description on the same partition.
-    /// This is marked as default since it does not exist in the old scheme and would be obtained from unwrap_or_default
+    /// This is marked as default since it does not exist in the old scheme and would be obtained from `unwrap_or_default`.
     #[default]
     Version0,
-    /// Version 1, spreading by ChainId, CryptoHash, and BlobId.
+    /// Version 1, spreading by chain ID, crypto hash, and blob ID.
     Version1,
 }
 
@@ -41,14 +41,22 @@ enum BaseKey {
 }
 
 const UNUSED_EMPTY_KEY: &[u8] = &[];
-// The keys corresponding to `ChainState` are not moved.
-// The keys in `BlockExporterState` are moved, but belong to separate root keys.
+// We choose the ordering of the variants in `BaseKey` and `RootKey` so that
+// the root keys corresponding to `ChainState` and `BlockExporter` remain the
+// same in their serialization.
+// This implies that data on those root keys do not need to be moved.
+// For other tag variants, that are on the shared partition, we need to move
+// the data into their own partitions.
 const MOVABLE_KEYS_0_1: &[u8] = &[1, 2, 3, 4, 5, 7];
 
 /// The total number of keys being migrated in a block.
 /// we use chunks to avoid OOM
 const BLOCK_KEY_SIZE: usize = 90;
 
+// We map a `BaseKey` in the shared partition to a `(RootKey,key)` in the
+// new schema. For `ChainState` and `BlockExporterState`, there is no need
+// to move so we use `UNUSED_EMPTY_KEY`.
+//
 fn map_base_key(base_key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ViewError> {
     let base_key = bcs::from_bytes::<BaseKey>(base_key)?;
     match base_key {
@@ -101,14 +109,11 @@ where
         keys: Vec<Vec<u8>>,
     ) -> Result<(), ViewError> {
         tracing::info!(
-            "migrate_storage_shared_partition with first_byte={first_byte} for |base_keys|={}",
+            "migrate_shared_partition for {} keys starting with with {first_byte}",
             keys.len()
         );
         for (index, chunk_keys) in keys.chunks(BLOCK_KEY_SIZE).enumerate() {
-            tracing::info!(
-                "index={index} processing chunk of size {}",
-                chunk_keys.len()
-            );
+            tracing::info!("processing chunk {index} of size {}", chunk_keys.len());
             let chunk_base_keys = chunk_keys
                 .iter()
                 .map(|key| {
@@ -148,16 +153,16 @@ where
         Ok(())
     }
 
-    async fn get_database_schema(&self) -> Result<SchemaDescription, ViewError> {
-        let root_key = RootKey::SchemaDescription.bytes();
+    async fn get_database_schema(&self) -> Result<SchemaVersion, ViewError> {
+        let root_key = RootKey::SchemaVersion.bytes();
         let store = self.database.open_shared(&root_key)?;
-        let value = store.read_value::<SchemaDescription>(DEFAULT_KEY).await?;
+        let value = store.read_value::<SchemaVersion>(DEFAULT_KEY).await?;
         let value = value.unwrap_or_default();
         Ok(value)
     }
 
-    async fn write_database_schema(&self, schema: &SchemaDescription) -> Result<(), ViewError> {
-        let root_key = RootKey::SchemaDescription.bytes();
+    async fn write_database_schema(&self, schema: &SchemaVersion) -> Result<(), ViewError> {
+        let root_key = RootKey::SchemaVersion.bytes();
         let mut batch = Batch::new();
         batch.put_key_value(DEFAULT_KEY.to_vec(), schema)?;
         let store = self.database.open_shared(&root_key)?;
@@ -166,27 +171,25 @@ where
 
     pub async fn migrate_if_needed(&self) -> Result<(), ViewError> {
         let schema = self.get_database_schema().await?;
-        if schema == SchemaDescription::Version0 {
+        if schema == SchemaVersion::Version0 {
             self.migrate_v0_to_v1().await?;
         }
-        self.write_database_schema(&SchemaDescription::Version1)
-            .await?;
+        self.write_database_schema(&SchemaVersion::Version1).await?;
         Ok(())
     }
 
     pub async fn assert_is_migrated_database(&self) -> Result<(), ViewError> {
-        let root_key = RootKey::SchemaDescription.bytes();
+        let root_key = RootKey::SchemaVersion.bytes();
         let store = self.database.open_shared(&root_key)?;
         if store.contains_key(DEFAULT_KEY).await? {
             // The network description exists. Therefore, we are not starting
             // from scratch
             let schema = self.get_database_schema().await?;
-            assert_eq!(schema, SchemaDescription::Version1);
+            assert_eq!(schema, SchemaVersion::Version1);
         } else {
             // Starting from scratch, so write the Schema to avoid migrating
             // later.
-            self.write_database_schema(&SchemaDescription::Version1)
-                .await?;
+            self.write_database_schema(&SchemaVersion::Version1).await?;
         }
         Ok(())
     }
@@ -508,8 +511,8 @@ mod tests {
                             events.insert(event_id, value);
                         }
                     }
-                    RootKey::SchemaDescription => {
-                        // Not part of the state
+                    RootKey::SchemaVersion => {
+                        // No operation needed.
                     }
                     RootKey::NetworkDescription => {
                         let store = database.open_shared(&bcs_root_key)?;
