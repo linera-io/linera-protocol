@@ -25,8 +25,6 @@ pub const ALPHA_SMOOTHING_FACTOR: f64 = 0.1;
 /// Configuration for the `RequestsScheduler`.
 #[derive(Debug, Clone)]
 pub struct RequestsSchedulerConfig {
-    /// Maximum concurrent requests per validator node
-    pub max_in_flight_requests: usize,
     /// Maximum expected latency in milliseconds for score normalization
     pub max_accepted_latency_ms: f64,
     /// Time-to-live for cached responses in milliseconds
@@ -42,7 +40,6 @@ pub struct RequestsSchedulerConfig {
 impl Default for RequestsSchedulerConfig {
     fn default() -> Self {
         Self {
-            max_in_flight_requests: MAX_IN_FLIGHT_REQUESTS,
             max_accepted_latency_ms: MAX_ACCEPTED_LATENCY_MS,
             cache_ttl_ms: CACHE_TTL_MS,
             cache_max_size: CACHE_MAX_SIZE,
