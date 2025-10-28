@@ -125,9 +125,6 @@ pub struct RequestsScheduler<Env: Environment> {
     /// Thread-safe map of validator nodes indexed by their public keys.
     /// Each node is wrapped with EMA-based performance tracking information.
     nodes: Arc<tokio::sync::RwLock<BTreeMap<ValidatorPublicKey, NodeInfo<Env>>>>,
-    /// Maximum number of concurrent requests allowed per node.
-    /// Prevents overwhelming individual validators with too many parallel requests.
-    max_requests_per_node: usize,
     /// Default scoring weights applied to new nodes.
     weights: ScoringWeights,
     /// Default EMA smoothing factor for new nodes.
@@ -148,7 +145,6 @@ impl<Env: Environment> RequestsScheduler<Env> {
     ) -> Self {
         Self::with_config(
             nodes,
-            config.max_in_flight_requests,
             ScoringWeights::default(),
             config.alpha,
             config.max_accepted_latency_ms,
@@ -169,10 +165,8 @@ impl<Env: Environment> RequestsScheduler<Env> {
     /// - `cache_ttl`: Time-to-live for cached responses
     /// - `max_cache_size`: Maximum number of entries in the cache
     /// - `max_request_ttl`: Maximum latency for an in-flight request before we stop deduplicating it
-    #[expect(clippy::too_many_arguments)]
     pub fn with_config(
         nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
-        max_requests_per_node: usize,
         weights: ScoringWeights,
         alpha: f64,
         max_expected_latency_ms: f64,
@@ -193,7 +187,6 @@ impl<Env: Environment> RequestsScheduler<Env> {
                     })
                     .collect(),
             )),
-            max_requests_per_node,
             weights,
             alpha,
             max_expected_latency: max_expected_latency_ms,
@@ -771,7 +764,6 @@ mod tests {
     ) -> Arc<RequestsScheduler<TestEnvironment>> {
         let mut manager = RequestsScheduler::with_config(
             vec![], // No actual nodes needed for these tests
-            10,
             ScoringWeights::default(),
             0.1,
             1000.0,
@@ -1029,7 +1021,6 @@ mod tests {
         let manager: Arc<RequestsScheduler<TestEnvironment>> =
             Arc::new(RequestsScheduler::with_config(
                 nodes.clone(),
-                1,
                 ScoringWeights::default(),
                 0.1,
                 1000.0,
