@@ -1,10 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use custom_debug_derive::Debug;
-use tokio::sync::Semaphore;
 
 use super::scoring::ScoringWeights;
 use crate::{environment::Environment, remote_node::RemoteNode};
@@ -20,9 +17,8 @@ pub(super) struct NodeInfo<Env: Environment> {
     /// The underlying validator node connection
     pub(super) node: RemoteNode<Env::ValidatorNode>,
 
-    /// Semaphore to limit concurrent in-flight requests.
-    /// It's created with a limit set to `max_in_flight` from configuration.
-    pub(super) in_flight_semaphore: Arc<Semaphore>,
+    /// Tracks the number of in-flight requests to this node.
+    pub(super) current_load: u32,
 
     /// Exponential Moving Average of latency in milliseconds
     /// Adapts quickly to changes in response time
@@ -63,7 +59,7 @@ impl<Env: Environment> NodeInfo<Env> {
             node,
             ema_latency_ms: 100.0, // Start with reasonable latency expectation
             ema_success_rate: 1.0, // Start optimistically with 100% success
-            in_flight_semaphore: Arc::new(tokio::sync::Semaphore::new(max_in_flight)),
+            current_load: 0,
             total_requests: 0,
             weights,
             alpha,
@@ -90,10 +86,9 @@ impl<Env: Environment> NodeInfo<Env> {
         let success_score = self.ema_success_rate;
 
         // 3. Normalize Load (lower is better, so we invert)
-        let current_load =
-            (self.max_in_flight as f64) - (self.in_flight_semaphore.available_permits() as f64);
-        let load_score =
-            1.0 - (current_load.min(self.max_in_flight as f64) / self.max_in_flight as f64);
+        let load_score = 1.0
+            - ((self.current_load as f64).min(self.max_in_flight as f64)
+                / self.max_in_flight as f64);
 
         // 4. Apply cold-start penalty for nodes with very few requests
         let confidence_factor = (self.total_requests as f64 / 10.0).min(1.0);
