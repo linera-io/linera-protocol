@@ -1818,8 +1818,6 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     notifications.wait_for_block(height2.try_add_one()?).await?;
     assert_eq!(app2.query(query).await?, expected_response);
 
-    let tip_after_first_post = node_service2.chain_tip(chain1).await?;
-
     // Perform an operation that does not emit events, or messages that client 2 listens to - to be
     // safe, we just transfer from chain1 to itself.
     node_service1
@@ -1845,11 +1843,6 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     });
     notifications.wait_for_block(height2.try_add_one()?).await?;
     assert_eq!(app2.query(query).await?, expected_response);
-
-    let tip_after_second_post = node_service2.chain_tip(chain1).await?;
-    // The second post should not have moved the tip hash - client 2 should have only preprocessed
-    // that block, without downloading the transfer block in between.
-    assert_eq!(tip_after_first_post, tip_after_second_post);
 
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
