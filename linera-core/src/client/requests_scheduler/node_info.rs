@@ -17,9 +17,6 @@ pub(super) struct NodeInfo<Env: Environment> {
     /// The underlying validator node connection
     pub(super) node: RemoteNode<Env::ValidatorNode>,
 
-    /// Tracks the number of in-flight requests to this node.
-    pub(super) current_load: u32,
-
     /// Exponential Moving Average of latency in milliseconds
     /// Adapts quickly to changes in response time
     ema_latency_ms: f64,
@@ -40,9 +37,6 @@ pub(super) struct NodeInfo<Env: Environment> {
 
     /// Maximum expected latency in milliseconds for score normalization
     max_expected_latency_ms: f64,
-
-    /// Maximum expected in-flight requests for score normalization
-    max_in_flight: usize,
 }
 
 impl<Env: Environment> NodeInfo<Env> {
@@ -52,19 +46,16 @@ impl<Env: Environment> NodeInfo<Env> {
         weights: ScoringWeights,
         alpha: f64,
         max_expected_latency_ms: f64,
-        max_in_flight: usize,
     ) -> Self {
         assert!(alpha > 0.0 && alpha < 1.0, "Alpha must be in (0, 1) range");
         Self {
             node,
             ema_latency_ms: 100.0, // Start with reasonable latency expectation
             ema_success_rate: 1.0, // Start optimistically with 100% success
-            current_load: 0,
             total_requests: 0,
             weights,
             alpha,
             max_expected_latency_ms,
-            max_in_flight,
         }
     }
 
@@ -85,18 +76,12 @@ impl<Env: Environment> NodeInfo<Env> {
         // 2. Success Rate is already normalized [0, 1]
         let success_score = self.ema_success_rate;
 
-        // 3. Normalize Load (lower is better, so we invert)
-        let load_score = 1.0
-            - ((self.current_load as f64).min(self.max_in_flight as f64)
-                / self.max_in_flight as f64);
-
         // 4. Apply cold-start penalty for nodes with very few requests
         let confidence_factor = (self.total_requests as f64 / 10.0).min(1.0);
 
         // 5. Combine with weights
-        let raw_score = (self.weights.latency * latency_score)
-            + (self.weights.success * success_score)
-            + (self.weights.load * load_score);
+        let raw_score =
+            (self.weights.latency * latency_score) + (self.weights.success * success_score);
 
         // Apply confidence factor to penalize nodes with too few samples
         raw_score * (0.5 + 0.5 * confidence_factor)
