@@ -93,7 +93,6 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     sender_chain_worker_ttl: Duration::from_millis(200),
     grace_period: linera_core::DEFAULT_GRACE_PERIOD,
     max_joined_tasks: 100,
-    max_in_flight_requests: linera_core::client::requests_scheduler::MAX_IN_FLIGHT_REQUESTS,
     max_accepted_latency_ms: linera_core::client::requests_scheduler::MAX_ACCEPTED_LATENCY_MS,
     cache_ttl_ms: linera_core::client::requests_scheduler::CACHE_TTL_MS,
     cache_max_size: linera_core::client::requests_scheduler::CACHE_MAX_SIZE,

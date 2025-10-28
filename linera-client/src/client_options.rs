@@ -187,14 +187,6 @@ pub struct ClientContextOptions {
     #[arg(long, default_value = "100")]
     pub max_joined_tasks: usize,
 
-    /// Maximum concurrent requests per validator node.
-    #[arg(
-        long,
-        default_value_t = linera_core::client::requests_scheduler::MAX_IN_FLIGHT_REQUESTS,
-        env = "LINERA_REQUESTS_SCHEDULER_MAX_IN_FLIGHT_REQUESTS"
-    )]
-    pub max_in_flight_requests: usize,
-
     /// Maximum expected latency in milliseconds for score normalization.
     #[arg(
         long,
@@ -276,7 +268,6 @@ impl ClientContextOptions {
         &self,
     ) -> linera_core::client::RequestsSchedulerConfig {
         linera_core::client::RequestsSchedulerConfig {
-            max_in_flight_requests: self.max_in_flight_requests,
             max_accepted_latency_ms: self.max_accepted_latency_ms,
             cache_ttl_ms: self.cache_ttl_ms,
             cache_max_size: self.cache_max_size,
