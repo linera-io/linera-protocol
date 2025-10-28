@@ -835,7 +835,8 @@ where
     }
     assert_eq!(keys, read_keys);
 
-    // Checking prefix freeness of the
+    // Checking prefix freeness of the (root_key, key). This is a
+    // common problem that needs to be tested.
     let database = D::connect_test_namespace().await.expect("database");
     let store1 = database.open_shared(&[2, 3, 4, 5]).expect("store1");
     let mut batch = Batch::new();
