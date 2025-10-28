@@ -188,13 +188,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
                     .map(|node| {
                         (
                             node.public_key,
-                            NodeInfo::with_config(
-                                node,
-                                weights,
-                                alpha,
-                                max_expected_latency_ms,
-                                max_requests_per_node,
-                            ),
+                            NodeInfo::with_config(node, weights, alpha, max_expected_latency_ms),
                         )
                     })
                     .collect(),
@@ -474,23 +468,11 @@ impl<Env: Environment> RequestsScheduler<Env> {
         let start_time = Instant::now();
         let public_key = peer.public_key;
 
-        // Acquire request slot
-        {
-            let mut nodes = self.nodes.write().await;
-            let node = nodes.get_mut(&public_key).expect("Node must exist");
-            node.current_load += 1;
-        }
-
         // Execute the operation
         let result = operation(peer).await;
 
         // Update metrics and release slot
         let response_time_ms = start_time.elapsed().as_millis() as u64;
-        {
-            let mut nodes = self.nodes.write().await;
-            let node = nodes.get_mut(&public_key).expect("Node must exist");
-            node.current_load = node.current_load.saturating_sub(1);
-        }
         let is_success = result.is_ok();
         {
             let mut nodes = self.nodes.write().await;
@@ -756,13 +738,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         let mut nodes = self.nodes.write().await;
         let public_key = node.public_key;
         nodes.entry(public_key).or_insert_with(|| {
-            NodeInfo::with_config(
-                node,
-                self.weights,
-                self.alpha,
-                self.max_expected_latency,
-                self.max_requests_per_node,
-            )
+            NodeInfo::with_config(node, self.weights, self.alpha, self.max_expected_latency)
         });
     }
 }
