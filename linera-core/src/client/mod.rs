@@ -52,10 +52,10 @@ use crate::{
     environment::Environment,
     local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNodeProvider as _},
-    notifier::ChannelNotifier,
+    notifier::{ChannelNotifier, Notifier as _},
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, ValidatorUpdater},
-    worker::{Notification, ProcessableCertificate, WorkerError, WorkerState},
+    worker::{Notification, ProcessableCertificate, Reason, WorkerError, WorkerState},
     CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
@@ -1499,6 +1499,17 @@ impl<Env: Environment> Client<Env> {
                 self.update_local_node_with_blobs_from(blob_ids.clone(), &validators)
                     .await?;
                 continue; // We found the missing blob: retry.
+            }
+            if let Ok((block, _)) = &result {
+                let hash = CryptoHash::new(block);
+                let notification = Notification {
+                    chain_id: block.header.chain_id,
+                    reason: Reason::BlockExecuted {
+                        height: block.header.height,
+                        hash,
+                    },
+                };
+                self.notifier.notify(&[notification]);
             }
             return Ok(result?);
         }

@@ -2595,6 +2595,9 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                 }
             }
+            Reason::BlockExecuted { .. } => {
+                // No action needed.
+            }
         }
         Ok(())
     }

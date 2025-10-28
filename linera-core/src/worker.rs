@@ -148,6 +148,10 @@ pub enum Reason {
         height: BlockHeight,
         round: Round,
     },
+    BlockExecuted {
+        height: BlockHeight,
+        hash: CryptoHash,
+    },
 }
 
 /// Error type for worker operations.

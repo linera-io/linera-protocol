@@ -4656,6 +4656,9 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
                 reason @ Reason::NewRound { .. } | reason @ Reason::NewEvents { .. } => {
                     panic!("Unexpected notification about transfer #{i} {reason:?}")
                 }
+                Reason::BlockExecuted { .. } => {
+                    // Ignored
+                }
             }
         };
 
