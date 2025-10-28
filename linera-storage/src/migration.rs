@@ -13,7 +13,10 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    db_storage::{to_event_key, DbStorage, MultiPartitionBatch, RootKey, NETWORK_DESCRIPTION_KEY, LITE_CERTIFICATE_KEY, BLOB_KEY, BLOCK_KEY, BLOB_STATE_KEY},
+    db_storage::{
+        to_event_key, DbStorage, MultiPartitionBatch, RootKey, BLOB_KEY, BLOB_STATE_KEY, BLOCK_KEY,
+        LITE_CERTIFICATE_KEY, NETWORK_DESCRIPTION_KEY,
+    },
     Clock,
 };
 
@@ -159,7 +162,9 @@ where
     async fn get_database_schema(&self) -> Result<SchemaVersion, ViewError> {
         let root_key = RootKey::SchemaVersion.bytes();
         let store = self.database.open_shared(&root_key)?;
-        let value = store.read_value::<SchemaVersion>(DATABASE_SCHEMA_KEY).await?;
+        let value = store
+            .read_value::<SchemaVersion>(DATABASE_SCHEMA_KEY)
+            .await?;
         let value = value.unwrap_or_default();
         Ok(value)
     }
@@ -208,9 +213,7 @@ mod tests {
 
     use linera_base::{
         crypto::CryptoHash,
-        identifiers::{
-            BlobId, BlobType, ChainId, EventId, StreamId, StreamName,
-        },
+        identifiers::{BlobId, BlobType, ChainId, EventId, StreamId, StreamName},
     };
     #[cfg(feature = "rocksdb")]
     use linera_views::rocks_db::RocksDbDatabase;
@@ -226,12 +229,15 @@ mod tests {
         },
         ViewError,
     };
-    use rand::{Rng, distributions};
+    use rand::{distributions, Rng};
     use test_case::test_case;
 
     use crate::{
         db_storage::RestrictedEventId,
-        migration::{BaseKey, RootKey, NETWORK_DESCRIPTION_KEY, LITE_CERTIFICATE_KEY, BLOB_KEY, BLOCK_KEY, BLOB_STATE_KEY},
+        migration::{
+            BaseKey, RootKey, BLOB_KEY, BLOB_STATE_KEY, BLOCK_KEY, LITE_CERTIFICATE_KEY,
+            NETWORK_DESCRIPTION_KEY,
+        },
         DbStorage, WallClock,
     };
 
@@ -309,7 +315,7 @@ mod tests {
         let key_size = 5;
         let value_size = 10;
         // 0: the chain states.
-        let chain_id_count = 2;
+        let chain_id_count = 10;
         let n_key = 1;
         let mut chain_ids_key_values = BTreeMap::new();
         for _i_chain in 0..chain_id_count {
@@ -325,7 +331,7 @@ mod tests {
             chain_ids_key_values.insert(chain_id, key_values);
         }
         // 1: the certificates
-        let certificates_count = 2;
+        let certificates_count = 10;
         let mut certificates = BTreeMap::new();
         for _i_certificate in 0..certificates_count {
             let hash = get_hash(&mut rng);
@@ -333,7 +339,7 @@ mod tests {
             certificates.insert(hash, value);
         }
         // 2: the confirmed blocks (along with certificates)
-        let blocks_count = 2;
+        let blocks_count = 10;
         let mut confirmed_blocks = BTreeMap::new();
         for _i_block in 0..blocks_count {
             let hash = get_hash(&mut rng);
@@ -569,10 +575,22 @@ mod tests {
         D::Error: Send + Sync,
     {
         let database = D::connect_test_namespace().await?;
-        let storage_state = get_storage_state();
+        // Get a storage state and write it.
+        let mut storage_state = get_storage_state();
         write_storage_state_old_schema(&database, storage_state.clone()).await?;
+        // Creating a storage and migrate to the new database schema.
         let storage = DbStorage::<D, WallClock>::new(database, None, WallClock);
         storage.migrate_if_needed().await?;
+        // read the storage state and compare it.
+        let read_storage_state = read_storage_state_new_schema(storage.database.deref()).await?;
+        assert_eq!(read_storage_state, storage_state);
+        // Creates a new storage state, write it and migrate it.
+        // That should simulate the partial migration interrupted for some reason and restarted.
+        let mut appended_state = get_storage_state();
+        appended_state.network_description = None;
+        write_storage_state_old_schema(storage.database.deref(), appended_state.clone()).await?;
+        storage.migrate_if_needed().await?;
+        storage_state.append_storage_state(appended_state);
         let read_storage_state = read_storage_state_new_schema(storage.database.deref()).await?;
         assert_eq!(read_storage_state, storage_state);
         Ok(())

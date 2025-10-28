@@ -240,8 +240,6 @@ pub(crate) const BLOCK_KEY: &[u8] = &[221];
 /// The key used for the network description.
 pub(crate) const NETWORK_DESCRIPTION_KEY: &[u8] = &[119];
 
-
-
 fn get_block_keys() -> Vec<Vec<u8>> {
     vec![LITE_CERTIFICATE_KEY.to_vec(), BLOCK_KEY.to_vec()]
 }
