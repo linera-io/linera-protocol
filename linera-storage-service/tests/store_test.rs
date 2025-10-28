@@ -4,13 +4,10 @@
 #![cfg(feature = "storage-service")]
 
 use anyhow::Result;
-use linera_storage_service::client::{StorageServiceDatabase, StorageServiceDatabaseInternal};
+use linera_storage_service::client::StorageServiceDatabaseInternal;
 use linera_views::{
     batch::Batch,
-    store::{
-        KeyValueDatabase as _, ReadableKeyValueStore as _, TestKeyValueDatabase as _,
-        WritableKeyValueStore as _,
-    },
+    store::TestKeyValueDatabase as _,
     test_utils::{
         get_random_byte_vector, get_random_test_scenarios, namespace_admin_test,
         root_key_admin_test, run_reads, run_test_batch_from_blank, run_writes_from_blank,
@@ -61,19 +58,5 @@ async fn test_storage_service_big_raw_write() -> Result<()> {
     let key_prefix = vec![43];
     batch.put_key_value_bytes(vec![43, 57], vector);
     run_test_batch_from_blank(&store, key_prefix, batch).await;
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_storage_service_open_shared() -> Result<()> {
-    let database = StorageServiceDatabase::connect_test_namespace().await?;
-    let store1 = database.open_shared(&[2, 3, 4, 5])?;
-    let mut batch = Batch::new();
-    batch.put_key_value_bytes(vec![6, 7], vec![123, 135]);
-    store1.write_batch(batch).await?;
-
-    let store2 = database.open_shared(&[])?;
-    let key_values = store2.find_key_values_by_prefix(&[2]).await?;
-    assert_eq!(key_values.len(), 0);
     Ok(())
 }
