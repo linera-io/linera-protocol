@@ -225,10 +225,10 @@ pub mod metrics {
     });
 }
 
-/// The default key used when the root_key contains the information.
+/// The default key used when the root key contains all the information.
 pub(crate) const DEFAULT_KEY: &[u8] = &[0];
 
-/// The second key used when the root_key contains the information.
+/// The second key used when the root key contains all the information.
 pub(crate) const ONE_KEY: &[u8] = &[1];
 
 fn get_01_keys() -> Vec<Vec<u8>> {
@@ -338,6 +338,11 @@ pub(crate) enum RootKey {
     BlockExporterState(u32),
 }
 
+const CHAIN_ID_TAG: u8 = 0;
+const BLOB_ID_TAG: u8 = 2;
+const CHAIN_ID_LENGTH: usize = std::mem::size_of::<ChainId>();
+const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
+
 impl RootKey {
     pub(crate) fn bytes(&self) -> Vec<u8> {
         bcs::to_bytes(self).unwrap()
@@ -364,11 +369,6 @@ fn is_chain_state(root_key: &[u8]) -> bool {
     }
     root_key[0] == CHAIN_ID_TAG
 }
-
-const CHAIN_ID_TAG: u8 = 0;
-const BLOB_ID_TAG: u8 = 2;
-const CHAIN_ID_LENGTH: usize = std::mem::size_of::<ChainId>();
-const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
 
 #[cfg(test)]
 mod tests {
@@ -585,7 +585,7 @@ where
         &self.clock
     }
 
-    #[instrument(level = "trace", skip_all, fields(chain_id = %chain_id))]
+    #[instrument(level = "trace", skip_all, fields(%chain_id))]
     async fn load_chain(
         &self,
         chain_id: ChainId,
@@ -605,7 +605,7 @@ where
         ChainStateView::load(context).await
     }
 
-    #[instrument(level = "trace", skip_all, fields(blob_id = %blob_id))]
+    #[instrument(level = "trace", skip_all, fields(%blob_id))]
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let root_key = RootKey::Blob(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
@@ -621,8 +621,7 @@ where
         for blob_id in blob_ids {
             let root_key = RootKey::Blob(*blob_id).bytes();
             let store = self.database.open_shared(&root_key)?;
-            let test = store.contains_key(DEFAULT_KEY).await?;
-            if !test {
+            if !store.contains_key(DEFAULT_KEY).await? {
                 missing_blobs.push(*blob_id);
             }
         }
@@ -631,7 +630,7 @@ where
         Ok(missing_blobs)
     }
 
-    #[instrument(skip_all, fields(blob_id = %blob_id))]
+    #[instrument(skip_all, fields(%blob_id))]
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let root_key = RootKey::Blob(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
@@ -643,7 +642,7 @@ where
         Ok(test)
     }
 
-    #[instrument(skip_all, fields(hash = %hash))]
+    #[instrument(skip_all, fields(%hash))]
     async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
@@ -658,7 +657,7 @@ where
         Ok(value)
     }
 
-    #[instrument(skip_all, fields(blob_id = %blob_id))]
+    #[instrument(skip_all, fields(%blob_id))]
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
         let root_key = RootKey::Blob(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
@@ -684,7 +683,7 @@ where
         Ok(blobs)
     }
 
-    #[instrument(skip_all, fields(blob_id = %blob_id))]
+    #[instrument(skip_all, fields(%blob_id))]
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError> {
         let root_key = RootKey::Blob(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
@@ -805,7 +804,7 @@ where
         self.write_batch(batch).await
     }
 
-    #[instrument(skip_all, fields(hash = %hash))]
+    #[instrument(skip_all, fields(%hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let root_key = RootKey::CryptoHash(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
@@ -817,7 +816,7 @@ where
         Ok(results[0] && results[1])
     }
 
-    #[instrument(skip_all, fields(hash = %hash))]
+    #[instrument(skip_all, fields(%hash))]
     async fn read_certificate(
         &self,
         hash: CryptoHash,
@@ -916,7 +915,7 @@ where
         Ok(exists)
     }
 
-    #[instrument(skip_all, fields(chain_id = %chain_id, stream_id = %stream_id, start_index = %start_index))]
+    #[instrument(skip_all, fields(%chain_id, %stream_id, %start_index))]
     async fn read_events_from_index(
         &self,
         chain_id: &ChainId,

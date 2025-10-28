@@ -179,7 +179,7 @@ where
     }
 
     pub async fn assert_is_migrated_database(&self) -> Result<(), ViewError> {
-        let root_key = RootKey::SchemaVersion.bytes();
+        let root_key = RootKey::NetworkDescription.bytes();
         let store = self.database.open_shared(&root_key)?;
         if store.contains_key(DEFAULT_KEY).await? {
             // The network description exists. Therefore, we are not starting
@@ -206,7 +206,7 @@ mod tests {
     use linera_base::{
         crypto::CryptoHash,
         identifiers::{
-            BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId, StreamName,
+            BlobId, BlobType, ChainId, EventId, StreamId, StreamName,
         },
     };
     #[cfg(feature = "rocksdb")]
@@ -223,7 +223,7 @@ mod tests {
         },
         ViewError,
     };
-    use rand::Rng;
+    use rand::{Rng, distributions};
     use test_case::test_case;
 
     use crate::{
@@ -245,13 +245,8 @@ mod tests {
         network_description: Option<Vec<u8>>,
     }
 
-    fn get_vector(rng: &mut impl Rng, len: usize) -> Vec<u8> {
-        let mut v = Vec::new();
-        for _ in 0..len {
-            let value = rng.gen::<u8>();
-            v.push(value);
-        }
-        v
+    fn create_vector(rng: &mut impl Rng, len: usize) -> Vec<u8> {
+        rng.sample_iter(distributions::Standard).take(len).collect()
     }
 
     fn get_hash(rng: &mut impl Rng) -> CryptoHash {
@@ -260,12 +255,8 @@ mod tests {
     }
 
     fn get_stream_id(rng: &mut impl Rng) -> StreamId {
-        let application_id = GenericApplicationId::System;
-        let stream_name = StreamName(get_vector(rng, 10));
-        StreamId {
-            application_id,
-            stream_name,
-        }
+        let stream_name = StreamName(create_vector(rng, 10));
+        StreamId::system(stream_name)
     }
 
     fn get_event_id(rng: &mut impl Rng) -> EventId {
@@ -280,96 +271,93 @@ mod tests {
         }
     }
 
-    fn reorder_key_values(key_values: Vec<(Vec<u8>, Vec<u8>)>) -> Vec<(Vec<u8>, Vec<u8>)> {
-        let map = key_values
-            .into_iter()
-            .collect::<BTreeMap<Vec<u8>, Vec<u8>>>();
-        map.into_iter().collect::<Vec<(Vec<u8>, Vec<u8>)>>()
-    }
-
     fn get_storage_state() -> StorageState {
         let mut rng = make_deterministic_rng();
         let key_size = 5;
         let value_size = 10;
         // 0: the chain states.
-        let n_chain_id = 2;
+        let chain_id_count = 2;
         let n_key = 1;
         let mut chain_ids_key_values = BTreeMap::new();
-        for _i_chain in 0..n_chain_id {
+        for _i_chain in 0..chain_id_count {
             let hash = get_hash(&mut rng);
             let chain_id = ChainId(hash);
             let mut key_values = Vec::new();
             for _i_key in 0..n_key {
-                let key = get_vector(&mut rng, key_size);
-                let value = get_vector(&mut rng, value_size);
+                let key = create_vector(&mut rng, key_size);
+                let value = create_vector(&mut rng, value_size);
                 key_values.push((key, value));
             }
-            chain_ids_key_values.insert(chain_id, reorder_key_values(key_values));
+            key_values.sort_unstable();
+            chain_ids_key_values.insert(chain_id, key_values);
         }
         // 1: the certificates
-        let n_certificate = 2;
+        let certificates_count = 2;
         let mut certificates = BTreeMap::new();
-        for _i_certificate in 0..n_certificate {
+        for _i_certificate in 0..certificates_count {
             let hash = get_hash(&mut rng);
-            let value = get_vector(&mut rng, value_size);
+            let value = create_vector(&mut rng, value_size);
             certificates.insert(hash, value);
         }
-        // 2: the confirmed blocks
-        let n_blocks = 2;
+        // 2: the confirmed blocks (along with certificates)
+        let blocks_count = 2;
         let mut confirmed_blocks = BTreeMap::new();
-        for _i_block in 0..n_blocks {
+        for _i_block in 0..blocks_count {
             let hash = get_hash(&mut rng);
-            let value = get_vector(&mut rng, value_size);
+            let value = create_vector(&mut rng, value_size);
+            certificates.insert(hash, value);
+            let value = create_vector(&mut rng, value_size);
             confirmed_blocks.insert(hash, value);
         }
         // 3: the blobs
-        let n_blobs = 2;
+        let blobs_count = 2;
         let mut blobs = BTreeMap::new();
-        for _i_blob in 0..n_blobs {
+        for _i_blob in 0..blobs_count {
             let hash = get_hash(&mut rng);
             let blob_id = BlobId {
                 blob_type: BlobType::Data,
                 hash,
             };
-            let value = get_vector(&mut rng, value_size);
+            let value = create_vector(&mut rng, value_size);
             blobs.insert(blob_id, value);
         }
         // 4: the blob states
-        let n_blob_states = 2;
+        let blob_states_count = 2;
         let mut blob_states = BTreeMap::new();
-        for _i_blob_state in 0..n_blob_states {
+        for _i_blob_state in 0..blob_states_count {
             let hash = get_hash(&mut rng);
             let blob_id = BlobId {
                 blob_type: BlobType::Data,
                 hash,
             };
-            let value = get_vector(&mut rng, value_size);
+            let value = create_vector(&mut rng, value_size);
             blob_states.insert(blob_id, value);
         }
         // 5: the events
-        let n_events = 2;
+        let events_count = 2;
         let mut events = HashMap::new();
-        for _i_event in 0..n_events {
+        for _i_event in 0..events_count {
             let event_id = get_event_id(&mut rng);
-            let value = get_vector(&mut rng, value_size);
+            let value = create_vector(&mut rng, value_size);
             events.insert(event_id, value);
         }
-        // 6: the block exports
-        let n_block_exports = 2;
+        // 6: the block exporters
+        let block_exporters_count = 2;
         let n_key = 1;
         let mut block_exporter_states = BTreeMap::new();
-        for _i_block_export in 0..n_block_exports {
+        for _i_block_export in 0..block_exporters_count {
             let index = rng.gen::<u32>();
             let mut key_values = Vec::new();
             for _i_key in 0..n_key {
-                let key = get_vector(&mut rng, key_size);
-                let value = get_vector(&mut rng, value_size);
+                let key = create_vector(&mut rng, key_size);
+                let value = create_vector(&mut rng, value_size);
                 key_values.push((key, value));
             }
-            block_exporter_states.insert(index, reorder_key_values(key_values));
+            key_values.sort_unstable();
+            block_exporter_states.insert(index, key_values);
         }
         // 7: network description
-        let network_description = Some(get_vector(&mut rng, value_size));
+        let network_description = Some(create_vector(&mut rng, value_size));
         StorageState {
             chain_ids_key_values,
             certificates,
@@ -446,7 +434,7 @@ mod tests {
             return false;
         }
         if root_key == [4] {
-            // It corresponds to the key of the schema database.
+            // It corresponds to the key of the database schema.
             return false;
         }
         true
