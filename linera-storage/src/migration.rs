@@ -13,7 +13,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    db_storage::{to_event_key, DbStorage, MultiPartitionBatch, RootKey, DEFAULT_KEY, ONE_KEY},
+    db_storage::{to_event_key, DbStorage, MultiPartitionBatch, RootKey, NETWORK_DESCRIPTION_KEY, LITE_CERTIFICATE_KEY, BLOB_KEY, BLOCK_KEY, BLOB_STATE_KEY},
     Clock,
 };
 
@@ -39,6 +39,9 @@ enum BaseKey {
     BlockExporterState(u32),
     NetworkDescription,
 }
+
+/// The key used the the database schema
+const DATABASE_SCHEMA_KEY: &[u8] = &[];
 
 const UNUSED_EMPTY_KEY: &[u8] = &[];
 // We choose the ordering of the variants in `BaseKey` and `RootKey` so that
@@ -66,19 +69,19 @@ fn map_base_key(base_key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ViewError> {
         }
         BaseKey::Certificate(hash) => {
             let root_key = RootKey::CryptoHash(hash).bytes();
-            Ok((root_key, DEFAULT_KEY.to_vec()))
+            Ok((root_key, LITE_CERTIFICATE_KEY.to_vec()))
         }
         BaseKey::ConfirmedBlock(hash) => {
             let root_key = RootKey::CryptoHash(hash).bytes();
-            Ok((root_key, ONE_KEY.to_vec()))
+            Ok((root_key, BLOCK_KEY.to_vec()))
         }
         BaseKey::Blob(blob_id) => {
             let root_key = RootKey::Blob(blob_id).bytes();
-            Ok((root_key, DEFAULT_KEY.to_vec()))
+            Ok((root_key, BLOB_KEY.to_vec()))
         }
         BaseKey::BlobState(blob_id) => {
             let root_key = RootKey::Blob(blob_id).bytes();
-            Ok((root_key, ONE_KEY.to_vec()))
+            Ok((root_key, BLOB_STATE_KEY.to_vec()))
         }
         BaseKey::Event(event_id) => {
             let root_key = RootKey::Event(event_id.chain_id).bytes();
@@ -91,7 +94,7 @@ fn map_base_key(base_key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ViewError> {
         }
         BaseKey::NetworkDescription => {
             let root_key = RootKey::NetworkDescription.bytes();
-            Ok((root_key, DEFAULT_KEY.to_vec()))
+            Ok((root_key, NETWORK_DESCRIPTION_KEY.to_vec()))
         }
     }
 }
@@ -156,7 +159,7 @@ where
     async fn get_database_schema(&self) -> Result<SchemaVersion, ViewError> {
         let root_key = RootKey::SchemaVersion.bytes();
         let store = self.database.open_shared(&root_key)?;
-        let value = store.read_value::<SchemaVersion>(DEFAULT_KEY).await?;
+        let value = store.read_value::<SchemaVersion>(DATABASE_SCHEMA_KEY).await?;
         let value = value.unwrap_or_default();
         Ok(value)
     }
@@ -164,7 +167,7 @@ where
     async fn write_database_schema(&self, schema: &SchemaVersion) -> Result<(), ViewError> {
         let root_key = RootKey::SchemaVersion.bytes();
         let mut batch = Batch::new();
-        batch.put_key_value(DEFAULT_KEY.to_vec(), schema)?;
+        batch.put_key_value(DATABASE_SCHEMA_KEY.to_vec(), schema)?;
         let store = self.database.open_shared(&root_key)?;
         Ok(store.write_batch(batch).await?)
     }
@@ -181,7 +184,7 @@ where
     pub async fn assert_is_migrated_database(&self) -> Result<(), ViewError> {
         let root_key = RootKey::NetworkDescription.bytes();
         let store = self.database.open_shared(&root_key)?;
-        if store.contains_key(DEFAULT_KEY).await? {
+        if store.contains_key(NETWORK_DESCRIPTION_KEY).await? {
             // The network description exists. Therefore, we are not starting
             // from scratch
             let schema = self.get_database_schema().await?;
@@ -228,7 +231,7 @@ mod tests {
 
     use crate::{
         db_storage::RestrictedEventId,
-        migration::{BaseKey, RootKey, DEFAULT_KEY, ONE_KEY},
+        migration::{BaseKey, RootKey, NETWORK_DESCRIPTION_KEY, LITE_CERTIFICATE_KEY, BLOB_KEY, BLOCK_KEY, BLOB_STATE_KEY},
         DbStorage, WallClock,
     };
 
@@ -466,22 +469,22 @@ mod tests {
                     }
                     RootKey::CryptoHash(hash) => {
                         let store = database.open_shared(&bcs_root_key)?;
-                        let value = store.read_value_bytes(DEFAULT_KEY).await?;
+                        let value = store.read_value_bytes(LITE_CERTIFICATE_KEY).await?;
                         if let Some(value) = value {
                             certificates.insert(hash, value);
                         }
-                        let value = store.read_value_bytes(ONE_KEY).await?;
+                        let value = store.read_value_bytes(BLOCK_KEY).await?;
                         if let Some(value) = value {
                             confirmed_blocks.insert(hash, value);
                         }
                     }
                     RootKey::Blob(blob_id) => {
                         let store = database.open_shared(&bcs_root_key)?;
-                        let value = store.read_value_bytes(DEFAULT_KEY).await?;
+                        let value = store.read_value_bytes(BLOB_KEY).await?;
                         if let Some(value) = value {
                             blobs.insert(blob_id, value);
                         }
-                        let value = store.read_value_bytes(ONE_KEY).await?;
+                        let value = store.read_value_bytes(BLOB_STATE_KEY).await?;
                         if let Some(value) = value {
                             blob_states.insert(blob_id, value);
                         }
@@ -504,7 +507,7 @@ mod tests {
                     }
                     RootKey::NetworkDescription => {
                         let store = database.open_shared(&bcs_root_key)?;
-                        let value = store.read_value_bytes(DEFAULT_KEY).await?;
+                        let value = store.read_value_bytes(NETWORK_DESCRIPTION_KEY).await?;
                         if let Some(value) = value {
                             network_description = Some(value);
                         }

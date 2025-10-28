@@ -225,14 +225,25 @@ pub mod metrics {
     });
 }
 
-/// The default key used when the root key contains all the information.
-pub(crate) const DEFAULT_KEY: &[u8] = &[0];
+/// The key used for blobs when the root key contains all the information.
+pub(crate) const BLOB_KEY: &[u8] = &[42];
 
-/// The second key used when the root key contains all the information.
-pub(crate) const ONE_KEY: &[u8] = &[1];
+/// The key used for blob states when the root key contains all the information.
+pub(crate) const BLOB_STATE_KEY: &[u8] = &[49];
 
-fn get_01_keys() -> Vec<Vec<u8>> {
-    vec![vec![0], vec![1]]
+/// The key used for the lite certificates when the root key contains all the information.
+pub(crate) const LITE_CERTIFICATE_KEY: &[u8] = &[91];
+
+/// The key used for the confirmed blocks when the root key contains all the information.
+pub(crate) const BLOCK_KEY: &[u8] = &[221];
+
+/// The key used for the network description.
+pub(crate) const NETWORK_DESCRIPTION_KEY: &[u8] = &[119];
+
+
+
+fn get_block_keys() -> Vec<Vec<u8>> {
+    vec![LITE_CERTIFICATE_KEY.to_vec(), BLOCK_KEY.to_vec()]
 }
 
 #[derive(Default)]
@@ -249,29 +260,18 @@ impl MultiPartitionBatch {
         self.keys_value_bytes.push((root_key, key, value));
     }
 
-    pub(crate) fn put_key_value<T: Serialize>(
-        &mut self,
-        root_key: Vec<u8>,
-        value: &T,
-    ) -> Result<(), ViewError> {
-        let bytes = bcs::to_bytes(value)?;
-        let key = DEFAULT_KEY.to_vec();
-        self.keys_value_bytes.push((root_key, key, bytes));
-        Ok(())
-    }
-
     fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let root_key = RootKey::Blob(blob.id()).bytes();
-        let key = DEFAULT_KEY.to_vec();
+        let key = BLOB_KEY.to_vec();
         self.put_key_value_bytes(root_key, key, blob.bytes().to_vec());
         Ok(())
     }
 
     fn add_blob_state(&mut self, blob_id: BlobId, blob_state: &BlobState) -> Result<(), ViewError> {
         let root_key = RootKey::Blob(blob_id).bytes();
-        let key = ONE_KEY.to_vec();
+        let key = BLOB_STATE_KEY.to_vec();
         let value = bcs::to_bytes(blob_state)?;
         self.put_key_value_bytes(root_key, key, value);
         Ok(())
@@ -287,9 +287,12 @@ impl MultiPartitionBatch {
             .inc();
         let hash = certificate.hash();
         let root_key = RootKey::CryptoHash(hash).bytes();
-        self.put_key_value(root_key.clone(), &certificate.lite_certificate())?;
+        let value = bcs::to_bytes(&certificate.lite_certificate())?;
+        let key = LITE_CERTIFICATE_KEY.to_vec();
+        self.put_key_value_bytes(root_key.clone(), key, value);
         let value = bcs::to_bytes(&certificate.value())?;
-        self.put_key_value_bytes(root_key, ONE_KEY.to_vec(), value);
+        let key = BLOCK_KEY.to_vec();
+        self.put_key_value_bytes(root_key, key, value);
         Ok(())
     }
 
@@ -311,7 +314,9 @@ impl MultiPartitionBatch {
             .with_label_values(&[])
             .inc();
         let root_key = RootKey::NetworkDescription.bytes();
-        self.put_key_value(root_key, information)?;
+        let value = bcs::to_bytes(information)?;
+        let key = NETWORK_DESCRIPTION_KEY.to_vec();
+        self.put_key_value_bytes(root_key, key, value);
         Ok(())
     }
 }
@@ -609,7 +614,7 @@ where
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let root_key = RootKey::Blob(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let test = store.contains_key(DEFAULT_KEY).await?;
+        let test = store.contains_key(BLOB_KEY).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(test)
@@ -621,7 +626,7 @@ where
         for blob_id in blob_ids {
             let root_key = RootKey::Blob(*blob_id).bytes();
             let store = self.database.open_shared(&root_key)?;
-            if !store.contains_key(DEFAULT_KEY).await? {
+            if !store.contains_key(BLOB_KEY).await? {
                 missing_blobs.push(*blob_id);
             }
         }
@@ -634,7 +639,7 @@ where
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let root_key = RootKey::Blob(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let test = store.contains_key(ONE_KEY).await?;
+        let test = store.contains_key(BLOB_STATE_KEY).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_BLOB_STATE_COUNTER
             .with_label_values(&[])
@@ -649,7 +654,7 @@ where
     ) -> Result<Option<ConfirmedBlock>, ViewError> {
         let root_key = RootKey::CryptoHash(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let value = store.read_value(ONE_KEY).await?;
+        let value = store.read_value(BLOCK_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[])
@@ -661,7 +666,7 @@ where
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
         let root_key = RootKey::Blob(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let maybe_blob_bytes = store.read_value_bytes(DEFAULT_KEY).await?;
+        let maybe_blob_bytes = store.read_value_bytes(BLOB_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
@@ -687,7 +692,7 @@ where
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError> {
         let root_key = RootKey::Blob(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let blob_state = store.read_value::<BlobState>(ONE_KEY).await?;
+        let blob_state = store.read_value::<BlobState>(BLOB_STATE_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_STATE_COUNTER
             .with_label_values(&[])
@@ -735,7 +740,7 @@ where
         for blob_id in blob_ids {
             let root_key = RootKey::Blob(*blob_id).bytes();
             let store = self.database.open_shared(&root_key)?;
-            let maybe_blob_state = store.read_value::<BlobState>(ONE_KEY).await?;
+            let maybe_blob_state = store.read_value::<BlobState>(BLOB_STATE_KEY).await?;
             maybe_blob_states.push(maybe_blob_state);
         }
         let mut batch = MultiPartitionBatch::new();
@@ -768,7 +773,7 @@ where
         for blob in blobs {
             let root_key = RootKey::Blob(blob.id()).bytes();
             let store = self.database.open_shared(&root_key)?;
-            let has_state = store.contains_key(ONE_KEY).await?;
+            let has_state = store.contains_key(BLOB_STATE_KEY).await?;
             blob_states.push(has_state);
             if has_state {
                 batch.add_blob(blob)?;
@@ -808,7 +813,7 @@ where
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let root_key = RootKey::CryptoHash(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let results = store.contains_keys(get_01_keys()).await?;
+        let results = store.contains_keys(get_block_keys()).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_CERTIFICATE_COUNTER
             .with_label_values(&[])
@@ -823,7 +828,7 @@ where
     ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
         let root_key = RootKey::CryptoHash(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let values = store.read_multi_values_bytes(get_01_keys()).await?;
+        let values = store.read_multi_values_bytes(get_block_keys()).await?;
         #[cfg(with_metrics)]
         metrics::READ_CERTIFICATE_COUNTER
             .with_label_values(&[])
@@ -844,7 +849,7 @@ where
         let mut values = Vec::new();
         for root_key in root_keys {
             let store = self.database.open_shared(&root_key)?;
-            values.extend(store.read_multi_values_bytes(get_01_keys()).await?);
+            values.extend(store.read_multi_values_bytes(get_block_keys()).await?);
         }
         #[cfg(with_metrics)]
         metrics::READ_CERTIFICATES_COUNTER
@@ -877,7 +882,7 @@ where
         let mut values = Vec::new();
         for root_key in root_keys {
             let store = self.database.open_shared(&root_key)?;
-            values.extend(store.read_multi_values_bytes(get_01_keys()).await?);
+            values.extend(store.read_multi_values_bytes(get_block_keys()).await?);
         }
         #[cfg(with_metrics)]
         metrics::READ_CERTIFICATES_COUNTER
@@ -961,7 +966,7 @@ where
     async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         let root_key = RootKey::NetworkDescription.bytes();
         let store = self.database.open_shared(&root_key)?;
-        let maybe_value = store.read_value(DEFAULT_KEY).await?;
+        let maybe_value = store.read_value(NETWORK_DESCRIPTION_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_NETWORK_DESCRIPTION
             .with_label_values(&[])
