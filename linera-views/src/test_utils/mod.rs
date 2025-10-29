@@ -781,13 +781,15 @@ where
         let size = 3;
         let mut rng = make_deterministic_rng();
         let store = D::connect(&config, &namespace).await.expect("store");
-        let shared_store = store.open_shared(&[]).expect("shared store");
-        root_keys.push(vec![]);
+        // Use a non-empty root key for compatibility with ScyllaDB
+        let default_root_key = vec![0xff];
+        let shared_store = store.open_shared(&default_root_key).expect("shared store");
+        root_keys.push(default_root_key.clone());
         let mut batch = Batch::new();
         for _ in 0..2 {
             let key = get_random_byte_vector(&mut rng, &prefix, 4);
             batch.put_key_value_bytes(key.clone(), vec![]);
-            keys.insert((vec![], key));
+            keys.insert((default_root_key.clone(), key));
         }
         shared_store.write_batch(batch).await.expect("write batch");
 
@@ -843,7 +845,8 @@ where
     batch.put_key_value_bytes(vec![6, 7], vec![123, 135]);
     store1.write_batch(batch).await.expect("write_batch");
 
-    let store2 = database.open_shared(&[]).expect("store2");
+    // Use a non-empty root key for compatibility with ScyllaDB
+    let store2 = database.open_shared(&[0xff]).expect("store2");
     let key_values = store2
         .find_key_values_by_prefix(&[2])
         .await
@@ -876,19 +879,21 @@ where
     let key = vec![42];
 
     let namespace = D::connect(&config, &namespace).await.expect("store");
+    // Use a non-empty root key for compatibility with ScyllaDB
+    let default_root_key = vec![0xff];
     let store1 = if exclusive_access {
-        namespace.open_exclusive(&[]).expect("store1")
+        namespace.open_exclusive(&default_root_key).expect("store1")
     } else {
-        namespace.open_shared(&[]).expect("store1")
+        namespace.open_shared(&default_root_key).expect("store1")
     };
     let mut batch1 = Batch::new();
     batch1.delete_key(key.clone());
     store1.write_batch(batch1).await.expect("write batch1");
 
     let store2 = if exclusive_access {
-        namespace.open_exclusive(&[]).expect("store2")
+        namespace.open_exclusive(&default_root_key).expect("store2")
     } else {
-        namespace.open_shared(&[]).expect("store2")
+        namespace.open_shared(&default_root_key).expect("store2")
     };
     let mut batch2 = Batch::new();
     batch2.put_key_value_bytes(key.clone(), vec![]);
