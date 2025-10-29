@@ -135,7 +135,6 @@ where
             let mut batch = MultiPartitionBatch::new();
             for (base_key, value) in chunk_base_keys.iter().zip(values) {
                 let value = value.ok_or(ViewError::MissingEntries)?;
-                tracing::info!("base_key={base_key:?} value={value:?}");
                 let (root_key, key) = map_base_key(base_key)?;
                 batch.put_key_value_bytes(root_key, key, value);
             }
@@ -256,27 +255,13 @@ mod tests {
 
     impl StorageState {
         fn append_storage_state(&mut self, storage_state: StorageState) {
-            for (chain_id, key_values) in storage_state.chain_ids_key_values {
-                self.chain_ids_key_values.insert(chain_id, key_values);
-            }
-            for (hash, value) in storage_state.certificates {
-                self.certificates.insert(hash, value);
-            }
-            for (hash, value) in storage_state.confirmed_blocks {
-                self.confirmed_blocks.insert(hash, value);
-            }
-            for (blob_id, value) in storage_state.blobs {
-                self.blobs.insert(blob_id, value);
-            }
-            for (blob_id, value) in storage_state.blob_states {
-                self.blob_states.insert(blob_id, value);
-            }
-            for (event_id, value) in storage_state.events {
-                self.events.insert(event_id, value);
-            }
-            for (index, key_values) in storage_state.block_exporter_states {
-                self.block_exporter_states.insert(index, key_values);
-            }
+            self.chain_ids_key_values.extend(storage_state.chain_ids_key_values);
+            self.certificates.extend(storage_state.certificates);
+            self.confirmed_blocks.extend(storage_state.confirmed_blocks);
+            self.blobs.extend(storage_state.blobs);
+            self.blob_states.extend(storage_state.blob_states);
+            self.events.extend(storage_state.events);
+            self.block_exporter_states.extend(storage_state.block_exporter_states);
             if let Some(value) = storage_state.network_description {
                 assert!(self.network_description.is_none());
                 self.network_description = Some(value);

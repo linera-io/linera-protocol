@@ -225,16 +225,16 @@ pub mod metrics {
     });
 }
 
-/// The key used for blobs when the root key contains all the information.
+/// The key used for blobs. The Blob ID itself is contained in the root key.
 pub(crate) const BLOB_KEY: &[u8] = &[42];
 
-/// The key used for blob states when the root key contains all the information.
+/// The key used for blob states. The Blob ID itself is contained in the root key.
 pub(crate) const BLOB_STATE_KEY: &[u8] = &[49];
 
-/// The key used for the lite certificates when the root key contains all the information.
+/// The key used for lite certificates. The cryptohash itself is contained in the root key.
 pub(crate) const LITE_CERTIFICATE_KEY: &[u8] = &[91];
 
-/// The key used for the confirmed blocks when the root key contains all the information.
+/// The key used for confirmed blocks. The cryptohash itself is contained in the root key.
 pub(crate) const BLOCK_KEY: &[u8] = &[221];
 
 /// The key used for the network description.
