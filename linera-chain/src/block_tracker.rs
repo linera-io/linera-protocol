@@ -357,18 +357,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             .collect()
     }
 
-    /// Returns the execution context for the current transaction.
-    pub fn chain_execution_context(&self, transaction: &Transaction) -> ChainExecutionContext {
-        match transaction {
-            Transaction::ReceiveMessages(_) => {
-                ChainExecutionContext::IncomingBundle(self.transaction_index)
-            }
-            Transaction::ExecuteOperation(_) => {
-                ChainExecutionContext::Operation(self.transaction_index)
-            }
-        }
-    }
-
     /// Returns a mutable reference to the resource controller.
     pub fn resource_controller_mut(
         &mut self,
@@ -398,6 +386,18 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             self.blobs,
             self.operation_results,
         )
+    }
+
+    /// Returns the execution context for the current transaction.
+    fn chain_execution_context(&self, transaction: &Transaction) -> ChainExecutionContext {
+        match transaction {
+            Transaction::ReceiveMessages(_) => {
+                ChainExecutionContext::IncomingBundle(self.transaction_index)
+            }
+            Transaction::ExecuteOperation(_) => {
+                ChainExecutionContext::Operation(self.transaction_index)
+            }
+        }
     }
 }
 
