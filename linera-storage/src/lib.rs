@@ -729,6 +729,66 @@ mod tests {
         let block_result = storage.read_confirmed_block(block_hash).await?;
         assert!(block_result.is_none());
 
+        // Test write_blobs_and_certificate functionality
+        // Create test blobs
+        let test_blob1 = Blob::new_data(vec![1, 2, 3]);
+        let test_blob2 = Blob::new_data(vec![4, 5, 6]);
+        let blobs = vec![test_blob1, test_blob2];
+
+        // Create a test certificate using the working pattern from linera-indexer tests
+        use std::collections::BTreeMap;
+        use linera_base::data_types::{BlockHeight, Round};
+        use linera_chain::{
+            block::{Block, ConfirmedBlock},
+            data_types::{BlockExecutionOutcome, ProposedBlock},
+        };
+
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain_cert"));
+
+        // Create a minimal proposed block (genesis block)
+        let proposed_block = ProposedBlock {
+            epoch: Epoch::ZERO,
+            chain_id,
+            transactions: vec![],
+            previous_block_hash: None,
+            height: BlockHeight::ZERO,
+            authenticated_owner: None,
+            timestamp: Timestamp::default(),
+        };
+
+        // Create a minimal block execution outcome with proper BTreeMap types
+        let outcome = BlockExecutionOutcome {
+            messages: vec![],
+            state_hash: CryptoHash::default(),
+            oracle_responses: vec![],
+            events: vec![],
+            blobs: vec![],
+            operation_results: vec![],
+            previous_event_blocks: BTreeMap::new(),
+            previous_message_blocks: BTreeMap::new(),
+        };
+
+        let block = Block::new(proposed_block, outcome);
+        let confirmed_block = ConfirmedBlock::new(block);
+        let certificate = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
+
+        // Test writing blobs and certificate together
+        storage.write_blobs_and_certificate(&blobs, &certificate).await?;
+
+        // Verify the certificate was written
+        let cert_hash = certificate.hash();
+        assert!(storage.contains_certificate(cert_hash).await?);
+
+        // Verify the certificate can be read back
+        let read_certificate = storage.read_certificate(cert_hash).await?;
+        assert!(read_certificate.is_some());
+        assert_eq!(read_certificate.unwrap().hash(), cert_hash);
+
+        // Verify the blobs were written
+        for blob in &blobs {
+            assert!(storage.contains_blob(blob.id()).await?);
+        }
+
         Ok(())
     }
 
