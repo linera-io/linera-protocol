@@ -549,14 +549,20 @@ pub trait Clock {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use linera_base::{
         crypto::{AccountPublicKey, CryptoHash},
         data_types::{
             Amount, ApplicationPermissions, Blob, BlockHeight, ChainDescription, ChainOrigin,
-            Epoch, InitialChainConfig, NetworkDescription, Timestamp,
+            Epoch, InitialChainConfig, NetworkDescription, Round, Timestamp,
         },
         identifiers::{BlobId, BlobType, ChainId, EventId, StreamId},
         ownership::ChainOwnership,
+    };
+    use linera_chain::{
+        block::{Block, ConfirmedBlock},
+        data_types::{BlockExecutionOutcome, ProposedBlock},
     };
     use linera_execution::BlobState;
     #[cfg(feature = "dynamodb")]
@@ -736,13 +742,6 @@ mod tests {
         let blobs = vec![test_blob1, test_blob2];
 
         // Create a test certificate using the working pattern from linera-indexer tests
-        use std::collections::BTreeMap;
-        use linera_base::data_types::{BlockHeight, Round};
-        use linera_chain::{
-            block::{Block, ConfirmedBlock},
-            data_types::{BlockExecutionOutcome, ProposedBlock},
-        };
-
         let chain_id = ChainId(CryptoHash::test_hash("test_chain_cert"));
 
         // Create a minimal proposed block (genesis block)
@@ -773,7 +772,9 @@ mod tests {
         let certificate = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
 
         // Test writing blobs and certificate together
-        storage.write_blobs_and_certificate(&blobs, &certificate).await?;
+        storage
+            .write_blobs_and_certificate(&blobs, &certificate)
+            .await?;
 
         // Verify the certificate was written
         let cert_hash = certificate.hash();
