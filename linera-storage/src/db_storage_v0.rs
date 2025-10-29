@@ -20,7 +20,6 @@ use linera_execution::{
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
-    batch::Batch,
     context::ViewContext,
     store::{
         KeyValueDatabase, KeyValueStore, ReadableKeyValueStore as _, WritableKeyValueStore as _,
@@ -37,7 +36,10 @@ use {
     std::{cmp::Reverse, collections::BTreeMap},
 };
 
-use crate::{ChainRuntimeContext, Clock, Storage};
+use crate::{
+    db_storage::{BLOB_ID_LENGTH, CHAIN_ID_LENGTH},
+    ChainRuntimeContext, Clock, Storage,
+};
 
 #[cfg(with_metrics)]
 pub mod metrics {
@@ -225,53 +227,37 @@ pub mod metrics {
     });
 }
 
-/// The key used for blobs. The Blob ID itself is contained in the root key.
-pub(crate) const BLOB_KEY: &[u8] = &[42];
-
-/// The key used for blob states. The Blob ID itself is contained in the root key.
-pub(crate) const BLOB_STATE_KEY: &[u8] = &[49];
-
-/// The key used for lite certificates. The cryptohash itself is contained in the root key.
-pub(crate) const LITE_CERTIFICATE_KEY: &[u8] = &[91];
-
-/// The key used for confirmed blocks. The cryptohash itself is contained in the root key.
-pub(crate) const BLOCK_KEY: &[u8] = &[221];
-
-/// The key used for the network description.
-pub(crate) const NETWORK_DESCRIPTION_KEY: &[u8] = &[119];
-
-fn get_block_keys() -> Vec<Vec<u8>> {
-    vec![LITE_CERTIFICATE_KEY.to_vec(), BLOCK_KEY.to_vec()]
-}
-
 #[derive(Default)]
-pub(crate) struct MultiPartitionBatch {
-    keys_value_bytes: Vec<(Vec<u8>, Vec<u8>, Vec<u8>)>,
+struct Batch {
+    key_value_bytes: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
-impl MultiPartitionBatch {
-    pub(crate) fn new() -> Self {
+impl Batch {
+    fn new() -> Self {
         Self::default()
     }
 
-    pub(crate) fn put_key_value_bytes(&mut self, root_key: Vec<u8>, key: Vec<u8>, value: Vec<u8>) {
-        self.keys_value_bytes.push((root_key, key, value));
+    fn put_key_value_bytes(&mut self, key: Vec<u8>, value: Vec<u8>) {
+        self.key_value_bytes.push((key, value));
+    }
+
+    fn put_key_value<T: Serialize>(&mut self, key: Vec<u8>, value: &T) -> Result<(), ViewError> {
+        let bytes = bcs::to_bytes(value)?;
+        self.key_value_bytes.push((key, bytes));
+        Ok(())
     }
 
     fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
-        let root_key = RootKey::Blob(blob.id()).bytes();
-        let key = BLOB_KEY.to_vec();
-        self.put_key_value_bytes(root_key, key, blob.bytes().to_vec());
+        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob.id()))?;
+        self.put_key_value_bytes(blob_key.to_vec(), blob.bytes().to_vec());
         Ok(())
     }
 
     fn add_blob_state(&mut self, blob_id: BlobId, blob_state: &BlobState) -> Result<(), ViewError> {
-        let root_key = RootKey::Blob(blob_id).bytes();
-        let key = BLOB_STATE_KEY.to_vec();
-        let value = bcs::to_bytes(blob_state)?;
-        self.put_key_value_bytes(root_key, key, value);
+        let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
+        self.put_key_value(blob_state_key.to_vec(), blob_state)?;
         Ok(())
     }
 
@@ -284,22 +270,18 @@ impl MultiPartitionBatch {
             .with_label_values(&[])
             .inc();
         let hash = certificate.hash();
-        let root_key = RootKey::ConfirmedBlock(hash).bytes();
-        let value = bcs::to_bytes(&certificate.lite_certificate())?;
-        let key = LITE_CERTIFICATE_KEY.to_vec();
-        self.put_key_value_bytes(root_key.clone(), key, value);
-        let value = bcs::to_bytes(&certificate.value())?;
-        let key = BLOCK_KEY.to_vec();
-        self.put_key_value_bytes(root_key, key, value);
+        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
+        let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
+        self.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
+        self.put_key_value(block_key.to_vec(), certificate.value())?;
         Ok(())
     }
 
     fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
-        let key = to_event_key(&event_id);
-        let root_key = RootKey::Event(event_id.chain_id).bytes();
-        self.put_key_value_bytes(root_key, key, value);
+        let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
+        self.put_key_value_bytes(event_key.to_vec(), value);
         Ok(())
     }
 
@@ -311,18 +293,16 @@ impl MultiPartitionBatch {
         metrics::WRITE_NETWORK_DESCRIPTION
             .with_label_values(&[])
             .inc();
-        let root_key = RootKey::NetworkDescription.bytes();
-        let value = bcs::to_bytes(information)?;
-        let key = NETWORK_DESCRIPTION_KEY.to_vec();
-        self.put_key_value_bytes(root_key, key, value);
+        let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
+        self.put_key_value(key, information)?;
         Ok(())
     }
 }
 
 /// Main implementation of the [`Storage`] trait.
 #[derive(Clone)]
-pub struct DbStorage<Database, Clock = WallClock> {
-    pub(crate) database: Arc<Database>,
+pub struct DbStorageV0<Database, Clock = WallClock> {
+    database: Arc<Database>,
     clock: Clock,
     wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
@@ -331,47 +311,20 @@ pub struct DbStorage<Database, Clock = WallClock> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) enum RootKey {
+pub(crate) enum BaseKey {
     ChainState(ChainId),
+    Certificate(CryptoHash),
     ConfirmedBlock(CryptoHash),
     Blob(BlobId),
-    Event(ChainId),
-    SchemaVersion,
-    NetworkDescription,
+    BlobState(BlobId),
+    Event(EventId),
     BlockExporterState(u32),
+    NetworkDescription,
 }
 
-const CHAIN_ID_TAG: u8 = 0;
-const BLOB_ID_TAG: u8 = 2;
-pub(crate) const CHAIN_ID_LENGTH: usize = std::mem::size_of::<ChainId>();
-pub(crate) const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
-
-impl RootKey {
-    pub(crate) fn bytes(&self) -> Vec<u8> {
-        bcs::to_bytes(self).unwrap()
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub(crate) struct RestrictedEventId {
-    pub stream_id: StreamId,
-    pub index: u32,
-}
-
-pub(crate) fn to_event_key(event_id: &EventId) -> Vec<u8> {
-    let restricted_event_id = RestrictedEventId {
-        stream_id: event_id.stream_id.clone(),
-        index: event_id.index,
-    };
-    bcs::to_bytes(&restricted_event_id).unwrap()
-}
-
-fn is_chain_state(root_key: &[u8]) -> bool {
-    if root_key.is_empty() {
-        return false;
-    }
-    root_key[0] == CHAIN_ID_TAG
-}
+const INDEX_CHAIN_ID: u8 = 0;
+const INDEX_BLOB_ID: u8 = 3;
+const INDEX_EVENT_ID: u8 = 5;
 
 #[cfg(test)]
 mod tests {
@@ -383,8 +336,9 @@ mod tests {
         },
     };
 
-    use crate::db_storage::{
-        to_event_key, RootKey, BLOB_ID_LENGTH, BLOB_ID_TAG, CHAIN_ID_LENGTH, CHAIN_ID_TAG,
+    use crate::{
+        db_storage::{BLOB_ID_LENGTH, CHAIN_ID_LENGTH},
+        db_storage_v0::{BaseKey, INDEX_BLOB_ID, INDEX_CHAIN_ID, INDEX_EVENT_ID},
     };
 
     // Several functionalities of the storage rely on the way that the serialization
@@ -392,32 +346,34 @@ mod tests {
     // we expect.
 
     // The listing of the blobs in `list_blob_ids` depends on the serialization
-    // of `RootKey::Blob`.
+    // of `BaseKey::Blob`.
     #[test]
-    fn test_root_key_blob_serialization() {
+    fn test_basekey_blob_serialization() {
         let hash = CryptoHash::default();
         let blob_type = BlobType::default();
         let blob_id = BlobId::new(hash, blob_type);
-        let root_key = RootKey::Blob(blob_id).bytes();
-        assert_eq!(root_key[0], BLOB_ID_TAG);
-        assert_eq!(root_key.len(), 1 + BLOB_ID_LENGTH);
+        let base_key = BaseKey::Blob(blob_id);
+        let key = bcs::to_bytes(&base_key).expect("a key");
+        assert_eq!(key[0], INDEX_BLOB_ID);
+        assert_eq!(key.len(), 1 + BLOB_ID_LENGTH);
     }
 
     // The listing of the chains in `list_chain_ids` depends on the serialization
-    // of `RootKey::ChainState`.
+    // of `BaseKey::ChainState`.
     #[test]
-    fn test_root_key_chainstate_serialization() {
+    fn test_basekey_chainstate_serialization() {
         let hash = CryptoHash::default();
         let chain_id = ChainId(hash);
-        let root_key = RootKey::ChainState(chain_id).bytes();
-        assert_eq!(root_key[0], CHAIN_ID_TAG);
-        assert_eq!(root_key.len(), 1 + CHAIN_ID_LENGTH);
+        let base_key = BaseKey::ChainState(chain_id);
+        let key = bcs::to_bytes(&base_key).expect("a key");
+        assert_eq!(key[0], INDEX_CHAIN_ID);
+        assert_eq!(key.len(), 1 + CHAIN_ID_LENGTH);
     }
 
     // The listing of the events in `read_events_from_index` depends on the
-    // serialization of `RootKey::Event`.
+    // serialization of `BaseKey::Event`.
     #[test]
-    fn test_root_key_event_serialization() {
+    fn test_basekey_event_serialization() {
         let hash = CryptoHash::test_hash("49");
         let chain_id = ChainId(hash);
         let application_description_hash = CryptoHash::test_hash("42");
@@ -428,7 +384,9 @@ mod tests {
             application_id,
             stream_name,
         };
-        let prefix = bcs::to_bytes(&stream_id).unwrap();
+        let mut prefix = vec![INDEX_EVENT_ID];
+        prefix.extend(bcs::to_bytes(&chain_id).unwrap());
+        prefix.extend(bcs::to_bytes(&stream_id).unwrap());
 
         let index = 1567;
         let event_id = EventId {
@@ -436,7 +394,8 @@ mod tests {
             stream_id,
             index,
         };
-        let key = to_event_key(&event_id);
+        let base_key = BaseKey::Event(event_id);
+        let key = bcs::to_bytes(&base_key).unwrap();
         assert!(key.starts_with(&prefix));
     }
 }
@@ -451,9 +410,9 @@ impl DualStoreRootKeyAssignment for ChainStatesFirstAssignment {
         if root_key.is_empty() {
             return Ok(StoreInUse::Second);
         }
-        let store = match is_chain_state(root_key) {
-            true => StoreInUse::First,
-            false => StoreInUse::Second,
+        let store = match bcs::from_bytes(root_key)? {
+            BaseKey::ChainState(_) => StoreInUse::First,
+            _ => StoreInUse::Second,
         };
         Ok(store)
     }
@@ -573,7 +532,7 @@ impl TestClock {
 
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
-impl<Database, C> Storage for DbStorage<Database, C>
+impl<Database, C> Storage for DbStorageV0<Database, C>
 where
     Database: KeyValueDatabase + Clone + Send + Sync + 'static,
     Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
@@ -588,7 +547,7 @@ where
         &self.clock
     }
 
-    #[instrument(level = "trace", skip_all, fields(%chain_id))]
+    #[instrument(level = "trace", target = "telemetry_only", skip_all, fields(chain_id = %chain_id))]
     async fn load_chain(
         &self,
         chain_id: ChainId,
@@ -602,29 +561,34 @@ where
             user_contracts: self.user_contracts.clone(),
             user_services: self.user_services.clone(),
         };
-        let root_key = RootKey::ChainState(chain_id).bytes();
+        let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
         let store = self.database.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
 
-    #[instrument(level = "trace", skip_all, fields(%blob_id))]
+    #[instrument(level = "trace", target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let root_key = RootKey::Blob(blob_id).bytes();
-        let store = self.database.open_shared(&root_key)?;
-        let test = store.contains_key(BLOB_KEY).await?;
+        let store = self.database.open_shared(&[])?;
+        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
+        let test = store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(test)
     }
 
-    #[instrument(skip_all, fields(blob_count = blob_ids.len()))]
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_count = blob_ids.len()))]
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
-        let mut missing_blobs = Vec::new();
+        let store = self.database.open_shared(&[])?;
+        let mut keys = Vec::new();
         for blob_id in blob_ids {
-            let root_key = RootKey::Blob(*blob_id).bytes();
-            let store = self.database.open_shared(&root_key)?;
-            if !store.contains_key(BLOB_KEY).await? {
+            let key = bcs::to_bytes(&BaseKey::Blob(*blob_id))?;
+            keys.push(key);
+        }
+        let results = store.contains_keys(keys).await?;
+        let mut missing_blobs = Vec::new();
+        for (blob_id, result) in blob_ids.iter().zip(results) {
+            if !result {
                 missing_blobs.push(*blob_id);
             }
         }
@@ -633,11 +597,11 @@ where
         Ok(missing_blobs)
     }
 
-    #[instrument(skip_all, fields(%blob_id))]
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let root_key = RootKey::Blob(blob_id).bytes();
-        let store = self.database.open_shared(&root_key)?;
-        let test = store.contains_key(BLOB_STATE_KEY).await?;
+        let store = self.database.open_shared(&[])?;
+        let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
+        let test = store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_BLOB_STATE_COUNTER
             .with_label_values(&[])
@@ -645,14 +609,14 @@ where
         Ok(test)
     }
 
-    #[instrument(skip_all, fields(%hash))]
+    #[instrument(target = "telemetry_only", skip_all, fields(hash = %hash))]
     async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlock>, ViewError> {
-        let root_key = RootKey::ConfirmedBlock(hash).bytes();
-        let store = self.database.open_shared(&root_key)?;
-        let value = store.read_value(BLOCK_KEY).await?;
+        let store = self.database.open_shared(&[])?;
+        let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
+        let value = store.read_value(&block_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[])
@@ -660,37 +624,46 @@ where
         Ok(value)
     }
 
-    #[instrument(skip_all, fields(%blob_id))]
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
-        let root_key = RootKey::Blob(blob_id).bytes();
-        let store = self.database.open_shared(&root_key)?;
-        let maybe_blob_bytes = store.read_value_bytes(BLOB_KEY).await?;
+        let store = self.database.open_shared(&[])?;
+        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
+        let maybe_blob_bytes = store.read_value_bytes(&blob_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
     }
 
-    #[instrument(skip_all, fields(blob_ids_len = %blob_ids.len()))]
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_ids_len = %blob_ids.len()))]
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
-        let mut blobs = Vec::new();
-        for blob_id in blob_ids {
-            blobs.push(self.read_blob(*blob_id).await?);
-        }
+        let blob_keys = blob_ids
+            .iter()
+            .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
+            .collect::<Result<Vec<_>, _>>()?;
+        let store = self.database.open_shared(&[])?;
+        let maybe_blob_bytes = store.read_multi_values_bytes(blob_keys).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER
             .with_label_values(&[])
             .inc_by(blob_ids.len() as u64);
-        Ok(blobs)
+
+        Ok(blob_ids
+            .iter()
+            .zip(maybe_blob_bytes)
+            .map(|(blob_id, maybe_blob_bytes)| {
+                maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(*blob_id, blob_bytes))
+            })
+            .collect())
     }
 
-    #[instrument(skip_all, fields(%blob_id))]
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError> {
-        let root_key = RootKey::Blob(blob_id).bytes();
-        let store = self.database.open_shared(&root_key)?;
-        let blob_state = store.read_value::<BlobState>(BLOB_STATE_KEY).await?;
+        let store = self.database.open_shared(&[])?;
+        let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
+        let blob_state = store.read_value::<BlobState>(&blob_state_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_STATE_COUNTER
             .with_label_values(&[])
@@ -698,7 +671,7 @@ where
         Ok(blob_state)
     }
 
-    #[instrument(skip_all, fields(blob_ids_len = %blob_ids.len()))]
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_ids_len = %blob_ids.len()))]
     async fn read_blob_states(
         &self,
         blob_ids: &[BlobId],
@@ -706,10 +679,14 @@ where
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
-        let mut blob_states = Vec::new();
-        for blob_id in blob_ids {
-            blob_states.push(self.read_blob_state(*blob_id).await?);
-        }
+        let blob_state_keys = blob_ids
+            .iter()
+            .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
+            .collect::<Result<_, _>>()?;
+        let store = self.database.open_shared(&[])?;
+        let blob_states = store
+            .read_multi_values::<BlobState>(blob_state_keys)
+            .await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_STATES_COUNTER
             .with_label_values(&[])
@@ -717,15 +694,15 @@ where
         Ok(blob_states)
     }
 
-    #[instrument(skip_all, fields(blob_id = %blob.id()))]
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob.id()))]
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
-        let mut batch = MultiPartitionBatch::new();
+        let mut batch = Batch::new();
         batch.add_blob(blob)?;
         self.write_batch(batch).await?;
         Ok(())
     }
 
-    #[instrument(skip_all, fields(blob_ids_len = %blob_ids.len()))]
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_ids_len = %blob_ids.len()))]
     async fn maybe_write_blob_states(
         &self,
         blob_ids: &[BlobId],
@@ -734,14 +711,15 @@ where
         if blob_ids.is_empty() {
             return Ok(());
         }
-        let mut maybe_blob_states = Vec::new();
-        for blob_id in blob_ids {
-            let root_key = RootKey::Blob(*blob_id).bytes();
-            let store = self.database.open_shared(&root_key)?;
-            let maybe_blob_state = store.read_value::<BlobState>(BLOB_STATE_KEY).await?;
-            maybe_blob_states.push(maybe_blob_state);
-        }
-        let mut batch = MultiPartitionBatch::new();
+        let blob_state_keys = blob_ids
+            .iter()
+            .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
+            .collect::<Result<_, _>>()?;
+        let store = self.database.open_shared(&[])?;
+        let maybe_blob_states = store
+            .read_multi_values::<BlobState>(blob_state_keys)
+            .await?;
+        let mut batch = Batch::new();
         for (maybe_blob_state, blob_id) in maybe_blob_states.iter().zip(blob_ids) {
             match maybe_blob_state {
                 None => {
@@ -761,19 +739,20 @@ where
         Ok(())
     }
 
-    #[instrument(skip_all, fields(blobs_len = %blobs.len()))]
+    #[instrument(target = "telemetry_only", skip_all, fields(blobs_len = %blobs.len()))]
     async fn maybe_write_blobs(&self, blobs: &[Blob]) -> Result<Vec<bool>, ViewError> {
         if blobs.is_empty() {
             return Ok(Vec::new());
         }
-        let mut batch = MultiPartitionBatch::new();
-        let mut blob_states = Vec::new();
-        for blob in blobs {
-            let root_key = RootKey::Blob(blob.id()).bytes();
-            let store = self.database.open_shared(&root_key)?;
-            let has_state = store.contains_key(BLOB_STATE_KEY).await?;
-            blob_states.push(has_state);
-            if has_state {
+        let blob_state_keys = blobs
+            .iter()
+            .map(|blob| bcs::to_bytes(&BaseKey::BlobState(blob.id())))
+            .collect::<Result<_, _>>()?;
+        let store = self.database.open_shared(&[])?;
+        let blob_states = store.contains_keys(blob_state_keys).await?;
+        let mut batch = Batch::new();
+        for (blob, has_state) in blobs.iter().zip(&blob_states) {
+            if *has_state {
                 batch.add_blob(blob)?;
             }
         }
@@ -781,25 +760,25 @@ where
         Ok(blob_states)
     }
 
-    #[instrument(skip_all, fields(blobs_len = %blobs.len()))]
+    #[instrument(target = "telemetry_only", skip_all, fields(blobs_len = %blobs.len()))]
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError> {
         if blobs.is_empty() {
             return Ok(());
         }
-        let mut batch = MultiPartitionBatch::new();
+        let mut batch = Batch::new();
         for blob in blobs {
             batch.add_blob(blob)?;
         }
         self.write_batch(batch).await
     }
 
-    #[instrument(skip_all, fields(blobs_len = %blobs.len()))]
+    #[instrument(target = "telemetry_only", skip_all, fields(blobs_len = %blobs.len()))]
     async fn write_blobs_and_certificate(
         &self,
         blobs: &[Blob],
         certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), ViewError> {
-        let mut batch = MultiPartitionBatch::new();
+        let mut batch = Batch::new();
         for blob in blobs {
             batch.add_blob(blob)?;
         }
@@ -807,11 +786,11 @@ where
         self.write_batch(batch).await
     }
 
-    #[instrument(skip_all, fields(%hash))]
+    #[instrument(target = "telemetry_only", skip_all, fields(hash = %hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
-        let root_key = RootKey::ConfirmedBlock(hash).bytes();
-        let store = self.database.open_shared(&root_key)?;
-        let results = store.contains_keys(get_block_keys()).await?;
+        let keys = Self::get_keys_for_certificates(&[hash])?;
+        let store = self.database.open_shared(&[])?;
+        let results = store.contains_keys(keys).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_CERTIFICATE_COUNTER
             .with_label_values(&[])
@@ -819,22 +798,25 @@ where
         Ok(results[0] && results[1])
     }
 
-    #[instrument(skip_all, fields(%hash))]
+    #[instrument(target = "telemetry_only", skip_all, fields(hash = %hash))]
     async fn read_certificate(
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
-        let root_key = RootKey::ConfirmedBlock(hash).bytes();
-        let store = self.database.open_shared(&root_key)?;
-        let values = store.read_multi_values_bytes(get_block_keys()).await?;
-        #[cfg(with_metrics)]
-        metrics::READ_CERTIFICATE_COUNTER
-            .with_label_values(&[])
-            .inc();
+        let store = self.database.open_shared(&[])?;
+        let keys = Self::get_keys_for_certificates(&[hash])?;
+        let values = store.read_multi_values_bytes(keys).await;
+        if values.is_ok() {
+            #[cfg(with_metrics)]
+            metrics::READ_CERTIFICATE_COUNTER
+                .with_label_values(&[])
+                .inc();
+        }
+        let values = values?;
         Self::deserialize_certificate(&values, hash)
     }
 
-    #[instrument(skip_all)]
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
@@ -843,16 +825,16 @@ where
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        let root_keys = Self::get_root_keys_for_certificates(&hashes);
-        let mut values = Vec::new();
-        for root_key in root_keys {
-            let store = self.database.open_shared(&root_key)?;
-            values.extend(store.read_multi_values_bytes(get_block_keys()).await?);
+        let keys = Self::get_keys_for_certificates(&hashes)?;
+        let store = self.database.open_shared(&[])?;
+        let values = store.read_multi_values_bytes(keys).await;
+        if values.is_ok() {
+            #[cfg(with_metrics)]
+            metrics::READ_CERTIFICATES_COUNTER
+                .with_label_values(&[])
+                .inc_by(hashes.len() as u64);
         }
-        #[cfg(with_metrics)]
-        metrics::READ_CERTIFICATES_COUNTER
-            .with_label_values(&[])
-            .inc_by(hashes.len() as u64);
+        let values = values?;
         let mut certificates = Vec::new();
         for (pair, hash) in values.chunks_exact(2).zip(hashes) {
             let certificate = Self::deserialize_certificate(pair, hash)?;
@@ -867,7 +849,7 @@ where
     /// and the second element is confirmed block.
     ///
     /// It does not check if all hashes all returned.
-    #[instrument(skip_all)]
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn read_certificates_raw<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
@@ -876,12 +858,9 @@ where
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        let root_keys = Self::get_root_keys_for_certificates(&hashes);
-        let mut values = Vec::new();
-        for root_key in root_keys {
-            let store = self.database.open_shared(&root_key)?;
-            values.extend(store.read_multi_values_bytes(get_block_keys()).await?);
-        }
+        let keys = Self::get_keys_for_certificates(&hashes)?;
+        let store = self.database.open_shared(&[])?;
+        let values = store.read_multi_values_bytes(keys).await?;
         #[cfg(with_metrics)]
         metrics::READ_CERTIFICATES_COUNTER
             .with_label_values(&[])
@@ -896,40 +875,39 @@ where
             .collect())
     }
 
-    #[instrument(skip_all, fields(event_id = ?event_id))]
+    #[instrument(target = "telemetry_only", skip_all, fields(event_id = ?event_id))]
     async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
-        let event_key = to_event_key(&event_id);
-        let root_key = RootKey::Event(event_id.chain_id).bytes();
-        let store = self.database.open_shared(&root_key)?;
+        let store = self.database.open_shared(&[])?;
+        let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
         let event = store.read_value_bytes(&event_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
         Ok(event)
     }
 
-    #[instrument(skip_all, fields(event_id = ?event_id))]
+    #[instrument(target = "telemetry_only", skip_all, fields(event_id = ?event_id))]
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
-        let event_key = to_event_key(&event_id);
-        let root_key = RootKey::Event(event_id.chain_id).bytes();
-        let store = self.database.open_shared(&root_key)?;
+        let store = self.database.open_shared(&[])?;
+        let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
         let exists = store.contains_key(&event_key).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_EVENT_COUNTER.with_label_values(&[]).inc();
         Ok(exists)
     }
 
-    #[instrument(skip_all, fields(%chain_id, %stream_id, %start_index))]
+    #[instrument(target = "telemetry_only", skip_all, fields(chain_id = %chain_id, stream_id = %stream_id, start_index = %start_index))]
     async fn read_events_from_index(
         &self,
         chain_id: &ChainId,
         stream_id: &StreamId,
         start_index: u32,
     ) -> Result<Vec<IndexAndEvent>, ViewError> {
-        let root_key = RootKey::Event(*chain_id).bytes();
-        let store = self.database.open_shared(&root_key)?;
+        let mut prefix = vec![INDEX_EVENT_ID];
+        prefix.extend(bcs::to_bytes(chain_id).unwrap());
+        prefix.extend(bcs::to_bytes(stream_id).unwrap());
         let mut keys = Vec::new();
         let mut indices = Vec::new();
-        let prefix = bcs::to_bytes(stream_id).unwrap();
+        let store = self.database.open_shared(&[])?;
         for short_key in store.find_keys_by_prefix(&prefix).await? {
             let index = bcs::from_bytes::<u32>(&short_key)?;
             if index >= start_index {
@@ -948,23 +926,23 @@ where
         Ok(returned_values)
     }
 
-    #[instrument(skip_all)]
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn write_events(
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
     ) -> Result<(), ViewError> {
-        let mut batch = MultiPartitionBatch::new();
+        let mut batch = Batch::new();
         for (event_id, value) in events {
             batch.add_event(event_id, value)?;
         }
         self.write_batch(batch).await
     }
 
-    #[instrument(skip_all)]
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
-        let root_key = RootKey::NetworkDescription.bytes();
-        let store = self.database.open_shared(&root_key)?;
-        let maybe_value = store.read_value(NETWORK_DESCRIPTION_KEY).await?;
+        let store = self.database.open_shared(&[])?;
+        let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
+        let maybe_value = store.read_value(&key).await?;
         #[cfg(with_metrics)]
         metrics::READ_NETWORK_DESCRIPTION
             .with_label_values(&[])
@@ -972,12 +950,12 @@ where
         Ok(maybe_value)
     }
 
-    #[instrument(skip_all)]
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn write_network_description(
         &self,
         information: &NetworkDescription,
     ) -> Result<(), ViewError> {
-        let mut batch = MultiPartitionBatch::new();
+        let mut batch = Batch::new();
         batch.add_network_description(information)?;
         self.write_batch(batch).await?;
         Ok(())
@@ -987,33 +965,37 @@ where
         self.wasm_runtime
     }
 
-    #[instrument(skip_all)]
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn block_exporter_context(
         &self,
         block_exporter_id: u32,
     ) -> Result<Self::BlockExporterContext, ViewError> {
-        let root_key = RootKey::BlockExporterState(block_exporter_id).bytes();
+        let root_key = bcs::to_bytes(&BaseKey::BlockExporterState(block_exporter_id))?;
         let store = self.database.open_exclusive(&root_key)?;
         Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
     }
 }
 
-impl<Database, C> DbStorage<Database, C>
+impl<Database, C> DbStorageV0<Database, C>
 where
     Database: KeyValueDatabase + Clone + Send + Sync + 'static,
     Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock,
     Database::Error: Send + Sync,
 {
-    #[instrument(skip_all)]
-    fn get_root_keys_for_certificates(hashes: &[CryptoHash]) -> Vec<Vec<u8>> {
-        hashes
+    #[instrument(target = "telemetry_only", skip_all)]
+    fn get_keys_for_certificates(hashes: &[CryptoHash]) -> Result<Vec<Vec<u8>>, ViewError> {
+        Ok(hashes
             .iter()
-            .map(|hash| RootKey::ConfirmedBlock(*hash).bytes())
-            .collect()
+            .flat_map(|hash| {
+                let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash));
+                let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(*hash));
+                vec![cert_key, block_key]
+            })
+            .collect::<Result<_, _>>()?)
     }
 
-    #[instrument(skip_all)]
+    #[instrument(target = "telemetry_only", skip_all)]
     fn deserialize_certificate(
         pair: &[Option<Vec<u8>>],
         hash: CryptoHash,
@@ -1033,26 +1015,26 @@ where
         Ok(Some(certificate))
     }
 
-    #[instrument(skip_all)]
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn write_entry(
         store: &Database::Store,
         key: Vec<u8>,
         bytes: Vec<u8>,
     ) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
+        let mut batch = linera_views::batch::Batch::new();
         batch.put_key_value_bytes(key, bytes);
         store.write_batch(batch).await?;
         Ok(())
     }
 
-    #[instrument(skip_all, fields(batch_size = batch.keys_value_bytes.len()))]
-    pub(crate) async fn write_batch(&self, batch: MultiPartitionBatch) -> Result<(), ViewError> {
-        if batch.keys_value_bytes.is_empty() {
+    #[instrument(target = "telemetry_only", skip_all, fields(batch_size = batch.key_value_bytes.len()))]
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
+        if batch.key_value_bytes.is_empty() {
             return Ok(());
         }
         let mut futures = Vec::new();
-        for (root_key, key, bytes) in batch.keys_value_bytes {
-            let store = self.database.open_shared(&root_key)?;
+        for (key, bytes) in batch.key_value_bytes {
+            let store = self.database.open_shared(&[])?;
             futures.push(async move { Self::write_entry(&store, key, bytes).await });
         }
         futures::future::try_join_all(futures).await?;
@@ -1060,14 +1042,8 @@ where
     }
 }
 
-impl<Database, C> DbStorage<Database, C>
-where
-    Database: KeyValueDatabase + Clone + Send + Sync + 'static,
-    Database::Error: Send + Sync,
-    Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
-    C: Clock + Clone + Send + Sync + 'static,
-{
-    pub(crate) fn new(database: Database, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
+impl<Database, C> DbStorageV0<Database, C> {
+    fn new(database: Database, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
         Self {
             database: Arc::new(database),
             clock,
@@ -1079,7 +1055,7 @@ where
     }
 }
 
-impl<Database> DbStorage<Database, WallClock>
+impl<Database> DbStorageV0<Database, WallClock>
 where
     Database: KeyValueDatabase + Clone + Send + Sync + 'static,
     Database::Error: Send + Sync,
@@ -1089,22 +1065,18 @@ where
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, ViewError> {
+    ) -> Result<Self, Database::Error> {
         let database = Database::maybe_create_and_connect(config, namespace).await?;
-        let storage = Self::new(database, wasm_runtime, WallClock);
-        storage.assert_is_migrated_database().await?;
-        Ok(storage)
+        Ok(Self::new(database, wasm_runtime, WallClock))
     }
 
     pub async fn connect(
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, ViewError> {
+    ) -> Result<Self, Database::Error> {
         let database = Database::connect(config, namespace).await?;
-        let storage = Self::new(database, wasm_runtime, WallClock);
-        storage.assert_is_migrated_database().await?;
-        Ok(storage)
+        Ok(Self::new(database, wasm_runtime, WallClock))
     }
 
     /// Lists the blob IDs of the storage.
@@ -1112,21 +1084,21 @@ where
         config: &Database::Config,
         namespace: &str,
     ) -> Result<Vec<BlobId>, ViewError> {
-        let database = Database::connect(config, namespace).await?;
-        let root_keys = database.list_root_keys().await?;
+        let database = Database::maybe_create_and_connect(config, namespace).await?;
+        let store = database.open_shared(&[])?;
+        let prefix = &[INDEX_BLOB_ID];
+        let keys = store.find_keys_by_prefix(prefix).await?;
         let mut blob_ids = Vec::new();
-        for root_key in root_keys {
-            if root_key.len() == 1 + BLOB_ID_LENGTH && root_key[0] == BLOB_ID_TAG {
-                let root_key_red = &root_key[1..=BLOB_ID_LENGTH];
-                let blob_id = bcs::from_bytes(root_key_red)?;
-                blob_ids.push(blob_id);
-            }
+        for key in keys {
+            let key_red = &key[..BLOB_ID_LENGTH];
+            let blob_id = bcs::from_bytes(key_red)?;
+            blob_ids.push(blob_id);
         }
         Ok(blob_ids)
     }
 }
 
-impl<Database> DbStorage<Database, WallClock>
+impl<Database> DbStorageV0<Database, WallClock>
 where
     Database: KeyValueDatabase + Clone + Send + Sync + 'static,
     Database::Error: Send + Sync,
@@ -1140,7 +1112,7 @@ where
         let root_keys = database.list_root_keys().await?;
         let mut chain_ids = Vec::new();
         for root_key in root_keys {
-            if root_key.len() == 1 + CHAIN_ID_LENGTH && root_key[0] == CHAIN_ID_TAG {
+            if root_key.len() == 1 + CHAIN_ID_LENGTH && root_key[0] == INDEX_CHAIN_ID {
                 let root_key_red = &root_key[1..=CHAIN_ID_LENGTH];
                 let chain_id = bcs::from_bytes(root_key_red)?;
                 chain_ids.push(chain_id);
@@ -1151,7 +1123,7 @@ where
 }
 
 #[cfg(with_testing)]
-impl<Database> DbStorage<Database, TestClock>
+impl<Database> DbStorageV0<Database, TestClock>
 where
     Database: TestKeyValueDatabase + Clone + Send + Sync + 'static,
     Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
@@ -1160,7 +1132,7 @@ where
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let config = Database::new_test_config().await.unwrap();
         let namespace = generate_test_namespace();
-        DbStorage::<Database, TestClock>::new_for_testing(
+        DbStorageV0::<Database, TestClock>::new_for_testing(
             config,
             &namespace,
             wasm_runtime,
@@ -1175,10 +1147,8 @@ where
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
-    ) -> Result<Self, ViewError> {
+    ) -> Result<Self, Database::Error> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
-        let storage = Self::new(database, wasm_runtime, clock);
-        storage.assert_is_migrated_database().await?;
-        Ok(storage)
+        Ok(Self::new(database, wasm_runtime, clock))
     }
 }

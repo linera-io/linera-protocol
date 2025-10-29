@@ -1,10 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{
-    crypto::CryptoHash,
-    identifiers::{BlobId, ChainId, EventId},
-};
 use linera_views::{
     batch::Batch,
     store::{KeyValueDatabase, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
@@ -17,6 +13,7 @@ use crate::{
         to_event_key, DbStorage, MultiPartitionBatch, RootKey, BLOB_KEY, BLOB_STATE_KEY, BLOCK_KEY,
         LITE_CERTIFICATE_KEY, NETWORK_DESCRIPTION_KEY,
     },
+    db_storage_v0::BaseKey,
     Clock,
 };
 
@@ -29,18 +26,6 @@ enum SchemaVersion {
     Version0,
     /// Version 1, spreading by chain ID, crypto hash, and blob ID.
     Version1,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-enum BaseKey {
-    ChainState(ChainId),
-    Certificate(CryptoHash),
-    ConfirmedBlock(CryptoHash),
-    Blob(BlobId),
-    BlobState(BlobId),
-    Event(EventId),
-    BlockExporterState(u32),
-    NetworkDescription,
 }
 
 /// The key used for the database schema version.
@@ -255,13 +240,15 @@ mod tests {
 
     impl StorageState {
         fn append_storage_state(&mut self, storage_state: StorageState) {
-            self.chain_ids_key_values.extend(storage_state.chain_ids_key_values);
+            self.chain_ids_key_values
+                .extend(storage_state.chain_ids_key_values);
             self.certificates.extend(storage_state.certificates);
             self.confirmed_blocks.extend(storage_state.confirmed_blocks);
             self.blobs.extend(storage_state.blobs);
             self.blob_states.extend(storage_state.blob_states);
             self.events.extend(storage_state.events);
-            self.block_exporter_states.extend(storage_state.block_exporter_states);
+            self.block_exporter_states
+                .extend(storage_state.block_exporter_states);
             if let Some(value) = storage_state.network_description {
                 assert!(self.network_description.is_none());
                 self.network_description = Some(value);
