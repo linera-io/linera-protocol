@@ -25,6 +25,7 @@ use linera_chain::{
 use linera_execution::{
     committee::Committee, system::SystemOperation, ExecutionError, Message, MessageKind, Operation,
     QueryOutcome, ResourceControlPolicy, SystemMessage, SystemQuery, SystemResponse,
+    FLAG_FREE_REJECT,
 };
 use linera_storage::Storage;
 use rand::Rng;
@@ -2849,7 +2850,10 @@ where
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
         .await?
-        .with_policy(ResourceControlPolicy::testnet());
+        .with_policy(ResourceControlPolicy {
+            http_request_allow_list: BTreeSet::from([FLAG_FREE_REJECT.to_string()]),
+            ..ResourceControlPolicy::testnet()
+        });
     let admin = builder.add_root_chain(1, Amount::from_tokens(2)).await?;
     let user = builder.add_root_chain(1, Amount::ZERO).await?;
     let user_reject = builder

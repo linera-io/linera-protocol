@@ -90,6 +90,10 @@ const MAX_STREAM_NAME_LEN: usize = 64;
 /// returned to be all zeros.
 // Note: testnet-only! This should not survive to mainnet.
 pub const FLAG_ZERO_HASH: &str = "FLAG_ZERO_HASH.linera.network";
+/// The flag that deactivates charging for bouncing messages. If this is present, outgoing
+/// messages are free of charge if they are bouncing, and operation outcomes are counted only
+/// by payload size, so that rejecting messages is free.
+pub const FLAG_FREE_REJECT: &str = "FLAG_FREE_REJECT.linera.network";
 
 /// An implementation of [`UserContractModule`].
 #[derive(Clone)]
