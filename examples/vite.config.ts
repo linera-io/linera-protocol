@@ -1,13 +1,15 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import path from 'path';
 
-const checkEnvironment = envs => {
-  const missing = envs.filter(env => !(env in process.env));
-  if (missing.length > 0)
-    throw new Error(`required environment variables missing: ${missing.toString()}`);
-
+const checkEnvironment = required => {
   return {
     name: 'checkEnvironment',
+    config(config, { mode }) {
+      const available = {...process.env, ...loadEnv(mode, process.cwd(), config.envPrefix)};
+      const missing = required.filter(env => !available[env]);
+      if (missing.length > 0)
+        throw new Error(`required environment variables missing: ${missing.toString()}`);
+    }
   };
 }
 
