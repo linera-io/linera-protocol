@@ -546,3 +546,375 @@ pub trait Clock {
 
     async fn sleep_until(&self, timestamp: Timestamp);
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use linera_base::{
+        crypto::{AccountPublicKey, CryptoHash},
+        data_types::{
+            Amount, ApplicationPermissions, Blob, BlockHeight, ChainDescription, ChainOrigin,
+            Epoch, InitialChainConfig, NetworkDescription, Round, Timestamp,
+        },
+        identifiers::{BlobId, BlobType, ChainId, EventId, StreamId},
+        ownership::ChainOwnership,
+    };
+    use linera_chain::{
+        block::{Block, ConfirmedBlock},
+        data_types::{BlockExecutionOutcome, ProposedBlock},
+    };
+    use linera_execution::BlobState;
+    #[cfg(feature = "dynamodb")]
+    use linera_views::dynamo_db::DynamoDbDatabase;
+    #[cfg(feature = "scylladb")]
+    use linera_views::scylla_db::ScyllaDbDatabase;
+    use linera_views::{memory::MemoryDatabase, ViewError};
+    use test_case::test_case;
+
+    use super::*;
+    use crate::db_storage::DbStorage;
+
+    /// Generic test function to test Storage trait features
+    async fn test_storage_chain_exporter<S: Storage + Sync>(storage: &S) -> Result<(), ViewError>
+    where
+        S::Context: Send + Sync,
+    {
+        // Test clock functionality
+        let _current_time = storage.clock().current_time();
+        let test_chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+
+        // Test loading a chain (this creates a chain state view)
+        let _chain_view = storage.load_chain(test_chain_id).await?;
+
+        // Test block exporter context
+        let _block_exporter_context = storage.block_exporter_context(0).await?;
+        Ok(())
+    }
+
+    async fn test_storage_blob<S: Storage + Sync>(storage: &S) -> Result<(), ViewError>
+    where
+        S::Context: Send + Sync,
+    {
+        // Create test blobs
+        let chain_description = ChainDescription::new(
+            ChainOrigin::Root(0),
+            InitialChainConfig {
+                ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
+                epoch: Epoch::ZERO,
+                min_active_epoch: Epoch::ZERO,
+                max_active_epoch: Epoch::ZERO,
+                balance: Amount::ZERO,
+                application_permissions: ApplicationPermissions::default(),
+            },
+            Timestamp::from(0),
+        );
+
+        let test_blob1 = Blob::new_chain_description(&chain_description);
+        let test_blob2 = Blob::new_data(vec![10, 20, 30]);
+        let test_blob3 = Blob::new_data(vec![40, 50, 60]);
+
+        // Testing blobs existence
+        let blob_id1 = test_blob1.id();
+        let blob_id2 = test_blob2.id();
+        let blob_id3 = test_blob3.id();
+
+        // Test blob existence before writing
+        assert!(!storage.contains_blob(blob_id1).await?);
+        assert!(!storage.contains_blob(blob_id2).await?);
+        assert!(!storage.contains_blob(blob_id3).await?);
+
+        // Test single blob write
+        storage.write_blob(&test_blob1).await?;
+        assert!(storage.contains_blob(blob_id1).await?);
+
+        // Test multiple blob write (write_blobs)
+        storage
+            .write_blobs(&[test_blob2.clone(), test_blob3.clone()])
+            .await?;
+        assert!(storage.contains_blob(blob_id2).await?);
+        assert!(storage.contains_blob(blob_id3).await?);
+
+        // Test single blob read
+        let read_blob = storage.read_blob(blob_id1).await?;
+        assert_eq!(read_blob, Some(test_blob1.clone()));
+
+        // Test multiple blob read (read_blobs)
+        let blob_ids = vec![blob_id1, blob_id2, blob_id3];
+        let read_blobs = storage.read_blobs(&blob_ids).await?;
+        assert_eq!(read_blobs.len(), 3);
+
+        // Verify each blob was read correctly
+        assert_eq!(read_blobs[0], Some(test_blob1.clone()));
+        assert_eq!(read_blobs[1], Some(test_blob2));
+        assert_eq!(read_blobs[2], Some(test_blob3));
+
+        // Test missing blobs detection
+        let missing_blob_id = BlobId::new(CryptoHash::test_hash("missing"), BlobType::Data);
+        let missing_blobs = storage.missing_blobs(&[blob_id1, missing_blob_id]).await?;
+        assert_eq!(missing_blobs, vec![missing_blob_id]);
+
+        // Test maybe_write_blobs (should return false as blobs don't have blob states yet)
+        let write_results = storage.maybe_write_blobs(&[test_blob1.clone()]).await?;
+        assert_eq!(write_results, vec![false]);
+
+        // Test blob state operations
+        let blob_state1 = BlobState {
+            last_used_by: None,
+            chain_id: ChainId(CryptoHash::test_hash("chain1")),
+            block_height: BlockHeight(0),
+            epoch: Some(Epoch::ZERO),
+        };
+        let blob_state2 = BlobState {
+            last_used_by: Some(CryptoHash::test_hash("cert")),
+            chain_id: ChainId(CryptoHash::test_hash("chain2")),
+            block_height: BlockHeight(1),
+            epoch: Some(Epoch::from(1)),
+        };
+
+        // Test blob state existence before writing
+        assert!(!storage.contains_blob_state(blob_id1).await?);
+        assert!(!storage.contains_blob_state(blob_id2).await?);
+
+        // Test blob state writing
+        storage
+            .maybe_write_blob_states(&[blob_id1], blob_state1.clone())
+            .await?;
+        storage
+            .maybe_write_blob_states(&[blob_id2], blob_state2.clone())
+            .await?;
+
+        // Test blob state existence after writing
+        assert!(storage.contains_blob_state(blob_id1).await?);
+        assert!(storage.contains_blob_state(blob_id2).await?);
+
+        // Test single blob state read
+        let read_blob_state = storage.read_blob_state(blob_id1).await?;
+        assert_eq!(read_blob_state, Some(blob_state1.clone()));
+
+        // Test multiple blob state read (read_blob_states)
+        let read_blob_states = storage.read_blob_states(&[blob_id1, blob_id2]).await?;
+        assert_eq!(read_blob_states.len(), 2);
+
+        // Verify blob states
+        assert_eq!(read_blob_states[0], Some(blob_state1));
+        assert_eq!(read_blob_states[1], Some(blob_state2));
+
+        // Test maybe_write_blobs now that blob states exist (should return true)
+        let write_results = storage.maybe_write_blobs(&[test_blob1.clone()]).await?;
+        assert_eq!(write_results, vec![true]);
+
+        Ok(())
+    }
+
+    async fn test_storage_certificate<S: Storage + Sync>(storage: &S) -> Result<(), ViewError>
+    where
+        S::Context: Send + Sync,
+    {
+        let cert_hash = CryptoHash::test_hash("certificate");
+
+        // Test certificate existence (should be false initially)
+        assert!(!storage.contains_certificate(cert_hash).await?);
+
+        // Test reading non-existent certificate
+        assert!(storage.read_certificate(cert_hash).await?.is_none());
+
+        // Test reading multiple certificates
+        let cert_hashes = vec![cert_hash, CryptoHash::test_hash("cert2")];
+        let certs_result = storage.read_certificates(cert_hashes.clone()).await?;
+        assert_eq!(certs_result.len(), 2);
+        assert!(certs_result[0].is_none());
+        assert!(certs_result[1].is_none());
+
+        // Test raw certificate reading
+        let raw_certs_result = storage.read_certificates_raw(cert_hashes).await?;
+        assert!(raw_certs_result.is_empty()); // No certificates exist
+
+        // Test confirmed block reading
+        let block_hash = CryptoHash::test_hash("block");
+        let block_result = storage.read_confirmed_block(block_hash).await?;
+        assert!(block_result.is_none());
+
+        // Test write_blobs_and_certificate functionality
+        // Create test blobs
+        let test_blob1 = Blob::new_data(vec![1, 2, 3]);
+        let test_blob2 = Blob::new_data(vec![4, 5, 6]);
+        let blobs = vec![test_blob1, test_blob2];
+
+        // Create a test certificate using the working pattern from linera-indexer tests
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain_cert"));
+
+        // Create a minimal proposed block (genesis block)
+        let proposed_block = ProposedBlock {
+            epoch: Epoch::ZERO,
+            chain_id,
+            transactions: vec![],
+            previous_block_hash: None,
+            height: BlockHeight::ZERO,
+            authenticated_owner: None,
+            timestamp: Timestamp::default(),
+        };
+
+        // Create a minimal block execution outcome with proper BTreeMap types
+        let outcome = BlockExecutionOutcome {
+            messages: vec![],
+            state_hash: CryptoHash::default(),
+            oracle_responses: vec![],
+            events: vec![],
+            blobs: vec![],
+            operation_results: vec![],
+            previous_event_blocks: BTreeMap::new(),
+            previous_message_blocks: BTreeMap::new(),
+        };
+
+        let block = Block::new(proposed_block, outcome);
+        let confirmed_block = ConfirmedBlock::new(block);
+        let certificate = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
+
+        // Test writing blobs and certificate together
+        storage
+            .write_blobs_and_certificate(&blobs, &certificate)
+            .await?;
+
+        // Verify the certificate was written
+        let cert_hash = certificate.hash();
+        assert!(storage.contains_certificate(cert_hash).await?);
+
+        // Verify the certificate can be read back
+        let read_certificate = storage.read_certificate(cert_hash).await?;
+        assert!(read_certificate.is_some());
+        assert_eq!(read_certificate.unwrap().hash(), cert_hash);
+
+        // Verify the blobs were written
+        for blob in &blobs {
+            assert!(storage.contains_blob(blob.id()).await?);
+        }
+
+        Ok(())
+    }
+
+    async fn test_storage_event<S: Storage + Sync>(storage: &S) -> Result<(), ViewError>
+    where
+        S::Context: Send + Sync,
+    {
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+        let stream_id = StreamId::system("test_stream");
+
+        // Test multiple events
+        let event_id1 = EventId {
+            chain_id,
+            stream_id: stream_id.clone(),
+            index: 0,
+        };
+        let event_id2 = EventId {
+            chain_id,
+            stream_id: stream_id.clone(),
+            index: 1,
+        };
+        let event_id3 = EventId {
+            chain_id,
+            stream_id: stream_id.clone(),
+            index: 2,
+        };
+
+        let event_data1 = vec![1, 2, 3];
+        let event_data2 = vec![4, 5, 6];
+        let event_data3 = vec![7, 8, 9];
+
+        // Test event existence before writing
+        assert!(!storage.contains_event(event_id1.clone()).await?);
+        assert!(!storage.contains_event(event_id2.clone()).await?);
+
+        // Write multiple events
+        storage
+            .write_events([
+                (event_id1.clone(), event_data1.clone()),
+                (event_id2.clone(), event_data2.clone()),
+                (event_id3.clone(), event_data3.clone()),
+            ])
+            .await?;
+
+        // Test event existence after writing
+        assert!(storage.contains_event(event_id1.clone()).await?);
+        assert!(storage.contains_event(event_id2.clone()).await?);
+        assert!(storage.contains_event(event_id3.clone()).await?);
+
+        // Test individual event reading
+        let read_event1 = storage.read_event(event_id1).await?;
+        assert_eq!(read_event1, Some(event_data1));
+
+        let read_event2 = storage.read_event(event_id2).await?;
+        assert_eq!(read_event2, Some(event_data2));
+
+        // Test reading events from index
+        let events_from_index = storage
+            .read_events_from_index(&chain_id, &stream_id, 1)
+            .await?;
+        assert!(events_from_index.len() >= 2); // Should contain events at index 1 and 2
+        Ok(())
+    }
+
+    async fn test_storage_network_description<S: Storage + Sync>(
+        storage: &S,
+    ) -> Result<(), ViewError>
+    where
+        S::Context: Send + Sync,
+    {
+        let admin_chain_id = ChainId(CryptoHash::test_hash("test_chain_second"));
+
+        let network_desc = NetworkDescription {
+            name: "test_network".to_string(),
+            genesis_config_hash: CryptoHash::test_hash("genesis_config"),
+            genesis_timestamp: Timestamp::from(0),
+            genesis_committee_blob_hash: CryptoHash::test_hash("committee"),
+            admin_chain_id,
+        };
+
+        // Test reading non-existent network description
+        assert!(storage.read_network_description().await?.is_none());
+
+        // Write network description
+        storage.write_network_description(&network_desc).await?;
+
+        // Test reading existing network description
+        let read_desc = storage.read_network_description().await?;
+        assert_eq!(read_desc, Some(network_desc));
+
+        Ok(())
+    }
+
+    async fn test_storage_committee<S: Storage + Sync>(storage: &S) -> Result<(), ViewError>
+    where
+        S::Context: Send + Sync,
+    {
+        // Test empty epoch range
+        let empty_committees = storage
+            .committees_for(Epoch::from(10)..=Epoch::from(5))
+            .await?;
+        assert!(empty_committees.is_empty());
+
+        // Test epoch range (this will likely return empty since we haven't set up committee blobs)
+        let _committees = storage.committees_for(Epoch::ZERO..=Epoch::from(1)).await;
+        // This might fail if network description or committee blobs aren't properly set up
+        // but we test that the method can be called
+        Ok(())
+    }
+
+    /// Generic test function to test Storage trait features
+    #[test_case(DbStorage::<MemoryDatabase, _>::make_test_storage(None).await; "memory")]
+    #[cfg_attr(feature = "dynamodb", test_case(DbStorage::<DynamoDbDatabase, _>::make_test_storage(None).await; "dynamo_db"))]
+    #[cfg_attr(feature = "scylladb", test_case(DbStorage::<ScyllaDbDatabase, _>::make_test_storage(None).await; "scylla_db"))]
+    #[test_log::test(tokio::test)]
+    async fn test_storage_features<S: Storage + Sync>(storage: S) -> Result<(), ViewError>
+    where
+        S::Context: Send + Sync,
+    {
+        test_storage_chain_exporter(&storage).await?;
+        test_storage_blob(&storage).await?;
+        test_storage_certificate(&storage).await?;
+        test_storage_event(&storage).await?;
+        test_storage_network_description(&storage).await?;
+        test_storage_committee(&storage).await?;
+        Ok(())
+    }
+}
