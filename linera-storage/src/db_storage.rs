@@ -284,7 +284,7 @@ impl MultiPartitionBatch {
             .with_label_values(&[])
             .inc();
         let hash = certificate.hash();
-        let root_key = RootKey::CryptoHash(hash).bytes();
+        let root_key = RootKey::ConfirmedBlock(hash).bytes();
         let value = bcs::to_bytes(&certificate.lite_certificate())?;
         let key = LITE_CERTIFICATE_KEY.to_vec();
         self.put_key_value_bytes(root_key.clone(), key, value);
@@ -333,7 +333,7 @@ pub struct DbStorage<Database, Clock = WallClock> {
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) enum RootKey {
     ChainState(ChainId),
-    CryptoHash(CryptoHash),
+    ConfirmedBlock(CryptoHash),
     Blob(BlobId),
     Event(ChainId),
     SchemaVersion,
@@ -650,7 +650,7 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlock>, ViewError> {
-        let root_key = RootKey::CryptoHash(hash).bytes();
+        let root_key = RootKey::ConfirmedBlock(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
         let value = store.read_value(BLOCK_KEY).await?;
         #[cfg(with_metrics)]
@@ -809,7 +809,7 @@ where
 
     #[instrument(skip_all, fields(%hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
-        let root_key = RootKey::CryptoHash(hash).bytes();
+        let root_key = RootKey::ConfirmedBlock(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
         let results = store.contains_keys(get_block_keys()).await?;
         #[cfg(with_metrics)]
@@ -824,7 +824,7 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
-        let root_key = RootKey::CryptoHash(hash).bytes();
+        let root_key = RootKey::ConfirmedBlock(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
         let values = store.read_multi_values_bytes(get_block_keys()).await?;
         #[cfg(with_metrics)]
@@ -1009,7 +1009,7 @@ where
     fn get_root_keys_for_certificates(hashes: &[CryptoHash]) -> Vec<Vec<u8>> {
         hashes
             .iter()
-            .map(|hash| RootKey::CryptoHash(*hash).bytes())
+            .map(|hash| RootKey::ConfirmedBlock(*hash).bytes())
             .collect()
     }
 

@@ -71,11 +71,11 @@ fn map_base_key(base_key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ViewError> {
             Ok((root_key, UNUSED_EMPTY_KEY.to_vec()))
         }
         BaseKey::Certificate(hash) => {
-            let root_key = RootKey::CryptoHash(hash).bytes();
+            let root_key = RootKey::ConfirmedBlock(hash).bytes();
             Ok((root_key, LITE_CERTIFICATE_KEY.to_vec()))
         }
         BaseKey::ConfirmedBlock(hash) => {
-            let root_key = RootKey::CryptoHash(hash).bytes();
+            let root_key = RootKey::ConfirmedBlock(hash).bytes();
             Ok((root_key, BLOCK_KEY.to_vec()))
         }
         BaseKey::Blob(blob_id) => {
@@ -488,7 +488,7 @@ mod tests {
                         let key_values = store.find_key_values_by_prefix(&[]).await?;
                         chain_ids_key_values.insert(chain_id, key_values);
                     }
-                    RootKey::CryptoHash(hash) => {
+                    RootKey::ConfirmedBlock(hash) => {
                         let store = database.open_shared(&bcs_root_key)?;
                         let value = store.read_value_bytes(LITE_CERTIFICATE_KEY).await?;
                         if let Some(value) = value {
