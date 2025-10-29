@@ -246,7 +246,7 @@ fn get_block_keys() -> Vec<Vec<u8>> {
 
 #[derive(Default)]
 pub(crate) struct MultiPartitionBatch {
-    keys_value_bytes: Vec<(Vec<u8>, Vec<u8>, Vec<u8>)>,
+    keys_value_bytes: Vec<(Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>)>,
 }
 
 impl MultiPartitionBatch {
@@ -254,8 +254,12 @@ impl MultiPartitionBatch {
         Self::default()
     }
 
-    pub(crate) fn put_key_value_bytes(&mut self, root_key: Vec<u8>, key: Vec<u8>, value: Vec<u8>) {
-        self.keys_value_bytes.push((root_key, key, value));
+    pub(crate) fn put_key_values(&mut self, root_key: Vec<u8>, key_values: Vec<(Vec<u8>, Vec<u8>)>) {
+        self.keys_value_bytes.push((root_key, key_values));
+    }
+
+    pub(crate) fn put_key_value(&mut self, root_key: Vec<u8>, key: Vec<u8>, value: Vec<u8>) {
+        self.put_key_values(root_key, vec![(key, value)]);
     }
 
     fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
@@ -263,7 +267,7 @@ impl MultiPartitionBatch {
         metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let root_key = RootKey::Blob(blob.id()).bytes();
         let key = BLOB_KEY.to_vec();
-        self.put_key_value_bytes(root_key, key, blob.bytes().to_vec());
+        self.put_key_value(root_key, key, blob.bytes().to_vec());
         Ok(())
     }
 
@@ -271,7 +275,7 @@ impl MultiPartitionBatch {
         let root_key = RootKey::Blob(blob_id).bytes();
         let key = BLOB_STATE_KEY.to_vec();
         let value = bcs::to_bytes(blob_state)?;
-        self.put_key_value_bytes(root_key, key, value);
+        self.put_key_value(root_key, key, value);
         Ok(())
     }
 
@@ -285,12 +289,14 @@ impl MultiPartitionBatch {
             .inc();
         let hash = certificate.hash();
         let root_key = RootKey::ConfirmedBlock(hash).bytes();
-        let value = bcs::to_bytes(&certificate.lite_certificate())?;
+        let mut key_values = Vec::new();
         let key = LITE_CERTIFICATE_KEY.to_vec();
-        self.put_key_value_bytes(root_key.clone(), key, value);
-        let value = bcs::to_bytes(&certificate.value())?;
+        let value = bcs::to_bytes(&certificate.lite_certificate())?;
+        key_values.push((key, value));
         let key = BLOCK_KEY.to_vec();
-        self.put_key_value_bytes(root_key, key, value);
+        let value = bcs::to_bytes(&certificate.value())?;
+        key_values.push((key, value));
+        self.put_key_values(root_key, key_values);
         Ok(())
     }
 
@@ -299,7 +305,7 @@ impl MultiPartitionBatch {
         metrics::WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
         let key = to_event_key(&event_id);
         let root_key = RootKey::Event(event_id.chain_id).bytes();
-        self.put_key_value_bytes(root_key, key, value);
+        self.put_key_value(root_key, key, value);
         Ok(())
     }
 
@@ -312,9 +318,9 @@ impl MultiPartitionBatch {
             .with_label_values(&[])
             .inc();
         let root_key = RootKey::NetworkDescription.bytes();
-        let value = bcs::to_bytes(information)?;
         let key = NETWORK_DESCRIPTION_KEY.to_vec();
-        self.put_key_value_bytes(root_key, key, value);
+        let value = bcs::to_bytes(information)?;
+        self.put_key_value(root_key, key, value);
         Ok(())
     }
 }
@@ -1036,11 +1042,12 @@ where
     #[instrument(skip_all)]
     async fn write_entry(
         store: &Database::Store,
-        key: Vec<u8>,
-        bytes: Vec<u8>,
+        key_values: Vec<(Vec<u8>,Vec<u8>)>,
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        batch.put_key_value_bytes(key, bytes);
+        for (key, value) in key_values {
+            batch.put_key_value_bytes(key, value);
+        }
         store.write_batch(batch).await?;
         Ok(())
     }
@@ -1051,9 +1058,9 @@ where
             return Ok(());
         }
         let mut futures = Vec::new();
-        for (root_key, key, bytes) in batch.keys_value_bytes {
+        for (root_key, key_values) in batch.keys_value_bytes {
             let store = self.database.open_shared(&root_key)?;
-            futures.push(async move { Self::write_entry(&store, key, bytes).await });
+            futures.push(async move { Self::write_entry(&store, key_values).await });
         }
         futures::future::try_join_all(futures).await?;
         Ok(())

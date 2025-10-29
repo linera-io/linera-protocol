@@ -99,8 +99,8 @@ where
         first_byte: &u8,
         keys: Vec<Vec<u8>>,
     ) -> Result<(), ViewError> {
-        tracing::info!(
-            "migrate_shared_partition for {} keys starting with with {first_byte}",
+        tracing::debug!(
+            "migrate_shared_partition for {} keys starting with {first_byte}",
             keys.len()
         );
         for (index, chunk_keys) in keys.chunks(BLOCK_KEY_SIZE).enumerate() {
@@ -121,7 +121,7 @@ where
             for (base_key, value) in chunk_base_keys.iter().zip(values) {
                 let value = value.ok_or(ViewError::MissingEntries)?;
                 let (root_key, key) = map_base_key(base_key)?;
-                batch.put_key_value_bytes(root_key, key, value);
+                batch.put_key_value(root_key, key, value);
             }
             self.write_batch(batch).await?;
             // Now delete the keys
