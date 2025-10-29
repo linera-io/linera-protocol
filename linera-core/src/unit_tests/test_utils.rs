@@ -1042,11 +1042,12 @@ where
         Ok(self.genesis_storage_builder.build(storage).await)
     }
 
-    pub async fn make_client(
+    pub async fn make_client_with_options(
         &mut self,
         chain_id: ChainId,
         block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
+        options: chain_client::Options,
     ) -> anyhow::Result<ChainClient<B::Storage>> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
@@ -1064,7 +1065,7 @@ where
             format!("Client node for {:.8}", chain_id),
             Duration::from_secs(30),
             Duration::from_secs(1),
-            chain_client::Options::test_default(),
+            options,
             5_000,
             10_000,
             crate::client::RequestsSchedulerConfig::default(),
@@ -1077,6 +1078,21 @@ where
             self.chain_owners.get(&chain_id).copied(),
             None,
         ))
+    }
+
+    pub async fn make_client(
+        &mut self,
+        chain_id: ChainId,
+        block_hash: Option<CryptoHash>,
+        block_height: BlockHeight,
+    ) -> anyhow::Result<ChainClient<B::Storage>> {
+        self.make_client_with_options(
+            chain_id,
+            block_hash,
+            block_height,
+            chain_client::Options::test_default(),
+        )
+        .await
     }
 
     /// Tries to find a (confirmation) certificate for the given chain_id and block height.
