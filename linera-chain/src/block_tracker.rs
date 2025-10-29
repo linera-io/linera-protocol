@@ -325,7 +325,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         }
 
         self.resource_controller
-            .track_block_size(txn_outcome.operation_result.len())
+            .track_block_size_of(&(&txn_outcome.operation_result))
             .with_execution_context(context)?;
 
         self.next_application_index = txn_outcome.next_application_index;
