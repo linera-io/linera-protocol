@@ -245,6 +245,7 @@ fn get_block_keys() -> Vec<Vec<u8>> {
 }
 
 #[derive(Default)]
+#[allow(clippy::type_complexity)]
 pub(crate) struct MultiPartitionBatch {
     keys_value_bytes: Vec<(Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>)>,
 }
@@ -254,7 +255,11 @@ impl MultiPartitionBatch {
         Self::default()
     }
 
-    pub(crate) fn put_key_values(&mut self, root_key: Vec<u8>, key_values: Vec<(Vec<u8>, Vec<u8>)>) {
+    pub(crate) fn put_key_values(
+        &mut self,
+        root_key: Vec<u8>,
+        key_values: Vec<(Vec<u8>, Vec<u8>)>,
+    ) {
         self.keys_value_bytes.push((root_key, key_values));
     }
 
@@ -1042,7 +1047,7 @@ where
     #[instrument(skip_all)]
     async fn write_entry(
         store: &Database::Store,
-        key_values: Vec<(Vec<u8>,Vec<u8>)>,
+        key_values: Vec<(Vec<u8>, Vec<u8>)>,
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for (key, value) in key_values {

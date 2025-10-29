@@ -4,7 +4,6 @@
 //! This module defines the storage abstractions for individual chains and certificates.
 
 mod db_storage;
-mod db_storage_v0;
 mod migration;
 
 use std::{collections::BTreeMap, ops::RangeInclusive, sync::Arc};

@@ -1,6 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_base::{
+    crypto::CryptoHash,
+    identifiers::{BlobId, ChainId, EventId},
+};
 use linera_views::{
     batch::Batch,
     store::{KeyValueDatabase, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
@@ -13,7 +17,6 @@ use crate::{
         to_event_key, DbStorage, MultiPartitionBatch, RootKey, BLOB_KEY, BLOB_STATE_KEY, BLOCK_KEY,
         LITE_CERTIFICATE_KEY, NETWORK_DESCRIPTION_KEY,
     },
-    db_storage_v0::BaseKey,
     Clock,
 };
 
@@ -43,6 +46,18 @@ const MOVABLE_KEYS_0_1: &[u8] = &[1, 2, 3, 4, 5, 7];
 /// The total number of keys being migrated in a block.
 /// we use chunks to avoid OOM
 const BLOCK_KEY_SIZE: usize = 90;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) enum BaseKey {
+    ChainState(ChainId),
+    Certificate(CryptoHash),
+    ConfirmedBlock(CryptoHash),
+    Blob(BlobId),
+    BlobState(BlobId),
+    Event(EventId),
+    BlockExporterState(u32),
+    NetworkDescription,
+}
 
 // We map a `BaseKey` in the shared partition to a `(RootKey,key)` in the
 // new schema. For `ChainState` and `BlockExporterState`, there is no need
