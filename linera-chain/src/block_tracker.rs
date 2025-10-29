@@ -13,8 +13,8 @@ use linera_base::{
 };
 use linera_execution::{
     execution_state_actor::ExecutionStateActor, ExecutionRuntimeContext, ExecutionStateView,
-    MessageContext, OperationContext, OutgoingMessage, ResourceController, ResourceTracker,
-    SystemExecutionStateView, TransactionOutcome, TransactionTracker,
+    MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
+    ResourceTracker, SystemExecutionStateView, TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::Context;
 use tracing::instrument;
@@ -287,6 +287,9 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         let mut resource_controller = self.resource_controller.with_state(view).await?;
 
         for message_out in &txn_outcome.outgoing_messages {
+            if message_out.kind == MessageKind::Bouncing {
+                continue; // Bouncing messages are free.
+            }
             resource_controller
                 .track_message(&message_out.message)
                 .with_execution_context(context)?;
@@ -322,7 +325,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         }
 
         self.resource_controller
-            .track_block_size_of(&(&txn_outcome.operation_result))
+            .track_block_size(txn_outcome.operation_result.len())
             .with_execution_context(context)?;
 
         self.next_application_index = txn_outcome.next_application_index;

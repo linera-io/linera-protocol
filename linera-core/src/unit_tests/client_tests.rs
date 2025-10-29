@@ -2933,3 +2933,48 @@ where
 
     Ok(())
 }
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_rejected_message_bundles_are_free<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+        .await?
+        .with_policy(ResourceControlPolicy::testnet());
+    let admin = builder.add_root_chain(1, Amount::from_tokens(2)).await?;
+    let user = builder.add_root_chain(1, Amount::ZERO).await?;
+    let user_reject = builder
+        .make_client_with_options(
+            user.chain_id(),
+            None,
+            BlockHeight::ZERO,
+            chain_client::Options {
+                message_policy: MessagePolicy::new(BlanketMessagePolicy::Reject, None),
+                ..chain_client::Options::test_default()
+            },
+        )
+        .await?;
+
+    let recipient = Account::chain(user.chain_id());
+    admin
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+
+    user_reject.synchronize_from_validators().await?;
+    let (certificates, _) = user_reject.process_inbox().await.unwrap();
+    assert_eq!(certificates.len(), 1);
+    assert_matches!(
+        &certificates[0].block().body.transactions[0],
+        Transaction::ReceiveMessages(bundle) if bundle.action == MessageAction::Reject
+    );
+
+    Ok(())
+}
