@@ -219,8 +219,8 @@ mod tests {
     use crate::{
         db_storage::RestrictedEventId,
         migration::{
-            BaseKey, RootKey, BLOB_KEY, BLOB_STATE_KEY, BLOCK_KEY, LITE_CERTIFICATE_KEY,
-            NETWORK_DESCRIPTION_KEY,
+            BaseKey, RootKey, SchemaVersion, BLOB_KEY, BLOB_STATE_KEY, BLOCK_KEY,
+            DATABASE_SCHEMA_KEY, LITE_CERTIFICATE_KEY, NETWORK_DESCRIPTION_KEY,
         },
         DbStorage, WallClock,
     };
@@ -511,7 +511,9 @@ mod tests {
                         }
                     }
                     RootKey::SchemaVersion => {
-                        // No operation needed.
+                        let store = database.open_shared(&bcs_root_key)?;
+                        let value = store.read_value(DATABASE_SCHEMA_KEY).await?;
+                        assert_eq!(value, Some(SchemaVersion::Version1));
                     }
                     RootKey::NetworkDescription => {
                         let store = database.open_shared(&bcs_root_key)?;
