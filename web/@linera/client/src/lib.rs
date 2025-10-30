@@ -453,6 +453,9 @@ pub struct Application {
 impl Application {
     /// Performs a query against an application's service.
     ///
+    /// If `block_hash` is non-empty, it specifies the block at which to
+    /// perform the query; otherwise, the latest block is used.
+    ///
     /// # Errors
     /// If the application ID is invalid, the query is incorrect, or
     /// the response isn't valid UTF-8.
@@ -462,18 +465,25 @@ impl Application {
     #[wasm_bindgen]
     // TODO(#14) allow passing bytes here rather than just strings
     // TODO(#15) a lot of this logic is shared with `linera_service::node_service`
-    pub async fn query(&self, query: &str) -> JsResult<String> {
+    pub async fn query(&self, query: &str, block_hash: &str) -> JsResult<String> {
         tracing::debug!("querying application: {query}");
         let chain_client = self.client.default_chain_client().await?;
-
+        let block_hash = if block_hash.is_empty() {
+            None
+        } else {
+            Some(block_hash.parse()?)
+        };
         let linera_execution::QueryOutcome {
             response: linera_execution::QueryResponse::User(response),
             operations,
         } = chain_client
-            .query_application(linera_execution::Query::User {
-                application_id: self.id,
-                bytes: query.as_bytes().to_vec(),
-            })
+            .query_application(
+                linera_execution::Query::User {
+                    application_id: self.id,
+                    bytes: query.as_bytes().to_vec(),
+                },
+                block_hash,
+            )
             .await?
         else {
             panic!("system response to user query")

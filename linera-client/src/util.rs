@@ -47,7 +47,7 @@ pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: Round
             *height >= timeout.next_block_height
         }
         Reason::NewRound { round, .. } => *round > timeout.current_round,
-        Reason::NewIncomingBundle { .. } => false,
+        Reason::NewIncomingBundle { .. } | Reason::BlockExecuted { .. } => false,
     });
     future::select(
         Box::pin(stream.next()),

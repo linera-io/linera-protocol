@@ -323,6 +323,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 }
                 self.process_new_events(notification.chain_id).await?;
             }
+            Reason::BlockExecuted { .. } => {}
         }
         Self::sleep(self.config.delay_after_ms).await;
         Ok(())

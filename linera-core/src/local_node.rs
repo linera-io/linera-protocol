@@ -9,7 +9,7 @@ use std::{
 
 use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
-    crypto::ValidatorPublicKey,
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, Epoch},
     identifiers::{BlobId, ChainId},
 };
@@ -240,8 +240,13 @@ where
         &self,
         chain_id: ChainId,
         query: Query,
+        block_hash: Option<CryptoHash>,
     ) -> Result<QueryOutcome, LocalNodeError> {
-        let outcome = self.node.state.query_application(chain_id, query).await?;
+        let outcome = self
+            .node
+            .state
+            .query_application(chain_id, query, block_hash)
+            .await?;
         Ok(outcome)
     }
 

@@ -148,6 +148,10 @@ pub enum Reason {
         height: BlockHeight,
         round: Round,
     },
+    BlockExecuted {
+        height: BlockHeight,
+        hash: CryptoHash,
+    },
 }
 
 /// Error type for worker operations.
@@ -633,14 +637,22 @@ where
     }
 
     /// Executes a [`Query`] for an application's state on a specific chain.
+    ///
+    /// If `block_hash` is specified, system will query the application's state
+    /// at that block. If it doesn't exist, it uses latest state.
     #[instrument(level = "trace", skip(self, chain_id, query))]
     pub async fn query_application(
         &self,
         chain_id: ChainId,
         query: Query,
+        block_hash: Option<CryptoHash>,
     ) -> Result<QueryOutcome, WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::QueryApplication { query, callback }
+            ChainWorkerRequest::QueryApplication {
+                query,
+                block_hash,
+                callback,
+            }
         })
         .await
     }
