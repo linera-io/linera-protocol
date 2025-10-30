@@ -31,9 +31,6 @@ enum SchemaVersion {
     Version1,
 }
 
-/// The key used for the database schema version.
-const DATABASE_SCHEMA_KEY: &[u8] = &[0];
-
 const UNUSED_EMPTY_KEY: &[u8] = &[];
 // We choose the ordering of the variants in `BaseKey` and `RootKey` so that
 // the root keys corresponding to `ChainState` and `BlockExporter` remain the
@@ -59,10 +56,9 @@ pub(crate) enum BaseKey {
     NetworkDescription,
 }
 
-// We map a `BaseKey` in the shared partition to a `(RootKey,key)` in the
-// new schema. For `ChainState` and `BlockExporterState`, there is no need
-// to move so we use `UNUSED_EMPTY_KEY`.
-//
+// We map a serialized `BaseKey` in the shared partition to a serialized `RootKey`
+// and key in the new schema. For `ChainState` and `BlockExporterState`, there is
+// no need to move so we use `UNUSED_EMPTY_KEY`.
 fn map_base_key(base_key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ViewError> {
     let base_key = bcs::from_bytes::<BaseKey>(base_key)?;
     match base_key {
@@ -158,24 +154,6 @@ where
         Ok(())
     }
 
-    async fn get_database_schema(&self) -> Result<SchemaVersion, ViewError> {
-        let root_key = RootKey::SchemaVersion.bytes();
-        let store = self.database.open_shared(&root_key)?;
-        let value = store
-            .read_value::<SchemaVersion>(DATABASE_SCHEMA_KEY)
-            .await?;
-        let value = value.unwrap_or_default();
-        Ok(value)
-    }
-
-    async fn write_database_schema(&self, schema: &SchemaVersion) -> Result<(), ViewError> {
-        let root_key = RootKey::SchemaVersion.bytes();
-        let mut batch = Batch::new();
-        batch.put_key_value(DATABASE_SCHEMA_KEY.to_vec(), schema)?;
-        let store = self.database.open_shared(&root_key)?;
-        Ok(store.write_batch(batch).await?)
-    }
-
     pub async fn migrate_if_needed(&self) -> Result<(), ViewError> {
         let (is_initialized, schema) = self.get_storage_state().await?;
         if is_initialized && schema == SchemaVersion::Version0 {
@@ -196,10 +174,12 @@ where
             store.contains_key(NETWORK_DESCRIPTION_KEY).await?
         };
         let is_initialized = test_old_schema || test_new_schema;
-        let schema = if test_new_schema {
-            SchemaVersion::Version1
-        } else {
+        let schema = if test_old_schema {
             SchemaVersion::Version0
+        } else {
+            // Whether the state is initialized or not it is going
+            // to be in version 1.
+            SchemaVersion::Version1
         };
         Ok((is_initialized, schema))
     }
@@ -246,8 +226,8 @@ mod tests {
     use crate::{
         db_storage::RestrictedEventId,
         migration::{
-            BaseKey, RootKey, SchemaVersion, BLOB_KEY, BLOB_STATE_KEY, BLOCK_KEY,
-            DATABASE_SCHEMA_KEY, LITE_CERTIFICATE_KEY, NETWORK_DESCRIPTION_KEY,
+            BaseKey, RootKey, BLOB_KEY, BLOB_STATE_KEY, BLOCK_KEY,
+            LITE_CERTIFICATE_KEY, NETWORK_DESCRIPTION_KEY,
         },
         DbStorage, WallClock,
     };
@@ -537,10 +517,8 @@ mod tests {
                             events.insert(event_id, value);
                         }
                     }
-                    RootKey::SchemaVersion => {
-                        let store = database.open_shared(&bcs_root_key)?;
-                        let value = store.read_value(DATABASE_SCHEMA_KEY).await?;
-                        assert_eq!(value, Some(SchemaVersion::Version1));
+                    RootKey::Placeholder => {
+                        // Nothing to be done
                     }
                     RootKey::NetworkDescription => {
                         let store = database.open_shared(&bcs_root_key)?;

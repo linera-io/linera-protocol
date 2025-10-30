@@ -347,15 +347,15 @@ pub(crate) enum RootKey {
     ConfirmedBlock(CryptoHash),
     Blob(BlobId),
     Event(ChainId),
-    SchemaVersion,
+    Placeholder,
     NetworkDescription,
     BlockExporterState(u32),
 }
 
 const CHAIN_ID_TAG: u8 = 0;
 const BLOB_ID_TAG: u8 = 2;
-pub(crate) const CHAIN_ID_LENGTH: usize = std::mem::size_of::<ChainId>();
-pub(crate) const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
+pub(crate) const CHAIN_ID_LENGTH: usize = 32;
+pub(crate) const BLOB_ID_LENGTH: usize = 33;
 
 impl RootKey {
     pub(crate) fn bytes(&self) -> Vec<u8> {
