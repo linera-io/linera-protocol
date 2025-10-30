@@ -1027,8 +1027,8 @@ where
         let application_id: ApplicationId = application_id.parse()?;
 
         debug!(
-            chain_id = %chain_id,
-            application_id = %application_id,
+            %chain_id,
+            %application_id,
             "processing request for application:\n{:?}",
             &request
         );

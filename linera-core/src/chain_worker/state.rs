@@ -1274,9 +1274,18 @@ where
         let local_time = self.storage.clock().current_time();
         if let Some(requested_block) = block_hash {
             if let Some(mut state) = self.execution_state_cache.remove(&requested_block) {
+                // We try to use a cached execution state for the requested block.
+                // We want to pretend that this block is committed, so we set the next block height.
+                let next_block_height = self
+                    .chain
+                    .tip_state
+                    .get()
+                    .next_block_height
+                    .try_add_one()
+                    .expect("block height to not overflow");
                 let context = QueryContext {
                     chain_id: self.chain_id(),
-                    next_block_height: self.chain.tip_state.get().next_block_height,
+                    next_block_height,
                     local_time,
                 };
                 let outcome = state
