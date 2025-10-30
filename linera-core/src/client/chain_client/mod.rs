@@ -553,7 +553,7 @@ impl<Env: Environment> ChainClient<Env> {
                     .message_policy
                     .restrict_chain_ids_to
                     .as_ref()
-                    .map_or(true, |chain_set| chain_set.contains(chain_id))
+                    .is_none_or(|chain_set| chain_set.contains(chain_id))
             })
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
