@@ -13,8 +13,9 @@ use linera_base::{
 };
 use linera_execution::{
     execution_state_actor::ExecutionStateActor, ExecutionRuntimeContext, ExecutionStateView,
-    MessageContext, OperationContext, OutgoingMessage, ResourceController, ResourceTracker,
-    SystemExecutionStateView, TransactionOutcome, TransactionTracker,
+    MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
+    ResourceTracker, SystemExecutionStateView, TransactionOutcome, TransactionTracker,
+    FLAG_FREE_REJECT,
 };
 use linera_views::context::Context;
 use tracing::instrument;
@@ -287,6 +288,14 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         let mut resource_controller = self.resource_controller.with_state(view).await?;
 
         for message_out in &txn_outcome.outgoing_messages {
+            if message_out.kind == MessageKind::Bouncing
+                && resource_controller
+                    .policy()
+                    .http_request_allow_list
+                    .contains(FLAG_FREE_REJECT)
+            {
+                continue; // Bouncing messages are free.
+            }
             resource_controller
                 .track_message(&message_out.message)
                 .with_execution_context(context)?;
