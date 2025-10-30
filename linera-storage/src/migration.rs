@@ -180,26 +180,39 @@ where
         let schema = self.get_database_schema().await?;
         if schema == SchemaVersion::Version0 {
             self.migrate_v0_to_v1().await?;
-        }
-        self.write_database_schema(&SchemaVersion::Version1).await?;
-        Ok(())
-    }
-
-    pub async fn assert_is_migrated_database(&self) -> Result<(), ViewError> {
-        let root_key = RootKey::NetworkDescription.bytes();
-        let store = self.database.open_shared(&root_key)?;
-        if store.contains_key(NETWORK_DESCRIPTION_KEY).await? {
-            // The network description exists. Therefore, we are not starting
-            // from scratch
-            let schema = self.get_database_schema().await?;
-            assert_eq!(schema, SchemaVersion::Version1);
-        } else {
-            // Starting from scratch, so write the Schema to avoid migrating
-            // later.
             self.write_database_schema(&SchemaVersion::Version1).await?;
         }
         Ok(())
     }
+
+    async fn get_storage_state(&self) -> Result<(bool, SchemaVersion), ViewError> {
+        let test_old_schema = {
+            let store = self.database.open_shared(&[])?;
+            let key = bcs::to_bytes(&BaseKey::NetworkDescription).unwrap();
+            store.contains_key(&key).await?
+        };
+        let test_new_schema = {
+            let root_key = RootKey::NetworkDescription.bytes();
+            let store = self.database.open_shared(&root_key)?;
+            store.contains_key(NETWORK_DESCRIPTION_KEY).await?
+        };
+        let is_initialized = test_old_schema || test_new_schema;
+        let schema = if test_new_schema {
+            SchemaVersion::Version1
+        } else {
+            SchemaVersion::Version0
+        };
+        Ok((is_initialized, schema))
+    }
+
+    pub async fn assert_is_migrated_storage(&self) -> Result<(), ViewError> {
+        let (is_initialized, schema) = self.get_storage_state().await?;
+        if is_initialized {
+            assert_eq!(schema, SchemaVersion::Version1);
+        }
+        Ok(())
+    }
+
 }
 
 #[cfg(test)]

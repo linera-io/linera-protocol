@@ -1104,7 +1104,6 @@ where
     ) -> Result<Self, ViewError> {
         let database = Database::maybe_create_and_connect(config, namespace).await?;
         let storage = Self::new(database, wasm_runtime, WallClock);
-        storage.assert_is_migrated_database().await?;
         Ok(storage)
     }
 
@@ -1115,7 +1114,6 @@ where
     ) -> Result<Self, ViewError> {
         let database = Database::connect(config, namespace).await?;
         let storage = Self::new(database, wasm_runtime, WallClock);
-        storage.assert_is_migrated_database().await?;
         Ok(storage)
     }
 
@@ -1190,7 +1188,7 @@ where
     ) -> Result<Self, ViewError> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
         let storage = Self::new(database, wasm_runtime, clock);
-        storage.assert_is_migrated_database().await?;
+        storage.assert_is_migrated_storage().await?;
         Ok(storage)
     }
 }
