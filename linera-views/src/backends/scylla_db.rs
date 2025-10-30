@@ -720,6 +720,13 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     }
 }
 
+// ScyllaDB requires that the keys are non-empty.
+fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
+    let mut big_key = vec![0];
+    big_key.extend(root_key);
+    big_key
+}
+
 /// The type for building a new ScyllaDB Key Value Store
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ScyllaDbStoreInternalConfig {
@@ -764,7 +771,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         let store = self.store.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
-        let root_key = root_key.to_vec();
+        let root_key = get_big_root_key(root_key);
         Ok(ScyllaDbStoreInternal {
             store,
             semaphore,
