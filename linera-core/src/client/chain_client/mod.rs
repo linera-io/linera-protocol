@@ -548,6 +548,13 @@ impl<Env: Environment> ChainClient<Env> {
         // Collect the indices of all new events.
         let futures = subscription_map
             .into_iter()
+            .filter(|((chain_id, _), _)| {
+                self.options
+                    .message_policy
+                    .restrict_chain_ids_to
+                    .as_ref()
+                    .is_none_or(|chain_set| chain_set.contains(chain_id))
+            })
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
                 async move {
