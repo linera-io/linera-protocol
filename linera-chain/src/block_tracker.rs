@@ -102,7 +102,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Executes a transaction in the context of the block.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id,
         block_height = %self.block_height,
     ))]

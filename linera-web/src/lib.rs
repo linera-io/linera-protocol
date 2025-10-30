@@ -106,8 +106,8 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     keystore_path: None,
     with_wallet: None,
     chrome_trace_exporter: false,
-    otel_trace_file: None,
-    otel_exporter_otlp_endpoint: None,
+    chrome_trace_file: None,
+    otlp_exporter_endpoint: None,
 };
 
 #[wasm_bindgen(js_name = Faucet)]

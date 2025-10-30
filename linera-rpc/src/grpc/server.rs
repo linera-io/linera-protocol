@@ -20,7 +20,7 @@ use linera_core::{
     JoinSetExt as _, TaskHandle,
 };
 use linera_storage::Storage;
-use tokio::sync::oneshot;
+use tokio::sync::{broadcast::error::RecvError, oneshot};
 use tokio_util::sync::CancellationToken;
 use tonic::{transport::Channel, Request, Response, Status};
 use tower::{builder::ServiceBuilder, Layer, Service};
@@ -218,6 +218,7 @@ where
             )
         });
 
+        let mut exporter_forwarded = false;
         for proxy in &internal_network.proxies {
             let receiver = notification_sender.subscribe();
             join_set.spawn_task({
@@ -225,10 +226,16 @@ where
                     nickname = state.nickname(),
                     "spawning notifications thread on {} for shard {}", host, shard_id
                 );
+                let exporter_addresses = if exporter_forwarded {
+                    vec![]
+                } else {
+                    exporter_forwarded = true;
+                    internal_network.exporter_addresses()
+                };
                 Self::forward_notifications(
                     state.nickname().to_string(),
                     proxy.internal_address(&internal_network.protocol),
-                    internal_network.exporter_addresses(),
+                    exporter_addresses,
                     receiver,
                 )
             });
@@ -305,7 +312,25 @@ where
             })
             .collect::<Vec<_>>();
 
-        while let Ok(notification) = receiver.recv().await {
+        loop {
+            let notification = match receiver.recv().await {
+                Ok(notification) => notification,
+                Err(RecvError::Lagged(skipped_count)) => {
+                    warn!(
+                        nickname,
+                        skipped_count, "notification receiver lagged, messages were skipped"
+                    );
+                    continue;
+                }
+                Err(RecvError::Closed) => {
+                    warn!(
+                        nickname,
+                        "notification channel closed, exiting forwarding loop"
+                    );
+                    break;
+                }
+            };
+
             let reason = &notification.reason;
             let notification: api::Notification = match notification.clone().try_into() {
                 Ok(notification) => notification,

@@ -4,7 +4,7 @@
 lineraImage: {{ env "LINERA_HELMFILE_LINERA_IMAGE" | default "linera:latest" }}
 lineraImagePullPolicy: Never
 logLevel: "debug"
-otelExporterEndpoint: {{ env "LINERA_HELMFILE_SET_OTEL_ENDPOINT" | default "http://tempo.tempo.svc.cluster.local:4317" }}
+otlpExporterEndpoint: {{ env "LINERA_HELMFILE_SET_OTLP_EXPORTER_ENDPOINT" | default "" }}
 proxyPort: 19100
 metricsPort: 21100
 numShards: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}
