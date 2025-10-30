@@ -1381,13 +1381,13 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn query_application(
         &self,
         query: Query,
-        state_hash: Option<CryptoHash>,
+        block_hash: Option<CryptoHash>,
     ) -> Result<QueryOutcome, Error> {
         loop {
             let result = self
                 .client
                 .local_node
-                .query_application(self.chain_id, query.clone(), state_hash)
+                .query_application(self.chain_id, query.clone(), block_hash)
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let validators = self.client.validator_nodes().await?;

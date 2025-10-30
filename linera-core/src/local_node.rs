@@ -240,12 +240,12 @@ where
         &self,
         chain_id: ChainId,
         query: Query,
-        state_hash: Option<CryptoHash>,
+        block_hash: Option<CryptoHash>,
     ) -> Result<QueryOutcome, LocalNodeError> {
         let outcome = self
             .node
             .state
-            .query_application(chain_id, query, state_hash)
+            .query_application(chain_id, query, block_hash)
             .await?;
         Ok(outcome)
     }

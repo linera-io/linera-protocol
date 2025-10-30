@@ -130,10 +130,10 @@ where
             }
             ChainWorkerRequest::QueryApplication {
                 query,
-                state_hash,
+                block_hash,
                 callback,
             } => callback
-                .send(self.query_application(query, state_hash).await)
+                .send(self.query_application(query, block_hash).await)
                 .is_ok(),
             ChainWorkerRequest::DescribeApplication {
                 application_id,
@@ -1268,12 +1268,12 @@ where
     pub(super) async fn query_application(
         &mut self,
         query: Query,
-        state_hash: Option<CryptoHash>,
+        block_hash: Option<CryptoHash>,
     ) -> Result<QueryOutcome, WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
-        if let Some(requested_state) = state_hash {
-            if let Some(mut state) = self.execution_state_cache.remove(&requested_state) {
+        if let Some(requested_block) = block_hash {
+            if let Some(mut state) = self.execution_state_cache.remove(&requested_block) {
                 let context = QueryContext {
                     chain_id: self.chain_id(),
                     next_block_height: self.chain.tip_state.get().next_block_height,
@@ -1291,10 +1291,10 @@ where
                     .await
                     .with_execution_context(ChainExecutionContext::Query)?;
                 self.execution_state_cache
-                    .insert_owned(&requested_state, state);
+                    .insert_owned(&requested_block, state);
                 Ok(outcome)
             } else {
-                tracing::debug!(requested_state = %requested_state, "requested state hash not found in cache, querying live state");
+                tracing::debug!(requested_block = %requested_block, "requested block hash not found in cache, querying committed state");
                 let outcome = self
                     .chain
                     .query_application(local_time, query, self.service_runtime_endpoint.as_mut())

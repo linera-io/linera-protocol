@@ -163,8 +163,8 @@
           parent.insertBefore(entry, parent.firstChild);
       }
 
-      async function updateBalance(application, owner, state_hash) {
-          const response = JSON.parse(await application.query(gql(`query { tickerSymbol, accounts { entry(key: "${owner}") { value } } }`), state_hash || ''));
+      async function updateBalance(application, owner, blockHash) {
+          const response = JSON.parse(await application.query(gql(`query { tickerSymbol, accounts { entry(key: "${owner}") { value } } }`), blockHash || ''));
           console.debug('application response:', response);
           document.querySelector('#ticker-symbol').textContent = response.data.tickerSymbol;
           document.querySelector('#balance').textContent = (+( response.data.accounts.entry?.value || 0)).toFixed(2);
@@ -241,8 +241,8 @@
           client.onNotification(notification => {
               let newBlock = notification.reason.NewBlock;
               if (notification.reason.BlockExecuted) {
-                let stateHash = notification.reason.BlockExecuted.hash;
-                updateBalance(application, owner, stateHash);
+                let blockHash = notification.reason.BlockExecuted.hash;
+                updateBalance(application, owner, blockHash);
               } else {
                 if (!newBlock) return;
                 prependEntry(document.querySelector('#logs'), newBlock);
