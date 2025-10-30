@@ -177,10 +177,9 @@ where
     }
 
     pub async fn migrate_if_needed(&self) -> Result<(), ViewError> {
-        let schema = self.get_database_schema().await?;
-        if schema == SchemaVersion::Version0 {
+        let (is_initialized, schema) = self.get_storage_state().await?;
+        if is_initialized && schema == SchemaVersion::Version0 {
             self.migrate_v0_to_v1().await?;
-            self.write_database_schema(&SchemaVersion::Version1).await?;
         }
         Ok(())
     }
