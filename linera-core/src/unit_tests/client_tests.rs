@@ -130,13 +130,33 @@ where
             certificate
         );
     }
-    assert_matches!(
-        notifications.next().await,
+    let executed_block_hash = match notifications.next().await {
         Some(Notification {
-            reason: Reason::NewBlock { height, .. },
+            reason: Reason::BlockExecuted { hash, height },
             chain_id,
-        }) if chain_id == sender.chain_id() && height == BlockHeight::ZERO
-    );
+        }) => {
+            assert_eq!(chain_id, sender.chain_id());
+            assert_eq!(height, BlockHeight::ZERO);
+            hash
+        }
+        _ => panic!("Expected BlockExecuted notification"),
+    };
+    // We execute twice in the local node:
+    // - first time when setting the proposal as a pending block
+    // - second time when processing pending block
+    // This results in two BlockExecuted notifications.
+    let _notification = notifications.next().await;
+    match notifications.next().await {
+        Some(Notification {
+            reason: Reason::NewBlock { hash, height, .. },
+            chain_id,
+        }) => {
+            assert_eq!(chain_id, sender.chain_id());
+            assert_eq!(height, BlockHeight::ZERO);
+            assert_eq!(executed_block_hash, hash);
+        }
+        other => panic!("Expected NewBlock notification, got {:?}", other),
+    }
     Ok(())
 }
 

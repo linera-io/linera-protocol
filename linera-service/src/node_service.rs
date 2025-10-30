@@ -912,12 +912,13 @@ where
         application_id: ApplicationId,
         request: Vec<u8>,
         chain_id: ChainId,
+        block_hash: Option<CryptoHash>,
     ) -> Result<Vec<u8>, NodeServiceError> {
         let QueryOutcome {
             response,
             operations,
         } = self
-            .query_user_application(application_id, request, chain_id)
+            .query_user_application(application_id, request, chain_id, block_hash)
             .await?;
         if operations.is_empty() {
             return Ok(response);
@@ -948,6 +949,7 @@ where
         application_id: ApplicationId,
         bytes: Vec<u8>,
         chain_id: ChainId,
+        block_hash: Option<CryptoHash>,
     ) -> Result<QueryOutcome<Vec<u8>>, NodeServiceError> {
         let query = Query::User {
             application_id,
@@ -957,7 +959,7 @@ where
         let QueryOutcome {
             response,
             operations,
-        } = client.query_application(query).await?;
+        } = client.query_application(query, block_hash).await?;
         match response {
             QueryResponse::System(_) => {
                 unreachable!("cannot get a system response for a user query")
@@ -991,12 +993,14 @@ where
         let application_id: ApplicationId = application_id.parse()?;
 
         debug!(
-            "Processing request for application {application_id} on chain {chain_id}:\n{:?}",
+            %chain_id,
+            %application_id,
+            "processing request for application:\n{:?}",
             &request
         );
         let response = service
             .0
-            .handle_service_request(application_id, request.into_bytes(), chain_id)
+            .handle_service_request(application_id, request.into_bytes(), chain_id, None)
             .await?;
 
         Ok(response)

@@ -31,7 +31,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
-    system::EPOCH_STREAM_NAME, Committee, ExecutionStateView, Query, QueryOutcome,
+    system::EPOCH_STREAM_NAME, Committee, ExecutionStateView, Query, QueryContext, QueryOutcome,
     ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
@@ -126,9 +126,13 @@ where
             ChainWorkerRequest::GetChainStateView { callback } => {
                 callback.send(self.chain_state_view().await).is_ok()
             }
-            ChainWorkerRequest::QueryApplication { query, callback } => {
-                callback.send(self.query_application(query).await).is_ok()
-            }
+            ChainWorkerRequest::QueryApplication {
+                query,
+                block_hash,
+                callback,
+            } => callback
+                .send(self.query_application(query, block_hash).await)
+                .is_ok(),
             ChainWorkerRequest::DescribeApplication {
                 application_id,
                 callback,
@@ -1254,14 +1258,55 @@ where
     pub(super) async fn query_application(
         &mut self,
         query: Query,
+        block_hash: Option<CryptoHash>,
     ) -> Result<QueryOutcome, WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
-        let outcome = self
-            .chain
-            .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
-            .await?;
-        Ok(outcome)
+        if let Some(requested_block) = block_hash {
+            if let Some(mut state) = self.execution_state_cache.remove(&requested_block) {
+                // We try to use a cached execution state for the requested block.
+                // We want to pretend that this block is committed, so we set the next block height.
+                let next_block_height = self
+                    .chain
+                    .tip_state
+                    .get()
+                    .next_block_height
+                    .try_add_one()
+                    .expect("block height to not overflow");
+                let context = QueryContext {
+                    chain_id: self.chain_id(),
+                    next_block_height,
+                    local_time,
+                };
+                let outcome = state
+                    .with_context(|ctx| {
+                        self.chain
+                            .execution_state
+                            .context()
+                            .clone_with_base_key(ctx.base_key().bytes.clone())
+                    })
+                    .await
+                    .query_application(context, query, self.service_runtime_endpoint.as_mut())
+                    .await
+                    .with_execution_context(ChainExecutionContext::Query)?;
+                self.execution_state_cache
+                    .insert_owned(&requested_block, state);
+                Ok(outcome)
+            } else {
+                tracing::debug!(requested_block = %requested_block, "requested block hash not found in cache, querying committed state");
+                let outcome = self
+                    .chain
+                    .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
+                    .await?;
+                Ok(outcome)
+            }
+        } else {
+            let outcome = self
+                .chain
+                .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
+                .await?;
+            Ok(outcome)
+        }
     }
 
     /// Returns an application's description.
