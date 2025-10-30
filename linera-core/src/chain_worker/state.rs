@@ -7,6 +7,7 @@ use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     iter,
+    ops::RangeInclusive,
     sync::{self, Arc},
 };
 
@@ -1523,8 +1524,9 @@ where
             info.requested_pending_message_bundles = bundles;
         }
         let mut hashes = Vec::new();
-        for height in query.request_sent_certificate_hashes_by_heights {
-            hashes.extend(chain.block_hashes(height..=height).await?);
+        let height_ranges = Self::into_ranges(query.request_sent_certificate_hashes_by_heights);
+        for height_range in height_ranges {
+            hashes.extend(chain.block_hashes(height_range).await?);
         }
         info.requested_sent_certificate_hashes = hashes;
         if let Some(start) = query.request_received_log_excluding_first_n {
@@ -1599,6 +1601,21 @@ where
         self.clear_shared_chain_view().await;
         self.chain.save().await?;
         Ok(())
+    }
+
+    /// Returns an iterator of inclusive ranges that exactly cover the list of block heights.
+    fn into_ranges(
+        values: impl IntoIterator<Item = BlockHeight>,
+    ) -> impl Iterator<Item = RangeInclusive<BlockHeight>> {
+        let mut values_iter = values.into_iter().peekable();
+        iter::from_fn(move || {
+            let start = values_iter.next()?;
+            let mut end = start;
+            while values_iter.peek() == end.try_add_one().ok().as_ref() {
+                end = values_iter.next()?;
+            }
+            Some(start..=end)
+        })
     }
 }
 
