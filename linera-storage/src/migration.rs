@@ -191,7 +191,6 @@ where
         }
         Ok(())
     }
-
 }
 
 #[cfg(test)]
@@ -226,8 +225,8 @@ mod tests {
     use crate::{
         db_storage::RestrictedEventId,
         migration::{
-            BaseKey, RootKey, BLOB_KEY, BLOB_STATE_KEY, BLOCK_KEY,
-            LITE_CERTIFICATE_KEY, NETWORK_DESCRIPTION_KEY,
+            BaseKey, RootKey, BLOB_KEY, BLOB_STATE_KEY, BLOCK_KEY, LITE_CERTIFICATE_KEY,
+            NETWORK_DESCRIPTION_KEY,
         },
         DbStorage, WallClock,
     };
