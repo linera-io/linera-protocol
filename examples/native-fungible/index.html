@@ -165,11 +165,11 @@
           parent.insertBefore(entry, parent.firstChild);
       }
 
-      async function updateBalance(application) {
-          const response = JSON.parse(await application.query(gql(`query { tickerSymbol, accounts { entries { key value } } }`)));
+      async function updateBalance(application, owner, blockHash) {
+          const response = JSON.parse(await application.query(gql(`query { tickerSymbol, accounts { entry(key: "${owner}") { value } } }`), blockHash || ''));
           console.debug('application response:', response);
           document.querySelector('#ticker-symbol').textContent = response.data.tickerSymbol;
-          document.querySelector('#balance').textContent = (+(response?.data?.accounts?.entries?.[0]?.value || 0)).toFixed(2);
+          document.querySelector('#balance').textContent = (+(response?.data?.accounts?.entry.value || 0)).toFixed(2);
       }
 
       async function transfer(application, donor, amount, recipient) {
@@ -195,7 +195,7 @@
                   recipient: { owner: match[1], chainId: match[2] },
               });
 
-              errors = JSON.parse(await application.query(query)).errors || [];
+              errors = JSON.parse(await application.query(query, '')).errors || [];
           } catch (e) {
               console.error(e);
               errors.push({ message: e.message });
@@ -238,13 +238,19 @@
 
           const application = await client.frontend().application(import.meta.env.LINERA_APPLICATION_ID);
 
-          await updateBalance(application);
+          await updateBalance(application, owner, null);
 
           client.onNotification(notification => {
               let newBlock = notification.reason.NewBlock;
-              if (!newBlock) return;
-              prependEntry(document.querySelector('#logs'), newBlock);
-              updateBalance(application);
+              console.debug('notification:', notification);
+              if (notification.reason.BlockExecuted) {
+                let blockHash = notification.reason.BlockExecuted.hash;
+                updateBalance(application, owner, blockHash);
+              } else {
+                if (!newBlock) return;
+                prependEntry(document.querySelector('#logs'), newBlock);
+                updateBalance(application, owner, null);
+              }
           });
 
           submitButton.disabled = false;

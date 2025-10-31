@@ -75,7 +75,7 @@ use crate::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider as _,
     },
-    notifier::ChannelNotifier,
+    notifier::{ChannelNotifier, Notifier as _},
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::{Notification, ProcessableCertificate, Reason, WorkerError, WorkerState},
@@ -1357,6 +1357,17 @@ impl<Env: Environment> Client<Env> {
                 self.update_local_node_with_blobs_from(blob_ids.clone(), &validators)
                     .await?;
                 continue; // We found the missing blob: retry.
+            }
+            if let Ok((block, _)) = &result {
+                let hash = CryptoHash::new(block);
+                let notification = Notification {
+                    chain_id: block.header.chain_id,
+                    reason: Reason::BlockExecuted {
+                        height: block.header.height,
+                        hash,
+                    },
+                };
+                self.notifier.notify(&[notification]);
             }
             return Ok(result?);
         }
@@ -2711,12 +2722,16 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Queries an application.
     #[instrument(level = "trace", skip(query))]
-    pub async fn query_application(&self, query: Query) -> Result<QueryOutcome, ChainClientError> {
+    pub async fn query_application(
+        &self,
+        query: Query,
+        block_hash: Option<CryptoHash>,
+    ) -> Result<QueryOutcome, ChainClientError> {
         loop {
             let result = self
                 .client
                 .local_node
-                .query_application(self.chain_id, query.clone())
+                .query_application(self.chain_id, query.clone(), block_hash)
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let validators = self.client.validator_nodes().await?;
@@ -2738,7 +2753,7 @@ impl<Env: Environment> ChainClient<Env> {
         let QueryOutcome {
             response,
             operations,
-        } = self.query_application(Query::System(query)).await?;
+        } = self.query_application(Query::System(query), None).await?;
         match response {
             QueryResponse::System(response) => Ok(QueryOutcome {
                 response,
@@ -2752,6 +2767,7 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Queries a user application.
     #[instrument(level = "trace", skip(application_id, query))]
+    #[cfg(with_testing)]
     pub async fn query_user_application<A: Abi>(
         &self,
         application_id: ApplicationId<A>,
@@ -2761,7 +2777,7 @@ impl<Env: Environment> ChainClient<Env> {
         let QueryOutcome {
             response,
             operations,
-        } = self.query_application(query).await?;
+        } = self.query_application(query, None).await?;
         match response {
             QueryResponse::User(response_bytes) => {
                 let response = serde_json::from_slice(&response_bytes)?;
@@ -3882,6 +3898,9 @@ impl<Env: Environment> ChainClient<Env> {
                         "NewRound: Fail to synchronize new block after notification"
                     );
                 }
+            }
+            Reason::BlockExecuted { .. } => {
+                // Ignored.
             }
         }
         Ok(())
