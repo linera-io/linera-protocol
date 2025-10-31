@@ -75,7 +75,7 @@ use crate::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider as _,
     },
-    notifier::ChannelNotifier,
+    notifier::{ChannelNotifier, Notifier as _},
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::{Notification, ProcessableCertificate, Reason, WorkerError, WorkerState},
@@ -270,7 +270,7 @@ impl<Env: Environment> Client<Env> {
             Ok(info) => Ok(info),
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
                 // Make sure the admin chain is up to date.
-                self.synchronize_chain_state(self.admin_id).await?;
+                Box::pin(self.synchronize_chain_state(self.admin_id)).await?;
                 // If the chain is missing then the error is a WorkerError
                 // and so a BlobsNotFound
                 self.update_local_node_with_blobs_from(blob_ids, validators)
@@ -291,7 +291,7 @@ impl<Env: Environment> Client<Env> {
         let mut validators = self.validator_nodes().await?;
         // Sequentially try each validator in random order.
         validators.shuffle(&mut rand::thread_rng());
-        let mut info = self.fetch_chain_info(chain_id, &validators).await?;
+        let mut info = Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;
         for remote_node in validators {
             if target_next_block_height <= info.next_block_height {
                 return Ok(info);
@@ -502,7 +502,7 @@ impl<Env: Environment> Client<Env> {
             return Ok(bcs::from_bytes(blob.bytes())?);
         };
         // Recover history from the current validators, according to the admin chain.
-        self.synchronize_chain_state(self.admin_id).await?;
+        Box::pin(self.synchronize_chain_state(self.admin_id)).await?;
         let nodes = self.validator_nodes().await?;
         let blob = self
             .update_local_node_with_blobs_from(vec![chain_desc_id], &nodes)
@@ -1025,8 +1025,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let (_, committee) = self.admin_committee().await?;
-        self.synchronize_chain_state_from_committee(chain_id, committee)
-            .await
+        Box::pin(self.synchronize_chain_state_from_committee(chain_id, committee)).await
     }
 
     /// Downloads and processes any certificates we are missing for the given chain, from the given
@@ -1115,10 +1114,8 @@ impl<Env: Environment> Client<Env> {
         }
         'proposal_loop: for proposal in proposals {
             let owner: AccountOwner = proposal.owner();
-            if let Err(mut err) = self
-                .local_node
-                .handle_block_proposal(proposal.clone())
-                .await
+            if let Err(mut err) =
+                Box::pin(self.local_node.handle_block_proposal(proposal.clone())).await
             {
                 if let LocalNodeError::BlobsNotFound(_) = &err {
                     let required_blob_ids = proposal.required_blob_ids().collect::<Vec<_>>();
@@ -1146,10 +1143,8 @@ impl<Env: Environment> Client<Env> {
                             .handle_pending_blobs(chain_id, blobs)
                             .await?;
                         // We found the missing blobs: retry.
-                        if let Err(new_err) = self
-                            .local_node
-                            .handle_block_proposal(proposal.clone())
-                            .await
+                        if let Err(new_err) =
+                            Box::pin(self.local_node.handle_block_proposal(proposal.clone())).await
                         {
                             err = new_err;
                         } else {
@@ -1163,10 +1158,8 @@ impl<Env: Environment> Client<Env> {
                         )
                         .await?;
                         // We found the missing blobs: retry.
-                        if let Err(new_err) = self
-                            .local_node
-                            .handle_block_proposal(proposal.clone())
-                            .await
+                        if let Err(new_err) =
+                            Box::pin(self.local_node.handle_block_proposal(proposal.clone())).await
                         {
                             err = new_err;
                         } else {
@@ -1189,10 +1182,8 @@ impl<Env: Environment> Client<Env> {
                         )
                         .await?;
                         // Retry
-                        if let Err(new_err) = self
-                            .local_node
-                            .handle_block_proposal(proposal.clone())
-                            .await
+                        if let Err(new_err) =
+                            Box::pin(self.local_node.handle_block_proposal(proposal.clone())).await
                         {
                             err = new_err;
                         } else {
@@ -1357,6 +1348,17 @@ impl<Env: Environment> Client<Env> {
                 self.update_local_node_with_blobs_from(blob_ids.clone(), &validators)
                     .await?;
                 continue; // We found the missing blob: retry.
+            }
+            if let Ok((block, _)) = &result {
+                let hash = CryptoHash::new(block);
+                let notification = Notification {
+                    chain_id: block.header.chain_id,
+                    reason: Reason::BlockExecuted {
+                        height: block.header.height,
+                        hash,
+                    },
+                };
+                self.notifier.notify(&[notification]);
             }
             return Ok(result?);
         }
@@ -2392,11 +2394,11 @@ impl<Env: Environment> ChainClient<Env> {
         recipient: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         // TODO(#467): check the balance of `owner` before signing any block proposal.
-        self.execute_operation(SystemOperation::Transfer {
+        Box::pin(self.execute_operation(SystemOperation::Transfer {
             owner,
             recipient,
             amount,
-        })
+        }))
         .await
     }
 
@@ -2411,8 +2413,7 @@ impl<Env: Environment> ChainClient<Env> {
             hash,
             blob_type: BlobType::Data,
         };
-        self.execute_operation(SystemOperation::VerifyBlob { blob_id })
-            .await
+        Box::pin(self.execute_operation(SystemOperation::VerifyBlob { blob_id })).await
     }
 
     /// Claims money in a remote chain.
@@ -2424,12 +2425,12 @@ impl<Env: Environment> ChainClient<Env> {
         recipient: Account,
         amount: Amount,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.execute_operation(SystemOperation::Claim {
+        Box::pin(self.execute_operation(SystemOperation::Claim {
             owner,
             target_id,
             recipient,
             amount,
-        })
+        }))
         .await
     }
 
@@ -2482,9 +2483,11 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         committee: Committee,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        self.client
-            .synchronize_chain_state_from_committee(self.chain_id, committee)
-            .await
+        Box::pin(
+            self.client
+                .synchronize_chain_state_from_committee(self.chain_id, committee),
+        )
+        .await
     }
 
     /// Executes a list of operations.
@@ -2678,14 +2681,15 @@ impl<Env: Environment> ChainClient<Env> {
         };
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
-        let (block, _) = self
-            .client
-            .stage_block_execution_and_discard_failing_messages(
-                proposed_block,
-                round,
-                blobs.clone(),
-            )
-            .await?;
+        let (block, _) = Box::pin(
+            self.client
+                .stage_block_execution_and_discard_failing_messages(
+                    proposed_block,
+                    round,
+                    blobs.clone(),
+                ),
+        )
+        .await?;
         let (proposed_block, _) = block.clone().into_proposal();
         self.update_state(|state| {
             state.set_pending_proposal(proposed_block.clone(), blobs.clone())
@@ -2711,12 +2715,16 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Queries an application.
     #[instrument(level = "trace", skip(query))]
-    pub async fn query_application(&self, query: Query) -> Result<QueryOutcome, ChainClientError> {
+    pub async fn query_application(
+        &self,
+        query: Query,
+        block_hash: Option<CryptoHash>,
+    ) -> Result<QueryOutcome, ChainClientError> {
         loop {
             let result = self
                 .client
                 .local_node
-                .query_application(self.chain_id, query.clone())
+                .query_application(self.chain_id, query.clone(), block_hash)
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let validators = self.client.validator_nodes().await?;
@@ -2738,7 +2746,7 @@ impl<Env: Environment> ChainClient<Env> {
         let QueryOutcome {
             response,
             operations,
-        } = self.query_application(Query::System(query)).await?;
+        } = self.query_application(Query::System(query), None).await?;
         match response {
             QueryResponse::System(response) => Ok(QueryOutcome {
                 response,
@@ -2752,6 +2760,7 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Queries a user application.
     #[instrument(level = "trace", skip(application_id, query))]
+    #[cfg(with_testing)]
     pub async fn query_user_application<A: Abi>(
         &self,
         application_id: ApplicationId<A>,
@@ -2761,7 +2770,7 @@ impl<Env: Environment> ChainClient<Env> {
         let QueryOutcome {
             response,
             operations,
-        } = self.query_application(query).await?;
+        } = self.query_application(query, None).await?;
         match response {
             QueryResponse::User(response_bytes) => {
                 let response = serde_json::from_slice(&response_bytes)?;
@@ -2784,7 +2793,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// block.
     #[instrument(level = "trace")]
     pub async fn query_balance(&self) -> Result<Amount, ChainClientError> {
-        let (balance, _) = self.query_balances_with_owner(AccountOwner::CHAIN).await?;
+        let (balance, _) = Box::pin(self.query_balances_with_owner(AccountOwner::CHAIN)).await?;
         Ok(balance)
     }
 
@@ -2800,10 +2809,9 @@ impl<Env: Environment> ChainClient<Env> {
         owner: AccountOwner,
     ) -> Result<Amount, ChainClientError> {
         if owner.is_chain() {
-            self.query_balance().await
+            Box::pin(self.query_balance()).await
         } else {
-            Ok(self
-                .query_balances_with_owner(owner)
+            Ok(Box::pin(self.query_balances_with_owner(owner))
                 .await?
                 .1
                 .unwrap_or(Amount::ZERO))
@@ -2848,10 +2856,11 @@ impl<Env: Environment> ChainClient<Env> {
             },
             timestamp,
         };
-        match self
-            .client
-            .stage_block_execution_and_discard_failing_messages(block, None, Vec::new())
-            .await
+        match Box::pin(
+            self.client
+                .stage_block_execution_and_discard_failing_messages(block, None, Vec::new()),
+        )
+        .await
         {
             Ok((_, response)) => Ok((
                 response.info.chain_balance,
@@ -2994,7 +3003,7 @@ impl<Env: Environment> ChainClient<Env> {
         if info.manager.has_locking_block_in_current_round()
             && !info.manager.current_round.is_fast()
         {
-            return self.finalize_locking_block(info).await;
+            return Box::pin(self.finalize_locking_block(info)).await;
         }
         let owner = self.identity().await?;
 
@@ -3106,20 +3115,24 @@ impl<Env: Environment> ChainClient<Env> {
         let submit_block_proposal_start = linera_base::time::Instant::now();
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
-            self.client
-                .submit_block_proposal(&committee, proposal, hashed_value)
-                .await?
+            Box::pin(
+                self.client
+                    .submit_block_proposal(&committee, proposal, hashed_value),
+            )
+            .await?
         } else {
             let hashed_value = ValidatedBlock::new(block);
-            let certificate = self
-                .client
-                .submit_block_proposal(&committee, proposal, hashed_value.clone())
-                .await?;
-            self.client.finalize_block(&committee, certificate).await?
+            let certificate = Box::pin(self.client.submit_block_proposal(
+                &committee,
+                proposal,
+                hashed_value.clone(),
+            ))
+            .await?;
+            Box::pin(self.client.finalize_block(&committee, certificate)).await?
         };
         self.send_timing(submit_block_proposal_start, TimingType::SubmitBlockProposal);
         debug!(round = %certificate.round, "Sending confirmed block to validators");
-        self.update_validators(Some(&committee)).await?;
+        Box::pin(self.update_validators(Some(&committee))).await?;
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
@@ -3169,13 +3182,9 @@ impl<Env: Environment> ChainClient<Env> {
             "Finalizing locking block"
         );
         let committee = self.local_committee().await?;
-        match self
-            .client
-            .finalize_block(&committee, certificate.clone())
-            .await
-        {
+        match Box::pin(self.client.finalize_block(&committee, certificate.clone())).await {
             Ok(certificate) => {
-                self.update_validators(Some(&committee)).await?;
+                Box::pin(self.update_validators(Some(&committee))).await?;
                 Ok(ClientOutcome::Committed(Some(certificate)))
             }
             Err(ChainClientError::CommunicationError(error))
@@ -3260,7 +3269,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         public_key: AccountPublicKey,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.transfer_ownership(public_key.into()).await
+        Box::pin(self.transfer_ownership(public_key.into())).await
     }
 
     /// Transfers ownership of the chain to a single super owner.
@@ -3269,13 +3278,13 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         new_owner: AccountOwner,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.execute_operation(SystemOperation::ChangeOwnership {
+        Box::pin(self.execute_operation(SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
             owners: Vec::new(),
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
-        })
+        }))
         .await
     }
 
@@ -3326,13 +3335,13 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         ownership: ChainOwnership,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.execute_operation(SystemOperation::ChangeOwnership {
+        Box::pin(self.execute_operation(SystemOperation::ChangeOwnership {
             super_owners: ownership.super_owners.into_iter().collect(),
             owners: ownership.owners.into_iter().collect(),
             multi_leader_rounds: ownership.multi_leader_rounds,
             open_multi_leader_rounds: ownership.open_multi_leader_rounds,
             timeout_config: ownership.timeout_config.clone(),
-        })
+        }))
         .await
     }
 
@@ -3342,9 +3351,11 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         application_permissions: ApplicationPermissions,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.execute_operation(SystemOperation::ChangeApplicationPermissions(
-            application_permissions,
-        ))
+        Box::pin(
+            self.execute_operation(SystemOperation::ChangeApplicationPermissions(
+                application_permissions,
+            )),
+        )
         .await
     }
 
@@ -3396,7 +3407,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn close_chain(
         &self,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
-        match self.execute_operation(SystemOperation::CloseChain).await {
+        match Box::pin(self.execute_operation(SystemOperation::CloseChain)).await {
             Ok(outcome) => Ok(outcome.map(Some)),
             Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(chain_error),
@@ -3417,7 +3428,7 @@ impl<Env: Environment> ChainClient<Env> {
         vm_runtime: VmRuntime,
     ) -> Result<ClientOutcome<(ModuleId, ConfirmedBlockCertificate)>, ChainClientError> {
         let (blobs, module_id) = create_bytecode_blobs(contract, service, vm_runtime).await;
-        self.publish_module_blobs(blobs, module_id).await
+        Box::pin(self.publish_module_blobs(blobs, module_id)).await
     }
 
     /// Publishes some module.
@@ -3463,7 +3474,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         bytes: Vec<u8>,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.publish_data_blobs(vec![bytes]).await
+        Box::pin(self.publish_data_blobs(vec![bytes])).await
     }
 
     /// Creates an application by instantiating some bytecode.
@@ -3485,15 +3496,14 @@ impl<Env: Environment> ChainClient<Env> {
     {
         let instantiation_argument = serde_json::to_vec(instantiation_argument)?;
         let parameters = serde_json::to_vec(parameters)?;
-        Ok(self
-            .create_application_untyped(
-                module_id.forget_abi(),
-                parameters,
-                instantiation_argument,
-                required_application_ids,
-            )
-            .await?
-            .map(|(app_id, cert)| (app_id.with_abi(), cert)))
+        Ok(Box::pin(self.create_application_untyped(
+            module_id.forget_abi(),
+            parameters,
+            instantiation_argument,
+            required_application_ids,
+        ))
+        .await?
+        .map(|(app_id, cert)| (app_id.with_abi(), cert)))
     }
 
     /// Creates an application by instantiating some bytecode.
@@ -3514,12 +3524,12 @@ impl<Env: Environment> ChainClient<Env> {
         instantiation_argument: Vec<u8>,
         required_application_ids: Vec<ApplicationId>,
     ) -> Result<ClientOutcome<(ApplicationId, ConfirmedBlockCertificate)>, ChainClientError> {
-        self.execute_operation(SystemOperation::CreateApplication {
+        Box::pin(self.execute_operation(SystemOperation::CreateApplication {
             module_id,
             parameters,
             instantiation_argument,
             required_application_ids,
-        })
+        }))
         .await?
         .try_map(|certificate| {
             // The first message of the only operation created the application.
@@ -3562,11 +3572,13 @@ impl<Env: Environment> ChainClient<Env> {
             ClientOutcome::Committed(_) => {}
             outcome @ ClientOutcome::WaitForTimeout(_) => return Ok(outcome),
         }
-        let epoch = self.chain_info().await?.epoch.try_add_one()?;
-        self.execute_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
-            epoch,
-            blob_hash,
-        }))
+        let epoch = Box::pin(self.chain_info()).await?.epoch.try_add_one()?;
+        Box::pin(
+            self.execute_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+                epoch,
+                blob_hash,
+            })),
+        )
         .await
     }
 
@@ -3726,11 +3738,11 @@ impl<Env: Environment> ChainClient<Env> {
         amount: Amount,
         recipient: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.execute_operation(SystemOperation::Transfer {
+        Box::pin(self.execute_operation(SystemOperation::Transfer {
             owner,
             recipient,
             amount,
-        })
+        }))
         .await
     }
 
@@ -3882,6 +3894,9 @@ impl<Env: Environment> ChainClient<Env> {
                         "NewRound: Fail to synchronize new block after notification"
                     );
                 }
+            }
+            Reason::BlockExecuted { .. } => {
+                // Ignored.
             }
         }
         Ok(())

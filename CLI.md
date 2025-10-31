@@ -147,8 +147,8 @@ Client implementation and command-line tool for the Linera blockchain
 
   Default value: `10`
 * `--chrome-trace-exporter` — Enable OpenTelemetry Chrome JSON exporter for trace data analysis
-* `--otel-trace-file <OTEL_TRACE_FILE>` — Output file path for Chrome trace JSON format. Can be visualized in chrome://tracing or Perfetto UI
-* `--otel-exporter-otlp-endpoint <OTEL_EXPORTER_OTLP_ENDPOINT>` — OpenTelemetry OTLP exporter endpoint (requires tempo feature)
+* `--chrome-trace-file <CHROME_TRACE_FILE>` — Output file path for Chrome trace JSON format. Can be visualized in chrome://tracing or Perfetto UI
+* `--otlp-exporter-endpoint <OTLP_EXPORTER_ENDPOINT>` — OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature)
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
 * `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries
 * `--blanket-message-policy <BLANKET_MESSAGE_POLICY>` — The policy for handling incoming messages
@@ -184,9 +184,6 @@ Client implementation and command-line tool for the Linera blockchain
 
   Default value: `20000`
 * `--max-joined-tasks <MAX_JOINED_TASKS>` — Maximum number of tasks that can are joined concurrently in the client
-
-  Default value: `100`
-* `--max-in-flight-requests <MAX_IN_FLIGHT_REQUESTS>` — Maximum concurrent requests per validator node
 
   Default value: `100`
 * `--max-accepted-latency-ms <MAX_ACCEPTED_LATENCY_MS>` — Maximum expected latency in milliseconds for score normalization

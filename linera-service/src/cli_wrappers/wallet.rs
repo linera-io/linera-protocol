@@ -1078,6 +1078,17 @@ impl ClientWrapper {
         Ok(())
     }
 
+    pub async fn change_http_whitelist(&self, list: &[&str]) -> Result<()> {
+        self.command()
+            .await?
+            .arg("resource-control-policy")
+            .arg("--http-request-allow-list")
+            .arg(list.join(","))
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
+    }
+
     /// Runs `linera keygen`.
     pub async fn keygen(&self) -> Result<AccountOwner> {
         let stdout = self

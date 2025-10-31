@@ -85,6 +85,16 @@ pub const LINERA_TYPES_SOL: &str = include_str!("../solidity/LineraTypes.sol");
 /// The maximum length of a stream name.
 const MAX_STREAM_NAME_LEN: usize = 64;
 
+/// The flag that, if present in `http_request_allow_list` field of the content policy of
+/// current committee, causes the execution state not to be hashed, and instead the hash
+/// returned to be all zeros.
+// Note: testnet-only! This should not survive to mainnet.
+pub const FLAG_ZERO_HASH: &str = "FLAG_ZERO_HASH.linera.network";
+/// The flag that deactivates charging for bouncing messages. If this is present, outgoing
+/// messages are free of charge if they are bouncing, and operation outcomes are counted only
+/// by payload size, so that rejecting messages is free.
+pub const FLAG_FREE_REJECT: &str = "FLAG_FREE_REJECT.linera.network";
+
 /// An implementation of [`UserContractModule`].
 #[derive(Clone)]
 pub struct UserContractCode(Box<dyn UserContractModule>);

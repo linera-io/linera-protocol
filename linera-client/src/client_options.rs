@@ -109,12 +109,12 @@ pub struct ClientContextOptions {
 
     /// Output file path for Chrome trace JSON format.
     /// Can be visualized in chrome://tracing or Perfetto UI.
-    #[arg(long, env = "LINERA_OTEL_TRACE_FILE")]
-    pub otel_trace_file: Option<String>,
+    #[arg(long, env = "LINERA_CHROME_TRACE_FILE")]
+    pub chrome_trace_file: Option<String>,
 
-    /// OpenTelemetry OTLP exporter endpoint (requires tempo feature).
-    #[arg(long, env = "LINERA_OTEL_EXPORTER_OTLP_ENDPOINT")]
-    pub otel_exporter_otlp_endpoint: Option<String>,
+    /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
+    #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
+    pub otlp_exporter_endpoint: Option<String>,
 
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.
@@ -186,14 +186,6 @@ pub struct ClientContextOptions {
     /// Maximum number of tasks that can are joined concurrently in the client.
     #[arg(long, default_value = "100")]
     pub max_joined_tasks: usize,
-
-    /// Maximum concurrent requests per validator node.
-    #[arg(
-        long,
-        default_value_t = linera_core::client::requests_scheduler::MAX_IN_FLIGHT_REQUESTS,
-        env = "LINERA_REQUESTS_SCHEDULER_MAX_IN_FLIGHT_REQUESTS"
-    )]
-    pub max_in_flight_requests: usize,
 
     /// Maximum expected latency in milliseconds for score normalization.
     #[arg(
@@ -276,7 +268,6 @@ impl ClientContextOptions {
         &self,
     ) -> linera_core::client::RequestsSchedulerConfig {
         linera_core::client::RequestsSchedulerConfig {
-            max_in_flight_requests: self.max_in_flight_requests,
             max_accepted_latency_ms: self.max_accepted_latency_ms,
             cache_ttl_ms: self.cache_ttl_ms,
             cache_max_size: self.cache_max_size,

@@ -25,6 +25,7 @@ use linera_chain::{
 use linera_execution::{
     committee::Committee, system::SystemOperation, ExecutionError, Message, MessageKind, Operation,
     QueryOutcome, ResourceControlPolicy, SystemMessage, SystemQuery, SystemResponse,
+    FLAG_FREE_REJECT,
 };
 use linera_storage::Storage;
 use rand::Rng;
@@ -44,8 +45,8 @@ use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
     client::{
-        BlanketMessagePolicy, ChainClient, ChainClientError, ClientOutcome, MessageAction,
-        MessagePolicy,
+        BlanketMessagePolicy, ChainClient, ChainClientError, ChainClientOptions, ClientOutcome,
+        MessageAction, MessagePolicy,
     },
     local_node::LocalNodeError,
     node::{
@@ -129,13 +130,33 @@ where
             certificate
         );
     }
-    assert_matches!(
-        notifications.next().await,
+    let executed_block_hash = match notifications.next().await {
         Some(Notification {
-            reason: Reason::NewBlock { height, .. },
+            reason: Reason::BlockExecuted { hash, height },
             chain_id,
-        }) if chain_id == sender.chain_id() && height == BlockHeight::ZERO
-    );
+        }) => {
+            assert_eq!(chain_id, sender.chain_id());
+            assert_eq!(height, BlockHeight::ZERO);
+            hash
+        }
+        _ => panic!("Expected BlockExecuted notification"),
+    };
+    // We execute twice in the local node:
+    // - first time when setting the proposal as a pending block
+    // - second time when processing pending block
+    // This results in two BlockExecuted notifications.
+    let _notification = notifications.next().await;
+    match notifications.next().await {
+        Some(Notification {
+            reason: Reason::NewBlock { hash, height, .. },
+            chain_id,
+        }) => {
+            assert_eq!(chain_id, sender.chain_id());
+            assert_eq!(height, BlockHeight::ZERO);
+            assert_eq!(executed_block_hash, hash);
+        }
+        other => panic!("Expected NewBlock notification, got {:?}", other),
+    }
     Ok(())
 }
 
@@ -2832,6 +2853,54 @@ where
         .unwrap_ok_committed();
 
     assert_eq!(receiver2.local_balance().await.unwrap(), amount1 - amount3);
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_rejected_message_bundles_are_free<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+        .await?
+        .with_policy(ResourceControlPolicy {
+            http_request_allow_list: BTreeSet::from([FLAG_FREE_REJECT.to_string()]),
+            ..ResourceControlPolicy::testnet()
+        });
+    let admin = builder.add_root_chain(1, Amount::from_tokens(2)).await?;
+    let user = builder.add_root_chain(1, Amount::ZERO).await?;
+    let user_reject = builder
+        .make_client_with_options(
+            user.chain_id(),
+            None,
+            BlockHeight::ZERO,
+            ChainClientOptions {
+                message_policy: MessagePolicy::new(BlanketMessagePolicy::Reject, None),
+                ..ChainClientOptions::test_default()
+            },
+        )
+        .await?;
+
+    let recipient = Account::chain(user.chain_id());
+    admin
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+
+    user_reject.synchronize_from_validators().await?;
+    let (certificates, _) = user_reject.process_inbox().await.unwrap();
+    assert_eq!(certificates.len(), 1);
+    assert_matches!(
+        &certificates[0].block().body.transactions[0],
+        Transaction::ReceiveMessages(bundle) if bundle.action == MessageAction::Reject
+    );
 
     Ok(())
 }

@@ -92,7 +92,6 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     sender_chain_worker_ttl: Duration::from_millis(200),
     grace_period: linera_core::DEFAULT_GRACE_PERIOD,
     max_joined_tasks: 100,
-    max_in_flight_requests: linera_core::client::requests_scheduler::MAX_IN_FLIGHT_REQUESTS,
     max_accepted_latency_ms: linera_core::client::requests_scheduler::MAX_ACCEPTED_LATENCY_MS,
     cache_ttl_ms: linera_core::client::requests_scheduler::CACHE_TTL_MS,
     cache_max_size: linera_core::client::requests_scheduler::CACHE_MAX_SIZE,
@@ -106,8 +105,8 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     keystore_path: None,
     with_wallet: None,
     chrome_trace_exporter: false,
-    otel_trace_file: None,
-    otel_exporter_otlp_endpoint: None,
+    chrome_trace_file: None,
+    otlp_exporter_endpoint: None,
 };
 
 #[wasm_bindgen(js_name = Faucet)]
@@ -466,6 +465,9 @@ impl Frontend {
 impl Application {
     /// Performs a query against an application's service.
     ///
+    /// If `block_hash` is non-empty, it specifies the block at which to
+    /// perform the query; otherwise, the latest block is used.
+    ///
     /// # Errors
     /// If the application ID is invalid, the query is incorrect, or
     /// the response isn't valid UTF-8.
@@ -475,18 +477,25 @@ impl Application {
     #[wasm_bindgen]
     // TODO(#14) allow passing bytes here rather than just strings
     // TODO(#15) a lot of this logic is shared with `linera_service::node_service`
-    pub async fn query(&self, query: &str) -> JsResult<String> {
+    pub async fn query(&self, query: &str, block_hash: &str) -> JsResult<String> {
         tracing::debug!("querying application: {query}");
         let chain_client = self.client.default_chain_client().await?;
-
+        let block_hash = if block_hash.is_empty() {
+            None
+        } else {
+            Some(block_hash.parse()?)
+        };
         let linera_execution::QueryOutcome {
             response: linera_execution::QueryResponse::User(response),
             operations,
         } = chain_client
-            .query_application(linera_execution::Query::User {
-                application_id: self.id,
-                bytes: query.as_bytes().to_vec(),
-            })
+            .query_application(
+                linera_execution::Query::User {
+                    application_id: self.id,
+                    bytes: query.as_bytes().to_vec(),
+                },
+                block_hash,
+            )
             .await?
         else {
             panic!("system response to user query")

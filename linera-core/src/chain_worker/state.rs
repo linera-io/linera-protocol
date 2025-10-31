@@ -7,6 +7,7 @@ use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     iter,
+    ops::RangeInclusive,
     sync::{self, Arc},
 };
 
@@ -30,7 +31,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
-    system::EPOCH_STREAM_NAME, Committee, ExecutionStateView, Query, QueryOutcome,
+    system::EPOCH_STREAM_NAME, Committee, ExecutionStateView, Query, QueryContext, QueryOutcome,
     ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
@@ -77,7 +78,7 @@ where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
     /// Creates a new [`ChainWorkerState`] using the provided `storage` client.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %chain_id
     ))]
     #[expect(clippy::too_many_arguments)]
@@ -125,9 +126,13 @@ where
             ChainWorkerRequest::GetChainStateView { callback } => {
                 callback.send(self.chain_state_view().await).is_ok()
             }
-            ChainWorkerRequest::QueryApplication { query, callback } => {
-                callback.send(self.query_application(query).await).is_ok()
-            }
+            ChainWorkerRequest::QueryApplication {
+                query,
+                block_hash,
+                callback,
+            } => callback
+                .send(self.query_application(query, block_hash).await)
+                .is_ok(),
             ChainWorkerRequest::DescribeApplication {
                 application_id,
                 callback,
@@ -264,7 +269,7 @@ where
     /// That means that when this function returns, no readers will be waiting to acquire
     /// the lock and it is safe to write the chain state to storage without any readers
     /// having a stale view of it.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     pub(super) async fn clear_shared_chain_view(&mut self) {
@@ -297,7 +302,7 @@ where
     }
 
     /// Returns the requested blob, if it belongs to the current locking block or pending proposal.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         blob_id = %blob_id
     ))]
@@ -311,7 +316,7 @@ where
 
     /// Reads the blobs from the chain manager or from storage. Returns an error if any are
     /// missing.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     async fn get_required_blobs(
@@ -334,7 +339,7 @@ where
     }
 
     /// Tries to read the blobs from the chain manager or storage. Returns `None` if not found.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     async fn maybe_get_required_blobs(
@@ -405,7 +410,7 @@ where
     }
 
     /// Loads pending cross-chain requests, and adds `NewRound` notifications where appropriate.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     async fn create_network_actions(
@@ -445,7 +450,7 @@ where
         })
     }
 
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         num_recipients = %heights_by_recipient.len()
     ))]
@@ -520,7 +525,7 @@ where
 
     /// Returns true if there are no more outgoing messages in flight up to the given
     /// block height.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         height = %height
     ))]
@@ -550,7 +555,7 @@ where
     }
 
     /// Processes a leader timeout issued for this multi-owner chain.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         height = %certificate.inner().height()
     ))]
@@ -592,7 +597,7 @@ where
     ///
     /// If they cannot be found, it creates an entry in `pending_proposed_blobs` so they can be
     /// submitted one by one.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %proposal.content.block.height
     ))]
@@ -640,7 +645,7 @@ where
     }
 
     /// Processes a validated block issued for this multi-owner chain.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %certificate.block().header.height
     ))]
@@ -716,6 +721,7 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let block = certificate.block();
+        let block_hash = certificate.hash();
         let height = block.header.height;
         let chain_id = block.header.chain_id;
 
@@ -854,29 +860,28 @@ where
             .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
-        let verified_outcome = if let Some(mut execution_state) =
-            self.execution_state_cache.remove(&outcome.state_hash)
-        {
-            chain.execution_state = execution_state
-                .with_context(|ctx| {
-                    chain
-                        .execution_state
-                        .context()
-                        .clone_with_base_key(ctx.base_key().bytes.clone())
-                })
-                .await;
-            outcome.clone()
-        } else {
-            chain
-                .execute_block(
-                    &proposed_block,
-                    local_time,
-                    None,
-                    &published_blobs,
-                    oracle_responses,
-                )
-                .await?
-        };
+        let verified_outcome =
+            if let Some(mut execution_state) = self.execution_state_cache.remove(&block_hash) {
+                chain.execution_state = execution_state
+                    .with_context(|ctx| {
+                        chain
+                            .execution_state
+                            .context()
+                            .clone_with_base_key(ctx.base_key().bytes.clone())
+                    })
+                    .await;
+                outcome.clone()
+            } else {
+                chain
+                    .execute_block(
+                        &proposed_block,
+                        local_time,
+                        None,
+                        &published_blobs,
+                        oracle_responses,
+                    )
+                    .await?
+            };
         // We should always agree on the messages and state hash.
         ensure!(
             outcome == verified_outcome,
@@ -950,7 +955,7 @@ where
     }
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
-    #[instrument(level = "trace", target = "telemetry_only", skip(self, bundles))]
+    #[instrument(level = "trace", skip(self, bundles))]
     pub(super) async fn process_cross_chain_update(
         &mut self,
         origin: ChainId,
@@ -999,7 +1004,7 @@ where
     }
 
     /// Handles the cross-chain request confirming that the recipient was updated.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         recipient = %recipient,
         latest_height = %latest_height
@@ -1026,7 +1031,7 @@ where
         Ok(())
     }
 
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         num_trackers = %new_trackers.len()
     ))]
@@ -1041,7 +1046,7 @@ where
     }
 
     /// Returns the preprocessed block hashes in the given height range.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         start = %start,
         end = %end
@@ -1064,7 +1069,7 @@ where
     }
 
     /// Returns the next block height to receive from an inbox.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         origin = %origin
     ))]
@@ -1077,7 +1082,7 @@ where
 
     /// Returns the locking blobs for the given blob IDs.
     /// Returns `Ok(None)` if any of the blobs is not found.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         num_blob_ids = %blob_ids.len()
     ))]
@@ -1096,7 +1101,7 @@ where
     }
 
     /// Reads a range from the confirmed log.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         start = %start,
         end = %end
@@ -1127,7 +1132,7 @@ where
     }
 
     /// Attempts to vote for a leader timeout, if possible.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         height = %height,
         round = %round
@@ -1159,7 +1164,7 @@ where
     }
 
     /// Votes for falling back to a public chain.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     pub(super) async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
@@ -1184,7 +1189,7 @@ where
         Ok(())
     }
 
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         blob_id = %blob.id()
     ))]
@@ -1224,7 +1229,7 @@ where
 
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
     #[cfg(with_testing)]
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         height = %height
     ))]
@@ -1246,25 +1251,66 @@ where
     }
 
     /// Queries an application's state on the chain.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         query_application_id = %query.application_id()
     ))]
     pub(super) async fn query_application(
         &mut self,
         query: Query,
+        block_hash: Option<CryptoHash>,
     ) -> Result<QueryOutcome, WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
-        let outcome = self
-            .chain
-            .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
-            .await?;
-        Ok(outcome)
+        if let Some(requested_block) = block_hash {
+            if let Some(mut state) = self.execution_state_cache.remove(&requested_block) {
+                // We try to use a cached execution state for the requested block.
+                // We want to pretend that this block is committed, so we set the next block height.
+                let next_block_height = self
+                    .chain
+                    .tip_state
+                    .get()
+                    .next_block_height
+                    .try_add_one()
+                    .expect("block height to not overflow");
+                let context = QueryContext {
+                    chain_id: self.chain_id(),
+                    next_block_height,
+                    local_time,
+                };
+                let outcome = state
+                    .with_context(|ctx| {
+                        self.chain
+                            .execution_state
+                            .context()
+                            .clone_with_base_key(ctx.base_key().bytes.clone())
+                    })
+                    .await
+                    .query_application(context, query, self.service_runtime_endpoint.as_mut())
+                    .await
+                    .with_execution_context(ChainExecutionContext::Query)?;
+                self.execution_state_cache
+                    .insert_owned(&requested_block, state);
+                Ok(outcome)
+            } else {
+                tracing::debug!(requested_block = %requested_block, "requested block hash not found in cache, querying committed state");
+                let outcome = self
+                    .chain
+                    .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
+                    .await?;
+                Ok(outcome)
+            }
+        } else {
+            let outcome = self
+                .chain
+                .query_application(local_time, query, self.service_runtime_endpoint.as_mut())
+                .await?;
+            Ok(outcome)
+        }
     }
 
     /// Returns an application's description.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         application_id = %application_id
     ))]
@@ -1278,7 +1324,7 @@ where
     }
 
     /// Executes a block without persisting any changes to the state.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.height
     ))]
@@ -1294,9 +1340,8 @@ where
         let (_, committee) = self.chain.current_committee()?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
-        let outcome = self
-            .execute_block(&block, local_time, round, published_blobs)
-            .await?;
+        let outcome =
+            Box::pin(self.execute_block(&block, local_time, round, published_blobs)).await?;
 
         // No need to sign: only used internally.
         let mut response = ChainInfoResponse::new(&self.chain, None);
@@ -1314,7 +1359,7 @@ where
     }
 
     /// Validates and executes a block proposed to extend this chain.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %proposal.content.block.height
     ))]
@@ -1422,7 +1467,7 @@ where
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
-            self.execute_block(block, local_time, round.multi_leader(), &published_blobs)
+            Box::pin(self.execute_block(block, local_time, round.multi_leader(), &published_blobs))
                 .await?
         };
 
@@ -1463,7 +1508,7 @@ where
     }
 
     /// Prepares a [`ChainInfoResponse`] for a [`ChainInfoQuery`].
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     pub(super) async fn prepare_chain_info_response(
@@ -1517,8 +1562,9 @@ where
             info.requested_pending_message_bundles = bundles;
         }
         let mut hashes = Vec::new();
-        for height in query.request_sent_certificate_hashes_by_heights {
-            hashes.extend(chain.block_hashes(height..=height).await?);
+        let height_ranges = into_ranges(query.request_sent_certificate_hashes_by_heights);
+        for height_range in height_ranges {
+            hashes.extend(chain.block_hashes(height_range).await?);
         }
         info.requested_sent_certificate_hashes = hashes;
         if let Some(start) = query.request_received_log_excluding_first_n {
@@ -1536,7 +1582,7 @@ where
     }
 
     /// Executes a block, caches the result, and returns the outcome.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.height
     ))]
@@ -1553,18 +1599,22 @@ where
                     .execute_block(block, local_time, round, published_blobs, None),
             )
             .await?;
+        let block = Block::new(block.clone(), outcome.clone());
+        let block_hash = CryptoHash::new(&block);
         self.execution_state_cache.insert_owned(
-            &outcome.state_hash,
-            self.chain
-                .execution_state
-                .with_context(|ctx| InactiveContext(ctx.base_key().clone()))
-                .await,
+            &block_hash,
+            Box::pin(
+                self.chain
+                    .execution_state
+                    .with_context(|ctx| InactiveContext(ctx.base_key().clone())),
+            )
+            .await,
         );
         Ok(outcome)
     }
 
     /// Initializes and saves the current chain if it is not active yet.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     async fn initialize_and_save_if_needed(&mut self) -> Result<(), WorkerError> {
@@ -1584,7 +1634,7 @@ where
     /// Stores the chain state in persistent storage.
     ///
     /// Waits until the [`ChainStateView`] is no longer shared before persisting the changes.
-    #[instrument(target = "telemetry_only", skip_all, fields(
+    #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     async fn save(&mut self) -> Result<(), WorkerError> {
@@ -1592,6 +1642,21 @@ where
         self.chain.save().await?;
         Ok(())
     }
+}
+
+/// Returns an iterator of inclusive ranges that exactly cover the list of block heights.
+fn into_ranges(
+    values: impl IntoIterator<Item = BlockHeight>,
+) -> impl Iterator<Item = RangeInclusive<BlockHeight>> {
+    let mut values_iter = values.into_iter().peekable();
+    iter::from_fn(move || {
+        let start = values_iter.next()?;
+        let mut end = start;
+        while values_iter.peek() == end.try_add_one().ok().as_ref() {
+            end = values_iter.next()?;
+        }
+        Some(start..=end)
+    })
 }
 
 /// Returns the keys whose value is `None`.
@@ -1705,4 +1770,22 @@ impl<'a> CrossChainUpdateHelper<'a> {
         };
         Ok(bundles)
     }
+}
+
+#[test]
+fn test_into_ranges() {
+    assert_eq!(
+        into_ranges(vec![
+            BlockHeight(2),
+            BlockHeight(3),
+            BlockHeight(4),
+            BlockHeight(6)
+        ],)
+        .collect::<Vec<_>>(),
+        vec![
+            BlockHeight(2)..=BlockHeight(4),
+            BlockHeight(6)..=BlockHeight(6)
+        ]
+    );
+    assert_eq!(into_ranges(vec![]).collect::<Vec<_>>(), vec![]);
 }
