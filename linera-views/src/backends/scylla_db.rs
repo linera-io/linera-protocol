@@ -803,21 +803,18 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         Ok(namespaces)
     }
 
-    async fn list_root_keys(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, ScyllaDbStoreInternalError> {
-        Self::check_namespace(namespace)?;
-        let session = ScyllaDbClient::build_default_session(&config.uri).await?;
-        let statement = session
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, ScyllaDbStoreInternalError> {
+        let statement = self
+            .store
+            .session
             .prepare(format!(
-                "SELECT root_key FROM {}.{} ALLOW FILTERING",
-                KEYSPACE, namespace
+                "SELECT root_key FROM {}.\"{}\" ALLOW FILTERING",
+                KEYSPACE, self.store.namespace
             ))
             .await?;
 
         // Execute the query
-        let rows = Box::pin(session.execute_iter(statement, &[])).await?;
+        let rows = Box::pin(self.store.session.execute_iter(statement, &[])).await?;
         let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
         let mut root_keys = BTreeSet::new();
         while let Some(row) = rows.next().await {

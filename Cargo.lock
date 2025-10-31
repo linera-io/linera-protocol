@@ -5531,6 +5531,7 @@ dependencies = [
  "linera-chain",
  "linera-core",
  "linera-execution",
+ "linera-service",
  "linera-service-graphql-client",
  "linera-version",
  "linera-views",
@@ -5887,7 +5888,11 @@ dependencies = [
  "linera-views",
  "papaya",
  "prometheus",
+ "rand 0.8.5",
  "serde",
+ "test-case",
+ "test-log",
+ "tokio",
  "tracing",
 ]
 

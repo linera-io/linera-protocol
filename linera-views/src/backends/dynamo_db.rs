@@ -395,12 +395,8 @@ impl KeyValueDatabase for DynamoDbDatabaseInternal {
         Ok(namespaces)
     }
 
-    async fn list_root_keys(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, DynamoDbStoreInternalError> {
-        let database = Self::connect(config, namespace).await?;
-        let store = database.open_internal(PARTITION_KEY_ROOT_KEY.to_vec());
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, DynamoDbStoreInternalError> {
+        let store = self.open_internal(PARTITION_KEY_ROOT_KEY.to_vec());
         store.find_keys_by_prefix(EMPTY_ROOT_KEY).await
     }
 
