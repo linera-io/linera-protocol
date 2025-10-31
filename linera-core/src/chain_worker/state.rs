@@ -1340,9 +1340,8 @@ where
         let (_, committee) = self.chain.current_committee()?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
-        let outcome = self
-            .execute_block(&block, local_time, round, published_blobs)
-            .await?;
+        let outcome =
+            Box::pin(self.execute_block(&block, local_time, round, published_blobs)).await?;
 
         // No need to sign: only used internally.
         let mut response = ChainInfoResponse::new(&self.chain, None);
@@ -1468,7 +1467,7 @@ where
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
-            self.execute_block(block, local_time, round.multi_leader(), &published_blobs)
+            Box::pin(self.execute_block(block, local_time, round.multi_leader(), &published_blobs))
                 .await?
         };
 
@@ -1604,10 +1603,12 @@ where
         let block_hash = CryptoHash::new(&block);
         self.execution_state_cache.insert_owned(
             &block_hash,
-            self.chain
-                .execution_state
-                .with_context(|ctx| InactiveContext(ctx.base_key().clone()))
-                .await,
+            Box::pin(
+                self.chain
+                    .execution_state
+                    .with_context(|ctx| InactiveContext(ctx.base_key().clone())),
+            )
+            .await,
         );
         Ok(outcome)
     }
