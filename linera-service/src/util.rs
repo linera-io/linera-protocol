@@ -166,7 +166,7 @@ pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
     Ok(TimeDelta::from_millis(s.parse()?))
 }
 
-/// Checks the condition five times with increasing delays. Returns true if it is met.
+/// Checks the condition five times with increasing delays. Returns `true` if it is met.
 #[cfg(with_testing)]
 pub async fn eventually<F>(condition: impl Fn() -> F) -> bool
 where
