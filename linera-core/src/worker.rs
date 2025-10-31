@@ -563,7 +563,7 @@ impl ProcessableCertificate for ConfirmedBlock {
         worker: &WorkerState<S>,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        worker.handle_confirmed_certificate(certificate, None).await
+        Box::pin(worker.handle_confirmed_certificate(certificate, None)).await
     }
 }
 
@@ -572,7 +572,7 @@ impl ProcessableCertificate for ValidatedBlock {
         worker: &WorkerState<S>,
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        worker.handle_validated_certificate(certificate).await
+        Box::pin(worker.handle_validated_certificate(certificate)).await
     }
 }
 
@@ -939,8 +939,13 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         match self.full_certificate(certificate).await? {
             Either::Left(confirmed) => {
-                self.handle_confirmed_certificate(confirmed, notify_when_messages_are_delivered)
-                    .await
+                Box::pin(
+                    self.handle_confirmed_certificate(
+                        confirmed,
+                        notify_when_messages_are_delivered,
+                    ),
+                )
+                .await
             }
             Either::Right(validated) => {
                 if let Some(notifier) = notify_when_messages_are_delivered {
@@ -949,7 +954,7 @@ where
                         warn!("Failed to notify message delivery to caller");
                     }
                 }
-                self.handle_validated_certificate(validated).await
+                Box::pin(self.handle_validated_certificate(validated)).await
             }
         }
     }
@@ -979,9 +984,9 @@ where
                 .collect::<Vec<_>>(),
         );
 
-        let (info, actions, _outcome) = self
-            .process_confirmed_block(certificate, notify_when_messages_are_delivered)
-            .await?;
+        let (info, actions, _outcome) =
+            Box::pin(self.process_confirmed_block(certificate, notify_when_messages_are_delivered))
+                .await?;
 
         #[cfg(with_metrics)]
         {
@@ -1030,7 +1035,7 @@ where
         #[cfg(with_metrics)]
         let cert_str = certificate.inner().to_log_str();
 
-        let (info, actions, _outcome) = self.process_validated_block(certificate).await?;
+        let (info, actions, _outcome) = Box::pin(self.process_validated_block(certificate)).await?;
         #[cfg(with_metrics)]
         {
             if matches!(_outcome, BlockOutcome::Processed) {

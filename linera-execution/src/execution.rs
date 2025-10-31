@@ -129,9 +129,11 @@ where
             &[],
         );
         txn_tracker.add_created_blob(blob);
-        ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller)
-            .run_user_action(application_id, action, context.refund_grant_to(), None)
-            .await?;
+        Box::pin(
+            ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller)
+                .run_user_action(application_id, action, context.refund_grant_to(), None),
+        )
+        .await?;
 
         Ok(())
     }
