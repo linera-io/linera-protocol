@@ -63,6 +63,7 @@ where
     /// Query an application's state.
     QueryApplication {
         query: Query,
+        block_hash: Option<CryptoHash>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<QueryOutcome, WorkerError>>,
     },

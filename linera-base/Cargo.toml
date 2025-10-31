@@ -18,7 +18,7 @@ workspace = true
 metrics = ["prometheus"]
 reqwest = ["dep:reqwest"]
 revm = []
-tempo = ["opentelemetry-otlp"]
+opentelemetry = ["opentelemetry-otlp"]
 test = ["test-strategy", "proptest"]
 web = [
     "getrandom/js",
@@ -83,7 +83,7 @@ tracing-web = { optional = true, workspace = true }
 chrono.workspace = true
 opentelemetry.workspace = true
 opentelemetry-otlp = { workspace = true, optional = true }
-opentelemetry_sdk.workspace = true
+opentelemetry_sdk = { workspace = true, features = ["testing"] }
 tracing-chrome.workspace = true
 tracing-opentelemetry.workspace = true
 rand = { workspace = true, features = ["getrandom", "std", "std_rng"] }

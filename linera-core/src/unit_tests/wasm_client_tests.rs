@@ -50,7 +50,7 @@ use crate::client::client_tests::ServiceStorageBuilder;
 use crate::{
     client::{
         client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
-        ChainClient, ChainClientError, ClientOutcome,
+        BlanketMessagePolicy, ChainClient, ChainClientError, ClientOutcome, MessagePolicy,
     },
     local_node::LocalNodeError,
     test_utils::{ClientOutcomeResultExt as _, FaultType},
@@ -682,7 +682,15 @@ where
     builder.set_fault_type([3], FaultType::Offline);
 
     let sender = builder.add_root_chain(0, Amount::ONE).await?;
-    let receiver = builder.add_root_chain(1, Amount::ONE).await?;
+    let sender2 = builder.add_root_chain(1, Amount::ONE).await?;
+    // Make sure that sender's chain ID is less than sender2's - important for the final
+    // query check
+    let (sender, sender2) = if sender.chain_id() < sender2.chain_id() {
+        (sender, sender2)
+    } else {
+        (sender2, sender)
+    };
+    let mut receiver = builder.add_root_chain(2, Amount::ONE).await?;
 
     let module_id = receiver.publish_wasm_example("social").await?;
     let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
@@ -692,12 +700,21 @@ where
         .await
         .unwrap_ok_committed();
 
-    // Request to subscribe to the sender.
+    // Request to subscribe to the senders.
     let request_subscribe = social::Operation::Subscribe {
         chain_id: sender.chain_id(),
     };
+    let request_subscribe2 = social::Operation::Subscribe {
+        chain_id: sender2.chain_id(),
+    };
     receiver
-        .execute_operation(Operation::user(application_id, &request_subscribe)?)
+        .execute_operations(
+            vec![
+                Operation::user(application_id, &request_subscribe)?,
+                Operation::user(application_id, &request_subscribe2)?,
+            ],
+            vec![],
+        )
         .await
         .unwrap_ok_committed();
 
@@ -753,6 +770,73 @@ where
     };
     assert_eq!(outcome, expected);
 
+    // Make two more posts.
+    let text = "Follow sender2!".to_string();
+    let post = social::Operation::Post {
+        text: text.clone(),
+        image_url: None,
+    };
+    sender
+        .execute_operation(Operation::user(application_id, &post)?)
+        .await
+        .unwrap_ok_committed();
+
+    let text = "Thanks for the shoutout!".to_string();
+    let post = social::Operation::Post {
+        text: text.clone(),
+        image_url: None,
+    };
+    sender2
+        .execute_operation(Operation::user(application_id, &post)?)
+        .await
+        .unwrap_ok_committed();
+
+    receiver.synchronize_from_validators().await.unwrap();
+
+    receiver.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        Some([sender.chain_id()].into_iter().collect()),
+    );
+
+    // Receiver should only process the event from sender now.
+    let certs = receiver.process_inbox().await.unwrap().0;
+    assert_eq!(certs.len(), 1);
+
+    // There should be an UpdateStreams operation due to the new post.
+    let operations = certs[0].block().body.operations().collect::<Vec<_>>();
+    let [Operation::System(operation)] = &*operations else {
+        panic!("Expected one operation, got {:?}", operations);
+    };
+    let stream_id = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: b"posts".into(),
+    };
+    assert_eq!(
+        **operation,
+        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 2)])
+    );
+
+    // Let's receive from everyone again.
+    receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Accept, None);
+
+    // Receiver should now process the event from sender2 as well.
+    let certs = receiver.process_inbox().await.unwrap().0;
+    assert_eq!(certs.len(), 1);
+
+    // There should be an UpdateStreams operation due to the new post.
+    let operations = certs[0].block().body.operations().collect::<Vec<_>>();
+    let [Operation::System(operation)] = &*operations else {
+        panic!("Expected one operation, got {:?}", operations);
+    };
+    let stream_id = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: b"posts".into(),
+    };
+    assert_eq!(
+        **operation,
+        SystemOperation::UpdateStreams(vec![(sender2.chain_id(), stream_id, 1)])
+    );
+
     // Request to unsubscribe from the sender.
     let request_unsubscribe = social::Operation::Unsubscribe {
         chain_id: sender.chain_id(),
@@ -791,7 +875,9 @@ where
         response: async_graphql::Response::new(
             async_graphql::Value::from_json(json!({
                 "receivedPosts": {
-                    "keys": [ { "author": sender.chain_id, "index": 0 } ]
+                    "keys": [ { "author": sender.chain_id(), "index": 1 },
+                              { "author": sender.chain_id(), "index": 0 },
+                              { "author": sender2.chain_id(), "index": 0 } ]
                 }
             }))
             .unwrap(),

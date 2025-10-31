@@ -84,22 +84,26 @@
               logs.insertBefore(entry, logs.firstChild);
           }
 
-          async function updateCount() {
-              const response = await counter.query('{ "query": "query { value }" }');
+          async function updateCount(block_hash) {
+              const response = await counter.query('{ "query": "query { value }" }', block_hash || '');
               document.getElementById('count').innerText
                   = JSON.parse(response).data.value;
           }
 
-          updateCount();
+          updateCount(null);
           client.onNotification(notification => {
               let newBlock = notification.reason.NewBlock;
-              if (!newBlock) return;
-              addLogEntry(newBlock);
-              updateCount();
+              if (notification.reason.BlockExecuted) {
+                let hash = notification.reason.BlockExecuted.hash;
+                updateCount(hash);
+              } else if(newBlock) {
+                addLogEntry(newBlock);
+                updateCount(null);
+              }
           });
 
           incrementButton.addEventListener('click', () => {
-              counter.query('{ "query": "mutation { increment(value: 1) }" }');
+              counter.query('{ "query": "mutation { increment(value: 1) }" }', '');
           });
       }
 

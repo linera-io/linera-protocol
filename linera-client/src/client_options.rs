@@ -109,12 +109,12 @@ pub struct ClientContextOptions {
 
     /// Output file path for Chrome trace JSON format.
     /// Can be visualized in chrome://tracing or Perfetto UI.
-    #[arg(long, env = "LINERA_OTEL_TRACE_FILE")]
-    pub otel_trace_file: Option<String>,
+    #[arg(long, env = "LINERA_CHROME_TRACE_FILE")]
+    pub chrome_trace_file: Option<String>,
 
-    /// OpenTelemetry OTLP exporter endpoint (requires tempo feature).
-    #[arg(long, env = "LINERA_OTEL_EXPORTER_OTLP_ENDPOINT")]
-    pub otel_exporter_otlp_endpoint: Option<String>,
+    /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
+    #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
+    pub otlp_exporter_endpoint: Option<String>,
 
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.

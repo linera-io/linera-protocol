@@ -16,9 +16,21 @@ workspace = true
 
 [features]
 default = ["rocksdb"]
-rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb"]
-dynamodb = ["linera-views/dynamodb", "linera-core/dynamodb"]
-scylladb = ["linera-views/scylladb", "linera-core/scylladb"]
+rocksdb = [
+    "linera-views/rocksdb",
+    "linera-core/rocksdb",
+    "linera-service/rocksdb",
+]
+dynamodb = [
+    "linera-views/dynamodb",
+    "linera-core/dynamodb",
+    "linera-service/dynamodb",
+]
+scylladb = [
+    "linera-views/scylladb",
+    "linera-core/scylladb",
+    "linera-service/scylladb",
+]
 storage-service = ["linera-core/storage-service"]
 
 [dependencies]
@@ -37,6 +49,7 @@ linera-base = { workspace = true, features = ["test"] }
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true
+linera-service.workspace = true
 linera-service-graphql-client.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true

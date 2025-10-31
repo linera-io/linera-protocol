@@ -33,7 +33,7 @@ hooks:
         )
 
         echo "Installing Prometheus ServiceMonitor CRD…"
-        kubectl "${kube_args[@]}" apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
+        kubectl "${kube_args[@]}" apply -f crds/servicemonitor.yaml
 {{- if and .Values.gcpRun .Values.usingLocalSsd }}
   - events: ["prepare"]
     showlogs: true
@@ -97,8 +97,30 @@ releases:
       - scylla-operator/scylla-operator
     values:
       - {{ env "LINERA_HELMFILE_VALUES_SCYLLA" | default "scylla.values.yaml.gotmpl" }}
-    {{- if and .Values.gcpRun .Values.usingLocalSsd }}
     hooks:
+      - events: ["presync"]
+        showlogs: true
+        command: bash
+        args:
+          - -c
+          - |
+            set -euxo pipefail
+
+            kube_args=(
+              {{- if .Values.kubeContext }}
+              --context {{ .Values.kubeContext }}
+              {{- end }}
+              {{- if .Values.kubeConfigPath }}
+              --kubeconfig {{ .Values.kubeConfigPath }}
+              {{- end }}
+            )
+
+            echo "Ensuring scylla namespace exists..."
+            kubectl "${kube_args[@]}" create namespace scylla 2>/dev/null || true
+
+            echo "Ensuring scylla-config ConfigMap exists before deploying ScyllaCluster..."
+            kubectl "${kube_args[@]}" apply -f templates/scylla-config.yaml
+    {{- if and .Values.gcpRun .Values.usingLocalSsd }}
       - events: ["presync"]
         showlogs: true
         command: bash

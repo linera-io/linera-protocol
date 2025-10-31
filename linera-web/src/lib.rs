@@ -36,7 +36,7 @@ use linera_core::{
 };
 use linera_faucet_client::Faucet;
 use linera_persistent as persistent;
-use linera_views::store::WithError;
+use linera_views::ViewError;
 use serde::ser::Serialize as _;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
@@ -52,8 +52,7 @@ type WebEnvironment =
 
 type JsResult<T> = Result<T, JsError>;
 
-async fn get_storage(
-) -> Result<WebStorage, <linera_views::memory::MemoryDatabase as WithError>::Error> {
+async fn get_storage() -> Result<WebStorage, ViewError> {
     linera_storage::DbStorage::maybe_create_and_connect(
         &linera_views::memory::MemoryStoreConfig {
             max_stream_queries: 1,
@@ -106,8 +105,8 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     keystore_path: None,
     with_wallet: None,
     chrome_trace_exporter: false,
-    otel_trace_file: None,
-    otel_exporter_otlp_endpoint: None,
+    chrome_trace_file: None,
+    otlp_exporter_endpoint: None,
 };
 
 #[wasm_bindgen(js_name = Faucet)]
@@ -466,6 +465,9 @@ impl Frontend {
 impl Application {
     /// Performs a query against an application's service.
     ///
+    /// If `block_hash` is non-empty, it specifies the block at which to
+    /// perform the query; otherwise, the latest block is used.
+    ///
     /// # Errors
     /// If the application ID is invalid, the query is incorrect, or
     /// the response isn't valid UTF-8.
@@ -475,18 +477,25 @@ impl Application {
     #[wasm_bindgen]
     // TODO(#14) allow passing bytes here rather than just strings
     // TODO(#15) a lot of this logic is shared with `linera_service::node_service`
-    pub async fn query(&self, query: &str) -> JsResult<String> {
+    pub async fn query(&self, query: &str, block_hash: &str) -> JsResult<String> {
         tracing::debug!("querying application: {query}");
         let chain_client = self.client.default_chain_client().await?;
-
+        let block_hash = if block_hash.is_empty() {
+            None
+        } else {
+            Some(block_hash.parse()?)
+        };
         let linera_execution::QueryOutcome {
             response: linera_execution::QueryResponse::User(response),
             operations,
         } = chain_client
-            .query_application(linera_execution::Query::User {
-                application_id: self.id,
-                bytes: query.as_bytes().to_vec(),
-            })
+            .query_application(
+                linera_execution::Query::User {
+                    application_id: self.id,
+                    bytes: query.as_bytes().to_vec(),
+                },
+                block_hash,
+            )
             .await?
         else {
             panic!("system response to user query")

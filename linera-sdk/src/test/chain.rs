@@ -115,7 +115,7 @@ impl ActiveChain {
         let QueryOutcome { response, .. } = self
             .validator
             .worker()
-            .query_application(self.id(), query)
+            .query_application(self.id(), query, None)
             .await
             .expect("Failed to query chain's balance");
 
@@ -622,6 +622,7 @@ impl ActiveChain {
                     application_id: application_id.forget_abi(),
                     bytes: query_bytes,
                 },
+                None,
             )
             .await?;
 

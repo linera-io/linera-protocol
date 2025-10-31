@@ -98,10 +98,23 @@ impl IndexerClient {
                 }
                 Err(e) => {
                     if retry_count > self.max_retries {
+                        tracing::error!(
+                            retry_count,
+                            max_retries = self.max_retries,
+                            error = %e,
+                            "Failed to connect to indexer after exhausting all retries, exporter task will exit"
+                        );
                         return Err(ExporterError::SynchronizationFailed(e.into()));
                     }
 
                     let delay = self.retry_delay.saturating_mul(retry_count);
+                    tracing::warn!(
+                        retry_count,
+                        max_retries = self.max_retries,
+                        retry_delay_ms = delay.as_millis(),
+                        error = %e,
+                        "Failed to connect to indexer, retrying with exponential backoff"
+                    );
                     sleep(delay).await;
                     retry_count += 1;
                 }
