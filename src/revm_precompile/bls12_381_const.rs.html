@@ -1,0 +1,199 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/revm-precompile-21.0.0/src/bls12_381_const.rs`."><title>bls12_381_const.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="revm_precompile" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">revm_precompile/</div>bls12_381_const.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Constants specifying the precompile addresses for each precompile in EIP-2537
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">use </span><span class="kw">crate</span>::u64_to_address;
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>primitives::Address;
+<a href=#5 id=5 data-nosnippet>5</a>
+<a href=#6 id=6 data-nosnippet>6</a><span class="doccomment">/// G1 add precompile address
+<a href=#7 id=7 data-nosnippet>7</a></span><span class="kw">pub const </span>G1_ADD_ADDRESS: Address = u64_to_address(<span class="number">0x0b</span>);
+<a href=#8 id=8 data-nosnippet>8</a><span class="doccomment">/// G1 msm precompile address
+<a href=#9 id=9 data-nosnippet>9</a></span><span class="kw">pub const </span>G1_MSM_ADDRESS: Address = u64_to_address(<span class="number">0x0c</span>);
+<a href=#10 id=10 data-nosnippet>10</a><span class="doccomment">/// G2 add precompile address
+<a href=#11 id=11 data-nosnippet>11</a></span><span class="kw">pub const </span>G2_ADD_ADDRESS: Address = u64_to_address(<span class="number">0x0d</span>);
+<a href=#12 id=12 data-nosnippet>12</a><span class="doccomment">/// G2 msm precompile address
+<a href=#13 id=13 data-nosnippet>13</a></span><span class="kw">pub const </span>G2_MSM_ADDRESS: Address = u64_to_address(<span class="number">0x0e</span>);
+<a href=#14 id=14 data-nosnippet>14</a><span class="doccomment">/// Pairing precompile address
+<a href=#15 id=15 data-nosnippet>15</a></span><span class="kw">pub const </span>PAIRING_ADDRESS: Address = u64_to_address(<span class="number">0x0f</span>);
+<a href=#16 id=16 data-nosnippet>16</a><span class="doccomment">/// Map fp to g1 precompile address
+<a href=#17 id=17 data-nosnippet>17</a></span><span class="kw">pub const </span>MAP_FP_TO_G1_ADDRESS: Address = u64_to_address(<span class="number">0x10</span>);
+<a href=#18 id=18 data-nosnippet>18</a><span class="doccomment">/// Map fp2 to g2 precompile address
+<a href=#19 id=19 data-nosnippet>19</a></span><span class="kw">pub const </span>MAP_FP2_TO_G2_ADDRESS: Address = u64_to_address(<span class="number">0x11</span>);
+<a href=#20 id=20 data-nosnippet>20</a>
+<a href=#21 id=21 data-nosnippet>21</a><span class="doccomment">/// G1_ADD_BASE_GAS_FEE specifies the amount of gas needed
+<a href=#22 id=22 data-nosnippet>22</a>/// to perform the G1_ADD precompile.
+<a href=#23 id=23 data-nosnippet>23</a></span><span class="kw">pub const </span>G1_ADD_BASE_GAS_FEE: u64 = <span class="number">375</span>;
+<a href=#24 id=24 data-nosnippet>24</a><span class="doccomment">/// G1_MSM_BASE_GAS_FEE specifies the base amount of gas needed to
+<a href=#25 id=25 data-nosnippet>25</a>/// perform the G1_MSM precompile.
+<a href=#26 id=26 data-nosnippet>26</a>///
+<a href=#27 id=27 data-nosnippet>27</a>/// The cost to do an MSM is determined by the formula:
+<a href=#28 id=28 data-nosnippet>28</a>///    (k * G1_MSM_BASE_GAS_FEE * DISCOUNT\[k\]) // MSM_MULTIPLIER
+<a href=#29 id=29 data-nosnippet>29</a>/// where k is the number of point-scalar pairs.
+<a href=#30 id=30 data-nosnippet>30</a>///
+<a href=#31 id=31 data-nosnippet>31</a>/// Note: If one wants to do a G1 scalar multiplication, they would call
+<a href=#32 id=32 data-nosnippet>32</a>/// this precompile with a single point and a scalar.
+<a href=#33 id=33 data-nosnippet>33</a></span><span class="kw">pub const </span>G1_MSM_BASE_GAS_FEE: u64 = <span class="number">12000</span>;
+<a href=#34 id=34 data-nosnippet>34</a><span class="doccomment">/// MSM_MULTIPLIER specifies the division constant that is used to determine the
+<a href=#35 id=35 data-nosnippet>35</a>/// gas needed to compute an MSM.
+<a href=#36 id=36 data-nosnippet>36</a>///
+<a href=#37 id=37 data-nosnippet>37</a>/// The cost to do an MSM is determined by the formula:
+<a href=#38 id=38 data-nosnippet>38</a>///    (k * MSM_BASE_GAS_FEE * DISCOUNT\[k\]) // MSM_MULTIPLIER
+<a href=#39 id=39 data-nosnippet>39</a>/// where k is the number of point-scalar pairs.
+<a href=#40 id=40 data-nosnippet>40</a>///
+<a href=#41 id=41 data-nosnippet>41</a>/// Note: If `k` is more than the size of the discount table, then
+<a href=#42 id=42 data-nosnippet>42</a>/// the last value in the discount table is chosen.
+<a href=#43 id=43 data-nosnippet>43</a></span><span class="kw">pub const </span>MSM_MULTIPLIER: u64 = <span class="number">1000</span>;
+<a href=#44 id=44 data-nosnippet>44</a><span class="doccomment">/// MAP_FP_TO_G1_BASE_GAS_FEE specifies the amount of gas needed
+<a href=#45 id=45 data-nosnippet>45</a>/// to perform the MAP_FP_TO_G1 precompile.
+<a href=#46 id=46 data-nosnippet>46</a></span><span class="kw">pub const </span>MAP_FP_TO_G1_BASE_GAS_FEE: u64 = <span class="number">5500</span>;
+<a href=#47 id=47 data-nosnippet>47</a><span class="doccomment">/// MAP_FP2_TO_G2_BASE_GAS_FEE specifies the amount of gas needed
+<a href=#48 id=48 data-nosnippet>48</a>/// to perform the MAP_FP2_TO_G2 precompile.
+<a href=#49 id=49 data-nosnippet>49</a></span><span class="kw">pub const </span>MAP_FP2_TO_G2_BASE_GAS_FEE: u64 = <span class="number">23800</span>;
+<a href=#50 id=50 data-nosnippet>50</a><span class="doccomment">/// G2_ADD_BASE_GAS_FEE specifies the amount of gas needed
+<a href=#51 id=51 data-nosnippet>51</a>/// to perform the G2_ADD precompile.
+<a href=#52 id=52 data-nosnippet>52</a></span><span class="kw">pub const </span>G2_ADD_BASE_GAS_FEE: u64 = <span class="number">600</span>;
+<a href=#53 id=53 data-nosnippet>53</a><span class="doccomment">/// G2_MSM_BASE_GAS_FEE specifies the base amount of gas needed to
+<a href=#54 id=54 data-nosnippet>54</a>/// perform the G2_MSM precompile.
+<a href=#55 id=55 data-nosnippet>55</a>///
+<a href=#56 id=56 data-nosnippet>56</a>/// The cost to do an MSM is determined by the formula:
+<a href=#57 id=57 data-nosnippet>57</a>///    (k * G2_MSM_BASE_GAS_FEE * DISCOUNT\[k\]) // MSM_MULTIPLIER
+<a href=#58 id=58 data-nosnippet>58</a>/// where k is the number of point-scalar pairs.
+<a href=#59 id=59 data-nosnippet>59</a>///
+<a href=#60 id=60 data-nosnippet>60</a>/// Note: If one wants to do a G2 scalar multiplication, they would call
+<a href=#61 id=61 data-nosnippet>61</a>/// this precompile with a single point and a scalar.
+<a href=#62 id=62 data-nosnippet>62</a></span><span class="kw">pub const </span>G2_MSM_BASE_GAS_FEE: u64 = <span class="number">22500</span>;
+<a href=#63 id=63 data-nosnippet>63</a><span class="doccomment">/// PAIRING_OFFSET_BASE specifies the y-intercept for the linear expression to determine
+<a href=#64 id=64 data-nosnippet>64</a>/// the amount of gas needed to perform a pairing.
+<a href=#65 id=65 data-nosnippet>65</a>///
+<a href=#66 id=66 data-nosnippet>66</a>/// The cost to do a pairing is determined by the formula:
+<a href=#67 id=67 data-nosnippet>67</a>/// cost = PAIRING_MULTIPLIER_BASE * number_of_pairs + PAIRING_OFFSET_BASE
+<a href=#68 id=68 data-nosnippet>68</a></span><span class="kw">pub const </span>PAIRING_OFFSET_BASE: u64 = <span class="number">37700</span>;
+<a href=#69 id=69 data-nosnippet>69</a><span class="doccomment">/// PAIRING_MULTIPLIER_BASE specifies the slope/gradient for the linear expression to determine
+<a href=#70 id=70 data-nosnippet>70</a>/// the amount of gas needed to perform a pairing.
+<a href=#71 id=71 data-nosnippet>71</a>///
+<a href=#72 id=72 data-nosnippet>72</a>/// The cost to do a pairing is determined by the formula:
+<a href=#73 id=73 data-nosnippet>73</a>///   PAIRING_MULTIPLIER_BASE * number_of_pairs + PAIRING_OFFSET_BASE
+<a href=#74 id=74 data-nosnippet>74</a></span><span class="kw">pub const </span>PAIRING_MULTIPLIER_BASE: u64 = <span class="number">32600</span>;
+<a href=#75 id=75 data-nosnippet>75</a>
+<a href=#76 id=76 data-nosnippet>76</a><span class="doccomment">/// Discounts table for G1 MSM as a vector of pairs `[k, discount]`.
+<a href=#77 id=77 data-nosnippet>77</a></span><span class="kw">pub static </span>DISCOUNT_TABLE_G1_MSM: [u16; <span class="number">128</span>] = [
+<a href=#78 id=78 data-nosnippet>78</a>    <span class="number">1000</span>, <span class="number">949</span>, <span class="number">848</span>, <span class="number">797</span>, <span class="number">764</span>, <span class="number">750</span>, <span class="number">738</span>, <span class="number">728</span>, <span class="number">719</span>, <span class="number">712</span>, <span class="number">705</span>, <span class="number">698</span>, <span class="number">692</span>, <span class="number">687</span>, <span class="number">682</span>, <span class="number">677</span>, <span class="number">673</span>, <span class="number">669</span>, <span class="number">665</span>,
+<a href=#79 id=79 data-nosnippet>79</a>    <span class="number">661</span>, <span class="number">658</span>, <span class="number">654</span>, <span class="number">651</span>, <span class="number">648</span>, <span class="number">645</span>, <span class="number">642</span>, <span class="number">640</span>, <span class="number">637</span>, <span class="number">635</span>, <span class="number">632</span>, <span class="number">630</span>, <span class="number">627</span>, <span class="number">625</span>, <span class="number">623</span>, <span class="number">621</span>, <span class="number">619</span>, <span class="number">617</span>, <span class="number">615</span>,
+<a href=#80 id=80 data-nosnippet>80</a>    <span class="number">613</span>, <span class="number">611</span>, <span class="number">609</span>, <span class="number">608</span>, <span class="number">606</span>, <span class="number">604</span>, <span class="number">603</span>, <span class="number">601</span>, <span class="number">599</span>, <span class="number">598</span>, <span class="number">596</span>, <span class="number">595</span>, <span class="number">593</span>, <span class="number">592</span>, <span class="number">591</span>, <span class="number">589</span>, <span class="number">588</span>, <span class="number">586</span>, <span class="number">585</span>,
+<a href=#81 id=81 data-nosnippet>81</a>    <span class="number">584</span>, <span class="number">582</span>, <span class="number">581</span>, <span class="number">580</span>, <span class="number">579</span>, <span class="number">577</span>, <span class="number">576</span>, <span class="number">575</span>, <span class="number">574</span>, <span class="number">573</span>, <span class="number">572</span>, <span class="number">570</span>, <span class="number">569</span>, <span class="number">568</span>, <span class="number">567</span>, <span class="number">566</span>, <span class="number">565</span>, <span class="number">564</span>, <span class="number">563</span>,
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="number">562</span>, <span class="number">561</span>, <span class="number">560</span>, <span class="number">559</span>, <span class="number">558</span>, <span class="number">557</span>, <span class="number">556</span>, <span class="number">555</span>, <span class="number">554</span>, <span class="number">553</span>, <span class="number">552</span>, <span class="number">551</span>, <span class="number">550</span>, <span class="number">549</span>, <span class="number">548</span>, <span class="number">547</span>, <span class="number">547</span>, <span class="number">546</span>, <span class="number">545</span>,
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="number">544</span>, <span class="number">543</span>, <span class="number">542</span>, <span class="number">541</span>, <span class="number">540</span>, <span class="number">540</span>, <span class="number">539</span>, <span class="number">538</span>, <span class="number">537</span>, <span class="number">536</span>, <span class="number">536</span>, <span class="number">535</span>, <span class="number">534</span>, <span class="number">533</span>, <span class="number">532</span>, <span class="number">532</span>, <span class="number">531</span>, <span class="number">530</span>, <span class="number">529</span>,
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="number">528</span>, <span class="number">528</span>, <span class="number">527</span>, <span class="number">526</span>, <span class="number">525</span>, <span class="number">525</span>, <span class="number">524</span>, <span class="number">523</span>, <span class="number">522</span>, <span class="number">522</span>, <span class="number">521</span>, <span class="number">520</span>, <span class="number">520</span>, <span class="number">519</span>,
+<a href=#85 id=85 data-nosnippet>85</a>];
+<a href=#86 id=86 data-nosnippet>86</a><span class="doccomment">/// Discounts table for G2 MSM as a vector of pairs `[k, discount]`:
+<a href=#87 id=87 data-nosnippet>87</a></span><span class="kw">pub static </span>DISCOUNT_TABLE_G2_MSM: [u16; <span class="number">128</span>] = [
+<a href=#88 id=88 data-nosnippet>88</a>    <span class="number">1000</span>, <span class="number">1000</span>, <span class="number">923</span>, <span class="number">884</span>, <span class="number">855</span>, <span class="number">832</span>, <span class="number">812</span>, <span class="number">796</span>, <span class="number">782</span>, <span class="number">770</span>, <span class="number">759</span>, <span class="number">749</span>, <span class="number">740</span>, <span class="number">732</span>, <span class="number">724</span>, <span class="number">717</span>, <span class="number">711</span>, <span class="number">704</span>,
+<a href=#89 id=89 data-nosnippet>89</a>    <span class="number">699</span>, <span class="number">693</span>, <span class="number">688</span>, <span class="number">683</span>, <span class="number">679</span>, <span class="number">674</span>, <span class="number">670</span>, <span class="number">666</span>, <span class="number">663</span>, <span class="number">659</span>, <span class="number">655</span>, <span class="number">652</span>, <span class="number">649</span>, <span class="number">646</span>, <span class="number">643</span>, <span class="number">640</span>, <span class="number">637</span>, <span class="number">634</span>, <span class="number">632</span>,
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="number">629</span>, <span class="number">627</span>, <span class="number">624</span>, <span class="number">622</span>, <span class="number">620</span>, <span class="number">618</span>, <span class="number">615</span>, <span class="number">613</span>, <span class="number">611</span>, <span class="number">609</span>, <span class="number">607</span>, <span class="number">606</span>, <span class="number">604</span>, <span class="number">602</span>, <span class="number">600</span>, <span class="number">598</span>, <span class="number">597</span>, <span class="number">595</span>, <span class="number">593</span>,
+<a href=#91 id=91 data-nosnippet>91</a>    <span class="number">592</span>, <span class="number">590</span>, <span class="number">589</span>, <span class="number">587</span>, <span class="number">586</span>, <span class="number">584</span>, <span class="number">583</span>, <span class="number">582</span>, <span class="number">580</span>, <span class="number">579</span>, <span class="number">578</span>, <span class="number">576</span>, <span class="number">575</span>, <span class="number">574</span>, <span class="number">573</span>, <span class="number">571</span>, <span class="number">570</span>, <span class="number">569</span>, <span class="number">568</span>,
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="number">567</span>, <span class="number">566</span>, <span class="number">565</span>, <span class="number">563</span>, <span class="number">562</span>, <span class="number">561</span>, <span class="number">560</span>, <span class="number">559</span>, <span class="number">558</span>, <span class="number">557</span>, <span class="number">556</span>, <span class="number">555</span>, <span class="number">554</span>, <span class="number">553</span>, <span class="number">552</span>, <span class="number">552</span>, <span class="number">551</span>, <span class="number">550</span>, <span class="number">549</span>,
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="number">548</span>, <span class="number">547</span>, <span class="number">546</span>, <span class="number">545</span>, <span class="number">545</span>, <span class="number">544</span>, <span class="number">543</span>, <span class="number">542</span>, <span class="number">541</span>, <span class="number">541</span>, <span class="number">540</span>, <span class="number">539</span>, <span class="number">538</span>, <span class="number">537</span>, <span class="number">537</span>, <span class="number">536</span>, <span class="number">535</span>, <span class="number">535</span>, <span class="number">534</span>,
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="number">533</span>, <span class="number">532</span>, <span class="number">532</span>, <span class="number">531</span>, <span class="number">530</span>, <span class="number">530</span>, <span class="number">529</span>, <span class="number">528</span>, <span class="number">528</span>, <span class="number">527</span>, <span class="number">526</span>, <span class="number">526</span>, <span class="number">525</span>, <span class="number">524</span>, <span class="number">524</span>,
+<a href=#95 id=95 data-nosnippet>95</a>];
+<a href=#96 id=96 data-nosnippet>96</a>
+<a href=#97 id=97 data-nosnippet>97</a><span class="comment">// Constants related to the bls12-381 precompile inputs and outputs
+<a href=#98 id=98 data-nosnippet>98</a>
+<a href=#99 id=99 data-nosnippet>99</a></span><span class="doccomment">/// FP_LENGTH specifies the number of bytes needed to represent an
+<a href=#100 id=100 data-nosnippet>100</a>/// Fp element. This is an element in the base field of BLS12-381.
+<a href=#101 id=101 data-nosnippet>101</a>///
+<a href=#102 id=102 data-nosnippet>102</a>/// Note: The base field is used to define G1 and G2 elements.
+<a href=#103 id=103 data-nosnippet>103</a></span><span class="kw">pub const </span>FP_LENGTH: usize = <span class="number">48</span>;
+<a href=#104 id=104 data-nosnippet>104</a><span class="doccomment">/// PADDED_FP_LENGTH specifies the number of bytes that the EVM will use
+<a href=#105 id=105 data-nosnippet>105</a>/// to represent an Fp element according to EIP-2537.
+<a href=#106 id=106 data-nosnippet>106</a>///
+<a href=#107 id=107 data-nosnippet>107</a>/// Note: We only need FP_LENGTH number of bytes to represent it,
+<a href=#108 id=108 data-nosnippet>108</a>/// but we pad the byte representation to be 32 byte aligned as specified in EIP 2537.
+<a href=#109 id=109 data-nosnippet>109</a></span><span class="kw">pub const </span>PADDED_FP_LENGTH: usize = <span class="number">64</span>;
+<a href=#110 id=110 data-nosnippet>110</a>
+<a href=#111 id=111 data-nosnippet>111</a><span class="doccomment">/// G1_LENGTH specifies the number of bytes needed to represent a G1 element.
+<a href=#112 id=112 data-nosnippet>112</a>///
+<a href=#113 id=113 data-nosnippet>113</a>/// Note: A G1 element contains 2 Fp elements.
+<a href=#114 id=114 data-nosnippet>114</a></span><span class="kw">pub const </span>G1_LENGTH: usize = <span class="number">2 </span>* FP_LENGTH;
+<a href=#115 id=115 data-nosnippet>115</a><span class="doccomment">/// PADDED_G1_LENGTH specifies the number of bytes that the EVM will use to represent
+<a href=#116 id=116 data-nosnippet>116</a>/// a G1 element according to padding rules specified in EIP-2537.
+<a href=#117 id=117 data-nosnippet>117</a></span><span class="kw">pub const </span>PADDED_G1_LENGTH: usize = <span class="number">2 </span>* PADDED_FP_LENGTH;
+<a href=#118 id=118 data-nosnippet>118</a>
+<a href=#119 id=119 data-nosnippet>119</a><span class="doccomment">/// PADDED_FP2_LENGTH specifies the number of bytes that the EVM will use to represent
+<a href=#120 id=120 data-nosnippet>120</a>/// a Fp^2 element according to the padding rules specified in EIP-2537.
+<a href=#121 id=121 data-nosnippet>121</a>///
+<a href=#122 id=122 data-nosnippet>122</a>/// Note: This is the quadratic extension of Fp, and by definition
+<a href=#123 id=123 data-nosnippet>123</a>/// means we need 2 Fp elements.
+<a href=#124 id=124 data-nosnippet>124</a></span><span class="kw">pub const </span>PADDED_FP2_LENGTH: usize = <span class="number">2 </span>* PADDED_FP_LENGTH;
+<a href=#125 id=125 data-nosnippet>125</a>
+<a href=#126 id=126 data-nosnippet>126</a><span class="doccomment">/// SCALAR_LENGTH specifies the number of bytes needed to represent an Fr element.
+<a href=#127 id=127 data-nosnippet>127</a>/// This is an element in the scalar field of BLS12-381.
+<a href=#128 id=128 data-nosnippet>128</a>///
+<a href=#129 id=129 data-nosnippet>129</a>/// Note: Since it is already 32 byte aligned, there is no padded version of this constant.
+<a href=#130 id=130 data-nosnippet>130</a></span><span class="kw">pub const </span>SCALAR_LENGTH: usize = <span class="number">32</span>;
+<a href=#131 id=131 data-nosnippet>131</a><span class="doccomment">/// SCALAR_LENGTH_BITS specifies the number of bits needed to represent an Fr element.
+<a href=#132 id=132 data-nosnippet>132</a>/// This is an element in the scalar field of BLS12-381.
+<a href=#133 id=133 data-nosnippet>133</a></span><span class="kw">pub const </span>SCALAR_LENGTH_BITS: usize = SCALAR_LENGTH * <span class="number">8</span>;
+<a href=#134 id=134 data-nosnippet>134</a>
+<a href=#135 id=135 data-nosnippet>135</a><span class="doccomment">/// G1_ADD_INPUT_LENGTH specifies the number of bytes that the input to G1ADD
+<a href=#136 id=136 data-nosnippet>136</a>/// must use.
+<a href=#137 id=137 data-nosnippet>137</a>///
+<a href=#138 id=138 data-nosnippet>138</a>/// Note: The input to the G1 addition precompile is 2 G1 elements.
+<a href=#139 id=139 data-nosnippet>139</a></span><span class="kw">pub const </span>G1_ADD_INPUT_LENGTH: usize = <span class="number">2 </span>* PADDED_G1_LENGTH;
+<a href=#140 id=140 data-nosnippet>140</a><span class="doccomment">/// G1_MSM_INPUT_LENGTH specifies the number of bytes that each MSM input pair should have.
+<a href=#141 id=141 data-nosnippet>141</a>///
+<a href=#142 id=142 data-nosnippet>142</a>/// Note: An MSM pair is a G1 element and a scalar. The input to the MSM precompile will have `n`
+<a href=#143 id=143 data-nosnippet>143</a>/// of these pairs.
+<a href=#144 id=144 data-nosnippet>144</a></span><span class="kw">pub const </span>G1_MSM_INPUT_LENGTH: usize = PADDED_G1_LENGTH + SCALAR_LENGTH;
+<a href=#145 id=145 data-nosnippet>145</a>
+<a href=#146 id=146 data-nosnippet>146</a><span class="doccomment">/// PADDED_G2_LENGTH specifies the number of bytes that the EVM will use to represent
+<a href=#147 id=147 data-nosnippet>147</a>/// a G2 element.
+<a href=#148 id=148 data-nosnippet>148</a>///
+<a href=#149 id=149 data-nosnippet>149</a>/// Note: A G2 element can be represented using 2 Fp^2 elements.
+<a href=#150 id=150 data-nosnippet>150</a></span><span class="kw">pub const </span>PADDED_G2_LENGTH: usize = <span class="number">2 </span>* PADDED_FP2_LENGTH;
+<a href=#151 id=151 data-nosnippet>151</a>
+<a href=#152 id=152 data-nosnippet>152</a><span class="doccomment">/// G2_ADD_INPUT_LENGTH specifies the number of bytes that the input to G2ADD
+<a href=#153 id=153 data-nosnippet>153</a>/// must occupy.
+<a href=#154 id=154 data-nosnippet>154</a>///
+<a href=#155 id=155 data-nosnippet>155</a>/// Note: The input to the G2 addition precompile is 2 G2 elements.
+<a href=#156 id=156 data-nosnippet>156</a></span><span class="kw">pub const </span>G2_ADD_INPUT_LENGTH: usize = <span class="number">2 </span>* PADDED_G2_LENGTH;
+<a href=#157 id=157 data-nosnippet>157</a><span class="doccomment">/// G2_MSM_INPUT_LENGTH specifies the number of bytes that each MSM input pair should have.
+<a href=#158 id=158 data-nosnippet>158</a>///
+<a href=#159 id=159 data-nosnippet>159</a>/// Note: An MSM pair is a G2 element and a scalar. The input to the MSM will have `n`
+<a href=#160 id=160 data-nosnippet>160</a>/// of these pairs.
+<a href=#161 id=161 data-nosnippet>161</a></span><span class="kw">pub const </span>G2_MSM_INPUT_LENGTH: usize = PADDED_G2_LENGTH + SCALAR_LENGTH;
+<a href=#162 id=162 data-nosnippet>162</a>
+<a href=#163 id=163 data-nosnippet>163</a><span class="doccomment">/// PAIRING_INPUT_LENGTH specifies the number of bytes that each Pairing input pair should have.
+<a href=#164 id=164 data-nosnippet>164</a>///
+<a href=#165 id=165 data-nosnippet>165</a>/// Note: An Pairing input-pair is a G2 element and a G1 element. The input to the Pairing will have `n`
+<a href=#166 id=166 data-nosnippet>166</a>/// of these pairs.
+<a href=#167 id=167 data-nosnippet>167</a></span><span class="kw">pub const </span>PAIRING_INPUT_LENGTH: usize = PADDED_G1_LENGTH + PADDED_G2_LENGTH;
+<a href=#168 id=168 data-nosnippet>168</a>
+<a href=#169 id=169 data-nosnippet>169</a><span class="doccomment">/// FP_PAD_BY specifies the number of bytes that an FP_ELEMENT is padded by to make it 32 byte aligned.
+<a href=#170 id=170 data-nosnippet>170</a>///
+<a href=#171 id=171 data-nosnippet>171</a>/// Note: This should be equal to PADDED_FP_LENGTH - FP_LENGTH.
+<a href=#172 id=172 data-nosnippet>172</a></span><span class="kw">pub const </span>FP_PAD_BY: usize = <span class="number">16</span>;
+<a href=#173 id=173 data-nosnippet>173</a>
+<a href=#174 id=174 data-nosnippet>174</a><span class="attr">#[test]
+<a href=#175 id=175 data-nosnippet>175</a></span><span class="kw">fn </span>check_discount_table_invariant_holds() {
+<a href=#176 id=176 data-nosnippet>176</a>    <span class="comment">// Currently EIP-2537 specifies the cost for a G1/G2 scalar multiplication in two places
+<a href=#177 id=177 data-nosnippet>177</a>    // in two different ways.
+<a href=#178 id=178 data-nosnippet>178</a>    //
+<a href=#179 id=179 data-nosnippet>179</a>    // First it explicitly says that G1 Multiplication costs 12000 Gas and G2 Multiplication costs 22500.
+<a href=#180 id=180 data-nosnippet>180</a>    //
+<a href=#181 id=181 data-nosnippet>181</a>    // Then it implies the above constants for G1_MSM and G2_MSM via the MSM formula:
+<a href=#182 id=182 data-nosnippet>182</a>    // MSM_COST = k * MSM_BASE_GAS_FEE * DISCOUNT[k-1] // MSM_MULTIPLIER
+<a href=#183 id=183 data-nosnippet>183</a>    //
+<a href=#184 id=184 data-nosnippet>184</a>    // Note that when the MSM has only one point-scalar pair (scalar multiplication), we get:
+<a href=#185 id=185 data-nosnippet>185</a>    // MSM_COST = MSM_BASE_GAS_FEE * DISCOUNT[0] // MSM_MULTIPLIER
+<a href=#186 id=186 data-nosnippet>186</a>    //  (This is because k==1)
+<a href=#187 id=187 data-nosnippet>187</a>    //
+<a href=#188 id=188 data-nosnippet>188</a>    // The 0th entry in the discount table for G1_MSM and G2_MSM is equal to MSM_MULTIPLIER
+<a href=#189 id=189 data-nosnippet>189</a>    // so for k==1, MSM_COST = MSM_BASE_GAS_FEE
+<a href=#190 id=190 data-nosnippet>190</a>    //
+<a href=#191 id=191 data-nosnippet>191</a>    // For G1, MSM_BASE_GAS_FEE matches 12000 and for G2 MSM_BASE_GAS_FEE matches 22500.
+<a href=#192 id=192 data-nosnippet>192</a>    //
+<a href=#193 id=193 data-nosnippet>193</a>    // In this test, we check that this invariant does not change by asserting that the first value
+<a href=#194 id=194 data-nosnippet>194</a>    // in the discount table is equal to the MULTIPLIER.
+<a href=#195 id=195 data-nosnippet>195</a>    </span><span class="macro">assert_eq!</span>(DISCOUNT_TABLE_G1_MSM[<span class="number">0</span>], MSM_MULTIPLIER <span class="kw">as </span>u16);
+<a href=#196 id=196 data-nosnippet>196</a>    <span class="macro">assert_eq!</span>(DISCOUNT_TABLE_G2_MSM[<span class="number">0</span>], MSM_MULTIPLIER <span class="kw">as </span>u16);
+<a href=#197 id=197 data-nosnippet>197</a>    <span class="comment">// Note: We could also more robustly check this by defining the G1/G2 Scalar multiplication constants
+<a href=#198 id=198 data-nosnippet>198</a>    // from the EIP and checking that they equal to the value computed by `msm_required_gas` when k==1
+<a href=#199 id=199 data-nosnippet>199</a></span>}</code></pre></div></section></main></body></html>

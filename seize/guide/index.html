@@ -1,0 +1,201 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A quick-start guide for working with `seize`."><title>seize::guide - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="seize" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../seize/index.html">seize</a><span class="version">0.4.9</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module guide</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#introduction" title="Introduction">Introduction</a></li><li><a href="#collectors" title="Collectors">Collectors</a></li><li><a href="#allocating-objects" title="Allocating Objects">Allocating Objects</a></li><li><a href="#starting-operations" title="Starting Operations">Starting Operations</a></li><li><a href="#protecting-pointers" title="Protecting Pointers">Protecting Pointers</a></li><li><a href="#retiring-objects" title="Retiring Objects">Retiring Objects</a><ul><li><a href="#retired-objects-must-be-logically-removed" title="Retired objects must be logically removed">Retired objects must be logically removed</a></li><li><a href="#retired-objects-cannot-be-accessed-by-the-current-thread" title="Retired objects cannot be accessed by the current thread">Retired objects cannot be accessed by the current thread</a></li><li><a href="#custom-reclaimers" title="Custom Reclaimers">Custom Reclaimers</a></li><li><a href="#dst-support" title="DST Support">DST Support</a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate seize</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">seize</a></div><h1>Module <span>guide</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/seize/guide.rs.html#1">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A quick-start guide for working with <code>seize</code>.</p>
+<h2 id="introduction"><a class="doc-anchor" href="#introduction">§</a>Introduction</h2>
+<p>Seize tries to stay out of your way as much as possible. It works with raw
+pointers directly instead of creating safe wrapper types that end up being a
+hassle to work with in practice. Below is a step-by-step guide on how to get
+started. We’ll be writing a stack that implements concurrent <code>push</code> and <code>pop</code>
+operations. The details of how the stack works are not directly relevant, the
+guide will instead focus on how Seize works generally.</p>
+<h2 id="collectors"><a class="doc-anchor" href="#collectors">§</a>Collectors</h2>
+<p>Seize avoids the use of global state and encourages creating a designated
+<em>collector</em> per data structure. Collectors allow you to allocate, protect, and
+retire objects.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>seize::Collector;
+
+<span class="kw">struct </span>Stack&lt;T&gt; {
+    collector: Collector,
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">impl</span>&lt;T&gt; Stack&lt;T&gt; {
+    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            collector: Collector::new(),
+        }
+    }
+}</code></pre></div>
+<h2 id="allocating-objects"><a class="doc-anchor" href="#allocating-objects">§</a>Allocating Objects</h2>
+<p>Seize requires storing some metadata about the global epoch for each object that
+is allocated. Because of this, objects in a concurrent data structure that may be
+reclaimed must embed the <code>Link</code> type or use the <code>Linked&lt;T&gt;</code> wrapper provided for
+convenience. See <a href="#dst-support">DST Support</a> for more details.</p>
+<p>You can create a <code>Link</code> with the <code>link</code> method, or allocate and link a value with
+the <code>link_boxed</code> helper:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>seize::{reclaim, Collector, Linked};
+<span class="kw">use </span>std::mem::ManuallyDrop;
+<span class="kw">use </span>std::sync::atomic::{AtomicPtr, Ordering};
+
+<span class="kw">pub struct </span>Stack&lt;T&gt; {
+    head: AtomicPtr&lt;Linked&lt;Node&lt;T&gt;&gt;&gt;, <span class="comment">// &lt;===
+    </span>collector: Collector,
+}
+
+<span class="kw">struct </span>Node&lt;T&gt; {
+    next: <span class="kw-2">*mut </span>Linked&lt;Node&lt;T&gt;&gt;, <span class="comment">// &lt;===
+    </span>value: ManuallyDrop&lt;T&gt;,
+}
+
+<span class="kw">impl</span>&lt;T&gt; Stack&lt;T&gt; {
+    <span class="kw">pub fn </span>push(<span class="kw-2">&amp;</span><span class="self">self</span>, value: T) {
+        <span class="kw">let </span>node = <span class="self">self</span>.collector.link_boxed(Node { <span class="comment">// &lt;===
+            </span>next: std::ptr::null_mut(),
+            value: ManuallyDrop::new(value),
+        });
+
+        <span class="comment">// ...
+    </span>}
+}</code></pre></div>
+<h2 id="starting-operations"><a class="doc-anchor" href="#starting-operations">§</a>Starting Operations</h2>
+<p>Before starting an operation that involves loading objects that may eventually be reclaimed,
+you must mark the thread as <em>active</em> by calling the <code>enter</code> method.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Stack {
+    <span class="kw">pub fn </span>push(<span class="kw-2">&amp;</span><span class="self">self</span>, value: T) {
+        <span class="comment">// ...
+
+        </span><span class="kw">let </span>guard = <span class="self">self</span>.collector.enter(); <span class="comment">// &lt;===
+
+        // ...
+    </span>}
+}</code></pre></div>
+<h2 id="protecting-pointers"><a class="doc-anchor" href="#protecting-pointers">§</a>Protecting Pointers</h2>
+<p><code>enter</code> returns a guard that allows you to safely load atomic pointers. Guards are
+the core of safe memory reclamation. Any valid pointer loaded through a guard using the
+<code>protect</code> method is guaranteed to stay valid until the guard is dropped, or is retired
+by the current thread. Importantly, if another thread retires an object that you protected,
+the collector knows not to reclaim the object until your guard is dropped.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Stack {
+    <span class="kw">pub fn </span>push(<span class="kw-2">&amp;</span><span class="self">self</span>, value: T) {
+        <span class="comment">// ...
+
+        </span><span class="kw">let </span>guard = <span class="self">self</span>.collector.enter();
+
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>head = guard.protect(<span class="kw-2">&amp;</span><span class="self">self</span>.head, Ordering::Acquire); <span class="comment">// &lt;===
+            </span><span class="kw">unsafe </span>{ (<span class="kw-2">*</span>node).next = head; }
+
+            <span class="kw">if </span><span class="self">self
+                </span>.head
+                .compare_exchange(head, node, Ordering::Release, Ordering::Relaxed)
+                .is_ok()
+            {
+                <span class="kw">break</span>;
+            }
+        }
+
+        <span class="comment">// drop(guard);
+    </span>}
+}</code></pre></div>
+<p>Note that the lifetime of a guarded pointer is logically tied to that of the
+guard – when the guard is dropped the pointer is invalidated – but a raw
+pointer is returned for convenience. Data structures that return shared references
+to values should ensure that the lifetime of the reference is tied to the lifetime
+of a guard.</p>
+<h2 id="retiring-objects"><a class="doc-anchor" href="#retiring-objects">§</a>Retiring Objects</h2>
+<p>Objects that have been removed from a data structure can be safely <em>retired</em>
+through the collector. It will be <em>reclaimed</em>, or freed, when no threads holds
+a reference to it:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl</span>&lt;T&gt; Stack&lt;T&gt; {
+    <span class="kw">pub fn </span>pop(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt; {
+        <span class="kw">let </span>guard = <span class="self">self</span>.collector.enter(); <span class="comment">// &lt;=== mark the thread as active
+
+        </span><span class="kw">loop </span>{
+            <span class="kw">let </span>head = guard.protect(<span class="kw-2">&amp;</span><span class="self">self</span>.head, Ordering::Acquire); <span class="comment">// &lt;=== safely load the head
+
+            </span><span class="kw">if </span>head.is_null() {
+                <span class="kw">return </span><span class="prelude-val">None</span>;
+            }
+
+            <span class="kw">let </span>next = <span class="kw">unsafe </span>{ (<span class="kw-2">*</span>head).next };
+
+            <span class="kw">if </span><span class="self">self
+                </span>.head
+                .compare_exchange(head, next, Ordering::Release, Ordering::Relaxed)
+                .is_ok()
+            {
+                <span class="kw">unsafe </span>{
+                    <span class="kw">let </span>data = ptr::read(<span class="kw-2">&amp;</span>(<span class="kw-2">*</span>head).value);
+                    <span class="self">self</span>.collector.retire(head, reclaim::boxed::&lt;Linked&lt;Node&lt;T&gt;&gt;&gt;); <span class="comment">// &lt;=== retire
+                    </span><span class="kw">return </span><span class="prelude-val">Some</span>(ManuallyDrop::into_inner(data));
+                }
+            }
+        }
+    }
+}</code></pre></div>
+<p>There are a couple important things to note about retiring an object:</p>
+<h4 id="retired-objects-must-be-logically-removed"><a class="doc-anchor" href="#retired-objects-must-be-logically-removed">§</a>Retired objects must be logically removed</h4>
+<p>An object can only be retired if it is <em>no longer accessible</em> to any thread that
+comes after. In the above code example this was ensured by swapping out the node
+before retiring it. Threads that loaded a value <em>before</em> it was retired are
+safe, but threads that come after are not.</p>
+<p>Note that concurrent stacks typically suffer from the <a href="https://en.wikipedia.org/wiki/ABA_problem">ABA problem</a>. Using <code>retire</code>
+after popping a node ensures that the node is only freed <em>after</em> all active threads
+that could have loaded it exit, avoiding any potential ABA.</p>
+<h4 id="retired-objects-cannot-be-accessed-by-the-current-thread"><a class="doc-anchor" href="#retired-objects-cannot-be-accessed-by-the-current-thread">§</a>Retired objects cannot be accessed by the current thread</h4>
+<p>Unlike in schemes like EBR, a guard does not protect objects retired by the
+current thread. If no other thread holds a reference to an object it may be
+reclaimed <em>immediately</em>. This makes the following code unsound:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>ptr = guard.protect(<span class="kw-2">&amp;</span>node, Ordering::Acquire);
+collector.retire(ptr, |<span class="kw">_</span>| {});
+<span class="macro">println!</span>(<span class="string">"{}"</span>, (<span class="kw-2">*</span>ptr).value); <span class="comment">// &lt;===== unsound!</span></code></pre></div>
+<p>Retirement can be delayed until the guard is dropped by calling <code>defer_retire</code> on
+the guard, instead of on the collector directly:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>ptr = guard.protect(<span class="kw-2">&amp;</span>node, Ordering::Acquire);
+guard.defer_retire(ptr, |<span class="kw">_</span>| {});
+<span class="macro">println!</span>(<span class="string">"{}"</span>, (<span class="kw-2">*</span>ptr).value); <span class="comment">// &lt;===== ok!
+</span>drop(guard); <span class="comment">// &lt;===== ptr is invalidated</span></code></pre></div>
+<h4 id="custom-reclaimers"><a class="doc-anchor" href="#custom-reclaimers">§</a>Custom Reclaimers</h4>
+<p>You probably noticed that <code>retire</code> takes a function as a second parameter. This
+function is known as a <em>reclaimer</em>, and is run when the collector decides it is
+safe to free the retired object. Typically you will pass in a function from the
+<a href="https://docs.rs/seize/latest/seize/reclaim/index.html"><code>seize::reclaim</code></a> module.
+For example, values allocated with <code>Box</code> can use <code>reclaim::boxed</code>:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>seize::reclaim;
+
+<span class="kw">impl</span>&lt;T&gt; Stack&lt;T&gt; {
+    <span class="kw">pub fn </span>pop(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt; {
+        <span class="comment">// ...
+        </span><span class="self">self</span>.collector.retire(head, reclaim::boxed::&lt;Linked&lt;Node&lt;T&gt;&gt;); <span class="comment">// &lt;===
+        // ...
+    </span>}
+}</code></pre></div>
+<p>The type annotation there is important. It is <strong>unsound</strong> to pass a reclaimer of
+a different type than the object being retired.</p>
+<p>If you need to run custom reclamation code, you can write a custom reclaimer.
+Functions passed to <code>retire</code> are called with a type-erased <code>Link</code> pointer. This is
+because retired values lose any type information during the reclamation process.
+To extract the underlying value from a link, you can call the <code>cast</code> method:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>collector.retire(value, |link: <span class="kw-2">*mut </span>Link| <span class="kw">unsafe </span>{
+    <span class="comment">// safety: the value retired was of type *mut Linked&lt;T&gt;
+    </span><span class="kw">let </span>ptr: <span class="kw-2">*mut </span>Linked&lt;T&gt; = Link::cast(link);
+
+    <span class="comment">// safety: the value was allocated with `link_boxed`
+    </span><span class="kw">let </span>value = Box::from_raw(ptr);
+    <span class="macro">println!</span>(<span class="string">"dropping {}"</span>, value);
+    drop(value);
+});</code></pre></div>
+<h3 id="dst-support"><a class="doc-anchor" href="#dst-support">§</a>DST Support</h3>
+<p>Most reclamation use cases can work with <code>Linked&lt;T&gt;</code> and avoid working with
+links directly. However, advanced use cases such as dynamically sized types
+may requie more control over type layout. To support this, seize allows embedding
+a <code>Link</code> directly in your type. See the <a href="https://docs.rs/seize/latest/seize/trait.AsLink.html"><code>AsLink</code></a>
+trait for more details.</p>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["escape"],"struct":["CaptureLocations","CaptureMatches","CaptureNames","Captures","Error","Match","Matches","NoExpand","Regex","RegexBuilder","ReplacerRef","Split","SplitN","SubCaptureMatches"],"trait":["Replacer"]};

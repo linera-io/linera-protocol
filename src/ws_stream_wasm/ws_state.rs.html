@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ws_stream_wasm-0.7.5/src/ws_state.rs`."><title>ws_state.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="ws_stream_wasm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">ws_stream_wasm/</div>ws_state.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-2"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use crate </span>:: { import::<span class="kw-2">*</span>, WsErr };
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a><span class="doccomment">/// Indicates the state of a Websocket connection. The only state in which it's valid to send and receive messages
+<a href=#5 id=5 data-nosnippet>5</a>/// is [WsState::Open].
+<a href=#6 id=6 data-nosnippet>6</a>///
+<a href=#7 id=7 data-nosnippet>7</a>/// See [MDN](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState) for the ready state values.
+<a href=#8 id=8 data-nosnippet>8</a></span><span class="comment">//
+<a href=#9 id=9 data-nosnippet>9</a></span><span class="attr">#[ allow( missing_docs ) ]
+<a href=#10 id=10 data-nosnippet>10</a></span><span class="comment">//
+<a href=#11 id=11 data-nosnippet>11</a></span><span class="attr">#[ derive( Debug, Clone, Copy, PartialEq, Eq ) ]
+<a href=#12 id=12 data-nosnippet>12</a></span><span class="comment">//
+<a href=#13 id=13 data-nosnippet>13</a></span><span class="kw">pub enum </span>WsState
+<a href=#14 id=14 data-nosnippet>14</a>{
+<a href=#15 id=15 data-nosnippet>15</a>	Connecting,
+<a href=#16 id=16 data-nosnippet>16</a>	Open      ,
+<a href=#17 id=17 data-nosnippet>17</a>	Closing   ,
+<a href=#18 id=18 data-nosnippet>18</a>	Closed    ,
+<a href=#19 id=19 data-nosnippet>19</a>}
+<a href=#20 id=20 data-nosnippet>20</a>
+<a href=#21 id=21 data-nosnippet>21</a>
+<a href=#22 id=22 data-nosnippet>22</a><span class="doccomment">/// Internally ready state is a u16, so it's possible to create one from a u16. Only 0-3 are valid values.
+<a href=#23 id=23 data-nosnippet>23</a>///
+<a href=#24 id=24 data-nosnippet>24</a>/// See [MDN](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState) for the ready state values.
+<a href=#25 id=25 data-nosnippet>25</a></span><span class="comment">//
+<a href=#26 id=26 data-nosnippet>26</a></span><span class="kw">impl </span>TryFrom&lt;u16&gt; <span class="kw">for </span>WsState
+<a href=#27 id=27 data-nosnippet>27</a>{
+<a href=#28 id=28 data-nosnippet>28</a>	<span class="kw">type </span>Error = WsErr;
+<a href=#29 id=29 data-nosnippet>29</a>
+<a href=#30 id=30 data-nosnippet>30</a>	<span class="kw">fn </span>try_from( state: u16 ) -&gt; <span class="prelude-ty">Result</span>&lt; <span class="self">Self</span>, <span class="self">Self</span>::Error &gt;
+<a href=#31 id=31 data-nosnippet>31</a>	{
+<a href=#32 id=32 data-nosnippet>32</a>		<span class="kw">match </span>state
+<a href=#33 id=33 data-nosnippet>33</a>		{
+<a href=#34 id=34 data-nosnippet>34</a>			WebSocket::CONNECTING =&gt; <span class="prelude-val">Ok </span>( WsState::Connecting                      ) ,
+<a href=#35 id=35 data-nosnippet>35</a>			WebSocket::OPEN       =&gt; <span class="prelude-val">Ok </span>( WsState::Open                            ) ,
+<a href=#36 id=36 data-nosnippet>36</a>			WebSocket::CLOSING    =&gt; <span class="prelude-val">Ok </span>( WsState::Closing                         ) ,
+<a href=#37 id=37 data-nosnippet>37</a>			WebSocket::CLOSED     =&gt; <span class="prelude-val">Ok </span>( WsState::Closed                          ) ,
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a>			<span class="kw">_                     </span>=&gt; <span class="prelude-val">Err</span>( WsErr::InvalidWsState{ supplied: state } ) ,
+<a href=#40 id=40 data-nosnippet>40</a>		}
+<a href=#41 id=41 data-nosnippet>41</a>	}
+<a href=#42 id=42 data-nosnippet>42</a>}</code></pre></div></section></main></body></html>

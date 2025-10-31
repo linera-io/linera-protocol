@@ -1,0 +1,47 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Macro that allows you to quickly define a handlebars helper by passing a name and a closure."><title>handlebars_helper in handlebars - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="handlebars" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../handlebars/index.html">handlebars</a><span class="version">5.1.2</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">handlebars_<wbr>helper</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate handlebars</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">handlebars</a></div><h1>Macro <span class="macro">handlebars_helper</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/handlebars/macros.rs.html#40-110">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! handlebars_helper {
+    ($struct_name:ident: |$($name:ident: $tpe:tt$(&lt;$($gen:ty),+&gt;)?),*
+     $($(,)?{$($hash_name:ident: $hash_tpe:tt=$dft_val:literal),*})?
+     $($(,)?*$args:ident)?
+     $($(,)?**$kwargs:ident)?|
+     $body:expr ) =&gt; { ... };
+    (@as_json_value $x:ident, object) =&gt; { ... };
+    (@as_json_value $x:ident, array) =&gt; { ... };
+    (@as_json_value $x:ident, str) =&gt; { ... };
+    (@as_json_value $x:ident, i64) =&gt; { ... };
+    (@as_json_value $x:ident, u64) =&gt; { ... };
+    (@as_json_value $x:ident, f64) =&gt; { ... };
+    (@as_json_value $x:ident, bool) =&gt; { ... };
+    (@as_json_value $x:ident, null) =&gt; { ... };
+    (@as_json_value $x:ident, Json) =&gt; { ... };
+    (@as_json_value $x:ident, $tpe:tt$(&lt;$($gen:ty),+&gt;)?) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Macro that allows you to quickly define a handlebars helper by passing a
+name and a closure.</p>
+<p>There are several types of arguments available to closure:</p>
+<ul>
+<li>Parameters are mapped to closure arguments one by one. Any declared
+parameters are required</li>
+<li>Hash are mapped as named arguments and declared in a bracket block.
+All named arguments are optional so default value is required.</li>
+<li>An optional <code>*args</code> provides a vector of all helper parameters.</li>
+<li>An optional <code>**kwargs</code> provides a map of all helper hash.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[macro_use] </span><span class="kw">extern crate </span>handlebars;
+<span class="attr">#[macro_use] </span><span class="kw">extern crate </span>serde_json;
+
+<span class="macro">handlebars_helper!</span>(is_above_10: |x: u64| x &gt; <span class="number">10</span>);
+<span class="macro">handlebars_helper!</span>(is_above: |x: u64, { compare: u64 = <span class="number">10 </span>}| x &gt; compare);
+
+<span class="kw">let </span><span class="kw-2">mut </span>handlebars = handlebars::Handlebars::new();
+handlebars.register_helper(<span class="string">"is-above-10"</span>, Box::new(is_above_10));
+handlebars.register_helper(<span class="string">"is-above"</span>, Box::new(is_above));
+
+<span class="kw">let </span>result = handlebars
+    .render_template(<span class="string">"{{#if (is-above-10 12)}}great!{{else}}okay{{/if}}"</span>, <span class="kw-2">&amp;</span><span class="macro">json!</span>({}))
+    .unwrap();
+ <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>result, <span class="string">"great!"</span>);
+<span class="kw">let </span>result2 = handlebars
+    .render_template(<span class="string">"{{#if (is-above 12 compare=10)}}great!{{else}}okay{{/if}}"</span>, <span class="kw-2">&amp;</span><span class="macro">json!</span>({}))
+    .unwrap();
+ <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>result2, <span class="string">"great!"</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

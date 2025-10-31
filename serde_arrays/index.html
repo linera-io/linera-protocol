@@ -1,0 +1,74 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Serialize and deserialize const generic or arbitrarily-large arrays with Serde."><title>serde_arrays - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde_arrays" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde_arrays/index.html">serde_<wbr>arrays</a><span class="version">0.2.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example-usage" title="Example usage">Example usage</a></li><li><a href="#no_std-compatibility" title="no_std Compatibility">no_std Compatibility</a></li><li><a href="#msrv" title="MSRV">MSRV</a></li><li><a href="#relevant-links" title="Relevant links">Relevant links</a></li></ul><h3><a href="#traits">Crate Items</a></h3><ul class="block"><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>serde_arrays</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/serde_arrays/lib.rs.html#8-279">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Serialize and deserialize const generic or arbitrarily-large arrays with <a href="https://serde.rs/">Serde</a>.</p>
+<p>Out of the box, Serde supports <a href="https://serde.rs/data-model.html#types">a lot of types</a>, but
+unfortunately lacks support for arrays that use const generics. This library provides a module
+that, in combination with Serde’s <a href="https://serde.rs/field-attrs.html#with"><code>with</code></a> attribute,
+adds that support.</p>
+<h2 id="example-usage"><a class="doc-anchor" href="#example-usage">§</a>Example usage</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Serialize, Deserialize};
+<span class="kw">use </span>serde_json;
+
+<span class="attr">#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+</span><span class="kw">struct </span>GenericArray&lt;<span class="kw">const </span>N: usize&gt; {
+    <span class="attr">#[serde(with = <span class="string">"serde_arrays"</span>)]
+    </span>arr: [u32; N],
+}
+
+<span class="kw">let </span>data = GenericArray{ arr: [<span class="number">1</span>; <span class="number">16</span>] };
+<span class="kw">let </span>json = serde_json::to_string(<span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>;
+<span class="kw">let </span>de_data = serde_json::from_str(<span class="kw-2">&amp;</span>json)<span class="question-mark">?</span>;
+
+<span class="macro">assert_eq!</span>(data, de_data);</code></pre></div>
+<p>As an added bonus, this also adds support for arbitrarily large arrays beyond the 32 elements
+that Serde supports:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+</span><span class="kw">struct </span>LargeArray {
+    <span class="attr">#[serde(with = <span class="string">"serde_arrays"</span>)]
+    </span>arr: [u32; <span class="number">64</span>],
+}</code></pre></div>
+<p>Tuple structs are supported just as easily:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+</span><span class="kw">struct </span>TupleStruct&lt;<span class="kw">const </span>N: usize&gt;(
+    <span class="attr">#[serde(with = <span class="string">"serde_arrays"</span>)]
+    </span>[u32; N],
+);</code></pre></div>
+<p>Nested arrays can be serialized as well:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Serialize, Debug, PartialEq, Eq)]
+</span><span class="kw">struct </span>NestedArray {
+    <span class="attr">#[serde(with = <span class="string">"serde_arrays"</span>)]
+    </span>arr: [[u32; <span class="number">64</span>]; <span class="number">64</span>],
+    <span class="attr">#[serde(with = <span class="string">"serde_arrays"</span>)]
+    </span>vec: Vec&lt;[u32; <span class="number">96</span>]&gt;,
+}</code></pre></div>
+<p>Currently, nested arrays cannot be deserialized. If you need to deserialize nested arrays, try
+using a wrapper struct:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
+</span><span class="kw">struct </span>WrappedArray&lt;<span class="kw">const </span>N: usize&gt; (
+   <span class="attr">#[serde(with = <span class="string">"serde_arrays"</span>)]
+  </span>[u32; N],
+);
+
+<span class="attr">#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+</span><span class="kw">struct </span>NestedArray {
+    <span class="attr">#[serde(with = <span class="string">"serde_arrays"</span>)]
+    </span>arr: [WrappedArray&lt;<span class="number">64</span>&gt;; <span class="number">64</span>],
+    vec: Vec&lt;WrappedArray&lt;<span class="number">96</span>&gt;&gt;,
+}</code></pre></div>
+<h2 id="no_std-compatibility"><a class="doc-anchor" href="#no_std-compatibility">§</a>no_std Compatibility</h2>
+<p>This crate is <code>no_std</code> compatible by default.</p>
+<p>If you need to support serialization of e.g. <code>Vec&lt;[T; N]&gt;</code> you can enable the <code>alloc</code> feature;
+alternatively, using a wrapper struct as shown above can be done without the <code>alloc</code> feature.</p>
+<h2 id="msrv"><a class="doc-anchor" href="#msrv">§</a>MSRV</h2>
+<p>This library relies on the const generics feature introduced in Rust 1.51.0.</p>
+<h2 id="relevant-links"><a class="doc-anchor" href="#relevant-links">§</a>Relevant links</h2>
+<ul>
+<li>The <a href="https://github.com/serde-rs/serde/issues/1937">Serde issue</a> for const generics support</li>
+<li><a href="https://crates.io/crates/serde-big-array">serde-big-array</a> is a similar crate for large
+arrays and const generic arrays</li>
+<li><a href="https://crates.io/crates/serde_with/">serde_with</a> is a much more flexible and powerful
+crate, but with arguably more complex ergonomics</li>
+</ul>
+</div></details><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Serializable.html" title="trait serde_arrays::Serializable">Serializable</a></dt><dd>Trait for types serializable using <code>serde_arrays</code></dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.deserialize.html" title="fn serde_arrays::deserialize">deserialize</a></dt><dd>Deserialize const generic or arbitrarily-large arrays</dd><dt><a class="fn" href="fn.serialize.html" title="fn serde_arrays::serialize">serialize</a></dt><dd>Serialize const generic or arbitrarily-large arrays</dd></dl></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Os"],"fn":["home_dir"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"fn":["alloc","alloc_at","lock","protect","protect_with_handle","query","query_range","unlock"],"mod":["page"],"struct":["Allocation","LockGuard","ProtectGuard","Protection","QueryIter","Region"],"type":["Result"]};
