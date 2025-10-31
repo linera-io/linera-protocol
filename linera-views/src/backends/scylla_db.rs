@@ -350,9 +350,7 @@ impl ScyllaDbClient {
         let statement = self.get_multi_key_values_statement(map.len()).await?;
         let mut inputs = vec![root_key.to_vec()];
         inputs.extend(map.keys().cloned());
-        let mut rows = self
-            .session
-            .execute_iter(statement, &inputs)
+        let mut rows = Box::pin(self.session.execute_iter(statement, &inputs))
             .await?
             .rows_stream::<(Vec<u8>, Vec<u8>)>()?;
 
@@ -375,9 +373,7 @@ impl ScyllaDbClient {
         let statement = self.get_multi_keys_statement(map.len()).await?;
         let mut inputs = vec![root_key.to_vec()];
         inputs.extend(map.keys().cloned());
-        let mut rows = self
-            .session
-            .execute_iter(statement, &inputs)
+        let mut rows = Box::pin(self.session.execute_iter(statement, &inputs))
             .await?
             .rows_stream::<(Vec<u8>,)>()?;
 
@@ -468,13 +464,11 @@ impl ScyllaDbClient {
         let rows = match get_upper_bound_option(&key_prefix) {
             None => {
                 let values = (root_key.to_vec(), key_prefix.clone());
-                session
-                    .execute_iter(query_unbounded.clone(), values)
-                    .await?
+                Box::pin(session.execute_iter(query_unbounded.clone(), values)).await?
             }
             Some(upper_bound) => {
                 let values = (root_key.to_vec(), key_prefix.clone(), upper_bound);
-                session.execute_iter(query_bounded.clone(), values).await?
+                Box::pin(session.execute_iter(query_bounded.clone(), values)).await?
             }
         };
         let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
@@ -501,13 +495,11 @@ impl ScyllaDbClient {
         let rows = match get_upper_bound_option(&key_prefix) {
             None => {
                 let values = (root_key.to_vec(), key_prefix.clone());
-                session
-                    .execute_iter(query_unbounded.clone(), values)
-                    .await?
+                Box::pin(session.execute_iter(query_unbounded.clone(), values)).await?
             }
             Some(upper_bound) => {
                 let values = (root_key.to_vec(), key_prefix.clone(), upper_bound);
-                session.execute_iter(query_bounded.clone(), values).await?
+                Box::pin(session.execute_iter(query_bounded.clone(), values)).await?
             }
         };
         let mut rows = rows.rows_stream::<(Vec<u8>, Vec<u8>)>()?;
@@ -627,17 +619,13 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     ) -> Result<Option<Vec<u8>>, ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        store
-            .read_value_internal(&self.root_key, key.to_vec())
-            .await
+        Box::pin(store.read_value_internal(&self.root_key, key.to_vec())).await
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        store
-            .contains_key_internal(&self.root_key, key.to_vec())
-            .await
+        Box::pin(store.contains_key_internal(&self.root_key, key.to_vec())).await
     }
 
     async fn contains_keys(
@@ -684,9 +672,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     ) -> Result<Vec<Vec<u8>>, ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        store
-            .find_keys_by_prefix_internal(&self.root_key, key_prefix.to_vec())
-            .await
+        Box::pin(store.find_keys_by_prefix_internal(&self.root_key, key_prefix.to_vec())).await
     }
 
     async fn find_key_values_by_prefix(
@@ -695,8 +681,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        store
-            .find_key_values_by_prefix_internal(&self.root_key, key_prefix.to_vec())
+        Box::pin(store.find_key_values_by_prefix_internal(&self.root_key, key_prefix.to_vec()))
             .await
     }
 }
@@ -789,7 +774,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         let statement = session
             .prepare(format!("DESCRIBE KEYSPACE {}", KEYSPACE))
             .await?;
-        let result = session.execute_iter(statement, &[]).await;
+        let result = Box::pin(session.execute_iter(statement, &[])).await;
         let miss_msg = format!("'{}' not found in keyspaces", KEYSPACE);
         let result = match result {
             Ok(result) => result,
@@ -832,7 +817,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
             .await?;
 
         // Execute the query
-        let rows = session.execute_iter(statement, &[]).await?;
+        let rows = Box::pin(session.execute_iter(statement, &[])).await?;
         let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
         let mut root_keys = BTreeSet::new();
         while let Some(row) = rows.next().await {
