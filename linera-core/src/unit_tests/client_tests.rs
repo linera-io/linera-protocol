@@ -2482,8 +2482,10 @@ where
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
-    let mut receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+    let sender2 = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
+    let mut receiver = builder.add_root_chain(3, Amount::ZERO).await?;
     let recipient = Account::chain(receiver.chain_id());
+
     sender
         .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
         .await
@@ -2514,6 +2516,44 @@ where
     assert_eq!(
         sender.local_balance().await.unwrap(),
         Amount::from_tokens(4)
+    );
+
+    // Let's try again.
+    sender
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+    sender2
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(
+        sender.local_balance().await.unwrap(),
+        Amount::from_tokens(3)
+    );
+    assert_eq!(
+        sender2.local_balance().await.unwrap(),
+        Amount::from_tokens(3)
+    );
+
+    // The receiver will only accept messages from sender, and not from sender2.
+    receiver.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        Some([sender.chain_id()].into_iter().collect()),
+    );
+    receiver.synchronize_from_validators().await?;
+    let certs = receiver.process_inbox().await?.0;
+    assert_eq!(certs.len(), 1);
+    // Only the transfer from sender should have been accepted.
+    assert_eq!(receiver.local_balance().await.unwrap(), Amount::ONE);
+
+    // Let's accept the other one, too.
+    receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Accept, None);
+    let certs = receiver.process_inbox().await?.0;
+    assert_eq!(certs.len(), 1);
+    assert_eq!(
+        receiver.local_balance().await.unwrap(),
+        Amount::from_tokens(2)
     );
 
     Ok(())
