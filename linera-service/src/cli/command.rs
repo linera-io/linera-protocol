@@ -1109,7 +1109,7 @@ pub enum DatabaseToolCommand {
     /// List the chain IDs in the database
     ListChainIds,
 
-    /// Do the migration of the storage
+    /// Migrate storage from schema version 0 to version 1
     Migrate,
 }
 
