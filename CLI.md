@@ -1305,7 +1305,7 @@ Operation on the storage
 * `list-namespaces` — List the namespaces in the database
 * `list-blob-ids` — List the blob IDs in the database
 * `list-chain-ids` — List the chain IDs in the database
-* `migrate` — Do the migration of the storage
+* `migrate` — Migrate storage from schema version 0 to version 1
 
 
 
@@ -1371,7 +1371,7 @@ List the chain IDs in the database
 
 ## `linera storage migrate`
 
-Do the migration of the storage
+Migrate storage from schema version 0 to version 1
 
 **Usage:** `linera storage migrate`
 
