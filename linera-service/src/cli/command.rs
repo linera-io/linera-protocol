@@ -1110,13 +1110,13 @@ pub enum DatabaseToolCommand {
     ListChainIds,
 
     /// Do the migration of the storage
-    Migration,
+    Migrate,
 }
 
 impl DatabaseToolCommand {
     /// Whether we need initial migration.
     pub fn need_migration(&self) -> bool {
-        matches!(self, DatabaseToolCommand::Migration)
+        matches!(self, DatabaseToolCommand::Migrate)
     }
 
     /// Whether we need to assert that the storage is migrated.
@@ -1153,7 +1153,7 @@ impl DatabaseToolCommand {
                 // have been migrated.
                 true
             }
-            DatabaseToolCommand::Migration => {
+            DatabaseToolCommand::Migrate => {
                 // Of course for migration the database should
                 // not have been migrated.
                 false

@@ -758,10 +758,10 @@ impl RunnableWithStore for StorageMigration {
     }
 }
 
-pub struct IsStorageMigrated;
+pub struct AssertStorageV1;
 
 #[async_trait]
-impl RunnableWithStore for IsStorageMigrated {
+impl RunnableWithStore for AssertStorageV1 {
     type Output = ();
 
     async fn run<D>(

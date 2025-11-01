@@ -77,7 +77,7 @@ use linera_service::{
     node_service::NodeService,
     project::{self, Project},
     storage::{
-        CommonStorageOptions, IsStorageMigrated, Runnable, RunnableWithStore, StorageConfig,
+        CommonStorageOptions, AssertStorageV1, Runnable, RunnableWithStore, StorageConfig,
         StorageMigration,
     },
     util, wallet,
@@ -1926,7 +1926,7 @@ impl ClientOptions {
             storage_config.add_common_storage_options(&self.common_storage_options)?;
         store_config
             .clone()
-            .run_with_store(IsStorageMigrated)
+            .run_with_store(AssertStorageV1)
             .await?;
         let output =
             Box::pin(store_config.run_with_storage(self.wasm_runtime.with_wasm_default(), job))
@@ -1953,7 +1953,7 @@ impl ClientOptions {
         if need_assert_migration {
             store_config
                 .clone()
-                .run_with_store(IsStorageMigrated)
+                .run_with_store(AssertStorageV1)
                 .await?;
         }
         let output = Box::pin(store_config.run_with_store(job)).await?;
@@ -2172,7 +2172,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                     println!("{}", id);
                 }
             }
-            DatabaseToolCommand::Migration => {
+            DatabaseToolCommand::Migrate => {
                 // The migration is done elsewhere
             }
         }
