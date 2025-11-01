@@ -54,7 +54,7 @@ use linera_rpc::{
 };
 use linera_sdk::linera_base_types::{AccountSecretKey, ValidatorKeypair};
 use linera_service::{
-    storage::{CommonStorageOptions, Runnable, StorageConfig},
+    storage::{AssertStorageV1, CommonStorageOptions, Runnable, StorageConfig},
     util,
 };
 use linera_storage::Storage;
@@ -542,6 +542,11 @@ async fn run(options: ServerOptions) {
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let store_config = storage_config
                 .add_common_storage_options(&common_storage_options)
+                .unwrap();
+            store_config
+                .clone()
+                .run_with_store(AssertStorageV1)
+                .await
                 .unwrap();
             store_config
                 .run_with_storage(wasm_runtime, job)
