@@ -1108,6 +1108,58 @@ pub enum DatabaseToolCommand {
 
     /// List the chain IDs in the database
     ListChainIds,
+
+    /// Do the migration of the storage
+    Migration,
+}
+
+impl DatabaseToolCommand {
+    /// Whether we need initial migration.
+    pub fn need_migration(&self) -> bool {
+        matches!(self, DatabaseToolCommand::Migration)
+    }
+
+    /// Whether we need to assert that the storage is migrated.
+    pub fn need_assert_migration(&self) -> bool {
+        match self {
+            DatabaseToolCommand::DeleteAll => {
+                // No need to assert migration for deletion
+                false
+            }
+            DatabaseToolCommand::DeleteNamespace => {
+                // No need to assert migration for deletion
+                false
+            }
+            DatabaseToolCommand::CheckExistence => {
+                // It is a read operation. No migration.
+                false
+            }
+            DatabaseToolCommand::Initialize { .. } => {
+                // When initializing, the database should have
+                // been migrated.
+                true
+            }
+            DatabaseToolCommand::ListNamespaces => {
+                // Listing is a read operation. No migration.
+                false
+            }
+            DatabaseToolCommand::ListBlobIds => {
+                // For listing the blobs the database should
+                // have been migrated.
+                true
+            }
+            DatabaseToolCommand::ListChainIds => {
+                // For listing the chains the database should
+                // have been migrated.
+                true
+            }
+            DatabaseToolCommand::Migration => {
+                // Of course for migration the database should
+                // not have been migrated.
+                false
+            }
+        }
+    }
 }
 
 #[allow(clippy::large_enum_variant)]

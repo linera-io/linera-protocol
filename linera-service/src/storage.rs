@@ -758,6 +758,32 @@ impl RunnableWithStore for StorageMigration {
     }
 }
 
+pub struct IsStorageMigrated;
+
+#[async_trait]
+impl RunnableWithStore for IsStorageMigrated {
+    type Output = ();
+
+    async fn run<D>(
+        self,
+        config: D::Config,
+        namespace: String,
+    ) -> Result<Self::Output, anyhow::Error>
+    where
+        D: KeyValueDatabase + Clone + Send + Sync + 'static,
+        D::Store: KeyValueStore + Clone + Send + Sync + 'static,
+        D::Error: Send + Sync,
+    {
+        if D::exists(&config, &namespace).await? {
+            let wasm_runtime = None;
+            let storage =
+                DbStorage::<D, WallClock>::connect(&config, &namespace, wasm_runtime).await?;
+            storage.assert_is_migrated_storage().await?;
+        }
+        Ok(())
+    }
+}
+
 #[test]
 fn test_memory_storage_config_from_str() {
     assert_eq!(

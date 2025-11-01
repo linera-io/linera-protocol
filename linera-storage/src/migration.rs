@@ -191,6 +191,14 @@ where
         }
         Ok(())
     }
+
+    pub async fn assert_is_not_migrated_storage(&self) -> Result<(), ViewError> {
+        let (is_initialized, schema) = self.get_storage_state().await?;
+        if is_initialized {
+            assert_eq!(schema, SchemaVersion::Version0);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
