@@ -41,7 +41,7 @@ use linera_rpc::{
 };
 use linera_sdk::linera_base_types::Blob;
 use linera_service::{
-    storage::{CommonStorageOptions, Runnable, StorageConfig},
+    storage::{AssertStorageV1, CommonStorageOptions, Runnable, StorageConfig},
     util,
 };
 use linera_storage::{ResultReadCertificates, Storage};
@@ -496,6 +496,7 @@ impl ProxyOptions {
         let store_config = self
             .storage_config
             .add_common_storage_options(&self.common_storage_options)?;
+        store_config.clone().run_with_store(AssertStorageV1).await?;
         store_config
             .run_with_storage(None, ProxyContext::from_options(self)?)
             .boxed()
