@@ -77,7 +77,7 @@ use linera_service::{
     node_service::NodeService,
     project::{self, Project},
     storage::{
-        CommonStorageOptions, AssertStorageV1, Runnable, RunnableWithStore, StorageConfig,
+        AssertStorageV1, CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig,
         StorageMigration,
     },
     util, wallet,
@@ -1924,10 +1924,7 @@ impl ClientOptions {
         debug!("Running command using storage configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common_storage_options)?;
-        store_config
-            .clone()
-            .run_with_store(AssertStorageV1)
-            .await?;
+        store_config.clone().run_with_store(AssertStorageV1).await?;
         let output =
             Box::pin(store_config.run_with_storage(self.wasm_runtime.with_wasm_default(), job))
                 .await?;
@@ -1951,10 +1948,7 @@ impl ClientOptions {
                 .await?;
         }
         if need_assert_migration {
-            store_config
-                .clone()
-                .run_with_store(AssertStorageV1)
-                .await?;
+            store_config.clone().run_with_store(AssertStorageV1).await?;
         }
         let output = Box::pin(store_config.run_with_store(job)).await?;
         Ok(output)

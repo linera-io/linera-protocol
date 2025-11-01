@@ -69,7 +69,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera storage list-namespaces`↴](#linera-storage-list-namespaces)
 * [`linera storage list-blob-ids`↴](#linera-storage-list-blob-ids)
 * [`linera storage list-chain-ids`↴](#linera-storage-list-chain-ids)
-* [`linera storage migration`↴](#linera-storage-migration)
+* [`linera storage migrate`↴](#linera-storage-migrate)
 
 ## `linera`
 
@@ -1305,7 +1305,7 @@ Operation on the storage
 * `list-namespaces` — List the namespaces in the database
 * `list-blob-ids` — List the blob IDs in the database
 * `list-chain-ids` — List the chain IDs in the database
-* `migration` — Do the migration of the storage
+* `migrate` — Do the migration of the storage
 
 
 
@@ -1369,11 +1369,11 @@ List the chain IDs in the database
 
 
 
-## `linera storage migration`
+## `linera storage migrate`
 
 Do the migration of the storage
 
-**Usage:** `linera storage migration`
+**Usage:** `linera storage migrate`
 
 
 
