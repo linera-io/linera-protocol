@@ -36,7 +36,7 @@ use {
     linera_views::{random::generate_test_namespace, store::TestKeyValueDatabase},
     std::{cmp::Reverse, collections::BTreeMap},
 };
-
+use std::ops::Deref;
 use crate::{ChainRuntimeContext, Clock, Storage};
 
 #[cfg(with_metrics)]
@@ -1087,11 +1087,8 @@ where
     }
 
     /// Lists the blob IDs of the storage.
-    pub async fn list_blob_ids(
-        config: &Database::Config,
-        namespace: &str,
-    ) -> Result<Vec<BlobId>, ViewError> {
-        let database = Database::connect(config, namespace).await?;
+    pub async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError> {
+        let database = self.database.deref();
         let root_keys = database.list_root_keys().await?;
         let mut blob_ids = Vec::new();
         for root_key in root_keys {
@@ -1111,11 +1108,8 @@ where
     Database::Error: Send + Sync,
 {
     /// Lists the chain IDs of the storage.
-    pub async fn list_chain_ids(
-        config: &Database::Config,
-        namespace: &str,
-    ) -> Result<Vec<ChainId>, ViewError> {
-        let database = Database::connect(config, namespace).await?;
+    pub async fn list_chain_ids(&self) -> Result<Vec<ChainId>, ViewError> {
+        let database = self.database.deref();
         let root_keys = database.list_root_keys().await?;
         let mut chain_ids = Vec::new();
         for root_key in root_keys {
