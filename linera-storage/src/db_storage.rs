@@ -985,6 +985,34 @@ where
         let store = self.database.open_exclusive(&root_key)?;
         Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
     }
+
+    async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError> {
+        let database = self.database.deref();
+        let root_keys = database.list_root_keys().await?;
+        let mut blob_ids = Vec::new();
+        for root_key in root_keys {
+            if root_key.len() == 1 + BLOB_ID_LENGTH && root_key[0] == BLOB_ID_TAG {
+                let root_key_red = &root_key[1..=BLOB_ID_LENGTH];
+                let blob_id = bcs::from_bytes(root_key_red)?;
+                blob_ids.push(blob_id);
+            }
+        }
+        Ok(blob_ids)
+    }
+
+    async fn list_chain_ids(&self) -> Result<Vec<ChainId>, ViewError> {
+        let database = self.database.deref();
+        let root_keys = database.list_root_keys().await?;
+        let mut chain_ids = Vec::new();
+        for root_key in root_keys {
+            if root_key.len() == 1 + CHAIN_ID_LENGTH && root_key[0] == CHAIN_ID_TAG {
+                let root_key_red = &root_key[1..=CHAIN_ID_LENGTH];
+                let chain_id = bcs::from_bytes(root_key_red)?;
+                chain_ids.push(chain_id);
+            }
+        }
+        Ok(chain_ids)
+    }
 }
 
 impl<Database, C> DbStorage<Database, C>
@@ -1084,42 +1112,6 @@ where
     ) -> Result<Self, Database::Error> {
         let database = Database::connect(config, namespace).await?;
         Ok(Self::new(database, wasm_runtime, WallClock))
-    }
-
-    /// Lists the blob IDs of the storage.
-    pub async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError> {
-        let database = self.database.deref();
-        let root_keys = database.list_root_keys().await?;
-        let mut blob_ids = Vec::new();
-        for root_key in root_keys {
-            if root_key.len() == 1 + BLOB_ID_LENGTH && root_key[0] == BLOB_ID_TAG {
-                let root_key_red = &root_key[1..=BLOB_ID_LENGTH];
-                let blob_id = bcs::from_bytes(root_key_red)?;
-                blob_ids.push(blob_id);
-            }
-        }
-        Ok(blob_ids)
-    }
-}
-
-impl<Database> DbStorage<Database, WallClock>
-where
-    Database: KeyValueDatabase + Clone + Send + Sync + 'static,
-    Database::Error: Send + Sync,
-{
-    /// Lists the chain IDs of the storage.
-    pub async fn list_chain_ids(&self) -> Result<Vec<ChainId>, ViewError> {
-        let database = self.database.deref();
-        let root_keys = database.list_root_keys().await?;
-        let mut chain_ids = Vec::new();
-        for root_key in root_keys {
-            if root_key.len() == 1 + CHAIN_ID_LENGTH && root_key[0] == CHAIN_ID_TAG {
-                let root_key_red = &root_key[1..=CHAIN_ID_LENGTH];
-                let chain_id = bcs::from_bytes(root_key_red)?;
-                chain_ids.push(chain_id);
-            }
-        }
-        Ok(chain_ids)
     }
 }
 
