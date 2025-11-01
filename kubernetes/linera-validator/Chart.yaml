@@ -28,11 +28,19 @@ dependencies:
   - name: kube-prometheus-stack
     version: "51.0.3"
     repository: "https://prometheus-community.github.io/helm-charts"
+    condition: kube-prometheus-stack.enabled
 
   - name: loki-stack
     version: "2.8.9"
     repository: "https://grafana.github.io/helm-charts"
+    condition: loki-stack.enabled
 
   - name: pyroscope
     version: "1.14.2"
     repository: "https://grafana.github.io/helm-charts"
+    condition: pyroscope.enabled
+
+  - name: alloy
+    version: "1.3.1"
+    repository: "https://grafana.github.io/helm-charts"
+    condition: alloy.enabled
