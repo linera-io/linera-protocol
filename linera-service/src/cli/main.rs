@@ -76,10 +76,7 @@ use linera_service::{
     cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     node_service::NodeService,
     project::{self, Project},
-    storage::{
-        AssertStorageV1, CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig,
-        StorageMigration,
-    },
+    storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig, StorageMigration},
     util, wallet,
 };
 use linera_storage::{DbStorage, Storage};
@@ -1924,32 +1921,25 @@ impl ClientOptions {
         debug!("Running command using storage configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common_storage_options)?;
-        store_config.clone().run_with_store(AssertStorageV1).await?;
+        store_config
+            .clone()
+            .run_with_store(StorageMigration)
+            .await?;
         let output =
             Box::pin(store_config.run_with_storage(self.wasm_runtime.with_wasm_default(), job))
                 .await?;
         Ok(output)
     }
 
-    async fn run_with_store<R: RunnableWithStore>(
-        &self,
-        need_migration: bool,
-        need_assert_migration: bool,
-        job: R,
-    ) -> Result<R::Output, Error> {
+    async fn run_with_store<R: RunnableWithStore>(&self, job: R) -> Result<R::Output, Error> {
         let storage_config = self.storage_config()?;
         debug!("Running command using storage configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common_storage_options)?;
-        if need_migration {
-            store_config
-                .clone()
-                .run_with_store(StorageMigration)
-                .await?;
-        }
-        if need_assert_migration {
-            store_config.clone().run_with_store(AssertStorageV1).await?;
-        }
+        store_config
+            .clone()
+            .run_with_store(StorageMigration)
+            .await?;
         let output = Box::pin(store_config.run_with_store(job)).await?;
         Ok(output)
     }
@@ -2165,9 +2155,6 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 for id in chain_ids {
                     println!("{}", id);
                 }
-            }
-            DatabaseToolCommand::Migrate => {
-                // The migration is done elsewhere
             }
         }
         Ok(0)
@@ -2580,15 +2567,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
         },
 
         ClientCommand::Storage(command) => {
-            let need_migration = command.need_migration();
-            let need_assert_migration = command.need_assert_migration();
-            Ok(options
-                .run_with_store(
-                    need_migration,
-                    need_assert_migration,
-                    DatabaseToolJob(command),
-                )
-                .await?)
+            Ok(options.run_with_store(DatabaseToolJob(command)).await?)
         }
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {
