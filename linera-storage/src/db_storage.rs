@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
 #[cfg(with_metrics)]
@@ -36,7 +36,7 @@ use {
     linera_views::{random::generate_test_namespace, store::TestKeyValueDatabase},
     std::{cmp::Reverse, collections::BTreeMap},
 };
-use std::ops::Deref;
+
 use crate::{ChainRuntimeContext, Clock, Storage};
 
 #[cfg(with_metrics)]
@@ -358,8 +358,6 @@ fn is_chain_state(root_key: &[u8]) -> bool {
 
 const CHAIN_ID_TAG: u8 = 0;
 const BLOB_ID_TAG: u8 = 2;
-const CHAIN_ID_LENGTH: usize = std::mem::size_of::<ChainId>();
-const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
 
 #[cfg(test)]
 mod tests {
@@ -371,9 +369,7 @@ mod tests {
         },
     };
 
-    use crate::db_storage::{
-        event_key, RootKey, BLOB_ID_LENGTH, BLOB_ID_TAG, CHAIN_ID_LENGTH, CHAIN_ID_TAG,
-    };
+    use crate::db_storage::{event_key, RootKey, BLOB_ID_TAG, CHAIN_ID_TAG};
 
     // Several functionalities of the storage rely on the way that the serialization
     // is done. Thus we need to check that the serialization works in the way that
@@ -388,7 +384,7 @@ mod tests {
         let blob_id = BlobId::new(hash, blob_type);
         let root_key = RootKey::Blob(blob_id).bytes();
         assert_eq!(root_key[0], BLOB_ID_TAG);
-        assert_eq!(root_key.len(), 1 + BLOB_ID_LENGTH);
+        assert_eq!(bcs::from_bytes::<BlobId>(&root_key[1..]).unwrap(), blob_id);
     }
 
     // The listing of the chains in `list_chain_ids` depends on the serialization
@@ -399,7 +395,10 @@ mod tests {
         let chain_id = ChainId(hash);
         let root_key = RootKey::ChainState(chain_id).bytes();
         assert_eq!(root_key[0], CHAIN_ID_TAG);
-        assert_eq!(root_key.len(), 1 + CHAIN_ID_LENGTH);
+        assert_eq!(
+            bcs::from_bytes::<ChainId>(&root_key[1..]).unwrap(),
+            chain_id
+        );
     }
 
     // The listing of the events in `read_events_from_index` depends on the
@@ -991,8 +990,8 @@ where
         let root_keys = database.list_root_keys().await?;
         let mut blob_ids = Vec::new();
         for root_key in root_keys {
-            if root_key.len() == 1 + BLOB_ID_LENGTH && root_key[0] == BLOB_ID_TAG {
-                let root_key_red = &root_key[1..=BLOB_ID_LENGTH];
+            if !root_key.is_empty() && root_key[0] == BLOB_ID_TAG {
+                let root_key_red = &root_key[1..];
                 let blob_id = bcs::from_bytes(root_key_red)?;
                 blob_ids.push(blob_id);
             }
@@ -1005,8 +1004,8 @@ where
         let root_keys = database.list_root_keys().await?;
         let mut chain_ids = Vec::new();
         for root_key in root_keys {
-            if root_key.len() == 1 + CHAIN_ID_LENGTH && root_key[0] == CHAIN_ID_TAG {
-                let root_key_red = &root_key[1..=CHAIN_ID_LENGTH];
+            if !root_key.is_empty() && root_key[0] == CHAIN_ID_TAG {
+                let root_key_red = &root_key[1..];
                 let chain_id = bcs::from_bytes(root_key_red)?;
                 chain_ids.push(chain_id);
             }
