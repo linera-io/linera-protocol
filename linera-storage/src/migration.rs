@@ -20,14 +20,12 @@ use crate::{
     Clock,
 };
 
-#[derive(Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[repr(u8)]
+#[derive(Debug)]
 enum SchemaVersion {
-    /// Version 0, all the blobs, certificates, confirmed blocks, events and network description on the same partition.
-    /// This is marked as default since it does not exist in the old scheme and would be obtained from `unwrap_or_default`.
-    #[default]
+    /// Version 0. All the blobs, certificates, confirmed blocks, events and network
+    /// description are on the same partition.
     Version0,
-    /// Version 1, spreading by chain ID, crypto hash, and blob ID.
+    /// Version 1. New partitions are assigned by chain ID, crypto hash, and blob ID.
     Version1,
 }
 
@@ -41,11 +39,11 @@ const UNUSED_EMPTY_KEY: &[u8] = &[];
 const MOVABLE_KEYS_0_1: &[u8] = &[1, 2, 3, 4, 5, 7];
 
 /// The total number of keys being migrated in a block.
-/// we use chunks to avoid OOM
+/// We use chunks to avoid OOM.
 const BLOCK_KEY_SIZE: usize = 90;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) enum BaseKey {
+enum BaseKey {
     ChainState(ChainId),
     Certificate(CryptoHash),
     ConfirmedBlock(CryptoHash),
@@ -110,12 +108,12 @@ where
         first_byte: &u8,
         keys: Vec<Vec<u8>>,
     ) -> Result<(), ViewError> {
-        tracing::debug!(
-            "migrate_shared_partition for {} keys starting with {first_byte}",
+        tracing::info!(
+            "Migrating {} keys of shared DB partition starting with {first_byte}",
             keys.len()
         );
         for (index, chunk_keys) in keys.chunks(BLOCK_KEY_SIZE).enumerate() {
-            tracing::info!("processing chunk {index} of size {}", chunk_keys.len());
+            tracing::info!("Processing chunk {index} of size {}", chunk_keys.len());
             let chunk_base_keys = chunk_keys
                 .iter()
                 .map(|key| {
@@ -140,6 +138,7 @@ where
             for key in chunk_base_keys {
                 batch.delete_key(key.to_vec());
             }
+            // Migrate chunk.
             store.write_batch(batch).await?;
         }
         Ok(())
@@ -155,40 +154,35 @@ where
     }
 
     pub async fn migrate_if_needed(&self) -> Result<(), ViewError> {
-        let (is_initialized, schema) = self.get_storage_state().await?;
-        if is_initialized && schema == SchemaVersion::Version0 {
-            self.migrate_v0_to_v1().await?;
+        match self.get_storage_state().await? {
+            Some(SchemaVersion::Version0) => self.migrate_v0_to_v1().await,
+            Some(SchemaVersion::Version1) => Ok(()),
+            None => {
+                // Need to initialize the DB, not migrate it.
+                Ok(())
+            }
         }
-        Ok(())
     }
 
-    async fn get_storage_state(&self) -> Result<(bool, SchemaVersion), ViewError> {
-        let test_old_schema = {
-            let store = self.database.open_shared(&[])?;
-            let key = bcs::to_bytes(&BaseKey::NetworkDescription).unwrap();
-            store.contains_key(&key).await?
-        };
-        let test_new_schema = {
-            let root_key = RootKey::NetworkDescription.bytes();
-            let store = self.database.open_shared(&root_key)?;
-            store.contains_key(NETWORK_DESCRIPTION_KEY).await?
-        };
-        let is_initialized = test_old_schema || test_new_schema;
-        let schema = if test_old_schema {
-            SchemaVersion::Version0
-        } else {
-            // Whether the state is initialized or not it is going
-            // to be in version 1.
-            SchemaVersion::Version1
-        };
-        Ok((is_initialized, schema))
+    async fn get_storage_state(&self) -> Result<Option<SchemaVersion>, ViewError> {
+        let store = self.database.open_shared(&[])?;
+        let key = bcs::to_bytes(&BaseKey::NetworkDescription).unwrap();
+        if store.contains_key(&key).await? {
+            return Ok(Some(SchemaVersion::Version0));
+        }
+
+        let root_key = RootKey::NetworkDescription.bytes();
+        let store = self.database.open_shared(&root_key)?;
+        if store.contains_key(NETWORK_DESCRIPTION_KEY).await? {
+            return Ok(Some(SchemaVersion::Version1));
+        }
+
+        Ok(None)
     }
 
     pub async fn assert_is_migrated_storage(&self) -> Result<(), ViewError> {
-        let (is_initialized, schema) = self.get_storage_state().await?;
-        if is_initialized {
-            assert_eq!(schema, SchemaVersion::Version1);
-        }
+        let state = self.get_storage_state().await?;
+        assert!(matches!(state, Some(SchemaVersion::Version1)));
         Ok(())
     }
 }
