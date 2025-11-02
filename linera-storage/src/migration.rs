@@ -197,9 +197,10 @@ where
         Ok(None)
     }
 
+    /// Assert that the storage is at the last version (or not yet initialized).
     pub async fn assert_is_migrated_storage(&self) -> Result<(), ViewError> {
         let state = self.get_storage_state().await?;
-        assert!(matches!(state, Some(SchemaVersion::Version1)));
+        assert!(matches!(state, None | Some(SchemaVersion::Version1)));
         Ok(())
     }
 }
