@@ -1314,6 +1314,9 @@ impl<Env: Environment> Client<Env> {
                             "Protected incoming message failed to execute locally"
                         )
                     );
+                    if message.action == MessageAction::Reject {
+                        return result;
+                    }
                     // Reject the faulty message from the block and continue.
                     // TODO(#1420): This is potentially a bit heavy-handed for
                     // retryable errors.
