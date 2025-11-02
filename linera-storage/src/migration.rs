@@ -11,6 +11,7 @@ use linera_views::{
     ViewError,
 };
 use serde::{Deserialize, Serialize};
+use tokio::time::Duration;
 
 use crate::{
     db_storage::{
@@ -28,6 +29,9 @@ enum SchemaVersion {
     /// Version 1. New partitions are assigned by chain ID, crypto hash, and blob ID.
     Version1,
 }
+
+/// How long we should wait before retrying when we detect another migration in progress.
+const MIGRATION_WAIT_BEFORE_RETRY_MIN: u64 = 3;
 
 const UNUSED_EMPTY_KEY: &[u8] = &[];
 // We choose the ordering of the variants in `BaseKey` and `RootKey` so that
@@ -154,13 +158,26 @@ where
     }
 
     pub async fn migrate_if_needed(&self) -> Result<(), ViewError> {
-        match self.get_storage_state().await? {
-            Some(SchemaVersion::Version0) => self.migrate_v0_to_v1().await,
-            Some(SchemaVersion::Version1) => Ok(()),
-            None => {
-                // Need to initialize the DB, not migrate it.
-                Ok(())
+        loop {
+            if matches!(
+                self.get_storage_state().await?,
+                None | Some(SchemaVersion::Version1)
+            ) {
+                // Nothing to do.
+                return Ok(());
             }
+            let result = self.migrate_v0_to_v1().await;
+            if let Err(ViewError::MissingEntries) = result {
+                tracing::warn!(
+                    "It looks like a migration is already in progress on this database. \
+                     I will wait for {:?} minutes and retry.",
+                    MIGRATION_WAIT_BEFORE_RETRY_MIN
+                );
+                // Duration::from_mins is not yet stable for tokio 1.36.
+                tokio::time::sleep(Duration::from_secs(MIGRATION_WAIT_BEFORE_RETRY_MIN * 60)).await;
+                continue;
+            }
+            return result;
         }
     }
 
