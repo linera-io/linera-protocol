@@ -38,10 +38,6 @@ pub mod vm;
 #[cfg(not(chain))]
 pub use task::Blocking;
 pub mod time;
-#[cfg_attr(web, path = "tracing_web.rs")]
-pub mod tracing;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod tracing_opentelemetry;
 #[cfg(test)]
 mod unit_tests;
 

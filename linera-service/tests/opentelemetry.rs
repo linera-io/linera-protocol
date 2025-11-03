@@ -1,29 +1,23 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "opentelemetry")]
-use {
-    tracing::{info_span, instrument},
-    tracing_subscriber::{layer::SubscriberExt as _, registry::Registry},
-};
+use tracing::{info_span, instrument};
+use tracing_subscriber::{layer::SubscriberExt as _, registry::Registry};
 
-#[cfg(feature = "opentelemetry")]
 #[instrument]
 fn span_with_export() {
     tracing::info!("This span should be exported");
 }
 
-#[cfg(feature = "opentelemetry")]
 #[instrument(skip_all, fields(opentelemetry.skip = true))]
 fn span_without_export() {
     tracing::info!("This span should NOT be exported");
 }
 
-#[cfg(feature = "opentelemetry")]
 #[test]
 fn test_opentelemetry_filters_skip() {
     let (opentelemetry_layer, exporter, tracer_provider) =
-        linera_base::tracing_opentelemetry::build_opentelemetry_layer_with_test_exporter(
+        linera_service::tracing::opentelemetry::build_opentelemetry_layer_with_test_exporter(
             "test_opentelemetry",
         );
 

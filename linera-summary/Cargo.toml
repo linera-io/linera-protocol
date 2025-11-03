@@ -19,12 +19,12 @@ anyhow.workspace = true
 clap.workspace = true
 git2.workspace = true
 humantime.workspace = true
-linera-base.workspace = true
 linera-version.workspace = true
 octocrab.workspace = true
 serde.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [[bin]]
 name = "linera-summary"

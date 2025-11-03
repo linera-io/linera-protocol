@@ -133,7 +133,7 @@ impl ExporterContext {
 }
 
 fn main() -> Result<()> {
-    linera_base::tracing::init("linera-exporter");
+    linera_service::tracing::init("linera-exporter");
     let options = <ExporterOptions as clap::Parser>::parse();
     options.run()
 }
