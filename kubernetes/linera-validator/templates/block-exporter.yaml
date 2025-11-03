@@ -40,14 +40,6 @@ spec:
       labels:
         app: linera-block-exporter
     spec:
-      {{- if eq .Values.environment "GCP" }}
-      nodeSelector:
-        workload: system
-      tolerations:
-      - key: system
-        value: "true"
-        effect: NoSchedule
-      {{- end }}
       initContainers:
         - name: linera-exporter-initializer
           image: {{ .Values.indexer.image }}
