@@ -1110,6 +1110,45 @@ pub enum DatabaseToolCommand {
     ListChainIds,
 }
 
+impl DatabaseToolCommand {
+    pub fn need_migration(&self) -> bool {
+        match self {
+            DatabaseToolCommand::DeleteAll => {
+                // No need to migrate for deletion
+                false
+            }
+            DatabaseToolCommand::DeleteNamespace => {
+                // No need to migrate for deletion
+                false
+            }
+            DatabaseToolCommand::CheckExistence => {
+                // No migration needed for checking existence
+                // of namespace.
+                false
+            }
+            DatabaseToolCommand::Initialize { .. } => {
+                // When initializing, the database should be
+                // migrated.
+                true
+            }
+            DatabaseToolCommand::ListNamespaces => {
+                // Listing namespaces does not require migrating.
+                false
+            }
+            DatabaseToolCommand::ListBlobIds => {
+                // The state of the database is relevant to listing
+                // the blob IDs. Migrate if needed.
+                true
+            }
+            DatabaseToolCommand::ListChainIds => {
+                // The state of the database is relevant to listing
+                // the chain IDs. Migrate if needed.
+                true
+            }
+        }
+    }
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, clap::Parser)]
 pub enum NetCommand {

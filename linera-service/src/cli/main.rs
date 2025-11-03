@@ -1931,15 +1931,17 @@ impl ClientOptions {
         Ok(output)
     }
 
-    async fn run_with_store<R: RunnableWithStore>(&self, job: R) -> Result<R::Output, Error> {
+    async fn run_with_store<R: RunnableWithStore>(&self, need_migration: bool, job: R) -> Result<R::Output, Error> {
         let storage_config = self.storage_config()?;
         debug!("Running command using storage configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common_storage_options)?;
-        store_config
-            .clone()
-            .run_with_store(StorageMigration)
-            .await?;
+        if need_migration {
+            store_config
+                .clone()
+                .run_with_store(StorageMigration)
+                .await?;
+        }
         let output = Box::pin(store_config.run_with_store(job)).await?;
         Ok(output)
     }
@@ -2567,7 +2569,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
         },
 
         ClientCommand::Storage(command) => {
-            Ok(options.run_with_store(DatabaseToolJob(command)).await?)
+            let need_migration = command.need_migration();
+            Ok(options.run_with_store(need_migration, DatabaseToolJob(command)).await?)
         }
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {
