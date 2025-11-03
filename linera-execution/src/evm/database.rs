@@ -77,9 +77,9 @@ pub(crate) struct DatabaseRuntime<Runtime> {
     /// This is the EVM address of the contract.
     /// At the creation, it is set to `Address::ZERO` and then later set to the correct value.
     pub contract_address: Address,
-    /// The caller to the smart contract
+    /// The caller to the smart contract.
     pub caller: Address,
-    /// The value of the smart contract
+    /// The value of the smart contract.
     pub value: U256,
     /// The runtime of the contract.
     pub runtime: Arc<Mutex<Runtime>>,
@@ -114,8 +114,8 @@ pub enum KeyCategory {
 }
 
 impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
-    /// Encode the `index` of the EVM storage associated to the smart contract
-    /// in a linera key.
+    /// Encodes the `index` of the EVM storage associated to the smart contract
+    /// in a Linera key.
     fn get_linera_key(key_prefix: &[u8], index: U256) -> Vec<u8> {
         let mut key = key_prefix.to_vec();
         key.extend(index.as_le_slice());
@@ -211,7 +211,7 @@ where
 {
     type Error = ExecutionError;
 
-    /// The `basic_ref` is the function for reading the state of
+    /// The `basic_ref` is the function for reading the state of the application.
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
         if address == FAUCET_ADDRESS {
             return Ok(Some(AccountInfo {
@@ -435,7 +435,7 @@ where
         let timestamp_linera = runtime.read_system_timestamp()?;
         let timestamp_evm = timestamp_linera.micros() / 1_000_000;
         // The basefee is the minimum feee for executing. We have no such
-        // concept in Linera
+        // concept in Linera.
         let basefee = 0;
         let chain_id = runtime.chain_id()?;
         let entry = format!("{}{}", chain_id, block_height_linera);

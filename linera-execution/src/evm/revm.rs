@@ -18,7 +18,7 @@ use linera_base::{
         Amount, ApplicationDescription, Bytecode, Resources, SendMessageRequest, StreamUpdate,
     },
     ensure,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, StreamName},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId, StreamName},
     vm::{EvmInstantiation, EvmOperation, EvmQuery, VmRuntime},
 };
 use revm::{primitives::Bytes, InspectCommitEvm, InspectEvm, Inspector};
@@ -350,10 +350,6 @@ fn get_precompile_argument<Ctx: ContextTr>(
     context: &mut Ctx,
     inputs: &InputsImpl,
 ) -> Result<Vec<u8>, ExecutionError> {
-    ensure!(
-        inputs.call_value == U256::ZERO,
-        EvmExecutionError::NoTransferInRuntimeCall
-    );
     Ok(get_argument(context, &inputs.input))
 }
 
@@ -764,6 +760,24 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
 }
 
 impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
+    /// Gets the expected `ApplicationId`.
+    fn get_expected_application_id(runtime: &mut Runtime, module_id: ModuleId) -> Result<ApplicationId, ExecutionError> {
+        let chain_id = runtime.chain_id()?;
+        let block_height = runtime.block_height()?;
+        let application_index = runtime.application_index()?;
+        let parameters = JSON_EMPTY_VECTOR.to_vec(); // No constructor
+        let required_application_ids = Vec::new();
+        let application_description = ApplicationDescription {
+            module_id,
+            creator_chain_id: chain_id,
+            block_height,
+            application_index,
+            parameters: parameters.clone(),
+            required_application_ids,
+        };
+        Ok(ApplicationId::from(&application_description))
+    }
+
     /// The function `fn create` of the inspector trait is called
     /// when a contract is going to be instantiated. Since the
     /// function can have some error case which are not supported
@@ -866,7 +880,10 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         } else {
             if inputs.value != U256::ZERO {
                 // decrease the balance of the contract address by the expected amount.
-                // We put the address as
+                // We put the tokens in FAUCET_ADDRESS because we cannot transfer to
+                // a contract that do not yet exist.
+                // It is a common construction. We can see that in ERC20 contract code
+                // for example for burning and minting.
                 Self::revm_transfer(
                     context,
                     self.db.contract_address,
@@ -879,8 +896,6 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             let mut runtime = context.db().0.runtime.lock().unwrap();
             let module_id = runtime.publish_module(contract, service, VmRuntime::Evm)?;
             let chain_id = runtime.chain_id()?;
-            let block_height = runtime.block_height()?;
-            let application_index = runtime.application_index()?;
             let application_id = runtime.application_id()?;
             let parameters = JSON_EMPTY_VECTOR.to_vec(); // No constructor
             let evm_call = EvmInstantiation {
@@ -889,15 +904,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             };
             let argument = serde_json::to_vec(&evm_call)?;
             let required_application_ids = Vec::new();
-            let application_description = ApplicationDescription {
-                module_id,
-                creator_chain_id: chain_id,
-                block_height,
-                application_index,
-                parameters: parameters.clone(),
-                required_application_ids: Vec::new(),
-            };
-            let expected_application_id = ApplicationId::from(&application_description);
+            let expected_application_id = Self::get_expected_application_id(&mut runtime, module_id)?;
             if inputs.value != U256::ZERO {
                 let amount = Amount::try_from(inputs.value).map_err(EvmExecutionError::from)?;
                 let destination = Account {
@@ -969,18 +976,20 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             let owner: AccountOwner = inputs.bytecode_address.into();
             if value != U256::ZERO {
                 // In Linera, only non-zero transfers matter
-                let mut runtime = context
-                    .db()
-                    .0
-                    .runtime
-                    .lock()
-                    .expect("The lock should be possible");
-                let amount = Amount::try_from(value).map_err(EvmExecutionError::from)?;
-                let chain_id = runtime.chain_id()?;
-                let destination = Account { chain_id, owner };
-                runtime.transfer(source, destination, amount)?;
+                {
+                    let mut runtime = context
+                        .db()
+                        .0
+                        .runtime
+                        .lock()
+                        .expect("The lock should be possible");
+                    let amount = Amount::try_from(value).map_err(EvmExecutionError::from)?;
+                    let chain_id = runtime.chain_id()?;
+                    let destination = Account { chain_id, owner };
+                    runtime.transfer(source, destination, amount)?;
+                }
+                Self::revm_transfer(context, inputs.caller, inputs.target_address, value)?;
             }
-            Self::revm_transfer(context, inputs.caller, inputs.target_address, value)?;
         }
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
@@ -1027,13 +1036,11 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         destination: Address,
         value: U256,
     ) -> Result<(), ExecutionError> {
-        if value != U256::ZERO {
-            // In Ethereum, all transfers matter
-            if let Some(error) = context.journal().transfer(source, destination, value)? {
-                let error = format!("{error:?}");
-                let error = EvmExecutionError::TransactError(error);
-                return Err(error.into());
-            }
+        // In Ethereum, all transfers matter
+        if let Some(error) = context.journal().transfer(source, destination, value)? {
+            let error = format!("{error:?}");
+            let error = EvmExecutionError::TransactError(error);
+            return Err(error.into());
         }
         Ok(())
     }

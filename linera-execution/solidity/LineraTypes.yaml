@@ -48,6 +48,12 @@ Amount:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+Account:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - owner:
+        TYPENAME: AccountOwner
 AccountOwnerBalanceInner:
   STRUCT:
     - account_owner:
@@ -196,6 +202,13 @@ ContractRuntimePrecompile:
           - query: BYTES
     11:
       ValidationRound: UNIT
+    12:
+      Transfer:
+        STRUCT:
+          - account:
+              TYPENAME: Account
+          - amount:
+              TYPENAME: Amount
 ServiceRuntimePrecompile:
   ENUM:
     0:

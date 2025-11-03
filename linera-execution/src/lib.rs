@@ -869,7 +869,8 @@ pub trait ContractRuntime: BaseRuntime {
         required_application_ids: Vec<ApplicationId>,
     ) -> Result<ApplicationId, ExecutionError>;
 
-    /// Returns the current application_index.
+    /// Returns the current application index, i.e. the number of new applications
+    /// created so far in this block.
     fn application_index(&mut self) -> Result<u32, ExecutionError>;
 
     /// Creates a new data blob and returns its hash.

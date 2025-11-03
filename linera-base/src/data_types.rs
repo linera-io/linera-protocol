@@ -94,16 +94,11 @@ impl From<Amount> for U256 {
     }
 }
 
-/// Converting amount from `U256` to Amount can fail since
-/// `Amount` is a `u128`.
+/// Error converting from `U256` to `Amount`.
+/// This can fail since `Amount` is a `u128`.
 #[derive(Error, Debug)]
+#[error("Failed to convert U256 to Amount. {0} has more than 128 bits")]
 pub struct AmountConversionError(U256);
-
-impl fmt::Display for AmountConversionError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Amount conversion error for {}", self.0)
-    }
-}
 
 impl TryFrom<U256> for Amount {
     type Error = AmountConversionError;
