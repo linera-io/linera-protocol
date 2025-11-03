@@ -16,7 +16,6 @@ spec:
       name: metrics
   selector:
     app: proxy
-  clusterIP: None
 
 ---
 apiVersion: v1
