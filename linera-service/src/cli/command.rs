@@ -1111,6 +1111,27 @@ pub enum DatabaseToolCommand {
 }
 
 impl DatabaseToolCommand {
+    pub fn assert_storage_v1(&self) -> bool {
+        match self {
+            DatabaseToolCommand::ListBlobIds => {
+                // The state of the database is relevant to listing
+                // the blob IDs. Since it is a read operation, we
+                // require the state to be Version1.
+                true
+            }
+            DatabaseToolCommand::ListChainIds => {
+                // The state of the database is relevant to listing
+                // the chain IDs. Since it is a read operation, we
+                // require the state to be Version1.
+                true
+            }
+            _ => {
+                // No assert for all other cases.
+                false
+            }
+        }
+    }
+
     pub fn need_migration(&self) -> bool {
         match self {
             DatabaseToolCommand::DeleteAll => {
@@ -1137,13 +1158,15 @@ impl DatabaseToolCommand {
             }
             DatabaseToolCommand::ListBlobIds => {
                 // The state of the database is relevant to listing
-                // the blob IDs. Migrate if needed.
-                true
+                // the blob IDs. But, this is a read operation, so
+                // instead we require the storage to be migrated.
+                false
             }
             DatabaseToolCommand::ListChainIds => {
                 // The state of the database is relevant to listing
-                // the chain IDs. Migrate if needed.
-                true
+                // the chain IDs. But, this is a read operation, so
+                // instead we require the storage to be migrated.
+                false
             }
         }
     }
