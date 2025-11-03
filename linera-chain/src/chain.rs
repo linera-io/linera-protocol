@@ -3,15 +3,14 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    ops::RangeBounds,
     sync::Arc,
 };
 
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        BlockHeightRangeBounds as _, Epoch, OracleResponse, Timestamp,
+        ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Epoch,
+        OracleResponse, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
@@ -1069,40 +1068,31 @@ where
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         next_block_height = %self.tip_state.get().next_block_height,
-        start_height = ?range.start_bound(),
-        end_height = ?range.end_bound()
     ))]
     pub async fn block_hashes(
         &self,
-        range: impl RangeBounds<BlockHeight>,
+        heights: impl IntoIterator<Item = BlockHeight>,
     ) -> Result<Vec<CryptoHash>, ChainError> {
         let next_height = self.tip_state.get().next_block_height;
-        // If the range is not empty, it can always be represented as start..=end.
-        let Some((start, end)) = range.to_inclusive() else {
-            return Ok(Vec::new());
-        };
         // Everything up to (excluding) next_height is in confirmed_log.
-        let mut hashes = if let Ok(last_height) = next_height.try_sub_one() {
-            let usize_start = usize::try_from(start)?;
-            let usize_end = usize::try_from(end.min(last_height))?;
-            self.confirmed_log.read(usize_start..=usize_end).await?
-        } else {
-            Vec::new()
-        };
-        // Everything after (including) next_height in preprocessed_blocks if we have it.
-        let block_heights = (start.max(next_height).0..=end.0)
-            .map(BlockHeight)
-            .collect::<Vec<_>>();
-        for hash in self
-            .preprocessed_blocks
-            .multi_get(&block_heights)
-            .await?
+        let (confirmed_heights, unconfirmed_heights): (Vec<_>, Vec<_>) = heights
             .into_iter()
+            .partition(|height| *height < next_height);
+        let confirmed_indices = confirmed_heights
+            .into_iter()
+            .map(|height| usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow))
+            .collect::<Result<_, _>>()?;
+        let confirmed_hashes = self.confirmed_log.multi_get(confirmed_indices).await?;
+        // Everything after (including) next_height in preprocessed_blocks if we have it.
+        let unconfirmed_hashes = self
+            .preprocessed_blocks
+            .multi_get(&unconfirmed_heights)
+            .await?;
+        Ok(confirmed_hashes
+            .into_iter()
+            .chain(unconfirmed_hashes)
             .flatten()
-        {
-            hashes.push(hash);
-        }
-        Ok(hashes)
+            .collect())
     }
 
     /// Resets the chain manager for the next block height.
