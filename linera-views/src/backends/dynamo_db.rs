@@ -175,7 +175,10 @@ fn build_key(start_key: &[u8], key: Vec<u8>) -> HashMap<String, AttributeValue> 
             PARTITION_ATTRIBUTE.to_owned(),
             AttributeValue::B(Blob::new(start_key.to_vec())),
         ),
-        (KEY_ATTRIBUTE.to_owned(), AttributeValue::B(Blob::new(prefixed_key))),
+        (
+            KEY_ATTRIBUTE.to_owned(),
+            AttributeValue::B(Blob::new(prefixed_key)),
+        ),
     ]
     .into()
 }
@@ -193,7 +196,10 @@ fn build_key_value(
             PARTITION_ATTRIBUTE.to_owned(),
             AttributeValue::B(Blob::new(start_key.to_vec())),
         ),
-        (KEY_ATTRIBUTE.to_owned(), AttributeValue::B(Blob::new(prefixed_key))),
+        (
+            KEY_ATTRIBUTE.to_owned(),
+            AttributeValue::B(Blob::new(prefixed_key)),
+        ),
         (
             VALUE_ATTRIBUTE.to_owned(),
             AttributeValue::B(Blob::new(value)),
@@ -617,7 +623,10 @@ impl DynamoDbStoreInternal {
                 "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
             ))
             .expression_attribute_values(":partition", AttributeValue::B(Blob::new(start_key)))
-            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(prefixed_key_prefix)))
+            .expression_attribute_values(
+                ":prefix",
+                AttributeValue::B(Blob::new(prefixed_key_prefix)),
+            )
             .set_exclusive_start_key(start_key_map)
             .send()
             .boxed_sync()

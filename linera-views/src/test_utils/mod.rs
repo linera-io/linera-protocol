@@ -176,7 +176,7 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
     store.write_batch(batch).await.unwrap();
     for key_prefix in keys
         .iter()
-        .flat_map(|key| (0..key.len()+1).map(|u| &key[..u]))
+        .flat_map(|key| (0..=key.len()).map(|u| &key[..u]))
     {
         // Getting the find_keys_by_prefix / find_key_values_by_prefix
         let len_prefix = key_prefix.len();
