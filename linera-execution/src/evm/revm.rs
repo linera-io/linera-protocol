@@ -778,6 +778,14 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         Ok(ApplicationId::from(&application_description))
     }
 
+    /// Publishes the `input`.
+    fn publish_create_inputs(context: &mut Ctx<'_, Runtime>, inputs: &mut CreateInputs) -> Result<ModuleId, ExecutionError> {
+        let contract = linera_base::data_types::Bytecode::new(inputs.init_code.to_vec());
+        let service = linera_base::data_types::Bytecode::new(vec![]);
+        let mut runtime = context.db().0.runtime.lock().unwrap();
+        runtime.publish_module(contract, service, VmRuntime::Evm)
+    }
+
     /// The function `fn create` of the inspector trait is called
     /// when a contract is going to be instantiated. Since the
     /// function can have some error case which are not supported
@@ -891,19 +899,10 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
                     inputs.value,
                 )?;
             }
-            let contract = linera_base::data_types::Bytecode::new(inputs.init_code.to_vec());
-            let service = linera_base::data_types::Bytecode::new(vec![]);
+            let module_id = Self::publish_create_inputs(context, inputs)?;
             let mut runtime = context.db().0.runtime.lock().unwrap();
-            let module_id = runtime.publish_module(contract, service, VmRuntime::Evm)?;
             let chain_id = runtime.chain_id()?;
             let application_id = runtime.application_id()?;
-            let parameters = JSON_EMPTY_VECTOR.to_vec(); // No constructor
-            let evm_call = EvmInstantiation {
-                value: inputs.value,
-                argument: Vec::new(),
-            };
-            let argument = serde_json::to_vec(&evm_call)?;
-            let required_application_ids = Vec::new();
             let expected_application_id = Self::get_expected_application_id(&mut runtime, module_id)?;
             if inputs.value != U256::ZERO {
                 let amount = Amount::try_from(inputs.value).map_err(EvmExecutionError::from)?;
@@ -914,6 +913,13 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
                 let source = application_id.into();
                 runtime.transfer(source, destination, amount)?;
             }
+            let parameters = JSON_EMPTY_VECTOR.to_vec(); // No constructor
+            let evm_call = EvmInstantiation {
+                value: inputs.value,
+                argument: Vec::new(),
+            };
+            let argument = serde_json::to_vec(&evm_call)?;
+            let required_application_ids = Vec::new();
             let created_application_id = runtime.create_application(
                 module_id,
                 parameters,
