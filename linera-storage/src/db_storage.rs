@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
 #[cfg(with_metrics)]
@@ -337,16 +337,28 @@ enum RootKey {
     NetworkDescription,
 }
 
+const CHAIN_ID_TAG: u8 = 0;
+const BLOB_ID_TAG: u8 = 2;
+const EVENT_ID_TAG: u8 = 3;
+
 impl RootKey {
     fn bytes(&self) -> Vec<u8> {
         bcs::to_bytes(self).unwrap()
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct RestrictedEventId {
+    pub stream_id: StreamId,
+    pub index: u32,
+}
+
 fn event_key(event_id: &EventId) -> Vec<u8> {
-    let mut key = bcs::to_bytes(&event_id.stream_id).unwrap();
-    key.extend(bcs::to_bytes(&event_id.index).unwrap());
-    key
+    let restricted_event_id = RestrictedEventId {
+        stream_id: event_id.stream_id.clone(),
+        index: event_id.index,
+    };
+    bcs::to_bytes(&restricted_event_id).unwrap()
 }
 
 fn is_chain_state(root_key: &[u8]) -> bool {
@@ -355,11 +367,6 @@ fn is_chain_state(root_key: &[u8]) -> bool {
     }
     root_key[0] == CHAIN_ID_TAG
 }
-
-const CHAIN_ID_TAG: u8 = 0;
-const BLOB_ID_TAG: u8 = 2;
-const CHAIN_ID_LENGTH: usize = std::mem::size_of::<ChainId>();
-const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
 
 #[cfg(test)]
 mod tests {
@@ -371,9 +378,7 @@ mod tests {
         },
     };
 
-    use crate::db_storage::{
-        event_key, RootKey, BLOB_ID_LENGTH, BLOB_ID_TAG, CHAIN_ID_LENGTH, CHAIN_ID_TAG,
-    };
+    use crate::db_storage::{event_key, RootKey, BLOB_ID_TAG, CHAIN_ID_TAG, EVENT_ID_TAG};
 
     // Several functionalities of the storage rely on the way that the serialization
     // is done. Thus we need to check that the serialization works in the way that
@@ -388,7 +393,7 @@ mod tests {
         let blob_id = BlobId::new(hash, blob_type);
         let root_key = RootKey::Blob(blob_id).bytes();
         assert_eq!(root_key[0], BLOB_ID_TAG);
-        assert_eq!(root_key.len(), 1 + BLOB_ID_LENGTH);
+        assert_eq!(bcs::from_bytes::<BlobId>(&root_key[1..]).unwrap(), blob_id);
     }
 
     // The listing of the chains in `list_chain_ids` depends on the serialization
@@ -399,7 +404,10 @@ mod tests {
         let chain_id = ChainId(hash);
         let root_key = RootKey::ChainState(chain_id).bytes();
         assert_eq!(root_key[0], CHAIN_ID_TAG);
-        assert_eq!(root_key.len(), 1 + CHAIN_ID_LENGTH);
+        assert_eq!(
+            bcs::from_bytes::<ChainId>(&root_key[1..]).unwrap(),
+            chain_id
+        );
     }
 
     // The listing of the events in `read_events_from_index` depends on the
@@ -426,6 +434,12 @@ mod tests {
         };
         let key = event_key(&event_id);
         assert!(key.starts_with(&prefix));
+        let root_key = RootKey::Event(chain_id).bytes();
+        assert_eq!(root_key[0], EVENT_ID_TAG);
+        assert_eq!(
+            bcs::from_bytes::<ChainId>(&root_key[1..]).unwrap(),
+            chain_id
+        );
     }
 }
 
@@ -985,6 +999,56 @@ where
         let store = self.database.open_exclusive(&root_key)?;
         Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
     }
+
+    async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError> {
+        let root_keys = self.database.list_root_keys().await?;
+        let mut blob_ids = Vec::new();
+        for root_key in root_keys {
+            if !root_key.is_empty() && root_key[0] == BLOB_ID_TAG {
+                let root_key_red = &root_key[1..];
+                let blob_id = bcs::from_bytes(root_key_red)?;
+                blob_ids.push(blob_id);
+            }
+        }
+        Ok(blob_ids)
+    }
+
+    async fn list_chain_ids(&self) -> Result<Vec<ChainId>, ViewError> {
+        let root_keys = self.database.list_root_keys().await?;
+        let mut chain_ids = Vec::new();
+        for root_key in root_keys {
+            if !root_key.is_empty() && root_key[0] == CHAIN_ID_TAG {
+                let root_key_red = &root_key[1..];
+                let chain_id = bcs::from_bytes(root_key_red)?;
+                chain_ids.push(chain_id);
+            }
+        }
+        Ok(chain_ids)
+    }
+
+    async fn list_event_ids(&self) -> Result<Vec<EventId>, ViewError> {
+        let database = self.database.deref();
+        let root_keys = database.list_root_keys().await?;
+        let mut event_ids = Vec::new();
+        for root_key in root_keys {
+            if !root_key.is_empty() && root_key[0] == EVENT_ID_TAG {
+                let root_key_red = &root_key[1..];
+                let chain_id = bcs::from_bytes(root_key_red)?;
+                let store = database.open_shared(&root_key)?;
+                let keys = store.find_keys_by_prefix(&[]).await?;
+                for key in keys {
+                    let restricted_event_id = bcs::from_bytes::<RestrictedEventId>(&key)?;
+                    let event_id = EventId {
+                        chain_id,
+                        stream_id: restricted_event_id.stream_id,
+                        index: restricted_event_id.index,
+                    };
+                    event_ids.push(event_id);
+                }
+            }
+        }
+        Ok(event_ids)
+    }
 }
 
 impl<Database, C> DbStorage<Database, C>
@@ -1084,48 +1148,6 @@ where
     ) -> Result<Self, Database::Error> {
         let database = Database::connect(config, namespace).await?;
         Ok(Self::new(database, wasm_runtime, WallClock))
-    }
-
-    /// Lists the blob IDs of the storage.
-    pub async fn list_blob_ids(
-        config: &Database::Config,
-        namespace: &str,
-    ) -> Result<Vec<BlobId>, ViewError> {
-        let database = Database::connect(config, namespace).await?;
-        let root_keys = database.list_root_keys().await?;
-        let mut blob_ids = Vec::new();
-        for root_key in root_keys {
-            if root_key.len() == 1 + BLOB_ID_LENGTH && root_key[0] == BLOB_ID_TAG {
-                let root_key_red = &root_key[1..=BLOB_ID_LENGTH];
-                let blob_id = bcs::from_bytes(root_key_red)?;
-                blob_ids.push(blob_id);
-            }
-        }
-        Ok(blob_ids)
-    }
-}
-
-impl<Database> DbStorage<Database, WallClock>
-where
-    Database: KeyValueDatabase + Clone + Send + Sync + 'static,
-    Database::Error: Send + Sync,
-{
-    /// Lists the chain IDs of the storage.
-    pub async fn list_chain_ids(
-        config: &Database::Config,
-        namespace: &str,
-    ) -> Result<Vec<ChainId>, ViewError> {
-        let database = Database::connect(config, namespace).await?;
-        let root_keys = database.list_root_keys().await?;
-        let mut chain_ids = Vec::new();
-        for root_key in root_keys {
-            if root_key.len() == 1 + CHAIN_ID_LENGTH && root_key[0] == CHAIN_ID_TAG {
-                let root_key_red = &root_key[1..=CHAIN_ID_LENGTH];
-                let chain_id = bcs::from_bytes(root_key_red)?;
-                chain_ids.push(chain_id);
-            }
-        }
-        Ok(chain_ids)
     }
 }
 

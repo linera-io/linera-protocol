@@ -2100,7 +2100,9 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 }
             }
             DatabaseToolCommand::ListBlobIds => {
-                let blob_ids = DbStorage::<D, _>::list_blob_ids(&config, &namespace).await?;
+                let storage =
+                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let blob_ids = storage.list_blob_ids().await?;
                 info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
                 info!("The list of blob IDs is:");
                 for id in blob_ids {
@@ -2108,13 +2110,28 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 }
             }
             DatabaseToolCommand::ListChainIds => {
-                let chain_ids = DbStorage::<D, _>::list_chain_ids(&config, &namespace).await?;
+                let storage =
+                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let chain_ids = storage.list_chain_ids().await?;
                 info!(
                     "Chain IDs listed in {} ms",
                     start_time.elapsed().as_millis()
                 );
                 info!("The list of chain IDs is:");
                 for id in chain_ids {
+                    println!("{}", id);
+                }
+            }
+            DatabaseToolCommand::ListEventIds => {
+                let storage =
+                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let event_ids = storage.list_event_ids().await?;
+                info!(
+                    "Event IDs listed in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+                info!("The list of event IDs is:");
+                for id in event_ids {
                     println!("{}", id);
                 }
             }

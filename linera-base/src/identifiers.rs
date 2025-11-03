@@ -622,6 +622,12 @@ pub struct EventId {
     pub index: u32,
 }
 
+impl fmt::Display for EventId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}:{}", self.chain_id, self.stream_id, self.index)
+    }
+}
+
 impl StreamName {
     /// Turns the stream name into bytes.
     pub fn into_bytes(self) -> Vec<u8> {

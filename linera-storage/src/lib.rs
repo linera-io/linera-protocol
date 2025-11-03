@@ -400,6 +400,15 @@ pub trait Storage: Sized {
         &self,
         block_exporter_id: u32,
     ) -> Result<Self::BlockExporterContext, ViewError>;
+
+    /// Lists the blob IDs in storage.
+    async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError>;
+
+    /// Lists the chain IDs in storage.
+    async fn list_chain_ids(&self) -> Result<Vec<ChainId>, ViewError>;
+
+    /// Lists the event IDs in storage.
+    async fn list_event_ids(&self) -> Result<Vec<EventId>, ViewError>;
 }
 
 /// The result of processing the obtained read certificates.

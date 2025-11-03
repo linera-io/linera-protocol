@@ -1130,6 +1130,9 @@ pub enum DatabaseToolCommand {
 
     /// List the chain IDs in the database
     ListChainIds,
+
+    /// List the event IDs in the database
+    ListEventIds,
 }
 
 #[allow(clippy::large_enum_variant)]
