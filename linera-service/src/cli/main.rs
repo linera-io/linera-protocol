@@ -2122,6 +2122,19 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                     println!("{}", id);
                 }
             }
+            DatabaseToolCommand::ListEventIds => {
+                let storage =
+                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let event_ids = storage.list_event_ids().await?;
+                info!(
+                    "Event IDs listed in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+                info!("The list of event IDs is:");
+                for id in event_ids {
+                    println!("{}", id);
+                }
+            }
         }
         Ok(0)
     }

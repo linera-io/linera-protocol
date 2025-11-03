@@ -343,10 +343,18 @@ impl RootKey {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct RestrictedEventId {
+    pub stream_id: StreamId,
+    pub index: u32,
+}
+
 fn event_key(event_id: &EventId) -> Vec<u8> {
-    let mut key = bcs::to_bytes(&event_id.stream_id).unwrap();
-    key.extend(bcs::to_bytes(&event_id.index).unwrap());
-    key
+    let restricted_event_id = RestrictedEventId {
+        stream_id: event_id.stream_id.clone(),
+	index: event_id.index,
+    };
+    bcs::to_bytes(&restricted_event_id).unwrap()
 }
 
 fn is_chain_state(root_key: &[u8]) -> bool {
@@ -358,6 +366,7 @@ fn is_chain_state(root_key: &[u8]) -> bool {
 
 const CHAIN_ID_TAG: u8 = 0;
 const BLOB_ID_TAG: u8 = 2;
+const EVENT_ID_TAG: u8 = 3;
 
 #[cfg(test)]
 mod tests {
@@ -1011,6 +1020,30 @@ where
             }
         }
         Ok(chain_ids)
+    }
+
+    async fn list_event_ids(&self) -> Result<Vec<EventId>, ViewError> {
+        let database = self.database.deref();
+        let root_keys = database.list_root_keys().await?;
+        let mut event_ids = Vec::new();
+        for root_key in root_keys {
+            if !root_key.is_empty() && root_key[0] == EVENT_ID_TAG {
+                let root_key_red = &root_key[1..];
+                let chain_id = bcs::from_bytes(root_key_red)?;
+                let store = database.open_shared(&root_key)?;
+                let keys = store.find_keys_by_prefix(&[]).await?;
+                for key in keys {
+                    let restricted_event_id = bcs::from_bytes::<RestrictedEventId>(&key)?;
+                    let event_id = EventId {
+                        chain_id,
+                        stream_id: restricted_event_id.stream_id,
+                        index: restricted_event_id.index,
+                    };
+                    event_ids.push(event_id);
+                }
+            }
+        }
+        Ok(event_ids)
     }
 }
 

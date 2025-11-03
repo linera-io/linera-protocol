@@ -406,6 +406,9 @@ pub trait Storage: Sized {
 
     /// Lists the chain IDs of the storage.
     async fn list_chain_ids(&self) -> Result<Vec<ChainId>, ViewError>;
+
+    /// Lists the event IDs of the storage.
+    async fn list_event_ids(&self) -> Result<Vec<EventId>, ViewError>;
 }
 
 /// The result of processing the obtained read certificates.
