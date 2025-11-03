@@ -1,0 +1,270 @@
+# Default values for linera-validator chart
+# This file provides sane defaults for all configuration options.
+# Override these values using environment variables or custom values files.
+
+# ============================================================================
+# Core Linera Configuration
+# ============================================================================
+
+# Container image configuration
+lineraImage: "linera:latest"
+lineraImagePullPolicy: "IfNotPresent"
+
+# Logging configuration
+logLevel: "info"
+
+# OpenTelemetry configuration
+# Set to empty string to disable OTLP tracing
+otlpExporterEndpoint: ""
+
+# Network ports
+proxyPort: 19100
+metricsPort: 21100
+
+# Deployment scaling
+numShards: 4
+numProxies: 1
+
+# Performance tuning
+# Set to empty string to use default Tokio thread count
+serverTokioThreads: ""
+
+# ============================================================================
+# Storage Configuration
+# ============================================================================
+
+# Primary storage backend
+# Default: ScyllaDB connection string
+storage: "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+
+# Storage replication factor
+storageReplicationFactor: 1
+
+# Dual storage mode (RocksDB + ScyllaDB)
+dualStore: false
+
+# RocksDB storage size per shard (only used if dualStore is true)
+rocksdbStorageSize: "2Gi"
+
+# Local SSD usage flag (GCP-specific)
+usingLocalSsd: false
+
+# GCP-specific run flag
+gcpRun: false
+
+# ============================================================================
+# Validator Configuration
+# ============================================================================
+
+validator:
+  # Server configuration file path
+  serverConfig: "working/server_1.json"
+  # Genesis configuration file path
+  genesisConfig: "working/genesis.json"
+
+# ============================================================================
+# Explorer Services (Indexer, Block Exporter, Web Explorer)
+# ============================================================================
+
+# Block Exporter - exports blocks for indexing
+blockExporter:
+  enabled: false
+  replicas: 1
+  port: 8882
+  metricsPort: 9091
+  storageSize: "1Gi"
+  logLevel: "info"
+  serviceMonitor:
+    enabled: false
+
+# Indexer - indexes blockchain data
+indexer:
+  enabled: false
+  image: "linera-indexer:latest"
+  imagePullPolicy: "IfNotPresent"
+  port: 8081
+  databasePath: "/data/indexer.db"
+  storageSize: "2Gi"
+  logLevel: "info"
+
+# Explorer - web interface for blockchain exploration
+explorer:
+  enabled: false
+  image: "linera-explorer:latest"
+  imagePullPolicy: "IfNotPresent"
+  frontendPort: 3001
+  apiPort: 3002
+  logLevel: "info"
+  ingress:
+    enabled: false
+    annotations: {}
+    hosts:
+      - host: "linera-explorer.local"
+        paths:
+          - path: "/"
+            pathType: "Prefix"
+    tls: []
+    # Example TLS configuration:
+    # tls:
+    #   - secretName: explorer-tls
+    #     hosts:
+    #       - linera-explorer.example.com
+
+# ============================================================================
+# Environment Configuration
+# ============================================================================
+
+# Environment type: "kind" (local), "GCP", etc.
+environment: "kind"
+
+# GCP-specific configuration (only used when environment is "GCP")
+staticIpGcpName: ""
+validatorDomainName: ""
+
+# ============================================================================
+# Monitoring & Observability
+# ============================================================================
+
+# Grafana Cloud integration
+writeToGrafanaCloud: false
+grafanaCloudUsername: ""
+grafanaCloudAPIToken: ""
+
+# Validator label for external metrics systems
+validatorLabel: "validator-1"
+
+# ============================================================================
+# Optional Monitoring Stack Dependencies
+# ============================================================================
+# These are disabled by default. Enable explicitly when needed.
+
+# Alloy - centralized observability collector
+# Enable via LINERA_HELMFILE_SET_ALLOY_ENABLED=true or by setting alloy.enabled=true
+alloy:
+  enabled: false
+  # Alloy subchart configuration
+  # When enabled, provide the following environment variables:
+  # - ALLOY_CLUSTER_NAME: Name of the cluster (e.g., "prod-cluster-1")
+  # - ALLOY_VALIDATOR_NAME: Name of the validator (e.g., "validator-1")
+  # - ALLOY_PROMETHEUS_ENABLED: Enable Prometheus metrics export (true/false)
+  # - ALLOY_PROMETHEUS_URL: OTLP endpoint for metrics (e.g., "https://prometheus-endpoint/otlp")
+  # - ALLOY_PROMETHEUS_USER: Username for Prometheus authentication
+  # - ALLOY_PROMETHEUS_PASS: Password for Prometheus authentication
+  # - ALLOY_LOKI_ENABLED: Enable Loki logs export (true/false)
+  # - ALLOY_LOKI_URL: Loki push endpoint for logs (e.g., "https://loki-endpoint/loki/api/v1/push")
+  # - ALLOY_LOKI_USER: Username for Loki authentication
+  # - ALLOY_LOKI_PASS: Password for Loki authentication
+  # - ALLOY_TEMPO_ENABLED: Enable Tempo traces export (true/false)
+  # - ALLOY_TEMPO_URL: OTLP endpoint for traces (e.g., "https://tempo-endpoint/otlp")
+  # - ALLOY_TEMPO_USER: Username for Tempo authentication
+  # - ALLOY_TEMPO_PASS: Password for Tempo authentication
+  alloy:
+    configMap:
+      create: true
+      # The alloy-config.river.tpl file contains the Alloy River configuration
+      # It will be templated and mounted into the Alloy pods
+      content: |-
+        // NOTE: This is a placeholder. In production, replace with actual River config
+        // or use values-local.yaml.gotmpl which loads from alloy-config.river.tpl file.
+        // For reference config, see alloy-config.river.tpl in the chart directory.
+
+        // Minimal working configuration - customize as needed
+        prometheus.exporter.self "alloy" {}
+
+        prometheus.scrape "alloy_metrics" {
+          targets    = prometheus.exporter.self.alloy.targets
+          forward_to = []
+        }
+    extraEnv:
+      - name: NAMESPACE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
+      - name: CLUSTER_NAME
+        value: ""
+      - name: VALIDATOR_NAME
+        value: ""
+      - name: PROMETHEUS_ENABLED
+        value: "false"
+      - name: PROMETHEUS_OTLP_URL
+        value: ""
+      - name: PROMETHEUS_OTLP_USER
+        value: ""
+      - name: PROMETHEUS_OTLP_PASS
+        value: ""
+      - name: LOKI_ENABLED
+        value: "false"
+      - name: LOKI_PUSH_URL
+        value: ""
+      - name: LOKI_PUSH_USER
+        value: ""
+      - name: LOKI_PUSH_PASS
+        value: ""
+      - name: TEMPO_ENABLED
+        value: "false"
+      - name: TEMPO_OTLP_URL
+        value: ""
+      - name: TEMPO_OTLP_USER
+        value: ""
+      - name: TEMPO_OTLP_PASS
+        value: ""
+
+# Loki Stack - log aggregation
+loki-stack:
+  enabled: false
+  loki:
+    enabled: false
+    isDefault: false
+    persistence:
+      enabled: true
+      size: "1Gi"
+    config:
+      limits_config:
+        reject_old_samples_max_age: "24h"
+  promtail:
+    enabled: false
+    config:
+      clients:
+        - url: "http://linera-core-loki:3100/loki/api/v1/push"
+
+# Kube Prometheus Stack - metrics and alerting
+kube-prometheus-stack:
+  enabled: false
+  grafana:
+    sidecar:
+      dashboards:
+        enabled: true
+        label: "grafana_dashboard"
+        labelValue: "1"
+        folderAnnotation: "grafana_folder"
+        provider:
+          foldersFromFilesStructure: true
+    persistence:
+      enabled: true
+      size: "1Gi"
+    plugins:
+      - "grafana-piechart-panel"
+  prometheus:
+    prometheusSpec:
+      scrapeInterval: "30s"
+      retention: "2d"
+      retentionSize: "1GB"
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: "standard"
+            accessModes:
+              - "ReadWriteOnce"
+            resources:
+              requests:
+                storage: "1Gi"
+      # Auto-discover ServiceMonitors across all namespaces
+      serviceMonitorSelector: {}
+      serviceMonitorNamespaceSelector: {}
+      serviceMonitorSelectorNilUsesHelmValues: false
+      ruleSelector: {}
+      ruleSelectorNilUsesHelmValues: false
+
+# Pyroscope - continuous profiling
+pyroscope:
+  enabled: false

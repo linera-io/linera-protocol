@@ -6,15 +6,18 @@
 # Documentation: See MONITORING.md for complete setup and configuration guide
 #
 # Required environment variables for remote push:
-#   PROMETHEUS_OTLP_URL: https://your-prometheus-endpoint/otlp
-#   PROMETHEUS_OTLP_USER: your-username
-#   PROMETHEUS_OTLP_PASS: your-password
-#   LOKI_PUSH_URL: https://your-loki-endpoint/loki/api/v1/push
-#   LOKI_PUSH_USER: your-username
-#   LOKI_PUSH_PASS: your-password
-#   TEMPO_OTLP_URL: https://your-tempo-endpoint/tempo/otlp
-#   TEMPO_OTLP_USER: your-username
-#   TEMPO_OTLP_PASS: your-password
+#   ALLOY_PROMETHEUS_ENABLED: true|false (enable Prometheus metrics export)
+#   ALLOY_PROMETHEUS_URL: https://your-prometheus-endpoint/otlp
+#   ALLOY_PROMETHEUS_USER: your-username
+#   ALLOY_PROMETHEUS_PASS: your-password
+#   ALLOY_LOKI_ENABLED: true|false (enable Loki logs export)
+#   ALLOY_LOKI_URL: https://your-loki-endpoint/loki/api/v1/push
+#   ALLOY_LOKI_USER: your-username
+#   ALLOY_LOKI_PASS: your-password
+#   ALLOY_TEMPO_ENABLED: true|false (enable Tempo traces export)
+#   ALLOY_TEMPO_URL: https://your-tempo-endpoint/tempo/otlp
+#   ALLOY_TEMPO_USER: your-username
+#   ALLOY_TEMPO_PASS: your-password
 
 services:
   alloy:
@@ -33,15 +36,18 @@ services:
       - "/etc/alloy/config.river"
     environment:
       - HOSTNAME=${HOSTNAME:-validator}
-      - PROMETHEUS_OTLP_URL=${PROMETHEUS_OTLP_URL:-}
-      - PROMETHEUS_OTLP_USER=${PROMETHEUS_OTLP_USER:-}
-      - PROMETHEUS_OTLP_PASS=${PROMETHEUS_OTLP_PASS:-}
-      - LOKI_PUSH_URL=${LOKI_PUSH_URL:-}
-      - LOKI_PUSH_USER=${LOKI_PUSH_USER:-}
-      - LOKI_PUSH_PASS=${LOKI_PUSH_PASS:-}
-      - TEMPO_OTLP_URL=${TEMPO_OTLP_URL:-}
-      - TEMPO_OTLP_USER=${TEMPO_OTLP_USER:-}
-      - TEMPO_OTLP_PASS=${TEMPO_OTLP_PASS:-}
+      - PROMETHEUS_ENABLED=${ALLOY_PROMETHEUS_ENABLED:-false}
+      - PROMETHEUS_OTLP_URL=${ALLOY_PROMETHEUS_URL:-}
+      - PROMETHEUS_OTLP_USER=${ALLOY_PROMETHEUS_USER:-}
+      - PROMETHEUS_OTLP_PASS=${ALLOY_PROMETHEUS_PASS:-}
+      - LOKI_ENABLED=${ALLOY_LOKI_ENABLED:-false}
+      - LOKI_PUSH_URL=${ALLOY_LOKI_URL:-}
+      - LOKI_PUSH_USER=${ALLOY_LOKI_USER:-}
+      - LOKI_PUSH_PASS=${ALLOY_LOKI_PASS:-}
+      - TEMPO_ENABLED=${ALLOY_TEMPO_ENABLED:-false}
+      - TEMPO_OTLP_URL=${ALLOY_TEMPO_URL:-}
+      - TEMPO_OTLP_USER=${ALLOY_TEMPO_USER:-}
+      - TEMPO_OTLP_PASS=${ALLOY_TEMPO_PASS:-}
     labels:
       com.centurylinklabs.watchtower.enable: "true"
     depends_on:
