@@ -130,9 +130,10 @@ const VISIBLE_MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE
     - 1
     - 1;
 
-/// Fundamental constant in DynamoDB: The maximum size of a key is 1024 bytes
+/// Fundamental constant in DynamoDB: The maximum size of a key is 1024 bytes.
+/// We decrease by 1 because we append a [1] as prefix.
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html
-const MAX_KEY_SIZE: usize = 1024;
+const MAX_KEY_SIZE: usize = 1023;
 
 /// Fundamental constants in DynamoDB: The maximum size of a [`TransactWriteItem`] is 4 MB.
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html
@@ -203,7 +204,6 @@ fn build_key_value(
 
 /// Checks that a key is of the correct size
 fn check_key_size(key: &[u8]) -> Result<(), DynamoDbStoreInternalError> {
-    ensure!(!key.is_empty(), DynamoDbStoreInternalError::ZeroLengthKey);
     ensure!(
         key.len() <= MAX_KEY_SIZE,
         DynamoDbStoreInternalError::KeyTooLong
@@ -973,10 +973,6 @@ pub enum DynamoDbStoreInternalError {
     #[error("The transact must have length at most MAX_TRANSACT_WRITE_ITEM_SIZE")]
     TransactUpperLimitSize,
 
-    /// Keys have to be of non-zero length.
-    #[error("The key must be of strictly positive length")]
-    ZeroLengthKey,
-
     /// The key must have at most 1024 bytes
     #[error("The key must have at most 1024 bytes")]
     KeyTooLong,
@@ -984,10 +980,6 @@ pub enum DynamoDbStoreInternalError {
     /// The key prefix must have at most 1024 bytes
     #[error("The key prefix must have at most 1024 bytes")]
     KeyPrefixTooLong,
-
-    /// Key prefixes have to be of non-zero length.
-    #[error("The key_prefix must be of strictly positive length")]
-    ZeroLengthKeyPrefix,
 
     /// The journal is not coherent
     #[error(transparent)]
