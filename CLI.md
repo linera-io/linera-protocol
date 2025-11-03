@@ -71,6 +71,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera storage list-namespaces`↴](#linera-storage-list-namespaces)
 * [`linera storage list-blob-ids`↴](#linera-storage-list-blob-ids)
 * [`linera storage list-chain-ids`↴](#linera-storage-list-chain-ids)
+* [`linera storage list-event-ids`↴](#linera-storage-list-event-ids)
 
 ## `linera`
 
@@ -1360,6 +1361,7 @@ Operation on the storage
 * `list-namespaces` — List the namespaces in the database
 * `list-blob-ids` — List the blob IDs in the database
 * `list-chain-ids` — List the chain IDs in the database
+* `list-event-ids` — List the event IDs in the database
 
 
 
@@ -1420,6 +1422,14 @@ List the blob IDs in the database
 List the chain IDs in the database
 
 **Usage:** `linera storage list-chain-ids`
+
+
+
+## `linera storage list-event-ids`
+
+List the event IDs in the database
+
+**Usage:** `linera storage list-event-ids`
 
 
 
