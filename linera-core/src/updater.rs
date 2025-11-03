@@ -522,7 +522,7 @@ where
                 .local_node
                 .chain_state_view(chain_id)
                 .await?
-                .block_hashes([height])
+                .block_hashes_by_height([height])
                 .await?
                 .into_iter()
                 .next()
@@ -556,14 +556,12 @@ where
                 Ok(info) => info,
             };
             // Obtain the missing blocks and the manager state from the local node.
-            let heights = (info.next_block_height.0..target_block_height.0)
-                .map(BlockHeight)
-                .collect::<Vec<_>>();
+            let heights = (info.next_block_height.0..target_block_height.0).map(BlockHeight);
             let validator_missing_hashes = self
                 .local_node
                 .chain_state_view(chain_id)
                 .await?
-                .block_hashes(heights)
+                .block_hashes_by_height(heights)
                 .await?;
             if !validator_missing_hashes.is_empty() {
                 // Send the requested certificates in order.

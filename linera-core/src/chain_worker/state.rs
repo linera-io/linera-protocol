@@ -1570,7 +1570,7 @@ where
             info.requested_pending_message_bundles = bundles;
         }
         let hashes = chain
-            .block_hashes(query.request_sent_certificate_hashes_by_heights)
+            .block_hashes_by_height(query.request_sent_certificate_hashes_by_heights)
             .await?;
         info.requested_sent_certificate_hashes = hashes;
         if let Some(start) = query.request_received_log_excluding_first_n {

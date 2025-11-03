@@ -1065,19 +1065,22 @@ where
     }
 
     /// Returns the hashes of all blocks we have in the given range.
+    ///
+    /// If the input heights are in ascending order, the hashes will be in the same order.
+    /// Otherwise they may be unordered.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         next_block_height = %self.tip_state.get().next_block_height,
     ))]
-    pub async fn block_hashes(
+    pub async fn block_hashes_by_height(
         &self,
         heights: impl IntoIterator<Item = BlockHeight>,
     ) -> Result<Vec<CryptoHash>, ChainError> {
         let next_height = self.tip_state.get().next_block_height;
         // Everything up to (excluding) next_height is in confirmed_log.
-        let (confirmed_heights, unconfirmed_heights): (Vec<_>, Vec<_>) = heights
+        let (confirmed_heights, unconfirmed_heights) = heights
             .into_iter()
-            .partition(|height| *height < next_height);
+            .partition::<Vec<_>, _>(|height| *height < next_height);
         let confirmed_indices = confirmed_heights
             .into_iter()
             .map(|height| usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow))
