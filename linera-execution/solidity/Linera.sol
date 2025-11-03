@@ -27,6 +27,15 @@ library Linera {
         return ChainId(entry.value.value);
     }
 
+    function chainid_to(Linera.ChainId memory entry)
+        internal
+        pure
+        returns (LineraTypes.ChainId memory)
+    {
+        LineraTypes.CryptoHash memory hash = LineraTypes.CryptoHash(entry.value);
+        return LineraTypes.ChainId(hash);
+    }
+
     struct AccountOwner {
         uint8 choice;
         // choice=0 corresponds to Reserved
@@ -52,6 +61,16 @@ library Linera {
     {
         LineraTypes.CryptoHash memory hash = LineraTypes.CryptoHash(owner.address32);
         return LineraTypes.AccountOwner(owner.choice, owner.reserved, hash, owner.address20);
+    }
+
+    function account_to(Linera.Account memory account)
+        internal
+        pure
+        returns (LineraTypes.Account memory)
+    {
+        LineraTypes.ChainId memory chain_id = chainid_to(account.chain_id);
+        LineraTypes.AccountOwner memory owner = accountowner_to(account.owner);
+        return LineraTypes.Account(chain_id, owner);
     }
 
     struct AccountOwnerBalance {
@@ -549,6 +568,18 @@ library Linera {
         require(success);
         LineraTypes.opt_uint32 memory output2 = LineraTypes.bcs_deserialize_opt_uint32(output);
         return opt_uint32_from(output2);
+    }
+
+    function transfer(Linera.AccountOwner account, uint256 amount) internal {
+        address precompile = address(0x0b);
+        LineraTypes.AccountOwner account2 = account_to(account);
+        LineraTypes.ContractRuntimePrecompile_Transfer memory transfer_ = LineraTypes.ContractRuntimePrecompile_Transfer(account2, amount);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_transfer(transfer_);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        require(output.length == 0);
     }
 
     // ServiceRuntime functions.
