@@ -337,6 +337,10 @@ enum RootKey {
     NetworkDescription,
 }
 
+const CHAIN_ID_TAG: u8 = 0;
+const BLOB_ID_TAG: u8 = 2;
+const EVENT_ID_TAG: u8 = 3;
+
 impl RootKey {
     fn bytes(&self) -> Vec<u8> {
         bcs::to_bytes(self).unwrap()
@@ -364,10 +368,6 @@ fn is_chain_state(root_key: &[u8]) -> bool {
     root_key[0] == CHAIN_ID_TAG
 }
 
-const CHAIN_ID_TAG: u8 = 0;
-const BLOB_ID_TAG: u8 = 2;
-const EVENT_ID_TAG: u8 = 3;
-
 #[cfg(test)]
 mod tests {
     use linera_base::{
@@ -378,7 +378,7 @@ mod tests {
         },
     };
 
-    use crate::db_storage::{event_key, RootKey, BLOB_ID_TAG, CHAIN_ID_TAG};
+    use crate::db_storage::{event_key, RootKey, BLOB_ID_TAG, CHAIN_ID_TAG, EVENT_ID_TAG};
 
     // Several functionalities of the storage rely on the way that the serialization
     // is done. Thus we need to check that the serialization works in the way that
@@ -434,6 +434,12 @@ mod tests {
         };
         let key = event_key(&event_id);
         assert!(key.starts_with(&prefix));
+        let root_key = RootKey::Event(chain_id).bytes();
+        assert_eq!(root_key[0], EVENT_ID_TAG);
+        assert_eq!(
+            bcs::from_bytes::<ChainId>(&root_key[1..]).unwrap(),
+            chain_id
+        );
     }
 }
 

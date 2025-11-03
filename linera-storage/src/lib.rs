@@ -401,13 +401,13 @@ pub trait Storage: Sized {
         block_exporter_id: u32,
     ) -> Result<Self::BlockExporterContext, ViewError>;
 
-    /// Lists the blob IDs of the storage.
+    /// Lists the blob IDs in storage.
     async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError>;
 
-    /// Lists the chain IDs of the storage.
+    /// Lists the chain IDs in storage.
     async fn list_chain_ids(&self) -> Result<Vec<ChainId>, ViewError>;
 
-    /// Lists the event IDs of the storage.
+    /// Lists the event IDs in storage.
     async fn list_event_ids(&self) -> Result<Vec<EventId>, ViewError>;
 }
 
