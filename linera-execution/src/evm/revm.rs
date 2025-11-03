@@ -292,6 +292,11 @@ enum ContractRuntimePrecompile {
     },
     /// Calling `validation_round` of `ContractRuntime`
     ValidationRound,
+    /// Calling `transfer` of `ContractRuntime`
+    Transfer {
+        account: Account,
+        amount: Amount,
+    },
 }
 
 /// Some functionalities from the ServiceRuntime not in BaseRuntime
@@ -485,28 +490,62 @@ impl<'a, Runtime: ContractRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Cont
     }
 }
 
+fn get_evm_destination<Runtime: ContractRuntime>(
+    context: &mut Ctx<'_, Runtime>,
+    account: Account,
+) -> Result<Option<Address>, ExecutionError> {
+    let mut runtime = context.db().0.runtime.lock().unwrap();
+    let chain_id = runtime.chain_id()?;
+    if chain_id == account.chain_id {
+        return Ok(None);
+    }
+    Ok(account.owner.to_evm_address())
+}
+
+
+/// If we are using the `None` case of `fn call` and `fn create` then the transfer
+/// of ethers is done by REVM. On the other hand, if we are managing the call/create
+/// by hand, then we need to do the transfers ourselves.
+fn revm_transfer<Runtime: ContractRuntime>(
+    context: &mut Ctx<'_, Runtime>,
+    source: Address,
+    destination: Address,
+    value: U256,
+) -> Result<(), ExecutionError> {
+    // In Ethereum, all transfers matter
+    if let Some(error) = context.journal().transfer(source, destination, value)? {
+        let error = format!("{error:?}");
+        let error = EvmExecutionError::TransactError(error);
+        return Err(error.into());
+    }
+    Ok(())
+}
+
 impl<'a> ContractPrecompile {
     fn contract_runtime_call<Runtime: ContractRuntime>(
         request: ContractRuntimePrecompile,
         context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let mut runtime = context.db().0.runtime.lock().unwrap();
         match request {
             ContractRuntimePrecompile::AuthenticatedOwner => {
+                let mut runtime = context.db().0.runtime.lock().unwrap();
                 let account_owner = runtime.authenticated_owner()?;
                 Ok(bcs::to_bytes(&account_owner)?)
             }
 
             ContractRuntimePrecompile::MessageOriginChainId => {
+                let mut runtime = context.db().0.runtime.lock().unwrap();
                 let origin_chain_id = runtime.message_origin_chain_id()?;
                 Ok(bcs::to_bytes(&origin_chain_id)?)
             }
 
             ContractRuntimePrecompile::MessageIsBouncing => {
+                let mut runtime = context.db().0.runtime.lock().unwrap();
                 let result = runtime.message_is_bouncing()?;
                 Ok(bcs::to_bytes(&result)?)
             }
             ContractRuntimePrecompile::AuthenticatedCallerId => {
+                let mut runtime = context.db().0.runtime.lock().unwrap();
                 let application_id = runtime.authenticated_caller_id()?;
                 Ok(bcs::to_bytes(&application_id)?)
             }
@@ -524,14 +563,17 @@ impl<'a> ContractPrecompile {
                     grant,
                     message,
                 };
+                let mut runtime = context.db().0.runtime.lock().unwrap();
                 runtime.send_message(send_message_request)?;
                 Ok(vec![])
             }
             ContractRuntimePrecompile::TryCallApplication { target, argument } => {
                 let authenticated = true;
+                let mut runtime = context.db().0.runtime.lock().unwrap();
                 runtime.try_call_application(authenticated, target, argument)
             }
             ContractRuntimePrecompile::Emit { stream_name, value } => {
+                let mut runtime = context.db().0.runtime.lock().unwrap();
                 let result = runtime.emit(stream_name, value)?;
                 Ok(bcs::to_bytes(&result)?)
             }
@@ -539,12 +581,16 @@ impl<'a> ContractPrecompile {
                 chain_id,
                 stream_name,
                 index,
-            } => runtime.read_event(chain_id, stream_name, index),
+            } => {
+                let mut runtime = context.db().0.runtime.lock().unwrap();
+                runtime.read_event(chain_id, stream_name, index)
+            }
             ContractRuntimePrecompile::SubscribeToEvents {
                 chain_id,
                 application_id,
                 stream_name,
             } => {
+                let mut runtime = context.db().0.runtime.lock().unwrap();
                 runtime.subscribe_to_events(chain_id, application_id, stream_name)?;
                 Ok(vec![])
             }
@@ -553,16 +599,39 @@ impl<'a> ContractPrecompile {
                 application_id,
                 stream_name,
             } => {
+                let mut runtime = context.db().0.runtime.lock().unwrap();
                 runtime.unsubscribe_from_events(chain_id, application_id, stream_name)?;
                 Ok(vec![])
             }
             ContractRuntimePrecompile::QueryService {
                 application_id,
                 query,
-            } => runtime.query_service(application_id, query),
+            } => {
+                let mut runtime = context.db().0.runtime.lock().unwrap();
+                runtime.query_service(application_id, query)
+            }
             ContractRuntimePrecompile::ValidationRound => {
+                let mut runtime = context.db().0.runtime.lock().unwrap();
                 let value = runtime.validation_round()?;
                 Ok(bcs::to_bytes(&value)?)
+            }
+            ContractRuntimePrecompile::Transfer { account, amount } => {
+                if amount != Amount::ZERO {
+                    let destination = {
+                        let destination = get_evm_destination(context, account)?;
+                        destination.unwrap_or(FAUCET_ADDRESS)
+                    };
+                    let application_id = {
+                        let mut runtime = context.db().0.runtime.lock().unwrap();
+                        let application_id = runtime.application_id()?;
+                        let source = application_id.into();
+                        runtime.transfer(source, account, amount)?;
+                        application_id
+                    };
+                    let source: Address = application_id.evm_address();
+                    revm_transfer(context, source, destination, amount.into())?;
+                }
+                Ok(vec![])
             }
         }
     }
@@ -892,7 +961,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
                 // a contract that do not yet exist.
                 // It is a common construction. We can see that in ERC20 contract code
                 // for example for burning and minting.
-                Self::revm_transfer(
+                revm_transfer(
                     context,
                     self.db.contract_address,
                     FAUCET_ADDRESS,
@@ -994,7 +1063,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
                     let destination = Account { chain_id, owner };
                     runtime.transfer(source, destination, amount)?;
                 }
-                Self::revm_transfer(context, inputs.caller, inputs.target_address, value)?;
+                revm_transfer(context, inputs.caller, inputs.target_address, value)?;
             }
         }
         // Other smart contracts calls are handled by the runtime
@@ -1031,24 +1100,6 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             memory_offset: inputs.return_memory_offset.clone(),
         };
         Ok(Some(call_outcome))
-    }
-
-    /// If we are using the `None` case of `fn call` and `fn create` then the transfer
-    /// of ethers is done by REVM. On the other hand, if we are managing the call/create
-    /// by hand, then we need to do the transfers ourselves.
-    fn revm_transfer(
-        context: &mut Ctx<'_, Runtime>,
-        source: Address,
-        destination: Address,
-        value: U256,
-    ) -> Result<(), ExecutionError> {
-        // In Ethereum, all transfers matter
-        if let Some(error) = context.journal().transfer(source, destination, value)? {
-            let error = format!("{error:?}");
-            let error = EvmExecutionError::TransactError(error);
-            return Err(error.into());
-        }
-        Ok(())
     }
 }
 
