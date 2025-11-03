@@ -884,7 +884,10 @@ impl<Env: Environment> Client<Env> {
         loop {
             trace!("get_received_log_from_validator: looping");
             let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(offset);
-            let info = remote_node.handle_chain_info_query(query).await?;
+            let info = self
+                .requests_scheduler
+                .handle_chain_info_query(remote_node, query)
+                .await?;
             let received_entries = info.requested_received_log.len();
             offset += received_entries as u64;
             remote_log.extend(info.requested_received_log);
@@ -1070,7 +1073,10 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), ChainClientError> {
         let mut local_info = self.local_node.chain_info(chain_id).await?;
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
-        let remote_info = remote_node.handle_chain_info_query(query).await?;
+        let remote_info = self
+            .requests_scheduler
+            .handle_chain_info_query(remote_node, query)
+            .await?;
         if let Some(new_info) = self
             .download_certificates_from(remote_node, chain_id, remote_info.next_block_height)
             .await?

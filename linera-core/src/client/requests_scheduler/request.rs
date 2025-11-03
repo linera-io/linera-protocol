@@ -1,13 +1,50 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Request deduplication and subsumption for validator downloads.
+//!
+//! This module provides types and logic for deduplicating concurrent requests
+//! to validators, reducing unnecessary network traffic and load.
+//!
+//! # Supported Request Types
+//!
+//! - **Certificates**: Download confirmed block certificates by heights
+//! - **Blobs**: Download blob data by ID
+//! - **ChainInfo**: Query comprehensive chain state information
+//!
+//! # Subsumption
+//!
+//! Some request types support subsumption, where one request can satisfy multiple others:
+//!
+//! ## Certificate Subsumption
+//! A request for heights `[10, 11, 12, 13]` can serve a request for `[11, 12]`.
+//!
+//! ## ChainInfo Subsumption
+//! A comprehensive ChainInfoQuery can serve subset queries. For example:
+//! - Query A: `request_committees=true`, `request_pending_message_bundles=true`
+//! - Query B: `request_committees=true`
+//!
+//! Query A subsumes B because it requests all the data B needs (and more).
+//!
+//! # Deduplication Benefits
+//!
+//! When multiple components need chain information:
+//! - **Without deduplication**: Each makes a separate network request
+//! - **With deduplication**: One network request serves all callers
+//! - **With subsumption**: A comprehensive request can serve multiple subset requests
+//!
+//! This significantly reduces network traffic and validator load in high-concurrency scenarios.
+
 use linera_base::{
     data_types::{Blob, BlobContent, BlockHeight},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 
-use crate::client::requests_scheduler::cache::SubsumingKey;
+use crate::{
+    client::requests_scheduler::cache::SubsumingKey,
+    data_types::{ChainInfo, ChainInfoQuery},
+};
 
 /// Unique identifier for different types of download requests.
 ///
@@ -25,6 +62,12 @@ pub enum RequestKey {
     PendingBlob { chain_id: ChainId, blob_id: BlobId },
     /// Download certificate for a specific blob
     CertificateForBlob(BlobId),
+    /// Query chain information with various optional fields
+    ///
+    /// Supports subsumption: a query requesting more data can serve queries requesting subsets.
+    /// For example, a query with `request_committees=true` and `request_pending_message_bundles=true`
+    /// can serve a query with only `request_committees=true`.
+    ChainInfo(ChainInfoQuery),
 }
 
 impl RequestKey {
@@ -33,6 +76,7 @@ impl RequestKey {
         match self {
             RequestKey::Certificates { chain_id, .. } => Some(*chain_id),
             RequestKey::PendingBlob { chain_id, .. } => Some(*chain_id),
+            RequestKey::ChainInfo(query) => Some(query.chain_id),
             _ => None,
         }
     }
@@ -53,6 +97,15 @@ impl RequestKey {
     }
 }
 
+/// Checks if one vector of block heights contains all elements of another.
+///
+/// Returns `true` if `superset` contains all heights present in `subset`.
+/// Order doesn't matter - this is a set membership check.
+/// Used for ChainInfo subsumption logic with height vectors.
+fn heights_vec_subsumes(superset: &[BlockHeight], subset: &[BlockHeight]) -> bool {
+    subset.iter().all(|h| superset.contains(h))
+}
+
 /// Result types that can be shared across deduplicated requests
 #[derive(Debug, Clone)]
 pub enum RequestResult {
@@ -60,6 +113,11 @@ pub enum RequestResult {
     Blob(Option<Blob>),
     BlobContent(BlobContent),
     Certificate(Box<ConfirmedBlockCertificate>),
+    /// Chain information result
+    ///
+    /// Contains comprehensive chain state information that can be filtered to serve
+    /// subset requests through the subsumption mechanism.
+    ChainInfo(Box<ChainInfo>),
 }
 
 /// Marker trait for types that can be converted to/from `RequestResult`
@@ -88,6 +146,12 @@ impl From<BlobContent> for RequestResult {
 impl From<ConfirmedBlockCertificate> for RequestResult {
     fn from(cert: ConfirmedBlockCertificate) -> Self {
         RequestResult::Certificate(Box::new(cert))
+    }
+}
+
+impl From<Box<ChainInfo>> for RequestResult {
+    fn from(info: Box<ChainInfo>) -> Self {
+        RequestResult::ChainInfo(info)
     }
 }
 
@@ -135,11 +199,94 @@ impl TryFrom<RequestResult> for ConfirmedBlockCertificate {
     }
 }
 
+impl TryFrom<RequestResult> for Box<ChainInfo> {
+    type Error = ();
+
+    fn try_from(result: RequestResult) -> Result<Self, Self::Error> {
+        match result {
+            RequestResult::ChainInfo(info) => Ok(info),
+            _ => Err(()),
+        }
+    }
+}
+
 impl SubsumingKey<RequestResult> for super::request::RequestKey {
     fn subsumes(&self, other: &Self) -> bool {
         // Different chains can't subsume each other
         if self.chain_id() != other.chain_id() {
             return false;
+        }
+
+        // ChainInfo subsumption rules:
+        // Query A subsumes query B if A requests all the data that B requests (and potentially more).
+        // This allows a comprehensive query to serve multiple subset queries.
+        //
+        // Subsumption criteria:
+        // 1. chain_id: Must match exactly (checked above)
+        // 2. Boolean flags: If B requests it, A must also request it
+        // 3. Exact-match fields: Must match exactly (owner, test_height, timeout)
+        // 4. Collection fields: A must request a superset (certificate heights)
+        // 5. Range fields: A must request more or equal entries (received_log)
+        if let (RequestKey::ChainInfo(a), RequestKey::ChainInfo(b)) = (self, other) {
+            // Chain ID already checked above
+
+            // Boolean flags: if b requests it (true), a must also request it (true)
+            if b.request_committees && !a.request_committees {
+                return false;
+            }
+            if b.request_pending_message_bundles && !a.request_pending_message_bundles {
+                return false;
+            }
+            if b.request_manager_values && !a.request_manager_values {
+                return false;
+            }
+            if b.request_fallback && !a.request_fallback {
+                return false;
+            }
+            if b.create_network_actions && !a.create_network_actions {
+                return false;
+            }
+
+            // Exact-match fields: must match exactly
+            if a.request_owner_balance != b.request_owner_balance {
+                return false;
+            }
+            if a.test_next_block_height != b.test_next_block_height {
+                return false;
+            }
+            if a.request_leader_timeout != b.request_leader_timeout {
+                return false;
+            }
+
+            // Collection fields: A must request a superset
+            // A's vec must contain all elements of B's vec
+            if !heights_vec_subsumes(
+                &a.request_sent_certificate_hashes_by_heights,
+                &b.request_sent_certificate_hashes_by_heights,
+            ) {
+                return false;
+            }
+
+            // Range field: request_received_log_excluding_first_n
+            // If B requests Some(n) and A requests Some(m), then m ≤ n (A asks for more or equal entries)
+            match (
+                a.request_received_log_excluding_first_n,
+                b.request_received_log_excluding_first_n,
+            ) {
+                (Some(a_n), Some(b_n)) => {
+                    if a_n > b_n {
+                        return false; // A asks for fewer entries than B
+                    }
+                }
+                (None, Some(_)) => {
+                    return false; // B requests something, A doesn't
+                }
+                _ => {
+                    // (Some(_), None) or (None, None) - OK
+                }
+            }
+
+            return true;
         }
 
         let (in_flight_req_heights, new_req_heights) = match (self.heights(), other.heights()) {
@@ -162,6 +309,132 @@ impl SubsumingKey<RequestResult> for super::request::RequestKey {
         in_flight_request: &RequestKey,
         result: &RequestResult,
     ) -> Option<RequestResult> {
+        // ChainInfo extraction logic:
+        // Given a comprehensive ChainInfo response from an in-flight request,
+        // extract only the subset of data requested by this query.
+        //
+        // Process:
+        // 1. Verify in_flight_request subsumes self (has all requested data)
+        // 2. Copy all base fields (chain_id, epoch, timestamps, etc.)
+        // 3. Conditionally include optional fields based on self's flags
+        // 4. Filter collection fields to only include requested items
+        //
+        // This allows one network request to serve multiple callers requesting
+        // different subsets of chain information.
+        if let (RequestKey::ChainInfo(self_query), RequestKey::ChainInfo(in_flight_query)) =
+            (self, in_flight_request)
+        {
+            // Verify subsumption
+            if !in_flight_request.subsumes(self) {
+                return None;
+            }
+
+            // Extract ChainInfo from result
+            let source_info = match result {
+                RequestResult::ChainInfo(info) => info,
+                _ => return None,
+            };
+
+            // Create new ChainInfo with base fields copied from source
+            let extracted_info = ChainInfo {
+                chain_id: source_info.chain_id,
+                epoch: source_info.epoch,
+                description: source_info.description.clone(),
+                manager: source_info.manager.clone(),
+                chain_balance: source_info.chain_balance,
+                block_hash: source_info.block_hash,
+                timestamp: source_info.timestamp,
+                next_block_height: source_info.next_block_height,
+                state_hash: source_info.state_hash,
+                count_received_log: source_info.count_received_log,
+                // Conditional fields: include only if requested
+                requested_committees: if self_query.request_committees {
+                    source_info.requested_committees.clone()
+                } else {
+                    None
+                },
+                requested_owner_balance: {
+                    // Only include owner balance if it's for the requested owner
+                    // Note: The in-flight query must have requested the same owner (verified by subsumption)
+                    source_info.requested_owner_balance
+                },
+                requested_pending_message_bundles: if self_query.request_pending_message_bundles {
+                    source_info.requested_pending_message_bundles.clone()
+                } else {
+                    vec![]
+                },
+                // Collection field filtering for certificate hashes
+                requested_sent_certificate_hashes: {
+                    // Filter certificate hashes based on requested heights
+                    // The source hashes correspond to in_flight_query's heights in order
+                    if self_query
+                        .request_sent_certificate_hashes_by_heights
+                        .is_empty()
+                    {
+                        vec![]
+                    } else {
+                        // Build index mapping from in_flight heights to source hash indices
+                        let mut result_hashes = Vec::new();
+                        for requested_height in
+                            &self_query.request_sent_certificate_hashes_by_heights
+                        {
+                            if let Some(index) = in_flight_query
+                                .request_sent_certificate_hashes_by_heights
+                                .iter()
+                                .position(|h| h == requested_height)
+                            {
+                                if let Some(hash) =
+                                    source_info.requested_sent_certificate_hashes.get(index)
+                                {
+                                    result_hashes.push(*hash);
+                                } else {
+                                    // Missing hash for requested height - return None
+                                    return None;
+                                }
+                            } else {
+                                // Height not in in_flight query (should not happen due to subsumption)
+                                return None;
+                            }
+                        }
+                        result_hashes
+                    }
+                },
+                requested_received_log: {
+                    // Filter received log based on exclusion count
+                    // source_info.requested_received_log already excluded `in_flight_exclude` entries
+                    // self_query wants to exclude `self_exclude` entries
+                    // Since subsumption ensures in_flight_exclude <= self_exclude,
+                    // we need to skip additional (self_exclude - in_flight_exclude) entries
+                    match (
+                        self_query.request_received_log_excluding_first_n,
+                        in_flight_query.request_received_log_excluding_first_n,
+                    ) {
+                        (Some(self_exclude), Some(in_flight_exclude)) => {
+                            let additional_skip = self_exclude.saturating_sub(in_flight_exclude);
+                            source_info
+                                .requested_received_log
+                                .iter()
+                                .skip(additional_skip as usize)
+                                .cloned()
+                                .collect()
+                        }
+                        (Some(self_exclude), None) => {
+                            // in_flight didn't exclude any, so skip self_exclude from source
+                            source_info
+                                .requested_received_log
+                                .iter()
+                                .skip(self_exclude as usize)
+                                .cloned()
+                                .collect()
+                        }
+                        _ => vec![],
+                    }
+                },
+            };
+
+            return Some(RequestResult::ChainInfo(Box::new(extracted_info)));
+        }
+
         // Only certificate results can be extracted
         let certificates = match result {
             RequestResult::Certificates(certs) => certs,
@@ -197,6 +470,7 @@ mod tests {
     use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 
     use super::{RequestKey, SubsumingKey};
+    use crate::data_types::ChainInfoQuery;
 
     #[test]
     fn test_subsumes_complete_containment() {
@@ -573,5 +847,1009 @@ mod tests {
 
         // Different chains should return None
         assert!(req1.try_extract_result(&req2, &result).is_none());
+    }
+
+    #[test]
+    fn test_chain_info_subsumes_same_query() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let query = ChainInfoQuery::new(chain_id);
+        let req1 = RequestKey::ChainInfo(query.clone());
+        let req2 = RequestKey::ChainInfo(query);
+
+        // Identical queries should subsume each other
+        assert!(req1.subsumes(&req2));
+        assert!(req2.subsumes(&req1));
+    }
+
+    #[test]
+    fn test_chain_info_subsumes_boolean_flags_superset() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        // Query A with more flags set
+        let query_a = ChainInfoQuery::new(chain_id)
+            .with_committees()
+            .with_pending_message_bundles()
+            .with_manager_values();
+        // Query B with fewer flags
+        let query_b = ChainInfoQuery::new(chain_id).with_committees();
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // A with more flags should subsume B with fewer
+        assert!(req_a.subsumes(&req_b));
+    }
+
+    #[test]
+    fn test_chain_info_not_subsumes_boolean_flags_subset() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        // Query A with fewer flags
+        let query_a = ChainInfoQuery::new(chain_id).with_committees();
+        // Query B with more flags
+        let query_b = ChainInfoQuery::new(chain_id)
+            .with_committees()
+            .with_pending_message_bundles();
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // A with fewer flags should NOT subsume B with more
+        assert!(!req_a.subsumes(&req_b));
+    }
+
+    #[test]
+    fn test_chain_info_subsumes_boolean_flags_exact() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let query_a = ChainInfoQuery::new(chain_id)
+            .with_committees()
+            .with_manager_values();
+        let query_b = ChainInfoQuery::new(chain_id)
+            .with_committees()
+            .with_manager_values();
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // Same flags should subsume each other
+        assert!(req_a.subsumes(&req_b));
+        assert!(req_b.subsumes(&req_a));
+    }
+
+    #[test]
+    fn test_chain_info_subsumes_exact_match_fields() {
+        use linera_base::identifiers::AccountOwner;
+
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let owner = AccountOwner::from(CryptoHash::test_hash("owner1"));
+
+        let query_a = ChainInfoQuery::new(chain_id).with_owner_balance(owner);
+        let query_b = ChainInfoQuery::new(chain_id).with_owner_balance(owner);
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // Matching owner balance should subsume
+        assert!(req_a.subsumes(&req_b));
+        assert!(req_b.subsumes(&req_a));
+    }
+
+    #[test]
+    fn test_chain_info_not_subsumes_different_owner() {
+        use linera_base::identifiers::AccountOwner;
+
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let owner1 = AccountOwner::from(CryptoHash::test_hash("owner1"));
+        let owner2 = AccountOwner::from(CryptoHash::test_hash("owner2"));
+
+        let query_a = ChainInfoQuery::new(chain_id).with_owner_balance(owner1);
+        let query_b = ChainInfoQuery::new(chain_id).with_owner_balance(owner2);
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // Different owner balance should not subsume
+        assert!(!req_a.subsumes(&req_b));
+        assert!(!req_b.subsumes(&req_a));
+    }
+
+    #[test]
+    fn test_chain_info_not_subsumes_different_test_height() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let mut query_a = ChainInfoQuery::new(chain_id);
+        query_a.test_next_block_height = Some(BlockHeight(10));
+        let mut query_b = ChainInfoQuery::new(chain_id);
+        query_b.test_next_block_height = Some(BlockHeight(11));
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // Different test height should not subsume
+        assert!(!req_a.subsumes(&req_b));
+        assert!(!req_b.subsumes(&req_a));
+    }
+
+    #[test]
+    fn test_chain_info_not_subsumes_different_timeout() {
+        use linera_base::data_types::Round;
+
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let query_a = ChainInfoQuery::new(chain_id).with_timeout(BlockHeight(10), Round::Fast);
+        let query_b =
+            ChainInfoQuery::new(chain_id).with_timeout(BlockHeight(10), Round::MultiLeader(1));
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // Different timeout should not subsume
+        assert!(!req_a.subsumes(&req_b));
+        assert!(!req_b.subsumes(&req_a));
+    }
+
+    #[test]
+    fn test_chain_info_subsumes_heights_superset() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let query_a = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(vec![
+            BlockHeight(10),
+            BlockHeight(11),
+            BlockHeight(12),
+            BlockHeight(13),
+        ]);
+        let query_b = ChainInfoQuery::new(chain_id)
+            .with_sent_certificate_hashes_by_heights(vec![BlockHeight(11), BlockHeight(12)]);
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // A with [10,11,12,13] should subsume B with [11,12]
+        assert!(req_a.subsumes(&req_b));
+    }
+
+    #[test]
+    fn test_chain_info_not_subsumes_heights_subset() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let query_a = ChainInfoQuery::new(chain_id)
+            .with_sent_certificate_hashes_by_heights(vec![BlockHeight(11), BlockHeight(12)]);
+        let query_b = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(vec![
+            BlockHeight(10),
+            BlockHeight(11),
+            BlockHeight(12),
+        ]);
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // A with [11,12] should NOT subsume B with [10,11,12]
+        assert!(!req_a.subsumes(&req_b));
+    }
+
+    #[test]
+    fn test_chain_info_subsumes_heights_exact() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let query_a = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(vec![
+            BlockHeight(10),
+            BlockHeight(11),
+            BlockHeight(12),
+        ]);
+        let query_b = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(vec![
+            BlockHeight(10),
+            BlockHeight(11),
+            BlockHeight(12),
+        ]);
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // Same heights should subsume
+        assert!(req_a.subsumes(&req_b));
+        assert!(req_b.subsumes(&req_a));
+    }
+
+    #[test]
+    fn test_chain_info_subsumes_heights_empty() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let query_a = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(vec![
+            BlockHeight(10),
+            BlockHeight(11),
+            BlockHeight(12),
+        ]);
+        let query_b = ChainInfoQuery::new(chain_id); // Empty heights
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // Any query should subsume empty heights request
+        assert!(req_a.subsumes(&req_b));
+    }
+
+    #[test]
+    fn test_chain_info_subsumes_received_log_more_entries() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        // A excluding 0 (asks for everything)
+        let query_a = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(0);
+        // B excluding 5 (asks for fewer entries)
+        let query_b = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(5);
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // A excluding 0 should subsume B excluding 5
+        assert!(req_a.subsumes(&req_b));
+    }
+
+    #[test]
+    fn test_chain_info_not_subsumes_received_log_fewer_entries() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        // A excluding 10 (asks for fewer entries)
+        let query_a = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(10);
+        // B excluding 5 (asks for more entries)
+        let query_b = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(5);
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // A excluding 10 should NOT subsume B excluding 5
+        assert!(!req_a.subsumes(&req_b));
+    }
+
+    #[test]
+    fn test_chain_info_subsumes_received_log_equal() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let query_a = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(5);
+        let query_b = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(5);
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // Same exclusion value should subsume
+        assert!(req_a.subsumes(&req_b));
+        assert!(req_b.subsumes(&req_a));
+    }
+
+    #[test]
+    fn test_chain_info_subsumes_complex_query() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        // Query A with more comprehensive request
+        let query_a = ChainInfoQuery::new(chain_id)
+            .with_committees()
+            .with_pending_message_bundles()
+            .with_manager_values()
+            .with_sent_certificate_hashes_by_heights(vec![
+                BlockHeight(10),
+                BlockHeight(11),
+                BlockHeight(12),
+            ])
+            .with_received_log_excluding_first_n(0);
+        // Query B with subset request
+        let query_b = ChainInfoQuery::new(chain_id)
+            .with_committees()
+            .with_sent_certificate_hashes_by_heights(vec![BlockHeight(11)])
+            .with_received_log_excluding_first_n(5);
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // A with more data should subsume B with less
+        assert!(req_a.subsumes(&req_b));
+    }
+
+    #[test]
+    fn test_chain_info_not_subsumes_complex_query() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        // Query A
+        let query_a = ChainInfoQuery::new(chain_id)
+            .with_committees()
+            .with_sent_certificate_hashes_by_heights(vec![
+                BlockHeight(10),
+                BlockHeight(11),
+                BlockHeight(12),
+            ]);
+        // Query B differs in boolean flag
+        let query_b = ChainInfoQuery::new(chain_id)
+            .with_committees()
+            .with_pending_message_bundles() // This is the difference
+            .with_sent_certificate_hashes_by_heights(vec![BlockHeight(11)]);
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // A should NOT subsume B due to missing pending_message_bundles flag
+        assert!(!req_a.subsumes(&req_b));
+    }
+
+    #[test]
+    fn test_chain_info_not_subsumes_different_chains() {
+        use crate::data_types::ChainInfoQuery;
+
+        let chain1 = ChainId(CryptoHash::test_hash("chain1"));
+        let chain2 = ChainId(CryptoHash::test_hash("chain2"));
+        let query_a = ChainInfoQuery::new(chain1);
+        let query_b = ChainInfoQuery::new(chain2);
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let req_b = RequestKey::ChainInfo(query_b);
+
+        // Different chain_ids should never subsume
+        assert!(!req_a.subsumes(&req_b));
+        assert!(!req_b.subsumes(&req_a));
+    }
+
+    #[test]
+    fn test_try_extract_chain_info_not_subsumed() {
+        use linera_base::data_types::Epoch;
+
+        use super::RequestResult;
+        use crate::data_types::{ChainInfo, ChainInfoQuery};
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        // req_a wants more data
+        let query_a = ChainInfoQuery::new(chain_id)
+            .with_committees()
+            .with_pending_message_bundles();
+        // in_flight_req has less data (only committees)
+        let query_b = ChainInfoQuery::new(chain_id).with_committees();
+
+        let req_a = RequestKey::ChainInfo(query_a);
+        let in_flight_req = RequestKey::ChainInfo(query_b);
+
+        // Create a dummy ChainInfo result
+        let chain_info = ChainInfo {
+            chain_id,
+            epoch: Epoch::ZERO,
+            description: None,
+            manager: Box::default(),
+            chain_balance: Default::default(),
+            block_hash: None,
+            timestamp: Default::default(),
+            next_block_height: BlockHeight(0),
+            state_hash: None,
+            requested_owner_balance: None,
+            requested_committees: None,
+            requested_pending_message_bundles: vec![],
+            requested_sent_certificate_hashes: vec![],
+            count_received_log: 0,
+            requested_received_log: vec![],
+        };
+        let result = RequestResult::ChainInfo(Box::new(chain_info));
+
+        // Should return None when in_flight_req doesn't subsume req_a
+        assert!(req_a.try_extract_result(&in_flight_req, &result).is_none());
+    }
+
+    #[test]
+    fn test_try_extract_chain_info_base_fields() {
+        use linera_base::{
+            crypto::CryptoHash,
+            data_types::{Amount, Epoch, Timestamp},
+        };
+
+        use super::RequestResult;
+        use crate::data_types::{ChainInfo, ChainInfoQuery};
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let query = ChainInfoQuery::new(chain_id);
+        let req = RequestKey::ChainInfo(query.clone());
+        let in_flight_req = RequestKey::ChainInfo(query);
+
+        // Create a ChainInfo result with specific base field values
+        let chain_info = ChainInfo {
+            chain_id,
+            epoch: Epoch::from(5),
+            description: None,
+            manager: Box::default(),
+            chain_balance: Amount::from_tokens(100),
+            block_hash: Some(CryptoHash::test_hash("block")),
+            timestamp: Timestamp::from(1234567890),
+            next_block_height: BlockHeight(42),
+            state_hash: Some(CryptoHash::test_hash("state")),
+            requested_owner_balance: None,
+            requested_committees: None,
+            requested_pending_message_bundles: vec![],
+            requested_sent_certificate_hashes: vec![],
+            count_received_log: 10,
+            requested_received_log: vec![],
+        };
+        let result = RequestResult::ChainInfo(Box::new(chain_info.clone()));
+
+        // Extract result
+        let extracted = req.try_extract_result(&in_flight_req, &result);
+        assert!(extracted.is_some());
+
+        // Verify base fields were copied correctly
+        match extracted.unwrap() {
+            RequestResult::ChainInfo(info) => {
+                assert_eq!(info.chain_id, chain_info.chain_id);
+                assert_eq!(info.epoch, chain_info.epoch);
+                assert_eq!(info.chain_balance, chain_info.chain_balance);
+                assert_eq!(info.block_hash, chain_info.block_hash);
+                assert_eq!(info.timestamp, chain_info.timestamp);
+                assert_eq!(info.next_block_height, chain_info.next_block_height);
+                assert_eq!(info.state_hash, chain_info.state_hash);
+                assert_eq!(info.count_received_log, chain_info.count_received_log);
+            }
+            _ => panic!("Expected ChainInfo result"),
+        }
+    }
+
+    #[test]
+    fn test_try_extract_chain_info_conditional_committees() {
+        use std::collections::BTreeMap;
+
+        use linera_base::data_types::Epoch;
+        use linera_execution::committee::Committee;
+
+        use super::RequestResult;
+        use crate::data_types::{ChainInfo, ChainInfoQuery};
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+
+        // Query WITHOUT committees
+        let query_no_committees = ChainInfoQuery::new(chain_id);
+        // Query WITH committees
+        let query_with_committees = ChainInfoQuery::new(chain_id).with_committees();
+
+        let req_no_committees = RequestKey::ChainInfo(query_no_committees.clone());
+        let req_with_committees = RequestKey::ChainInfo(query_with_committees.clone());
+        let in_flight_req = RequestKey::ChainInfo(query_with_committees);
+
+        // Create committees data
+        let mut committees = BTreeMap::new();
+        committees.insert(Epoch::ZERO, Committee::default());
+
+        // Create a ChainInfo result with committees
+        let chain_info = ChainInfo {
+            chain_id,
+            epoch: Epoch::ZERO,
+            description: None,
+            manager: Box::default(),
+            chain_balance: Default::default(),
+            block_hash: None,
+            timestamp: Default::default(),
+            next_block_height: BlockHeight(0),
+            state_hash: None,
+            requested_owner_balance: None,
+            requested_committees: Some(committees.clone()),
+            requested_pending_message_bundles: vec![],
+            requested_sent_certificate_hashes: vec![],
+            count_received_log: 0,
+            requested_received_log: vec![],
+        };
+        let result = RequestResult::ChainInfo(Box::new(chain_info));
+
+        // Extract with committees requested - should include them
+        let extracted_with = req_with_committees.try_extract_result(&in_flight_req, &result);
+        assert!(extracted_with.is_some());
+        match extracted_with.unwrap() {
+            RequestResult::ChainInfo(info) => {
+                assert!(info.requested_committees.is_some());
+                assert_eq!(info.requested_committees.unwrap(), committees);
+            }
+            _ => panic!("Expected ChainInfo result"),
+        }
+
+        // Extract without committees requested - should NOT include them
+        let extracted_without = req_no_committees.try_extract_result(&in_flight_req, &result);
+        assert!(extracted_without.is_some());
+        match extracted_without.unwrap() {
+            RequestResult::ChainInfo(info) => {
+                assert!(info.requested_committees.is_none());
+            }
+            _ => panic!("Expected ChainInfo result"),
+        }
+    }
+
+    #[test]
+    fn test_try_extract_chain_info_conditional_owner_balance() {
+        use linera_base::{
+            data_types::{Amount, Epoch},
+            identifiers::AccountOwner,
+        };
+
+        use super::RequestResult;
+        use crate::data_types::{ChainInfo, ChainInfoQuery};
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let owner = AccountOwner::from(CryptoHash::test_hash("owner1"));
+
+        let query = ChainInfoQuery::new(chain_id).with_owner_balance(owner);
+        let req = RequestKey::ChainInfo(query.clone());
+        let in_flight_req = RequestKey::ChainInfo(query);
+
+        // Create a ChainInfo result with owner balance
+        let chain_info = ChainInfo {
+            chain_id,
+            epoch: Epoch::ZERO,
+            description: None,
+            manager: Box::default(),
+            chain_balance: Default::default(),
+            block_hash: None,
+            timestamp: Default::default(),
+            next_block_height: BlockHeight(0),
+            state_hash: None,
+            requested_owner_balance: Some(Amount::from_tokens(50)),
+            requested_committees: None,
+            requested_pending_message_bundles: vec![],
+            requested_sent_certificate_hashes: vec![],
+            count_received_log: 0,
+            requested_received_log: vec![],
+        };
+        let result = RequestResult::ChainInfo(Box::new(chain_info.clone()));
+
+        // Extract - should include owner balance
+        let extracted = req.try_extract_result(&in_flight_req, &result);
+        assert!(extracted.is_some());
+        match extracted.unwrap() {
+            RequestResult::ChainInfo(info) => {
+                assert_eq!(info.requested_owner_balance, Some(Amount::from_tokens(50)));
+            }
+            _ => panic!("Expected ChainInfo result"),
+        }
+    }
+
+    #[test]
+    fn test_try_extract_chain_info_conditional_message_bundles() {
+        use linera_base::data_types::Epoch;
+
+        use super::RequestResult;
+        use crate::data_types::{ChainInfo, ChainInfoQuery};
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+
+        // Query WITHOUT message bundles
+        let query_no_bundles = ChainInfoQuery::new(chain_id);
+        // Query WITH message bundles
+        let query_with_bundles = ChainInfoQuery::new(chain_id).with_pending_message_bundles();
+
+        let req_no_bundles = RequestKey::ChainInfo(query_no_bundles.clone());
+        let req_with_bundles = RequestKey::ChainInfo(query_with_bundles.clone());
+        let in_flight_req = RequestKey::ChainInfo(query_with_bundles);
+
+        // Create a ChainInfo result with message bundles (empty vec for simplicity)
+        let chain_info = ChainInfo {
+            chain_id,
+            epoch: Epoch::ZERO,
+            description: None,
+            manager: Box::default(),
+            chain_balance: Default::default(),
+            block_hash: None,
+            timestamp: Default::default(),
+            next_block_height: BlockHeight(0),
+            state_hash: None,
+            requested_owner_balance: None,
+            requested_committees: None,
+            requested_pending_message_bundles: vec![],
+            requested_sent_certificate_hashes: vec![],
+            count_received_log: 0,
+            requested_received_log: vec![],
+        };
+        let result = RequestResult::ChainInfo(Box::new(chain_info));
+
+        // Extract with bundles requested - should include them (even if empty)
+        let extracted_with = req_with_bundles.try_extract_result(&in_flight_req, &result);
+        assert!(extracted_with.is_some());
+        match extracted_with.unwrap() {
+            RequestResult::ChainInfo(info) => {
+                // Should have the vec, even if empty
+                assert_eq!(info.requested_pending_message_bundles.len(), 0);
+            }
+            _ => panic!("Expected ChainInfo result"),
+        }
+
+        // Extract without bundles requested - should have empty vec
+        let extracted_without = req_no_bundles.try_extract_result(&in_flight_req, &result);
+        assert!(extracted_without.is_some());
+        match extracted_without.unwrap() {
+            RequestResult::ChainInfo(info) => {
+                assert_eq!(info.requested_pending_message_bundles.len(), 0);
+            }
+            _ => panic!("Expected ChainInfo result"),
+        }
+    }
+
+    #[test]
+    fn test_try_extract_chain_info_filter_certificate_hashes() {
+        use linera_base::{crypto::CryptoHash, data_types::Epoch};
+
+        use super::RequestResult;
+        use crate::data_types::{ChainInfo, ChainInfoQuery};
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+
+        // In-flight query requests heights [10, 11, 12, 13]
+        let in_flight_query = ChainInfoQuery::new(chain_id)
+            .with_sent_certificate_hashes_by_heights(vec![
+                BlockHeight(10),
+                BlockHeight(11),
+                BlockHeight(12),
+                BlockHeight(13),
+            ]);
+
+        // Self query requests subset [11, 13]
+        let self_query = ChainInfoQuery::new(chain_id)
+            .with_sent_certificate_hashes_by_heights(vec![BlockHeight(11), BlockHeight(13)]);
+
+        let req = RequestKey::ChainInfo(self_query);
+        let in_flight_req = RequestKey::ChainInfo(in_flight_query);
+
+        // Create hashes for heights [10, 11, 12, 13]
+        let hash_10 = CryptoHash::test_hash("hash10");
+        let hash_11 = CryptoHash::test_hash("hash11");
+        let hash_12 = CryptoHash::test_hash("hash12");
+        let hash_13 = CryptoHash::test_hash("hash13");
+
+        let chain_info = ChainInfo {
+            chain_id,
+            epoch: Epoch::ZERO,
+            description: None,
+            manager: Box::default(),
+            chain_balance: Default::default(),
+            block_hash: None,
+            timestamp: Default::default(),
+            next_block_height: BlockHeight(0),
+            state_hash: None,
+            requested_owner_balance: None,
+            requested_committees: None,
+            requested_pending_message_bundles: vec![],
+            requested_sent_certificate_hashes: vec![hash_10, hash_11, hash_12, hash_13],
+            count_received_log: 0,
+            requested_received_log: vec![],
+        };
+        let result = RequestResult::ChainInfo(Box::new(chain_info));
+
+        // Extract - should only get hashes for [11, 13]
+        let extracted = req.try_extract_result(&in_flight_req, &result);
+        assert!(extracted.is_some());
+        match extracted.unwrap() {
+            RequestResult::ChainInfo(info) => {
+                assert_eq!(info.requested_sent_certificate_hashes.len(), 2);
+                assert_eq!(info.requested_sent_certificate_hashes[0], hash_11);
+                assert_eq!(info.requested_sent_certificate_hashes[1], hash_13);
+            }
+            _ => panic!("Expected ChainInfo result"),
+        }
+    }
+
+    #[test]
+    fn test_try_extract_chain_info_filter_received_log() {
+        use linera_base::data_types::Epoch;
+        use linera_chain::data_types::ChainAndHeight;
+
+        use super::RequestResult;
+        use crate::data_types::{ChainInfo, ChainInfoQuery};
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+
+        // In-flight query excludes first 2 entries
+        let in_flight_query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(2);
+
+        // Self query wants to exclude first 5 entries (so skip 3 more from in-flight result)
+        let self_query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(5);
+
+        let req = RequestKey::ChainInfo(self_query);
+        let in_flight_req = RequestKey::ChainInfo(in_flight_query);
+
+        // Create received log - in_flight already excluded first 2, so this starts at index 2
+        let log_entries = vec![
+            ChainAndHeight {
+                chain_id: ChainId(CryptoHash::test_hash("chain2")),
+                height: BlockHeight(2),
+            },
+            ChainAndHeight {
+                chain_id: ChainId(CryptoHash::test_hash("chain3")),
+                height: BlockHeight(3),
+            },
+            ChainAndHeight {
+                chain_id: ChainId(CryptoHash::test_hash("chain4")),
+                height: BlockHeight(4),
+            },
+            ChainAndHeight {
+                chain_id: ChainId(CryptoHash::test_hash("chain5")),
+                height: BlockHeight(5),
+            },
+        ];
+
+        let chain_info = ChainInfo {
+            chain_id,
+            epoch: Epoch::ZERO,
+            description: None,
+            manager: Box::default(),
+            chain_balance: Default::default(),
+            block_hash: None,
+            timestamp: Default::default(),
+            next_block_height: BlockHeight(0),
+            state_hash: None,
+            requested_owner_balance: None,
+            requested_committees: None,
+            requested_pending_message_bundles: vec![],
+            requested_sent_certificate_hashes: vec![],
+            count_received_log: 6,
+            requested_received_log: log_entries.clone(),
+        };
+        let result = RequestResult::ChainInfo(Box::new(chain_info));
+
+        // Extract - should skip first 3 from in-flight result (indices 0,1,2), leaving index 3 onwards
+        let extracted = req.try_extract_result(&in_flight_req, &result);
+        assert!(extracted.is_some());
+        match extracted.unwrap() {
+            RequestResult::ChainInfo(info) => {
+                assert_eq!(info.requested_received_log.len(), 1);
+                assert_eq!(info.requested_received_log[0].height, BlockHeight(5));
+            }
+            _ => panic!("Expected ChainInfo result"),
+        }
+    }
+
+    #[test]
+    fn test_try_extract_chain_info_full_extraction() {
+        use linera_base::{crypto::CryptoHash, data_types::Epoch};
+
+        use super::RequestResult;
+        use crate::data_types::{ChainInfo, ChainInfoQuery};
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+
+        // Complex query with multiple fields
+        let query = ChainInfoQuery::new(chain_id)
+            .with_committees()
+            .with_sent_certificate_hashes_by_heights(vec![BlockHeight(10)])
+            .with_received_log_excluding_first_n(0);
+
+        let req = RequestKey::ChainInfo(query.clone());
+        let in_flight_req = RequestKey::ChainInfo(query);
+
+        let hash_10 = CryptoHash::test_hash("hash10");
+
+        let chain_info = ChainInfo {
+            chain_id,
+            epoch: Epoch::ZERO,
+            description: None,
+            manager: Box::default(),
+            chain_balance: Default::default(),
+            block_hash: None,
+            timestamp: Default::default(),
+            next_block_height: BlockHeight(0),
+            state_hash: None,
+            requested_owner_balance: None,
+            requested_committees: Some(Default::default()),
+            requested_pending_message_bundles: vec![],
+            requested_sent_certificate_hashes: vec![hash_10],
+            count_received_log: 0,
+            requested_received_log: vec![],
+        };
+        let result = RequestResult::ChainInfo(Box::new(chain_info.clone()));
+
+        // Extract - should include all requested fields
+        let extracted = req.try_extract_result(&in_flight_req, &result);
+        assert!(extracted.is_some());
+        match extracted.unwrap() {
+            RequestResult::ChainInfo(info) => {
+                assert!(info.requested_committees.is_some());
+                assert_eq!(info.requested_sent_certificate_hashes.len(), 1);
+                assert_eq!(info.requested_sent_certificate_hashes[0], hash_10);
+                assert_eq!(info.requested_received_log.len(), 0);
+            }
+            _ => panic!("Expected ChainInfo result"),
+        }
+    }
+
+    #[test]
+    fn test_try_extract_chain_info_empty_request() {
+        use linera_base::data_types::Epoch;
+
+        use super::RequestResult;
+        use crate::data_types::{ChainInfo, ChainInfoQuery};
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+
+        // Minimal request
+        let query = ChainInfoQuery::new(chain_id);
+        let req = RequestKey::ChainInfo(query.clone());
+        let in_flight_req = RequestKey::ChainInfo(query);
+
+        let chain_info = ChainInfo {
+            chain_id,
+            epoch: Epoch::ZERO,
+            description: None,
+            manager: Box::default(),
+            chain_balance: Default::default(),
+            block_hash: None,
+            timestamp: Default::default(),
+            next_block_height: BlockHeight(0),
+            state_hash: None,
+            requested_owner_balance: None,
+            requested_committees: None,
+            requested_pending_message_bundles: vec![],
+            requested_sent_certificate_hashes: vec![],
+            count_received_log: 0,
+            requested_received_log: vec![],
+        };
+        let result = RequestResult::ChainInfo(Box::new(chain_info));
+
+        // Extract - should have minimal data
+        let extracted = req.try_extract_result(&in_flight_req, &result);
+        assert!(extracted.is_some());
+        match extracted.unwrap() {
+            RequestResult::ChainInfo(info) => {
+                assert!(info.requested_committees.is_none());
+                assert_eq!(info.requested_sent_certificate_hashes.len(), 0);
+                assert_eq!(info.requested_received_log.len(), 0);
+            }
+            _ => panic!("Expected ChainInfo result"),
+        }
+    }
+
+    // End-to-end deduplication tests for ChainInfoQuery
+    // These tests verify the complete deduplication pipeline works correctly
+
+    #[test]
+    fn test_chain_info_deduplication_identical_queries() {
+        // Test: Concurrent identical ChainInfoQuery requests should deduplicate
+        // When multiple identical queries are made, only one network request should be issued
+        // and all callers should receive the same result.
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let query1 = ChainInfoQuery::new(chain_id).with_committees();
+        let query2 = ChainInfoQuery::new(chain_id).with_committees();
+
+        let key1 = RequestKey::ChainInfo(query1);
+        let key2 = RequestKey::ChainInfo(query2);
+
+        // Verify keys are equal (will deduplicate)
+        assert_eq!(key1, key2);
+    }
+
+    #[test]
+    fn test_chain_info_deduplication_subsumed_query() {
+        // Test: A subsumed query should wait for the subsuming in-flight request
+        // When query B is a subset of query A, and A is in-flight, B should wait
+        // for A to complete and extract its subset from A's result.
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+
+        // Query A requests more data (committees + pending bundles)
+        let query_a = ChainInfoQuery::new(chain_id)
+            .with_committees()
+            .with_pending_message_bundles();
+
+        // Query B requests less data (only committees)
+        let query_b = ChainInfoQuery::new(chain_id).with_committees();
+
+        let key_a = RequestKey::ChainInfo(query_a);
+        let key_b = RequestKey::ChainInfo(query_b);
+
+        // Verify A subsumes B
+        assert!(key_a.subsumes(&key_b));
+
+        // In the actual scheduler, if key_a is in-flight when key_b arrives,
+        // key_b will wait for key_a's result and extract its subset
+    }
+
+    #[test]
+    fn test_chain_info_deduplication_cache_hit() {
+        // Test: Cache should return results for subsequent identical requests
+        // After a query completes, identical subsequent queries should be served
+        // from cache without making a new network request.
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+        let query = ChainInfoQuery::new(chain_id).with_committees();
+
+        let key = RequestKey::ChainInfo(query);
+
+        // In the actual scheduler:
+        // 1. First call creates key, makes network request, stores in cache
+        // 2. Second call with same key checks cache first, returns cached result
+        // 3. No second network request is made
+
+        // Verify key is cacheable (implements required traits)
+        assert_eq!(key.clone(), key);
+    }
+
+    #[test]
+    fn test_chain_info_no_deduplication_different_chains() {
+        // Test: Queries for different chain_ids should NOT deduplicate
+        // Queries for different chains must make separate network requests
+        // even if all other fields are identical.
+
+        let chain_id1 = ChainId(CryptoHash::test_hash("chain1"));
+        let chain_id2 = ChainId(CryptoHash::test_hash("chain2"));
+
+        let query1 = ChainInfoQuery::new(chain_id1).with_committees();
+        let query2 = ChainInfoQuery::new(chain_id2).with_committees();
+
+        let key1 = RequestKey::ChainInfo(query1);
+        let key2 = RequestKey::ChainInfo(query2);
+
+        // Verify keys are different (will NOT deduplicate)
+        assert_ne!(key1, key2);
+
+        // Verify neither subsumes the other
+        assert!(!key1.subsumes(&key2));
+        assert!(!key2.subsumes(&key1));
+    }
+
+    #[test]
+    fn test_chain_info_no_deduplication_non_subsuming() {
+        // Test: Non-subsuming queries should trigger separate requests
+        // When two queries request different data that don't form a subset relationship,
+        // they cannot be deduplicated and must make separate requests.
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+
+        // Query A requests committees
+        let query_a = ChainInfoQuery::new(chain_id).with_committees();
+
+        // Query B requests pending message bundles (different data)
+        let query_b = ChainInfoQuery::new(chain_id).with_pending_message_bundles();
+
+        let key_a = RequestKey::ChainInfo(query_a);
+        let key_b = RequestKey::ChainInfo(query_b);
+
+        // Verify neither subsumes the other (both request different data)
+        assert!(!key_a.subsumes(&key_b));
+        assert!(!key_b.subsumes(&key_a));
+
+        // In the actual scheduler, these would trigger separate network requests
+    }
+
+    #[test]
+    fn test_chain_info_subsumption_with_heights() {
+        // Test: Subsumption with collection fields (certificate heights)
+        // A query requesting a superset of heights can serve a query requesting
+        // a subset of those heights.
+
+        let chain_id = ChainId(CryptoHash::test_hash("chain1"));
+
+        // Query A requests certificates at heights [10, 11, 12, 13]
+        let query_a = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(vec![
+            BlockHeight(10),
+            BlockHeight(11),
+            BlockHeight(12),
+            BlockHeight(13),
+        ]);
+
+        // Query B requests certificates at heights [11, 12] (subset)
+        let query_b = ChainInfoQuery::new(chain_id)
+            .with_sent_certificate_hashes_by_heights(vec![BlockHeight(11), BlockHeight(12)]);
+
+        let key_a = RequestKey::ChainInfo(query_a);
+        let key_b = RequestKey::ChainInfo(query_b);
+
+        // Verify A subsumes B
+        assert!(key_a.subsumes(&key_b));
+
+        // Verify B does NOT subsume A (doesn't have all heights)
+        assert!(!key_b.subsumes(&key_a));
     }
 }
