@@ -352,7 +352,7 @@ struct RestrictedEventId {
 fn event_key(event_id: &EventId) -> Vec<u8> {
     let restricted_event_id = RestrictedEventId {
         stream_id: event_id.stream_id.clone(),
-	index: event_id.index,
+        index: event_id.index,
     };
     bcs::to_bytes(&restricted_event_id).unwrap()
 }
@@ -995,8 +995,7 @@ where
     }
 
     async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError> {
-        let database = self.database.deref();
-        let root_keys = database.list_root_keys().await?;
+        let root_keys = self.database.list_root_keys().await?;
         let mut blob_ids = Vec::new();
         for root_key in root_keys {
             if !root_key.is_empty() && root_key[0] == BLOB_ID_TAG {
@@ -1009,8 +1008,7 @@ where
     }
 
     async fn list_chain_ids(&self) -> Result<Vec<ChainId>, ViewError> {
-        let database = self.database.deref();
-        let root_keys = database.list_root_keys().await?;
+        let root_keys = self.database.list_root_keys().await?;
         let mut chain_ids = Vec::new();
         for root_key in root_keys {
             if !root_key.is_empty() && root_key[0] == CHAIN_ID_TAG {
