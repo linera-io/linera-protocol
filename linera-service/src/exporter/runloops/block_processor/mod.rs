@@ -31,7 +31,7 @@ where
     committee_destination_update: bool,
     // Temporary solution.
     // Tracks certificates that failed to be read from storage
-    // along with the time of the failure to avoid retrying too often.
+    // along with the time of the failure to avoid retrying for too long.
     retried_certs: HashMap<CryptoHash, (u8, Instant)>,
 }
 
