@@ -23,6 +23,8 @@ use crate::{
 
 #[derive(Debug)]
 enum SchemaVersion {
+    /// No schema version detected.
+    Uninitialized,
     /// Version 0. All the blobs, certificates, confirmed blocks, events and network
     /// description are on the same partition.
     Version0,
@@ -30,7 +32,8 @@ enum SchemaVersion {
     Version1,
 }
 
-/// How long we should wait before retrying when we detect another migration in progress.
+/// How long we should wait (in minutes) before retrying when we detect another migration
+/// in progress.
 const MIGRATION_WAIT_BEFORE_RETRY_MIN: u64 = 3;
 
 const UNUSED_EMPTY_KEY: &[u8] = &[];
@@ -142,7 +145,6 @@ where
             for key in chunk_base_keys {
                 batch.delete_key(key.to_vec());
             }
-            // Migrate chunk.
             store.write_batch(batch).await?;
         }
         Ok(())
@@ -161,7 +163,7 @@ where
         loop {
             if matches!(
                 self.get_storage_state().await?,
-                None | Some(SchemaVersion::Version1)
+                SchemaVersion::Uninitialized | SchemaVersion::Version1
             ) {
                 // Nothing to do.
                 return Ok(());
@@ -181,26 +183,29 @@ where
         }
     }
 
-    async fn get_storage_state(&self) -> Result<Option<SchemaVersion>, ViewError> {
+    async fn get_storage_state(&self) -> Result<SchemaVersion, ViewError> {
         let store = self.database.open_shared(&[])?;
         let key = bcs::to_bytes(&BaseKey::NetworkDescription).unwrap();
         if store.contains_key(&key).await? {
-            return Ok(Some(SchemaVersion::Version0));
+            return Ok(SchemaVersion::Version0);
         }
 
         let root_key = RootKey::NetworkDescription.bytes();
         let store = self.database.open_shared(&root_key)?;
         if store.contains_key(NETWORK_DESCRIPTION_KEY).await? {
-            return Ok(Some(SchemaVersion::Version1));
+            return Ok(SchemaVersion::Version1);
         }
 
-        Ok(None)
+        Ok(SchemaVersion::Uninitialized)
     }
 
     /// Assert that the storage is at the last version (or not yet initialized).
     pub async fn assert_is_migrated_storage(&self) -> Result<(), ViewError> {
         let state = self.get_storage_state().await?;
-        assert!(matches!(state, None | Some(SchemaVersion::Version1)));
+        assert!(matches!(
+            state,
+            SchemaVersion::Uninitialized | SchemaVersion::Version1
+        ));
         Ok(())
     }
 }
