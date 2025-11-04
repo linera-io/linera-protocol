@@ -28,14 +28,6 @@ spec:
       labels:
         app: linera-explorer
     spec:
-      {{- if eq .Values.environment "GCP" }}
-      nodeSelector:
-        workload: system
-      tolerations:
-      - key: system
-        value: "true"
-        effect: NoSchedule
-      {{- end }}
       containers:
         - name: linera-explorer
           image: {{ .Values.explorer.image }}

@@ -213,7 +213,9 @@ revm-state = { version = "4.0.1", default-features = false, features = [
     "serde",
 ] }
 rocksdb = "0.21.0"
-ruzstd = "0.8.1"
+# 0.8.2 doesn't build with Rust 1.87. Remove `=` once
+# https://github.com/linera-io/linera-protocol/issues/4742 is resolved.
+ruzstd = "=0.8.1"
 scylla = "~1.1.0"
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }

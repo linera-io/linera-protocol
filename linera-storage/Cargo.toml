@@ -47,6 +47,7 @@ linera-views.workspace = true
 papaya.workspace = true
 prometheus.workspace = true
 serde.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
@@ -55,7 +56,6 @@ linera-storage = { path = ".", default-features = false, features = ["test"] }
 rand.workspace = true
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
-tokio.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
