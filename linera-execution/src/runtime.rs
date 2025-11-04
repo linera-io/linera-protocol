@@ -897,7 +897,6 @@ where
             .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
             .recv_response()
     }
-
 }
 
 /// An extension trait to determine in compile time the different behaviors between contract and

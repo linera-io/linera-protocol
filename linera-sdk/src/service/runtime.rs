@@ -159,7 +159,6 @@ where
     pub fn assert_data_blob_exists(&self, hash: DataBlobHash) {
         base_wit::assert_data_blob_exists(hash.into())
     }
-
 }
 
 impl<Application> ServiceRuntime<Application>
