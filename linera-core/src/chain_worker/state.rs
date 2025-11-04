@@ -7,7 +7,6 @@ use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     iter,
-    ops::RangeInclusive,
     sync::{self, Arc},
 };
 
@@ -1561,11 +1560,9 @@ where
             bundles.sort_by_key(|b| b.bundle.timestamp);
             info.requested_pending_message_bundles = bundles;
         }
-        let mut hashes = Vec::new();
-        let height_ranges = into_ranges(query.request_sent_certificate_hashes_by_heights);
-        for height_range in height_ranges {
-            hashes.extend(chain.block_hashes(height_range).await?);
-        }
+        let hashes = chain
+            .block_hashes(query.request_sent_certificate_hashes_by_heights)
+            .await?;
         info.requested_sent_certificate_hashes = hashes;
         if let Some(start) = query.request_received_log_excluding_first_n {
             let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
@@ -1642,21 +1639,6 @@ where
         self.chain.save().await?;
         Ok(())
     }
-}
-
-/// Returns an iterator of inclusive ranges that exactly cover the list of block heights.
-fn into_ranges(
-    values: impl IntoIterator<Item = BlockHeight>,
-) -> impl Iterator<Item = RangeInclusive<BlockHeight>> {
-    let mut values_iter = values.into_iter().peekable();
-    iter::from_fn(move || {
-        let start = values_iter.next()?;
-        let mut end = start;
-        while values_iter.peek() == end.try_add_one().ok().as_ref() {
-            end = values_iter.next()?;
-        }
-        Some(start..=end)
-    })
 }
 
 /// Returns the keys whose value is `None`.
@@ -1770,22 +1752,4 @@ impl<'a> CrossChainUpdateHelper<'a> {
         };
         Ok(bundles)
     }
-}
-
-#[test]
-fn test_into_ranges() {
-    assert_eq!(
-        into_ranges(vec![
-            BlockHeight(2),
-            BlockHeight(3),
-            BlockHeight(4),
-            BlockHeight(6)
-        ],)
-        .collect::<Vec<_>>(),
-        vec![
-            BlockHeight(2)..=BlockHeight(4),
-            BlockHeight(6)..=BlockHeight(6)
-        ]
-    );
-    assert_eq!(into_ranges(vec![]).collect::<Vec<_>>(), vec![]);
 }
