@@ -724,14 +724,6 @@ impl ChainOrigin {
     pub fn is_child(&self) -> bool {
         matches!(self, ChainOrigin::Child { .. })
     }
-
-    /// Returns the root chain number, if this is a root chain.
-    pub fn root(&self) -> Option<u32> {
-        match self {
-            ChainOrigin::Root(i) => Some(*i),
-            ChainOrigin::Child { .. } => None,
-        }
-    }
 }
 
 /// A number identifying the configuration of the chain (aka the committee).
