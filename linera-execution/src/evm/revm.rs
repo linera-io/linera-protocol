@@ -293,10 +293,7 @@ enum ContractRuntimePrecompile {
     /// Calling `validation_round` of `ContractRuntime`
     ValidationRound,
     /// Calling `transfer` of `ContractRuntime`
-    Transfer {
-        account: Account,
-        amount: Amount,
-    },
+    Transfer { account: Account, amount: Amount },
 }
 
 /// Some functionalities from the ServiceRuntime not in BaseRuntime
@@ -501,7 +498,6 @@ fn get_evm_destination<Runtime: ContractRuntime>(
     }
     Ok(account.owner.to_evm_address())
 }
-
 
 /// If we are using the `None` case of `fn call` and `fn create` then the transfer
 /// of ethers is done by REVM. On the other hand, if we are managing the call/create
@@ -830,7 +826,10 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
 
 impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// Gets the expected `ApplicationId`.
-    fn get_expected_application_id(runtime: &mut Runtime, module_id: ModuleId) -> Result<ApplicationId, ExecutionError> {
+    fn get_expected_application_id(
+        runtime: &mut Runtime,
+        module_id: ModuleId,
+    ) -> Result<ApplicationId, ExecutionError> {
         let chain_id = runtime.chain_id()?;
         let block_height = runtime.block_height()?;
         let application_index = runtime.application_index()?;
@@ -848,7 +847,10 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     }
 
     /// Publishes the `input`.
-    fn publish_create_inputs(context: &mut Ctx<'_, Runtime>, inputs: &mut CreateInputs) -> Result<ModuleId, ExecutionError> {
+    fn publish_create_inputs(
+        context: &mut Ctx<'_, Runtime>,
+        inputs: &mut CreateInputs,
+    ) -> Result<ModuleId, ExecutionError> {
         let contract = linera_base::data_types::Bytecode::new(inputs.init_code.to_vec());
         let service = linera_base::data_types::Bytecode::new(vec![]);
         let mut runtime = context.db().0.runtime.lock().unwrap();
@@ -972,7 +974,8 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             let mut runtime = context.db().0.runtime.lock().unwrap();
             let chain_id = runtime.chain_id()?;
             let application_id = runtime.application_id()?;
-            let expected_application_id = Self::get_expected_application_id(&mut runtime, module_id)?;
+            let expected_application_id =
+                Self::get_expected_application_id(&mut runtime, module_id)?;
             if inputs.value != U256::ZERO {
                 let amount = Amount::try_from(inputs.value).map_err(EvmExecutionError::from)?;
                 let destination = Account {
