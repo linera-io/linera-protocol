@@ -316,7 +316,7 @@ enum RuntimePrecompile {
 
 fn get_precompile_output(output: Vec<u8>, gas_limit: u64) -> InterpreterResult {
     // The gas usage is set to `gas_limit` and no spending is being done on it.
-    // This means that for REVM, it looks like the precompile call costs nothing.
+    // This means that for Revm, it looks like the precompile call costs nothing.
     // This is because the costs of the EVM precompile calls is accounted for
     // separately in Linera.
     let output = Bytes::from(output);
@@ -492,15 +492,14 @@ fn get_evm_destination<Runtime: ContractRuntime>(
     account: Account,
 ) -> Result<Option<Address>, ExecutionError> {
     let mut runtime = context.db().0.runtime.lock().unwrap();
-    let chain_id = runtime.chain_id()?;
-    if chain_id == account.chain_id {
+    if runtime.chain_id()? != account.chain_id {
         return Ok(None);
     }
     Ok(account.owner.to_evm_address())
 }
 
 /// If we are using the `None` case of `fn call` and `fn create` then the transfer
-/// of ethers is done by REVM. On the other hand, if we are managing the call/create
+/// of ethers is done by Revm. On the other hand, if we are managing the call/create
 /// by hand, then we need to do the transfers ourselves.
 fn revm_transfer<Runtime: ContractRuntime>(
     context: &mut Ctx<'_, Runtime>,
@@ -846,7 +845,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         Ok(ApplicationId::from(&application_description))
     }
 
-    /// Publishes the `input`.
+    /// Publishes the `inputs`.
     fn publish_create_inputs(
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CreateInputs,
@@ -862,7 +861,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// function can have some error case which are not supported
     /// in `fn create`, we call a `fn create_or_fail` that can
     /// return errors.
-    /// When the database runtime is created, the REVM contract
+    /// When the database runtime is created, the Evm contract
     /// may or may not have been created. Therefore, at startup
     /// we have `is_revm_instantiated = false`. That boolean
     /// can be updated after `set_is_initialized`.
@@ -909,7 +908,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     ///   constructor argument.
     /// * What needs to be determined is the deployed bytecode.
     ///   This is stored in the AccountInfo entry. It is
-    ///   the result of the execution by the REVM interpreter
+    ///   the result of the execution by the Revm interpreter
     ///   and there is no way to do it without doing the execution.
     ///
     /// The strategy for creating the contract is thus:
@@ -926,22 +925,22 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     ///   This is simply not part of create/create2 in the EVM.
     /// * That call to `create_application` leads to a creation of
     ///   a new contract and so a call to `fn create_or_fail` in
-    ///   another instance of REVM.
+    ///   another instance of Revm.
     /// * When returning the `CreateOutcome`, we need to have the
     ///   deployed bytecode. This is implemented through a special
     ///   call to `GET_DEPLOYED_BYTECODE_SELECTOR`. This is done
     ///   with an `execute_operation`.
-    /// * Data is put together as a `Some(...)` which tells REVM
+    /// * Data is put together as a `Some(...)` which tells Revm
     ///   that it does not need to execute the bytecode since the
     ///   output is given to it.
     ///
     /// The fact that the creation of a contract can be done in a
-    /// parallel way to transfering native tokens to the contract
+    /// parallel way to transferring native tokens to the contract
     /// being created requires us to handle this as well.
     /// * We cannot do a transfer from the calling contract with
-    ///   the deposit_funds because we would not have the right
+    ///   `deposit_funds` because we would not have the right
     ///   to make the transfer.
-    /// * Therefore, we have to do the transfer before the
+    /// * Therefore, we have to do the transfer before
     ///   `create_application`. This forces us to know the
     ///   `application_id` before it is created. This is done
     ///   by building the `ApplicationDescription` and its hash.
@@ -960,7 +959,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             if inputs.value != U256::ZERO {
                 // decrease the balance of the contract address by the expected amount.
                 // We put the tokens in FAUCET_ADDRESS because we cannot transfer to
-                // a contract that do not yet exist.
+                // a contract that does not yet exist.
                 // It is a common construction. We can see that in ERC20 contract code
                 // for example for burning and minting.
                 revm_transfer(
@@ -1022,17 +1021,17 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// --- Call to the PRECOMPILE smart contract.
     /// --- Call to other EVM smart contract
     ///
-    /// The first case is handled by the using the REVM. This is
+    /// The first case is handled by the using Revm. This is
     /// when we call this contract.
     ///
-    /// Calling the precompile is also handled by using REVM
+    /// Calling the precompile is also handled by using Revm
     /// which would then use specific code for that purpose.
     ///
-    /// Calling other EVM contracts is handled here and we have
-    /// to produce the `Some(_)` as output. Note that in the EVM
-    /// transfering ethers is the same as calling a function.
+    /// Calling other Evm contracts is handled here and we have
+    /// to produce `Some(_)` as output. Note that in the Evm
+    /// transferring ethers is the same as calling a function.
     ///
-    /// In Linera, transfering lineras and calling a function are
+    /// In Linera, transferring native tokens and calling a function are
     /// different operations. However, the block is accepted
     /// completely or not at all. Therefore, we can ensure the
     /// atomicity of the operations.
@@ -1082,7 +1081,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             //
             // So, the correct way is instead to test the existence of the application
             // given the application_id. So, we would need following function in BaseRuntime:
-            //  fn is_existing_application(&mut self, application_id: ApplicationId)
+            // fn has_trivial_storage(&mut self, application: ApplicationId)
             //       -> Result<bool, ExecutionError>;
             let authenticated = true;
             let result = {
@@ -1151,7 +1150,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
     /// function can have some error case which are not supported
     /// in `fn create`, we call a `fn create_or_fail` that can
     /// return errors.
-    /// When the database runtime is created, the REVM contract
+    /// When the database runtime is created, the Evm contract
     /// may or may not have been created. Therefore, at startup
     /// we have `is_revm_instantiated = false`. That boolean
     /// can be updated after `set_is_initialized`.
