@@ -131,7 +131,7 @@ where
                             match self.retried_certs.remove(&hash) {
                                 // We retry only if the time elapsed since the first attempt is
                                 // less than 1 second. The assumption is that Scylla cannot
-                                // be eventually consistent for too long.
+                                // be inconsistent for too long.
                                 Some((retries, first_attempt)) => {
                                     let elapsed = Instant::now().duration_since(first_attempt);
                                     if retries < 3 || elapsed < Duration::from_secs(1) {
