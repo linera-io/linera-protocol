@@ -465,13 +465,13 @@ impl Application {
     #[wasm_bindgen]
     // TODO(#14) allow passing bytes here rather than just strings
     // TODO(#15) a lot of this logic is shared with `linera_service::node_service`
-    pub async fn query(&self, query: &str, block_hash: &str) -> JsResult<String> {
+    pub async fn query(&self, query: &str, block_hash: Option<String>) -> JsResult<String> {
         tracing::debug!("querying application: {query}");
         let chain_client = self.client.default_chain_client().await?;
-        let block_hash = if block_hash.is_empty() {
-            None
+        let block_hash = if let Some(hash) = block_hash {
+            Some(hash.as_str().parse()?)
         } else {
-            Some(block_hash.parse()?)
+            None
         };
         let linera_execution::QueryOutcome {
             response: linera_execution::QueryResponse::User(response),
