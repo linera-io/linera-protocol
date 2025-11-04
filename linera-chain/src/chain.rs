@@ -1072,7 +1072,7 @@ where
         chain_id = %self.chain_id(),
         next_block_height = %self.tip_state.get().next_block_height,
     ))]
-    pub async fn block_hashes_by_height(
+    pub async fn block_hashes(
         &self,
         heights: impl IntoIterator<Item = BlockHeight>,
     ) -> Result<Vec<CryptoHash>, ChainError> {

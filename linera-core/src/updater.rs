@@ -522,7 +522,7 @@ where
                 .local_node
                 .chain_state_view(chain_id)
                 .await?
-                .block_hashes_by_height([height])
+                .block_hashes([height])
                 .await?
                 .into_iter()
                 .next()
@@ -561,7 +561,7 @@ where
                 .local_node
                 .chain_state_view(chain_id)
                 .await?
-                .block_hashes_by_height(heights)
+                .block_hashes(heights)
                 .await?;
             if !validator_missing_hashes.is_empty() {
                 // Send the requested certificates in order.
