@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::HashMap,
     future::{Future, IntoFuture},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
+use linera_base::crypto::CryptoHash;
 use linera_execution::committee::Committee;
 use linera_service::config::DestinationId;
 use linera_storage::Storage;
@@ -27,6 +29,10 @@ where
     storage: BlockProcessorStorage<T>,
     new_block_queue: NewBlockQueue,
     committee_destination_update: bool,
+    // Temporary solution.
+    // Tracks certificates that failed to be read from storage
+    // along with the time of the failure to avoid retrying too often.
+    retried_certs: HashMap<CryptoHash, (u8, Instant)>,
 }
 
 impl<S, T> BlockProcessor<S, T>
@@ -46,6 +52,7 @@ where
             exporters_tracker,
             committee_destination_update,
             new_block_queue,
+            retried_certs: HashMap::new(),
         }
     }
 
@@ -118,6 +125,30 @@ where
                         Err(ExporterError::ViewError(_)) => {
                             // return the block to the back of the task queue to process again later
                             self.new_block_queue.push_back(next_block_notification);
+                        },
+
+                        Err(ExporterError::ReadCertificateError(hash)) => {
+                            match self.retried_certs.remove(&hash) {
+                                // We retry only if the time elapsed since the first attempt is
+                                // less than 1 second. The assumption is that Scylla cannot
+                                // be eventually consistent for too long.
+                                Some((retries, first_attempt)) => {
+                                    let elapsed = Instant::now().duration_since(first_attempt);
+                                    if elapsed < Duration::from_secs(1) {
+                                        tracing::warn!(?hash, retry=retries+1, "retrying to read certificate");
+                                        self.retried_certs.insert(hash, (retries + 1, first_attempt));
+                                        self.new_block_queue.push_back(next_block_notification);
+                                    } else {
+                                        tracing::error!(?hash, "certificate is missing from the database");
+                                        return Err(ExporterError::ReadCertificateError(hash));
+                                    }
+                                },
+                                None => {
+                                    tracing::warn!(?hash, retry=1, "retrying to read certificate");
+                                    self.retried_certs.insert(hash, (1, Instant::now()));
+                                    self.new_block_queue.push_back(next_block_notification);
+                                }
+                            }
                         },
 
                         Err(e @ (ExporterError::UnprocessedChain
