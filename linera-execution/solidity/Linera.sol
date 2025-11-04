@@ -63,14 +63,19 @@ library Linera {
         return LineraTypes.AccountOwner(owner.choice, owner.reserved, hash, owner.address20);
     }
 
-    function account_to(Linera.Account memory account)
+    struct Account {
+        ChainId chain_id;
+        AccountOwner owner;
+    }
+
+    function account_to(Linera.Account memory account_i)
         internal
         pure
         returns (LineraTypes.Account memory)
     {
-        LineraTypes.ChainId memory chain_id = chainid_to(account.chain_id);
-        LineraTypes.AccountOwner memory owner = accountowner_to(account.owner);
-        return LineraTypes.Account(chain_id, owner);
+        LineraTypes.ChainId memory chain_id2 = chainid_to(account_i.chain_id);
+        LineraTypes.AccountOwner memory owner2 = accountowner_to(account_i.owner);
+        return LineraTypes.Account(chain_id2, owner2);
     }
 
     struct AccountOwnerBalance {
@@ -570,10 +575,11 @@ library Linera {
         return opt_uint32_from(output2);
     }
 
-    function transfer(Linera.AccountOwner account, uint256 amount) internal {
+    function transfer(Linera.Account memory account, uint256 amount) internal {
         address precompile = address(0x0b);
-        LineraTypes.AccountOwner account2 = account_to(account);
-        LineraTypes.ContractRuntimePrecompile_Transfer memory transfer_ = LineraTypes.ContractRuntimePrecompile_Transfer(account2, amount);
+        LineraTypes.Account memory account2 = account_to(account);
+        LineraTypes.Amount memory amount2 = LineraTypes.Amount(bytes32(amount));
+        LineraTypes.ContractRuntimePrecompile_Transfer memory transfer_ = LineraTypes.ContractRuntimePrecompile_Transfer(account2, amount2);
         LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_transfer(transfer_);
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
