@@ -19,6 +19,7 @@ pub fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = ChainId
             Cell::new("Latest Block").add_attribute(Attribute::Bold),
         ]);
 
+    let admin_chain_id = wallet.genesis_admin_chain();
     for chain_id in chain_ids {
         let Some(user_chain) = wallet.chains.get(&chain_id) else {
             panic!("Chain {} not found.", chain_id);
@@ -28,6 +29,7 @@ pub fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = ChainId
             chain_id,
             user_chain,
             Some(chain_id) == wallet.default,
+            chain_id == admin_chain_id,
         );
     }
     println!("{}", table);
@@ -38,12 +40,27 @@ fn update_table_with_chain(
     chain_id: ChainId,
     user_chain: &UserChain,
     is_default_chain: bool,
+    is_admin_chain: bool,
 ) {
     let epoch = user_chain.epoch;
+    let mut chain_id_str = format!("{}", chain_id);
+
+    // Add labels below the chain ID.
+    let mut labels = Vec::new();
+    if is_default_chain {
+        labels.push("default");
+    }
+    if is_admin_chain {
+        labels.push("admin");
+    }
+    if !labels.is_empty() {
+        chain_id_str.push_str(&format!("\n{}", labels.join(", ")));
+    }
+
     let chain_id_cell = if is_default_chain {
-        Cell::new(format!("{}", chain_id)).fg(Color::Green)
+        Cell::new(chain_id_str).fg(Color::Green)
     } else {
-        Cell::new(format!("{}", chain_id))
+        Cell::new(chain_id_str)
     };
     let epoch_str = match epoch {
         None => "-".to_string(),
