@@ -6,7 +6,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fmt,
     hash::Hash,
-    mem,
+    iter, mem,
 };
 
 use futures::{
@@ -101,6 +101,16 @@ pub enum CommunicationError<E: fmt::Debug> {
     /// errors for debugging purposes, together with their weight.
     #[error("Failed to communicate with a quorum of validators:\n{:#?}", .0)]
     Sample(Vec<(E, u64)>),
+}
+
+impl<E: fmt::Debug> CommunicationError<E> {
+    pub fn errors(&self) -> Box<dyn Iterator<Item = &E> + '_> {
+        match self {
+            Self::NoConsensus(_, _) => Box::new(iter::empty()),
+            Self::Trusted(err) => Box::new(iter::once(err)),
+            Self::Sample(errors) => Box::new(errors.iter().map(|(err, _)| err)),
+        }
+    }
 }
 
 /// Executes a sequence of actions in parallel for all validators.

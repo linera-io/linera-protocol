@@ -2184,7 +2184,8 @@ where
         )
         .await;
 
-    // The transfer should succeed after the client discovers it's actually the leader in the validator's current round.
+    // The transfer should succeed after the client discovers it's actually the leader in the
+    // validator's current round.
     match result {
         Ok(ClientOutcome::Committed(_)) => {
             // Success! The client handled the round mismatch and completed the transfer.

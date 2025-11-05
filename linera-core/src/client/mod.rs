@@ -3158,58 +3158,37 @@ impl<Env: Environment> ChainClient<Env> {
     /// Requests a leader timeout certificate if the current round has timed out. Returns the
     /// chain info for the (possibly new) current round.
     async fn request_leader_timeout_if_needed(&self) -> Result<Box<ChainInfo>, ChainClientError> {
-        let mut info = self.chain_info_with_manager_values().await?;
-        // If the current round has timed out, we request a timeout certificate and retry in
-        // the next round.
-        if let Some(round_timeout) = info.manager.round_timeout {
-            if round_timeout <= self.storage_client().clock().current_time() {
-                match self.request_leader_timeout().await {
-                    Ok(_) => {
-                        info = self.chain_info_with_manager_values().await?;
-                    }
-                    Err(ChainClientError::CommunicationError(ref comm_error)) => {
-                        // Check if validators are in a different (higher) round.
-                        let validator_round = match comm_error {
-                            CommunicationError::Trusted(NodeError::WrongRound(round)) => {
-                                Some(*round)
-                            }
-                            CommunicationError::Sample(errors) => {
-                                // Find the highest round among WrongRound errors.
-                                errors
-                                    .iter()
-                                    .filter_map(|(err, _)| match err {
-                                        NodeError::WrongRound(round) => Some(*round),
-                                        _ => None,
-                                    })
-                                    .max()
-                            }
-                            _ => None,
-                        };
-
-                        if let Some(validator_round) = validator_round {
-                            if validator_round > info.manager.current_round {
-                                // Validators are ahead of us. Synchronize and update our state.
-                                debug!(
-                                    "Validators are in round {:?}, but we are in round {:?}. \
-                                    Synchronizing chain state.",
-                                    validator_round, info.manager.current_round
-                                );
-                                self.synchronize_from_validators().await?;
-                                info = self.chain_info_with_manager_values().await?;
-                            } else {
-                                debug!("Failed to obtain a timeout certificate: {}", comm_error);
-                            }
-                        } else {
-                            debug!("Failed to obtain a timeout certificate: {}", comm_error);
-                        }
-                    }
-                    Err(e) => {
-                        debug!("Failed to obtain a timeout certificate: {}", e);
-                    }
-                }
+        let info = self.chain_info_with_manager_values().await?;
+        let Some(round_timeout) = info.manager.round_timeout else {
+            return Ok(info); // The current round does not time out.
+        };
+        if round_timeout > self.storage_client().clock().current_time() {
+            return Ok(info); // The current round has not timed out yet.
+        };
+        match self.request_leader_timeout().await {
+            Ok(_) => {}
+            Err(ChainClientError::CommunicationError(comm_error))
+                if comm_error.errors().any(|err| {
+                    matches!(
+                        err,
+                        NodeError::WrongRound(round) if *round > info.manager.current_round
+                    )
+                }) =>
+            {
+                // Validators are ahead of us. Synchronize and update our state.
+                debug!(
+                    "We are in round {:?}, but validators are ahead: {comm_error}. \
+                    Synchronizing chain state.",
+                    info.manager.current_round
+                );
+                self.synchronize_from_validators().await?;
+            }
+            Err(err) => {
+                debug!("Failed to obtain a timeout certificate: {err}");
+                return Ok(info);
             }
         }
-        Ok(info)
+        Ok(self.chain_info_with_manager_values().await?)
     }
 
     /// Finalizes the locking block.
