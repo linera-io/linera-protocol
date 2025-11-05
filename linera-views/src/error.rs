@@ -51,7 +51,7 @@ pub enum ViewError {
 
     /// The database is corrupt: Some entries are missing
     #[error("missing database entries")]
-    MissingEntries,
+    MissingEntries(Vec<u8>),
 
     /// The values are incoherent.
     #[error("post load values error")]
