@@ -2107,6 +2107,111 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
+async fn test_request_leader_timeout_client_behind_validators<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let observer = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = client.chain_id();
+    let observer_id = observer.chain_id();
+    let owner0 = client.identity().await.unwrap();
+    let owner1 = AccountSecretKey::generate().public().into();
+
+    // Set up multi-owner chain.
+    let owners = [(owner0, 100), (owner1, 100)];
+    let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
+    client.change_ownership(ownership.clone()).await.unwrap();
+
+    // Advance to a round where owner1 is the leader (so owner0 is not).
+    let round_where_owner0_not_leader = loop {
+        let manager = client.chain_info().await.unwrap().manager;
+        if manager.leader == Some(owner1) {
+            break manager.current_round;
+        }
+        clock.set(manager.round_timeout.unwrap());
+        client.request_leader_timeout().await.unwrap();
+    };
+    let round_number = match round_where_owner0_not_leader {
+        Round::SingleLeader(n) => n,
+        round => panic!("Unexpected round {round:?}"),
+    };
+
+    // Now create a second client on the same chain to advance validators ahead
+    // to the next round, where owner0 will be the leader.
+    let client2 = builder
+        .make_client(chain_id, None, BlockHeight::ZERO)
+        .await?;
+
+    // Sync client2 to get the current state.
+    client2.synchronize_from_validators().await?;
+
+    // Advance validators one more round using client2.
+    let timeout = client2
+        .chain_info()
+        .await
+        .unwrap()
+        .manager
+        .round_timeout
+        .expect("round_timeout should be set after sync");
+    clock.set(timeout);
+    client2.request_leader_timeout().await.unwrap();
+
+    // Validators are now in round_number + 1.
+    let validator_round = Round::SingleLeader(round_number + 1);
+    builder
+        .check_that_validators_are_in_round(chain_id, BlockHeight::from(1), validator_round, 3)
+        .await;
+
+    // At this point:
+    // - The client's local state shows it's in round_number (where owner1 is the leader).
+    // - The validators are in round_number + 1 (where owner0 is the leader).
+    // When the client tries to transfer, it will see it's not the leader in its current round
+    // and will try to request a timeout. That timeout request for round_number will be rejected
+    // by validators (who are in round_number + 1). The client should handle this error,
+    // sync to the actual round, and complete the transfer.
+
+    let result = client
+        .transfer(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(observer_id),
+        )
+        .await;
+
+    // The transfer should succeed after the client discovers it's actually the leader in the validator's current round.
+    match result {
+        Ok(ClientOutcome::Committed(_)) => {
+            // Success! The client handled the round mismatch and completed the transfer.
+        }
+        Ok(ClientOutcome::WaitForTimeout(_)) => {
+            panic!(
+                "Transfer returned WaitForTimeout, but the client should have discovered \
+                it's the leader in the validator's current round and completed the transfer."
+            );
+        }
+        Err(e) => {
+            panic!(
+                "Transfer failed with error: {e:?}. The client should have handled the \
+                round mismatch automatically by syncing with validators."
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
 async fn test_finalize_validated<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
