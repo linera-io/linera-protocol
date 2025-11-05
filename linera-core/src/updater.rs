@@ -313,35 +313,52 @@ where
         height: BlockHeight,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let query = ChainInfoQuery::new(chain_id).with_timeout(height, round);
-        match self
+        let result = self
             .remote_node
             .handle_chain_info_query(query.clone())
-            .await
-        {
-            Ok(info) => return Ok(info),
-            Err(NodeError::WrongRound(validator_round)) => {
+            .await;
+        let validator = &self.remote_node.public_key;
+        match &result {
+            Err(NodeError::WrongRound(validator_round)) if *validator_round > round => {
                 tracing::info!(
-                    validator = ?self.remote_node.public_key, %chain_id, %validator_round, %round,
-                    "Failed to request timeout from validator: it is not in the same round.",
+                    ?validator, %chain_id, %validator_round, %round,
+                    "Failed to request timeout from validator: it is at a higher round.",
                 );
+                // TODO(#4909): Update the local node.
+            }
+            Err(NodeError::WrongRound(validator_round)) if *validator_round < round => {
+                tracing::info!(
+                    ?validator, %chain_id, %validator_round, %round,
+                    "Failed to request timeout from validator: it is at a lower round.",
+                );
+                self.send_chain_information(
+                    chain_id,
+                    height,
+                    CrossChainMessageDelivery::NonBlocking,
+                )
+                .await?;
             }
             Err(NodeError::UnexpectedBlockHeight {
                 expected_block_height,
                 found_block_height,
             }) if expected_block_height < found_block_height => {
                 tracing::info!(
-                    validator = ?self.remote_node.public_key,
+                    ?validator,
                     %chain_id,
                     %expected_block_height,
                     %found_block_height,
-                    "Failed to request timeout from validator: it is not at the same height.",
+                    "Failed to request timeout from validator: it is at a lower height.",
                 );
+                self.send_chain_information(
+                    chain_id,
+                    height,
+                    CrossChainMessageDelivery::NonBlocking,
+                )
+                .await?;
             }
-            Err(err) => return Err(err.into()),
+            Ok(_) | Err(_) => {}
         }
-        self.send_chain_information(chain_id, height, CrossChainMessageDelivery::NonBlocking)
-            .await?;
-        Ok(self.remote_node.handle_chain_info_query(query).await?)
+        Ok(result?)
     }
 
     async fn send_block_proposal(
