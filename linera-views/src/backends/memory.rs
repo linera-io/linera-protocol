@@ -73,6 +73,7 @@ impl MemoryDatabases {
         let map = store.clone();
         Ok(MemoryStore {
             map,
+            root_key: root_key.to_vec(),
             max_stream_queries,
         })
     }
@@ -111,6 +112,8 @@ static MEMORY_DATABASES: LazyLock<Mutex<MemoryDatabases>> =
 pub struct MemoryStore {
     /// The map used for storing the data.
     map: Arc<RwLock<MemoryStoreMap>>,
+    /// The root key.
+    root_key: Vec<u8>,
     /// The maximum number of queries used for a stream.
     max_stream_queries: usize,
 }
@@ -128,6 +131,10 @@ impl ReadableKeyValueStore for MemoryStore {
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
+    }
+
+    fn root_key(&self) -> Result<Vec<u8>, MemoryStoreError> {
+        Ok(self.root_key.clone())
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryStoreError> {
@@ -247,6 +254,7 @@ impl MemoryStore {
     pub fn new_for_testing() -> Self {
         Self {
             map: Arc::default(),
+            root_key: Vec::new(),
             max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
         }
     }

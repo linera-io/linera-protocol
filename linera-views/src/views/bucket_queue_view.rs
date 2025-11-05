@@ -448,9 +448,14 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                     let index = *index;
                     if !bucket.is_loaded() {
                         let key = self.get_index_key(index)?;
-                        let value = self.context.store().read_value_bytes(&key).await?;
-                        let value = value.ok_or(ViewError::MissingEntries)?;
-                        let data = bcs::from_bytes(&value)?;
+                        let data = self.context.store().read_value(&key).await?;
+                        let data = match data {
+                            Some(value) => value,
+                            None => {
+                                let root_key = self.context.store().root_key()?;
+                                return Err(ViewError::MissingEntries(root_key));
+                            }
+                        };
                         self.stored_data[i_block].1 = Bucket::Loaded { data };
                     }
                 }
@@ -524,9 +529,14 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
         };
         if !bucket.is_loaded() {
             let key = self.get_index_key(*index)?;
-            let value = self.context.store().read_value_bytes(&key).await?;
-            let value = value.as_ref().ok_or(ViewError::MissingEntries)?;
-            let data = bcs::from_bytes::<Vec<T>>(value)?;
+            let data = self.context.store().read_value(&key).await?;
+            let data = match data {
+                Some(data) => data,
+                None => {
+                    let root_key = self.context.store().root_key()?;
+                    return Err(ViewError::MissingEntries(root_key));
+                }
+            };
             self.stored_data.back_mut().unwrap().1 = Bucket::Loaded { data };
         }
         let bucket = &self.stored_data.back_mut().unwrap().1;
@@ -572,9 +582,13 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                 let vec = match bucket {
                     Bucket::Loaded { data } => data,
                     Bucket::NotLoaded { .. } => {
-                        let value = values[value_pos]
-                            .as_ref()
-                            .ok_or(ViewError::MissingEntries)?;
+                        let value = match &values[value_pos] {
+                            Some(value) => value,
+                            None => {
+                                let root_key = self.context.store().root_key()?;
+                                return Err(ViewError::MissingEntries(root_key));
+                            }
+                        };
                         value_pos += 1;
                         &bcs::from_bytes::<Vec<T>>(value)?
                     }

@@ -369,7 +369,7 @@ where
             ViewError::KeyTooLong | ViewError::ArithmeticError(_) => {
                 Status::out_of_range(err.to_string())
             }
-            ViewError::NotFound(_) | ViewError::MissingEntries => {
+            ViewError::NotFound(_) | ViewError::MissingEntries(_) => {
                 Status::not_found(err.to_string())
             }
         };

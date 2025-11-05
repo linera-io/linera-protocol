@@ -96,6 +96,13 @@ where
         }
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
+        Ok(match self {
+            Self::First(store) => store.root_key().map_err(DualStoreError::First)?,
+            Self::Second(store) => store.root_key().map_err(DualStoreError::Second)?,
+        })
+    }
+
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let result = match self {
             Self::First(store) => store
