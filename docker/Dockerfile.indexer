@@ -117,7 +117,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     pkg-config \
     protobuf-compiler \
     clang \
-    netcat-openbsd
+    netcat-openbsd \
+    sqlite3
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN update-ca-certificates
 
