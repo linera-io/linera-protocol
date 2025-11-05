@@ -75,16 +75,16 @@ impl CommunicateAction {
     }
 }
 
-pub struct ValidatorUpdater<A, Env>
+pub struct ValidatorUpdater<Env>
 where
     Env: Environment,
 {
-    pub remote_node: RemoteNode<A>,
+    pub remote_node: RemoteNode<Env::ValidatorNode>,
     pub client: Arc<Client<Env>>,
     pub admin_id: ChainId,
 }
 
-impl<A: Clone, Env: Environment> Clone for ValidatorUpdater<A, Env> {
+impl<Env: Environment> Clone for ValidatorUpdater<Env> {
     fn clone(&self) -> Self {
         ValidatorUpdater {
             remote_node: self.remote_node.clone(),
@@ -225,9 +225,8 @@ where
     Err(CommunicationError::Sample(sample))
 }
 
-impl<A, Env> ValidatorUpdater<A, Env>
+impl<Env> ValidatorUpdater<Env>
 where
-    A: ValidatorNode + Clone + 'static,
     Env: Environment + 'static,
 {
     #[instrument(
@@ -339,7 +338,9 @@ where
                     ?validator, %chain_id, %validator_round, %round,
                     "Failed to request timeout from validator: it is at a higher round.",
                 );
-                // TODO(#4909): Update the local node.
+                self.client
+                    .synchronize_chain_state_from(&self.remote_node, chain_id)
+                    .await?;
             }
             Err(NodeError::WrongRound(validator_round)) if *validator_round < round => {
                 tracing::info!(
