@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { BlockchainAPI } from '../utils/database';
 import { BlockInfo, Block, IncomingBundleWithMessages, ChainInfo, Operation, Message, Event, OracleResponse } from '../types/blockchain';
 import { REFRESH_INTERVAL } from '../config/constants';
@@ -91,10 +91,10 @@ const usePollingData = <T>(
     return () => {
       clearInterval(pollInterval);
     };
-    // fetcher, logPrefix, and errorMessage are included because they're used in the effect
-    // dependencies array is spread to include the actual data dependencies (limit, offset, chainId, etc.)
+    // Note: fetcher, logPrefix, and errorMessage are intentionally not in the dependency array
+    // because they would cause excessive re-renders. The calling code must ensure these are stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, refreshInterval, fetcher, logPrefix, errorMessage, ...dependencies]);
+  }, [enabled, refreshInterval, ...dependencies]);
 
   return { data, loading, error };
 };
@@ -104,8 +104,10 @@ export const useBlocks = (limit: number = 50, offset: number = 0, refreshInterva
   const { isConnected } = useAPI();
   const latestBlockRef = useRef<BlockInfo | null>(null);
 
+  const fetcher = useCallback(() => api.getBlocks(limit, offset), [limit, offset]);
+
   const { data: blocks, loading, error } = usePollingData<BlockInfo[]>(
-    () => api.getBlocks(limit, offset),
+    fetcher,
     [limit, offset],
     {
       refreshInterval,
@@ -211,8 +213,10 @@ export const useBlock = (hash: string) => {
 export const useChains = (limit: number = 50, offset: number = 0, refreshInterval: number = 5000) => {
   const { isConnected } = useAPI();
 
+  const fetcher = useCallback(() => api.getChains(limit, offset), [limit, offset]);
+
   const { data: chains, loading, error } = usePollingData<ChainInfo[]>(
-    () => api.getChains(limit, offset),
+    fetcher,
     [limit, offset],
     {
       refreshInterval,
@@ -230,8 +234,10 @@ export const useChainBlocks = (chainId: string, limit: number = 50, refreshInter
   const { isConnected } = useAPI();
   const latestBlockRef = useRef<BlockInfo | null>(null);
 
+  const fetcher = useCallback(() => api.getBlocksByChain(chainId, limit, 0), [chainId, limit]);
+
   const { data: blocks, loading, error } = usePollingData<BlockInfo[]>(
-    () => api.getBlocksByChain(chainId, limit, 0),
+    fetcher,
     [chainId, limit],
     {
       refreshInterval,
