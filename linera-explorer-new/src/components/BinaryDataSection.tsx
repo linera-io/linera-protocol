@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
+import { formatBytes } from '../utils/formatters';
 
 interface BinaryDataSectionProps {
   data: Uint8Array;
@@ -15,12 +16,6 @@ export const BinaryDataSection: React.FC<BinaryDataSectionProps> = ({
   className = ''
 }) => {
   const [copied, setCopied] = useState(false);
-
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   const copyToClipboard = async () => {
     try {

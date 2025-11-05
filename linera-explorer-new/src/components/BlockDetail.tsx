@@ -5,17 +5,12 @@ import { useBlock } from '../hooks/useDatabase';
 import { ExpandableSection } from './ExpandableSection';
 import { CopyableHash } from './CopyableHash';
 import { BinaryDataSection } from './BinaryDataSection';
+import { formatBytes } from '../utils/formatters';
 
 export const BlockDetail: React.FC = () => {
   const { hash } = useParams<{ hash: string }>();
   const navigate = useNavigate();
   const { block, bundles, operations, messages, events, oracleResponses, activity, loading, error } = useBlock(hash || '');
-
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   if (loading) {
     return (

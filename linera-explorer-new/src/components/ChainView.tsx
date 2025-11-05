@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import { Layers, TrendingUp, Hash, ChevronRight } from 'lucide-react';
 import { useChains } from '../hooks/useDatabase';
 import { ChainInfo } from '../types/blockchain';
+import { formatHash, formatChainId } from '../utils/formatters';
+import { Pagination } from './common/Pagination';
+import { BlockchainAPI } from '../utils/database';
 
 export const ChainView: React.FC = () => {
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -11,20 +14,17 @@ export const ChainView: React.FC = () => {
   const [searchLoading, setSearchLoading] = React.useState(false);
   const [searchError, setSearchError] = React.useState<string | null>(null);
   const [totalChains, setTotalChains] = React.useState(0);
-  
+
   const chainsPerPage = 50;
   const offset = (currentPage - 1) * chainsPerPage;
-  
-  const { chains, loading, error } = useChains(chainsPerPage, offset);
 
-  const formatChainId = (chainId: string) => `${chainId.slice(0, 16)}...${chainId.slice(-8)}`;
-  const formatHash = (hash: string) => `${hash.slice(0, 8)}...${hash.slice(-8)}`;
+  const { chains, loading, error } = useChains(chainsPerPage, offset);
 
   // Fetch total chain count
   React.useEffect(() => {
     const fetchCount = async () => {
       try {
-        const api = new (await import('../utils/database')).BlockchainAPI();
+        const api = new BlockchainAPI();
         const count = await api.getChainsCount();
         setTotalChains(count);
       } catch (err) {
@@ -54,7 +54,7 @@ export const ChainView: React.FC = () => {
     setSearchError(null);
 
     try {
-      const api = new (await import('../utils/database')).BlockchainAPI();
+      const api = new BlockchainAPI();
       const result = await api.getChainById(searchQuery);
       if (result) {
         setSearchResult([result]);
@@ -234,54 +234,12 @@ export const ChainView: React.FC = () => {
           </div>
 
           {/* Pagination - only show when not in search mode */}
-          {!isSearchMode && totalPages > 1 && (
-            <div className="flex justify-center items-center space-x-2">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 bg-linera-darker border border-linera-border rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-linera-red hover:border-linera-red transition-colors"
-              >
-                Previous
-              </button>
-              
-              {/* Page numbers */}
-              <div className="flex space-x-2">
-                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                  let pageNum;
-                  if (totalPages <= 7) {
-                    pageNum = i + 1;
-                  } else if (currentPage <= 4) {
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 3) {
-                    pageNum = totalPages - 6 + i;
-                  } else {
-                    pageNum = currentPage - 3 + i;
-                  }
-                  
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setCurrentPage(pageNum)}
-                      className={`px-4 py-2 rounded-lg transition-colors ${
-                        currentPage === pageNum
-                          ? 'bg-linera-red text-white border border-linera-red'
-                          : 'bg-linera-darker border border-linera-border text-white hover:bg-linera-red hover:border-linera-red'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 bg-linera-darker border border-linera-border rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-linera-red hover:border-linera-red transition-colors"
-              >
-                Next
-              </button>
-            </div>
+          {!isSearchMode && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
           )}
         </>
       )}
