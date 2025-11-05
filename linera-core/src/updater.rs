@@ -331,39 +331,50 @@ where
             .remote_node
             .handle_chain_info_query(query.clone())
             .await;
+        if let Err(err) = &result {
+            self.sync_if_needed(chain_id, round, height, err).await?;
+        }
+        Ok(result?)
+    }
+
+    /// Synchronizes either the local node or the remote node, if one of them is lagging behind.
+    async fn sync_if_needed(
+        &mut self,
+        chain_id: ChainId,
+        round: Round,
+        height: BlockHeight,
+        error: &NodeError,
+    ) -> Result<(), ChainClientError> {
         let validator = &self.remote_node.public_key;
-        match &result {
-            Err(NodeError::WrongRound(validator_round)) if *validator_round > round => {
-                tracing::info!(
+        match error {
+            NodeError::WrongRound(validator_round) if *validator_round > round => {
+                tracing::debug!(
                     ?validator, %chain_id, %validator_round, %round,
-                    "Failed to request timeout from validator: it is at a higher round.",
+                    "Validator is at a higher round; synchronizing.",
                 );
                 self.client
                     .synchronize_chain_state_from(&self.remote_node, chain_id)
                     .await?;
             }
-            Err(NodeError::WrongRound(validator_round)) if *validator_round < round => {
-                tracing::info!(
-                    ?validator, %chain_id, %validator_round, %round,
-                    "Failed to request timeout from validator: it is at a lower round.",
-                );
-                self.send_chain_information(
-                    chain_id,
-                    height,
-                    CrossChainMessageDelivery::NonBlocking,
-                )
-                .await?;
-            }
-            Err(NodeError::UnexpectedBlockHeight {
+            NodeError::UnexpectedBlockHeight {
                 expected_block_height,
                 found_block_height,
-            }) if expected_block_height < found_block_height => {
-                tracing::info!(
+            } if expected_block_height > found_block_height => {
+                tracing::debug!(
                     ?validator,
                     %chain_id,
                     %expected_block_height,
                     %found_block_height,
-                    "Failed to request timeout from validator: it is at a lower height.",
+                    "Validator is at a higher height; synchronizing.",
+                );
+                self.client
+                    .synchronize_chain_state_from(&self.remote_node, chain_id)
+                    .await?;
+            }
+            NodeError::WrongRound(validator_round) if *validator_round < round => {
+                tracing::debug!(
+                    ?validator, %chain_id, %validator_round, %round,
+                    "Validator is at a lower round; sending chain info.",
                 );
                 self.send_chain_information(
                     chain_id,
@@ -372,9 +383,40 @@ where
                 )
                 .await?;
             }
-            Ok(_) | Err(_) => {}
+            NodeError::UnexpectedBlockHeight {
+                expected_block_height,
+                found_block_height,
+            } if expected_block_height < found_block_height => {
+                tracing::debug!(
+                    ?validator,
+                    %chain_id,
+                    %expected_block_height,
+                    %found_block_height,
+                    "Validator is at a lower height; sending chain info.",
+                );
+                self.send_chain_information(
+                    chain_id,
+                    height,
+                    CrossChainMessageDelivery::NonBlocking,
+                )
+                .await?;
+            }
+            NodeError::InactiveChain(chain_id) => {
+                tracing::debug!(
+                    ?validator,
+                    %chain_id,
+                    "Validator has inactive chain; sending chain info.",
+                );
+                self.send_chain_information(
+                    *chain_id,
+                    height,
+                    CrossChainMessageDelivery::NonBlocking,
+                )
+                .await?;
+            }
+            _ => {}
         }
-        Ok(result?)
+        Ok(())
     }
 
     async fn send_block_proposal(
