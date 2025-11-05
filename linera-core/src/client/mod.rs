@@ -1202,7 +1202,7 @@ impl<Env: Environment> Client<Env> {
     /// Downloads any certificates from the specified validator that we are missing for the given
     /// chain, and processes them.
     #[instrument(level = "trace", skip(self, remote_node, chain_id))]
-    async fn synchronize_chain_state_from(
+    pub(crate) async fn synchronize_chain_state_from(
         &self,
         remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
