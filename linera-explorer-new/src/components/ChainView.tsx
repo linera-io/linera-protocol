@@ -8,6 +8,7 @@ import { Pagination } from './common/Pagination';
 import { LoadingSpinner } from './common/LoadingSpinner';
 import { ErrorMessage } from './common/ErrorMessage';
 import { BlockchainAPI } from '../utils/database';
+import { CHAINS_PER_PAGE } from '../config/constants';
 
 export const ChainView: React.FC = () => {
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -17,10 +18,9 @@ export const ChainView: React.FC = () => {
   const [searchError, setSearchError] = React.useState<string | null>(null);
   const [totalChains, setTotalChains] = React.useState(0);
 
-  const chainsPerPage = 50;
-  const offset = (currentPage - 1) * chainsPerPage;
+  const offset = (currentPage - 1) * CHAINS_PER_PAGE;
 
-  const { chains, loading, error } = useChains(chainsPerPage, offset);
+  const { chains, loading, error } = useChains(CHAINS_PER_PAGE, offset);
 
   // Fetch total chain count
   React.useEffect(() => {
@@ -78,7 +78,7 @@ export const ChainView: React.FC = () => {
     setSearchError(null);
   };
 
-  const totalPages = Math.ceil(totalChains / chainsPerPage);
+  const totalPages = Math.ceil(totalChains / CHAINS_PER_PAGE);
   const displayChains = searchResult || chains;
   const isSearchMode = searchResult !== null || searchQuery.trim() !== '';
 

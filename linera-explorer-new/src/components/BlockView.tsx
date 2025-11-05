@@ -6,16 +6,16 @@ import { Pagination } from './common/Pagination';
 import { useBlocks } from '../hooks/useDatabase';
 import { useRelativeTime } from '../hooks/useRelativeTime';
 import { BlockchainAPI } from '../utils/database';
+import { BLOCKS_PER_PAGE } from '../config/constants';
 
 export const BlockView: React.FC = () => {
   const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalBlocks, setTotalBlocks] = useState(0);
 
-  const blocksPerPage = 50;
-  const offset = (currentPage - 1) * blocksPerPage;
+  const offset = (currentPage - 1) * BLOCKS_PER_PAGE;
 
-  const { blocks, latestBlock, loading, error } = useBlocks(blocksPerPage, offset);
+  const { blocks, latestBlock, loading, error } = useBlocks(BLOCKS_PER_PAGE, offset);
   const latestBlockTime = useRelativeTime(latestBlock?.timestamp ?? null);
 
   // Fetch total block count
@@ -39,7 +39,7 @@ export const BlockView: React.FC = () => {
     }
   };
 
-  const totalPages = Math.ceil(totalBlocks / blocksPerPage);
+  const totalPages = Math.ceil(totalBlocks / BLOCKS_PER_PAGE);
 
   return (
     <div className="space-y-8 animate-fade-in">

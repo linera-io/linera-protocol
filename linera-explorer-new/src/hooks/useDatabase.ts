@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { BlockchainAPI } from '../utils/database';
 import { BlockInfo, Block, IncomingBundleWithMessages, ChainInfo, Operation, Message, Event, OracleResponse } from '../types/blockchain';
+import { REFRESH_INTERVAL } from '../config/constants';
 
 const api = new BlockchainAPI();
 
@@ -41,7 +42,7 @@ const usePollingData = <T>(
   } = {}
 ) => {
   const {
-    refreshInterval = 5000,
+    refreshInterval = REFRESH_INTERVAL,
     logPrefix = '🔄',
     errorMessage = 'Failed to fetch data',
     enabled = true
@@ -59,13 +60,13 @@ const usePollingData = <T>(
         if (!isPolling) {
           setLoading(true);
         }
-        
+
         const result = await fetcher();
-        
+
         if (isPolling) {
           console.log(`${logPrefix} Refreshed data from API`);
         }
-        
+
         setData(result);
         setError(null);
       } catch (err) {
@@ -90,7 +91,10 @@ const usePollingData = <T>(
     return () => {
       clearInterval(pollInterval);
     };
-  }, [enabled, refreshInterval, ...dependencies]);
+    // fetcher, logPrefix, and errorMessage are included because they're used in the effect
+    // dependencies array is spread to include the actual data dependencies (limit, offset, chainId, etc.)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, refreshInterval, fetcher, logPrefix, errorMessage, ...dependencies]);
 
   return { data, loading, error };
 };

@@ -1,4 +1,5 @@
 import React from 'react';
+import { MAX_VISIBLE_PAGES } from '../../config/constants';
 
 interface PaginationProps {
   currentPage: number;
@@ -14,7 +15,7 @@ export const Pagination: React.FC<PaginationProps> = ({
   currentPage,
   totalPages,
   onPageChange,
-  maxVisiblePages = 7,
+  maxVisiblePages = MAX_VISIBLE_PAGES,
 }) => {
   if (totalPages <= 1) return null;
 
