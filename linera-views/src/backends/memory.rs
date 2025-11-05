@@ -112,7 +112,7 @@ static MEMORY_DATABASES: LazyLock<Mutex<MemoryDatabases>> =
 pub struct MemoryStore {
     /// The map used for storing the data.
     map: Arc<RwLock<MemoryStoreMap>>,
-    /// The `root_key`
+    /// The root key.
     root_key: Vec<u8>,
     /// The maximum number of queries used for a stream.
     max_stream_queries: usize,

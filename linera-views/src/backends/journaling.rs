@@ -123,7 +123,6 @@ where
         self.store.max_stream_queries()
     }
 
-    /// The `root_key` does not change
     fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
         self.store.root_key()
     }

@@ -47,7 +47,7 @@ pub trait ReadableKeyValueStore: WithError {
     /// Retrieve the number of stream queries.
     fn max_stream_queries(&self) -> usize;
 
-    /// Gets the root_key of the store.
+    /// Gets the root key of the store.
     fn root_key(&self) -> Result<Vec<u8>, Self::Error>;
 
     /// Retrieves a `Vec<u8>` from the database using the provided `key`.
