@@ -431,6 +431,12 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         self.max_stream_queries
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, RocksDbStoreInternalError> {
+        assert!(self.executor.start_key.starts_with(&ROOT_KEY_DOMAIN));
+        let root_key = bcs::from_bytes(&self.executor.start_key[ROOT_KEY_DOMAIN.len()..])?;
+        Ok(root_key)
+    }
+
     async fn read_value_bytes(
         &self,
         key: &[u8],

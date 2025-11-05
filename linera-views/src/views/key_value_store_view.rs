@@ -1240,6 +1240,10 @@ impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
         1
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, ViewContainerError> {
+        Ok(Vec::new())
+    }
+
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewContainerError> {
         let view = self.view.read().await;
         Ok(view.get(key).await?)

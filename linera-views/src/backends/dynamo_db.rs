@@ -803,6 +803,11 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         self.max_stream_queries
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, DynamoDbStoreInternalError> {
+        assert!(self.start_key.starts_with(EMPTY_ROOT_KEY));
+        Ok(self.start_key[EMPTY_ROOT_KEY.len()..].to_vec())
+    }
+
     async fn read_value_bytes(
         &self,
         key: &[u8],

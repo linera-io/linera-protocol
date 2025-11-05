@@ -98,6 +98,10 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         self.max_stream_queries
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, StorageServiceStoreError> {
+        Ok(self.start_key[self.prefix_len..].to_vec())
+    }
+
     async fn read_value_bytes(
         &self,
         key: &[u8],
