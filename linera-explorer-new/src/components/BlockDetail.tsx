@@ -5,6 +5,9 @@ import { useBlock } from '../hooks/useDatabase';
 import { ExpandableSection } from './ExpandableSection';
 import { CopyableHash } from './CopyableHash';
 import { BinaryDataSection } from './BinaryDataSection';
+import { TypeBadge } from './common/TypeBadge';
+import { LoadingSpinner } from './common/LoadingSpinner';
+import { ErrorMessage } from './common/ErrorMessage';
 import { formatBytes } from '../utils/formatters';
 
 export const BlockDetail: React.FC = () => {
@@ -13,22 +16,11 @@ export const BlockDetail: React.FC = () => {
   const { block, bundles, operations, messages, events, oracleResponses, activity, loading, error } = useBlock(hash || '');
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="loading-spinner h-8 w-8"></div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (error || !block) {
-    return (
-      <div className="card bg-red-500/10 border-red-500/30">
-        <div className="text-red-300">
-          <Hash className="w-5 h-5 inline mr-2" />
-          {error || 'Block not found'}
-        </div>
-      </div>
-    );
+    return <ErrorMessage message={error || 'Block not found'} icon={<Hash className="w-5 h-5" />} />;
   }
 
   return (
@@ -143,13 +135,7 @@ export const BlockDetail: React.FC = () => {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-linera-gray-light">Type</span>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          operation.operation_type === 'System' 
-                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
-                            : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                        }`}>
-                          {operation.operation_type}
-                        </span>
+                        <TypeBadge type={operation.operation_type} />
                       </div>
                     </div>
                     <div className="space-y-2">
@@ -200,13 +186,7 @@ export const BlockDetail: React.FC = () => {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-linera-gray-light">Type</span>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          message.message_type === 'System' 
-                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
-                            : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                        }`}>
-                          {message.message_type}
-                        </span>
+                        <TypeBadge type={message.message_type} />
                       </div>
                     </div>
                     <div className="space-y-2">
@@ -332,9 +312,7 @@ export const BlockDetail: React.FC = () => {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-linera-gray-light">Type</span>
-                        <span className="px-2 py-1 rounded text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
-                          {response.response_type}
-                        </span>
+                        <TypeBadge type={response.response_type} variant="oracle" />
                       </div>
                     </div>
                   </div>
@@ -387,13 +365,10 @@ export const BlockDetail: React.FC = () => {
                     
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-linera-gray-light">Action</span>
-                      <span className={
-                        bundle.action === 'Accept' 
-                          ? 'status-badge-accept' 
-                          : 'status-badge-reject'
-                      }>
-                        {bundle.action}
-                      </span>
+                      <TypeBadge
+                        type={bundle.action}
+                        variant={bundle.action === 'Accept' ? 'accept' : 'reject'}
+                      />
                     </div>
                   </div>
 
@@ -434,13 +409,7 @@ export const BlockDetail: React.FC = () => {
                             <span className="text-linera-gray-light">#{msg.message_index}</span>
                             <div className="flex items-center space-x-2">
                               {msg.message_type && (
-                                <span className={`px-1.5 py-0.5 rounded text-xs ${
-                                  msg.message_type === 'System' 
-                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
-                                    : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                                }`}>
-                                  {msg.message_type}
-                                </span>
+                                <TypeBadge type={msg.message_type} className="px-1.5 py-0.5" />
                               )}
                               <span className="text-linera-gray-medium">{msg.message_kind}</span>
                             </div>

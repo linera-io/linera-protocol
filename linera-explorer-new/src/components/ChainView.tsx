@@ -5,6 +5,8 @@ import { useChains } from '../hooks/useDatabase';
 import { ChainInfo } from '../types/blockchain';
 import { formatHash, formatChainId } from '../utils/formatters';
 import { Pagination } from './common/Pagination';
+import { LoadingSpinner } from './common/LoadingSpinner';
+import { ErrorMessage } from './common/ErrorMessage';
 import { BlockchainAPI } from '../utils/database';
 
 export const ChainView: React.FC = () => {
@@ -81,22 +83,11 @@ export const ChainView: React.FC = () => {
   const isSearchMode = searchResult !== null || searchQuery.trim() !== '';
 
   if (loading && !isSearchMode) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="loading-spinner h-8 w-8"></div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (error && !isSearchMode) {
-    return (
-      <div className="card bg-red-500/10 border-red-500/30">
-        <div className="text-red-300">
-          <Layers className="w-5 h-5 inline mr-2" />
-          Error: {error}
-        </div>
-      </div>
-    );
+    return <ErrorMessage message={error} icon={<Layers className="w-5 h-5" />} />;
   }
 
   return (
@@ -149,9 +140,7 @@ export const ChainView: React.FC = () => {
       </div>
 
       {searchLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="loading-spinner h-8 w-8"></div>
-        </div>
+        <LoadingSpinner />
       ) : displayChains.length === 0 ? (
         <div className="card text-center">
           <div className="text-linera-gray-light">

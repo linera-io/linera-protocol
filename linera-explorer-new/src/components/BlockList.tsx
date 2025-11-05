@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Clock, Hash, Layers, HardDrive, ChevronRight } from 'lucide-react';
 import { BlockInfo } from '../types/blockchain';
 import { formatHash, formatBytes, formatTimestamp, formatChainId } from '../utils/formatters';
+import { LoadingSpinner } from './common/LoadingSpinner';
+import { ErrorMessage } from './common/ErrorMessage';
 
 interface BlockListProps {
   blocks: BlockInfo[];
@@ -13,22 +15,11 @@ interface BlockListProps {
 export const BlockList: React.FC<BlockListProps> = ({ blocks, loading, error }) => {
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="loading-spinner h-8 w-8"></div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (error) {
-    return (
-      <div className="card bg-red-500/10 border-red-500/30">
-        <div className="text-red-300">
-          <Hash className="w-5 h-5 inline mr-2" />
-          Error: {error}
-        </div>
-      </div>
-    );
+    return <ErrorMessage message={error} icon={<Hash className="w-5 h-5" />} />;
   }
 
   if (blocks.length === 0) {
