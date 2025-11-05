@@ -1852,4 +1852,166 @@ mod tests {
         // Verify B does NOT subsume A (doesn't have all heights)
         assert!(!key_b.subsumes(&key_a));
     }
+
+    // Property-based tests for ChainInfo subsumption
+    // These tests use Arbitrary to generate random ChainInfoQuery instances and verify
+    // that subsumption properties hold across the entire input space.
+
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    mod property_tests {
+        use proptest::prelude::*;
+        use rand::seq::SliceRandom;
+
+        use super::*;
+
+        /// Returns a random subset of the input slice
+        fn random_subset<T: Clone>(items: &[T], rng: &mut impl rand::Rng) -> Vec<T> {
+            if items.is_empty() {
+                return vec![];
+            }
+            let subset_size = rng.gen_range(0..=items.len());
+            items.choose_multiple(rng, subset_size).cloned().collect()
+        }
+
+        /// Derives a subset query from a base query.
+        /// The resulting query should be subsumed by the base query.
+        fn derive_subset_query(base: &ChainInfoQuery, rng: &mut impl rand::Rng) -> ChainInfoQuery {
+            let mut subset = ChainInfoQuery::new(base.chain_id);
+
+            // Exact-match fields must be copied exactly
+            subset.request_owner_balance = base.request_owner_balance;
+            subset.test_next_block_height = base.test_next_block_height;
+            subset.request_leader_timeout = base.request_leader_timeout;
+
+            // Boolean flags: if base has true, subset can be true or false
+            // if base has false, subset must be false
+            subset.request_committees = base.request_committees && rng.gen_bool(0.5);
+            subset.request_pending_message_bundles =
+                base.request_pending_message_bundles && rng.gen_bool(0.5);
+            subset.request_manager_values = base.request_manager_values && rng.gen_bool(0.5);
+            subset.request_fallback = base.request_fallback && rng.gen_bool(0.5);
+            subset.create_network_actions = base.create_network_actions && rng.gen_bool(0.5);
+
+            // Collection fields: pick a random subset of heights
+            subset.request_sent_certificate_hashes_by_heights =
+                random_subset(&base.request_sent_certificate_hashes_by_heights, rng);
+
+            // Range field: if base excludes n entries, subset can exclude >= n entries
+            subset.request_received_log_excluding_first_n =
+                base.request_received_log_excluding_first_n.map(|n| {
+                    let additional = rng.gen_range(0..=10);
+                    n.saturating_add(additional)
+                });
+
+            subset
+        }
+
+        /// Derives a superset query that the base query cannot subsume.
+        /// The resulting query has additional requirements not in the base query.
+        fn derive_superset_query(
+            base: &ChainInfoQuery,
+            rng: &mut impl rand::Rng,
+        ) -> ChainInfoQuery {
+            let mut superset = base.clone();
+
+            // Choose one way to add requirements
+            match rng.gen_range(0..4) {
+                0 => {
+                    // Add a boolean flag requirement
+                    if !base.request_committees {
+                        superset.request_committees = true;
+                    } else if !base.request_pending_message_bundles {
+                        superset.request_pending_message_bundles = true;
+                    } else if !base.request_manager_values {
+                        superset.request_manager_values = true;
+                    } else if !base.request_fallback {
+                        superset.request_fallback = true;
+                    }
+                }
+                1 => {
+                    // Add a height not in base
+                    let new_height = BlockHeight(rng.gen_range(1000..2000));
+                    if !base
+                        .request_sent_certificate_hashes_by_heights
+                        .contains(&new_height)
+                    {
+                        superset
+                            .request_sent_certificate_hashes_by_heights
+                            .push(new_height);
+                    }
+                }
+                2 => {
+                    // Request more log entries
+                    match base.request_received_log_excluding_first_n {
+                        Some(n) if n > 0 => {
+                            superset.request_received_log_excluding_first_n =
+                                Some(n.saturating_sub(1))
+                        }
+                        None => superset.request_received_log_excluding_first_n = Some(0),
+                        _ => {}
+                    }
+                }
+                _ => {
+                    // Change exact-match field to make queries incompatible
+                    superset.test_next_block_height = Some(BlockHeight(rng.gen_range(1..1000)));
+                }
+            }
+
+            superset
+        }
+
+        proptest! {
+            /// Property: Every query subsumes itself (reflexivity)
+            #[test]
+            fn prop_subsumption_reflexivity(query in any::<ChainInfoQuery>()) {
+                let key = RequestKey::ChainInfo(query);
+                prop_assert!(key.subsumes(&key));
+            }
+
+            /// Property: Subsumption is transitive
+            /// If A subsumes B and B subsumes C, then A subsumes C
+            #[test]
+            fn prop_subsumption_transitivity(query_a in any::<ChainInfoQuery>()) {
+                let mut rng = rand::thread_rng();
+                let query_b = derive_subset_query(&query_a, &mut rng);
+                let query_c = derive_subset_query(&query_b, &mut rng);
+
+                let key_a = RequestKey::ChainInfo(query_a);
+                let key_b = RequestKey::ChainInfo(query_b);
+                let key_c = RequestKey::ChainInfo(query_c);
+
+                prop_assert!(key_a.subsumes(&key_b), "A should subsume B");
+                prop_assert!(key_b.subsumes(&key_c), "B should subsume C");
+                prop_assert!(key_a.subsumes(&key_c), "A should subsume C (transitivity)");
+            }
+
+            /// Property: A query subsumes all its proper subsets
+            #[test]
+            fn prop_subsumption_subset(query_a in any::<ChainInfoQuery>()) {
+                let mut rng = rand::thread_rng();
+                let query_b = derive_subset_query(&query_a, &mut rng);
+
+                let key_a = RequestKey::ChainInfo(query_a);
+                let key_b = RequestKey::ChainInfo(query_b);
+
+                prop_assert!(key_a.subsumes(&key_b), "Comprehensive query should subsume subset query");
+            }
+
+            /// Property: A query does not subsume queries with additional requirements
+            #[test]
+            fn prop_subsumption_non_subsumption(query_a in any::<ChainInfoQuery>()) {
+                let mut rng = rand::thread_rng();
+                let query_b = derive_superset_query(&query_a, &mut rng);
+
+                let key_a = RequestKey::ChainInfo(query_a.clone());
+                let key_b = RequestKey::ChainInfo(query_b.clone());
+
+                // Only assert non-subsumption if we actually added a requirement
+                // (superset derivation might not change anything in edge cases)
+                if query_a != query_b {
+                    prop_assert!(!key_a.subsumes(&key_b), "Query should not subsume superset with additional requirements");
+                }
+            }
+        }
+    }
 }
