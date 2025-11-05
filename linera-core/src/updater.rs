@@ -7,6 +7,7 @@ use std::{
     fmt,
     hash::Hash,
     mem,
+    sync::Arc,
 };
 
 use futures::{
@@ -31,9 +32,9 @@ use thiserror::Error;
 use tracing::{instrument, Level};
 
 use crate::{
-    client::ChainClientError,
+    client::{ChainClientError, Client},
     data_types::{ChainInfo, ChainInfoQuery},
-    local_node::LocalNodeClient,
+    environment::Environment,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
     LocalNodeError,
@@ -74,14 +75,23 @@ impl CommunicateAction {
     }
 }
 
-#[derive(Clone)]
-pub struct ValidatorUpdater<A, S>
+pub struct ValidatorUpdater<Env>
 where
-    S: Storage,
+    Env: Environment,
 {
-    pub remote_node: RemoteNode<A>,
-    pub local_node: LocalNodeClient<S>,
+    pub remote_node: RemoteNode<Env::ValidatorNode>,
+    pub client: Arc<Client<Env>>,
     pub admin_id: ChainId,
+}
+
+impl<Env: Environment> Clone for ValidatorUpdater<Env> {
+    fn clone(&self) -> Self {
+        ValidatorUpdater {
+            remote_node: self.remote_node.clone(),
+            client: self.client.clone(),
+            admin_id: self.admin_id,
+        }
+    }
 }
 
 /// An error result for requests to a stake-weighted quorum.
@@ -215,10 +225,9 @@ where
     Err(CommunicationError::Sample(sample))
 }
 
-impl<A, S> ValidatorUpdater<A, S>
+impl<Env> ValidatorUpdater<Env>
 where
-    A: ValidatorNode + Clone + 'static,
-    S: Storage + Clone + Send + Sync + 'static,
+    Env: Environment + 'static,
 {
     #[instrument(
         level = "trace", skip_all, err(level = Level::WARN),
@@ -258,7 +267,11 @@ where
                     self.remote_node
                         .check_blobs_not_found(&certificate, &blob_ids)?;
                     // The certificate is confirmed, so the blobs must be in storage.
-                    let maybe_blobs = self.local_node.read_blobs_from_storage(&blob_ids).await?;
+                    let maybe_blobs = self
+                        .client
+                        .local_node
+                        .read_blobs_from_storage(&blob_ids)
+                        .await?;
                     let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
                     self.remote_node.node.upload_blobs(blobs).await?;
                     sent_blobs = true;
@@ -289,6 +302,7 @@ where
                 // The certificate is for a validated block, i.e. for our locking block.
                 // Take the missing blobs from our local chain manager.
                 let blobs = self
+                    .client
                     .local_node
                     .get_locking_blobs(blob_ids, chain_id)
                     .await?
@@ -313,35 +327,96 @@ where
         height: BlockHeight,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let query = ChainInfoQuery::new(chain_id).with_timeout(height, round);
-        match self
+        let result = self
             .remote_node
             .handle_chain_info_query(query.clone())
-            .await
-        {
-            Ok(info) => return Ok(info),
-            Err(NodeError::WrongRound(validator_round)) => {
-                tracing::info!(
-                    validator = ?self.remote_node.public_key, %chain_id, %validator_round, %round,
-                    "Failed to request timeout from validator: it is not in the same round.",
+            .await;
+        if let Err(err) = &result {
+            self.sync_if_needed(chain_id, round, height, err).await?;
+        }
+        Ok(result?)
+    }
+
+    /// Synchronizes either the local node or the remote node, if one of them is lagging behind.
+    async fn sync_if_needed(
+        &mut self,
+        chain_id: ChainId,
+        round: Round,
+        height: BlockHeight,
+        error: &NodeError,
+    ) -> Result<(), ChainClientError> {
+        let validator = &self.remote_node.public_key;
+        match error {
+            NodeError::WrongRound(validator_round) if *validator_round > round => {
+                tracing::debug!(
+                    ?validator, %chain_id, %validator_round, %round,
+                    "Validator is at a higher round; synchronizing.",
                 );
+                self.client
+                    .synchronize_chain_state_from(&self.remote_node, chain_id)
+                    .await?;
             }
-            Err(NodeError::UnexpectedBlockHeight {
+            NodeError::UnexpectedBlockHeight {
                 expected_block_height,
                 found_block_height,
-            }) if expected_block_height < found_block_height => {
-                tracing::info!(
-                    validator = ?self.remote_node.public_key,
+            } if expected_block_height > found_block_height => {
+                tracing::debug!(
+                    ?validator,
                     %chain_id,
                     %expected_block_height,
                     %found_block_height,
-                    "Failed to request timeout from validator: it is not at the same height.",
+                    "Validator is at a higher height; synchronizing.",
                 );
+                self.client
+                    .synchronize_chain_state_from(&self.remote_node, chain_id)
+                    .await?;
             }
-            Err(err) => return Err(err.into()),
+            NodeError::WrongRound(validator_round) if *validator_round < round => {
+                tracing::debug!(
+                    ?validator, %chain_id, %validator_round, %round,
+                    "Validator is at a lower round; sending chain info.",
+                );
+                self.send_chain_information(
+                    chain_id,
+                    height,
+                    CrossChainMessageDelivery::NonBlocking,
+                )
+                .await?;
+            }
+            NodeError::UnexpectedBlockHeight {
+                expected_block_height,
+                found_block_height,
+            } if expected_block_height < found_block_height => {
+                tracing::debug!(
+                    ?validator,
+                    %chain_id,
+                    %expected_block_height,
+                    %found_block_height,
+                    "Validator is at a lower height; sending chain info.",
+                );
+                self.send_chain_information(
+                    chain_id,
+                    height,
+                    CrossChainMessageDelivery::NonBlocking,
+                )
+                .await?;
+            }
+            NodeError::InactiveChain(chain_id) => {
+                tracing::debug!(
+                    ?validator,
+                    %chain_id,
+                    "Validator has inactive chain; sending chain info.",
+                );
+                self.send_chain_information(
+                    *chain_id,
+                    height,
+                    CrossChainMessageDelivery::NonBlocking,
+                )
+                .await?;
+            }
+            _ => {}
         }
-        self.send_chain_information(chain_id, height, CrossChainMessageDelivery::NonBlocking)
-            .await?;
-        Ok(self.remote_node.handle_chain_info_query(query).await?)
+        Ok(())
     }
 
     async fn send_block_proposal(
@@ -432,6 +507,7 @@ where
                     );
                     for chain_id in new_chain_ids {
                         let height = self
+                            .client
                             .local_node
                             .chain_state_view(chain_id)
                             .await?
@@ -458,7 +534,7 @@ where
                     blob_ids.retain(|blob_id| !published_blob_ids.contains(blob_id));
                     let mut published_blobs = Vec::new();
                     {
-                        let chain = self.local_node.chain_state_view(chain_id).await?;
+                        let chain = self.client.local_node.chain_state_view(chain_id).await?;
                         for blob_id in published_blob_ids {
                             published_blobs
                                 .extend(chain.manager.proposed_blobs.get(&blob_id).await?);
@@ -473,6 +549,7 @@ where
                         .missing_blob_ids(mem::take(&mut blob_ids))
                         .await?;
                     let blob_states = self
+                        .client
                         .local_node
                         .read_blob_states_from_storage(&missing_blob_ids)
                         .await?;
@@ -500,7 +577,7 @@ where
     }
 
     async fn update_admin_chain(&mut self) -> Result<(), ChainClientError> {
-        let local_admin_info = self.local_node.chain_info(self.admin_id).await?;
+        let local_admin_info = self.client.local_node.chain_info(self.admin_id).await?;
         Box::pin(self.send_chain_information(
             self.admin_id,
             local_admin_info.next_block_height,
@@ -519,6 +596,7 @@ where
             // Figure out which certificates this validator is missing. In many cases, it's just the
             // last one, so we optimistically send that one right away.
             let hash = self
+                .client
                 .local_node
                 .chain_state_view(chain_id)
                 .await?
@@ -532,6 +610,7 @@ where
                     )
                 })?;
             let certificate = self
+                .client
                 .local_node
                 .storage_client()
                 .read_certificate(hash)
@@ -558,6 +637,7 @@ where
             // Obtain the missing blocks and the manager state from the local node.
             let heights = (info.next_block_height.0..target_block_height.0).map(BlockHeight);
             let validator_missing_hashes = self
+                .client
                 .local_node
                 .chain_state_view(chain_id)
                 .await?
@@ -566,6 +646,7 @@ where
             if !validator_missing_hashes.is_empty() {
                 // Send the requested certificates in order.
                 let certificates = self
+                    .client
                     .local_node
                     .storage_client()
                     .read_certificates(validator_missing_hashes.clone())
@@ -586,6 +667,7 @@ where
         } else {
             // The remote node might not know about the chain yet.
             let blob_states = self
+                .client
                 .local_node
                 .read_blob_states_from_storage(&[BlobId::new(
                     chain_id.0,
@@ -611,7 +693,7 @@ where
         };
         let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
-        let local_info = match self.local_node.handle_chain_info_query(query).await {
+        let local_info = match self.client.local_node.handle_chain_info_query(query).await {
             Ok(response) => response.info,
             // We don't have the full chain description.
             Err(LocalNodeError::BlobsNotFound(_)) => return Ok(()),

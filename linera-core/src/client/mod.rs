@@ -151,7 +151,7 @@ pub struct Client<Env: Environment> {
     environment: Env,
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
-    local_node: LocalNodeClient<Env::Storage>,
+    pub local_node: LocalNodeClient<Env::Storage>,
     /// Manages the requests sent to validator nodes.
     requests_scheduler: RequestsScheduler<Env>,
     /// The admin chain ID.
@@ -536,7 +536,7 @@ impl<Env: Environment> Client<Env> {
     /// Submits a validated block for finalization and returns the confirmed block certificate.
     #[instrument(level = "trace", skip_all)]
     async fn finalize_block(
-        &self,
+        self: &Arc<Self>,
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
     ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
@@ -557,7 +557,7 @@ impl<Env: Environment> Client<Env> {
     /// Submits a block proposal to the validators.
     #[instrument(level = "trace", skip_all)]
     async fn submit_block_proposal<T: ProcessableCertificate>(
-        &self,
+        self: &Arc<Self>,
         committee: &Committee,
         proposal: Box<BlockProposal>,
         value: T,
@@ -581,7 +581,7 @@ impl<Env: Environment> Client<Env> {
     /// Broadcasts certified blocks to validators.
     #[instrument(level = "trace", skip_all, fields(chain_id, block_height, delivery))]
     async fn communicate_chain_updates(
-        &self,
+        self: &Arc<Self>,
         committee: &Committee,
         chain_id: ChainId,
         height: BlockHeight,
@@ -595,7 +595,7 @@ impl<Env: Environment> Client<Env> {
             |remote_node| {
                 let mut updater = ValidatorUpdater {
                     remote_node,
-                    local_node: self.local_node.clone(),
+                    client: self.clone(),
                     admin_id: self.admin_id,
                 };
                 Box::pin(async move {
@@ -617,7 +617,7 @@ impl<Env: Environment> Client<Env> {
     /// and returns a certificate.
     #[instrument(level = "trace", skip_all)]
     async fn communicate_chain_action<T: CertificateValue>(
-        &self,
+        self: &Arc<Self>,
         committee: &Committee,
         action: CommunicateAction,
         value: T,
@@ -630,7 +630,7 @@ impl<Env: Environment> Client<Env> {
             |remote_node| {
                 let mut updater = ValidatorUpdater {
                     remote_node,
-                    local_node: self.local_node.clone(),
+                    client: self.clone(),
                     admin_id: self.admin_id,
                 };
                 let action = action.clone();
@@ -1062,7 +1062,7 @@ impl<Env: Environment> Client<Env> {
     /// Downloads any certificates from the specified validator that we are missing for the given
     /// chain, and processes them.
     #[instrument(level = "trace", skip(self, remote_node, chain_id))]
-    async fn synchronize_chain_state_from(
+    pub(crate) async fn synchronize_chain_state_from(
         &self,
         remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
