@@ -160,8 +160,8 @@ export class BlockchainDatabase {
   }
 
   // Get all unique chains with stats
-  getChains() {
-    const stmt = this.db.prepare(`
+  getChains(limit = null, offset = 0) {
+    let query = `
       SELECT 
         chain_id,
         COUNT(*) as block_count,
@@ -170,20 +170,40 @@ export class BlockchainDatabase {
       FROM blocks b1 
       GROUP BY chain_id 
       ORDER BY latest_height DESC
-    `);
+    `;
+    
+    if (limit !== null) {
+      query += ` LIMIT ? OFFSET ?`;
+      const stmt = this.db.prepare(query);
+      return stmt.all(limit, offset);
+    }
+    
+    const stmt = this.db.prepare(query);
     return stmt.all();
   }
 
-  // Search blocks by hash prefix
-  searchBlocks(query) {
+  // Get total chain count
+  getChainsCount() {
     const stmt = this.db.prepare(`
-      SELECT hash, chain_id, height, timestamp, LENGTH(data) as size 
-      FROM blocks 
-      WHERE hash = ? 
-      ORDER BY timestamp DESC 
-      LIMIT 20
+      SELECT COUNT(DISTINCT chain_id) as count
+      FROM blocks
     `);
-    return stmt.all(`${query}%`);
+    return stmt.get().count;
+  }
+
+  // Search chains by chain ID
+  getChainById(chainId) {
+    const stmt = this.db.prepare(`
+      SELECT 
+        chain_id,
+        COUNT(*) as block_count,
+        MAX(height) as latest_height,
+        (SELECT hash FROM blocks b2 WHERE b2.chain_id = b1.chain_id ORDER BY height DESC LIMIT 1) as latest_block_hash
+      FROM blocks b1 
+      WHERE chain_id = ?
+      GROUP BY chain_id
+    `);
+    return stmt.get(chainId) || null;
   }
 
   // Get total block count

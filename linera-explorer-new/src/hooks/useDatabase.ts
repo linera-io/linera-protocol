@@ -95,14 +95,14 @@ const usePollingData = <T>(
   return { data, loading, error };
 };
 
-export const useBlocks = (limit: number = 50, refreshInterval: number = 5000) => {
+export const useBlocks = (limit: number = 50, offset: number = 0, refreshInterval: number = 5000) => {
   const [latestBlock, setLatestBlock] = useState<BlockInfo | null>(null);
   const { isConnected } = useAPI();
   const latestBlockRef = useRef<BlockInfo | null>(null);
 
   const { data: blocks, loading, error } = usePollingData<BlockInfo[]>(
-    () => api.getBlocks(limit, 0),
-    [limit],
+    () => api.getBlocks(limit, offset),
+    [limit, offset],
     {
       refreshInterval,
       logPrefix: '📋',
@@ -204,12 +204,12 @@ export const useBlock = (hash: string) => {
   };
 };
 
-export const useChains = (refreshInterval: number = 5000) => {
+export const useChains = (limit: number = 50, offset: number = 0, refreshInterval: number = 5000) => {
   const { isConnected } = useAPI();
 
   const { data: chains, loading, error } = usePollingData<ChainInfo[]>(
-    () => api.getChains(),
-    [],
+    () => api.getChains(limit, offset),
+    [limit, offset],
     {
       refreshInterval,
       logPrefix: '⛓️',
