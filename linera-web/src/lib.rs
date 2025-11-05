@@ -97,6 +97,7 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     cache_max_size: linera_core::client::requests_scheduler::CACHE_MAX_SIZE,
     max_request_ttl_ms: linera_core::client::requests_scheduler::MAX_REQUEST_TTL_MS,
     alpha: linera_core::client::requests_scheduler::ALPHA_SMOOTHING_FACTOR,
+    alternative_peers_retry_delay_ms: linera_core::client::requests_scheduler::STAGGERED_DELAY_MS,
 
     // TODO(linera-protocol#2944): separate these out from the
     // `ClientOptions` struct, since they apply only to the CLI/native

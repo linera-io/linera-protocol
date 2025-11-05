@@ -21,6 +21,7 @@ pub const CACHE_TTL_MS: u64 = 2000;
 pub const CACHE_MAX_SIZE: usize = 1000;
 pub const MAX_REQUEST_TTL_MS: u64 = 200;
 pub const ALPHA_SMOOTHING_FACTOR: f64 = 0.1;
+pub const STAGGERED_DELAY_MS: u64 = 75;
 
 /// Configuration for the `RequestsScheduler`.
 #[derive(Debug, Clone)]
@@ -35,6 +36,8 @@ pub struct RequestsSchedulerConfig {
     pub max_request_ttl_ms: u64,
     /// Smoothing factor for Exponential Moving Averages (0 < alpha < 1)
     pub alpha: f64,
+    /// Delay in milliseconds between starting requests to different peers.
+    pub retry_delay_ms: u64,
 }
 
 impl Default for RequestsSchedulerConfig {
@@ -45,6 +48,7 @@ impl Default for RequestsSchedulerConfig {
             cache_max_size: CACHE_MAX_SIZE,
             max_request_ttl_ms: MAX_REQUEST_TTL_MS,
             alpha: ALPHA_SMOOTHING_FACTOR,
+            retry_delay_ms: STAGGERED_DELAY_MS,
         }
     }
 }
