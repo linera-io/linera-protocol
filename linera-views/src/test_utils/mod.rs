@@ -780,8 +780,8 @@ where
     {
         let size = 3;
         let mut rng = make_deterministic_rng();
-        let store = D::connect(&config, &namespace).await.expect("store");
-        let shared_store = store.open_shared(&[]).expect("shared store");
+        let database = D::connect(&config, &namespace).await.expect("store");
+        let shared_store = database.open_shared(&[]).expect("shared store");
         root_keys.push(vec![]);
         let mut batch = Batch::new();
         for _ in 0..2 {
@@ -793,7 +793,8 @@ where
 
         for _ in 0..20 {
             let root_key = get_random_byte_vector(&mut rng, &[], 4);
-            let exclusive_store = store.open_exclusive(&root_key).expect("exclusive store");
+            let exclusive_store = database.open_exclusive(&root_key).expect("exclusive store");
+            assert_eq!(exclusive_store.root_key().unwrap(), root_key);
             root_keys.push(root_key.clone());
             let size_select = rng.gen_range(0..size);
             let mut batch = Batch::new();
@@ -810,8 +811,8 @@ where
     }
 
     let read_root_keys = {
-        let store = D::connect(&config, &namespace).await.expect("store");
-        store.list_root_keys().await.expect("read_root_keys")
+        let database = D::connect(&config, &namespace).await.expect("store");
+        database.list_root_keys().await.expect("read_root_keys")
     };
     let set_root_keys = root_keys.iter().cloned().collect::<HashSet<_>>();
     for read_root_key in &read_root_keys {
@@ -822,9 +823,9 @@ where
     for root_key in read_root_keys {
         let store = D::connect(&config, &namespace)
             .await
-            .expect("store")
+            .expect("database")
             .open_exclusive(&root_key)
-            .expect("open_exclusive");
+            .expect("store");
         let keys = store.find_keys_by_prefix(&prefix).await.expect("keys");
         for key in keys {
             let mut big_key = prefix.clone();

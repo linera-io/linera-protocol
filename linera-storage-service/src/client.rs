@@ -99,7 +99,8 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
     }
 
     fn root_key(&self) -> Result<Vec<u8>, StorageServiceStoreError> {
-        Ok(self.start_key[self.prefix_len..].to_vec())
+        let root_key = bcs::from_bytes(&self.start_key[self.prefix_len..])?;
+        Ok(root_key)
     }
 
     async fn read_value_bytes(
