@@ -213,6 +213,17 @@ export class BlockchainDatabase {
     return result.count;
   }
 
+  // Get block count for a specific chain
+  getChainBlockCount(chainId) {
+    const stmt = this.db.prepare(`
+      SELECT COUNT(*) as count
+      FROM blocks
+      WHERE chain_id = ?
+    `);
+    const result = stmt.get(chainId);
+    return result.count;
+  }
+
   // Get operations for a block
   getOperations(blockHash) {
     const stmt = this.db.prepare(`

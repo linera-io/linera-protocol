@@ -3,7 +3,7 @@ import cors from 'cors';
 import { BlockchainDatabase } from './database.js';
 
 const app = express();
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.EXPLORER_API_PORT || 3002;
 
 // Middleware
 app.use(cors());
@@ -176,11 +176,22 @@ app.get('/api/chains/:chainId/blocks', (req, res) => {
     const { chainId } = req.params;
     const limit = parseInt(req.query.limit) || 50;
     const offset = parseInt(req.query.offset) || 0;
-    
+
     const blocks = db.getBlocksByChain(chainId, limit, offset);
     res.json(blocks);
   } catch (error) {
     handleError(res, error, 'Failed to fetch chain blocks');
+  }
+});
+
+// Get block count for a specific chain
+app.get('/api/chains/:chainId/blocks/count', (req, res) => {
+  try {
+    const { chainId } = req.params;
+    const count = db.getChainBlockCount(chainId);
+    res.json({ count });
+  } catch (error) {
+    handleError(res, error, 'Failed to fetch chain block count');
   }
 });
 

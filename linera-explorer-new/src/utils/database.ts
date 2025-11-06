@@ -151,6 +151,16 @@ export class BlockchainAPI {
     return response.json();
   }
 
+  // Get block count for a specific chain
+  async getChainBlockCount(chainId: string): Promise<number> {
+    const response = await fetch(`${API_BASE_URL}/chains/${encodeURIComponent(chainId)}/blocks/count`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch chain block count: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return data.count;
+  }
+
   // Get total block count
   async getTotalBlockCount(): Promise<number> {
     const response = await fetch(`${API_BASE_URL}/stats`);

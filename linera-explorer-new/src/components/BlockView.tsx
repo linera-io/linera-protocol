@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BlockList } from './BlockList';
 import { SearchBar } from './SearchBar';
@@ -6,31 +6,20 @@ import { Pagination } from './common/Pagination';
 import { useBlocks } from '../hooks/useDatabase';
 import { useRelativeTime } from '../hooks/useRelativeTime';
 import { BlockchainAPI } from '../utils/database';
-import { BLOCKS_PER_PAGE } from '../config/constants';
+import { useBlocksPagination } from '../hooks/usePagination';
 
 export const BlockView: React.FC = () => {
   const navigate = useNavigate();
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalBlocks, setTotalBlocks] = useState(0);
 
-  const offset = (currentPage - 1) * BLOCKS_PER_PAGE;
+  const { currentPage, setCurrentPage, totalPages, offset, itemsPerPage } = useBlocksPagination(
+    async () => {
+      const api = new BlockchainAPI();
+      return api.getTotalBlockCount();
+    }
+  );
 
-  const { blocks, latestBlock, loading, error } = useBlocks(BLOCKS_PER_PAGE, offset);
+  const { blocks, latestBlock, loading, error } = useBlocks(itemsPerPage, offset);
   const latestBlockTime = useRelativeTime(latestBlock?.timestamp ?? null);
-
-  // Fetch total block count
-  useEffect(() => {
-    const fetchCount = async () => {
-      try {
-        const api = new BlockchainAPI();
-        const count = await api.getTotalBlockCount();
-        setTotalBlocks(count);
-      } catch (err) {
-        console.error('Failed to fetch block count:', err);
-      }
-    };
-    fetchCount();
-  }, []);
 
   const handleSearch = (query: string) => {
     // Navigate to the block if it looks like a hash
@@ -38,8 +27,6 @@ export const BlockView: React.FC = () => {
       navigate(`/block/${query}`);
     }
   };
-
-  const totalPages = Math.ceil(totalBlocks / BLOCKS_PER_PAGE);
 
   return (
     <div className="space-y-8 animate-fade-in">

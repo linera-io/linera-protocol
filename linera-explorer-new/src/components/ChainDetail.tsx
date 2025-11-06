@@ -5,10 +5,22 @@ import { useChainBlocks } from '../hooks/useDatabase';
 import { BlockList } from './BlockList';
 import { CopyableHash } from './CopyableHash';
 import { useRelativeTime } from '../hooks/useRelativeTime';
+import { Pagination } from './common/Pagination';
+import { BlockchainAPI } from '../utils/database';
+import { useBlocksPagination } from '../hooks/usePagination';
 
 export const ChainDetail: React.FC = () => {
   const { chainId } = useParams<{ chainId: string }>();
-  const { blocks, latestBlock, loading, error } = useChainBlocks(chainId || '');
+
+  const { currentPage, setCurrentPage, totalPages, offset, itemsPerPage } = useBlocksPagination(
+    async () => {
+      if (!chainId) return 0;
+      const api = new BlockchainAPI();
+      return api.getChainBlockCount(chainId);
+    }
+  );
+
+  const { blocks, latestBlock, loading, error } = useChainBlocks(chainId || '', itemsPerPage, offset);
   const latestBlockTime = useRelativeTime(latestBlock?.timestamp ?? null);
 
   return (
@@ -97,6 +109,13 @@ export const ChainDetail: React.FC = () => {
         </div>
         <BlockList blocks={blocks} loading={loading} error={error} />
       </div>
+
+      {/* Pagination */}
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+      />
     </div>
   );
 };

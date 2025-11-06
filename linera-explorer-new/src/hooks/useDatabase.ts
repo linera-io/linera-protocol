@@ -229,16 +229,16 @@ export const useChains = (limit: number = 50, offset: number = 0, refreshInterva
   return { chains: chains || [], loading, error };
 };
 
-export const useChainBlocks = (chainId: string, limit: number = 50, refreshInterval: number = 5000) => {
+export const useChainBlocks = (chainId: string, limit: number = 50, offset: number = 0, refreshInterval: number = 5000) => {
   const [latestBlock, setLatestBlock] = useState<BlockInfo | null>(null);
   const { isConnected } = useAPI();
   const latestBlockRef = useRef<BlockInfo | null>(null);
 
-  const fetcher = useCallback(() => api.getBlocksByChain(chainId, limit, 0), [chainId, limit]);
+  const fetcher = useCallback(() => api.getBlocksByChain(chainId, limit, offset), [chainId, limit, offset]);
 
   const { data: blocks, loading, error } = usePollingData<BlockInfo[]>(
     fetcher,
-    [chainId, limit],
+    [chainId, limit, offset],
     {
       refreshInterval,
       logPrefix: '🔗',

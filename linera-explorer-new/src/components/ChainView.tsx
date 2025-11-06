@@ -8,33 +8,17 @@ import { Pagination } from './common/Pagination';
 import { LoadingSpinner } from './common/LoadingSpinner';
 import { ErrorMessage } from './common/ErrorMessage';
 import { BlockchainAPI } from '../utils/database';
-import { CHAINS_PER_PAGE } from '../config/constants';
+import { useChainsPagination } from '../hooks/usePagination';
 
 export const ChainView: React.FC = () => {
-  const [currentPage, setCurrentPage] = React.useState(1);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchResult, setSearchResult] = React.useState<ChainInfo[] | null>(null);
   const [searchLoading, setSearchLoading] = React.useState(false);
   const [searchError, setSearchError] = React.useState<string | null>(null);
-  const [totalChains, setTotalChains] = React.useState(0);
 
-  const offset = (currentPage - 1) * CHAINS_PER_PAGE;
+  const { currentPage, setCurrentPage, totalPages, offset, itemsPerPage } = useChainsPagination();
 
-  const { chains, loading, error } = useChains(CHAINS_PER_PAGE, offset);
-
-  // Fetch total chain count
-  React.useEffect(() => {
-    const fetchCount = async () => {
-      try {
-        const api = new BlockchainAPI();
-        const count = await api.getChainsCount();
-        setTotalChains(count);
-      } catch (err) {
-        console.error('Failed to fetch chain count:', err);
-      }
-    };
-    fetchCount();
-  }, []);
+  const { chains, loading, error } = useChains(itemsPerPage, offset);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +62,6 @@ export const ChainView: React.FC = () => {
     setSearchError(null);
   };
 
-  const totalPages = Math.ceil(totalChains / CHAINS_PER_PAGE);
   const displayChains = searchResult || chains;
   const isSearchMode = searchResult !== null || searchQuery.trim() !== '';
 
