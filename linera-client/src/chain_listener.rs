@@ -512,14 +512,16 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             }
             Err(error) => warn!(%error, "Failed to process inbox."),
             Ok((certs, None)) => info!(
-                "Done processing inbox of chain. {} blocks created on chain {chain_id}.",
-                certs.len()
+                %chain_id,
+                created_block_count = %certs.len(),
+                "done processing inbox",
             ),
             Ok((certs, Some(new_timeout))) => {
                 info!(
-                    "{} blocks created on chain {chain_id}. Will try processing the inbox later \
-                    based on the round timeout: {new_timeout:?}",
-                    certs.len(),
+                    %chain_id,
+                    created_block_count = %certs.len(),
+                    timeout = %new_timeout,
+                    "waiting for round timeout before continuing to process the inbox",
                 );
                 listening_client.timeout = new_timeout.timestamp;
             }

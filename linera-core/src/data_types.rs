@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, ops::Not};
+use std::{collections::BTreeMap, fmt, ops::Not};
 
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -354,12 +354,22 @@ pub struct RoundTimeout {
     pub next_block_height: BlockHeight,
 }
 
+impl fmt::Display for RoundTimeout {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} at height {} times out at {}",
+            self.current_round, self.next_block_height, self.timestamp
+        )
+    }
+}
+
 impl<T> ClientOutcome<T> {
     #[cfg(with_testing)]
     pub fn unwrap(self) -> T {
         match self {
             ClientOutcome::Committed(t) => t,
-            ClientOutcome::WaitForTimeout(timeout) => panic!("Unexpected timeout: {timeout:?}"),
+            ClientOutcome::WaitForTimeout(timeout) => panic!("unexpected timeout: {timeout}"),
         }
     }
 
