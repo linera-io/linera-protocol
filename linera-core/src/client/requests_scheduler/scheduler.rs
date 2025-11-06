@@ -741,9 +741,16 @@ impl<Env: Environment> RequestsScheduler<Env> {
             .await;
 
         if let Ok(success) = shared_result.as_ref() {
-            self.cache
-                .store(key.clone(), Arc::new(success.clone()))
-                .await;
+            match key {
+                RequestKey::ChainInfo(_) => {
+                    // Don't cache result of ChainInfo queries. Only deduplicate in-flight requests.
+                }
+                _ => {
+                    self.cache
+                        .store(key.clone(), Arc::new(success.clone()))
+                        .await;
+                }
+            }
         }
         result
     }
