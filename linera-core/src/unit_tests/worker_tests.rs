@@ -4241,45 +4241,16 @@ where
     B: StorageBuilder,
 {
     let mut signer = InMemorySigner::new(None);
-    let sender_public_key = signer.generate_new();
-    let sender_owner = sender_public_key.into();
     let receiver_public_key = signer.generate_new();
-    let receiver_owner = receiver_public_key.into();
+    let owner = receiver_public_key.into();
     let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
-    let chain_1_desc = env
-        .add_root_chain(1, sender_owner, Amount::from_tokens(10))
-        .await;
-    let chain_2_desc = env.add_root_chain(2, receiver_owner, Amount::ZERO).await;
+    let chain_1_desc = env.add_root_chain(1, owner, Amount::from_tokens(10)).await;
+    let chain_2_desc = env.add_root_chain(2, owner, Amount::ZERO).await;
     let chain_1 = chain_1_desc.id();
     let chain_2 = chain_2_desc.id();
 
-    // Create a certificate with two messages from chain_1 to chain_2.
-    let certificate = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![
-                vec![direct_credit_message(chain_2, Amount::ONE)],
-                vec![direct_credit_message(chain_2, Amount::from_tokens(2))],
-            ],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new(); 2],
-            blobs: vec![Vec::new(); 2],
-            state_hash: SystemExecutionState {
-                balance: Amount::from_tokens(7),
-                ..env.system_execution_state(&chain_1_desc.id())
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new(); 2],
-            operation_results: vec![OperationResult::default(); 2],
-        }
-        .with(
-            make_first_block(chain_1)
-                .with_simple_transfer(chain_2, Amount::ONE)
-                .with_simple_transfer(chain_2, Amount::from_tokens(2))
-                .with_authenticated_signer(Some(sender_owner)),
-        ),
-    ));
+    // Simulate a certificate sending two messages from chain_1 to chain_2.
+    let sender_hash = CryptoHash::test_hash("sender block");
 
     // Process the second message bundle on chain_2. This advances next_cursor_to_remove
     // to height=0, index=1.
@@ -4287,7 +4258,7 @@ where
         .with_incoming_bundle(IncomingBundle {
             origin: chain_1,
             bundle: MessageBundle {
-                certificate_hash: certificate.hash(),
+                certificate_hash: sender_hash,
                 height: BlockHeight::ZERO,
                 timestamp: Timestamp::from(0),
                 transaction_index: 1,
@@ -4296,8 +4267,7 @@ where
             },
             action: MessageAction::Accept,
         })
-        .with_authenticated_signer(Some(receiver_owner))
-        .into_first_proposal(receiver_owner, &signer)
+        .into_first_proposal(owner, &signer)
         .await
         .unwrap();
 
@@ -4331,7 +4301,7 @@ where
         .with_incoming_bundle(IncomingBundle {
             origin: chain_1,
             bundle: MessageBundle {
-                certificate_hash: certificate.hash(),
+                certificate_hash: sender_hash,
                 height: BlockHeight::ZERO,
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
@@ -4340,8 +4310,7 @@ where
                 ],
             },
             action: MessageAction::Accept,
-        })
-        .with_authenticated_signer(Some(receiver_owner));
+        });
 
     // Test stage_block_execution directly - this should fail with IncorrectMessageOrder.
     assert_matches!(
@@ -4354,7 +4323,7 @@ where
 
     // Also test handle_block_proposal for completeness.
     let bad_proposal = bad_proposed_block
-        .into_first_proposal(receiver_owner, &signer)
+        .into_first_proposal(owner, &signer)
         .await
         .unwrap();
 
