@@ -7,8 +7,10 @@ use std::{
     io::Write,
     marker::PhantomData,
     mem,
+    ops::Deref,
 };
 
+use allocative::{Allocative, Key, Visitor};
 use async_lock::{RwLock, RwLockReadGuard};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -49,6 +51,18 @@ pub struct ByteCollectionView<C, W> {
     context: C,
     delete_storage_first: bool,
     updates: RwLock<BTreeMap<Vec<u8>, Update<W>>>,
+}
+
+impl<C, W: Allocative> Allocative for ByteCollectionView<C, W> {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        let name = Key::new("ByteCollectionView");
+        let size = mem::size_of::<Self>();
+        let mut visitor = visitor.enter(name, size);
+        if let Some(updates) = self.updates.try_read() {
+            updates.deref().visit(&mut visitor);
+        }
+        visitor.exit();
+    }
 }
 
 /// A read-only accessor for a particular subview in a [`CollectionView`].
@@ -858,9 +872,11 @@ impl<W: HashableView> HashableView for ByteCollectionView<W::Context, W> {
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, I, W: Allocative")]
 pub struct CollectionView<C, I, W> {
     collection: ByteCollectionView<C, W>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
 
@@ -1276,9 +1292,11 @@ where
 }
 
 /// A map view that serializes the indices.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, I, W: Allocative")]
 pub struct CustomCollectionView<C, I, W> {
     collection: ByteCollectionView<C, W>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
 

@@ -6,8 +6,10 @@ use std::{
     ops::Range,
 };
 
+use allocative::Allocative;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::visit_allocative_simple;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -48,9 +50,12 @@ enum KeyTag {
 }
 
 /// A view that supports a FIFO queue for values of type `T`.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, T: Allocative")]
 pub struct QueueView<C, T> {
+    #[allocative(skip)]
     context: C,
+    #[allocative(visit = visit_allocative_simple)]
     stored_indices: Range<usize>,
     front_delete_count: usize,
     delete_storage_first: bool,

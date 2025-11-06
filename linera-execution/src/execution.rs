@@ -3,6 +3,7 @@
 
 use std::{collections::BTreeMap, vec};
 
+use allocative::Allocative;
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
@@ -39,7 +40,8 @@ use crate::{
 };
 
 /// A view accessing the execution state of a chain.
-#[derive(Debug, ClonableView, HashableView)]
+#[derive(Debug, ClonableView, HashableView, Allocative)]
+#[allocative(bound = "C")]
 pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,

@@ -7,9 +7,11 @@ use std::{
     io::Write,
     marker::PhantomData,
     mem,
+    ops::Deref,
     sync::Arc,
 };
 
+use allocative::{Allocative, Key, Visitor};
 use async_lock::{RwLock, RwLockReadGuardArc, RwLockWriteGuardArc};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -82,6 +84,32 @@ pub struct ReentrantByteCollectionView<C, W> {
     delete_storage_first: bool,
     /// Entries that may have staged changes.
     updates: BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
+}
+
+impl<C, W: Allocative> Allocative for ReentrantByteCollectionView<C, W> {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        let name = Key::new("ReentrantByteCollectionView");
+        let size = mem::size_of::<Self>();
+        let mut visitor = visitor.enter(name, size);
+
+        for (k, v) in &self.updates {
+            let key_name = Key::new("key");
+            visitor.visit_field(key_name, k);
+            match v {
+                Update::Removed => {
+                    let key = Key::new("update_removed");
+                    visitor.visit_field(key, &());
+                }
+                Update::Set(v) => {
+                    if let Some(v) = v.try_read() {
+                        let key = Key::new("update_set");
+                        visitor.visit_field(key, v.deref());
+                    }
+                }
+            }
+        }
+        visitor.exit();
+    }
 }
 
 impl<W, C2> ReplaceContext<C2> for ReentrantByteCollectionView<W::Context, W>
@@ -1022,9 +1050,11 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
 
 /// A view that supports accessing a collection of views of the same kind, indexed by keys,
 /// possibly several subviews at a time.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, I, W: Allocative")]
 pub struct ReentrantCollectionView<C, I, W> {
     collection: ReentrantByteCollectionView<C, W>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
 
@@ -1534,9 +1564,11 @@ where
 
 /// A view that supports accessing a collection of views of the same kind, indexed by an ordered key,
 /// possibly several subviews at a time.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, I, W: Allocative")]
 pub struct ReentrantCustomCollectionView<C, I, W> {
     collection: ReentrantByteCollectionView<C, W>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
 

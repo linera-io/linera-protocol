@@ -44,6 +44,7 @@ use std::{
     mem,
 };
 
+use allocative::Allocative;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -60,8 +61,10 @@ use crate::{
 };
 
 /// A view that supports inserting and removing values indexed by `Vec<u8>`.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, V: Allocative")]
 pub struct ByteMapView<C, V> {
+    #[allocative(skip)]
     context: C,
     deletion_set: DeletionSet,
     updates: BTreeMap<Vec<u8>, Update<V>>,
@@ -955,9 +958,11 @@ where
 
 /// A `View` that has a type for keys. The ordering of the entries
 /// is determined by the serialization of the context.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, I, V: Allocative")]
 pub struct MapView<C, I, V> {
     map: ByteMapView<C, V>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
 
@@ -1494,9 +1499,11 @@ where
 }
 
 /// A map view that uses custom serialization
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, I, V: Allocative")]
 pub struct CustomMapView<C, I, V> {
     map: ByteMapView<C, V>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
 
