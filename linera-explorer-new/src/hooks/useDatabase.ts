@@ -67,7 +67,12 @@ const usePollingData = <T>(
           console.log(`${logPrefix} Refreshed data from API`);
         }
 
-        setData(result);
+        // Only update state if data has actually changed to prevent unnecessary re-renders
+        setData(prevData => {
+          const resultStr = JSON.stringify(result);
+          const prevStr = JSON.stringify(prevData);
+          return resultStr !== prevStr ? result : prevData;
+        });
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : errorMessage);
