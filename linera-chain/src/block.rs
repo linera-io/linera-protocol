@@ -8,6 +8,7 @@ use std::{
     fmt::Debug,
 };
 
+use allocative::Allocative;
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
@@ -28,7 +29,7 @@ use crate::{
 };
 
 /// Wrapper around a `Block` that has been validated.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
 #[serde(transparent)]
 pub struct ValidatedBlock(Hashed<Block>);
 
@@ -74,7 +75,7 @@ impl ValidatedBlock {
 }
 
 /// Wrapper around a `Block` that has been confirmed.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
 #[serde(transparent)]
 pub struct ConfirmedBlock(Hashed<Block>);
 
@@ -153,11 +154,11 @@ impl ConfirmedBlock {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
 #[serde(transparent)]
 pub struct Timeout(Hashed<TimeoutInner>);
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
 #[serde(rename = "Timeout")]
 pub(crate) struct TimeoutInner {
     chain_id: ChainId,
@@ -221,7 +222,7 @@ pub enum ConversionError {
 /// and operations to execute which define a state transition of the chain.
 /// Resulting messages produced by the operations are also included in the block body,
 /// together with oracle responses and events.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject, Allocative)]
 pub struct Block {
     /// Header of the block containing metadata of the block.
     pub header: BlockHeader,
@@ -299,7 +300,7 @@ impl<'de> Deserialize<'de> for Block {
 /// Succinct representation of a block.
 /// Contains all the metadata to follow the chain of blocks or verifying
 /// inclusion (event, message, oracle response, etc.) in the block's body.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject, Allocative)]
 pub struct BlockHeader {
     /// The chain to which this block belongs.
     pub chain_id: ChainId,
@@ -341,7 +342,7 @@ pub struct BlockHeader {
 }
 
 /// The body of a block containing all the data included in the block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject, Allocative)]
 #[graphql(complex)]
 pub struct BlockBody {
     /// The transactions to execute in this block. Each transaction can be either

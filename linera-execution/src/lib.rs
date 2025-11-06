@@ -22,6 +22,7 @@ mod wasm;
 
 use std::{any::Any, collections::BTreeMap, fmt, ops::RangeInclusive, str::FromStr, sync::Arc};
 
+use allocative::Allocative;
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
@@ -894,7 +895,7 @@ pub trait ContractRuntime: BaseRuntime {
 }
 
 /// An operation to be executed in a block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub enum Operation {
     /// A system operation.
     System(Box<SystemOperation>),
@@ -910,7 +911,7 @@ pub enum Operation {
 impl BcsHashable<'_> for Operation {}
 
 /// A message to be sent and possibly executed in the receiver's block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub enum Message {
     /// A system message.
     System(SystemMessage),
@@ -986,7 +987,7 @@ pub enum QueryResponse {
 }
 
 /// The kind of outgoing message being sent.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Copy, Allocative)]
 pub enum MessageKind {
     /// The message can be skipped or rejected. No receipt is requested.
     Simple,
@@ -1012,7 +1013,7 @@ impl Display for MessageKind {
 }
 
 /// A posted message together with routing information.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject, Allocative)]
 pub struct OutgoingMessage {
     /// The destination of the message.
     pub destination: ChainId,

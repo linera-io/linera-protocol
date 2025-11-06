@@ -34,6 +34,7 @@ scylladb = [
 storage-service = ["linera-core/storage-service"]
 
 [dependencies]
+allocative.workspace = true
 async-graphql.workspace = true
 async-graphql-axum.workspace = true
 async-trait.workspace = true

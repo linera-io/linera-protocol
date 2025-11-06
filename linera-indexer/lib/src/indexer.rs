@@ -5,6 +5,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use allocative::Allocative;
 use async_graphql::{EmptyMutation, EmptySubscription, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{extract::Extension, routing::get, Router};
@@ -28,7 +29,8 @@ use crate::{
     service::Listener,
 };
 
-#[derive(RootView)]
+#[derive(RootView, Allocative)]
+#[allocative(bound = "C")]
 pub struct StateView<C> {
     chains: MapView<C, ChainId, (CryptoHash, BlockHeight)>,
     plugins: SetView<C, String>,

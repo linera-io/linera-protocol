@@ -26,6 +26,7 @@ test = [
 web = ["linera-base/web", "linera-views/web", "linera-execution/web"]
 
 [dependencies]
+allocative.workspace = true
 anyhow = { workspace = true, optional = true }
 async-graphql.workspace = true
 axum = { workspace = true, optional = true }

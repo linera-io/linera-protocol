@@ -6,6 +6,7 @@ use std::{
     ops::{Bound, Range, RangeBounds},
 };
 
+use allocative::Allocative;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{de::DeserializeOwned, Serialize};
@@ -48,8 +49,10 @@ enum KeyTag {
 }
 
 /// A view that supports logging values of type `T`.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, T: Allocative")]
 pub struct LogView<C, T> {
+    #[allocative(skip)]
     context: C,
     delete_storage_first: bool,
     stored_count: usize,

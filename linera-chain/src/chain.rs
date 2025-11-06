@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use allocative::Allocative;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
@@ -196,7 +197,7 @@ pub(crate) const EMPTY_BLOCK_SIZE: usize = 94;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative)]
 pub struct TimestampedBundleInInbox {
     /// The origin and cursor of the bundle.
     pub entry: BundleInInbox,
@@ -206,7 +207,7 @@ pub struct TimestampedBundleInInbox {
 
 /// An origin and cursor of a unskippable bundle that is no longer in our inbox.
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize, Allocative)]
 pub struct BundleInInbox {
     /// The origin from which we received the bundle.
     pub origin: ChainId,
@@ -233,7 +234,8 @@ const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
     derive(async_graphql::SimpleObject),
     graphql(cache_control(no_cache))
 )]
-#[derive(Debug, RootView, ClonableView)]
+#[derive(Debug, RootView, ClonableView, Allocative)]
+#[allocative(bound = "C")]
 pub struct ChainStateView<C>
 where
     C: Clone + Context + Send + Sync + 'static,
@@ -287,7 +289,7 @@ where
 
 /// Block-chaining state.
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
-#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, Allocative)]
 pub struct ChainTipState {
     /// Hash of the latest certified block in this chain, if any.
     pub block_hash: Option<CryptoHash>,
