@@ -166,8 +166,8 @@ where
     }
 
     /// Returns true if the corresponding contract uses a zero amount of storage.
-    pub fn has_trivial_storage(&mut self, application: ApplicationId) -> bool {
-        contract_wit::has_trivial_storage(application.into())
+    pub fn has_empty_storage(&mut self, application: ApplicationId) -> bool {
+        contract_wit::has_empty_storage(application.into())
     }
 }
 

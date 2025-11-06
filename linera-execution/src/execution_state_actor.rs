@@ -681,7 +681,6 @@ where
                     }
                     None => (0, 0),
                 };
-                tracing::info!("TotalStorageSize, result={result:?}");
                 callback.respond(result);
             }
         }

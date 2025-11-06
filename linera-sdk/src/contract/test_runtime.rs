@@ -78,7 +78,7 @@ where
     expected_http_requests: VecDeque<(http::Request, http::Response)>,
     expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
-    expected_has_trivial_storage_requests: VecDeque<(ApplicationId, bool)>,
+    expected_has_empty_storage_requests: VecDeque<(ApplicationId, bool)>,
     expected_open_chain_calls: VecDeque<(ChainOwnership, ApplicationPermissions, Amount, ChainId)>,
     expected_publish_module_calls: VecDeque<ExpectedPublishModuleCall>,
     expected_create_application_calls: VecDeque<ExpectedCreateApplicationCall>,
@@ -128,7 +128,7 @@ where
             expected_http_requests: VecDeque::new(),
             expected_read_data_blob_requests: VecDeque::new(),
             expected_assert_data_blob_exists_requests: VecDeque::new(),
-            expected_has_trivial_storage_requests: VecDeque::new(),
+            expected_has_empty_storage_requests: VecDeque::new(),
             expected_open_chain_calls: VecDeque::new(),
             expected_publish_module_calls: VecDeque::new(),
             expected_create_application_calls: VecDeque::new(),
@@ -938,13 +938,13 @@ where
             .push_back((hash, response));
     }
 
-    /// Adds an expected `has_trivial_storage` call, and the response it should return in the test.
-    pub fn add_expected_has_trivial_storage_requests(
+    /// Adds an expected `has_empty_storage` call, and the response it should return in the test.
+    pub fn add_expected_has_empty_storage_requests(
         &mut self,
         application: ApplicationId,
         response: bool,
     ) {
-        self.expected_has_trivial_storage_requests
+        self.expected_has_empty_storage_requests
             .push_back((application, response));
     }
 
@@ -1010,10 +1010,10 @@ where
     }
 
     /// Returns true if the corresponding contract uses a zero amount of storage.
-    pub fn has_trivial_storage(&mut self, application: ApplicationId) -> bool {
-        let maybe_request = self.expected_has_trivial_storage_requests.pop_front();
+    pub fn has_empty_storage(&mut self, application: ApplicationId) -> bool {
+        let maybe_request = self.expected_has_empty_storage_requests.pop_front();
         let (expected_application_id, response) =
-            maybe_request.expect("Unexpected has_trivial_storage request");
+            maybe_request.expect("Unexpected has_empty_storage request");
         assert_eq!(application, expected_application_id);
         response
     }

@@ -23,7 +23,7 @@ interface contract-runtime-api {
     consume-fuel: func(fuel: u64);
     validation-round: func() -> option<u32>;
     write-batch: func(operations: list<write-operation>);
-    has-trivial-storage: func(application: application-id) -> bool;
+    has-empty-storage: func(application: application-id) -> bool;
 
     record account {
         chain-id: chain-id,

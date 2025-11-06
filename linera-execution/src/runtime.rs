@@ -898,7 +898,7 @@ where
             .recv_response()
     }
 
-    fn has_trivial_storage(&mut self, application: ApplicationId) -> Result<bool, ExecutionError> {
+    fn has_empty_storage(&mut self, application: ApplicationId) -> Result<bool, ExecutionError> {
         let this = self.inner();
         let (key_size, value_size) = this
             .execution_state_sender
