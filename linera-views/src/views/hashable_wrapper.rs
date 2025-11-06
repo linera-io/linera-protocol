@@ -7,6 +7,8 @@ use std::{
     sync::Mutex,
 };
 
+use allocative::Allocative;
+use linera_base::visit_allocative_simple;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -17,10 +19,15 @@ use crate::{
 };
 
 /// Wrapping a view to memoize its hash.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, O, W: Allocative")]
 pub struct WrappedHashableContainerView<C, W, O> {
+    #[allocative(skip)]
     _phantom: PhantomData<C>,
+    #[allocative(visit = visit_allocative_simple)]
     stored_hash: Option<O>,
+    // We are only keeping track of the size of the mutex here.
+    #[allocative(visit = visit_allocative_simple)]
     hash: Mutex<Option<O>>,
     inner: W,
 }

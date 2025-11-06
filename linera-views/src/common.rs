@@ -12,6 +12,7 @@ use std::{
     slice::ChunksExact,
 };
 
+use allocative::Allocative;
 use itertools::Either;
 use serde::de::DeserializeOwned;
 
@@ -22,7 +23,7 @@ type HasherOutputSize = <sha3::Sha3_256 as sha3::digest::OutputSizeUser>::Output
 #[allow(deprecated)]
 pub type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Allocative)]
 /// An update, for example to a view.
 pub enum Update<T> {
     /// The entry is removed.
@@ -31,7 +32,7 @@ pub enum Update<T> {
     Set(T),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Allocative)]
 pub(crate) struct DeletionSet {
     pub(crate) delete_storage_first: bool,
     pub(crate) deleted_prefixes: BTreeSet<Vec<u8>>,

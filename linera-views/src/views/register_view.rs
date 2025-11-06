@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use allocative::Allocative;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{de::DeserializeOwned, Serialize};
@@ -33,9 +34,11 @@ mod metrics {
 }
 
 /// A view that supports modifying a single value of type `T`.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, T: Allocative")]
 pub struct RegisterView<C, T> {
     delete_storage_first: bool,
+    #[allocative(skip)]
     context: C,
     stored_value: Box<T>,
     update: Option<Box<T>>,

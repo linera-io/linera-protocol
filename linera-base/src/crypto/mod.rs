@@ -11,6 +11,7 @@ mod secp256k1;
 pub mod signer;
 use std::{fmt::Display, io, num::ParseIntError, str::FromStr};
 
+use allocative::Allocative;
 use alloy_primitives::FixedBytes;
 use custom_debug_derive::Debug;
 pub use ed25519::{Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature};
@@ -24,7 +25,7 @@ use serde::{Deserialize, Serialize};
 pub use signer::*;
 use thiserror::Error;
 
-use crate::{hex_debug, identifiers::AccountOwner};
+use crate::{hex_debug, identifiers::AccountOwner, visit_allocative_simple};
 
 /// The public key of a validator.
 pub type ValidatorPublicKey = secp256k1::Secp256k1PublicKey;
@@ -63,14 +64,15 @@ pub enum SignatureScheme {
     WitType,
     WitLoad,
     WitStore,
+    Allocative,
 )]
 pub enum AccountPublicKey {
     /// Ed25519 public key.
-    Ed25519(ed25519::Ed25519PublicKey),
+    Ed25519(#[allocative(visit = visit_allocative_simple)] ed25519::Ed25519PublicKey),
     /// secp256k1 public key.
-    Secp256k1(secp256k1::Secp256k1PublicKey),
+    Secp256k1(#[allocative(visit = visit_allocative_simple)] secp256k1::Secp256k1PublicKey),
     /// EVM secp256k1 public key.
-    EvmSecp256k1(secp256k1::evm::EvmPublicKey),
+    EvmSecp256k1(#[allocative(visit = visit_allocative_simple)] secp256k1::evm::EvmPublicKey),
 }
 
 /// The private key of a chain owner.
@@ -85,28 +87,34 @@ pub enum AccountSecretKey {
 }
 
 /// The signature of a chain owner.
-#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize, Allocative)]
 pub enum AccountSignature {
     /// Ed25519 signature.
     Ed25519 {
         /// Signature of the value.
+        #[allocative(visit = visit_allocative_simple)]
         signature: ed25519::Ed25519Signature,
         /// Public key of the signer.
+        #[allocative(visit = visit_allocative_simple)]
         public_key: ed25519::Ed25519PublicKey,
     },
     /// secp256k1 signature.
     Secp256k1 {
         /// Signature of the value.
+        #[allocative(visit = visit_allocative_simple)]
         signature: secp256k1::Secp256k1Signature,
         /// Public key of the signer.
+        #[allocative(visit = visit_allocative_simple)]
         public_key: secp256k1::Secp256k1PublicKey,
     },
     /// EVM secp256k1 signature.
     EvmSecp256k1 {
         /// Signature of the value.
+        #[allocative(visit = visit_allocative_simple)]
         signature: secp256k1::evm::EvmSignature,
         /// EVM address of the signer.
         #[debug(with = "hex_debug")]
+        #[allocative(visit = visit_allocative_simple)]
         address: [u8; 20],
     },
 }

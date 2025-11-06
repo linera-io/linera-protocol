@@ -9,6 +9,7 @@ use std::{
     marker::PhantomData,
 };
 
+use allocative::Allocative;
 #[cfg(with_revm)]
 use alloy_primitives::{Address, B256};
 use anyhow::{anyhow, Context};
@@ -30,7 +31,9 @@ use crate::{
 };
 
 /// An account owner.
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType)]
+#[derive(
+    Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType, Allocative,
+)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum AccountOwner {
     /// Short addresses reserved for the protocol.
@@ -101,6 +104,7 @@ impl From<CryptoHash> for AccountOwner {
     WitType,
     SimpleObject,
     InputObject,
+    Allocative,
 )]
 #[graphql(name = "AccountOutput", input_name = "Account")]
 pub struct Account {
@@ -178,6 +182,7 @@ impl std::str::FromStr for Account {
     WitLoad,
     WitStore,
     WitType,
+    Allocative,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 #[cfg_attr(with_testing, derive(Default))]
@@ -200,6 +205,7 @@ pub struct ChainId(pub CryptoHash);
     WitStore,
     WitLoad,
     Default,
+    Allocative,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum BlobType {
@@ -251,7 +257,9 @@ impl std::str::FromStr for BlobType {
 }
 
 /// A content-addressed blob ID i.e. the hash of the `BlobContent`.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Debug, WitType, WitStore, WitLoad)]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Debug, WitType, WitStore, WitLoad, Allocative,
+)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Default))]
 pub struct BlobId {
     /// The type of the blob.
@@ -343,13 +351,15 @@ impl From<DataBlobHash> for BlobId {
 }
 
 /// A unique identifier for a user application from a blob.
-#[derive(Debug, WitLoad, WitStore, WitType)]
+#[derive(Debug, WitLoad, WitStore, WitType, Allocative)]
 #[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
+#[allocative(bound = "A")]
 pub struct ApplicationId<A = ()> {
     /// The hash of the `ApplicationDescription` this refers to.
     pub application_description_hash: CryptoHash,
     #[witty(skip)]
     #[debug(skip)]
+    #[allocative(skip)]
     _phantom: PhantomData<A>,
 }
 
@@ -368,6 +378,7 @@ pub struct ApplicationId<A = ()> {
     WitLoad,
     WitStore,
     WitType,
+    Allocative,
 )]
 pub enum GenericApplicationId {
     /// The system application.
@@ -455,7 +466,7 @@ impl From<EvmPublicKey> for AccountOwner {
 }
 
 /// A unique identifier for a module.
-#[derive(Debug, WitLoad, WitStore, WitType)]
+#[derive(Debug, WitLoad, WitStore, WitType, Allocative)]
 #[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
 pub struct ModuleId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     /// The hash of the blob containing the contract bytecode.
@@ -483,6 +494,7 @@ pub struct ModuleId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     WitLoad,
     WitStore,
     WitType,
+    Allocative,
 )]
 pub struct StreamName(
     #[serde(with = "serde_bytes")]
@@ -530,6 +542,7 @@ impl std::str::FromStr for StreamName {
     WitType,
     SimpleObject,
     InputObject,
+    Allocative,
 )]
 #[graphql(input_name = "StreamIdInput")]
 pub struct StreamId {
@@ -612,6 +625,7 @@ impl std::str::FromStr for StreamId {
     WitStore,
     WitType,
     SimpleObject,
+    Allocative,
 )]
 pub struct EventId {
     /// The ID of the chain that generated this event.

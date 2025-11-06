@@ -35,6 +35,7 @@ web = [
 ]
 
 [dependencies]
+allocative.workspace = true
 alloy-primitives.workspace = true
 anyhow.workspace = true
 async-graphql.workspace = true
