@@ -32,10 +32,10 @@ use crate::doc_scalar;
 const SECP256K1_SCHEME_LABEL: &str = "secp256k1";
 
 /// Length of secp256k1 compressed public key.
-pub const SECP256K1_PUBLIC_KEY_SIZE: usize = 33;
+const SECP256K1_PUBLIC_KEY_SIZE: usize = 33;
 
 /// Length of secp256k1 signature.
-pub const SECP256K1_SIGNATURE_SIZE: usize = 64;
+const SECP256K1_SIGNATURE_SIZE: usize = 64;
 
 /// A secp256k1 secret key.
 #[derive(Eq, PartialEq)]

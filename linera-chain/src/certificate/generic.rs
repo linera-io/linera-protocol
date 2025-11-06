@@ -5,10 +5,7 @@
 use allocative::{Allocative, Key, Visitor};
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{
-        CryptoHash, ValidatorPublicKey, ValidatorSignature, SECP256K1_PUBLIC_KEY_SIZE,
-        SECP256K1_SIGNATURE_SIZE,
-    },
+    crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
 };
 use linera_execution::committee::Committee;
@@ -28,9 +25,9 @@ impl<T: Allocative + CertificateValue> Allocative for GenericCertificate<T> {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
         visitor.visit_field(Key::new("GenericCertificate_value"), &self.value);
         visitor.visit_field(Key::new("GenericCertificate_round"), &self.round);
-        for (_, _) in &self.signatures {
-            visitor.visit_simple(Key::new("ValidatorPublicKey"), SECP256K1_PUBLIC_KEY_SIZE);
-            visitor.visit_simple(Key::new("ValidatorSignature"), SECP256K1_SIGNATURE_SIZE);
+        for (public_key, signature) in &self.signatures {
+            visitor.visit_field(Key::new("ValidatorPublicKey"), public_key);
+            visitor.visit_field(Key::new("ValidatorSignature"), signature);
         }
     }
 }

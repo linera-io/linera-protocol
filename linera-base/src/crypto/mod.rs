@@ -19,8 +19,7 @@ pub use hash::*;
 use linera_witty::{WitLoad, WitStore, WitType};
 pub use secp256k1::{
     evm::{EvmPublicKey, EvmSecretKey, EvmSignature},
-    Secp256k1PublicKey, Secp256k1SecretKey, Secp256k1Signature, SECP256K1_PUBLIC_KEY_SIZE,
-    SECP256K1_SIGNATURE_SIZE,
+    Secp256k1PublicKey, Secp256k1SecretKey, Secp256k1Signature,
 };
 use serde::{Deserialize, Serialize};
 pub use signer::*;
