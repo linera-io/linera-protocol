@@ -26,6 +26,7 @@ pub struct WrappedHashableContainerView<C, W, O> {
     _phantom: PhantomData<C>,
     #[allocative(visit = visit_allocative_simple)]
     stored_hash: Option<O>,
+    // We are only keeping track of the size of the Mutex here.
     #[allocative(visit = visit_allocative_simple)]
     hash: Mutex<Option<O>>,
     inner: W,

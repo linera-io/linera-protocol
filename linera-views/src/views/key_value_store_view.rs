@@ -213,6 +213,7 @@ pub struct KeyValueStoreView<C> {
     sizes: ByteMapView<C, u32>,
     #[allocative(visit = visit_allocative_simple)]
     stored_hash: Option<HasherOutput>,
+    // We are only keeping track of the size of the Mutex here.
     #[allocative(visit = visit_allocative_simple)]
     hash: Mutex<Option<HasherOutput>>,
 }
