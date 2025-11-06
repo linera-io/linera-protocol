@@ -358,7 +358,7 @@ where
                 }
             }
 
-            ApplicationIndex { callback } => {
+            NextApplicationIndex { callback } => {
                 let index = self.txn_tracker.application_index();
                 callback.respond(index)
             }
@@ -1134,7 +1134,7 @@ pub enum ExecutionRequest {
         callback: Sender<Result<(), ExecutionError>>,
     },
 
-    ApplicationIndex {
+    NextApplicationIndex {
         #[debug(skip)]
         callback: Sender<u32>,
     },
