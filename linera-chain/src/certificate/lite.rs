@@ -34,10 +34,11 @@ impl Allocative for LiteCertificate<'_> {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
         visitor.visit_field(Key::new("LiteCertificate_value"), &self.value);
         visitor.visit_field(Key::new("LiteCertificate_round"), &self.round);
-        let signatures = self.signatures.deref();
-        for (public_key, _) in signatures {
-            visitor.visit_field(Key::new("ValidatorPublicKey"), public_key);
-            visitor.visit_simple(Key::new("ValidatorSignature"), 64);
+        if matches!(self.signatures, Cow::Owned(_)) {
+            for (public_key, _) in self.signatures.deref() {
+                visitor.visit_field(Key::new("ValidatorPublicKey"), public_key);
+                visitor.visit_simple(Key::new("ValidatorSignature"), 64);
+            }
         }
     }
 }
