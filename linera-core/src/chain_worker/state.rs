@@ -1339,6 +1339,9 @@ where
         let (_, committee) = self.chain.current_committee()?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
+        self.chain
+            .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
+            .await?;
         let outcome =
             Box::pin(self.execute_block(&block, local_time, round, published_blobs)).await?;
 
