@@ -71,39 +71,39 @@ impl<'a> ChainDetails<'a> {
             tags.push("ADMIN");
         }
         if !tags.is_empty() {
-            println!("  {:<20}  {}", "Tags:", tags.join(", "));
+            println!("{:<20}  {}", "Tags:", tags.join(", "));
         }
 
         match self.origin {
             Some(ChainOrigin::Root(_)) | None => {
-                println!("  {:<20}  -", "Parent chain:");
+                println!("{:<20}  -", "Parent chain:");
             }
             Some(ChainOrigin::Child { parent, .. }) => {
-                println!("  {:<20}  {parent}", "Parent chain:");
+                println!("{:<20}  {parent}", "Parent chain:");
             }
         }
 
         if let Some(owner) = &self.user_chain.owner {
-            println!("  {:<20}  {owner}", "Default owner:");
+            println!("{:<20}  {owner}", "Default owner:");
         } else {
-            println!("  {:<20}  No owner key", "Default owner:");
+            println!("{:<20}  No owner key", "Default owner:");
         }
 
-        println!("  {:<20}  {}", "Timestamp:", self.user_chain.timestamp);
-        println!("  {:<20}  {}", "Blocks:", self.user_chain.next_block_height);
+        println!("{:<20}  {}", "Timestamp:", self.user_chain.timestamp);
+        println!("{:<20}  {}", "Blocks:", self.user_chain.next_block_height);
 
         if let Some(epoch) = self.user_chain.epoch {
-            println!("  {:<20}  {epoch}", "Epoch:");
+            println!("{:<20}  {epoch}", "Epoch:");
         } else {
-            println!("  {:<20}  -", "Epoch:");
+            println!("{:<20}  -", "Epoch:");
         }
 
         if let Some(hash) = self.user_chain.block_hash {
-            println!("  {:<20}  {hash}", "Latest block hash:");
+            println!("{:<20}  {hash}", "Latest block hash:");
         }
 
         if self.user_chain.pending_proposal.is_some() {
-            println!("  {:<20}  present", "Pending proposal:");
+            println!("{:<20}  present", "Pending proposal:");
         }
     }
 }
