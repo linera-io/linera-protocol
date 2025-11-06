@@ -70,6 +70,12 @@ pub struct Secp256k1KeyPair {
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Secp256k1Signature(pub Signature);
 
+impl Allocative for Secp256k1Signature {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        visitor.visit_simple_sized::<Self>();
+    }
+}
+
 impl Secp256k1PublicKey {
     /// A fake public key used for testing.
     #[cfg(all(with_testing, not(target_arch = "wasm32")))]

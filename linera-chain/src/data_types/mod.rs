@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use allocative::{Allocative, Key, Visitor};
+use allocative::Allocative;
 use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -434,20 +434,12 @@ impl LiteValue {
 struct VoteValue(CryptoHash, Round, CertificateKind);
 
 /// A vote on a statement from a validator.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Allocative, Clone, Debug, Serialize, Deserialize)]
 #[serde(bound(deserialize = "T: Deserialize<'de>"))]
 pub struct Vote<T> {
     pub value: T,
     pub round: Round,
     pub signature: ValidatorSignature,
-}
-
-impl<T: Allocative> Allocative for Vote<T> {
-    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
-        visitor.visit_field(Key::new("value"), &self.value);
-        visitor.visit_field(Key::new("round"), &self.round);
-        visitor.visit_simple(Key::new("signature"), 64);
-    }
 }
 
 impl<T> Vote<T> {
