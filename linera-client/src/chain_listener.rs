@@ -598,7 +598,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             Ok((certs, Some(new_timeout))) => {
                 info!(
                     "{} blocks created on chain {chain_id}. Will try processing the inbox later \
-                    based on the round timeout: {new_timeout:?}",
+                    based on the round timeout: {new_timeout}",
                     certs.len(),
                 );
                 listening_client.timeout = new_timeout.timestamp;
