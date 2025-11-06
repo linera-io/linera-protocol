@@ -437,9 +437,10 @@ impl<Env: Environment> Client<Env> {
                 .download_certificates_from(&remote_node, chain_id, target_next_block_height)
                 .await
             {
-                Err(err) => info!(
-                    "Failed to download certificates from validator {:?}: {err}",
-                    remote_node.public_key
+                Err(error) => info!(
+                    remote_node = remote_node.address(),
+                    %error,
+                    "failed to download certificates from validator",
                 ),
                 Ok(Some(new_info)) => info = new_info,
                 Ok(None) => {}
@@ -1027,7 +1028,7 @@ impl<Env: Environment> Client<Env> {
             offset += received_entries as u64;
             remote_log.extend(info.requested_received_log);
             trace!(
-                ?remote_node,
+                remote_node = remote_node.address(),
                 %received_entries,
                 "get_received_log_from_validator: received log batch",
             );
@@ -1037,8 +1038,8 @@ impl<Env: Environment> Client<Env> {
         }
 
         trace!(
-            ?remote_node,
-            num_entries = %remote_log.len(),
+            remote_node = remote_node.address(),
+            num_entries = remote_log.len(),
             "get_received_log_from_validator: returning downloaded log",
         );
 
@@ -1220,8 +1221,10 @@ impl<Env: Environment> Client<Env> {
         // If we are at the same height as the remote node, we also update our chain manager.
         if local_info.next_block_height != remote_info.next_block_height {
             debug!(
-                "Synced from validator {}; but remote height is {} and local height is {}",
-                remote_node.public_key, remote_info.next_block_height, local_info.next_block_height
+                remote_node = remote_node.address(),
+                remote_height = %remote_info.next_block_height,
+                local_height = %local_info.next_block_height,
+                "synced from validator, but remote height and local height are different",
             );
             return Ok(());
         };
@@ -1243,10 +1246,14 @@ impl<Env: Environment> Client<Env> {
                 }
                 LockingBlock::Regular(cert) => {
                     let hash = cert.hash();
-                    if let Err(err) = self.try_process_locking_block_from(remote_node, cert).await {
+                    if let Err(error) = self.try_process_locking_block_from(remote_node, cert).await
+                    {
                         debug!(
-                            "Skipping locked block {hash} from validator {} at height {}: {err}",
-                            remote_node.public_key, local_info.next_block_height,
+                            remote_node = remote_node.address(),
+                            %hash,
+                            height = %local_info.next_block_height,
+                            %error,
+                            "skipping locked block from validator",
                         );
                     }
                 }
@@ -1270,11 +1277,14 @@ impl<Env: Environment> Client<Env> {
                                 .await
                             {
                                 Ok(content) => content,
-                                Err(err) => {
+                                Err(error) => {
                                     info!(
-                                        "Skipping proposal from {owner} and validator {} at \
-                                        height {}; failed to download {blob_id}: {err}",
-                                        remote_node.public_key, local_info.next_block_height
+                                        remote_node = remote_node.address(),
+                                        height = %local_info.next_block_height,
+                                        proposer = %owner,
+                                        %blob_id,
+                                        %error,
+                                        "skipping proposal from validator; failed to download blob",
                                     );
                                     continue 'proposal_loop;
                                 }
@@ -1343,8 +1353,11 @@ impl<Env: Environment> Client<Env> {
                 }
 
                 debug!(
-                    "Skipping proposal from {owner} and validator {} at height {}: {err}",
-                    remote_node.public_key, local_info.next_block_height
+                    remote_node = remote_node.address(),
+                    proposer = %owner,
+                    height = %local_info.next_block_height,
+                    error = %err,
+                    "skipping proposal from validator",
                 );
             }
         }

@@ -286,6 +286,11 @@ impl<N: ValidatorNode> RemoteNode<N> {
         }
         Ok(())
     }
+
+    /// Returns the validator's URL.
+    pub fn address(&self) -> String {
+        self.node.address()
+    }
 }
 
 impl<N: ValidatorNode> PartialEq for RemoteNode<N> {
