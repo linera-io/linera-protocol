@@ -498,16 +498,13 @@ fn get_evm_destination<Runtime: ContractRuntime>(
     Ok(account.owner.to_evm_address())
 }
 
-/// If we are using the `None` case of `fn call` and `fn create` then the transfer
-/// of ethers is done by Revm. On the other hand, if we are managing the call/create
-/// by hand, then we need to do the transfers ourselves.
+/// We are doing transfers of value from a source to a destination.
 fn revm_transfer<Runtime: ContractRuntime>(
     context: &mut Ctx<'_, Runtime>,
     source: Address,
     destination: Address,
     value: U256,
 ) -> Result<(), ExecutionError> {
-    // In Ethereum, all transfers matter
     if let Some(error) = context.journal().transfer(source, destination, value)? {
         let error = format!("{error:?}");
         let error = EvmExecutionError::TransactError(error);

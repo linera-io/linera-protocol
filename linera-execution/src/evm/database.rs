@@ -325,6 +325,7 @@ where
                 batch.put_key_value(key_state, &AccountState::NotExisting)?;
             } else {
                 let is_newly_created = account.is_created();
+                // We write here the state of the user in question. But that does not matter
                 batch.put_key_value(key_info, &account.info)?;
                 let account_state = if is_newly_created {
                     batch.delete_key_prefix(key_prefix.clone());
@@ -434,8 +435,8 @@ where
         // Ethereum epoch is in seconds
         let timestamp_linera = runtime.read_system_timestamp()?;
         let timestamp_evm = timestamp_linera.micros() / 1_000_000;
-        // The basefee is the minimum feee for executing. We have no such
-        // concept in Linera.
+        // The base fee is the minimum fee for executing a transaction.
+        // We have no such concept in Linera.
         let basefee = 0;
         let chain_id = runtime.chain_id()?;
         let entry = format!("{}{}", chain_id, block_height_linera);
