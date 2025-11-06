@@ -4229,3 +4229,140 @@ where
 
     Ok(())
 }
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stage_block_with_message_earlier_than_cursor<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let sender_public_key = signer.generate_new();
+    let sender_owner = sender_public_key.into();
+    let receiver_public_key = signer.generate_new();
+    let receiver_owner = receiver_public_key.into();
+    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let chain_1_desc = env
+        .add_root_chain(1, sender_owner, Amount::from_tokens(10))
+        .await;
+    let chain_2_desc = env.add_root_chain(2, receiver_owner, Amount::ZERO).await;
+    let chain_1 = chain_1_desc.id();
+    let chain_2 = chain_2_desc.id();
+
+    // Create a certificate with two messages from chain_1 to chain_2.
+    let certificate = env.make_certificate(ConfirmedBlock::new(
+        BlockExecutionOutcome {
+            messages: vec![
+                vec![direct_credit_message(chain_2, Amount::ONE)],
+                vec![direct_credit_message(chain_2, Amount::from_tokens(2))],
+            ],
+            previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
+            events: vec![Vec::new(); 2],
+            blobs: vec![Vec::new(); 2],
+            state_hash: SystemExecutionState {
+                balance: Amount::from_tokens(7),
+                ..env.system_execution_state(&chain_1_desc.id())
+            }
+            .into_hash()
+            .await,
+            oracle_responses: vec![Vec::new(); 2],
+            operation_results: vec![OperationResult::default(); 2],
+        }
+        .with(
+            make_first_block(chain_1)
+                .with_simple_transfer(chain_2, Amount::ONE)
+                .with_simple_transfer(chain_2, Amount::from_tokens(2))
+                .with_authenticated_signer(Some(sender_owner)),
+        ),
+    ));
+
+    // Process the second message bundle on chain_2. This advances next_cursor_to_remove
+    // to height=0, index=1.
+    let block_proposal = make_first_block(chain_2)
+        .with_incoming_bundle(IncomingBundle {
+            origin: chain_1,
+            bundle: MessageBundle {
+                certificate_hash: certificate.hash(),
+                height: BlockHeight::ZERO,
+                timestamp: Timestamp::from(0),
+                transaction_index: 1,
+                messages: vec![system_credit_message(Amount::from_tokens(2))
+                    .to_posted(0, MessageKind::Tracked)],
+            },
+            action: MessageAction::Accept,
+        })
+        .with_authenticated_signer(Some(receiver_owner))
+        .into_first_proposal(receiver_owner, &signer)
+        .await
+        .unwrap();
+
+    let certificate_chain_2 = env.make_certificate(ConfirmedBlock::new(
+        BlockExecutionOutcome {
+            messages: vec![Vec::new()],
+            previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
+            events: vec![Vec::new()],
+            blobs: vec![Vec::new()],
+            state_hash: SystemExecutionState {
+                balance: Amount::from_tokens(2),
+                ..env.system_execution_state(&chain_2_desc.id())
+            }
+            .into_hash()
+            .await,
+            oracle_responses: vec![Vec::new()],
+            operation_results: vec![],
+        }
+        .with(block_proposal.content.block),
+    ));
+
+    env.worker()
+        .handle_confirmed_certificate(certificate_chain_2.clone(), None)
+        .await?;
+
+    // Now try to stage a block with the earlier message (transaction_index: 0).
+    // This should fail with IncorrectMessageOrder because next_cursor_to_remove
+    // is now at index 1, but we're trying to process index 0.
+    let bad_proposed_block = make_child_block(&certificate_chain_2.into_value())
+        .with_incoming_bundle(IncomingBundle {
+            origin: chain_1,
+            bundle: MessageBundle {
+                certificate_hash: certificate.hash(),
+                height: BlockHeight::ZERO,
+                timestamp: Timestamp::from(0),
+                transaction_index: 0,
+                messages: vec![
+                    system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                ],
+            },
+            action: MessageAction::Accept,
+        })
+        .with_authenticated_signer(Some(receiver_owner));
+
+    // Test stage_block_execution directly - this should fail with IncorrectMessageOrder.
+    assert_matches!(
+        env.worker()
+            .stage_block_execution(bad_proposed_block.clone(), None, vec![])
+            .await,
+        Err(WorkerError::ChainError(chain_error))
+            if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. })
+    );
+
+    // Also test handle_block_proposal for completeness.
+    let bad_proposal = bad_proposed_block
+        .into_first_proposal(receiver_owner, &signer)
+        .await
+        .unwrap();
+
+    assert_matches!(
+        env.worker().handle_block_proposal(bad_proposal).await,
+        Err(WorkerError::ChainError(chain_error))
+            if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. })
+    );
+
+    Ok(())
+}
