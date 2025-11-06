@@ -7,21 +7,9 @@ use linera_base::{
 };
 pub use linera_client::wallet::*;
 
-pub fn pretty_print(
-    wallet: &Wallet,
-    wallet_path: &std::path::Path,
-    chain_ids: impl IntoIterator<Item = ChainId>,
-) {
+pub fn pretty_print(wallet: &Wallet, chain_ids: Vec<ChainId>) {
     let chain_ids: Vec<_> = chain_ids.into_iter().collect();
     let total_chains = chain_ids.len();
-
-    tracing::info!("Reading wallet from file: {}", wallet_path.display());
-
-    if total_chains == 0 {
-        tracing::info!("Found 0 chains");
-        println!("No chains in wallet.");
-        return;
-    }
 
     let plural_s = if total_chains == 1 { "" } else { "s" };
     tracing::info!("Found {total_chains} chain{plural_s}");
@@ -75,7 +63,6 @@ impl<'a> ChainDetails<'a> {
         println!("-----------------------");
         println!("  {:<20}  {}", "Chain ID:", self.user_chain.chain_id);
 
-        // Build tags
         let mut tags = Vec::new();
         if self.is_default {
             tags.push("DEFAULT");
@@ -87,24 +74,21 @@ impl<'a> ChainDetails<'a> {
             println!("  {:<20}  {}", "Tags:", tags.join(", "));
         }
 
-        // Parent chain
         match self.origin {
             Some(ChainOrigin::Root(_)) | None => {
-                println!("  {:<20}  None", "Parent chain:");
+                println!("  {:<20}  -", "Parent chain:");
             }
             Some(ChainOrigin::Child { parent, .. }) => {
                 println!("  {:<20}  {parent}", "Parent chain:");
             }
         }
 
-        // Default owner - aligned at column 24
         if let Some(owner) = &self.user_chain.owner {
             println!("  {:<20}  {owner}", "Default owner:");
         } else {
             println!("  {:<20}  No owner key", "Default owner:");
         }
 
-        // Aligned fields
         println!("  {:<20}  {}", "Timestamp:", self.user_chain.timestamp);
         println!("  {:<20}  {}", "Blocks:", self.user_chain.next_block_height);
 
@@ -114,12 +98,10 @@ impl<'a> ChainDetails<'a> {
             println!("  {:<20}  -", "Epoch:");
         }
 
-        // Latest block hash
         if let Some(hash) = self.user_chain.block_hash {
             println!("  {:<20}  {hash}", "Latest block hash:");
         }
 
-        // Pending proposal
         if self.user_chain.pending_proposal.is_some() {
             println!("  {:<20}  present", "Pending proposal:");
         }
