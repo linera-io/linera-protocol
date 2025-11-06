@@ -7,17 +7,24 @@ use linera_base::{
 };
 pub use linera_client::wallet::*;
 
-pub fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = ChainId>) {
+pub fn pretty_print(
+    wallet: &Wallet,
+    wallet_path: &std::path::Path,
+    chain_ids: impl IntoIterator<Item = ChainId>,
+) {
     let chain_ids: Vec<_> = chain_ids.into_iter().collect();
     let total_chains = chain_ids.len();
 
+    tracing::info!("Reading wallet from file: {}", wallet_path.display());
+
     if total_chains == 0 {
+        tracing::info!("Found 0 chains");
         println!("No chains in wallet.");
         return;
     }
 
     let plural_s = if total_chains == 1 { "" } else { "s" };
-    println!("\n\x1b[1mWALLET ({total_chains} chain{plural_s} in total)\x1b[0m",);
+    tracing::info!("Found {total_chains} chain{plural_s}");
 
     let mut chains = chain_ids
         .into_iter()
@@ -34,9 +41,9 @@ pub fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = ChainId
         (!chain.is_default, !chain.is_admin, root_id, chain_id)
     });
     for chain in chains {
-        println!();
         chain.print_paragraph();
     }
+    println!("------------------------");
 }
 
 struct ChainDetails<'a> {
@@ -65,36 +72,56 @@ impl<'a> ChainDetails<'a> {
     }
 
     fn print_paragraph(&self) {
-        let title = if self.is_admin {
-            "Admin Chain".to_string()
-        } else {
-            match self.origin {
-                Some(ChainOrigin::Root(i)) => format!("Root Chain {i}"),
-                _ => "Child Chain".to_string(),
-            }
-        };
-        let default_marker = if self.is_default { " [DEFAULT]" } else { "" };
+        println!("-----------------------");
+        println!("  {:<20}  {}", "Chain ID:", self.user_chain.chain_id);
 
-        // Print chain header in bold
-        println!("\x1b[1m{}{}\x1b[0m", title, default_marker);
-        println!("  Chain ID:     {}", self.user_chain.chain_id);
+        // Build tags
+        let mut tags = Vec::new();
+        if self.is_default {
+            tags.push("DEFAULT");
+        }
+        if self.is_admin {
+            tags.push("ADMIN");
+        }
+        if !tags.is_empty() {
+            println!("  {:<20}  {}", "Tags:", tags.join(", "));
+        }
+
+        // Parent chain
+        match self.origin {
+            Some(ChainOrigin::Root(_)) | None => {
+                println!("  {:<20}  None", "Parent chain:");
+            }
+            Some(ChainOrigin::Child { parent, .. }) => {
+                println!("  {:<20}  {parent}", "Parent chain:");
+            }
+        }
+
+        // Default owner - aligned at column 24
         if let Some(owner) = &self.user_chain.owner {
-            println!("  Owner:        {owner}");
+            println!("  {:<20}  {owner}", "Default owner:");
         } else {
-            println!("  Owner:        No owner key");
+            println!("  {:<20}  No owner key", "Default owner:");
         }
-        println!("  Timestamp:    {}", self.user_chain.timestamp);
-        println!("  Blocks:       {}", self.user_chain.next_block_height);
+
+        // Aligned fields
+        println!("  {:<20}  {}", "Timestamp:", self.user_chain.timestamp);
+        println!("  {:<20}  {}", "Blocks:", self.user_chain.next_block_height);
+
         if let Some(epoch) = self.user_chain.epoch {
-            println!("  Epoch:        {epoch}");
+            println!("  {:<20}  {epoch}", "Epoch:");
         } else {
-            println!("  Epoch:        -");
+            println!("  {:<20}  -", "Epoch:");
         }
+
+        // Latest block hash
         if let Some(hash) = self.user_chain.block_hash {
-            println!("  Latest Block: {}", hash);
+            println!("  {:<20}  {hash}", "Latest block hash:");
         }
+
+        // Pending proposal
         if self.user_chain.pending_proposal.is_some() {
-            println!("  Status:       ⚠ Pending proposal");
+            println!("  {:<20}  present", "Pending proposal:");
         }
     }
 }

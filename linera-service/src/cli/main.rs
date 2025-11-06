@@ -2559,6 +2559,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 short,
                 owned,
             } => {
+                let wallet_path = options.wallet_path()?;
                 let wallet = options.wallet()?;
                 let chain_ids = if let Some(chain_id) = chain_id {
                     ensure!(!owned, "Cannot specify both --owned and a chain ID");
@@ -2573,7 +2574,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                         println!("{chain_id}");
                     }
                 } else {
-                    wallet::pretty_print(&wallet, chain_ids);
+                    wallet::pretty_print(&wallet, &wallet_path, chain_ids);
                 }
                 Ok(0)
             }
