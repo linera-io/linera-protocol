@@ -35,9 +35,9 @@ impl Allocative for LiteCertificate<'_> {
         visitor.visit_field(Key::new("LiteCertificate_value"), &self.value);
         visitor.visit_field(Key::new("LiteCertificate_round"), &self.round);
         if matches!(self.signatures, Cow::Owned(_)) {
-            for (public_key, _) in self.signatures.deref() {
+            for (public_key, signature) in self.signatures.deref() {
                 visitor.visit_field(Key::new("ValidatorPublicKey"), public_key);
-                visitor.visit_simple(Key::new("ValidatorSignature"), 64);
+                visitor.visit_field(Key::new("ValidatorSignature"), signature);
             }
         }
     }
