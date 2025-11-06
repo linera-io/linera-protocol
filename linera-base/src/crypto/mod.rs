@@ -20,6 +20,7 @@ use linera_witty::{WitLoad, WitStore, WitType};
 pub use secp256k1::{
     evm::{EvmPublicKey, EvmSecretKey, EvmSignature},
     Secp256k1PublicKey, Secp256k1SecretKey, Secp256k1Signature,
+    SECP256K1_PUBLIC_KEY_SIZE, SECP256K1_SIGNATURE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 pub use signer::*;
@@ -35,11 +36,6 @@ pub type ValidatorSecretKey = secp256k1::Secp256k1SecretKey;
 pub type ValidatorSignature = secp256k1::Secp256k1Signature;
 /// The key pair of a validator.
 pub type ValidatorKeypair = secp256k1::Secp256k1KeyPair;
-
-/// The SECP256k1 public key sizes also used for validators.
-pub const SECP256K1_PUBLIC_KEY_SIZE: usize = std::mem::size_of::<secp256k1::Secp256k1PublicKey>();
-/// The SECP256k1 signature sizes also used for validators.
-pub const SECP256K1_SIGNATURE_SIZE: usize = std::mem::size_of::<secp256k1::Secp256k1Signature>();
 
 /// Signature scheme used for the public key.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
