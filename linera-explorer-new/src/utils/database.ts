@@ -107,21 +107,58 @@ export class BlockchainAPI {
   }
 
   // Get all unique chains with stats
-  async getChains(): Promise<ChainInfo[]> {
-    const response = await fetch(`${API_BASE_URL}/chains`);
+  async getChains(limit?: number, offset?: number): Promise<ChainInfo[]> {
+    let url = `${API_BASE_URL}/chains`;
+    const params = new URLSearchParams();
+    
+    if (limit !== undefined) {
+      params.append('limit', limit.toString());
+    }
+    if (offset !== undefined) {
+      params.append('offset', offset.toString());
+    }
+    
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+    
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch chains: ${response.statusText}`);
     }
     return response.json();
   }
 
-  // Search blocks by hash prefix
-  async searchBlocks(query: string): Promise<BlockInfo[]> {
-    const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
+  // Get total chain count
+  async getChainsCount(): Promise<number> {
+    const response = await fetch(`${API_BASE_URL}/chains/count`);
     if (!response.ok) {
-      throw new Error(`Failed to search blocks: ${response.statusText}`);
+      throw new Error(`Failed to fetch chains count: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return data.count;
+  }
+
+  // Get chain by ID
+  async getChainById(chainId: string): Promise<ChainInfo | null> {
+    const response = await fetch(`${API_BASE_URL}/chains/${encodeURIComponent(chainId)}`);
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(`Failed to fetch chain: ${response.statusText}`);
     }
     return response.json();
+  }
+
+  // Get block count for a specific chain
+  async getChainBlockCount(chainId: string): Promise<number> {
+    const response = await fetch(`${API_BASE_URL}/chains/${encodeURIComponent(chainId)}/blocks/count`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch chain block count: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return data.count;
   }
 
   // Get total block count

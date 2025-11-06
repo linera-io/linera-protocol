@@ -2,6 +2,8 @@
 # Stage 1: Build the frontend
 FROM node:18-alpine AS frontend-builder
 
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app
 
 # Copy package files
@@ -31,6 +33,7 @@ COPY linera-explorer-new/server ./server
 COPY linera-explorer-new/package*.json ./
 
 # Install backend dependencies (including better-sqlite3)
+RUN apk add --no-cache python3 make g++
 RUN npm ci --only=production
 
 # Stage 3: Production runtime

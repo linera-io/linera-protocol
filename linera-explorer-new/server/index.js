@@ -3,7 +3,7 @@ import cors from 'cors';
 import { BlockchainDatabase } from './database.js';
 
 const app = express();
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.EXPLORER_API_PORT || 3002;
 
 // Middleware
 app.use(cors());
@@ -14,6 +14,7 @@ const dbPath = process.env.DB_PATH || '../docker/indexer-data/indexer.db';
 let db;
 
 try {
+  console.log(`Connecting to database at: ${dbPath}`);
   db = new BlockchainDatabase(dbPath);
   console.log(`Connected to database at: ${dbPath}`);
 } catch (error) {
@@ -127,10 +128,45 @@ app.get('/api/bundles/:id/messages', (req, res) => {
 // Get all chains
 app.get('/api/chains', (req, res) => {
   try {
-    const chains = db.getChains();
+    const limit = req.query.limit ? parseInt(req.query.limit) : null;
+    const offset = parseInt(req.query.offset) || 0;
+
+    const chains = db.getChains(limit, offset);
     res.json(chains);
   } catch (error) {
     handleError(res, error, 'Failed to fetch chains');
+  }
+});
+
+// Get total chain count
+app.get('/api/chains/count', (req, res) => {
+  try {
+    const count = db.getChainsCount();
+    res.json({ count });
+  } catch (error) {
+    handleError(res, error, 'Failed to fetch chain count');
+  }
+});
+
+// Get chain by ID
+app.get('/api/chains/:chainId', (req, res) => {
+  try {
+    const { chainId } = req.params;
+
+    // Validate hex string format (64 chars)
+    if (!/^[0-9a-f]{64}$/i.test(chainId)) {
+      return res.status(400).json({ error: 'Chain ID must be a 64-character hex string' });
+    }
+
+    const chain = db.getChainById(chainId);
+
+    if (!chain) {
+      return res.status(404).json({ error: 'Chain not found' });
+    }
+
+    res.json(chain);
+  } catch (error) {
+    handleError(res, error, 'Failed to fetch chain');
   }
 });
 
@@ -140,7 +176,7 @@ app.get('/api/chains/:chainId/blocks', (req, res) => {
     const { chainId } = req.params;
     const limit = parseInt(req.query.limit) || 50;
     const offset = parseInt(req.query.offset) || 0;
-    
+
     const blocks = db.getBlocksByChain(chainId, limit, offset);
     res.json(blocks);
   } catch (error) {
@@ -148,19 +184,14 @@ app.get('/api/chains/:chainId/blocks', (req, res) => {
   }
 });
 
-// Search blocks
-app.get('/api/search', (req, res) => {
+// Get block count for a specific chain
+app.get('/api/chains/:chainId/blocks/count', (req, res) => {
   try {
-    const { q } = req.query;
-    
-    if (!q || q.length < 3) {
-      return res.status(400).json({ error: 'Query must be at least 3 characters' });
-    }
-    
-    const blocks = db.searchBlocks(q);
-    res.json(blocks);
+    const { chainId } = req.params;
+    const count = db.getChainBlockCount(chainId);
+    res.json({ count });
   } catch (error) {
-    handleError(res, error, 'Failed to search blocks');
+    handleError(res, error, 'Failed to fetch chain block count');
   }
 });
 

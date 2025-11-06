@@ -2,6 +2,9 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Clock, Hash, Layers, HardDrive, ChevronRight } from 'lucide-react';
 import { BlockInfo } from '../types/blockchain';
+import { formatHash, formatBytes, formatTimestamp, formatChainId } from '../utils/formatters';
+import { LoadingSpinner } from './common/LoadingSpinner';
+import { ErrorMessage } from './common/ErrorMessage';
 
 interface BlockListProps {
   blocks: BlockInfo[];
@@ -10,46 +13,13 @@ interface BlockListProps {
 }
 
 export const BlockList: React.FC<BlockListProps> = ({ blocks, loading, error }) => {
-  const formatHash = (hash: string) => `${hash.slice(0, 8)}...${hash.slice(-8)}`;
-  const formatChainId = (chainId: string) => `${chainId.slice(0, 12)}...`;
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  const formatTimestamp = (timestamp: string) => {
-    // Ensure timestamp is properly treated as UTC
-    const date = new Date(timestamp.includes('Z') || timestamp.includes('+') ? timestamp : timestamp + 'Z');
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHour = Math.floor(diffMin / 60);
-    
-    if (diffSec < 60) return `${diffSec}s ago`;
-    if (diffMin < 60) return `${diffMin}m ago`;
-    if (diffHour < 24) return `${diffHour}h ago`;
-    return date.toLocaleDateString();
-  };
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="loading-spinner h-8 w-8"></div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (error) {
-    return (
-      <div className="card bg-red-500/10 border-red-500/30">
-        <div className="text-red-300">
-          <Hash className="w-5 h-5 inline mr-2" />
-          Error: {error}
-        </div>
-      </div>
-    );
+    return <ErrorMessage message={error} icon={<Hash className="w-5 h-5" />} />;
   }
 
   if (blocks.length === 0) {

@@ -1,39 +1,27 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Layers, Copy } from 'lucide-react';
+import { ArrowLeft, Layers } from 'lucide-react';
 import { useChainBlocks } from '../hooks/useDatabase';
 import { BlockList } from './BlockList';
+import { CopyableHash } from './CopyableHash';
+import { useRelativeTime } from '../hooks/useRelativeTime';
+import { Pagination } from './common/Pagination';
+import { BlockchainAPI } from '../utils/database';
+import { useBlocksPagination } from '../hooks/usePagination';
 
 export const ChainDetail: React.FC = () => {
   const { chainId } = useParams<{ chainId: string }>();
-  const { blocks, latestBlock, loading, error } = useChainBlocks(chainId || '');
-  const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Update current time every second for real-time "Last block seen" display
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, []);
-  
-  // Calculate the latest block time - recalculates when currentTime or latestBlock changes
-  const latestBlockTime = useMemo(() => {
-    if (!latestBlock) return null;
-    
-    const blockTime = new Date(latestBlock.timestamp / 1000);
-    const diffMs = currentTime.getTime() - blockTime.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    
-    if (diffSec < 60) return `${diffSec} seconds ago`;
-    const diffMin = Math.floor(diffSec / 60);
-    return `${diffMin} minutes ago`;
-  }, [currentTime, latestBlock]);
+  const { currentPage, setCurrentPage, totalPages, offset, itemsPerPage } = useBlocksPagination(
+    async () => {
+      if (!chainId) return 0;
+      const api = new BlockchainAPI();
+      return api.getChainBlockCount(chainId);
+    }
+  );
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-  };
+  const { blocks, latestBlock, loading, error } = useChainBlocks(chainId || '', itemsPerPage, offset);
+  const latestBlockTime = useRelativeTime(latestBlock?.timestamp ?? null);
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -81,17 +69,7 @@ export const ChainDetail: React.FC = () => {
             <label className="block text-sm font-medium text-linera-gray-light mb-3">
               Chain ID
             </label>
-            <div className="relative group">
-              <div className="hash-display text-white pr-12">
-                {chainId}
-              </div>
-              <button
-                onClick={() => copyToClipboard(chainId || '')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-linera-gray-medium hover:text-linera-red"
-              >
-                <Copy className="w-4 h-4" />
-              </button>
-            </div>
+            <CopyableHash value={chainId || ''} format="full" />
           </div>
 
           {/* Stats */}
@@ -131,6 +109,13 @@ export const ChainDetail: React.FC = () => {
         </div>
         <BlockList blocks={blocks} loading={loading} error={error} />
       </div>
+
+      {/* Pagination */}
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+      />
     </div>
   );
 };

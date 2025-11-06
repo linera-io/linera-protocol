@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { BlockchainAPI } from '../utils/database';
 import { BlockInfo, Block, IncomingBundleWithMessages, ChainInfo, Operation, Message, Event, OracleResponse } from '../types/blockchain';
+import { REFRESH_INTERVAL } from '../config/constants';
 
 const api = new BlockchainAPI();
 
@@ -41,7 +42,7 @@ const usePollingData = <T>(
   } = {}
 ) => {
   const {
-    refreshInterval = 5000,
+    refreshInterval = REFRESH_INTERVAL,
     logPrefix = '🔄',
     errorMessage = 'Failed to fetch data',
     enabled = true
@@ -59,14 +60,19 @@ const usePollingData = <T>(
         if (!isPolling) {
           setLoading(true);
         }
-        
+
         const result = await fetcher();
-        
+
         if (isPolling) {
           console.log(`${logPrefix} Refreshed data from API`);
         }
-        
-        setData(result);
+
+        // Only update state if data has actually changed to prevent unnecessary re-renders
+        setData(prevData => {
+          const resultStr = JSON.stringify(result);
+          const prevStr = JSON.stringify(prevData);
+          return resultStr !== prevStr ? result : prevData;
+        });
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : errorMessage);
@@ -90,19 +96,24 @@ const usePollingData = <T>(
     return () => {
       clearInterval(pollInterval);
     };
+    // Note: fetcher, logPrefix, and errorMessage are intentionally not in the dependency array
+    // because they would cause excessive re-renders. The calling code must ensure these are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, refreshInterval, ...dependencies]);
 
   return { data, loading, error };
 };
 
-export const useBlocks = (limit: number = 50, refreshInterval: number = 5000) => {
+export const useBlocks = (limit: number = 50, offset: number = 0, refreshInterval: number = 5000) => {
   const [latestBlock, setLatestBlock] = useState<BlockInfo | null>(null);
   const { isConnected } = useAPI();
   const latestBlockRef = useRef<BlockInfo | null>(null);
 
+  const fetcher = useCallback(() => api.getBlocks(limit, offset), [limit, offset]);
+
   const { data: blocks, loading, error } = usePollingData<BlockInfo[]>(
-    () => api.getBlocks(limit, 0),
-    [limit],
+    fetcher,
+    [limit, offset],
     {
       refreshInterval,
       logPrefix: '📋',
@@ -204,12 +215,14 @@ export const useBlock = (hash: string) => {
   };
 };
 
-export const useChains = (refreshInterval: number = 5000) => {
+export const useChains = (limit: number = 50, offset: number = 0, refreshInterval: number = 5000) => {
   const { isConnected } = useAPI();
 
+  const fetcher = useCallback(() => api.getChains(limit, offset), [limit, offset]);
+
   const { data: chains, loading, error } = usePollingData<ChainInfo[]>(
-    () => api.getChains(),
-    [],
+    fetcher,
+    [limit, offset],
     {
       refreshInterval,
       logPrefix: '⛓️',
@@ -221,14 +234,16 @@ export const useChains = (refreshInterval: number = 5000) => {
   return { chains: chains || [], loading, error };
 };
 
-export const useChainBlocks = (chainId: string, limit: number = 50, refreshInterval: number = 5000) => {
+export const useChainBlocks = (chainId: string, limit: number = 50, offset: number = 0, refreshInterval: number = 5000) => {
   const [latestBlock, setLatestBlock] = useState<BlockInfo | null>(null);
   const { isConnected } = useAPI();
   const latestBlockRef = useRef<BlockInfo | null>(null);
 
+  const fetcher = useCallback(() => api.getBlocksByChain(chainId, limit, offset), [chainId, limit, offset]);
+
   const { data: blocks, loading, error } = usePollingData<BlockInfo[]>(
-    () => api.getBlocksByChain(chainId, limit, 0),
-    [chainId, limit],
+    fetcher,
+    [chainId, limit, offset],
     {
       refreshInterval,
       logPrefix: '🔗',
