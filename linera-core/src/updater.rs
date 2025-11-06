@@ -349,8 +349,8 @@ where
         match error {
             NodeError::WrongRound(validator_round) if *validator_round > round => {
                 tracing::debug!(
-                    ?validator, %chain_id, %validator_round, %round,
-                    "Validator is at a higher round; synchronizing.",
+                    validator, %chain_id, %validator_round, %round,
+                    "validator is at a higher round; synchronizing",
                 );
                 self.client
                     .synchronize_chain_state_from(&self.remote_node, chain_id)
@@ -361,11 +361,11 @@ where
                 found_block_height,
             } if expected_block_height > found_block_height => {
                 tracing::debug!(
-                    ?validator,
+                    validator,
                     %chain_id,
                     %expected_block_height,
                     %found_block_height,
-                    "Validator is at a higher height; synchronizing.",
+                    "validator is at a higher height; synchronizing",
                 );
                 self.client
                     .synchronize_chain_state_from(&self.remote_node, chain_id)
@@ -373,8 +373,8 @@ where
             }
             NodeError::WrongRound(validator_round) if *validator_round < round => {
                 tracing::debug!(
-                    ?validator, %chain_id, %validator_round, %round,
-                    "Validator is at a lower round; sending chain info.",
+                    validator, %chain_id, %validator_round, %round,
+                    "validator is at a lower round; sending chain info",
                 );
                 self.send_chain_information(
                     chain_id,
@@ -438,9 +438,9 @@ where
                     // The proposal is for a different round, so we need to update the validator.
                     // TODO: this should probably be more specific as to which rounds are retried.
                     tracing::debug!(
-                        remote_node = %self.remote_node.address(),
+                        remote_node = self.remote_node.address(),
                         %chain_id,
-                        "Wrong round; sending chain to validator.",
+                        "wrong round; sending chain to validator",
                     );
                     self.send_chain_information(
                         chain_id,
@@ -456,9 +456,9 @@ where
                     && found_block_height == proposal.content.block.height =>
                 {
                     tracing::debug!(
-                        remote_node = %self.remote_node.address(),
+                        remote_node = self.remote_node.address(),
                         %chain_id,
-                        "Wrong height; sending chain to validator.",
+                        "wrong height; sending chain to validator",
                     );
                     // The proposal is for a later block height, so we need to update the validator.
                     self.send_chain_information(
@@ -501,9 +501,9 @@ where
                         .filter(|chain_id| !publisher_chain_ids_sent.contains(chain_id))
                         .collect::<BTreeSet<_>>();
                     tracing::debug!(
-                        remote_node = %self.remote_node.address(),
+                        remote_node = self.remote_node.address(),
                         ?chain_ids,
-                        "Missing events; sending chains to validator",
+                        "missing events; sending chains to validator",
                     );
                     ensure!(!chain_ids.is_empty(), NodeError::EventsNotFound(event_ids));
                     for chain_id in chain_ids {
@@ -713,7 +713,7 @@ where
         {
             if proposal.content.round == manager.current_round {
                 if let Err(error) = self.remote_node.handle_block_proposal(proposal).await {
-                    tracing::info!(%error, "Failed to send block proposal.");
+                    tracing::info!(%error, "failed to send block proposal");
                 } else {
                     return Ok(());
                 }
@@ -729,7 +729,7 @@ where
                     )
                     .await
                 {
-                    tracing::info!(%error, "Failed to send locking block.");
+                    tracing::info!(%error, "failed to send locking block");
                 } else {
                     return Ok(());
                 }
@@ -737,7 +737,7 @@ where
         }
         if let Some(cert) = manager.timeout {
             if cert.round >= remote_round {
-                tracing::debug!("Sending timeout for {}", cert.round);
+                tracing::debug!(round = %cert.round, "sending timeout");
                 self.remote_node.handle_timeout_certificate(*cert).await?;
             }
         }

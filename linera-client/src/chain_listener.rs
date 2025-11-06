@@ -594,14 +594,14 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             Ok((certs, None)) => info!(
                 %chain_id,
                 created_block_count = %certs.len(),
-                "Done processing inbox.",
+                "done processing inbox",
             ),
             Ok((certs, Some(new_timeout))) => {
                 info!(
                     %chain_id,
                     created_block_count = %certs.len(),
                     timeout = %new_timeout,
-                    "Waiting for round timeout before continuing to process the inbox.",
+                    "waiting for round timeout before continuing to process the inbox",
                 );
                 listening_client.timeout = new_timeout.timestamp;
             }
