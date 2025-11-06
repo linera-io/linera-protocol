@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BlockList } from './BlockList';
 import { SearchBar } from './SearchBar';
@@ -7,9 +7,13 @@ import { useBlocks } from '../hooks/useDatabase';
 import { useRelativeTime } from '../hooks/useRelativeTime';
 import { BlockchainAPI } from '../utils/database';
 import { useBlocksPagination } from '../hooks/usePagination';
+import { useLocalSearch } from '../hooks/useLocalSearch';
+import { BlockInfo } from '../types/blockchain';
 
 export const BlockView: React.FC = () => {
   const navigate = useNavigate();
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const { currentPage, setCurrentPage, totalPages, offset, itemsPerPage } = useBlocksPagination(
     async () => {
@@ -21,10 +25,45 @@ export const BlockView: React.FC = () => {
   const { blocks, latestBlock, loading, error } = useBlocks(itemsPerPage, offset);
   const latestBlockTime = useRelativeTime(latestBlock?.timestamp ?? null);
 
-  const handleSearch = (query: string) => {
-    // Navigate to the block if it looks like a hash
-    if (query.length >= 8) {
-      navigate(`/block/${query}`);
+  const { search } = useLocalSearch<BlockInfo>();
+
+  const handleSearch = async (query: string) => {
+    setSearchError(null);
+
+    // Search locally first with validation
+    const result = search(query, {
+      items: blocks,
+      getSearchValue: (block) => block.hash
+    });
+
+    if (result.error) {
+      setSearchError(result.error);
+      return;
+    }
+
+    if (result.found && result.item) {
+      // Block found in current page, navigate directly
+      navigate(`/block/${result.item.hash}`);
+      return;
+    }
+
+    // Not in current page, validate with server before navigating
+    setSearchLoading(true);
+    setSearchError(null);
+
+    try {
+      const api = new BlockchainAPI();
+      const serverResult = await api.getBlockByHash(query);
+      if (serverResult) {
+        // Block exists, navigate to it
+        navigate(`/block/${query}`);
+      } else {
+        setSearchError('No block found with this hash');
+      }
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : 'Search failed');
+    } finally {
+      setSearchLoading(false);
     }
   };
 
@@ -47,6 +86,12 @@ export const BlockView: React.FC = () => {
 
             <div className="lg:w-96">
               <SearchBar onSearch={handleSearch} />
+              {searchError && (
+                <div className="mt-2 text-sm text-red-400">{searchError}</div>
+              )}
+              {searchLoading && (
+                <div className="mt-2 text-sm text-linera-gray-light">Searching...</div>
+              )}
             </div>
           </div>
         </div>

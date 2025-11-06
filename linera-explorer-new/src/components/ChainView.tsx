@@ -9,6 +9,7 @@ import { LoadingSpinner } from './common/LoadingSpinner';
 import { ErrorMessage } from './common/ErrorMessage';
 import { BlockchainAPI } from '../utils/database';
 import { useChainsPagination } from '../hooks/usePagination';
+import { useLocalSearch } from '../hooks/useLocalSearch';
 
 export const ChainView: React.FC = () => {
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -20,6 +21,8 @@ export const ChainView: React.FC = () => {
 
   const { chains, loading, error } = useChains(itemsPerPage, offset);
 
+  const { search } = useLocalSearch<ChainInfo>();
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -29,21 +32,34 @@ export const ChainView: React.FC = () => {
       return;
     }
 
-    // Validate hex string format
-    if (!/^[0-9a-f]{64}$/i.test(searchQuery)) {
-      setSearchError('Chain ID must be a 64-character hex string');
+    // Search locally first with validation
+    const result = search(searchQuery, {
+      items: chains,
+      getSearchValue: (chain) => chain.chain_id
+    });
+
+    if (result.error) {
+      setSearchError(result.error);
       setSearchResult(null);
       return;
     }
 
+    if (result.found && result.item) {
+      // Chain found in current page, display it immediately
+      setSearchResult([result.item]);
+      setSearchError(null);
+      return;
+    }
+
+    // Not in current page, query the server
     setSearchLoading(true);
     setSearchError(null);
 
     try {
       const api = new BlockchainAPI();
-      const result = await api.getChainById(searchQuery);
-      if (result) {
-        setSearchResult([result]);
+      const serverResult = await api.getChainById(searchQuery);
+      if (serverResult) {
+        setSearchResult([serverResult]);
       } else {
         setSearchResult([]);
         setSearchError('No chain found with this ID');

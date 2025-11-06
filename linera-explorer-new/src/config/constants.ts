@@ -23,6 +23,11 @@ export const HASH_FORMAT_FULL = 'full' as const;
 // API Configuration
 export const API_BASE_URL = '/api';
 
+// Search validation
+export const HEX_64_PATTERN = /^[0-9a-f]{64}$/i;
+export const HEX_64_MIN_LENGTH = 64;
+export const HEX_64_ERROR_MESSAGE = 'Must be a 64-character hex string';
+
 // Feature flags (for future use)
 export const FEATURES = {
   WEBSOCKET_ENABLED: false,
