@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_base::hex;
+
 /// Main error type for the crate.
 #[derive(thiserror::Error, Debug)]
 pub enum ViewError {
@@ -54,8 +56,8 @@ pub enum ViewError {
     InconsistentEntries,
 
     /// The database is corrupt: Some entries are missing
-    #[error("missing database entries")]
-    MissingEntries,
+    #[error("missing database entrie for the root key {}", hex::encode(.0))]
+    MissingEntries(Vec<u8>),
 
     /// The values are incoherent.
     #[error("post load values error")]

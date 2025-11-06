@@ -111,6 +111,10 @@ impl ReadableKeyValueStore for KeyValueStore {
         1
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, KeyValueStoreError> {
+        Ok(Vec::new())
+    }
+
     async fn contains_key(&self, key: &[u8]) -> Result<bool, KeyValueStoreError> {
         ensure!(
             key.len() <= Self::MAX_KEY_SIZE,

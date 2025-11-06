@@ -96,6 +96,10 @@ where
         self.store.max_stream_queries()
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
+        Ok(self.store.root_key()?)
+    }
+
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let mut big_key = key.to_vec();
         big_key.extend(&[0, 0, 0, 0]);
@@ -426,6 +430,10 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
 
     fn max_stream_queries(&self) -> usize {
         self.inner.max_stream_queries()
+    }
+
+    fn root_key(&self) -> Result<Vec<u8>, MemoryStoreError> {
+        self.inner.root_key()
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryStoreError> {

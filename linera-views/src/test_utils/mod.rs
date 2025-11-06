@@ -452,8 +452,8 @@ where
 {
     let mut rng = make_deterministic_rng();
     let namespace = generate_test_namespace();
-    let store = D::connect(&config, &namespace).await.unwrap();
-    let store = store.open_exclusive(&[]).unwrap();
+    let database = D::connect(&config, &namespace).await.unwrap();
+    let store = database.open_exclusive(&[]).unwrap();
     let key_prefix = vec![42, 54];
     let mut batch = Batch::new();
     let mut keys = Vec::new();
@@ -468,8 +468,8 @@ where
     }
     store.write_batch(batch).await.unwrap();
     // We reconnect so that the read is not using the cache.
-    let store = D::connect(&config, &namespace).await.unwrap();
-    let store = store.open_exclusive(&[]).unwrap();
+    let database = D::connect(&config, &namespace).await.unwrap();
+    let store = database.open_exclusive(&[]).unwrap();
     let values_read = store.read_multi_values_bytes(keys).await.unwrap();
     assert_eq!(values, values_read);
 }
@@ -729,12 +729,12 @@ pub async fn namespace_admin_test<D: TestKeyValueDatabase>() {
     }
     // Connecting to all of them at once
     {
-        let mut connections = Vec::new();
+        let mut databases = Vec::new();
         for namespace in &working_namespaces {
-            let connection = D::connect(&config, namespace)
+            let database = D::connect(&config, namespace)
                 .await
                 .expect("a connection to the namespace");
-            connections.push(connection);
+            databases.push(database);
         }
     }
     // Listing all of them
@@ -780,8 +780,8 @@ where
     {
         let size = 3;
         let mut rng = make_deterministic_rng();
-        let store = D::connect(&config, &namespace).await.expect("store");
-        let shared_store = store.open_shared(&[]).expect("shared store");
+        let database = D::connect(&config, &namespace).await.expect("store");
+        let shared_store = database.open_shared(&[]).expect("shared store");
         root_keys.push(vec![]);
         let mut batch = Batch::new();
         for _ in 0..2 {
@@ -793,7 +793,8 @@ where
 
         for _ in 0..20 {
             let root_key = get_random_byte_vector(&mut rng, &[], 4);
-            let exclusive_store = store.open_exclusive(&root_key).expect("exclusive store");
+            let exclusive_store = database.open_exclusive(&root_key).expect("exclusive store");
+            assert_eq!(exclusive_store.root_key().unwrap(), root_key);
             root_keys.push(root_key.clone());
             let size_select = rng.gen_range(0..size);
             let mut batch = Batch::new();
@@ -810,8 +811,8 @@ where
     }
 
     let read_root_keys = {
-        let store = D::connect(&config, &namespace).await.expect("store");
-        store.list_root_keys().await.expect("read_root_keys")
+        let database = D::connect(&config, &namespace).await.expect("store");
+        database.list_root_keys().await.expect("read_root_keys")
     };
     let set_root_keys = root_keys.iter().cloned().collect::<HashSet<_>>();
     for read_root_key in &read_root_keys {
@@ -822,7 +823,7 @@ where
     for root_key in read_root_keys {
         let store = D::connect(&config, &namespace)
             .await
-            .expect("store")
+            .expect("database")
             .open_exclusive(&root_key)
             .expect("open_exclusive");
         let keys = store.find_keys_by_prefix(&prefix).await.expect("keys");
@@ -860,20 +861,20 @@ where
     D::create(&config, &namespace).await.expect("creation");
     let key = vec![42];
 
-    let namespace = D::connect(&config, &namespace).await.expect("store");
+    let database = D::connect(&config, &namespace).await.expect("store");
     let store1 = if exclusive_access {
-        namespace.open_exclusive(&[]).expect("store1")
+        database.open_exclusive(&[]).expect("store1")
     } else {
-        namespace.open_shared(&[]).expect("store1")
+        database.open_shared(&[]).expect("store1")
     };
     let mut batch1 = Batch::new();
     batch1.delete_key(key.clone());
     store1.write_batch(batch1).await.expect("write batch1");
 
     let store2 = if exclusive_access {
-        namespace.open_exclusive(&[]).expect("store2")
+        database.open_exclusive(&[]).expect("store2")
     } else {
-        namespace.open_shared(&[]).expect("store2")
+        database.open_shared(&[]).expect("store2")
     };
     let mut batch2 = Batch::new();
     batch2.put_key_value_bytes(key.clone(), vec![]);

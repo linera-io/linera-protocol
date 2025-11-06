@@ -119,6 +119,12 @@ impl ReadableKeyValueStore for IndexedDbStore {
         self.max_stream_queries
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, IndexedDbStoreError> {
+        assert!(self.start_key.starts_with(&ROOT_KEY_DOMAIN));
+        let root_key = self.start_key[ROOT_KEY_DOMAIN.len()..].to_vec();
+        Ok(root_key)
+    }
+
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, IndexedDbStoreError> {
         let key = self.full_key(key);
         let key = js_sys::Uint8Array::from(key.as_slice());

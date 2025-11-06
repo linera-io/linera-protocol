@@ -135,7 +135,7 @@ where
                 .await?;
             let mut batch = MultiPartitionBatch::new();
             for (base_key, value) in chunk_base_keys.iter().zip(values) {
-                let value = value.ok_or(ViewError::MissingEntries)?;
+                let value = value.ok_or(ViewError::MissingEntries(Vec::new()))?;
                 let (root_key, key) = map_base_key(base_key)?;
                 batch.put_key_value(root_key, key, value);
             }
@@ -169,7 +169,7 @@ where
                 return Ok(());
             }
             let result = self.migrate_v0_to_v1().await;
-            if let Err(ViewError::MissingEntries) = result {
+            if let Err(ViewError::MissingEntries(_)) = result {
                 tracing::warn!(
                     "It looks like a migration is already in progress on this database. \
                      I will wait for {:?} minutes and retry.",
