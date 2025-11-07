@@ -1112,63 +1112,14 @@ pub enum DatabaseToolCommand {
 
 impl DatabaseToolCommand {
     pub fn assert_storage_v1(&self) -> bool {
-        match self {
-            DatabaseToolCommand::ListBlobIds => {
-                // The state of the database is relevant to listing
-                // the blob IDs. Since it is a read operation, we
-                // require the state to be Version1.
-                true
-            }
-            DatabaseToolCommand::ListChainIds => {
-                // The state of the database is relevant to listing
-                // the chain IDs. Since it is a read operation, we
-                // require the state to be Version1.
-                true
-            }
-            _ => {
-                // No assert for all other cases.
-                false
-            }
-        }
+        matches!(
+            self,
+            DatabaseToolCommand::ListBlobIds | DatabaseToolCommand::ListChainIds
+        )
     }
 
     pub fn need_migration(&self) -> bool {
-        match self {
-            DatabaseToolCommand::DeleteAll => {
-                // No need to migrate for deletion
-                false
-            }
-            DatabaseToolCommand::DeleteNamespace => {
-                // No need to migrate for deletion
-                false
-            }
-            DatabaseToolCommand::CheckExistence => {
-                // No migration needed for checking existence
-                // of namespace.
-                false
-            }
-            DatabaseToolCommand::Initialize { .. } => {
-                // When initializing, the database should be
-                // migrated.
-                true
-            }
-            DatabaseToolCommand::ListNamespaces => {
-                // Listing namespaces does not require migrating.
-                false
-            }
-            DatabaseToolCommand::ListBlobIds => {
-                // The state of the database is relevant to listing
-                // the blob IDs. But, this is a read operation, so
-                // instead we require the storage to be migrated.
-                false
-            }
-            DatabaseToolCommand::ListChainIds => {
-                // The state of the database is relevant to listing
-                // the chain IDs. But, this is a read operation, so
-                // instead we require the storage to be migrated.
-                false
-            }
-        }
+        matches!(self, DatabaseToolCommand::Initialize { .. })
     }
 }
 
