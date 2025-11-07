@@ -195,7 +195,7 @@
                   recipient: { owner: match[1], chainId: match[2] },
               });
 
-              errors = JSON.parse(await application.query(query, '')).errors || [];
+              errors = JSON.parse(await application.query(query)).errors || [];
           } catch (e) {
               console.error(e);
               errors.push({ message: e.message });
