@@ -230,6 +230,15 @@ pub struct ClientContextOptions {
         env = "LINERA_REQUESTS_SCHEDULER_ALPHA"
     )]
     pub alpha: f64,
+
+    /// Delay in milliseconds between starting requests to different peers.
+    /// This helps to stagger requests and avoid overwhelming the network.
+    #[arg(
+        long,
+        default_value_t = linera_core::client::requests_scheduler::STAGGERED_DELAY_MS,
+        env = "LINERA_REQUESTS_SCHEDULER_ALTERNATIVE_PEERS_RETRY_DELAY_MS"
+    )]
+    pub alternative_peers_retry_delay_ms: u64,
 }
 
 impl ClientContextOptions {
@@ -273,6 +282,7 @@ impl ClientContextOptions {
             cache_max_size: self.cache_max_size,
             max_request_ttl_ms: self.max_request_ttl_ms,
             alpha: self.alpha,
+            retry_delay_ms: self.alternative_peers_retry_delay_ms,
         }
     }
 }
