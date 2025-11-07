@@ -613,6 +613,10 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         self.max_stream_queries
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, ScyllaDbStoreInternalError> {
+        Ok(self.root_key[1..].to_vec())
+    }
+
     async fn read_value_bytes(
         &self,
         key: &[u8],

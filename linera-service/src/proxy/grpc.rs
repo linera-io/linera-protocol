@@ -361,7 +361,7 @@ where
             }
             ViewError::NotFound(_)
             | ViewError::CannotAcquireCollectionEntry
-            | ViewError::MissingEntries => Status::not_found(err.to_string()),
+            | ViewError::MissingEntries(_) => Status::not_found(err.to_string()),
         };
         status.set_source(Arc::new(err));
         status

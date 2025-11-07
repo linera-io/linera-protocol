@@ -291,6 +291,10 @@ where
         self.store.max_stream_queries()
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
+        self.store.root_key()
+    }
+
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let Some(cache) = &self.cache else {
             return self.store.read_value_bytes(key).await;

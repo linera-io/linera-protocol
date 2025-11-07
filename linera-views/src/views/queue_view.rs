@@ -311,7 +311,8 @@ where
         for entry in self.context.store().read_multi_values(keys).await? {
             match entry {
                 None => {
-                    return Err(ViewError::MissingEntries);
+                    let root_key = self.context.store().root_key()?;
+                    return Err(ViewError::MissingEntries(root_key));
                 }
                 Some(value) => values.push(value),
             }
