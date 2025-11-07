@@ -56,7 +56,7 @@ pub enum ViewError {
     InconsistentEntries,
 
     /// The database is corrupt: Some entries are missing
-    #[error("missing database entrie for the root key {}", hex::encode(.0))]
+    #[error("missing database entries for the root key {}", hex::encode(.0))]
     MissingEntries(Vec<u8>),
 
     /// The values are incoherent.
