@@ -2559,6 +2559,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 short,
                 owned,
             } => {
+                let wallet_path = options.wallet_path()?;
+                tracing::info!("Reading wallet from file: {}", wallet_path.display());
                 let wallet = options.wallet()?;
                 let chain_ids = if let Some(chain_id) = chain_id {
                     ensure!(!owned, "Cannot specify both --owned and a chain ID");
