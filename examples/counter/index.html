@@ -85,7 +85,7 @@
           }
 
           async function updateCount(block_hash) {
-              const response = await counter.query('{ "query": "query { value }" }', block_hash || '');
+              const response = await counter.query('{ "query": "query { value }" }', block_hash);
               document.getElementById('count').innerText
                   = JSON.parse(response).data.value;
           }
