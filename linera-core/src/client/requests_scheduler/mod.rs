@@ -21,7 +21,7 @@ pub const CACHE_TTL_MS: u64 = 2000;
 pub const CACHE_MAX_SIZE: usize = 1000;
 pub const MAX_REQUEST_TTL_MS: u64 = 200;
 pub const ALPHA_SMOOTHING_FACTOR: f64 = 0.1;
-pub const STAGGERED_DELAY_MS: u64 = 75;
+pub const STAGGERED_DELAY_MS: u64 = 150;
 
 /// Configuration for the `RequestsScheduler`.
 #[derive(Debug, Clone)]

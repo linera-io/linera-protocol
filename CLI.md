@@ -203,7 +203,7 @@ Client implementation and command-line tool for the Linera blockchain
   Default value: `0.1`
 * `--alternative-peers-retry-delay-ms <ALTERNATIVE_PEERS_RETRY_DELAY_MS>` — Delay in milliseconds between starting requests to different peers. This helps to stagger requests and avoid overwhelming the network
 
-  Default value: `75`
+  Default value: `150`
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
 * `--storage-max-concurrent-queries <STORAGE_MAX_CONCURRENT_QUERIES>` — The maximal number of simultaneous queries to the database
 * `--storage-max-stream-queries <STORAGE_MAX_STREAM_QUERIES>` — The maximal number of simultaneous stream queries to the database
