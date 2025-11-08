@@ -125,29 +125,29 @@ impl ReadableKeyValueStore for KeyValueStore {
         Ok(self.wit_api.contains_key_wait(promise))
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, KeyValueStoreError> {
-        for key in &keys {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, KeyValueStoreError> {
+        for key in keys {
             ensure!(
                 key.len() <= Self::MAX_KEY_SIZE,
                 KeyValueStoreError::KeyTooLong
             );
         }
-        let promise = self.wit_api.contains_keys_new(&keys);
+        let promise = self.wit_api.contains_keys_new(keys);
         yield_once().await;
         Ok(self.wit_api.contains_keys_wait(promise))
     }
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, KeyValueStoreError> {
-        for key in &keys {
+        for key in keys {
             ensure!(
                 key.len() <= Self::MAX_KEY_SIZE,
                 KeyValueStoreError::KeyTooLong
             );
         }
-        let promise = self.wit_api.read_multi_values_bytes_new(&keys);
+        let promise = self.wit_api.read_multi_values_bytes_new(keys);
         yield_once().await;
         Ok(self.wit_api.read_multi_values_bytes_wait(promise))
     }
@@ -389,7 +389,7 @@ mod tests {
 
         // Check if keys exist
         let is_keys_existing = mock_store
-            .contains_keys(vec![b"foo".to_vec(), b"bar".to_vec()])
+            .contains_keys(&[b"foo".to_vec(), b"bar".to_vec()])
             .await?;
         assert!(!is_keys_existing[0]);
         assert!(!is_keys_existing[1]);

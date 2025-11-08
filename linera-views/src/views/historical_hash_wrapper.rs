@@ -135,7 +135,7 @@ where
 
     async fn load(context: Self::Context) -> Result<Self, ViewError> {
         let keys = Self::pre_load(&context)?;
-        let values = context.store().read_multi_values_bytes(keys).await?;
+        let values = context.store().read_multi_values_bytes(&keys).await?;
         Self::post_load(context, &values)
     }
 

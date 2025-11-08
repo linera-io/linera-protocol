@@ -78,7 +78,7 @@ pub trait View: Sized {
             } else {
                 use crate::{context::Context, store::ReadableKeyValueStore};
                 let keys = Self::pre_load(&context)?;
-                let values = context.store().read_multi_values_bytes(keys).await?;
+                let values = context.store().read_multi_values_bytes(&keys).await?;
                 Self::post_load(context, &values)
             }
         }

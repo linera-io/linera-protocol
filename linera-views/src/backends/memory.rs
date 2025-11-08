@@ -153,20 +153,20 @@ impl ReadableKeyValueStore for MemoryStore {
         Ok(map.contains_key(key))
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, MemoryStoreError> {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, MemoryStoreError> {
         let map = self
             .map
             .read()
             .expect("MemoryStore lock should not be poisoned");
         Ok(keys
-            .into_iter()
-            .map(|key| map.contains_key(&key))
+            .iter()
+            .map(|key| map.contains_key(key))
             .collect::<Vec<_>>())
     }
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, MemoryStoreError> {
         let map = self
             .map
@@ -174,7 +174,7 @@ impl ReadableKeyValueStore for MemoryStore {
             .expect("MemoryStore lock should not be poisoned");
         let mut result = Vec::new();
         for key in keys {
-            result.push(map.get(&key).cloned());
+            result.push(map.get(key).cloned());
         }
         Ok(result)
     }

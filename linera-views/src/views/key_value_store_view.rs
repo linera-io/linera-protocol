@@ -764,19 +764,19 @@ impl<C: Context> KeyValueStoreView<C> {
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![42]).await.unwrap();
     /// let keys = vec![vec![0, 1], vec![0, 2]];
-    /// let results = view.contains_keys(keys).await.unwrap();
+    /// let results = view.contains_keys(&keys).await.unwrap();
     /// assert_eq!(results, vec![true, false]);
     /// # })
     /// ```
-    pub async fn contains_keys(&self, indices: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
+    pub async fn contains_keys(&self, indices: &[Vec<u8>]) -> Result<Vec<bool>, ViewError> {
         #[cfg(with_metrics)]
         let _latency = metrics::KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_LATENCY.measure_latency();
         let mut results = Vec::with_capacity(indices.len());
         let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
-        for (i, index) in indices.into_iter().enumerate() {
+        for (i, index) in indices.iter().enumerate() {
             ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
-            if let Some(update) = self.updates.get(&index) {
+            if let Some(update) = self.updates.get(index) {
                 let value = match update {
                     Update::Removed => false,
                     Update::Set(_) => true,
@@ -784,17 +784,17 @@ impl<C: Context> KeyValueStoreView<C> {
                 results.push(value);
             } else {
                 results.push(false);
-                if !self.deletion_set.contains_prefix_of(&index) {
+                if !self.deletion_set.contains_prefix_of(index) {
                     missed_indices.push(i);
                     let key = self
                         .context
                         .base_key()
-                        .base_tag_index(KeyTag::Index as u8, &index);
+                        .base_tag_index(KeyTag::Index as u8, index);
                     vector_query.push(key);
                 }
             }
         }
-        let values = self.context.store().contains_keys(vector_query).await?;
+        let values = self.context.store().contains_keys(&vector_query).await?;
         for (i, value) in missed_indices.into_iter().zip(values) {
             results[i] = value;
         }
@@ -816,18 +816,15 @@ impl<C: Context> KeyValueStoreView<C> {
     /// );
     /// # })
     /// ```
-    pub async fn multi_get(
-        &self,
-        indices: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
+    pub async fn multi_get(&self, indices: &[Vec<u8>]) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
         #[cfg(with_metrics)]
         let _latency = metrics::KEY_VALUE_STORE_VIEW_MULTI_GET_LATENCY.measure_latency();
         let mut result = Vec::with_capacity(indices.len());
         let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
-        for (i, index) in indices.into_iter().enumerate() {
+        for (i, index) in indices.iter().enumerate() {
             ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
-            if let Some(update) = self.updates.get(&index) {
+            if let Some(update) = self.updates.get(index) {
                 let value = match update {
                     Update::Removed => None,
                     Update::Set(value) => Some(value.clone()),
@@ -835,12 +832,12 @@ impl<C: Context> KeyValueStoreView<C> {
                 result.push(value);
             } else {
                 result.push(None);
-                if !self.deletion_set.contains_prefix_of(&index) {
+                if !self.deletion_set.contains_prefix_of(index) {
                     missed_indices.push(i);
                     let key = self
                         .context
                         .base_key()
-                        .base_tag_index(KeyTag::Index as u8, &index);
+                        .base_tag_index(KeyTag::Index as u8, index);
                     vector_query.push(key);
                 }
             }
@@ -848,7 +845,7 @@ impl<C: Context> KeyValueStoreView<C> {
         let values = self
             .context
             .store()
-            .read_multi_values_bytes(vector_query)
+            .read_multi_values_bytes(&vector_query)
             .await?;
         for (i, value) in missed_indices.into_iter().zip(values) {
             result[i] = value;
@@ -1261,14 +1258,14 @@ impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
         Ok(view.contains_key(key).await?)
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewContainerError> {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, ViewContainerError> {
         let view = self.view.read().await;
         Ok(view.contains_keys(keys).await?)
     }
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, ViewContainerError> {
         let view = self.view.read().await;
         Ok(view.multi_get(keys).await?)

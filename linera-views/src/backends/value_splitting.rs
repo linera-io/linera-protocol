@@ -117,7 +117,7 @@ where
             let big_key_segment = Self::get_segment_key(key, i)?;
             big_keys.push(big_key_segment);
         }
-        let segments = self.store.read_multi_values_bytes(big_keys).await?;
+        let segments = self.store.read_multi_values_bytes(&big_keys).await?;
         for segment in segments {
             match segment {
                 None => {
@@ -137,29 +137,29 @@ where
         Ok(self.store.contains_key(&big_key).await?)
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error> {
         let big_keys = keys
-            .into_iter()
+            .iter()
             .map(|key| {
                 let mut big_key = key.clone();
                 big_key.extend(&[0, 0, 0, 0]);
                 big_key
             })
             .collect::<Vec<_>>();
-        Ok(self.store.contains_keys(big_keys).await?)
+        Ok(self.store.contains_keys(&big_keys).await?)
     }
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         let mut big_keys = Vec::new();
-        for key in &keys {
+        for key in keys {
             let mut big_key = key.clone();
             big_key.extend(&[0, 0, 0, 0]);
             big_keys.push(big_key);
         }
-        let values = self.store.read_multi_values_bytes(big_keys).await?;
+        let values = self.store.read_multi_values_bytes(&big_keys).await?;
         let mut big_values = Vec::<Option<Vec<u8>>>::new();
         let mut keys_add = Vec::new();
         let mut n_blocks = Vec::new();
@@ -184,7 +184,7 @@ where
         if !keys_add.is_empty() {
             let mut segments = self
                 .store
-                .read_multi_values_bytes(keys_add)
+                .read_multi_values_bytes(&keys_add)
                 .await?
                 .into_iter();
             for (idx, count) in n_blocks.iter().enumerate() {
@@ -444,13 +444,13 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
         self.inner.contains_key(key).await
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, MemoryStoreError> {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, MemoryStoreError> {
         self.inner.contains_keys(keys).await
     }
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, MemoryStoreError> {
         self.inner.read_multi_values_bytes(keys).await
     }
