@@ -1110,19 +1110,6 @@ pub enum DatabaseToolCommand {
     ListChainIds,
 }
 
-impl DatabaseToolCommand {
-    pub fn assert_storage_v1(&self) -> bool {
-        matches!(
-            self,
-            DatabaseToolCommand::ListBlobIds | DatabaseToolCommand::ListChainIds
-        )
-    }
-
-    pub fn need_migration(&self) -> bool {
-        matches!(self, DatabaseToolCommand::Initialize { .. })
-    }
-}
-
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, clap::Parser)]
 pub enum NetCommand {

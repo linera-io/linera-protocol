@@ -2580,8 +2580,11 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
         },
 
         ClientCommand::Storage(command) => {
-            let assert_storage_v1 = command.assert_storage_v1();
-            let need_migration = command.need_migration();
+            let assert_storage_v1 = matches!(
+                command,
+                DatabaseToolCommand::ListBlobIds | DatabaseToolCommand::ListChainIds
+            );
+            let need_migration = matches!(command, DatabaseToolCommand::Initialize { .. });
             Ok(options
                 .run_with_store(assert_storage_v1, need_migration, DatabaseToolJob(command))
                 .await?)
