@@ -71,8 +71,7 @@ jobs:
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
   remote-net-test:
-    needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest-8-cores
     timeout-minutes: 40
 
@@ -109,8 +108,7 @@ jobs:
         cargo test -p linera-service remote_net_grpc --features remote-net
 
   remote-kubernetes-net-test:
-    needs: changed-files-kubernetes
-    if: needs.changed-files-kubernetes.outputs.should-run == 'true'
+    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 90
 
@@ -260,8 +258,7 @@ jobs:
         fi
 
   benchmark-test:
-    needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -286,8 +283,7 @@ jobs:
         cargo test --locked -p linera-service --features storage-service benchmark
 
   ethereum-tests:
-    needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
