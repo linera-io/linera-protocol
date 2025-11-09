@@ -511,15 +511,17 @@ impl Runnable for Job {
                     println!();
                 }
 
-                let num_ok_validators = committee.validators().len() - faulty_validators.len();
-                if !faulty_validators.is_empty() {
-                    println!("{:#?}", faulty_validators);
+                if min_votes.is_none() {
+                    let num_ok_validators = committee.validators().len() - faulty_validators.len();
+                    if !faulty_validators.is_empty() {
+                        println!("{:#?}", faulty_validators);
+                    }
+                    info!(
+                        "{}/{} validators are OK.",
+                        num_ok_validators,
+                        committee.validators().len()
+                    );
                 }
-                info!(
-                    "{}/{} validators are OK.",
-                    num_ok_validators,
-                    committee.validators().len()
-                );
             }
 
             QueryShardInfo { chain_id } => {
