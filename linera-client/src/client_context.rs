@@ -721,8 +721,10 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         address: &str,
         node: &impl ValidatorNode,
         chain_id: ChainId,
+        create_network_actions: bool,
     ) -> Result<ChainInfo, Error> {
-        let query = ChainInfoQuery::new(chain_id).with_manager_values();
+        let mut query = ChainInfoQuery::new(chain_id).with_manager_values();
+        query.create_network_actions = create_network_actions;
         match node.handle_chain_info_query(query).await {
             Ok(response) => {
                 debug!(
@@ -761,11 +763,18 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         node: &impl ValidatorNode,
         chain_id: ChainId,
         public_key: Option<&ValidatorPublicKey>,
+        create_network_actions: bool,
     ) -> ValidatorQueryResults {
         let version_info = self.check_compatible_version_info(address, node).await;
         let genesis_config_hash = self.check_matching_network_description(address, node).await;
         let chain_info = self
-            .check_validator_chain_info_response(public_key, address, node, chain_id)
+            .check_validator_chain_info_response(
+                public_key,
+                address,
+                node,
+                chain_id,
+                create_network_actions,
+            )
             .await;
 
         ValidatorQueryResults {
