@@ -76,7 +76,10 @@ use linera_service::{
     cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     node_service::NodeService,
     project::{self, Project},
-    storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig, StorageMigration},
+    storage::{
+        AssertStorageV1, CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig,
+        StorageMigration,
+    },
     util, wallet,
 };
 use linera_storage::{DbStorage, Storage};
@@ -1931,15 +1934,25 @@ impl ClientOptions {
         Ok(output)
     }
 
-    async fn run_with_store<R: RunnableWithStore>(&self, job: R) -> Result<R::Output, Error> {
+    async fn run_with_store<R: RunnableWithStore>(
+        &self,
+        assert_storage_v1: bool,
+        need_migration: bool,
+        job: R,
+    ) -> Result<R::Output, Error> {
         let storage_config = self.storage_config()?;
         debug!("Running command using storage configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common_storage_options)?;
-        store_config
-            .clone()
-            .run_with_store(StorageMigration)
-            .await?;
+        if assert_storage_v1 {
+            store_config.clone().run_with_store(AssertStorageV1).await?;
+        }
+        if need_migration {
+            store_config
+                .clone()
+                .run_with_store(StorageMigration)
+                .await?;
+        }
         let output = Box::pin(store_config.run_with_store(job)).await?;
         Ok(output)
     }
@@ -2567,7 +2580,14 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
         },
 
         ClientCommand::Storage(command) => {
-            Ok(options.run_with_store(DatabaseToolJob(command)).await?)
+            let assert_storage_v1 = matches!(
+                command,
+                DatabaseToolCommand::ListBlobIds | DatabaseToolCommand::ListChainIds
+            );
+            let need_migration = matches!(command, DatabaseToolCommand::Initialize { .. });
+            Ok(options
+                .run_with_store(assert_storage_v1, need_migration, DatabaseToolJob(command))
+                .await?)
         }
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {
