@@ -63,6 +63,7 @@ sysinfo.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "sync"] }
+tokio-util.workspace = true
 tracing.workspace = true
 trait-variant.workspace = true
 

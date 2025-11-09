@@ -19,15 +19,20 @@
 //! time the data in a block are written, the journal header is updated in the same
 //! transaction to mark the block as processed.
 
+use std::sync::{Arc, Mutex};
+
+use rand::Rng as _;
 use serde::{Deserialize, Serialize};
 use static_assertions as sa;
 use thiserror::Error;
+use tokio::{select, task::JoinHandle};
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     store::{
-        DirectKeyValueStore, KeyValueDatabase, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        DirectKeyValueStore, DirectWritableKeyValueStore, KeyValueDatabase, LeaseConflict,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     views::MIN_VIEW_TAG,
 };
@@ -44,7 +49,25 @@ pub struct JournalingKeyValueStore<S> {
     /// The inner store.
     store: S,
     /// Whether we have exclusive R/W access to the keys under root key.
-    has_exclusive_access: bool,
+    /// All subviews in a root view should use the same lease.
+    has_exclusive_access: Option<Arc<Lease>>,
+}
+
+/// A journaling key-value store.
+pub struct Lease {
+    /// The background task that maintains the lease.
+    _task: JoinHandle<()>,
+    /// The cancellation token.
+    token: CancellationToken,
+    /// The latest conflict that we had, if any. This is a best-effort only used for error
+    /// reporting.
+    conflict: Arc<Mutex<Option<LeaseConflict>>>,
+}
+
+impl Drop for Lease {
+    fn drop(&mut self) {
+        self.token.cancel();
+    }
 }
 
 /// Data type indicating that the database is not consistent
@@ -56,6 +79,9 @@ pub enum JournalConsistencyError {
 
     #[error("Refusing to use the journal without exclusive database access to the root object.")]
     JournalRequiresExclusiveAccess,
+
+    #[error("Failed to acquire lease {0:?}")]
+    LeaseConflict(LeaseConflict),
 }
 
 /// The tag used for the journal stuff.
@@ -70,6 +96,8 @@ enum KeyTag {
     Journal = 1,
     /// Prefix for the block entry.
     Entry,
+    /// Prefix for the lease.
+    Lease,
 }
 
 fn get_journaling_key(tag: u8, pos: u32) -> Result<Vec<u8>, bcs::Error> {
@@ -161,6 +189,8 @@ where
 impl<D> KeyValueDatabase for JournalingKeyValueDatabase<D>
 where
     D: KeyValueDatabase,
+    D::Store: DirectKeyValueStore<Error = D::Error> + 'static,
+    D::Error: From<JournalConsistencyError>,
 {
     type Config = D::Config;
     type Store = JournalingKeyValueStore<D::Store>;
@@ -178,16 +208,91 @@ where
         let store = self.database.open_shared(root_key)?;
         Ok(JournalingKeyValueStore {
             store,
-            has_exclusive_access: false,
+            has_exclusive_access: None,
         })
     }
 
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        let mut rng = rand::rngs::OsRng;
+        let uuid = rng.gen();
+
+        let token = CancellationToken::new();
+        let cloned_token = token.clone();
         let store = self.database.open_exclusive(root_key)?;
-        Ok(JournalingKeyValueStore {
+        let conflict = Arc::new(Mutex::new(None));
+        let cloned_conflict = Arc::clone(&conflict);
+        let root_key_owned = root_key.to_vec();
+        let task = tokio::spawn(async move {
+            let lease_key =
+                get_journaling_key(KeyTag::Lease as u8, 0).expect("Failed to serialize lease key");
+            match store
+                .obtain_lease(lease_key.clone(), uuid, std::time::Duration::from_secs(60))
+                .await
+            {
+                Err(err) => {
+                    tracing::error!(
+                        "Failed to acquire lease for UUID {uuid} and root key {root_key_owned:?}: {err}"
+                    );
+                }
+                Ok(Err(c)) => {
+                    tracing::error!(
+                        "Failed to acquire lease for UUID {uuid} and root key {root_key_owned:?}: {c:?}"
+                    );
+                    let mut conflict = cloned_conflict.lock().unwrap();
+                    *conflict = Some(c);
+                }
+                Ok(Ok(())) => (),
+            }
+            loop {
+                select! {
+                        _ = cloned_token.cancelled() => {
+                            tracing::trace!("Discarding lease for UUID {uuid} and root key: {root_key_owned:?}");
+                            if let Err(err) = store
+                            .discard_lease(lease_key.clone(), uuid)
+                            .await
+                            {
+                                tracing::error!(
+                                "Failed to renew lease for UUID {uuid} and root key {root_key_owned:?}: {err}"
+                            );
+                            }
+                            break;
+                        }
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(45)) => {
+                            tracing::trace!("Lease will be renewed for UUID {uuid} and root key: {root_key_owned:?}");
+                            match store
+                                .obtain_lease(lease_key.clone(), uuid, std::time::Duration::from_secs(60))
+                                .await
+                            {
+                                Err(err) => {
+                                    tracing::error!(
+                                        "Failed to renew lease for UUID {uuid} and root key {root_key_owned:?}: {err}"
+                                    );
+                                }
+                                Ok(Err(c)) => {
+                                    tracing::error!(
+                                        "Failed to renew lease for UUID {uuid} and root key {root_key_owned:?}: {c:?}"
+                                    );
+                                    let mut conflict = cloned_conflict.lock().unwrap();
+                                    *conflict = Some(c);
+                                }
+                                Ok(Ok(())) => (),
+                            }
+                        }
+                }
+            }
+        });
+        let lease = Lease {
+            _task: task,
+            token,
+            conflict,
+        };
+        // Open a new one for DB accesses.
+        let store = self.database.open_exclusive(root_key)?;
+        let store = JournalingKeyValueStore {
             store,
-            has_exclusive_access: true,
-        })
+            has_exclusive_access: Some(Arc::new(lease)),
+        };
+        Ok(store)
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
@@ -224,19 +329,23 @@ where
     const MAX_VALUE_SIZE: usize = S::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
+        self.check_lease()?;
+
         let batch = S::Batch::from_batch(self, batch).await?;
         if Self::is_fastpath_feasible(&batch) {
             self.store.write_batch(batch).await
         } else {
-            if !self.has_exclusive_access {
+            if self.has_exclusive_access.is_none() {
                 return Err(JournalConsistencyError::JournalRequiresExclusiveAccess.into());
-            }
+            };
             let header = self.write_journal(batch).await?;
             self.coherently_resolve_journal(header).await
         }
     }
 
     async fn clear_journal(&self) -> Result<(), Self::Error> {
+        self.check_lease()?;
+
         let key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         let value = self.read_value::<JournalHeader>(&key).await?;
         if let Some(header) = value {
@@ -251,6 +360,16 @@ where
     S: DirectKeyValueStore,
     S::Error: From<JournalConsistencyError>,
 {
+    fn check_lease(&self) -> Result<(), S::Error> {
+        if let Some(lease) = &self.has_exclusive_access {
+            let conflict = lease.conflict.lock().unwrap();
+            if let Some(error) = conflict.as_ref() {
+                return Err(JournalConsistencyError::LeaseConflict((*error).clone()).into());
+            }
+        }
+        Ok(())
+    }
+
     /// Resolves the pending operations that were previously stored in the database
     /// journal.
     ///
@@ -406,7 +525,7 @@ impl<S> JournalingKeyValueStore<S> {
     pub fn new(store: S) -> Self {
         Self {
             store,
-            has_exclusive_access: false,
+            has_exclusive_access: None,
         }
     }
 }
