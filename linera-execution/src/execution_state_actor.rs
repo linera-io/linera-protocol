@@ -668,6 +668,21 @@ where
                     .to_round()?;
                 callback.respond(validation_round);
             }
+
+            TotalStorageSize {
+                application,
+                callback,
+            } => {
+                let view = self.state.users.try_load_entry(&application).await?;
+                let result = match view {
+                    Some(view) => {
+                        let total_size = view.total_size();
+                        (total_size.key, total_size.value)
+                    }
+                    None => (0, 0),
+                };
+                callback.respond(result);
+            }
         }
 
         Ok(())
@@ -1214,5 +1229,11 @@ pub enum ExecutionRequest {
         round: Option<u32>,
         #[debug(skip)]
         callback: Sender<Option<u32>>,
+    },
+
+    TotalStorageSize {
+        application: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<(u32, u32)>,
     },
 }

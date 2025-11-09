@@ -897,6 +897,18 @@ where
             .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
             .recv_response()
     }
+
+    fn has_empty_storage(&mut self, application: ApplicationId) -> Result<bool, ExecutionError> {
+        let this = self.inner();
+        let (key_size, value_size) = this
+            .execution_state_sender
+            .send_request(move |callback| ExecutionRequest::TotalStorageSize {
+                application,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(key_size + value_size == 0)
+    }
 }
 
 /// An extension trait to determine in compile time the different behaviors between contract and

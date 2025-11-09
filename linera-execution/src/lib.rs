@@ -735,6 +735,9 @@ pub trait BaseRuntime {
 
     /// Asserts the existence of a data blob with the given hash.
     fn assert_data_blob_exists(&mut self, hash: DataBlobHash) -> Result<(), ExecutionError>;
+
+    /// Returns true if the corresponding contract uses a zero amount of storage.
+    fn has_empty_storage(&mut self, application: ApplicationId) -> Result<bool, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {

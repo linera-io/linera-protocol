@@ -669,6 +669,18 @@ where
             .write_batch(Batch { operations })
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
+
+    /// Returns true if the corresponding contract uses a zero amount of storage.
+    fn has_empty_storage(
+        caller: &mut Caller,
+        application: ApplicationId,
+    ) -> Result<bool, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime_mut()
+            .has_empty_storage(application)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
 }
 
 /// An implementation of the system API made available to services.
