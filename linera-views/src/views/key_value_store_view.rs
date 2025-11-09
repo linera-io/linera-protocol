@@ -811,7 +811,7 @@ impl<C: Context> KeyValueStoreView<C> {
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![42]).await.unwrap();
     /// assert_eq!(
-    ///     view.multi_get(vec![vec![0, 1], vec![0, 2]]).await.unwrap(),
+    ///     view.multi_get(&[vec![0, 1], vec![0, 2]]).await.unwrap(),
     ///     vec![Some(vec![42]), None]
     /// );
     /// # })
