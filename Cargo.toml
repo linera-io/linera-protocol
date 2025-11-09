@@ -341,7 +341,7 @@ version = "1.6.3"
 [workspace.dependencies.aws-sdk-dynamodb]
 default-features = false
 features = ["rt-tokio", "rustls"]
-version = "1.76.0"
+version = "1.88.0"
 
 [profile.release]
 lto = "thin"
