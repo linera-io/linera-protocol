@@ -82,7 +82,7 @@ pub struct EvmOperation {
 }
 
 impl EvmOperation {
-    /// An EVM transaction with a specified amount and function input.
+    /// Creates an EVM operation with a specified amount and function input.
     pub fn new(amount: Amount, argument: Vec<u8>) -> Self {
         Self {
             value: amount.into(),
