@@ -1710,12 +1710,20 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
+    // Initializing a chain and transferring tokens
     let (mut net, client) = config.instantiate().await?;
-    let chain = client.load_wallet()?.default_chain().unwrap();
-    let account_chain = Account::chain(chain);
+    let chain_id = client.load_wallet()?.default_chain().unwrap();
+    let account_owner1 = client.get_owner().unwrap();
+    let account_chain = Account::chain(chain_id);
+    let account1 = Account {
+        chain_id,
+        owner: account_owner1,
+    };
+    client
+        .transfer_with_accounts(Amount::from_tokens(50), account_chain, account1)
+        .await?;
 
     // Creating the EVM smart contract
-
     sol! {
         function test_chain_id();
         function test_read_data_blob(bytes32 hash, uint32 len);
@@ -1729,7 +1737,11 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     let (contract, _dir) = get_evm_contract_path("tests/fixtures/evm_test_linera_features.sol")?;
 
     let constructor_argument = Vec::new();
-    let instantiation_argument = EvmInstantiation::default();
+    let start_value = Amount::from_tokens(27);
+    let instantiation_argument = EvmInstantiation {
+        value: start_value.into(),
+        argument: vec![],
+    };
     let application_id = client
         .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             contract.clone(),
@@ -1748,11 +1760,11 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     let nft_blob_bytes = b"nft1_data".to_vec();
     let len = nft_blob_bytes.len() as u32;
     let hash = node_service
-        .publish_data_blob(&chain, nft_blob_bytes)
+        .publish_data_blob(&chain_id, nft_blob_bytes)
         .await?;
     let hash: B256 = <[u8; 32]>::from(hash).into();
 
-    let application = node_service.make_application(&chain, &application_id)?;
+    let application = node_service.make_application(&chain_id, &application_id)?;
 
     // Testing the ChainId.
 

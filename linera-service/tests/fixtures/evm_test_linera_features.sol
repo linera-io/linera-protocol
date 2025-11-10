@@ -5,6 +5,9 @@ pragma solidity ^0.8.0;
 import "./Linera.sol";
 
 contract ExampleLineraFeatures {
+    constructor() payable {
+    }
+
     function test_chain_id() external {
         Linera.ChainId memory chain_id = Linera.chain_id();
         Linera.ChainId memory creator_chain_id = Linera.application_creator_chain_id();
@@ -43,8 +46,15 @@ contract ExampleLineraFeatures {
 
     function test_read_owners() external {
         Linera.AccountOwnerBalance[] memory owner_balances = Linera.read_owner_balances();
-        require(owner_balances.length == 0);
+        require(owner_balances.length == 2);
         Linera.AccountOwner[] memory owners = Linera.read_balance_owners();
-        require(owners.length == 0);
+        require(owners.length == 2);
+    }
+
+    function test_linera_transfer(bytes32 chain_id, bytes32 destination, uint256 amount) external {
+        uint8 reserved = 0;
+        bytes20 address20;
+        Linera.AccountOwner memory owner = Linera.AccountOwner(1, reserved, destination, address20);
+        
     }
 }
