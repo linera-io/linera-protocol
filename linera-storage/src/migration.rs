@@ -135,7 +135,7 @@ where
                 .await?;
             let mut batch = MultiPartitionBatch::new();
             for (base_key, value) in chunk_base_keys.iter().zip(values) {
-                let value = value.ok_or(ViewError::MissingEntries(Vec::new()))?;
+                let value = value.ok_or(ViewError::MissingEntries("migration".into()))?;
                 let (root_key, key) = map_base_key(base_key)?;
                 batch.put_key_value(root_key, key, value);
             }
