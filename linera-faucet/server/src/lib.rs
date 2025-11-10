@@ -161,6 +161,15 @@ mod metrics {
             &["error_type"],
         )
     });
+
+    pub static STORE_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "faucet_store_chain_latency_ms",
+            "Latency of storing chain information in the database in milliseconds",
+            &[],
+            exponential_bucket_interval(0.5, 2000.0),
+        )
+    });
 }
 
 /// Returns an HTML response constructing the GraphiQL web page for the given URI.
@@ -321,6 +330,8 @@ where
         #[cfg(with_metrics)]
         let db_start_time = std::time::Instant::now();
 
+        tracing::debug!(account_owner=?owner, "received claim request");
+
         let existing_chain_id = self
             .faucet_storage
             .get_chain_id(&owner)
@@ -339,7 +350,10 @@ where
                 .inc();
 
             // Retrieve the chain description from local storage
-            return get_chain_description_from_storage(&self.storage, existing_chain_id).await;
+            let stored_chain =
+                get_chain_description_from_storage(&self.storage, existing_chain_id).await;
+            tracing::debug!(account_owner=?owner, "claim request processed; returning pre-existing chain");
+            return stored_chain;
         }
 
         // Create a oneshot channel to receive the result.
@@ -377,6 +391,7 @@ where
                 .inc();
         }
 
+        tracing::debug!(account_owner=?owner, "claim request processed; new chain created");
         result
     }
 }
@@ -730,14 +745,31 @@ where
             .iter()
             .map(|(owner, description)| (*owner, description.id()))
             .collect();
+
+        #[cfg(with_metrics)]
+        let _store_chains_start = std::time::Instant::now();
         if let Err(e) = self
             .faucet_storage
             .store_chains_batch(chains_to_store)
             .await
         {
+            #[cfg(with_metrics)]
+            {
+                let elapsed_ms = _store_chains_start.elapsed().as_secs_f64() * 1000.0;
+                metrics::STORE_CHAIN_LATENCY
+                    .with_label_values(&[])
+                    .observe(elapsed_ms);
+            }
             let error_msg = format!("Failed to save chains to database: {}", e);
             Self::send_err(requests, error_msg.clone());
             anyhow::bail!(error_msg);
+        }
+        #[cfg(with_metrics)]
+        {
+            let elapsed_ms = _store_chains_start.elapsed().as_secs_f64() * 1000.0;
+            metrics::STORE_CHAIN_LATENCY
+                .with_label_values(&[])
+                .observe(elapsed_ms);
         }
 
         // Respond to requests.
