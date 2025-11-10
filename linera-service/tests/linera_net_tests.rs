@@ -599,6 +599,7 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
     let application = node_service.make_application(&chain_id, &application_id)?;
+    let address_app = application_id.evm_address();
 
     // Creating the subcontracts
 
@@ -671,7 +672,14 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     assert_eq!(node_service.balance(&account0).await?, Amount::ONE);
     assert_eq!(node_service.balance(&account1).await?, Amount::ONE);
     assert_contract_balance(&application0, address0, Amount::ONE).await?;
+    assert_contract_balance(&application0, address1, Amount::ONE).await?;
+    assert_contract_balance(&application0, address_app, Amount::from_tokens(25)).await?;
+    assert_contract_balance(&application1, address0, Amount::ONE).await?;
     assert_contract_balance(&application1, address1, Amount::ONE).await?;
+    assert_contract_balance(&application1, address_app, Amount::from_tokens(25)).await?;
+    assert_contract_balance(&application, address0, Amount::ONE).await?;
+    assert_contract_balance(&application, address1, Amount::ONE).await?;
+    assert_contract_balance(&application, address_app, Amount::from_tokens(25)).await?;
 
     node_service.ensure_is_running()?;
 

@@ -40,4 +40,9 @@ contract CounterFactory {
     function get_address(uint256 index) external returns (address) {
         return address(counters[index]);
     }
+
+    function get_balance(address account) external returns (uint256) {
+        uint256 balance = account.balance;
+        return balance;
+    }
 }
