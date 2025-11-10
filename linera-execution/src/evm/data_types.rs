@@ -7,7 +7,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
 /// An encapsulation of U256 in order to have a specific serialization
-pub struct AmountU256(U256);
+pub struct AmountU256(pub U256);
 
 impl Serialize for AmountU256 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

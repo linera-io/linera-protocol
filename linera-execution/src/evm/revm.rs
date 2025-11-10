@@ -293,7 +293,7 @@ enum ContractRuntimePrecompile {
     /// Calling `validation_round` of `ContractRuntime`
     ValidationRound,
     /// Calling `transfer` of `ContractRuntime`
-    Transfer { account: Account, amount: Amount },
+    Transfer { account: Account, amount: AmountU256 },
 }
 
 /// Some functionalities from the ServiceRuntime not in BaseRuntime
@@ -608,7 +608,7 @@ impl<'a> ContractPrecompile {
                 Ok(bcs::to_bytes(&value)?)
             }
             ContractRuntimePrecompile::Transfer { account, amount } => {
-                if amount != Amount::ZERO {
+                if amount.0 != U256::ZERO {
                     let destination = {
                         let destination = get_evm_destination(context, account)?;
                         destination.unwrap_or(FAUCET_ADDRESS)
@@ -617,11 +617,12 @@ impl<'a> ContractPrecompile {
                         let mut runtime = context.db().0.runtime.lock().unwrap();
                         let application_id = runtime.application_id()?;
                         let source = application_id.into();
-                        runtime.transfer(source, account, amount)?;
+                        let value = Amount::try_from(amount.0).map_err(EvmExecutionError::from)?;
+                        runtime.transfer(source, account, value)?;
                         application_id
                     };
                     let source: Address = application_id.evm_address();
-                    revm_transfer(context, source, destination, amount.into())?;
+                    revm_transfer(context, source, destination, amount.0)?;
                 }
                 Ok(vec![])
             }

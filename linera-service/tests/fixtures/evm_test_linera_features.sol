@@ -8,6 +8,11 @@ contract ExampleLineraFeatures {
     constructor() payable {
     }
 
+    function get_balance(address account) external returns (uint256) {
+        uint256 balance = account.balance;
+        return balance;
+    }
+
     function test_chain_id() external {
         Linera.ChainId memory chain_id = Linera.chain_id();
         Linera.ChainId memory creator_chain_id = Linera.application_creator_chain_id();

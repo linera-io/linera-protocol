@@ -1702,9 +1702,9 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::{B256, U256};
+    use alloy_primitives::{Address, B256, U256};
     use alloy_sol_types::{sol, SolCall};
-    use linera_execution::test_utils::solidity::get_evm_contract_path;
+    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1733,6 +1733,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 
     // Creating the EVM smart contract
     sol! {
+        function get_balance(address account);
         function test_chain_id();
         function test_read_data_blob(bytes32 hash, uint32 len);
         function test_assert_data_blob_exists(bytes32 hash);
@@ -1765,6 +1766,8 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 
     let port = get_node_port().await;
     let mut node_service = client1.run_node_service(port, ProcessInbox::Skip).await?;
+    let address_app = application_id.evm_address();
+    let application = node_service.make_application(&chain_id1, &application_id)?;
 
     let nft_blob_bytes = b"nft1_data".to_vec();
     let len = nft_blob_bytes.len() as u32;
@@ -1772,8 +1775,6 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         .publish_data_blob(&chain_id1, nft_blob_bytes)
         .await?;
     let hash: B256 = <[u8; 32]>::from(hash).into();
-
-    let application = node_service.make_application(&chain_id1, &application_id)?;
 
     // Testing the ChainId.
 
@@ -1821,9 +1822,26 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 
     // Doing a transfer
 
+    async fn assert_contract_balance(
+        app: &ApplicationWrapper<EvmAbi>,
+        address: Address,
+        balance: Amount,
+    ) -> anyhow::Result<()> {
+        let query = get_balanceCall { account: address };
+        let query = EvmQuery::Query(query.abi_encode());
+        let result = app.run_json_query(query).await?;
+        let balance_256: U256 = balance.into();
+        assert_eq!(read_evm_u256_entry(result), balance_256);
+        Ok(())
+    }
+
+    assert_contract_balance(&application, address_app, Amount::from_tokens(27)).await?;
     let b256_chain_id2: B256 = <[u8; 32]>::from(chain_id2.0).into();
     let amount: U256 = Amount::from_tokens(5).into();
-    let query = test_linera_transferCall { chain_id: b256_chain_id2, destination: address2, amount };
+    let operation = test_linera_transferCall { chain_id: b256_chain_id2, destination: address2, amount };
+    let operation = get_zero_operation(operation)?;
+    application.run_json_query(operation).await?;
+    assert_contract_balance(&application, address_app, Amount::from_tokens(22)).await?;
 
     // Winding down
 
