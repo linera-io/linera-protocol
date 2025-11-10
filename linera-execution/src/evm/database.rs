@@ -79,7 +79,7 @@ pub(crate) struct DatabaseRuntime<Runtime> {
     pub contract_address: Address,
     /// The caller to the smart contract.
     pub caller: Address,
-    /// The value of the smart contract.
+    /// The value of the call to the smart contract.
     pub value: U256,
     /// The runtime of the contract.
     pub runtime: Arc<Mutex<Runtime>>,
