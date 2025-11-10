@@ -55,6 +55,8 @@ contract ExampleLineraFeatures {
         uint8 reserved = 0;
         bytes20 address20;
         Linera.AccountOwner memory owner = Linera.AccountOwner(1, reserved, destination, address20);
-        
+        Linera.ChainId memory chain_id1 = Linera.ChainId(chain_id);
+        Linera.Account memory account = Linera.Account(chain_id1, owner);
+        Linera.transfer(account, amount);
     }
 }

@@ -1711,15 +1711,15 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     tracing::info!("Starting test {}", test_name!());
 
     // Initializing a chain and transferring tokens
-    let (mut net, client) = config.instantiate().await?;
-    let chain_id = client.load_wallet()?.default_chain().unwrap();
-    let account_owner1 = client.get_owner().unwrap();
+    let (mut net, client1) = config.instantiate().await?;
+    let chain_id = client1.load_wallet()?.default_chain().unwrap();
+    let account_owner1 = client1.get_owner().unwrap();
     let account_chain = Account::chain(chain_id);
     let account1 = Account {
         chain_id,
         owner: account_owner1,
     };
-    client
+    client1
         .transfer_with_accounts(Amount::from_tokens(50), account_chain, account1)
         .await?;
 
@@ -1732,6 +1732,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         function test_authenticated_owner_caller_id();
         function test_chain_balance(uint256 expected_balance);
         function test_read_owners();
+        function test_linera_transfer(bytes32 chain_id, bytes32 destination, uint256 amount);
     }
 
     let (contract, _dir) = get_evm_contract_path("tests/fixtures/evm_test_linera_features.sol")?;
@@ -1742,7 +1743,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         value: start_value.into(),
         argument: vec![],
     };
-    let application_id = client
+    let application_id = client1
         .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             contract.clone(),
             contract,
@@ -1755,7 +1756,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         .await?;
 
     let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client1.run_node_service(port, ProcessInbox::Skip).await?;
 
     let nft_blob_bytes = b"nft1_data".to_vec();
     let len = nft_blob_bytes.len() as u32;
@@ -1809,6 +1810,8 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     let query = test_read_ownersCall {};
     let query = EvmQuery::Query(query.abi_encode());
     application.run_json_query(query).await?;
+
+    // Doing a transfer
 
     // Winding down
 
