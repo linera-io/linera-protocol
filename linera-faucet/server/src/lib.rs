@@ -71,7 +71,7 @@ mod metrics {
             "faucet_claim_latency_ms",
             "End-to-end latency of claim requests in milliseconds",
             &["result"],
-            Some(vec![0.5, 1.0, 3.0, 5.0, 10.0, 20.0, 50.0]),
+            exponential_bucket_interval(10.0, 40_000.0),
         )
     });
 
@@ -97,7 +97,7 @@ mod metrics {
             "faucet_batch_processing_latency_ms",
             "Time to process a batch of chain creation requests in milliseconds",
             &["result"],
-            Some(vec![0.5, 1.0, 3.0, 5.0, 10.0, 20.0, 50.0]),
+            exponential_bucket_interval(10.0, 40_000.0),
         )
     });
 
@@ -117,7 +117,7 @@ mod metrics {
             "faucet_queue_wait_time_ms",
             "Time a request spends in the queue before processing in milliseconds",
             &[],
-            Some(vec![0.5, 1.0, 3.0, 5.0, 10.0, 20.0, 50.0]),
+            exponential_bucket_interval(10.0, 40_000.0),
         )
     });
 
@@ -167,7 +167,7 @@ mod metrics {
             "faucet_store_chain_latency_ms",
             "Latency of storing chain information in the database in milliseconds",
             &[],
-            exponential_bucket_interval(0.5, 2000.0),
+            exponential_bucket_interval(10.0, 2000.0),
         )
     });
 }
