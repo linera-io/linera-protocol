@@ -345,7 +345,10 @@ where
         created_blobs: Option<&BTreeMap<BlobId, Blob>>,
     ) -> Result<BTreeMap<BlobId, Option<Blob>>, WorkerError> {
         let maybe_blobs = blob_ids.into_iter().collect::<BTreeSet<_>>();
-        let mut maybe_blobs = maybe_blobs.into_iter().map(|x| (x, None)).collect::<Vec<(BlobId, Option<Blob>)>>();
+        let mut maybe_blobs = maybe_blobs
+            .into_iter()
+            .map(|x| (x, None))
+            .collect::<Vec<(BlobId, Option<Blob>)>>();
 
         if let Some(blob_map) = created_blobs {
             for (blob_id, value) in &mut maybe_blobs {
@@ -362,7 +365,11 @@ where
         }
 
         let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
-        let third_block_blobs = self.chain.pending_validated_blobs.multi_get(&missing_blob_ids).await?;
+        let third_block_blobs = self
+            .chain
+            .pending_validated_blobs
+            .multi_get(&missing_blob_ids)
+            .await?;
         for (index, blob) in missing_indices.into_iter().zip(third_block_blobs) {
             maybe_blobs[index].1 = blob;
         }
@@ -1623,11 +1630,10 @@ fn missing_indices_blob_ids(maybe_blobs: &[(BlobId, Option<Blob>)]) -> (Vec<usiz
     (missing_indices, missing_blob_ids)
 }
 
-
-
-
 /// Returns the keys whose value is `None`.
-fn missing_blob_ids<'a>(maybe_blobs: impl IntoIterator<Item = (&'a BlobId, &'a Option<Blob>)>) -> Vec<BlobId> {
+fn missing_blob_ids<'a>(
+    maybe_blobs: impl IntoIterator<Item = (&'a BlobId, &'a Option<Blob>)>,
+) -> Vec<BlobId> {
     maybe_blobs
         .into_iter()
         .filter(|(_, maybe_blob)| maybe_blob.is_none())
