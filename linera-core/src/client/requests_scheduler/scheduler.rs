@@ -667,11 +667,11 @@ impl<Env: Environment> RequestsScheduler<Env> {
         // Use LocalBoxFuture for wasm32, BoxFuture for other targets (which requires Send)
         #[cfg(target_arch = "wasm32")]
         type IndexedFuture<T> =
-            futures::future::LocalBoxFuture<'static, (usize, Result<T, NodeError>)>;
+            futures::future::LocalBoxFuture<'static, (u32, Result<T, NodeError>)>;
         #[cfg(not(target_arch = "wasm32"))]
-        type IndexedFuture<T> = futures::future::BoxFuture<'static, (usize, Result<T, NodeError>)>;
+        type IndexedFuture<T> = futures::future::BoxFuture<'static, (u32, Result<T, NodeError>)>;
         let mut futures: FuturesUnordered<IndexedFuture<T>> = FuturesUnordered::new();
-        let mut peer_index = 0;
+        let mut peer_index = 0u32;
 
         // Start the first peer immediately (no delay)
         let fut = operation(first_peer);
@@ -682,7 +682,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         peer_index += 1;
 
         let mut last_error = None;
-        let mut next_delay = Box::pin(sleep(staggered_delay));
+        let mut next_delay = Box::pin(sleep(staggered_delay * peer_index));
         let mut no_more_alternatives = false;
 
         loop {
@@ -703,7 +703,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
                     #[cfg(not(target_arch = "wasm32"))]
                     futures.push(async move { (idx, fut.await) }.boxed());
                     peer_index += 1;
-                    next_delay = Box::pin(sleep(staggered_delay));
+                    next_delay = Box::pin(sleep(staggered_delay * peer_index));
                 } else {
                     no_more_alternatives = true;
                     // Create a dummy delay even though we won't use it
