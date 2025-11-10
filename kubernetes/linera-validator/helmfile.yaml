@@ -32,8 +32,9 @@ hooks:
           {{- end }}
         )
 
-        echo "Installing Prometheus ServiceMonitor CRD…"
-        kubectl "${kube_args[@]}" apply -f crds/servicemonitor.yaml
+        echo "Installing Prometheus CRDs (ServiceMonitor, PrometheusRule)…"
+        kubectl "${kube_args[@]}" apply -f ./crds/servicemonitor.yaml
+        kubectl "${kube_args[@]}" apply -f ./crds/prometheusrule.yaml
 {{- if and .Values.gcpRun .Values.usingLocalSsd }}
   - events: ["prepare"]
     showlogs: true
