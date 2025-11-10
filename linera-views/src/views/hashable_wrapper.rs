@@ -115,26 +115,29 @@ where
         self.stored_hash != *hash
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        let delete_view = self.inner.flush(batch)?;
-        let hash = self.hash.get_mut().unwrap();
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let delete_view = self.inner.pre_save(batch)?;
+        let hash = *self.hash.lock().unwrap();
         if delete_view {
             let mut key_prefix = self.inner.context().base_key().bytes.clone();
             key_prefix.pop();
             batch.delete_key_prefix(key_prefix);
-            self.stored_hash = None;
-            *hash = None;
-        } else if self.stored_hash != *hash {
+        } else if self.stored_hash != hash {
             let mut key = self.inner.context().base_key().bytes.clone();
             let tag = key.last_mut().unwrap();
             *tag = KeyTag::Hash as u8;
             match hash {
                 None => batch.delete_key(key),
-                Some(hash) => batch.put_key_value(key, hash)?,
+                Some(hash) => batch.put_key_value(key, &hash)?,
             }
-            self.stored_hash = *hash;
         }
         Ok(delete_view)
+    }
+
+    fn post_save(&mut self) {
+        self.inner.post_save();
+        let hash = *self.hash.get_mut().unwrap();
+        self.stored_hash = hash;
     }
 
     fn clear(&mut self) {

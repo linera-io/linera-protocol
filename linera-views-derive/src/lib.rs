@@ -82,8 +82,8 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
 
     let mut name_quotes = Vec::new();
     let mut rollback_quotes = Vec::new();
-    let mut flush_quotes = Vec::new();
-    let mut test_flush_quotes = Vec::new();
+    let mut pre_save_quotes = Vec::new();
+    let mut test_pre_save_quotes = Vec::new();
     let mut clear_quotes = Vec::new();
     let mut has_pending_changes_quotes = Vec::new();
     let mut num_init_keys_quotes = Vec::new();
@@ -96,8 +96,8 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
         let g = get_extended_entry(e.ty.clone())?;
         name_quotes.push(quote! { #name });
         rollback_quotes.push(quote! { self.#name.rollback(); });
-        flush_quotes.push(quote! { let #test_flush_ident = self.#name.flush(batch)?; });
-        test_flush_quotes.push(quote! { #test_flush_ident });
+        pre_save_quotes.push(quote! { let #test_flush_ident = self.#name.pre_save(batch)?; });
+        test_pre_save_quotes.push(quote! { #test_flush_ident });
         clear_quotes.push(quote! { self.#name.clear(); });
         has_pending_changes_quotes.push(quote! {
             if self.#name.has_pending_changes().await {
@@ -205,9 +205,13 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
                 false
             }
 
-            fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<bool, linera_views::ViewError> {
-                #(#flush_quotes)*
-                Ok( #(#test_flush_quotes)&&* )
+            fn pre_save(&self, batch: &mut linera_views::batch::Batch) -> Result<bool, linera_views::ViewError> {
+                #(#pre_save_quotes)*
+                Ok( #(#test_pre_save_quotes)&&* )
+            }
+
+            fn post_save(&mut self) {
+                #(self.#name_quotes.post_save();)*
             }
 
             fn clear(&mut self) {
@@ -248,10 +252,11 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
                 use linera_views::{context::Context as _, batch::Batch, store::WritableKeyValueStore as _, views::View as _};
                 #increment_counter
                 let mut batch = Batch::new();
-                self.flush(&mut batch)?;
+                self.pre_save(&mut batch)?;
                 if !batch.is_empty() {
                     self.context().store().write_batch(batch).await?;
                 }
+                self.post_save();
                 Ok(())
             }
         }

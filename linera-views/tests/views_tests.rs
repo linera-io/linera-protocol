@@ -827,15 +827,17 @@ async fn test_collection_removal() -> Result<()> {
     let entry = collection.load_entry_mut(&1).await?;
     entry.set(1);
     let mut batch = Batch::new();
-    collection.flush(&mut batch)?;
+    collection.pre_save(&mut batch)?;
     collection.context().store().write_batch(batch).await?;
+    collection.post_save();
 
     // Remove the entry from the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
     collection.remove_entry(&1)?;
     let mut batch = Batch::new();
-    collection.flush(&mut batch)?;
+    collection.pre_save(&mut batch)?;
     collection.context().store().write_batch(batch).await?;
+    collection.post_save();
 
     // Check that the entry was removed.
     let collection = CollectionViewType::load(context.clone()).await?;
@@ -858,8 +860,9 @@ async fn test_removal_api_first_second_condition(
     let entry = collection.load_entry_mut(&1).await?;
     entry.set(100);
     let mut batch = Batch::new();
-    collection.flush(&mut batch)?;
+    collection.pre_save(&mut batch)?;
     collection.context().store().write_batch(batch).await?;
+    collection.post_save();
 
     // Reload the collection view and remove the entry, but don't commit yet
     let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
@@ -879,8 +882,9 @@ async fn test_removal_api_first_second_condition(
 
     // We commit
     let mut batch = Batch::new();
-    collection.flush(&mut batch)?;
+    collection.pre_save(&mut batch)?;
     collection.context().store().write_batch(batch).await?;
+    collection.post_save();
 
     let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
     let expected_val = if second_condition {

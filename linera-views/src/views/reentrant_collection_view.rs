@@ -189,42 +189,57 @@ impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
         !self.updates.is_empty()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
             delete_view = true;
             batch.delete_key_prefix(self.context.base_key().bytes.clone());
-            for (index, update) in mem::take(&mut self.updates) {
+            for (index, update) in &self.updates {
                 if let Update::Set(view) = update {
-                    let mut view = Arc::try_unwrap(view)
-                        .map_err(|_| ViewError::TryLockError(index.clone()))?
-                        .into_inner();
-                    view.flush(batch)?;
-                    self.add_index(batch, &index);
+                    let view = view
+                        .try_write()
+                        .ok_or_else(|| ViewError::TryLockError(index.clone()))?;
+                    view.pre_save(batch)?;
+                    self.add_index(batch, index);
                     delete_view = false;
                 }
             }
         } else {
-            for (index, update) in mem::take(&mut self.updates) {
+            for (index, update) in &self.updates {
                 match update {
                     Update::Set(view) => {
-                        let mut view = Arc::try_unwrap(view)
-                            .map_err(|_| ViewError::TryLockError(index.clone()))?
-                            .into_inner();
-                        view.flush(batch)?;
-                        self.add_index(batch, &index);
+                        let view = view
+                            .try_write()
+                            .ok_or_else(|| ViewError::TryLockError(index.clone()))?;
+                        view.pre_save(batch)?;
+                        self.add_index(batch, index);
                     }
                     Update::Removed => {
-                        let key_subview = self.get_subview_key(&index);
-                        let key_index = self.get_index_key(&index);
+                        let key_subview = self.get_subview_key(index);
+                        let key_index = self.get_index_key(index);
                         batch.delete_key(key_index);
                         batch.delete_key_prefix(key_subview);
                     }
                 }
             }
         }
-        self.delete_storage_first = false;
         Ok(delete_view)
+    }
+
+    fn post_save(&mut self) {
+        for (_index, update) in mem::take(&mut self.updates) {
+            if let Update::Set(view) = update {
+                if let Ok(rwlock) = Arc::try_unwrap(view) {
+                    let mut view = rwlock.into_inner();
+                    view.post_save();
+                } else {
+                    // If Arc::try_unwrap fails, the view is still being shared.
+                    // This shouldn't happen in normal operation after pre_save.
+                    // We'll skip the post_save for this view.
+                }
+            }
+        }
+        self.delete_storage_first = false;
     }
 
     fn clear(&mut self) {
@@ -1170,8 +1185,12 @@ where
         self.collection.has_pending_changes().await
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        self.collection.flush(batch)
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.collection.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.collection.post_save()
     }
 
     fn clear(&mut self) {
@@ -1731,8 +1750,12 @@ where
         self.collection.has_pending_changes().await
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        self.collection.flush(batch)
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.collection.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.collection.post_save()
     }
 
     fn clear(&mut self) {

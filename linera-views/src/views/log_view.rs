@@ -99,29 +99,38 @@ where
         !self.new_values.is_empty()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key().bytes.clone());
-            self.stored_count = 0;
             delete_view = true;
         }
         if !self.new_values.is_empty() {
             delete_view = false;
+            let mut count = self.stored_count;
             for value in &self.new_values {
                 let key = self
                     .context
                     .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &self.stored_count)?;
+                    .derive_tag_key(KeyTag::Index as u8, &count)?;
                 batch.put_key_value(key, value)?;
-                self.stored_count += 1;
+                count += 1;
             }
             let key = self.context.base_key().base_tag(KeyTag::Count as u8);
-            batch.put_key_value(key, &self.stored_count)?;
+            batch.put_key_value(key, &count)?;
+        }
+        Ok(delete_view)
+    }
+
+    fn post_save(&mut self) {
+        if self.delete_storage_first {
+            self.stored_count = 0;
+        }
+        if !self.new_values.is_empty() {
+            self.stored_count += self.new_values.len();
             self.new_values.clear();
         }
         self.delete_storage_first = false;
-        Ok(delete_view)
     }
 
     fn clear(&mut self) {

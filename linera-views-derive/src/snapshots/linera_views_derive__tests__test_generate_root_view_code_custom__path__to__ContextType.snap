@@ -12,10 +12,11 @@ where
             views::View as _,
         };
         let mut batch = Batch::new();
-        self.flush(&mut batch)?;
+        self.pre_save(&mut batch)?;
         if !batch.is_empty() {
             self.context().store().write_batch(batch).await?;
         }
+        self.post_save();
         Ok(())
     }
 }
