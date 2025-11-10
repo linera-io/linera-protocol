@@ -1627,9 +1627,9 @@ fn missing_indices_blob_ids(maybe_blobs: &[(BlobId, Option<Blob>)]) -> (Vec<usiz
 
 
 /// Returns the keys whose value is `None`.
-fn missing_blob_ids(maybe_blobs: &BTreeMap<BlobId, Option<Blob>>) -> Vec<BlobId> {
+fn missing_blob_ids<'a>(maybe_blobs: impl IntoIterator<Item = (&'a BlobId, &'a Option<Blob>)>) -> Vec<BlobId> {
     maybe_blobs
-        .iter()
+        .into_iter()
         .filter(|(_, maybe_blob)| maybe_blob.is_none())
         .map(|(blob_id, _)| *blob_id)
         .collect()
