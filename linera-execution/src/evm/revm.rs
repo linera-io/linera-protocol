@@ -1074,7 +1074,20 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
         let (argument, n_input) = get_call_contract_argument(context, inputs)?;
-        let result = if n_input > 0 {
+        let contract_call = {
+            if n_input > 0 {
+                // The input is non-empty. It is a contract call.
+                true
+            } else {
+                // In case of empty input, we have two scenarios:
+                // * We are calling an EVM application. In that case it has non-empty
+                //   storage (at least the deployed code)
+                // * It is a user account. In that case it has empty storage.
+                let mut runtime = self.db.runtime.lock().unwrap();
+                !runtime.has_empty_storage(target)?
+            }
+        };
+        let result = if contract_call {
             // The input is non-trivial, we assume that we are calling a contract.
             //
             // The correct behavior is the following:
