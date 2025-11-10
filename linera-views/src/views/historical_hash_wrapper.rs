@@ -4,6 +4,7 @@
 use std::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
+    sync::Mutex,
 };
 
 #[cfg(with_metrics)]
@@ -44,7 +45,7 @@ pub struct HistoricallyHashableView<C, W> {
     /// The inner view.
     inner: W,
     /// Memoized hash, if any.
-    hash: Option<HasherOutput>,
+    hash: Mutex<Option<HasherOutput>>,
     /// Track context type.
     _phantom: PhantomData<C>,
 }
@@ -91,7 +92,7 @@ where
         HistoricallyHashableView {
             _phantom: PhantomData,
             stored_hash: self.stored_hash,
-            hash: self.hash,
+            hash: Mutex::new(*self.hash.get_mut().unwrap()),
             inner: self.inner.with_context(ctx).await,
         }
     }
@@ -128,7 +129,7 @@ where
         Ok(Self {
             _phantom: PhantomData,
             stored_hash: hash,
-            hash,
+            hash: Mutex::new(hash),
             inner,
         })
     }
@@ -141,7 +142,7 @@ where
 
     fn rollback(&mut self) {
         self.inner.rollback();
-        self.hash = self.stored_hash;
+        *self.hash.get_mut().unwrap() = self.stored_hash;
     }
 
     async fn has_pending_changes(&self) -> bool {
@@ -151,8 +152,19 @@ where
     fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut inner_batch = Batch::new();
         self.inner.pre_save(&mut inner_batch)?;
-        let new_hash = Self::make_hash(self.stored_hash, &inner_batch)?;
+        let new_hash = {
+            let mut maybe_hash = self.hash.lock().unwrap();
+            match maybe_hash.as_mut() {
+                Some(hash) => *hash,
+                None => {
+                    let hash = Self::make_hash(self.stored_hash, &inner_batch)?;
+                    *maybe_hash = Some(hash);
+                    hash
+                }
+            }
+        };
         batch.operations.extend(inner_batch.operations);
+
         if self.stored_hash != Some(new_hash) {
             let mut key = self.inner.context().base_key().bytes.clone();
             let tag = key.last_mut().unwrap();
@@ -164,19 +176,18 @@ where
     }
 
     fn post_save(&mut self) {
-        // Compute the new hash based on the batch that was computed in pre_save
-        let mut inner_batch = Batch::new();
-        let _ = self.inner.pre_save(&mut inner_batch);
-        if let Ok(new_hash) = Self::make_hash(self.stored_hash, &inner_batch) {
-            self.stored_hash = Some(new_hash);
-            self.hash = Some(new_hash);
-        }
+        let new_hash = self
+            .hash
+            .get_mut()
+            .unwrap()
+            .expect("hash should be computed in pre_save");
+        self.stored_hash = Some(new_hash);
         self.inner.post_save();
     }
 
     fn clear(&mut self) {
         self.inner.clear();
-        self.hash = None;
+        *self.hash.get_mut().unwrap() = None;
     }
 }
 
@@ -188,26 +199,23 @@ where
         Ok(HistoricallyHashableView {
             _phantom: PhantomData,
             stored_hash: self.stored_hash,
-            hash: self.hash,
+            hash: Mutex::new(*self.hash.get_mut().unwrap()),
             inner: self.inner.clone_unchecked()?,
         })
     }
 }
 
-impl<W: ClonableView> HistoricallyHashableView<W::Context, W> {
+impl<W: View> HistoricallyHashableView<W::Context, W> {
     /// Obtains a hash of the history of the changes in the view.
     pub async fn historical_hash(&mut self) -> Result<HasherOutput, ViewError> {
-        if let Some(hash) = self.hash {
-            return Ok(hash);
+        if let Some(hash) = self.hash.get_mut().unwrap() {
+            return Ok(*hash);
         }
         let mut batch = Batch::new();
-        if self.inner.has_pending_changes().await {
-            let inner = self.inner.clone_unchecked()?;
-            inner.pre_save(&mut batch)?;
-        }
+        self.inner.pre_save(&mut batch)?;
         let hash = Self::make_hash(self.stored_hash, &batch)?;
         // Remember the hash that we just computed.
-        self.hash = Some(hash);
+        *self.hash.get_mut().unwrap() = Some(hash);
         Ok(hash)
     }
 }
@@ -223,7 +231,7 @@ impl<C, W> Deref for HistoricallyHashableView<C, W> {
 impl<C, W> DerefMut for HistoricallyHashableView<C, W> {
     fn deref_mut(&mut self) -> &mut W {
         // Clear the memoized hash.
-        self.hash = None;
+        *self.hash.get_mut().unwrap() = None;
         &mut self.inner
     }
 }
