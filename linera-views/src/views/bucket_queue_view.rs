@@ -457,8 +457,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                         let data = match data {
                             Some(value) => value,
                             None => {
-                                let root_key = self.context.store().root_key()?;
-                                return Err(ViewError::MissingEntries(root_key));
+                                return Err(ViewError::MissingEntries("BucketQueueView A".into()));
                             }
                         };
                         self.stored_data[i_block].1 = Bucket::Loaded { data };
@@ -538,8 +537,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
             let data = match data {
                 Some(data) => data,
                 None => {
-                    let root_key = self.context.store().root_key()?;
-                    return Err(ViewError::MissingEntries(root_key));
+                    return Err(ViewError::MissingEntries("BucketQueueView B".into()));
                 }
             };
             self.stored_data.back_mut().unwrap().1 = Bucket::Loaded { data };
@@ -590,8 +588,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                         let value = match &values[value_pos] {
                             Some(value) => value,
                             None => {
-                                let root_key = self.context.store().root_key()?;
-                                return Err(ViewError::MissingEntries(root_key));
+                                return Err(ViewError::MissingEntries("BucketQueueView C".into()));
                             }
                         };
                         value_pos += 1;
