@@ -538,7 +538,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::U256;
+    use alloy_primitives::{Address, U256};
     use alloy_sol_types::{sol, SolCall};
     use linera_execution::test_utils::solidity::{
         load_solidity_example_by_name, read_evm_address_entry, read_evm_u256_entry,
@@ -556,6 +556,7 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
         function createCounter(uint256 initialValue);
         function get_address(uint256 index);
         function get_value();
+        function get_balance(address account);
         function increment();
     }
 
@@ -630,6 +631,20 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
 
     // Creating the applications
 
+    // The balance in Linera and EVM have to match.
+    async fn assert_contract_balance(
+        app: &ApplicationWrapper<EvmAbi>,
+        address: Address,
+        balance: Amount,
+    ) -> anyhow::Result<()> {
+        let query = get_balanceCall { account: address };
+        let query = EvmQuery::Query(query.abi_encode());
+        let result = app.run_json_query(query).await?;
+        let balance_256: U256 = balance.into();
+        assert_eq!(read_evm_u256_entry(result), balance_256);
+        Ok(())
+    }
+
     let application0 = ApplicationId::from(address0).with_abi::<EvmAbi>();
     let application0 = node_service.make_application(&chain_id, &application0)?;
 
@@ -655,6 +670,8 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     };
     assert_eq!(node_service.balance(&account0).await?, Amount::ONE);
     assert_eq!(node_service.balance(&account1).await?, Amount::ONE);
+    assert_contract_balance(&application0, address0, Amount::ONE).await?;
+    assert_contract_balance(&application1, address1, Amount::ONE).await?;
 
     node_service.ensure_is_running()?;
 

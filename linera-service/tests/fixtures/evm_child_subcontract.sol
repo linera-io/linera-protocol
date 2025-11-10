@@ -17,6 +17,11 @@ contract Counter {
     function get_value() external returns (uint256) {
         return count;
     }
+
+    function get_balance(address account) external returns (uint256) {
+        uint256 balance = account.balance;
+        return balance;
+    }
 }
 
 // Main contract that creates subcontracts

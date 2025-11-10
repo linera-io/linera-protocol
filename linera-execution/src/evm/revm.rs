@@ -821,7 +821,9 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
 }
 
 impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
-    /// Gets the expected `ApplicationId`.
+    /// Gets the expected `ApplicationId`. We need to transfer
+    /// native tokens before the application is created (see below).
+    /// Therefore, we need to pre-compute the obtained ApplicationId.
     fn get_expected_application_id(
         runtime: &mut Runtime,
         module_id: ModuleId,
@@ -873,7 +875,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// address being the one chosen by Linera.
     ///
     /// The second case occurs when the first contract has
-    /// been created and that contrac starts making new
+    /// been created and that contract starts making new
     /// contracts.
     /// In relation to bytecode, the following notions are
     /// relevant:
