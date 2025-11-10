@@ -7,7 +7,10 @@
 
 mod database;
 
-use std::{collections::VecDeque, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{
+    collections::VecDeque, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc,
+    time::Instant,
+};
 
 use anyhow::Context as _;
 use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
@@ -71,7 +74,7 @@ mod metrics {
             "faucet_claim_latency_ms",
             "End-to-end latency of claim requests in milliseconds",
             &["result"],
-            Some(vec![0.5, 1.0, 3.0, 5.0, 10.0, 20.0, 50.0]),
+            exponential_bucket_interval(10.0, 40_000.0),
         )
     });
 
@@ -97,7 +100,7 @@ mod metrics {
             "faucet_batch_processing_latency_ms",
             "Time to process a batch of chain creation requests in milliseconds",
             &["result"],
-            Some(vec![0.5, 1.0, 3.0, 5.0, 10.0, 20.0, 50.0]),
+            exponential_bucket_interval(10.0, 40_000.0),
         )
     });
 
@@ -117,7 +120,7 @@ mod metrics {
             "faucet_queue_wait_time_ms",
             "Time a request spends in the queue before processing in milliseconds",
             &[],
-            Some(vec![0.5, 1.0, 3.0, 5.0, 10.0, 20.0, 50.0]),
+            exponential_bucket_interval(10.0, 40_000.0),
         )
     });
 
@@ -167,7 +170,7 @@ mod metrics {
             "faucet_store_chain_latency_ms",
             "Latency of storing chain information in the database in milliseconds",
             &[],
-            exponential_bucket_interval(0.5, 2000.0),
+            exponential_bucket_interval(10.0, 2000.0),
         )
     });
 }
@@ -330,7 +333,7 @@ where
         #[cfg(with_metrics)]
         let db_start_time = std::time::Instant::now();
 
-        tracing::debug!(account_owner=?owner, "received claim request");
+        tracing::debug!(account_owner=?owner, "claim request received");
 
         let existing_chain_id = self
             .faucet_storage
@@ -423,17 +426,13 @@ where
         .read_blob(blob_id)
         .await
         .map_err(|e| {
-            tracing::error!(
-                "Failed to read chain description blob for {}: {}",
-                chain_id,
-                e
-            );
+            tracing::error!(?chain_id, ?e, "failed to read chain description blob");
             Error::new(format!(
                 "Storage error while reading chain description: {e}"
             ))
         })?
         .ok_or_else(|| {
-            tracing::error!("Chain description blob not found for chain {}", chain_id);
+            tracing::error!(?chain_id, "chain description blob not found for chain");
             Error::new(format!(
                 "Chain description not found for chain {}",
                 chain_id
@@ -442,11 +441,7 @@ where
 
     // Deserialize the chain description from the blob bytes
     let description = bcs::from_bytes::<ChainDescription>(blob.bytes()).map_err(|e| {
-        tracing::error!(
-            "Failed to deserialize chain description for {}: {}",
-            chain_id,
-            e
-        );
+        tracing::error!(?e, ?chain_id, "failed to deserialize chain description",);
         Error::new(format!(
             "Invalid chain description data for chain {}",
             chain_id
@@ -485,13 +480,13 @@ where
             tokio::select! {
                 _ = self.request_notifier.notified() => {
                     if let Err(e) = self.process_batch().await {
-                        tracing::error!("Batch processing error: {}", e);
+                        tracing::error!(?e, "batch processing error");
                     }
                 }
                 _ = cancellation_token.cancelled() => {
                     // Process any remaining requests before shutting down
                     if let Err(e) = self.process_batch().await {
-                        tracing::error!("Final batch processing error: {}", e);
+                        tracing::error!(?e, "final batch processing error");
                     }
                     break;
                 }
@@ -509,7 +504,7 @@ where
             }
 
             let batch_size = batch_requests.len();
-            tracing::info!("Processing batch of {} requests", batch_size);
+            tracing::info!(?batch_size, "processing requests");
 
             #[cfg(with_metrics)]
             {
@@ -539,7 +534,7 @@ where
             }
 
             if let Err(err) = batch_result {
-                tracing::error!("Failed to execute batch: {}", err);
+                tracing::error!(?err, "batch execution error");
                 return Err(err);
             }
         }
@@ -651,17 +646,21 @@ where
 
         // Execute all operations in a single block
         let result = self.client.execute_operations(operations, vec![]).await;
+        let waiting_for_lock_start = Instant::now();
         self.context
             .lock()
             .await
             .update_wallet(&self.client)
             .await?;
-
+        tracing::debug!(
+            wait_time_ms = waiting_for_lock_start.elapsed().as_millis(),
+            "wallet updated after executing operations"
+        );
         let certificate = match result {
             Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(chain_err),
             ))) => {
-                tracing::debug!("Local worker error executing operations: {chain_err}");
+                tracing::debug!(error=?chain_err, "local worker errored when executing operations");
                 match *chain_err {
                     ChainError::ExecutionError(exec_err, ChainExecutionContext::Operation(i))
                         if i > 0
@@ -673,7 +672,7 @@ where
                                     | ExecutionError::MaximumFuelExceeded(_)
                             ) =>
                     {
-                        tracing::error!(%exec_err, "Execution of operation {i} failed; reducing batch size");
+                        tracing::error!(index=?i, %exec_err, "execution of operation failed; reducing batch size");
 
                         #[cfg(with_metrics)]
                         {
