@@ -28,9 +28,7 @@ use super::{
 use crate::{
     client::{
         communicate_concurrently,
-        requests_scheduler::{
-            in_flight_tracker::Subscribed, request::Cacheable, STAGGERED_DELAY_MS,
-        },
+        requests_scheduler::{in_flight_tracker::Subscribed, request::Cacheable},
         RequestsSchedulerConfig,
     },
     environment::Environment,
@@ -614,7 +612,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         // alternatives are tried after stagger delays (even if first peer is slow but not failing)
         tracing::trace!(key = ?key, peer = ?peer, "executing staggered parallel request");
         let result = self
-            .try_staggered_parallel(&key, peer, &operation, STAGGERED_DELAY_MS)
+            .try_staggered_parallel(&key, peer, &operation, self.retry_delay)
             .await;
 
         let result_for_broadcast: Result<RequestResult, NodeError> = result.clone().map(Into::into);
@@ -652,7 +650,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         key: &RequestKey,
         first_peer: RemoteNode<Env::ValidatorNode>,
         operation: &F,
-        staggered_delay_ms: u64,
+        staggered_delay: Duration,
     ) -> Result<T, NodeError>
     where
         T: 'static,
@@ -684,8 +682,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         peer_index += 1;
 
         let mut last_error = None;
-        let delay_duration = Duration::from_millis(staggered_delay_ms);
-        let mut next_delay = Box::pin(sleep(delay_duration));
+        let mut next_delay = Box::pin(sleep(staggered_delay));
         let mut no_more_alternatives = false;
 
         loop {
@@ -706,7 +703,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
                     #[cfg(not(target_arch = "wasm32"))]
                     futures.push(async move { (idx, fut.await) }.boxed());
                     peer_index += 1;
-                    next_delay = Box::pin(sleep(delay_duration));
+                    next_delay = Box::pin(sleep(staggered_delay));
                 } else {
                     no_more_alternatives = true;
                     // Create a dummy delay even though we won't use it
@@ -761,7 +758,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
                         futures.push(async move { (idx, fut.await) }.boxed());
                         peer_index += 1;
                         // Reset delay for next peer
-                        next_delay = Box::pin(sleep(delay_duration));
+                        next_delay = Box::pin(sleep(staggered_delay));
                     } else {
                         // No more alternatives - just wait for existing futures to complete
                         no_more_alternatives = true;
@@ -935,7 +932,10 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::{super::request::RequestKey, *};
-    use crate::{client::requests_scheduler::MAX_REQUEST_TTL_MS, node::NodeError};
+    use crate::{
+        client::requests_scheduler::{MAX_REQUEST_TTL_MS, STAGGERED_DELAY_MS},
+        node::NodeError,
+    };
 
     type TestEnvironment = crate::environment::Test;
 
@@ -1382,7 +1382,7 @@ mod tests {
             })
             .collect();
 
-        let staggered_delay_ms = 10u128;
+        let staggered_delay = Duration::from_millis(10);
 
         // Store public keys for comparison
         let node0_key = nodes[0].public_key;
@@ -1398,7 +1398,7 @@ mod tests {
                 Duration::from_secs(60),
                 100,
                 Duration::from_millis(MAX_REQUEST_TTL_MS),
-                Duration::from_millis(STAGGERED_DELAY_MS),
+                staggered_delay,
             ));
 
         let key = test_key();
@@ -1428,13 +1428,11 @@ mod tests {
                     Err(NodeError::UnexpectedMessage)
                 } else if peer.public_key == node2_key {
                     // Node 2 succeeds after a delay
-                    let delay = staggered_delay_ms / 2;
-                    tokio::time::sleep(Duration::from_millis(delay.try_into().unwrap())).await;
+                    tokio::time::sleep(staggered_delay / 2).await;
                     Ok(vec![])
                 } else {
                     // Other nodes take longer or fail
-                    let delay = staggered_delay_ms * 2;
-                    tokio::time::sleep(Duration::from_millis(delay.try_into().unwrap())).await;
+                    tokio::time::sleep(staggered_delay * 2).await;
                     Err(NodeError::UnexpectedMessage)
                 }
             }
@@ -1452,12 +1450,7 @@ mod tests {
 
         // Use node 0 as first peer, alternatives will be popped: node 1, then 2, then 3
         let result: Result<Vec<ConfirmedBlockCertificate>, NodeError> = manager
-            .try_staggered_parallel(
-                &key,
-                nodes[0].clone(),
-                &operation,
-                staggered_delay_ms.try_into().unwrap(),
-            )
+            .try_staggered_parallel(&key, nodes[0].clone(), &operation, staggered_delay)
             .await;
 
         // Should succeed with result from node 2
@@ -1487,9 +1480,10 @@ mod tests {
         if times.len() > 1 {
             let delay = times[1].1.as_millis();
             assert!(
-                delay >= staggered_delay_ms / 2 && delay <= staggered_delay_ms + 20,
+                delay >= staggered_delay.as_millis() / 2
+                    && delay <= staggered_delay.as_millis() + 20,
                 "Second peer should be called after stagger delay (~{}ms), got {}ms",
-                staggered_delay_ms,
+                staggered_delay.as_millis(),
                 delay
             );
         }
@@ -1498,6 +1492,6 @@ mod tests {
         // With staggered parallel: node0 fails immediately, node1 starts at 10ms (and takes 20ms),
         // node2 starts at 20ms and succeeds at 25ms total
         let total_time = Instant::now().duration_since(start_time).as_millis();
-        assert!(total_time >= staggered_delay_ms && total_time < 50,);
+        assert!(total_time >= staggered_delay.as_millis() && total_time < 50);
     }
 }
