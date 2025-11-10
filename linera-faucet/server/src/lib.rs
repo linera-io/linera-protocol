@@ -7,7 +7,10 @@
 
 mod database;
 
-use std::{collections::VecDeque, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{
+    collections::VecDeque, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc,
+    time::Instant,
+};
 
 use anyhow::Context as _;
 use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
@@ -643,12 +646,16 @@ where
 
         // Execute all operations in a single block
         let result = self.client.execute_operations(operations, vec![]).await;
+        let waiting_for_lock_start = Instant::now();
         self.context
             .lock()
             .await
             .update_wallet(&self.client)
             .await?;
-
+        tracing::debug!(
+            wait_time_ms = waiting_for_lock_start.elapsed().as_millis(),
+            "wallet updated after executing operations"
+        );
         let certificate = match result {
             Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(chain_err),
