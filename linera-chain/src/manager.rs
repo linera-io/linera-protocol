@@ -548,6 +548,24 @@ where
         self.locking_blobs.get(blob_id).await
     }
 
+    /// Returns the requested blobs if they belong to the proposal or the locking block.
+    pub async fn pending_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
+        let mut blobs = self.proposed_blobs.multi_get(blob_ids).await?;
+        let mut missing_indices = Vec::new();
+        let mut missing_blob_ids = Vec::new();
+        for (i, (blob, blob_id)) in blobs.iter().zip(blob_ids).enumerate() {
+            if blob.is_none() {
+                missing_indices.push(i);
+                missing_blob_ids.push(blob_id);
+            }
+        }
+        let second_blobs = self.locking_blobs.multi_get(missing_blob_ids).await?;
+        for (blob, i) in second_blobs.into_iter().zip(missing_indices) {
+            blobs[i] = blob;
+        }
+        Ok(blobs)
+    }
+
     /// Updates `current_round` and `round_timeout` if necessary.
     ///
     /// This must be called after every change to `timeout`, `locking`, `proposed` or
