@@ -1712,11 +1712,19 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 
     // Initializing a chain and transferring tokens
     let (mut net, client1) = config.instantiate().await?;
-    let chain_id = client1.load_wallet()?.default_chain().unwrap();
+    let client2 = net.make_client().await;
+    client2.wallet_init(None).await?;
+
+    let chain_id1 = client1.load_wallet()?.default_chain().unwrap();
+    let chain_id2 = client1.open_and_assign(&client2, Amount::ONE).await?;
+    let account_owner2 = client2.get_owner().unwrap();
+    let address2 = account_owner2.to_evm_address().unwrap();
+
+
     let account_owner1 = client1.get_owner().unwrap();
-    let account_chain = Account::chain(chain_id);
+    let account_chain = Account::chain(chain_id1);
     let account1 = Account {
-        chain_id,
+        chain_id: chain_id1,
         owner: account_owner1,
     };
     client1
@@ -1732,7 +1740,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         function test_authenticated_owner_caller_id();
         function test_chain_balance(uint256 expected_balance);
         function test_read_owners();
-        function test_linera_transfer(bytes32 chain_id, bytes32 destination, uint256 amount);
+        function test_linera_transfer(bytes32 chain_id, address destination, uint256 amount);
     }
 
     let (contract, _dir) = get_evm_contract_path("tests/fixtures/evm_test_linera_features.sol")?;
@@ -1761,11 +1769,11 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     let nft_blob_bytes = b"nft1_data".to_vec();
     let len = nft_blob_bytes.len() as u32;
     let hash = node_service
-        .publish_data_blob(&chain_id, nft_blob_bytes)
+        .publish_data_blob(&chain_id1, nft_blob_bytes)
         .await?;
     let hash: B256 = <[u8; 32]>::from(hash).into();
 
-    let application = node_service.make_application(&chain_id, &application_id)?;
+    let application = node_service.make_application(&chain_id1, &application_id)?;
 
     // Testing the ChainId.
 
@@ -1812,6 +1820,10 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     application.run_json_query(query).await?;
 
     // Doing a transfer
+
+    let b256_chain_id2: B256 = <[u8; 32]>::from(chain_id2.0).into();
+    let amount: U256 = Amount::from_tokens(5).into();
+    let query = test_linera_transferCall { chain_id: b256_chain_id2, destination: address2, amount };
 
     // Winding down
 

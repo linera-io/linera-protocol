@@ -51,10 +51,11 @@ contract ExampleLineraFeatures {
         require(owners.length == 2);
     }
 
-    function test_linera_transfer(bytes32 chain_id, bytes32 destination, uint256 amount) external {
+    function test_linera_transfer(bytes32 chain_id, address destination, uint256 amount) external {
         uint8 reserved = 0;
-        bytes20 address20;
-        Linera.AccountOwner memory owner = Linera.AccountOwner(1, reserved, destination, address20);
+        bytes32 address32;
+        bytes20 address20 = bytes20(destination);
+        Linera.AccountOwner memory owner = Linera.AccountOwner(2, reserved, address32, address20);
         Linera.ChainId memory chain_id1 = Linera.ChainId(chain_id);
         Linera.Account memory account = Linera.Account(chain_id1, owner);
         Linera.transfer(account, amount);
