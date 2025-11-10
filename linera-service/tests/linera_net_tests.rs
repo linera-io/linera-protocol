@@ -1720,7 +1720,6 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     let account_owner2 = client2.get_owner().unwrap();
     let address2 = account_owner2.to_evm_address().unwrap();
 
-
     let account_owner1 = client1.get_owner().unwrap();
     let account_chain = Account::chain(chain_id1);
     let account1 = Account {
@@ -1764,14 +1763,16 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         )
         .await?;
 
-    let port = get_node_port().await;
-    let mut node_service = client1.run_node_service(port, ProcessInbox::Skip).await?;
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
     let address_app = application_id.evm_address();
-    let application = node_service.make_application(&chain_id1, &application_id)?;
+    let application = node_service1.make_application(&chain_id1, &application_id)?;
 
     let nft_blob_bytes = b"nft1_data".to_vec();
     let len = nft_blob_bytes.len() as u32;
-    let hash = node_service
+    let hash = node_service1
         .publish_data_blob(&chain_id1, nft_blob_bytes)
         .await?;
     let hash: B256 = <[u8; 32]>::from(hash).into();
@@ -1808,7 +1809,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 
     // Testing the chain balance
 
-    let expected_balance = node_service.balance(&account_chain).await?;
+    let expected_balance = node_service1.balance(&account_chain).await?;
     let expected_balance: U256 = expected_balance.into();
     let query = test_chain_balanceCall { expected_balance };
     let query = EvmQuery::Query(query.abi_encode());
@@ -1838,14 +1839,28 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     assert_contract_balance(&application, address_app, Amount::from_tokens(27)).await?;
     let b256_chain_id2: B256 = <[u8; 32]>::from(chain_id2.0).into();
     let amount: U256 = Amount::from_tokens(5).into();
-    let operation = test_linera_transferCall { chain_id: b256_chain_id2, destination: address2, amount };
+    let operation = test_linera_transferCall {
+        chain_id: b256_chain_id2,
+        destination: address2,
+        amount,
+    };
     let operation = get_zero_operation(operation)?;
     application.run_json_query(operation).await?;
     assert_contract_balance(&application, address_app, Amount::from_tokens(22)).await?;
+    assert!(!node_service2.process_inbox(&chain_id2).await?.is_empty());
+    let account2 = Account {
+        chain_id: chain_id2,
+        owner: account_owner2,
+    };
+    assert_eq!(
+        node_service2.balance(&account2).await?,
+        Amount::from_tokens(5)
+    );
 
     // Winding down
 
-    node_service.ensure_is_running()?;
+    node_service1.ensure_is_running()?;
+    node_service2.ensure_is_running()?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;

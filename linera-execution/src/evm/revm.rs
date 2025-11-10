@@ -293,7 +293,10 @@ enum ContractRuntimePrecompile {
     /// Calling `validation_round` of `ContractRuntime`
     ValidationRound,
     /// Calling `transfer` of `ContractRuntime`
-    Transfer { account: Account, amount: AmountU256 },
+    Transfer {
+        account: Account,
+        amount: AmountU256,
+    },
 }
 
 /// Some functionalities from the ServiceRuntime not in BaseRuntime
