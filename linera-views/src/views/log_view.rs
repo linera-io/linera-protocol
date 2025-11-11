@@ -316,8 +316,7 @@ where
         for entry in self.context.store().read_multi_values(&keys).await? {
             match entry {
                 None => {
-                    let root_key = self.context.store().root_key()?;
-                    return Err(ViewError::MissingEntries(root_key));
+                    return Err(ViewError::MissingEntries("LogView".into()));
                 }
                 Some(value) => values.push(value),
             }
