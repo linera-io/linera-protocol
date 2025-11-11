@@ -4029,6 +4029,7 @@ impl<Env: Environment> ChainClient<Env> {
         // Add tasks for new validators.
         let validator_tasks = FuturesUnordered::new();
         for (public_key, node) in nodes {
+            let address = node.address();
             let hash_map::Entry::Vacant(entry) = senders.entry(public_key) else {
                 continue;
             };
@@ -4046,13 +4047,16 @@ impl<Env: Environment> ChainClient<Env> {
                     Ok::<_, ChainClientError>(stream)
                 }
             })
-            .filter_map(move |result| async move {
-                if let Err(error) = &result {
-                    info!(?error, "Could not connect to validator {public_key}");
-                } else {
-                    debug!("Connected to validator {public_key}");
+            .filter_map(move |result| {
+                let address = address.clone();
+                async move {
+                    if let Err(error) = &result {
+                        info!(?error, "Could not connect to validator {address}");
+                    } else {
+                        debug!("Connected to validator {address}");
+                    }
+                    result.ok()
                 }
-                result.ok()
             })
             .flatten();
             let (stream, abort) = stream::abortable(stream);
@@ -4072,7 +4076,7 @@ impl<Env: Environment> ChainClient<Env> {
                     {
                         tracing::info!(
                             chain_id = %this.chain_id,
-                            validator_public_key = ?remote_node.public_key,
+                            address = remote_node.address(),
                             ?notification,
                             "Failed to process notification: {err}",
                         );
