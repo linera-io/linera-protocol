@@ -102,6 +102,8 @@ pub trait View: Sized {
     /// Updates the view state after the batch has been executed in the database.
     /// This should be called after `pre_save` and after the batch has been successfully written to storage.
     /// This leaves the view in a clean state with no pending changes.
+    ///
+    /// May panic if `pre_save` was not called right before on `self`.
     fn post_save(&mut self);
 
     /// Builds a trivial view that is already deleted
