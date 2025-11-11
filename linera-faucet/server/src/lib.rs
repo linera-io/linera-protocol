@@ -645,7 +645,12 @@ where
         }
 
         // Execute all operations in a single block
+        let execute_ops_start = Instant::now();
         let result = self.client.execute_operations(operations, vec![]).await;
+        tracing::debug!(
+            execute_operations_ms = execute_ops_start.elapsed().as_millis(),
+            "execute_operations completed"
+        );
         let waiting_for_lock_start = Instant::now();
         self.context
             .lock()

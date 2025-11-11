@@ -2070,13 +2070,23 @@ impl<Env: Environment> ChainClient<Env> {
         let update_validators_start = linera_base::time::Instant::now();
         // Communicate the new certificate now.
         if let Some(old_committee) = old_committee {
-            self.communicate_chain_updates(old_committee).await?
+            let old_committee_start = linera_base::time::Instant::now();
+            self.communicate_chain_updates(old_committee).await?;
+            tracing::debug!(
+                old_committee_ms = old_committee_start.elapsed().as_millis(),
+                "communicated chain updates to old committee"
+            );
         };
         if let Ok(new_committee) = self.local_committee().await {
             if Some(&new_committee) != old_committee {
                 // If the configuration just changed, communicate to the new committee as well.
                 // (This is actually more important that updating the previous committee.)
+                let new_committee_start = linera_base::time::Instant::now();
                 self.communicate_chain_updates(&new_committee).await?;
+                tracing::debug!(
+                    new_committee_ms = new_committee_start.elapsed().as_millis(),
+                    "communicated chain updates to new committee"
+                );
             }
         }
         self.send_timing(update_validators_start, TimingType::UpdateValidators);
@@ -2521,12 +2531,18 @@ impl<Env: Environment> ChainClient<Env> {
         blobs: Vec<Blob>,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         let timing_start = linera_base::time::Instant::now();
+        tracing::debug!("execute_operations started");
 
         let result = loop {
             let execute_block_start = linera_base::time::Instant::now();
             // TODO(#2066): Remove boxing once the call-stack is shallower
+            tracing::debug!("calling execute_block");
             match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await {
                 Ok(ExecuteBlockOutcome::Executed(certificate)) => {
+                    tracing::debug!(
+                        execute_block_ms = execute_block_start.elapsed().as_millis(),
+                        "execute_block succeeded"
+                    );
                     self.send_timing(execute_block_start, TimingType::ExecuteBlock);
                     break Ok(ClientOutcome::Committed(certificate));
                 }
@@ -2556,6 +2572,10 @@ impl<Env: Environment> ChainClient<Env> {
         };
 
         self.send_timing(timing_start, TimingType::ExecuteOperations);
+        tracing::debug!(
+            total_execute_operations_ms = timing_start.elapsed().as_millis(),
+            "execute_operations returning"
+        );
 
         result
     }
@@ -2602,7 +2622,12 @@ impl<Env: Environment> ChainClient<Env> {
         let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
 
         let mutex = self.client_mutex();
+        let lock_start = linera_base::time::Instant::now();
         let _guard = mutex.lock_owned().await;
+        tracing::debug!(
+            lock_wait_ms = lock_start.elapsed().as_millis(),
+            "acquired client_mutex in execute_prepared_transactions"
+        );
         // TOOD: We shouldn't need to call this explicitly.
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
@@ -3020,6 +3045,8 @@ impl<Env: Environment> ChainClient<Env> {
     async fn process_pending_block_without_prepare(
         &self,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
+        let process_start = linera_base::time::Instant::now();
+        tracing::debug!("process_pending_block_without_prepare started");
         let info = self.request_leader_timeout_if_needed().await?;
 
         // If there is a validated block in the current round, finalize it.
@@ -3155,7 +3182,13 @@ impl<Env: Environment> ChainClient<Env> {
         };
         self.send_timing(submit_block_proposal_start, TimingType::SubmitBlockProposal);
         debug!(round = %certificate.round, "Sending confirmed block to validators");
+        let update_start = linera_base::time::Instant::now();
         Box::pin(self.update_validators(Some(&committee))).await?;
+        tracing::debug!(
+            update_validators_ms = update_start.elapsed().as_millis(),
+            total_process_ms = process_start.elapsed().as_millis(),
+            "process_pending_block_without_prepare completing"
+        );
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
