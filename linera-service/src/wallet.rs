@@ -61,7 +61,7 @@ impl<'a> ChainDetails<'a> {
 
     fn print_paragraph(&self) {
         println!("-----------------------");
-        println!("  {:<20}  {}", "Chain ID:", self.user_chain.chain_id);
+        println!("{:<20}  {}", "Chain ID:", self.user_chain.chain_id);
 
         let mut tags = Vec::new();
         if self.is_default {
