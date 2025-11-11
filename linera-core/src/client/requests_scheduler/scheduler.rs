@@ -461,6 +461,73 @@ impl<Env: Environment> RequestsScheduler<Env> {
         result
     }
 
+    /// Wraps a request operation with performance tracking and capacity management.
+    ///
+    /// This method:
+    /// 1. Measures response time
+    /// 2. Updates node metrics based on success/failure
+    ///
+    /// # Arguments
+    /// - `nodes`: Arc to the nodes map for updating metrics
+    /// - `peer`: The remote node to track metrics for
+    /// - `operation`: Future that performs the actual request
+    ///
+    /// # Behavior
+    /// Executes the provided future and tracks metrics for the given peer.
+    async fn track_request<T, Fut>(
+        nodes: Arc<tokio::sync::RwLock<BTreeMap<ValidatorPublicKey, NodeInfo<Env>>>>,
+        peer: RemoteNode<Env::ValidatorNode>,
+        operation: Fut,
+    ) -> Result<T, NodeError>
+    where
+        Fut: MaybeSendFuture<Output = Result<T, NodeError>> + 'static,
+    {
+        let start_time = Instant::now();
+        let public_key = peer.public_key;
+
+        // Execute the operation
+        let result = operation.await;
+
+        // Update metrics and release slot
+        let response_time_ms = start_time.elapsed().as_millis() as u64;
+        let is_success = result.is_ok();
+        {
+            let mut nodes_guard = nodes.write().await;
+            if let Some(info) = nodes_guard.get_mut(&public_key) {
+                info.update_metrics(is_success, response_time_ms);
+                let score = info.calculate_score().await;
+                tracing::trace!(
+                    node = %public_key,
+                    address = %info.node.node.address(),
+                    success = %is_success,
+                    response_time_ms = %response_time_ms,
+                    score = %score,
+                    total_requests = %info.total_requests(),
+                    "Request completed"
+                );
+            }
+        }
+
+        // Record Prometheus metrics
+        #[cfg(with_metrics)]
+        {
+            let validator_name = public_key.to_string();
+            metrics::VALIDATOR_RESPONSE_TIME
+                .with_label_values(&[&validator_name])
+                .observe(response_time_ms as f64);
+            metrics::VALIDATOR_REQUEST_TOTAL
+                .with_label_values(&[&validator_name])
+                .inc();
+            if is_success {
+                metrics::VALIDATOR_REQUEST_SUCCESS
+                    .with_label_values(&[&validator_name])
+                    .inc();
+            }
+        }
+
+        result
+    }
+
     /// Deduplicates concurrent requests for the same data.
     ///
     /// If a request for the same key is already in flight, this method waits for
@@ -869,73 +936,6 @@ impl<Env: Environment> RequestsScheduler<Env> {
         nodes.entry(public_key).or_insert_with(|| {
             NodeInfo::with_config(node, self.weights, self.alpha, self.max_expected_latency)
         });
-    }
-
-    /// Wraps a request operation with performance tracking and capacity management.
-    ///
-    /// This method:
-    /// 1. Measures response time
-    /// 2. Updates node metrics based on success/failure
-    ///
-    /// # Arguments
-    /// - `nodes`: Arc to the nodes map for updating metrics
-    /// - `peer`: The remote node to track metrics for
-    /// - `operation`: Future that performs the actual request
-    ///
-    /// # Behavior
-    /// Executes the provided future and tracks metrics for the given peer.
-    async fn track_request<T, Fut>(
-        nodes: Arc<tokio::sync::RwLock<BTreeMap<ValidatorPublicKey, NodeInfo<Env>>>>,
-        peer: RemoteNode<Env::ValidatorNode>,
-        operation: Fut,
-    ) -> Result<T, NodeError>
-    where
-        Fut: MaybeSendFuture<Output = Result<T, NodeError>> + 'static,
-    {
-        let start_time = Instant::now();
-        let public_key = peer.public_key;
-
-        // Execute the operation
-        let result = operation.await;
-
-        // Update metrics and release slot
-        let response_time_ms = start_time.elapsed().as_millis() as u64;
-        let is_success = result.is_ok();
-        {
-            let mut nodes_guard = nodes.write().await;
-            if let Some(info) = nodes_guard.get_mut(&public_key) {
-                info.update_metrics(is_success, response_time_ms);
-                let score = info.calculate_score().await;
-                tracing::trace!(
-                    node = %public_key,
-                    address = %info.node.node.address(),
-                    success = %is_success,
-                    response_time_ms = %response_time_ms,
-                    score = %score,
-                    total_requests = %info.total_requests(),
-                    "Request completed"
-                );
-            }
-        }
-
-        // Record Prometheus metrics
-        #[cfg(with_metrics)]
-        {
-            let validator_name = public_key.to_string();
-            metrics::VALIDATOR_RESPONSE_TIME
-                .with_label_values(&[&validator_name])
-                .observe(response_time_ms as f64);
-            metrics::VALIDATOR_REQUEST_TOTAL
-                .with_label_values(&[&validator_name])
-                .inc();
-            if is_success {
-                metrics::VALIDATOR_REQUEST_SUCCESS
-                    .with_label_values(&[&validator_name])
-                    .inc();
-            }
-        }
-
-        result
     }
 }
 
