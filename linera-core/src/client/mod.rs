@@ -4051,9 +4051,9 @@ impl<Env: Environment> ChainClient<Env> {
                 let address = address.clone();
                 async move {
                     if let Err(error) = &result {
-                        info!(?error, "Could not connect to validator {address}");
+                        info!(?error, address, "could not connect to validator");
                     } else {
-                        debug!("Connected to validator {address}");
+                        debug!(address, "connected to validator");
                     }
                     result.ok()
                 }
@@ -4066,7 +4066,7 @@ impl<Env: Environment> ChainClient<Env> {
             let remote_node = RemoteNode { public_key, node };
             validator_tasks.push(async move {
                 while let Some(notification) = stream.next().await {
-                    if let Err(err) = this
+                    if let Err(error) = this
                         .process_notification(
                             remote_node.clone(),
                             local_node.clone(),
@@ -4078,7 +4078,8 @@ impl<Env: Environment> ChainClient<Env> {
                             chain_id = %this.chain_id,
                             address = remote_node.address(),
                             ?notification,
-                            "Failed to process notification: {err}",
+                            %error,
+                            "failed to process notification",
                         );
                     }
                 }
