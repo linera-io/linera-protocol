@@ -662,7 +662,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
             stream::{FuturesUnordered, StreamExt},
             FutureExt,
         };
-        use linera_base::time::{timer::sleep, Duration};
+        use linera_base::time::timer::sleep;
 
         // Use LocalBoxFuture for wasm32, BoxFuture for other targets (which requires Send)
         #[cfg(target_arch = "wasm32")]
@@ -683,18 +683,11 @@ impl<Env: Environment> RequestsScheduler<Env> {
 
         let mut last_error = None;
         let mut next_delay = Box::pin(sleep(staggered_delay * peer_index));
-        let mut no_more_alternatives = false;
 
+        // Phase 1: Race between futures completion and delays (while alternatives might exist)
         loop {
-            // If we have no futures running and no more alternatives, we're done
-            if futures.is_empty() && no_more_alternatives {
-                break;
-            }
-
-            // If we have no futures but might have alternatives, wait for the delay and try
+            // Exit condition: no futures running and can't start any more
             if futures.is_empty() {
-                next_delay.await;
-                // After awaiting, we've consumed next_delay, so recreate it
                 if let Some(peer) = self.in_flight_tracker.pop_alternative_peer(key).await {
                     let idx = peer_index;
                     let fut = operation(peer);
@@ -705,11 +698,9 @@ impl<Env: Environment> RequestsScheduler<Env> {
                     peer_index += 1;
                     next_delay = Box::pin(sleep(staggered_delay * peer_index));
                 } else {
-                    no_more_alternatives = true;
-                    // Create a dummy delay even though we won't use it
-                    next_delay = Box::pin(sleep(Duration::from_secs(3600)));
+                    // No futures and no alternatives - we're done
+                    break;
                 }
-                continue;
             }
 
             let next_result = Box::pin(futures.next());
@@ -737,6 +728,19 @@ impl<Env: Environment> RequestsScheduler<Env> {
                                 "staggered parallel request attempt failed"
                             );
                             last_error = Some(e);
+
+                            // Immediately try next alternative
+                            if let Some(peer) =
+                                self.in_flight_tracker.pop_alternative_peer(key).await
+                            {
+                                let idx = peer_index;
+                                let fut = operation(peer);
+                                #[cfg(target_arch = "wasm32")]
+                                futures.push(async move { (idx, fut.await) }.boxed_local());
+                                #[cfg(not(target_arch = "wasm32"))]
+                                futures.push(async move { (idx, fut.await) }.boxed());
+                                peer_index += 1;
+                            }
                         }
                     }
                 }
@@ -757,14 +761,34 @@ impl<Env: Environment> RequestsScheduler<Env> {
                         #[cfg(not(target_arch = "wasm32"))]
                         futures.push(async move { (idx, fut.await) }.boxed());
                         peer_index += 1;
-                        // Reset delay for next peer
-                        next_delay = Box::pin(sleep(staggered_delay));
+                        next_delay = Box::pin(sleep(staggered_delay * peer_index));
                     } else {
-                        // No more alternatives - just wait for existing futures to complete
-                        no_more_alternatives = true;
-                        // Set a very long delay so we don't keep checking
-                        next_delay = Box::pin(sleep(Duration::from_secs(3600)));
+                        // No more alternatives - break out to phase 2
+                        break;
                     }
+                }
+            }
+        }
+
+        // Phase 2: No more alternatives, just wait for remaining futures to complete
+        while let Some((idx, result)) = futures.next().await {
+            match result {
+                Ok(value) => {
+                    tracing::info!(
+                        key = ?key,
+                        peer_index = idx,
+                        "staggered parallel request succeeded"
+                    );
+                    return Ok(value);
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        key = ?key,
+                        peer_index = idx,
+                        error = %e,
+                        "staggered parallel request attempt failed"
+                    );
+                    last_error = Some(e);
                 }
             }
         }
@@ -1475,23 +1499,26 @@ mod tests {
             times[0].1.as_millis()
         );
 
-        // Second call should start after a stagger delay (~10ms)
-        // Allow extra time for tokio spawn overhead
+        // Second call should start immediately after first fails (aggressive retry)
+        // With new implementation, when node 0 fails immediately, we immediately start node 1
         if times.len() > 1 {
             let delay = times[1].1.as_millis();
             assert!(
-                delay >= staggered_delay.as_millis() / 2
-                    && delay <= staggered_delay.as_millis() + 20,
-                "Second peer should be called after stagger delay (~{}ms), got {}ms",
-                staggered_delay.as_millis(),
+                delay < 10,
+                "Second peer should be called immediately on first failure, got {}ms",
                 delay
             );
         }
 
         // Total time should be significantly less than sequential.
-        // With staggered parallel: node0 fails immediately, node1 starts at 10ms (and takes 20ms),
-        // node2 starts at 20ms and succeeds at 25ms total
+        // With aggressive retry: node0 fails immediately (~0ms), node1 starts immediately,
+        // node1 takes 20ms (and might fail or timeout), node2 starts at ~10ms (scheduled delay)
+        // and succeeds at ~15ms total (10ms + 5ms internal delay)
         let total_time = Instant::now().duration_since(start_time).as_millis();
-        assert!(total_time >= staggered_delay.as_millis() && total_time < 50);
+        assert!(
+            total_time < 50,
+            "Total time should be less than 50ms, got {}ms",
+            total_time
+        );
     }
 }
