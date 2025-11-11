@@ -63,9 +63,12 @@ use crate::{
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, V: Allocative")]
 pub struct ByteMapView<C, V> {
+    /// The view context.
     #[allocative(skip)]
     context: C,
+    /// Tracks deleted key prefixes.
     deletion_set: DeletionSet,
+    /// Pending changes not yet persisted to storage.
     updates: BTreeMap<Vec<u8>, Update<V>>,
 }
 
@@ -995,7 +998,9 @@ where
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, I, V: Allocative")]
 pub struct MapView<C, I, V> {
+    /// The underlying map storing entries with serialized keys.
     map: ByteMapView<C, V>,
+    /// Phantom data for the key type.
     #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
@@ -1575,7 +1580,9 @@ where
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, I, V: Allocative")]
 pub struct CustomMapView<C, I, V> {
+    /// The underlying map storing entries with custom-serialized keys.
     map: ByteMapView<C, V>,
+    /// Phantom data for the key type.
     #[allocative(skip)]
     _phantom: PhantomData<I>,
 }

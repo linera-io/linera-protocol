@@ -204,16 +204,23 @@ impl SizeData {
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C")]
 pub struct KeyValueStoreView<C> {
+    /// The view context.
     #[allocative(skip)]
     context: C,
+    /// Tracks deleted key prefixes.
     deletion_set: DeletionSet,
+    /// Pending changes not yet persisted to storage.
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
+    /// The total size of keys and values persisted in storage.
     stored_total_size: SizeData,
+    /// The total size of keys and values including pending changes.
     total_size: SizeData,
+    /// Map of key to value size for tracking storage usage.
     sizes: ByteMapView<C, u32>,
+    /// The hash persisted in storage.
     #[allocative(visit = visit_allocative_simple)]
     stored_hash: Option<HasherOutput>,
-    // We are only keeping track of the size of the mutex here.
+    /// Memoized hash, if any.
     #[allocative(visit = visit_allocative_simple)]
     hash: Mutex<Option<HasherOutput>>,
 }

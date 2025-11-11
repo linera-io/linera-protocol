@@ -48,8 +48,11 @@ mod metrics {
 /// `Vec<u8>`, one subview at a time.
 #[derive(Debug)]
 pub struct ByteCollectionView<C, W> {
+    /// The view context.
     context: C,
+    /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
+    /// Entries that may have staged changes.
     updates: RwLock<BTreeMap<Vec<u8>, Update<W>>>,
 }
 

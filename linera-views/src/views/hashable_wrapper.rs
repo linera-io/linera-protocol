@@ -22,13 +22,16 @@ use crate::{
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, O, W: Allocative")]
 pub struct WrappedHashableContainerView<C, W, O> {
+    /// Phantom data for the context type.
     #[allocative(skip)]
     _phantom: PhantomData<C>,
+    /// The hash persisted in storage.
     #[allocative(visit = visit_allocative_simple)]
     stored_hash: Option<O>,
-    // We are only keeping track of the size of the mutex here.
+    /// Memoized hash, if any.
     #[allocative(visit = visit_allocative_simple)]
     hash: Mutex<Option<O>>,
+    /// The wrapped view.
     inner: W,
 }
 

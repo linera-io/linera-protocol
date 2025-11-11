@@ -37,10 +37,14 @@ mod metrics {
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, T: Allocative")]
 pub struct RegisterView<C, T> {
+    /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
+    /// The view context.
     #[allocative(skip)]
     context: C,
+    /// The value persisted in storage.
     stored_value: Box<T>,
+    /// Pending update not yet persisted to storage.
     update: Option<Box<T>>,
 }
 

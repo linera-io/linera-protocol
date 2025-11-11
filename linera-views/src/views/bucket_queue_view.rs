@@ -132,6 +132,7 @@ fn stored_indices<T>(stored_data: &VecDeque<(usize, Bucket<T>)>, position: usize
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, T: Allocative, const N: usize")]
 pub struct BucketQueueView<C, T, const N: usize> {
+    /// The view context.
     #[allocative(skip)]
     context: C,
     /// The buckets of stored data. If missing, then it has not been loaded. The first index is always loaded.

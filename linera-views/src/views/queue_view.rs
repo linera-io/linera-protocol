@@ -53,12 +53,17 @@ enum KeyTag {
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, T: Allocative")]
 pub struct QueueView<C, T> {
+    /// The view context.
     #[allocative(skip)]
     context: C,
+    /// The range of indices for entries persisted in storage.
     #[allocative(visit = visit_allocative_simple)]
     stored_indices: Range<usize>,
+    /// The number of entries to delete from the front.
     front_delete_count: usize,
+    /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
+    /// New values added to the back, not yet persisted to storage.
     new_back_values: VecDeque<T>,
 }
 

@@ -52,10 +52,14 @@ enum KeyTag {
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, T: Allocative")]
 pub struct LogView<C, T> {
+    /// The view context.
     #[allocative(skip)]
     context: C,
+    /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
+    /// The number of entries persisted in storage.
     stored_count: usize,
+    /// New values not yet persisted to storage.
     new_values: Vec<T>,
 }
 

@@ -40,9 +40,12 @@ mod metrics {
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C")]
 pub struct ByteSetView<C> {
+    /// The view context.
     #[allocative(skip)]
     context: C,
+    /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
+    /// Pending changes not yet persisted to storage.
     updates: BTreeMap<Vec<u8>, Update<()>>,
 }
 
@@ -380,7 +383,9 @@ impl<C: Context> HashableView for ByteSetView<C> {
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, I")]
 pub struct SetView<C, I> {
+    /// The underlying set storing entries with serialized keys.
     set: ByteSetView<C>,
+    /// Phantom data for the key type.
     #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
@@ -657,7 +662,9 @@ where
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, I")]
 pub struct CustomSetView<C, I> {
+    /// The underlying set storing entries with custom-serialized keys.
     set: ByteSetView<C>,
+    /// Phantom data for the key type.
     #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
