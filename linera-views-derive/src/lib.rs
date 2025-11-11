@@ -83,7 +83,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
     let mut name_quotes = Vec::new();
     let mut rollback_quotes = Vec::new();
     let mut pre_save_quotes = Vec::new();
-    let mut test_pre_save_quotes = Vec::new();
+    let mut delete_view_quotes = Vec::new();
     let mut clear_quotes = Vec::new();
     let mut has_pending_changes_quotes = Vec::new();
     let mut num_init_keys_quotes = Vec::new();
@@ -92,12 +92,12 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
     let num_fields = input.fields.len();
     for (idx, e) in input.fields.iter().enumerate() {
         let name = e.ident.clone().unwrap();
-        let test_flush_ident = format_ident!("deleted{}", idx);
+        let delete_view_ident = format_ident!("deleted{}", idx);
         let g = get_extended_entry(e.ty.clone())?;
         name_quotes.push(quote! { #name });
         rollback_quotes.push(quote! { self.#name.rollback(); });
-        pre_save_quotes.push(quote! { let #test_flush_ident = self.#name.pre_save(batch)?; });
-        test_pre_save_quotes.push(quote! { #test_flush_ident });
+        pre_save_quotes.push(quote! { let #delete_view_ident = self.#name.pre_save(batch)?; });
+        delete_view_quotes.push(quote! { #delete_view_ident });
         clear_quotes.push(quote! { self.#name.clear(); });
         has_pending_changes_quotes.push(quote! {
             if self.#name.has_pending_changes().await {
@@ -207,7 +207,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
 
             fn pre_save(&self, batch: &mut linera_views::batch::Batch) -> Result<bool, linera_views::ViewError> {
                 #(#pre_save_quotes)*
-                Ok( #(#test_pre_save_quotes)&&* )
+                Ok( #(#delete_view_quotes)&&* )
             }
 
             fn post_save(&mut self) {
