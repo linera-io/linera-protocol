@@ -2727,6 +2727,7 @@ impl<Env: Environment> ChainClient<Env> {
             let hash_map::Entry::Vacant(entry) = senders.entry(public_key) else {
                 continue;
             };
+            let address = node.address();
             let this = self.clone();
             let stream = stream::once({
                 let node = node.clone();
@@ -2741,13 +2742,16 @@ impl<Env: Environment> ChainClient<Env> {
                     Ok::<_, Error>(stream)
                 }
             })
-            .filter_map(move |result| async move {
-                if let Err(error) = &result {
-                    info!(?error, "Could not connect to validator {public_key}");
-                } else {
-                    debug!("Connected to validator {public_key}");
+            .filter_map(move |result| {
+                let address = address.clone();
+                async move {
+                    if let Err(error) = &result {
+                        info!(?error, address, "could not connect to validator");
+                    } else {
+                        debug!(address, "connected to validator");
+                    }
+                    result.ok()
                 }
-                result.ok()
             })
             .flatten();
             let (stream, abort) = stream::abortable(stream);
@@ -2758,7 +2762,7 @@ impl<Env: Environment> ChainClient<Env> {
             let listening_mode_cloned = listening_mode.clone();
             validator_tasks.push(async move {
                 while let Some(notification) = stream.next().await {
-                    if let Err(err) = this
+                    if let Err(error) = this
                         .process_notification(
                             remote_node.clone(),
                             local_node.clone(),
@@ -2769,9 +2773,10 @@ impl<Env: Environment> ChainClient<Env> {
                     {
                         tracing::info!(
                             chain_id = %this.chain_id,
-                            validator_public_key = ?remote_node.public_key,
+                            validator = remote_node.address(),
                             ?notification,
-                            "Failed to process notification: {err}",
+                            %error,
+                            "failed to process notification",
                         );
                     }
                 }
