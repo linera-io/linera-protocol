@@ -110,7 +110,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
             match result {
                 Err(NodeError::MissingCertificateValue) => {
                     debug!(
-                        validator = %self.address(),
+                        address = self.address(),
                         certificate_hash = %certificate.hash(),
                         "validator forgot a validated block value that they signed before",
                     );
@@ -133,7 +133,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
             match result {
                 Err(NodeError::MissingCertificateValue) => {
                     debug!(
-                        validator = %self.address(),
+                        address = self.address(),
                         certificate_hash = %certificate.hash(),
                         "validator forgot a confirmed block value that they signed before",
                     );
@@ -170,7 +170,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         let certificate = self.node.blob_last_used_by_certificate(blob_id).await?;
         if !certificate.block().requires_or_creates_blob(&blob_id) {
             info!(
-                validator = %self.address(),
+                address = self.address(),
                 %blob_id,
                 "got invalid last used by certificate for blob from validator",
             );
@@ -200,7 +200,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 let blob = Blob::new(blob);
                 if blob.id() != blob_id {
                     tracing::info!(
-                        validator = %self.address(),
+                        address = self.address(),
                         %blob_id,
                         "validator sent an invalid blob.",
                     );
@@ -212,7 +212,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
             Err(NodeError::BlobsNotFound(_error)) => {
                 tracing::debug!(
                     ?blob_id,
-                    validator = self.node.address(),
+                    address = self.address(),
                     "validator is missing the blob",
                 );
                 Ok(None)
@@ -278,7 +278,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         for blob_id in blob_ids {
             if !required.contains(blob_id) {
                 info!(
-                    validator = self.address(),
+                    address = self.address(),
                     %blob_id,
                     "validator requested blob but it is not required",
                 );
@@ -288,7 +288,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         let unique_missing_blob_ids = blob_ids.iter().copied().collect::<HashSet<_>>();
         if blob_ids.len() > unique_missing_blob_ids.len() {
             info!(
-                validator = %self.address(),
+                address = self.address(),
                 "blobs requested by validator contain duplicates",
             );
             return Err(NodeError::DuplicatesInBlobsNotFound);

@@ -345,11 +345,11 @@ where
         height: BlockHeight,
         error: &NodeError,
     ) -> Result<(), chain_client::Error> {
-        let validator = &self.remote_node.address();
+        let address = &self.remote_node.address();
         match error {
             NodeError::WrongRound(validator_round) if *validator_round > round => {
                 tracing::debug!(
-                    validator, %chain_id, %validator_round, %round,
+                    address, %chain_id, %validator_round, %round,
                     "validator is at a higher round; synchronizing",
                 );
                 self.client
@@ -361,7 +361,7 @@ where
                 found_block_height,
             } if expected_block_height > found_block_height => {
                 tracing::debug!(
-                    validator,
+                    address,
                     %chain_id,
                     %expected_block_height,
                     %found_block_height,
@@ -373,7 +373,7 @@ where
             }
             NodeError::WrongRound(validator_round) if *validator_round < round => {
                 tracing::debug!(
-                    validator, %chain_id, %validator_round, %round,
+                    address, %chain_id, %validator_round, %round,
                     "validator is at a lower round; sending chain info",
                 );
                 self.send_chain_information(
@@ -388,7 +388,7 @@ where
                 found_block_height,
             } if expected_block_height < found_block_height => {
                 tracing::debug!(
-                    ?validator,
+                    address,
                     %chain_id,
                     %expected_block_height,
                     %found_block_height,
@@ -403,7 +403,7 @@ where
             }
             NodeError::InactiveChain(chain_id) => {
                 tracing::debug!(
-                    ?validator,
+                    address,
                     %chain_id,
                     "Validator has inactive chain; sending chain info.",
                 );

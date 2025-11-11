@@ -2773,7 +2773,7 @@ impl<Env: Environment> ChainClient<Env> {
                     {
                         tracing::info!(
                             chain_id = %this.chain_id,
-                            validator = remote_node.address(),
+                            address = remote_node.address(),
                             ?notification,
                             %error,
                             "failed to process notification",
