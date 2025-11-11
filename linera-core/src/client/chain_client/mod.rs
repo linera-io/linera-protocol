@@ -1834,17 +1834,12 @@ impl<Env: Environment> ChainClient<Env> {
             "Finalizing locking block"
         );
         let committee = self.local_committee().await?;
-        match self
+        let certificate = self
             .client
             .finalize_block(&committee, certificate.clone())
-            .await
-        {
-            Ok(certificate) => {
-                self.update_validators(Some(&committee)).await?;
-                Ok(ClientOutcome::Committed(Some(certificate)))
-            }
-            Err(error) => Err(error),
-        }
+            .await?;
+        self.update_validators(Some(&committee)).await?;
+        Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
     /// Returns a round in which we can propose a new block or the given one, if possible.
