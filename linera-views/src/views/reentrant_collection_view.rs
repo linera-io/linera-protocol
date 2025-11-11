@@ -229,14 +229,8 @@ impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
     fn post_save(&mut self) {
         for (_index, update) in mem::take(&mut self.updates) {
             if let Update::Set(view) = update {
-                if let Ok(rwlock) = Arc::try_unwrap(view) {
-                    let mut view = rwlock.into_inner();
-                    view.post_save();
-                } else {
-                    // If Arc::try_unwrap fails, the view is still being shared.
-                    // This shouldn't happen in normal operation after pre_save.
-                    // We'll skip the post_save for this view.
-                }
+                let mut view = view.write_arc_blocking();
+                view.post_save();
             }
         }
         self.delete_storage_first = false;
