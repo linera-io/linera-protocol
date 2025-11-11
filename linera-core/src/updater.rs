@@ -147,13 +147,16 @@ where
             Some(async move { (remote_node.public_key, execute(remote_node).await) })
         })
         .collect();
+    let total_validators = responses.len();
 
     let start_time = Instant::now();
+    tracing::debug!(total_validators, "starting communicate_with_quorum");
     let mut end_time: Option<Instant> = None;
     let mut remaining_votes = committee.total_votes();
     let mut highest_key_score = 0;
     let mut value_scores: HashMap<K, (u64, Vec<(ValidatorPublicKey, V)>)> = HashMap::new();
     let mut error_scores = HashMap::new();
+    let mut responses_received = 0;
 
     'vote_wait: while let Ok(Some((name, result))) = timeout(
         end_time.map_or(MAX_TIMEOUT, |t| t.saturating_duration_since(Instant::now())),
@@ -161,6 +164,7 @@ where
     )
     .await
     {
+        responses_received += 1;
         remaining_votes -= committee.weight(&name);
         match result {
             Ok(value) => {
@@ -195,9 +199,22 @@ where
         // If a key reaches a quorum, wait for the grace period to collect more values
         // or error information and then stop.
         if end_time.is_none() && highest_key_score >= committee.quorum_threshold() {
-            end_time = Some(Instant::now() + start_time.elapsed().mul_f64(grace_period));
+            let time_to_quorum = start_time.elapsed();
+            let grace_duration = time_to_quorum.mul_f64(grace_period);
+            end_time = Some(Instant::now() + grace_duration);
+            tracing::debug!(
+                time_to_quorum_ms = time_to_quorum.as_millis(),
+                grace_period_ms = grace_duration.as_millis(),
+                "quorum reached, setting grace period"
+            );
         }
     }
+    tracing::debug!(
+        total_wait_ms = start_time.elapsed().as_millis(),
+        responses_received,
+        total_validators,
+        "exiting communicate_with_quorum loop"
+    );
 
     let scores = value_scores
         .values()
