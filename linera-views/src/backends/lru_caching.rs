@@ -450,11 +450,8 @@ where
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        let Some(cache) = &self.cache else {
-            return self.store.write_batch(batch).await;
-        };
-
-        {
+        self.store.write_batch(batch.clone()).await?;
+        if let Some(cache) = &self.cache {
             let mut cache = cache.lock().unwrap();
             for operation in &batch.operations {
                 match operation {
@@ -472,7 +469,7 @@ where
                 }
             }
         }
-        self.store.write_batch(batch).await
+        Ok(())
     }
 
     async fn clear_journal(&self) -> Result<(), Self::Error> {
