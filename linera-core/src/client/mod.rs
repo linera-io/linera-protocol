@@ -3238,25 +3238,10 @@ impl<Env: Environment> ChainClient<Env> {
             "Finalizing locking block"
         );
         let committee = self.local_committee().await?;
-        match Box::pin(self.client.finalize_block(&committee, certificate.clone())).await {
-            Ok(certificate) => {
-                Box::pin(self.update_validators(Some(&committee))).await?;
-                Ok(ClientOutcome::Committed(Some(certificate)))
-            }
-            Err(ChainClientError::CommunicationError(error))
-                if info.manager.current_round >= Round::SingleLeader(0) =>
-            {
-                // Communication errors in this case often mean that someone else already
-                // finalized the block or started another round.
-                let timestamp = info.manager.round_timeout.ok_or(error)?;
-                Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
-                    timestamp,
-                    current_round: info.manager.current_round,
-                    next_block_height: info.next_block_height,
-                }))
-            }
-            Err(error) => Err(error),
-        }
+        let certificate =
+            Box::pin(self.client.finalize_block(&committee, certificate.clone())).await?;
+        Box::pin(self.update_validators(Some(&committee))).await?;
+        Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
     /// Returns a round in which we can propose a new block or the given one, if possible.
