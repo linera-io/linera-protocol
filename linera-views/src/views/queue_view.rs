@@ -136,16 +136,14 @@ where
         }
         if !self.new_back_values.is_empty() {
             delete_view = false;
-            let mut end_index = new_stored_indices.end;
             for value in &self.new_back_values {
                 let key = self
                     .context
                     .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &end_index)?;
+                    .derive_tag_key(KeyTag::Index as u8, &new_stored_indices.end)?;
                 batch.put_key_value(key, value)?;
-                end_index += 1;
+                new_stored_indices.end += 1;
             }
-            new_stored_indices.end = end_index;
         }
         if !self.delete_storage_first || !new_stored_indices.is_empty() {
             let key = self.context.base_key().base_tag(KeyTag::Store as u8);

@@ -197,7 +197,7 @@ impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
             for (index, update) in &self.updates {
                 if let Update::Set(view) = update {
                     let view = view
-                        .try_write()
+                        .try_read()
                         .ok_or_else(|| ViewError::TryLockError(index.clone()))?;
                     view.pre_save(batch)?;
                     self.add_index(batch, index);
@@ -209,7 +209,7 @@ impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
                 match update {
                     Update::Set(view) => {
                         let view = view
-                            .try_write()
+                            .try_read()
                             .ok_or_else(|| ViewError::TryLockError(index.clone()))?;
                         view.pre_save(batch)?;
                         self.add_index(batch, index);

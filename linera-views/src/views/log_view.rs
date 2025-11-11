@@ -130,10 +130,8 @@ where
         if self.delete_storage_first {
             self.stored_count = 0;
         }
-        if !self.new_values.is_empty() {
-            self.stored_count += self.new_values.len();
-            self.new_values.clear();
-        }
+        self.stored_count += self.new_values.len();
+        self.new_values.clear();
         self.delete_storage_first = false;
     }
 

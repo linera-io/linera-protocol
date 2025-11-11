@@ -371,7 +371,7 @@ impl<C: Context> View for KeyValueStoreView<C> {
         self.deletion_set.deleted_prefixes.clear();
         self.updates.clear();
         self.sizes.post_save();
-        let hash = *self.hash.get_mut().unwrap();
+        let hash = *self.hash.lock().unwrap();
         self.stored_hash = hash;
         self.stored_total_size = self.total_size;
     }
