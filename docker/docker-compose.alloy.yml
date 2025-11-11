@@ -1,0 +1,55 @@
+# Docker Compose override file to enable Grafana Alloy for central observability
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.alloy.yml up -d
+#
+# Documentation: See MONITORING.md for complete setup and configuration guide
+#
+# Required environment variables for remote push:
+#   ALLOY_PROMETHEUS_ENABLED: true|false (enable Prometheus metrics export)
+#   ALLOY_PROMETHEUS_URL: https://your-prometheus-endpoint/otlp
+#   ALLOY_PROMETHEUS_USER: your-username
+#   ALLOY_PROMETHEUS_PASS: your-password
+#   ALLOY_LOKI_ENABLED: true|false (enable Loki logs export)
+#   ALLOY_LOKI_URL: https://your-loki-endpoint/loki/api/v1/push
+#   ALLOY_LOKI_USER: your-username
+#   ALLOY_LOKI_PASS: your-password
+#   ALLOY_TEMPO_ENABLED: true|false (enable Tempo traces export)
+#   ALLOY_TEMPO_URL: https://your-tempo-endpoint/tempo/otlp
+#   ALLOY_TEMPO_USER: your-username
+#   ALLOY_TEMPO_PASS: your-password
+
+services:
+  alloy:
+    image: grafana/alloy:latest
+    container_name: alloy
+    ports:
+      - "12345:12345"  # Prometheus metrics exposition
+      - "4317:4317"    # OTLP gRPC receiver
+      - "4318:4318"    # OTLP HTTP receiver
+    volumes:
+      - ./alloy-config.river:/etc/alloy/config.river:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - "run"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "/etc/alloy/config.river"
+    environment:
+      - HOSTNAME=${HOSTNAME:-validator}
+      - PROMETHEUS_ENABLED=${ALLOY_PROMETHEUS_ENABLED:-false}
+      - PROMETHEUS_OTLP_URL=${ALLOY_PROMETHEUS_URL:-}
+      - PROMETHEUS_OTLP_USER=${ALLOY_PROMETHEUS_USER:-}
+      - PROMETHEUS_OTLP_PASS=${ALLOY_PROMETHEUS_PASS:-}
+      - LOKI_ENABLED=${ALLOY_LOKI_ENABLED:-false}
+      - LOKI_PUSH_URL=${ALLOY_LOKI_URL:-}
+      - LOKI_PUSH_USER=${ALLOY_LOKI_USER:-}
+      - LOKI_PUSH_PASS=${ALLOY_LOKI_PASS:-}
+      - TEMPO_ENABLED=${ALLOY_TEMPO_ENABLED:-false}
+      - TEMPO_OTLP_URL=${ALLOY_TEMPO_URL:-}
+      - TEMPO_OTLP_USER=${ALLOY_TEMPO_USER:-}
+      - TEMPO_OTLP_PASS=${ALLOY_TEMPO_PASS:-}
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      - proxy
+      - shard
