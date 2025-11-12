@@ -561,7 +561,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
             match in_flight_match {
                 InFlightMatch::Exact(Subscribed(mut receiver)) => {
                     tracing::trace!(
-                        key = ?key,
+                        ?key,
                         "deduplicating request (exact match) - joining existing in-flight request"
                     );
                     #[cfg(with_metrics)]
@@ -572,32 +572,29 @@ impl<Env: Environment> RequestsScheduler<Env> {
                             Ok(res) => match T::try_from(res) {
                                 Ok(converted) => {
                                     tracing::trace!(
-                                        key = ?key,
+                                        ?key,
                                         "received result from deduplicated in-flight request"
                                     );
                                     return Ok(converted);
                                 }
                                 Err(_) => {
-                                    tracing::trace!(
-                                        key = ?key,
+                                    tracing::warn!(
+                                        ?key,
                                         "failed to convert result from deduplicated in-flight request, will execute independently"
                                     );
                                 }
                             },
-                            Err(e) => {
+                            Err(error) => {
                                 tracing::trace!(
-                                    key = ?key,
-                                    error = %e,
+                                    ?key,
+                                    %error,
                                     "in-flight request failed",
                                 );
                                 // Fall through to execute a new request
                             }
                         },
                         Err(_) => {
-                            tracing::trace!(
-                                key = ?key,
-                                "in-flight request sender dropped"
-                            );
+                            tracing::trace!(?key, "in-flight request sender dropped");
                             // Fall through to execute a new request
                         }
                     }
@@ -607,7 +604,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
                     outcome: Subscribed(mut receiver),
                 } => {
                     tracing::trace!(
-                    key = ?key,
+                    ?key,
                     subsumed_by = ?subsuming_key,
                         "deduplicating request (subsumption) - joining larger in-flight request"
                     );
@@ -622,14 +619,14 @@ impl<Env: Environment> RequestsScheduler<Env> {
                                         key.try_extract_result(&subsuming_key, res)
                                     {
                                         tracing::trace!(
-                                            key = ?key,
+                                            ?key,
                                             "extracted subset result from larger in-flight request"
                                         );
                                         match T::try_from(extracted) {
                                             Ok(converted) => return Ok(converted),
                                             Err(_) => {
                                                 tracing::trace!(
-                                                    key = ?key,
+                                                    ?key,
                                                     "failed to convert extracted result, will execute independently"
                                                 );
                                             }
@@ -637,15 +634,15 @@ impl<Env: Environment> RequestsScheduler<Env> {
                                     } else {
                                         // Extraction failed, fall through to execute our own request
                                         tracing::trace!(
-                                            key = ?key,
+                                            ?key,
                                             "failed to extract from subsuming request, will execute independently"
                                         );
                                     }
                                 }
-                                Err(e) => {
+                                Err(error) => {
                                     tracing::trace!(
-                                        key = ?key,
-                                        error = %e,
+                                        ?key,
+                                        ?error,
                                         "subsuming in-flight request failed",
                                     );
                                     // Fall through to execute our own request
@@ -653,10 +650,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
                             }
                         }
                         Err(_) => {
-                            tracing::trace!(
-                                key = ?key,
-                                "subsuming in-flight request sender dropped"
-                            );
+                            tracing::trace!(?key, "subsuming in-flight request sender dropped");
                         }
                     }
                 }
@@ -673,7 +667,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
 
         // Execute request with staggered parallel - first peer starts immediately,
         // alternatives are tried after stagger delays (even if first peer is slow but not failing)
-        tracing::trace!(key = ?key, peer = ?peer, "executing staggered parallel request");
+        tracing::trace!(?key, ?peer, "executing staggered parallel request");
         let result = self
             .try_staggered_parallel(&key, peer, &operation, self.retry_delay)
             .await;
@@ -764,19 +758,16 @@ impl<Env: Environment> RequestsScheduler<Env> {
 
                     match result {
                         Ok(value) => {
-                            tracing::trace!(
-                                key = ?key,
-                                "staggered parallel request succeeded"
-                            );
+                            tracing::trace!(?key, "staggered parallel request succeeded");
                             return Ok(value);
                         }
-                        Err(e) => {
+                        Err(error) => {
                             tracing::debug!(
-                                key = ?key,
-                                error = %e,
+                                ?key,
+                                %error,
                                 "staggered parallel request attempt failed"
                             );
-                            last_error = e;
+                            last_error = error;
 
                             // Immediately try next alternative
                             if let Some(peer) =
@@ -815,28 +806,22 @@ impl<Env: Environment> RequestsScheduler<Env> {
         while let Some(result) = futures.next().await {
             match result {
                 Ok(value) => {
-                    tracing::trace!(
-                        key = ?key,
-                        "staggered parallel request succeeded"
-                    );
+                    tracing::trace!(?key, "staggered parallel request succeeded");
                     return Ok(value);
                 }
-                Err(e) => {
+                Err(error) => {
                     tracing::debug!(
-                        key = ?key,
-                        error = %e,
+                        ?key,
+                        %error,
                         "staggered parallel request attempt failed"
                     );
-                    last_error = e;
+                    last_error = error;
                 }
             }
         }
 
         // All attempts failed
-        tracing::debug!(
-            key = ?key,
-            "all staggered parallel retry attempts failed"
-        );
+        tracing::debug!(?key, "all staggered parallel retry attempts failed");
         Err(last_error)
     }
 
