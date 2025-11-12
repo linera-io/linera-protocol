@@ -565,6 +565,7 @@ impl<'a> ContractPrecompile {
             ContractRuntimePrecompile::TryCallApplication { target, argument } => {
                 let authenticated = true;
                 let mut runtime = context.db().0.runtime.lock().unwrap();
+                ensure!(target != runtime.application_id()?, EvmExecutionError::NoSelfCall);
                 runtime.try_call_application(authenticated, target, argument)
             }
             ContractRuntimePrecompile::Emit { stream_name, value } => {
@@ -603,6 +604,7 @@ impl<'a> ContractPrecompile {
                 query,
             } => {
                 let mut runtime = context.db().0.runtime.lock().unwrap();
+                ensure!(application_id != runtime.application_id()?, EvmExecutionError::NoSelfCall);
                 runtime.query_service(application_id, query)
             }
             ContractRuntimePrecompile::ValidationRound => {
@@ -663,6 +665,7 @@ impl<'a> ServicePrecompile {
         let mut runtime = context.db().0.runtime.lock().unwrap();
         match request {
             ServiceRuntimePrecompile::TryQueryApplication { target, argument } => {
+                ensure!(target != runtime.application_id()?, EvmExecutionError::NoSelfCall);
                 runtime.try_query_application(target, argument)
             }
         }
