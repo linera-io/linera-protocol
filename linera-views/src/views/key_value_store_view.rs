@@ -363,10 +363,6 @@ impl<C: Context> View for KeyValueStoreView<C> {
     }
 
     fn post_save(&mut self) {
-        if self.deletion_set.delete_storage_first {
-            self.stored_total_size = SizeData::default();
-            self.stored_hash = None;
-        }
         self.deletion_set.delete_storage_first = false;
         self.deletion_set.deleted_prefixes.clear();
         self.updates.clear();
