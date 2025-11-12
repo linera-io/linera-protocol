@@ -242,7 +242,7 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
             chain_id: Some(block_proposal.content.block.chain_id.into()),
             content: bincode::serialize(&block_proposal.content)?,
             owner: Some(block_proposal.owner().try_into()?),
-            signature: Some(block_proposal.signature.into()),
+            signature: Some((*block_proposal.signature).into()),
             original_proposal: block_proposal
                 .original_proposal
                 .map(|cert| bincode::serialize(&cert))
@@ -261,8 +261,8 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
             GrpcProtoConversionError::InconsistentChainId
         );
         Ok(Self {
-            content,
-            signature: try_proto_convert(block_proposal.signature)?,
+            content: Box::new(content),
+            signature: Box::new(try_proto_convert(block_proposal.signature)?),
             original_proposal: block_proposal
                 .original_proposal
                 .map(|bytes| bincode::deserialize(&bytes))
@@ -1285,13 +1285,13 @@ pub mod tests {
         .cloned();
         let key_pair = AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate());
         let block_proposal = BlockProposal {
-            content: ProposalContent {
+            content: Box::new(ProposalContent {
                 block: get_block(),
                 round: Round::SingleLeader(4),
                 outcome: Some(outcome),
-            },
-            signature: key_pair.sign(&Foo("test".into())),
-            original_proposal: Some(OriginalProposal::Regular { certificate }),
+            }),
+            signature: Box::new(key_pair.sign(&Foo("test".into()))),
+            original_proposal: Some(Box::new(OriginalProposal::Regular { certificate })),
         };
 
         round_trip_check::<_, api::BlockProposal>(block_proposal);

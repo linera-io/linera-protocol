@@ -569,7 +569,7 @@ where
         .await
         .unwrap();
     let unknown_key_pair = AccountSecretKey::generate();
-    let original_public_key = match block_proposal.signature {
+    let original_public_key = match *block_proposal.signature {
         AccountSignature::Ed25519 { public_key, .. } => public_key,
         _ => {
             panic!(
@@ -579,14 +579,14 @@ where
         }
     };
     let mut bad_signature_block_proposal = block_proposal.clone();
-    let bad_signature = match unknown_key_pair.sign(&block_proposal.content) {
+    let bad_signature = match unknown_key_pair.sign(block_proposal.content.as_ref()) {
         AccountSignature::Ed25519 { signature, .. } => AccountSignature::Ed25519 {
             public_key: original_public_key,
             signature,
         },
         _ => panic!("Expected an Ed25519 signature"),
     };
-    bad_signature_block_proposal.signature = bad_signature;
+    bad_signature_block_proposal.signature = Box::new(bad_signature);
     assert_matches!(
         env.worker()
             .handle_block_proposal(bad_signature_block_proposal)

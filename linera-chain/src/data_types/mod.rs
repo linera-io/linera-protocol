@@ -313,10 +313,10 @@ pub enum OriginalProposal {
 #[derive(Clone, Debug, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct BlockProposal {
-    pub content: ProposalContent,
-    pub signature: AccountSignature,
+    pub content: Box<ProposalContent>,
+    pub signature: Box<AccountSignature>,
     #[debug(skip_if = Option::is_none)]
-    pub original_proposal: Option<OriginalProposal>,
+    pub original_proposal: Option<Box<OriginalProposal>>,
 }
 
 /// A message together with kind, authentication and grant information.
@@ -594,8 +594,8 @@ impl BlockProposal {
         let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
 
         Ok(Self {
-            content,
-            signature,
+            content: Box::new(content),
+            signature: Box::new(signature),
             original_proposal: None,
         })
     }
@@ -614,9 +614,9 @@ impl BlockProposal {
         let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
 
         Ok(Self {
-            content,
-            signature,
-            original_proposal: Some(OriginalProposal::Fast(old_proposal.signature)),
+            content: Box::new(content),
+            signature: Box::new(signature),
+            original_proposal: Some(Box::new(OriginalProposal::Fast(*old_proposal.signature))),
         })
     }
 
@@ -637,23 +637,23 @@ impl BlockProposal {
         let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
 
         Ok(Self {
-            content,
-            signature,
-            original_proposal: Some(OriginalProposal::Regular { certificate }),
+            content: Box::new(content),
+            signature: Box::new(signature),
+            original_proposal: Some(Box::new(OriginalProposal::Regular { certificate })),
         })
     }
 
     /// Returns the `AccountOwner` that proposed the block.
     pub fn owner(&self) -> AccountOwner {
-        match self.signature {
-            AccountSignature::Ed25519 { public_key, .. } => public_key.into(),
-            AccountSignature::Secp256k1 { public_key, .. } => public_key.into(),
-            AccountSignature::EvmSecp256k1 { address, .. } => AccountOwner::Address20(address),
+        match self.signature.as_ref() {
+            AccountSignature::Ed25519 { public_key, .. } => (*public_key).into(),
+            AccountSignature::Secp256k1 { public_key, .. } => (*public_key).into(),
+            AccountSignature::EvmSecp256k1 { address, .. } => AccountOwner::Address20(*address),
         }
     }
 
     pub fn check_signature(&self) -> Result<(), CryptoError> {
-        self.signature.verify(&self.content)
+        self.signature.verify(self.content.as_ref())
     }
 
     pub fn required_blob_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
@@ -678,7 +678,7 @@ impl BlockProposal {
 
     /// Checks that the original proposal, if present, matches the new one and has a higher round.
     pub fn check_invariants(&self) -> Result<(), &'static str> {
-        match (&self.original_proposal, &self.content.outcome) {
+        match (self.original_proposal.as_deref(), &self.content.outcome) {
             (None, None) => {}
             (Some(OriginalProposal::Fast(_)), None) => ensure!(
                 self.content.round > Round::Fast,
@@ -885,8 +885,8 @@ mod signing {
         assert_eq!(signature.owner(), public_key.into());
 
         let block_proposal = BlockProposal {
-            content: proposal,
-            signature,
+            content: Box::new(proposal),
+            signature: Box::new(signature),
             original_proposal: None,
         };
         assert_eq!(block_proposal.owner(), public_key.into(),);

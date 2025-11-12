@@ -613,15 +613,15 @@ where
     ) -> Result<Vec<Blob>, WorkerError> {
         let owner = proposal.owner();
         let BlockProposal {
-            content:
-                ProposalContent {
-                    block,
-                    round,
-                    outcome: _,
-                },
+            content,
             original_proposal,
             signature: _,
         } = proposal;
+        let ProposalContent {
+            block,
+            round,
+            outcome: _,
+        } = content.as_ref();
 
         let mut maybe_blobs = self
             .maybe_get_required_blobs(proposal.required_blob_ids(), None)
@@ -633,7 +633,10 @@ where
                 // TODO(#3203): Allow multiple pending proposals on permissionless chains.
                 chain.pending_proposed_blobs.clear();
             }
-            let validated = matches!(original_proposal, Some(OriginalProposal::Regular { .. }));
+            let validated = matches!(
+                original_proposal.as_deref(),
+                Some(OriginalProposal::Regular { .. })
+            );
             chain
                 .pending_proposed_blobs
                 .try_load_entry_mut(&owner)
@@ -1403,7 +1406,7 @@ where
             WorkerError::InvalidOwner
         );
         let old_round = self.chain.manager.current_round();
-        match original_proposal {
+        match original_proposal.as_deref() {
             None => {
                 if let Some(signer) = block.authenticated_owner {
                     // Check the authentication of the operations in the new block.
@@ -1416,12 +1419,12 @@ where
             }
             Some(OriginalProposal::Fast(signature)) => {
                 let original_proposal = BlockProposal {
-                    content: ProposalContent {
+                    content: Box::new(ProposalContent {
                         block: content.block.clone(),
                         round: Round::Fast,
                         outcome: None,
-                    },
-                    signature: *signature,
+                    }),
+                    signature: Box::new(*signature),
                     original_proposal: None,
                 };
                 let super_owner = original_proposal.owner();
@@ -1464,7 +1467,7 @@ where
             block,
             round,
             outcome,
-        } = content;
+        } = &**content;
 
         ensure!(
             block.timestamp.duration_since(local_time) <= self.config.grace_period,
