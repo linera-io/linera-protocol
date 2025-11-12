@@ -221,7 +221,6 @@ where
         }
         if !self.changes.is_empty() {
             // This case occurs in only one scenario:
-            // * A service call.
             // * A service call to a contract that has not yet been
             //   initialized by a contract call.
             // When we do a service calls to a contract that has
