@@ -821,7 +821,7 @@ where
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let root_key = RootKey::ConfirmedBlock(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let results = store.contains_keys(get_block_keys()).await?;
+        let results = store.contains_keys(&get_block_keys()).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_CERTIFICATE_COUNTER
             .with_label_values(&[])
@@ -836,7 +836,7 @@ where
     ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
         let root_key = RootKey::ConfirmedBlock(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let values = store.read_multi_values_bytes(get_block_keys()).await?;
+        let values = store.read_multi_values_bytes(&get_block_keys()).await?;
         #[cfg(with_metrics)]
         metrics::READ_CERTIFICATE_COUNTER
             .with_label_values(&[])
@@ -857,7 +857,7 @@ where
         let mut values = Vec::new();
         for root_key in root_keys {
             let store = self.database.open_shared(&root_key)?;
-            values.extend(store.read_multi_values_bytes(get_block_keys()).await?);
+            values.extend(store.read_multi_values_bytes(&get_block_keys()).await?);
         }
         #[cfg(with_metrics)]
         metrics::READ_CERTIFICATES_COUNTER
@@ -890,7 +890,7 @@ where
         let mut values = Vec::new();
         for root_key in root_keys {
             let store = self.database.open_shared(&root_key)?;
-            values.extend(store.read_multi_values_bytes(get_block_keys()).await?);
+            values.extend(store.read_multi_values_bytes(&get_block_keys()).await?);
         }
         #[cfg(with_metrics)]
         metrics::READ_CERTIFICATES_COUNTER
@@ -949,7 +949,7 @@ where
                 indices.push(index);
             }
         }
-        let values = store.read_multi_values_bytes(keys).await?;
+        let values = store.read_multi_values_bytes(&keys).await?;
         let mut returned_values = Vec::new();
         for (index, value) in indices.into_iter().zip(values) {
             let event = value.unwrap();

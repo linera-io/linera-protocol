@@ -149,10 +149,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         Ok(test)
     }
 
-    async fn contains_keys(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<bool>, StorageServiceStoreError> {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, StorageServiceStoreError> {
         let mut full_keys = Vec::new();
         for key in keys {
             ensure!(
@@ -160,7 +157,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
                 StorageServiceStoreError::KeyTooLong
             );
             let mut full_key = self.start_key.clone();
-            full_key.extend(&key);
+            full_key.extend(key);
             full_keys.push(full_key);
         }
         let query = RequestContainsKeys { keys: full_keys };
@@ -176,7 +173,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, StorageServiceStoreError> {
         let mut full_keys = Vec::new();
         for key in keys {
@@ -185,7 +182,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
                 StorageServiceStoreError::KeyTooLong
             );
             let mut full_key = self.start_key.clone();
-            full_key.extend(&key);
+            full_key.extend(key);
             full_keys.push(full_key);
         }
         let query = RequestReadMultiValues { keys: full_keys };

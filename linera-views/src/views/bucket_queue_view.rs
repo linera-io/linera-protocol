@@ -576,7 +576,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                 count_remain -= size;
                 position = 0;
             }
-            let values = self.context.store().read_multi_values_bytes(keys).await?;
+            let values = self.context.store().read_multi_values_bytes(&keys).await?;
             position = pair.1;
             let mut value_pos = 0;
             count_remain = count;

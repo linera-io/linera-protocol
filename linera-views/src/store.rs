@@ -57,12 +57,12 @@ pub trait ReadableKeyValueStore: WithError {
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
 
     /// Tests whether a list of keys exist in the database
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error>;
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
 
     /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
@@ -89,7 +89,7 @@ pub trait ReadableKeyValueStore: WithError {
     /// Reads multiple `keys` and deserializes the results if present.
     fn read_multi_values<V: DeserializeOwned + Send + Sync>(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> impl Future<Output = Result<Vec<Option<V>>, Self::Error>> {
         async {
             let mut values = Vec::with_capacity(keys.len());
@@ -308,13 +308,13 @@ pub mod inactive_store {
             panic!("attempt to read from an inactive store!")
         }
 
-        async fn contains_keys(&self, _keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
+        async fn contains_keys(&self, _keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error> {
             panic!("attempt to read from an inactive store!")
         }
 
         async fn read_multi_values_bytes(
             &self,
-            _keys: Vec<Vec<u8>>,
+            _keys: &[Vec<u8>],
         ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
             panic!("attempt to read from an inactive store!")
         }

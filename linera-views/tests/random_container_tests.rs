@@ -227,7 +227,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
             assert_eq!(new_state_vec, new_key_values);
             assert_eq!(total_size(&new_state_vec), view.store.total_size());
             let all_keys_vec = all_keys.clone().into_iter().collect::<Vec<_>>();
-            let tests_multi_get = view.store.multi_get(all_keys_vec).await?;
+            let tests_multi_get = view.store.multi_get(&all_keys_vec).await?;
             for (i, key) in all_keys.clone().into_iter().enumerate() {
                 let test_map = new_state_map.contains_key(&key);
                 let test_view = view.store.get(&key).await?.is_some();

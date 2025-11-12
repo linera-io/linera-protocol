@@ -308,7 +308,7 @@ where
             keys.push(key)
         }
         let mut values = Vec::with_capacity(count);
-        for entry in self.context.store().read_multi_values(keys).await? {
+        for entry in self.context.store().read_multi_values(&keys).await? {
             match entry {
                 None => {
                     return Err(ViewError::MissingEntries("QueueView".into()));

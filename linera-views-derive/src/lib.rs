@@ -164,7 +164,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                     Self::post_load(context, &[])
                 } else {
                     let keys = Self::pre_load(&context)?;
-                    let values = context.store().read_multi_values_bytes(keys).await?;
+                    let values = context.store().read_multi_values_bytes(&keys).await?;
                     Self::post_load(context, &values)
                 }
             }

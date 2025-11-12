@@ -97,7 +97,7 @@ where
             .collect::<Vec<_>>();
 
         let measurement = Instant::now();
-        f(store.contains_keys(keys).await.unwrap());
+        f(store.contains_keys(&keys).await.unwrap());
         total_time += measurement.elapsed();
 
         clear_store(&store).await;
@@ -230,7 +230,7 @@ where
             .collect::<Vec<_>>();
 
         let measurement = Instant::now();
-        f(store.read_multi_values_bytes(keys).await.unwrap());
+        f(store.read_multi_values_bytes(&keys).await.unwrap());
         total_time += measurement.elapsed();
 
         clear_store(&store).await;

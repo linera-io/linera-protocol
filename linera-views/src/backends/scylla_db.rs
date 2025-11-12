@@ -637,7 +637,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
 
     async fn contains_keys(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<bool>, ScyllaDbStoreInternalError> {
         if keys.is_empty() {
             return Ok(Vec::new());
@@ -656,7 +656,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbStoreInternalError> {
         if keys.is_empty() {
             return Ok(Vec::new());
