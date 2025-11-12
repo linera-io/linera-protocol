@@ -12,16 +12,9 @@ discovery.kubernetes "pods" {
   }
 }
 
-// Relabel discovered pods to scrape linera-proxy and linera-shard
+// Relabel discovered pods to scrape all pods in namespace
 discovery.relabel "linera_metrics" {
   targets = discovery.kubernetes.pods.targets
-
-  // Only scrape pods with app=linera-validator label
-  rule {
-    source_labels = ["__meta_kubernetes_pod_label_app"]
-    regex         = "linera-validator"
-    action        = "keep"
-  }
 
   // Set job label based on container name
   rule {
@@ -40,6 +33,18 @@ discovery.relabel "linera_metrics" {
   rule {
     source_labels = ["__meta_kubernetes_namespace"]
     target_label  = "namespace"
+  }
+
+  // Set cluster label
+  rule {
+    target_label  = "cluster"
+    replacement   = env("CLUSTER_NAME")
+  }
+
+  // Set validator label
+  rule {
+    target_label  = "validator"
+    replacement   = env("VALIDATOR_NAME")
   }
 
   // Use metrics port (21100)
@@ -61,9 +66,8 @@ discovery.relabel "linera_metrics" {
 prometheus.scrape "linera_metrics" {
   targets = discovery.relabel.linera_metrics.output
 
-  // Conditionally forward to OTLP converter if Prometheus export is enabled
-  // Otherwise, just collect metrics without exporting
-  forward_to = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.receiver.prometheus.default.receiver] : []
+  // Forward to OTLP converter - will only export if PROMETHEUS_ENABLED is set
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
 
   scrape_interval = "15s"
   scrape_timeout  = "10s"
@@ -74,8 +78,8 @@ prometheus.exporter.self "alloy" {}
 
 prometheus.scrape "alloy_metrics" {
   targets    = prometheus.exporter.self.alloy.targets
-  // Conditionally forward to OTLP converter if Prometheus export is enabled
-  forward_to = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.receiver.prometheus.default.receiver] : []
+  // Forward to OTLP converter - will only export if PROMETHEUS_ENABLED is set
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
 }
 
 // ==================== Prometheus Metrics Export (Optional) ====================
@@ -94,7 +98,15 @@ otelcol.exporter.otlphttp "prometheus" {
     tls {
       insecure_skip_verify = false
     }
+
+    compression = "gzip"
+
+    headers = {
+      "Content-Type" = "application/x-protobuf",
+    }
   }
+
+  encoding = "proto"
 }
 
 // Basic auth for Prometheus OTLP
@@ -106,7 +118,7 @@ otelcol.auth.basic "prometheus_credentials" {
 // Convert Prometheus metrics to OTLP format (only if enabled)
 otelcol.receiver.prometheus "default" {
   output {
-    metrics = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.exporter.otlphttp.prometheus.input] : []
+    metrics = [otelcol.exporter.otlphttp.prometheus.input]
   }
 }
 
@@ -125,13 +137,6 @@ discovery.kubernetes "pod_logs" {
 discovery.relabel "pod_logs" {
   targets = discovery.kubernetes.pod_logs.targets
 
-  // Only collect logs from linera-validator pods
-  rule {
-    source_labels = ["__meta_kubernetes_pod_label_app"]
-    regex         = "linera-validator"
-    action        = "keep"
-  }
-
   // Set pod label
   rule {
     source_labels = ["__meta_kubernetes_pod_name"]
@@ -149,13 +154,25 @@ discovery.relabel "pod_logs" {
     source_labels = ["__meta_kubernetes_namespace"]
     target_label  = "namespace"
   }
+
+  // Set cluster label
+  rule {
+    target_label  = "cluster"
+    replacement   = env("CLUSTER_NAME")
+  }
+
+  // Set validator label
+  rule {
+    target_label  = "validator"
+    replacement   = env("VALIDATOR_NAME")
+  }
 }
 
 // Read pod logs
 loki.source.kubernetes "pods" {
   targets    = discovery.relabel.pod_logs.output
-  // Conditionally forward to Loki if export is enabled
-  forward_to = env("LOKI_ENABLED") == "true" ? [loki.write.central.receiver] : []
+  // Forward to Loki - will only export if LOKI_ENABLED is set
+  forward_to = [loki.write.central.receiver]
 }
 
 // Write logs to external Loki (only if enabled)
@@ -194,8 +211,8 @@ otelcol.receiver.otlp "default" {
   }
 
   output {
-    // Conditionally forward to Tempo if export is enabled
-    traces  = env("TEMPO_ENABLED") == "true" ? [otelcol.exporter.otlphttp.central.input] : []
+    // Forward to Tempo - will only export if TEMPO_ENABLED is set
+    traces  = [otelcol.exporter.otlphttp.central.input]
   }
 }
 

@@ -11,9 +11,8 @@ prometheus.scrape "proxy_metrics" {
     instance    = env("HOSTNAME"),
   }]
 
-  // Conditionally forward to OTLP converter if Prometheus export is enabled
-  // Otherwise, just collect metrics without exporting
-  forward_to = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.receiver.prometheus.default.receiver] : []
+  // Forward to OTLP converter - will only export if PROMETHEUS_ENABLED is set
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
 
   scrape_interval = "15s"
   scrape_timeout  = "10s"
@@ -29,8 +28,8 @@ prometheus.scrape "shard_metrics" {
     },
   ]
 
-  // Conditionally forward to OTLP converter if Prometheus export is enabled
-  forward_to = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.receiver.prometheus.default.receiver] : []
+  // Forward to OTLP converter - will only export if PROMETHEUS_ENABLED is set
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
 
   scrape_interval = "15s"
   scrape_timeout  = "10s"
@@ -41,8 +40,8 @@ prometheus.exporter.self "alloy" {}
 
 prometheus.scrape "alloy_metrics" {
   targets    = prometheus.exporter.self.alloy.targets
-  // Conditionally forward to OTLP converter if Prometheus export is enabled
-  forward_to = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.receiver.prometheus.default.receiver] : []
+  // Forward to OTLP converter - will only export if PROMETHEUS_ENABLED is set
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
 }
 
 // ==================== Prometheus Metrics Export (Optional) ====================
@@ -73,7 +72,7 @@ otelcol.auth.basic "prometheus_credentials" {
 // Convert Prometheus metrics to OTLP format (only if enabled)
 otelcol.receiver.prometheus "default" {
   output {
-    metrics = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.exporter.otlphttp.prometheus.input] : []
+    metrics = [otelcol.exporter.otlphttp.prometheus.input]
   }
 }
 
@@ -108,8 +107,8 @@ discovery.relabel "docker_logs" {
 loki.source.docker "containers" {
   host       = "unix:///var/run/docker.sock"
   targets    = discovery.relabel.docker_logs.output
-  // Conditionally forward to Loki if export is enabled
-  forward_to = env("LOKI_ENABLED") == "true" ? [loki.write.central.receiver] : []
+  // Forward to Loki - will only export if LOKI_ENABLED is set
+  forward_to = [loki.write.central.receiver]
 }
 
 // Write logs to external Loki (only if enabled)
@@ -148,8 +147,8 @@ otelcol.receiver.otlp "default" {
   }
 
   output {
-    // Conditionally forward to Tempo if export is enabled
-    traces  = env("TEMPO_ENABLED") == "true" ? [otelcol.exporter.otlphttp.central.input] : []
+    // Forward to Tempo - will only export if TEMPO_ENABLED is set
+    traces  = [otelcol.exporter.otlphttp.central.input]
   }
 }
 
