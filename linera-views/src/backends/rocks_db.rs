@@ -470,21 +470,24 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
 
     async fn contains_keys(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<bool>, RocksDbStoreInternalError> {
         let executor = self.executor.clone();
         self.spawn_mode
-            .spawn(move |x| executor.contains_keys_internal(x), keys)
+            .spawn(move |x| executor.contains_keys_internal(x), keys.to_vec())
             .await
     }
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreInternalError> {
         let executor = self.executor.clone();
         self.spawn_mode
-            .spawn(move |x| executor.read_multi_values_bytes_internal(x), keys)
+            .spawn(
+                move |x| executor.read_multi_values_bytes_internal(x),
+                keys.to_vec(),
+            )
             .await
     }
 

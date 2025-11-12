@@ -233,8 +233,8 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
             test_exists.push(store.contains_key(key).await.unwrap());
             values_single_read.push(store.read_value_bytes(key).await.unwrap());
         }
-        let test_exists_direct = store.contains_keys(keys.clone()).await.unwrap();
-        let values_read = store.read_multi_values_bytes(keys).await.unwrap();
+        let test_exists_direct = store.contains_keys(&keys).await.unwrap();
+        let values_read = store.read_multi_values_bytes(&keys).await.unwrap();
         assert_eq!(values, values_read);
         assert_eq!(values, values_single_read);
         let values_read_stat = values_read.iter().map(|x| x.is_some()).collect::<Vec<_>>();
@@ -470,7 +470,7 @@ where
     // We reconnect so that the read is not using the cache.
     let database = D::connect(&config, &namespace).await.unwrap();
     let store = database.open_exclusive(&[]).unwrap();
-    let values_read = store.read_multi_values_bytes(keys).await.unwrap();
+    let values_read = store.read_multi_values_bytes(&keys).await.unwrap();
     assert_eq!(values, values_read);
 }
 

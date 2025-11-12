@@ -1,6 +1,6 @@
 ---
 source: linera-views-derive/src/lib.rs
-expression: "pretty(generate_view_code(input, true))"
+expression: "pretty(generate_view_code(input, true).unwrap())"
 ---
 impl linera_views::views::View for TestView
 where
@@ -106,7 +106,7 @@ where
             Self::post_load(context, &[])
         } else {
             let keys = Self::pre_load(&context)?;
-            let values = context.store().read_multi_values_bytes(keys).await?;
+            let values = context.store().read_multi_values_bytes(&keys).await?;
             Self::post_load(context, &values)
         }
     }

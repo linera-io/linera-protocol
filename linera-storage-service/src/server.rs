@@ -92,7 +92,7 @@ impl StorageServer {
         }
     }
 
-    pub async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Status> {
+    pub async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Status> {
         match &self.store {
             LocalStore::Memory(store) => store
                 .contains_keys(keys)
@@ -108,7 +108,7 @@ impl StorageServer {
 
     pub async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Status> {
         match &self.store {
             LocalStore::Memory(store) => store.read_multi_values_bytes(keys).await.map_err(|e| {
@@ -341,7 +341,7 @@ impl StorageService for StorageServer {
     ) -> Result<Response<ReplyContainsKeys>, Status> {
         let request = request.into_inner();
         let RequestContainsKeys { keys } = request;
-        let tests = self.contains_keys(keys).await?;
+        let tests = self.contains_keys(&keys).await?;
         let response = ReplyContainsKeys { tests };
         Ok(Response::new(response))
     }
@@ -353,7 +353,7 @@ impl StorageService for StorageServer {
     ) -> Result<Response<ReplyReadMultiValues>, Status> {
         let request = request.into_inner();
         let RequestReadMultiValues { keys } = request;
-        let values = self.read_multi_values_bytes(keys.clone()).await?;
+        let values = self.read_multi_values_bytes(&keys).await?;
         let size = values
             .iter()
             .map(|x| match x {

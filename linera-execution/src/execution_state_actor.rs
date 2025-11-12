@@ -247,7 +247,7 @@ where
             ContainsKeys { id, keys, callback } => {
                 let view = self.state.users.try_load_entry(&id).await?;
                 let result = match view {
-                    Some(view) => view.contains_keys(keys).await?,
+                    Some(view) => view.contains_keys(&keys).await?,
                     None => vec![false; keys.len()],
                 };
                 callback.respond(result);
@@ -256,7 +256,7 @@ where
             ReadMultiValuesBytes { id, keys, callback } => {
                 let view = self.state.users.try_load_entry(&id).await?;
                 let values = match view {
-                    Some(view) => view.multi_get(keys).await?,
+                    Some(view) => view.multi_get(&keys).await?,
                     None => vec![None; keys.len()],
                 };
                 callback.respond(values);

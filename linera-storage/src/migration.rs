@@ -130,9 +130,7 @@ where
                 })
                 .collect::<Vec<Vec<u8>>>();
             let store = self.database.open_shared(&[])?;
-            let values = store
-                .read_multi_values_bytes(chunk_base_keys.to_vec())
-                .await?;
+            let values = store.read_multi_values_bytes(&chunk_base_keys).await?;
             let mut batch = MultiPartitionBatch::new();
             for (base_key, value) in chunk_base_keys.iter().zip(values) {
                 let value = value.ok_or_else(|| ViewError::MissingEntries("migration".into()))?;
