@@ -447,10 +447,17 @@ impl<Env: Environment> RequestsScheduler<Env> {
         peer: &RemoteNode<Env::ValidatorNode>,
         query: ChainInfoQuery,
     ) -> Result<Box<ChainInfo>, NodeError> {
-        self.with_peer(RequestKey::ChainInfo(query.clone()), peer.clone(), |peer| {
-            let query = query.clone();
-            async move { peer.handle_chain_info_query(query).await }
-        })
+        self.with_peer(
+            RequestKey::ChainInfo {
+                query: Box::new(query.clone()),
+                validator: peer.public_key,
+            },
+            peer.clone(),
+            |peer| {
+                let query = query.clone();
+                async move { peer.handle_chain_info_query(query).await }
+            },
+        )
         .await
     }
 
@@ -742,7 +749,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
 
         if let Ok(success) = shared_result.as_ref() {
             match key {
-                RequestKey::ChainInfo(_) => {
+                RequestKey::ChainInfo { .. } => {
                     // Don't cache result of ChainInfo queries. Only deduplicate in-flight requests.
                 }
                 _ => {
