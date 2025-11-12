@@ -871,7 +871,7 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// Returns the next application index, which is equal to the number of
     /// new applications created so far in this block.
-    fn next_application_index(&mut self) -> Result<u32, ExecutionError>;
+    fn peek_application_index(&mut self) -> Result<u32, ExecutionError>;
 
     /// Creates a new data blob and returns its hash.
     fn create_data_blob(&mut self, bytes: Vec<u8>) -> Result<DataBlobHash, ExecutionError>;

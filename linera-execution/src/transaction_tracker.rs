@@ -118,7 +118,7 @@ impl TransactionTracker {
         self.transaction_index
     }
 
-    pub fn application_index(&self) -> u32 {
+    pub fn peek_application_index(&self) -> u32 {
         self.next_application_index
     }
 

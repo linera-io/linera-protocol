@@ -1455,11 +1455,11 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?
     }
 
-    fn next_application_index(&mut self) -> Result<u32, ExecutionError> {
+    fn peek_application_index(&mut self) -> Result<u32, ExecutionError> {
         let index = self
             .inner()
             .execution_state_sender
-            .send_request(move |callback| ExecutionRequest::NextApplicationIndex { callback })?
+            .send_request(move |callback| ExecutionRequest::PeekApplicationIndex { callback })?
             .recv_response()?;
         Ok(index)
     }

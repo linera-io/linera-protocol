@@ -834,7 +834,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     ) -> Result<ApplicationId, ExecutionError> {
         let chain_id = runtime.chain_id()?;
         let block_height = runtime.block_height()?;
-        let application_index = runtime.next_application_index()?;
+        let application_index = runtime.peek_application_index()?;
         let parameters = JSON_EMPTY_VECTOR.to_vec(); // No constructor
         let required_application_ids = Vec::new();
         let application_description = ApplicationDescription {
