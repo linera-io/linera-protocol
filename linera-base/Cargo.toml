@@ -28,7 +28,6 @@ web = [
     "tracing-web",
     "wasm-bindgen",
     "wasm-bindgen-futures",
-    "wasm_thread",
     "web-sys",
     "web-time",
 ]
@@ -69,7 +68,6 @@ tracing.workspace = true
 trait-variant.workspace = true
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
-wasm_thread = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
 

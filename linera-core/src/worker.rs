@@ -252,6 +252,9 @@ pub enum WorkerError {
         chain_id: ChainId,
         error: Box<dyn std::error::Error + Send + Sync>,
     },
+
+    #[error("thread error: {0}")]
+    Thread(#[from] web_thread::Error),
 }
 
 impl WorkerError {
@@ -286,6 +289,7 @@ impl WorkerError {
             | WorkerError::MissingNetworkDescription
             | WorkerError::ChainActorSendError { .. }
             | WorkerError::ChainActorRecvError { .. }
+            | WorkerError::Thread(_)
             | WorkerError::ReadCertificatesError(_) => true,
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }

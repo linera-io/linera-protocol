@@ -205,6 +205,40 @@ where
     is_tracked: bool,
 }
 
+struct ServiceRuntimeActor {
+    thread: web_thread::Thread,
+    task: web_thread::Task<()>,
+    endpoint: ServiceRuntimeEndpoint,
+}
+
+impl ServiceRuntimeActor {
+    /// Spawns a blocking task to execute the service runtime actor.
+    ///
+    /// Returns the task handle and the endpoints to interact with the actor.
+    async fn spawn(chain_id: ChainId) -> Self {
+        let (execution_state_sender, incoming_execution_requests) =
+            futures::channel::mpsc::unbounded();
+        let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
+
+        let thread = web_thread::Thread::new();
+
+        Self {
+            endpoint: ServiceRuntimeEndpoint {
+                incoming_execution_requests,
+                runtime_request_sender,
+            },
+            task: thread.run((), move |()| async move {
+                ServiceSyncRuntime::new(execution_state_sender, QueryContext {
+                    chain_id,
+                    next_block_height: BlockHeight(0),
+                    local_time: Timestamp::from(0),
+                }).run(runtime_request_receiver)
+            }),
+            thread,
+        }
+    }
+}
+
 impl<StorageClient> ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
@@ -241,34 +275,6 @@ where
         }
     }
 
-    /// Spawns a blocking task to execute the service runtime actor.
-    ///
-    /// Returns the task handle and the endpoints to interact with the actor.
-    async fn spawn_service_runtime_actor(
-        chain_id: ChainId,
-    ) -> (linera_base::task::Blocking, ServiceRuntimeEndpoint) {
-        let context = QueryContext {
-            chain_id,
-            next_block_height: BlockHeight(0),
-            local_time: Timestamp::from(0),
-        };
-
-        let (execution_state_sender, incoming_execution_requests) =
-            futures::channel::mpsc::unbounded();
-        let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
-
-        let service_runtime_thread = linera_base::task::Blocking::spawn(move |_| async move {
-            ServiceSyncRuntime::new(execution_state_sender, context).run(runtime_request_receiver)
-        })
-        .await;
-
-        let endpoint = ServiceRuntimeEndpoint {
-            incoming_execution_requests,
-            runtime_request_sender,
-        };
-        (service_runtime_thread, endpoint)
-    }
-
     /// Sleeps for the configured TTL.
     pub(super) async fn sleep_until_timeout(&self) {
         let now = self.storage.clock().current_time();
@@ -297,13 +303,11 @@ where
         trace!("Starting `ChainWorkerActor`");
 
         while let Some((request, span)) = incoming_requests.recv().await {
-            let (service_runtime_thread, service_runtime_endpoint) = {
-                if self.config.long_lived_services {
-                    let (thread, endpoint) = Self::spawn_service_runtime_actor(self.chain_id).await;
-                    (Some(thread), Some(endpoint))
-                } else {
-                    (None, None)
-                }
+            let (_service_runtime_thread, service_runtime_task, service_runtime_endpoint) = if self.config.long_lived_services {
+                let actor = ServiceRuntimeActor::spawn(self.chain_id).await;
+                (Some(actor.thread), Some(actor.task), Some(actor.endpoint))
+            } else {
+                (None, None, None)
             };
 
             trace!("Loading chain state of {}", self.chain_id);
@@ -339,8 +343,8 @@ where
             trace!("Unloading chain state of {} ...", self.chain_id);
             worker.clear_shared_chain_view().await;
             drop(worker);
-            if let Some(thread) = service_runtime_thread {
-                thread.join().await
+            if let Some(task) = service_runtime_task {
+                task.await?;
             }
             trace!("Done unloading chain state of {}", self.chain_id);
         }

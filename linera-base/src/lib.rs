@@ -35,8 +35,6 @@ pub mod prometheus_util;
 #[cfg(not(chain))]
 pub mod task;
 pub mod vm;
-#[cfg(not(chain))]
-pub use task::Blocking;
 pub mod time;
 #[cfg(test)]
 mod unit_tests;

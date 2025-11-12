@@ -43,7 +43,6 @@ use linera_base::{
         GenericApplicationId, ModuleId, StreamName,
     },
     ownership::ChainOwnership,
-    task,
     vm::VmRuntime,
 };
 use linera_views::{batch::Batch, ViewError};
@@ -101,7 +100,7 @@ pub type UserContractInstance = Box<dyn UserContract>;
 pub type UserServiceInstance = Box<dyn UserService>;
 
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
-pub trait UserContractModule: dyn_clone::DynClone + Any + task::Post + Send + Sync {
+pub trait UserContractModule: dyn_clone::DynClone + Any + web_thread::Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
@@ -117,7 +116,7 @@ impl<T: UserContractModule + Send + Sync + 'static> From<T> for UserContractCode
 dyn_clone::clone_trait_object!(UserContractModule);
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
-pub trait UserServiceModule: dyn_clone::DynClone + Any + task::Post + Send + Sync {
+pub trait UserServiceModule: dyn_clone::DynClone + Any + web_thread::Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
@@ -272,10 +271,8 @@ pub enum ExecutionError {
     UnauthorizedHttpRequest(reqwest::Url),
     #[error("Attempt to perform an HTTP request to an invalid URL")]
     InvalidUrlForHttpRequest(#[from] url::ParseError),
-    #[error("Failed to send contract code to worker thread: {0:?}")]
-    ContractModuleSend(#[from] linera_base::task::SendError<UserContractCode>),
-    #[error("Failed to send service code to worker thread: {0:?}")]
-    ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
+    #[error("Worker thread failure: {0:?}")]
+    Thread(#[from] web_thread::Error),
     #[error("The chain being queried is not active {0}")]
     InactiveChain(ChainId),
     #[error("Blobs not found: {0:?}")]
@@ -382,8 +379,7 @@ impl ExecutionError {
             ExecutionError::MissingRuntimeResponse
             | ExecutionError::ViewError(_)
             | ExecutionError::ReqwestError(_)
-            | ExecutionError::ContractModuleSend(_)
-            | ExecutionError::ServiceModuleSend(_)
+            | ExecutionError::Thread(_)
             | ExecutionError::NoNetworkDescriptionFound
             | ExecutionError::InternalError(_)
             | ExecutionError::IoError(_) => true,

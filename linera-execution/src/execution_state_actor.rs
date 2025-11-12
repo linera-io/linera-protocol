@@ -778,7 +778,8 @@ where
 
         let (code, description) = self.load_contract(application_id).await?;
 
-        let contract_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
+        let thread = web_thread::Thread::new();
+        let contract_runtime_task = thread.run_send(code, move |code| async move {
             let runtime = ContractSyncRuntime::new(
                 execution_state_sender,
                 chain_id,
@@ -786,22 +787,15 @@ where
                 controller,
                 &action,
             );
-
-            async move {
-                let code = codes.next().await.expect("we send this immediately below");
-                runtime.preload_contract(application_id, code, description)?;
-                runtime.run_action(application_id, chain_id, action)
-            }
-        })
-        .await;
-
-        contract_runtime_task.send(code)?;
+            runtime.preload_contract(application_id, code, description)?;
+            runtime.run_action(application_id, chain_id, action)
+        });
 
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
         }
 
-        let (result, controller) = contract_runtime_task.join().await?;
+        let (result, controller) = contract_runtime_task.await??;
 
         self.txn_tracker.add_operation_result(result);
 
