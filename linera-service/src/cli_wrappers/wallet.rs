@@ -472,33 +472,36 @@ impl ClientWrapper {
         port: impl Into<Option<u16>>,
         process_inbox: ProcessInbox,
     ) -> Result<NodeService> {
-        let port = port.into().unwrap_or(8080);
-        let mut command = self.command().await?;
-        command.arg("service");
-        if let ProcessInbox::Skip = process_inbox {
-            command.arg("--listener-skip-process-inbox");
-        }
-        if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
-            command.args(var.split_whitespace());
-        }
-        let child = command
-            .args(["--port".to_string(), port.to_string()])
-            .spawn_into()?;
-        let client = reqwest_client();
-        for i in 0..10 {
-            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            let request = client
-                .get(format!("http://localhost:{}/", port))
-                .send()
-                .await;
-            if request.is_ok() {
-                tracing::info!("Node service has started");
-                return Ok(NodeService::new(port, child));
-            } else {
-                tracing::warn!("Waiting for node service to start");
+        Box::pin(async move {
+            let port = port.into().unwrap_or(8080);
+            let mut command = self.command().await?;
+            command.arg("service");
+            if let ProcessInbox::Skip = process_inbox {
+                command.arg("--listener-skip-process-inbox");
             }
-        }
-        bail!("Failed to start node service");
+            if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
+                command.args(var.split_whitespace());
+            }
+            let child = command
+                .args(["--port".to_string(), port.to_string()])
+                .spawn_into()?;
+            let client = reqwest_client();
+            for i in 0..10 {
+                linera_base::time::timer::sleep(Duration::from_secs(i)).await;
+                let request = client
+                    .get(format!("http://localhost:{}/", port))
+                    .send()
+                    .await;
+                if request.is_ok() {
+                    tracing::info!("Node service has started");
+                    return Ok(NodeService::new(port, child));
+                } else {
+                    tracing::warn!("Waiting for node service to start");
+                }
+            }
+            bail!("Failed to start node service");
+        })
+        .await
     }
 
     /// Runs `linera query-validator`

@@ -8,6 +8,7 @@
     feature = "storage-service",
     feature = "remote-net"
 ))]
+#![allow(clippy::large_stack_frames)]
 
 mod guard;
 

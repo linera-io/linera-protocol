@@ -1509,7 +1509,7 @@ impl<Env: Environment> ChainClient<Env> {
             .map(Transaction::ReceiveMessages)
             .collect::<Vec<_>>();
         let timestamp = self.next_timestamp(&transactions, info.timestamp);
-        let block = ProposedBlock {
+        let block = Box::new(ProposedBlock {
             epoch: info.epoch,
             chain_id: self.chain_id,
             transactions,
@@ -1521,10 +1521,10 @@ impl<Env: Environment> ChainClient<Env> {
                 Some(owner)
             },
             timestamp,
-        };
+        });
         match self
             .client
-            .stage_block_execution_and_discard_failing_messages(block, None, Vec::new())
+            .stage_block_execution_and_discard_failing_messages(*block, None, Vec::new())
             .await
         {
             Ok((_, response)) => Ok((

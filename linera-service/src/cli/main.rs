@@ -385,7 +385,7 @@ impl Runnable for Job {
                 warn!("This command is deprecated. Use `linera sync && linera query-balance` instead.");
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
-                let result = chain_client.query_owner_balance(account.owner).await;
+                let result = Box::pin(chain_client.query_owner_balance(account.owner)).await;
                 context.update_wallet_from_client(&chain_client).await?;
                 let balance = result.context("Failed to synchronize from validators")?;
                 let time_total = time_start.elapsed();
