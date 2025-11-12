@@ -192,7 +192,7 @@ impl<N: Clone> InFlightTracker<N> {
     /// Pops and returns the newest alternative peer from the list.
     ///
     /// Removes and returns the last peer from the alternative peers list (LIFO - newest first).
-    /// Returns None if the entry doesn't exist or the list is empty.
+    /// Returns `None` if the entry doesn't exist or the list is empty.
     ///
     /// # Arguments
     /// - `key`: The request key to look up

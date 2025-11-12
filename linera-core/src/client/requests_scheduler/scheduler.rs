@@ -1314,7 +1314,7 @@ mod tests {
         // Give time for alternative peers to register
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        // With the new implementation, alternatives are being popped as staggered parallel runs.
+        // Alternatives are being popped as staggered parallel runs.
         // The first request is blocked waiting for the signal, so staggered parallel has started
         // and may have already popped one or both alternatives. We just verify that at least
         // one alternative was registered (before being popped).
@@ -1457,7 +1457,7 @@ mod tests {
         );
 
         // Second call should start immediately after first fails (aggressive retry)
-        // With new implementation, when node 0 fails immediately, we immediately start node 1
+        // When node 0 fails immediately, we immediately start node 1
         if times.len() > 1 {
             let delay = times[1].1.as_millis();
             assert!(
