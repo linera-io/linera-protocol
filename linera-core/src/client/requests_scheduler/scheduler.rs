@@ -1,7 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{cmp::Ordering, collections::BTreeMap, future::Future, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    future::Future,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
 
 use custom_debug_derive::Debug;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -733,37 +740,38 @@ impl<Env: Environment> RequestsScheduler<Env> {
 
         // Use LocalBoxFuture for wasm32, BoxFuture for other targets (which requires Send)
         #[cfg(target_arch = "wasm32")]
-        type IndexedFuture<T> =
-            futures::future::LocalBoxFuture<'static, (u32, Result<T, NodeError>)>;
+        type IndexedFuture<T> = futures::future::LocalBoxFuture<'static, Result<T, NodeError>>;
         #[cfg(not(target_arch = "wasm32"))]
-        type IndexedFuture<T> = futures::future::BoxFuture<'static, (u32, Result<T, NodeError>)>;
+        type IndexedFuture<T> = futures::future::BoxFuture<'static, Result<T, NodeError>>;
+
         let mut futures: FuturesUnordered<IndexedFuture<T>> = FuturesUnordered::new();
-        let mut peer_index = 0u32;
+        let peer_index = AtomicU32::new(0);
+
+        let push_future = |futures: &mut FuturesUnordered<IndexedFuture<T>>, fut: Fut| {
+            #[cfg(target_arch = "wasm32")]
+            #[allow(clippy::redundant_async_block)]
+            futures.push(async move { fut.await }.boxed_local());
+            #[cfg(not(target_arch = "wasm32"))]
+            // if removed types don't match.
+            #[allow(clippy::redundant_async_block)]
+            futures.push(async move { fut.await }.boxed());
+            peer_index.fetch_add(1, Ordering::SeqCst)
+        };
 
         // Start the first peer immediately (no delay)
-        let fut = operation(first_peer);
-        #[cfg(target_arch = "wasm32")]
-        futures.push(async move { (peer_index, fut.await) }.boxed_local());
-        #[cfg(not(target_arch = "wasm32"))]
-        futures.push(async move { (peer_index, fut.await) }.boxed());
-        peer_index += 1;
+        push_future(&mut futures, operation(first_peer));
 
-        let mut last_error = None;
-        let mut next_delay = Box::pin(sleep(staggered_delay * peer_index));
+        let mut last_error = NodeError::UnexpectedMessage;
+        let mut next_delay = Box::pin(sleep(staggered_delay * peer_index.load(Ordering::SeqCst)));
 
         // Phase 1: Race between futures completion and delays (while alternatives might exist)
         loop {
             // Exit condition: no futures running and can't start any more
             if futures.is_empty() {
                 if let Some(peer) = self.in_flight_tracker.pop_alternative_peer(key).await {
-                    let idx = peer_index;
-                    let fut = operation(peer);
-                    #[cfg(target_arch = "wasm32")]
-                    futures.push(async move { (idx, fut.await) }.boxed_local());
-                    #[cfg(not(target_arch = "wasm32"))]
-                    futures.push(async move { (idx, fut.await) }.boxed());
-                    peer_index += 1;
-                    next_delay = Box::pin(sleep(staggered_delay * peer_index));
+                    push_future(&mut futures, operation(peer));
+                    next_delay =
+                        Box::pin(sleep(staggered_delay * peer_index.load(Ordering::SeqCst)));
                 } else {
                     // No futures and no alternatives - we're done
                     break;
@@ -774,15 +782,14 @@ impl<Env: Environment> RequestsScheduler<Env> {
 
             match select(next_result, next_delay).await {
                 // A request completed
-                Either::Left((Some((idx, result)), delay_fut)) => {
+                Either::Left((Some(result), delay_fut)) => {
                     // Keep the delay future for next iteration
                     next_delay = delay_fut;
 
                     match result {
                         Ok(value) => {
-                            tracing::info!(
+                            tracing::trace!(
                                 key = ?key,
-                                peer_index = idx,
                                 "staggered parallel request succeeded"
                             );
                             return Ok(value);
@@ -790,23 +797,19 @@ impl<Env: Environment> RequestsScheduler<Env> {
                         Err(e) => {
                             tracing::debug!(
                                 key = ?key,
-                                peer_index = idx,
                                 error = %e,
                                 "staggered parallel request attempt failed"
                             );
-                            last_error = Some(e);
+                            last_error = e;
 
                             // Immediately try next alternative
                             if let Some(peer) =
                                 self.in_flight_tracker.pop_alternative_peer(key).await
                             {
-                                let idx = peer_index;
-                                let fut = operation(peer);
-                                #[cfg(target_arch = "wasm32")]
-                                futures.push(async move { (idx, fut.await) }.boxed_local());
-                                #[cfg(not(target_arch = "wasm32"))]
-                                futures.push(async move { (idx, fut.await) }.boxed());
-                                peer_index += 1;
+                                push_future(&mut futures, operation(peer));
+                                next_delay = Box::pin(sleep(
+                                    staggered_delay * peer_index.load(Ordering::SeqCst),
+                                ));
                             }
                         }
                     }
@@ -821,14 +824,9 @@ impl<Env: Environment> RequestsScheduler<Env> {
                 // Delay elapsed - try to start next peer
                 Either::Right((_, _)) => {
                     if let Some(peer) = self.in_flight_tracker.pop_alternative_peer(key).await {
-                        let idx = peer_index;
-                        let fut = operation(peer);
-                        #[cfg(target_arch = "wasm32")]
-                        futures.push(async move { (idx, fut.await) }.boxed_local());
-                        #[cfg(not(target_arch = "wasm32"))]
-                        futures.push(async move { (idx, fut.await) }.boxed());
-                        peer_index += 1;
-                        next_delay = Box::pin(sleep(staggered_delay * peer_index));
+                        push_future(&mut futures, operation(peer));
+                        next_delay =
+                            Box::pin(sleep(staggered_delay * peer_index.load(Ordering::SeqCst)));
                     } else {
                         // No more alternatives - break out to phase 2
                         break;
@@ -838,12 +836,11 @@ impl<Env: Environment> RequestsScheduler<Env> {
         }
 
         // Phase 2: No more alternatives, just wait for remaining futures to complete
-        while let Some((idx, result)) = futures.next().await {
+        while let Some(result) = futures.next().await {
             match result {
                 Ok(value) => {
-                    tracing::info!(
+                    tracing::trace!(
                         key = ?key,
-                        peer_index = idx,
                         "staggered parallel request succeeded"
                     );
                     return Ok(value);
@@ -851,11 +848,10 @@ impl<Env: Environment> RequestsScheduler<Env> {
                 Err(e) => {
                     tracing::debug!(
                         key = ?key,
-                        peer_index = idx,
                         error = %e,
                         "staggered parallel request attempt failed"
                     );
-                    last_error = Some(e);
+                    last_error = e;
                 }
             }
         }
@@ -865,7 +861,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
             key = ?key,
             "all staggered parallel retry attempts failed"
         );
-        Err(last_error.unwrap_or(NodeError::UnexpectedMessage))
+        Err(last_error)
     }
 
     /// Returns all peers ordered by their score (highest first).
@@ -887,7 +883,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         }
 
         // Sort by score (highest first)
-        scored_nodes.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
+        scored_nodes.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
         scored_nodes
     }
