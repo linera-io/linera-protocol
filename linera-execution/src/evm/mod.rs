@@ -49,6 +49,8 @@ pub enum EvmExecutionError {
     OperationIsTooShort,
     #[error("Missing bytecode")]
     MissingBytecode,
+    #[error("Contracts cannot call themselves")]
+    NoSelfCall,
     #[error("Transact error {0}")]
     TransactError(String),
     #[error("Impossible to create contracts in services")]

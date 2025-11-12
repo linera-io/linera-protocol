@@ -75,6 +75,9 @@ async fn assert_contract_balance(
     address: Address,
     balance: Amount,
 ) -> anyhow::Result<()> {
+    sol! {
+        function get_balance(address account);
+    }
     let query = get_balanceCall { account: address };
     let query = EvmQuery::Query(query.abi_encode());
     let result = app.run_json_query(query).await?;
@@ -570,7 +573,6 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
         function createCounter(uint256 initialValue);
         function get_address(uint256 index);
         function get_value();
-        function get_balance(address account);
         function increment();
     }
 
@@ -737,7 +739,6 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
 
     sol! {
         function send_cash(address recipient, uint256 amount);
-        function get_balance(address account);
         function null_operation();
     }
 
@@ -1677,7 +1678,6 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 
     // Creating the EVM smart contract
     sol! {
-        function get_balance(address account);
         function test_chain_id();
         function test_read_data_blob(bytes32 hash, uint32 len);
         function test_assert_data_blob_exists(bytes32 hash);
