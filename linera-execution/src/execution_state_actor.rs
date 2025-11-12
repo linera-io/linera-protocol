@@ -358,6 +358,11 @@ where
                 }
             }
 
+            PeekApplicationIndex { callback } => {
+                let index = self.txn_tracker.peek_application_index();
+                callback.respond(index)
+            }
+
             CreateApplication {
                 chain_id,
                 block_height,
@@ -1127,6 +1132,11 @@ pub enum ExecutionRequest {
         application_permissions: ApplicationPermissions,
         #[debug(skip)]
         callback: Sender<Result<(), ExecutionError>>,
+    },
+
+    PeekApplicationIndex {
+        #[debug(skip)]
+        callback: Sender<u32>,
     },
 
     CreateApplication {

@@ -19,12 +19,21 @@ library Linera {
         bytes32 value;
     }
 
-    function chainid_from(LineraTypes.ChainId memory entry)
+    function chain_id_from(LineraTypes.ChainId memory entry)
         internal
         pure
         returns (ChainId memory)
     {
         return ChainId(entry.value.value);
+    }
+
+    function chain_id_to(Linera.ChainId memory entry)
+        internal
+        pure
+        returns (LineraTypes.ChainId memory)
+    {
+        LineraTypes.CryptoHash memory hash = LineraTypes.CryptoHash(entry.value);
+        return LineraTypes.ChainId(hash);
     }
 
     struct AccountOwner {
@@ -37,7 +46,7 @@ library Linera {
         bytes20 address20;
     }
 
-    function accountowner_from(LineraTypes.AccountOwner memory owner)
+    function account_owner_from(LineraTypes.AccountOwner memory owner)
         internal
         pure
         returns (AccountOwner memory)
@@ -45,7 +54,7 @@ library Linera {
         return AccountOwner(owner.choice, owner.reserved, owner.address32.value, owner.address20);
     }
 
-    function accountowner_to(Linera.AccountOwner memory owner)
+    function account_owner_to(Linera.AccountOwner memory owner)
         internal
         pure
         returns (LineraTypes.AccountOwner memory)
@@ -54,18 +63,33 @@ library Linera {
         return LineraTypes.AccountOwner(owner.choice, owner.reserved, hash, owner.address20);
     }
 
+    struct Account {
+        ChainId chain_id;
+        AccountOwner owner;
+    }
+
+    function account_to(Linera.Account memory account_i)
+        internal
+        pure
+        returns (LineraTypes.Account memory)
+    {
+        LineraTypes.ChainId memory chain_id1 = chain_id_to(account_i.chain_id);
+        LineraTypes.AccountOwner memory owner1 = account_owner_to(account_i.owner);
+        return LineraTypes.Account(chain_id1, owner1);
+    }
+
     struct AccountOwnerBalance {
         AccountOwner account_owner;
         uint256 balance;
     }
 
-    function accountownerbalance_from(LineraTypes.AccountOwnerBalanceInner memory entry)
+    function account_owner_balance_from(LineraTypes.AccountOwnerBalanceInner memory entry)
         internal
         pure
         returns (AccountOwnerBalance memory)
     {
         uint256 balance = uint256(entry.balance_.value);
-        AccountOwner memory account_owner = accountowner_from(entry.account_owner);
+        AccountOwner memory account_owner = account_owner_from(entry.account_owner);
         return AccountOwnerBalance(account_owner, balance);
     }
 
@@ -122,7 +146,7 @@ library Linera {
         pure
         returns (AccountOwnerWeight memory)
     {
-        return AccountOwnerWeight(accountowner_from(entry.key), entry.value);
+        return AccountOwnerWeight(account_owner_from(entry.key), entry.value);
     }
 
     struct ChainOwnership {
@@ -142,7 +166,7 @@ library Linera {
         AccountOwner[] memory super_owners;
         super_owners = new AccountOwner[](len1);
         for (uint256 i=0; i<len1; i++) {
-            super_owners[i] = accountowner_from(entry.super_owners[i]);
+            super_owners[i] = account_owner_from(entry.super_owners[i]);
         }
         uint256 len2 = entry.owners.length;
         AccountOwnerWeight[] memory owners;
@@ -201,23 +225,23 @@ library Linera {
         ChainId value;
     }
 
-    function opt_accountowner_from(LineraTypes.opt_AccountOwner memory entry)
+    function opt_account_owner_from(LineraTypes.opt_AccountOwner memory entry)
         internal
         pure
         returns (opt_AccountOwner memory)
     {
-        return opt_AccountOwner(entry.has_value, accountowner_from(entry.value));
+        return opt_AccountOwner(entry.has_value, account_owner_from(entry.value));
     }
 
-    function opt_chainid_from(LineraTypes.opt_ChainId memory entry)
+    function opt_chain_id_from(LineraTypes.opt_ChainId memory entry)
         internal
         pure
         returns (opt_ChainId memory)
     {
-        return opt_ChainId(entry.has_value, chainid_from(entry.value));
+        return opt_ChainId(entry.has_value, chain_id_from(entry.value));
     }
 
-    function opt_chainid_none()
+    function opt_chain_id_none()
         internal
         pure
         returns (opt_ChainId memory)
@@ -276,7 +300,7 @@ library Linera {
         (bool success, bytes memory output1) = precompile.call(input2);
         require(success);
         LineraTypes.ChainId memory output2 = LineraTypes.bcs_deserialize_ChainId(output1);
-        return chainid_from(output2);
+        return chain_id_from(output2);
     }
 
     function block_height() internal returns (uint64) {
@@ -284,9 +308,9 @@ library Linera {
         LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_block_height();
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
-        (bool success, bytes memory output) = precompile.call(input2);
+        (bool success, bytes memory output1) = precompile.call(input2);
         require(success);
-        LineraTypes.BlockHeight memory output2 = LineraTypes.bcs_deserialize_BlockHeight(output);
+        LineraTypes.BlockHeight memory output2 = LineraTypes.bcs_deserialize_BlockHeight(output1);
         return output2.value;
     }
 
@@ -306,9 +330,9 @@ library Linera {
         LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_system_timestamp();
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
-        (bool success, bytes memory output) = precompile.call(input2);
+        (bool success, bytes memory output1) = precompile.call(input2);
         require(success);
-        LineraTypes.Timestamp memory output2 = LineraTypes.bcs_deserialize_Timestamp(output);
+        LineraTypes.Timestamp memory output2 = LineraTypes.bcs_deserialize_Timestamp(output1);
         return output2.value;
     }
 
@@ -317,21 +341,21 @@ library Linera {
         LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_chain_balance();
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
-        (bool success, bytes memory output) = precompile.call(input2);
+        (bool success, bytes memory output1) = precompile.call(input2);
         require(success);
-        LineraTypes.Amount memory output2 = LineraTypes.bcs_deserialize_Amount(output);
+        LineraTypes.Amount memory output2 = LineraTypes.bcs_deserialize_Amount(output1);
         return uint256(output2.value);
     }
 
     function read_owner_balance(Linera.AccountOwner memory owner) internal returns (uint256) {
         address precompile = address(0x0b);
-        LineraTypes.AccountOwner memory owner2 = accountowner_to(owner);
+        LineraTypes.AccountOwner memory owner2 = account_owner_to(owner);
         LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_owner_balance(owner2);
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
-        (bool success, bytes memory output) = precompile.call(input2);
+        (bool success, bytes memory output1) = precompile.call(input2);
         require(success);
-        LineraTypes.Amount memory output2 = LineraTypes.bcs_deserialize_Amount(output);
+        LineraTypes.Amount memory output2 = LineraTypes.bcs_deserialize_Amount(output1);
         return uint256(output2.value);
     }
 
@@ -340,14 +364,14 @@ library Linera {
         LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_owner_balances();
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
-        (bool success, bytes memory output) = precompile.call(input2);
+        (bool success, bytes memory output1) = precompile.call(input2);
         require(success);
-        LineraTypes.ResponseReadOwnerBalances memory output2 = LineraTypes.bcs_deserialize_ResponseReadOwnerBalances(output);
+        LineraTypes.ResponseReadOwnerBalances memory output2 = LineraTypes.bcs_deserialize_ResponseReadOwnerBalances(output1);
         uint256 len = output2.value.length;
         Linera.AccountOwnerBalance[] memory elist;
         elist = new Linera.AccountOwnerBalance[](len);
         for (uint256 i=0; i<len; i++) {
-            elist[i] = accountownerbalance_from(output2.value[i]);
+            elist[i] = account_owner_balance_from(output2.value[i]);
         }
         return elist;
     }
@@ -364,7 +388,7 @@ library Linera {
         Linera.AccountOwner[] memory elist;
         elist = new Linera.AccountOwner[](len);
         for (uint256 i=0; i<len; i++) {
-            elist[i] = accountowner_from(output2.value[i]);
+            elist[i] = account_owner_from(output2.value[i]);
         }
         return elist;
     }
@@ -414,7 +438,7 @@ library Linera {
         (bool success, bytes memory output1) = precompile.call(input2);
         require(success);
         LineraTypes.opt_AccountOwner memory output2 = LineraTypes.bcs_deserialize_opt_AccountOwner(output1);
-        return opt_accountowner_from(output2);
+        return opt_account_owner_from(output2);
     }
 
     function message_origin_chain_id() internal returns (opt_ChainId memory) {
@@ -425,7 +449,7 @@ library Linera {
         (bool success, bytes memory output1) = precompile.call(input2);
         require(success);
         LineraTypes.opt_ChainId memory output2 = LineraTypes.bcs_deserialize_opt_ChainId(output1);
-        return opt_chainid_from(output2);
+        return opt_chain_id_from(output2);
     }
 
     function message_is_bouncing() internal returns (OptionBool) {
@@ -503,9 +527,9 @@ library Linera {
     function subscribe_to_events(bytes32 chain_id1, bytes32 subscribed_application_id, bytes memory stream_name) internal {
         address precompile = address(0x0b);
         LineraTypes.ChainId memory chain_id2 = LineraTypes.ChainId(LineraTypes.CryptoHash(chain_id1));
-        LineraTypes.ApplicationId memory application_id2 = LineraTypes.ApplicationId(LineraTypes.CryptoHash(subscribed_application_id));
+        LineraTypes.ApplicationId memory application_id1 = LineraTypes.ApplicationId(LineraTypes.CryptoHash(subscribed_application_id));
         LineraTypes.StreamName memory stream_name2 = LineraTypes.StreamName(stream_name);
-        LineraTypes.ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events_ = LineraTypes.ContractRuntimePrecompile_SubscribeToEvents(chain_id2, application_id2, stream_name2);
+        LineraTypes.ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events_ = LineraTypes.ContractRuntimePrecompile_SubscribeToEvents(chain_id2, application_id1, stream_name2);
         LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_subscribe_to_events(subscribe_to_events_);
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
@@ -545,10 +569,23 @@ library Linera {
         LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_validation_round();
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output1) = precompile.call(input2);
+        require(success);
+        LineraTypes.opt_uint32 memory output2 = LineraTypes.bcs_deserialize_opt_uint32(output1);
+        return opt_uint32_from(output2);
+    }
+
+    function transfer(Linera.Account memory account, uint256 amount) internal {
+        address precompile = address(0x0b);
+        LineraTypes.Account memory account1 = account_to(account);
+        LineraTypes.Amount memory amount1 = LineraTypes.Amount(bytes32(amount));
+        LineraTypes.ContractRuntimePrecompile_Transfer memory transfer_ = LineraTypes.ContractRuntimePrecompile_Transfer(account1, amount1);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_transfer(transfer_);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
-        LineraTypes.opt_uint32 memory output2 = LineraTypes.bcs_deserialize_opt_uint32(output);
-        return opt_uint32_from(output2);
+        require(output.length == 0);
     }
 
     // ServiceRuntime functions.
