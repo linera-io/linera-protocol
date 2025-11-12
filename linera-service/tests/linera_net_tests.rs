@@ -69,6 +69,22 @@ use {
     linera_sdk::abis::evm::EvmAbi,
 };
 
+#[cfg(with_revm)]
+async fn assert_contract_balance(
+    app: &ApplicationWrapper<EvmAbi>,
+    address: Address,
+    balance: Amount,
+) -> anyhow::Result<()> {
+    let query = get_balanceCall { account: address };
+    let query = EvmQuery::Query(query.abi_encode());
+    let result = app.run_json_query(query).await?;
+    let balance_256: U256 = balance.into();
+    assert_eq!(read_evm_u256_entry(result), balance_256);
+    Ok(())
+}
+
+
+
 /// The environment variable name to specify the number of iterations in the performance-related
 /// tests.
 const LINERA_TEST_ITERATIONS: &str = "LINERA_TEST_ITERATIONS";
@@ -631,18 +647,6 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     // Creating the applications
 
     // The balance in Linera and EVM have to match.
-    async fn assert_contract_balance(
-        app: &ApplicationWrapper<EvmAbi>,
-        address: Address,
-        balance: Amount,
-    ) -> anyhow::Result<()> {
-        let query = get_balanceCall { account: address };
-        let query = EvmQuery::Query(query.abi_encode());
-        let result = app.run_json_query(query).await?;
-        let balance_256: U256 = balance.into();
-        assert_eq!(read_evm_u256_entry(result), balance_256);
-        Ok(())
-    }
 
     let application0 = ApplicationId::from(address0).with_abi::<EvmAbi>();
     let application0 = node_service.make_application(&chain_id, &application0)?;
@@ -738,19 +742,6 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     }
 
     // The balance in Linera and EVM have to match.
-    async fn assert_contract_balance(
-        app: &ApplicationWrapper<EvmAbi>,
-        address: Address,
-        balance: Amount,
-    ) -> anyhow::Result<()> {
-        let query = get_balanceCall { account: address };
-        let query = EvmQuery::Query(query.abi_encode());
-        let result = app.run_json_query(query).await?;
-        let balance_256: U256 = balance.into();
-        assert_eq!(read_evm_u256_entry(result), balance_256);
-        Ok(())
-    }
-
     let constructor_argument = Vec::new();
 
     let (evm_contract, _dir) =
@@ -1776,19 +1767,6 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     application.run_json_query(query).await?;
 
     // Doing a transfer
-
-    async fn assert_contract_balance(
-        app: &ApplicationWrapper<EvmAbi>,
-        address: Address,
-        balance: Amount,
-    ) -> anyhow::Result<()> {
-        let query = get_balanceCall { account: address };
-        let query = EvmQuery::Query(query.abi_encode());
-        let result = app.run_json_query(query).await?;
-        let balance_256: U256 = balance.into();
-        assert_eq!(read_evm_u256_entry(result), balance_256);
-        Ok(())
-    }
 
     assert_contract_balance(&application, address_app, Amount::from_tokens(27)).await?;
     let b256_chain_id2: B256 = <[u8; 32]>::from(chain_id2.0).into();
