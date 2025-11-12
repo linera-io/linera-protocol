@@ -346,13 +346,13 @@ where
     pub async fn execute_operation(
         &mut self,
         context: OperationContext,
-        operation: SystemOperation,
+        operation: Box<SystemOperation>,
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<Option<(ApplicationId, Vec<u8>)>, ExecutionError> {
         use SystemOperation::*;
         let mut new_application = None;
-        match operation {
+        match *operation {
             OpenChain(config) => {
                 let _chain_id = self
                     .open_chain(

@@ -50,14 +50,13 @@ impl StorageService {
     }
 
     pub async fn run(&self) -> Result<StorageServiceGuard> {
-        self.wait_for_absence().await?;
-        let mut command = self.command();
-        let _child = command.spawn_into()?;
+        Box::pin(self.wait_for_absence()).await?;
+        let _child = self.command().spawn_into()?;
         let guard = StorageServiceGuard { _child };
         // We iterate until the child is spawned and can be accessed.
         // We add an additional waiting period to avoid problems.
         for i in 1..10 {
-            let result = storage_service_check_validity(&self.endpoint).await;
+            let result = Box::pin(storage_service_check_validity(&self.endpoint)).await;
             if result.is_ok() {
                 return Ok(guard);
             }

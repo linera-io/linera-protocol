@@ -621,7 +621,7 @@ pub async fn storage_service_check_absence(
 pub async fn storage_service_check_validity(
     endpoint: &str,
 ) -> Result<(), StorageServiceStoreError> {
-    let config = service_config_from_endpoint(endpoint).unwrap();
+    let config = Box::new(service_config_from_endpoint(endpoint).unwrap());
     let namespace = "namespace";
     let database = StorageServiceDatabaseInternal::connect(&config, namespace).await?;
     let store = database.open_shared(&[])?;

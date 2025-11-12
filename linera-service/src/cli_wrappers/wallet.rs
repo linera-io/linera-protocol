@@ -1569,49 +1569,52 @@ impl NodeService {
         &self,
         chain_id: ChainId,
     ) -> Result<Pin<Box<impl Stream<Item = Result<Notification>>>>> {
-        let query = format!("subscription {{ notifications(chainId: \"{chain_id}\") }}",);
-        let url = format!("ws://localhost:{}/ws", self.port);
-        let mut request = url.into_client_request()?;
-        request.headers_mut().insert(
-            "Sec-WebSocket-Protocol",
-            HeaderValue::from_str("graphql-transport-ws")?,
-        );
-        let (mut websocket, _) = async_tungstenite::tokio::connect_async(request).await?;
-        let init_json = json!({
-          "type": "connection_init",
-          "payload": {}
-        });
-        websocket.send(init_json.to_string().into()).await?;
-        let text = websocket
-            .next()
-            .await
-            .context("Failed to establish connection")??
-            .into_text()?;
-        ensure!(
-            text == "{\"type\":\"connection_ack\"}",
-            "Unexpected response: {text}"
-        );
-        let query_json = json!({
-          "id": "1",
-          "type": "start",
-          "payload": {
-            "query": query,
-            "variables": {},
-            "operationName": null
-          }
-        });
-        websocket.send(query_json.to_string().into()).await?;
-        Ok(Box::pin(websocket.map_err(anyhow::Error::from).and_then(
-            |message| async {
-                let text = message.into_text()?;
-                let value: Value = serde_json::from_str(&text).context("invalid JSON")?;
-                if let Some(errors) = value["payload"].get("errors") {
-                    bail!("Notification subscription failed: {errors:?}");
-                }
-                serde_json::from_value(value["payload"]["data"]["notifications"].clone())
-                    .context("Failed to deserialize notification")
-            },
-        )))
+        Box::pin(async move {
+            let query = format!("subscription {{ notifications(chainId: \"{chain_id}\") }}",);
+            let url = format!("ws://localhost:{}/ws", self.port);
+            let mut request = url.into_client_request()?;
+            request.headers_mut().insert(
+                "Sec-WebSocket-Protocol",
+                HeaderValue::from_str("graphql-transport-ws")?,
+            );
+            let (mut websocket, _) = async_tungstenite::tokio::connect_async(request).await?;
+            let init_json = json!({
+              "type": "connection_init",
+              "payload": {}
+            });
+            websocket.send(init_json.to_string().into()).await?;
+            let text = websocket
+                .next()
+                .await
+                .context("Failed to establish connection")??
+                .into_text()?;
+            ensure!(
+                text == "{\"type\":\"connection_ack\"}",
+                "Unexpected response: {text}"
+            );
+            let query_json = json!({
+              "id": "1",
+              "type": "start",
+              "payload": {
+                "query": query,
+                "variables": {},
+                "operationName": null
+              }
+            });
+            websocket.send(query_json.to_string().into()).await?;
+            Ok(Box::pin(websocket.map_err(anyhow::Error::from).and_then(
+                |message| async {
+                    let text = message.into_text()?;
+                    let value: Value = serde_json::from_str(&text).context("invalid JSON")?;
+                    if let Some(errors) = value["payload"].get("errors") {
+                        bail!("Notification subscription failed: {errors:?}");
+                    }
+                    serde_json::from_value(value["payload"]["data"]["notifications"].clone())
+                        .context("Failed to deserialize notification")
+                },
+            )))
+        })
+        .await
     }
 }
 

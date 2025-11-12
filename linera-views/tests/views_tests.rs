@@ -828,14 +828,14 @@ async fn test_collection_removal() -> Result<()> {
     entry.set(1);
     let mut batch = Batch::new();
     collection.flush(&mut batch)?;
-    collection.context().store().write_batch(batch).await?;
+    Box::pin(collection.context().store().write_batch(batch)).await?;
 
     // Remove the entry from the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
     collection.remove_entry(&1)?;
     let mut batch = Batch::new();
     collection.flush(&mut batch)?;
-    collection.context().store().write_batch(batch).await?;
+    Box::pin(collection.context().store().write_batch(batch)).await?;
 
     // Check that the entry was removed.
     let collection = CollectionViewType::load(context.clone()).await?;
@@ -859,7 +859,7 @@ async fn test_removal_api_first_second_condition(
     entry.set(100);
     let mut batch = Batch::new();
     collection.flush(&mut batch)?;
-    collection.context().store().write_batch(batch).await?;
+    Box::pin(collection.context().store().write_batch(batch)).await?;
 
     // Reload the collection view and remove the entry, but don't commit yet
     let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
@@ -880,7 +880,7 @@ async fn test_removal_api_first_second_condition(
     // We commit
     let mut batch = Batch::new();
     collection.flush(&mut batch)?;
-    collection.context().store().write_batch(batch).await?;
+    Box::pin(collection.context().store().write_batch(batch)).await?;
 
     let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
     let expected_val = if second_condition {
@@ -921,25 +921,28 @@ async fn compute_hash_unordered_put_view<S>(
 where
     S: StateStorage,
 {
-    let mut view = store.load(1).await?;
-    for key_value in key_value_vector {
-        let key = key_value.0;
-        let value = key_value.1;
-        let key_str = format!("{:?}", &key);
-        let value_usize = (*value.first().unwrap()) as usize;
-        view.map.insert(&key_str, value_usize)?;
-        view.key_value_store.insert(key, value).await?;
-        {
-            let subview = view.collection.load_entry_mut(&key_str).await?;
-            subview.push(value_usize as u32);
+    Box::pin(async move {
+        let mut view = store.load(1).await?;
+        for key_value in key_value_vector {
+            let key = key_value.0;
+            let value = key_value.1;
+            let key_str = format!("{:?}", &key);
+            let value_usize = (*value.first().unwrap()) as usize;
+            view.map.insert(&key_str, value_usize)?;
+            view.key_value_store.insert(key, value).await?;
+            {
+                let subview = view.collection.load_entry_mut(&key_str).await?;
+                subview.push(value_usize as u32);
+            }
+            //
+            let choice = rng.gen_range(0..20);
+            if choice == 0 {
+                view.save().await?;
+            }
         }
-        //
-        let choice = rng.gen_range(0..20);
-        if choice == 0 {
-            view.save().await?;
-        }
-    }
-    Ok(view.hash().await?)
+        Ok(view.hash().await?)
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -951,38 +954,41 @@ async fn compute_hash_unordered_putdelete_view<S>(
 where
     S: StateStorage,
 {
-    let mut view = store.load(1).await?;
-    for operation in operations {
-        match operation {
-            Put { key, value } => {
-                let key_str = format!("{:?}", &key);
-                let first_value = *value.first().unwrap();
-                let first_value_usize = first_value as usize;
-                let first_value_u64 = first_value as u64;
-                let mut tmp = *view.x1.get();
-                tmp += first_value_u64;
-                view.x1.set(tmp);
-                view.map.insert(&key_str, first_value_usize)?;
-                view.key_value_store.insert(key, value).await?;
-                {
-                    let subview = view.collection.load_entry_mut(&key_str).await?;
-                    subview.push(first_value as u32);
+    Box::pin(async move {
+        let mut view = store.load(1).await?;
+        for operation in operations {
+            match operation {
+                Put { key, value } => {
+                    let key_str = format!("{:?}", &key);
+                    let first_value = *value.first().unwrap();
+                    let first_value_usize = first_value as usize;
+                    let first_value_u64 = first_value as u64;
+                    let mut tmp = *view.x1.get();
+                    tmp += first_value_u64;
+                    view.x1.set(tmp);
+                    view.map.insert(&key_str, first_value_usize)?;
+                    view.key_value_store.insert(key, value).await?;
+                    {
+                        let subview = view.collection.load_entry_mut(&key_str).await?;
+                        subview.push(first_value as u32);
+                    }
                 }
+                Delete { key } => {
+                    let key_str = format!("{:?}", &key);
+                    view.map.remove(&key_str)?;
+                    view.key_value_store.remove(key).await?;
+                }
+                DeletePrefix { key_prefix: _ } => {}
             }
-            Delete { key } => {
-                let key_str = format!("{:?}", &key);
-                view.map.remove(&key_str)?;
-                view.key_value_store.remove(key).await?;
+            //
+            let choice = rng.gen_range(0..10);
+            if choice == 0 {
+                Box::pin(view.save()).await?;
             }
-            DeletePrefix { key_prefix: _ } => {}
         }
-        //
-        let choice = rng.gen_range(0..10);
-        if choice == 0 {
-            view.save().await?;
-        }
-    }
-    Ok(view.hash().await?)
+        Ok(view.hash().await?)
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -994,58 +1000,64 @@ async fn compute_hash_ordered_view<S>(
 where
     S: StateStorage,
 {
-    let mut view = store.load(1).await?;
-    for key_value in key_value_vector {
-        let value = key_value.1;
-        let value_usize = (*value.first().unwrap()) as usize;
-        view.log.push(value_usize as u32);
-        view.queue.push_back(value_usize as u64);
-        //
-        let choice = rng.gen_range(0..20);
-        if choice == 0 {
-            view.save().await?;
+    Box::pin(async move {
+        let mut view = store.load(1).await?;
+        for key_value in key_value_vector {
+            let value = key_value.1;
+            let value_usize = (*value.first().unwrap()) as usize;
+            view.log.push(value_usize as u32);
+            view.queue.push_back(value_usize as u64);
+            //
+            let choice = rng.gen_range(0..20);
+            if choice == 0 {
+                view.save().await?;
+            }
         }
-    }
-    Ok(view.hash().await?)
+        Ok(view.hash().await?)
+    })
+    .await
 }
 
 #[cfg(test)]
 async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Result<()> {
-    use rand::seq::SliceRandom;
+    Box::pin(async move {
+        use rand::seq::SliceRandom;
 
-    let mut unord1_hashes = Vec::new();
-    let mut unord2_hashes = Vec::new();
-    let mut ord_hashes = Vec::new();
-    let key_value_vector = get_random_key_values(rng, n);
-    let info_op = get_random_key_value_operations(rng, n, k);
-    let n_iter = 4;
-    for _ in 0..n_iter {
-        let mut key_value_vector_b = key_value_vector.clone();
-        key_value_vector_b.shuffle(rng);
-        let operations = span_random_reordering_put_delete(rng, info_op.clone());
-        //
-        let mut store1 = MemoryTestStorage::new().await;
-        unord1_hashes
-            .push(compute_hash_unordered_put_view(rng, &mut store1, key_value_vector_b).await?);
-        let mut store2 = MemoryTestStorage::new().await;
-        unord2_hashes
-            .push(compute_hash_unordered_putdelete_view(rng, &mut store2, operations).await?);
-        let mut store3 = MemoryTestStorage::new().await;
-        ord_hashes
-            .push(compute_hash_ordered_view(rng, &mut store3, key_value_vector.clone()).await?);
-    }
-    for i in 1..n_iter {
-        assert_eq!(
-            unord1_hashes.first().unwrap(),
-            unord1_hashes.get(i).unwrap(),
-        );
-        assert_eq!(
-            unord2_hashes.first().unwrap(),
-            unord2_hashes.get(i).unwrap(),
-        );
-        assert_eq!(ord_hashes.first().unwrap(), ord_hashes.get(i).unwrap());
-    }
-    Ok(())
+        let mut unord1_hashes = Vec::new();
+        let mut unord2_hashes = Vec::new();
+        let mut ord_hashes = Vec::new();
+        let key_value_vector = get_random_key_values(rng, n);
+        let info_op = get_random_key_value_operations(rng, n, k);
+        let n_iter = 4;
+        for _ in 0..n_iter {
+            let mut key_value_vector_b = key_value_vector.clone();
+            key_value_vector_b.shuffle(rng);
+            let operations = span_random_reordering_put_delete(rng, info_op.clone());
+            //
+            let mut store1 = MemoryTestStorage::new().await;
+            unord1_hashes
+                .push(compute_hash_unordered_put_view(rng, &mut store1, key_value_vector_b).await?);
+            let mut store2 = MemoryTestStorage::new().await;
+            unord2_hashes
+                .push(compute_hash_unordered_putdelete_view(rng, &mut store2, operations).await?);
+            let mut store3 = MemoryTestStorage::new().await;
+            ord_hashes
+                .push(compute_hash_ordered_view(rng, &mut store3, key_value_vector.clone()).await?);
+        }
+        for i in 1..n_iter {
+            assert_eq!(
+                unord1_hashes.first().unwrap(),
+                unord1_hashes.get(i).unwrap(),
+            );
+            assert_eq!(
+                unord2_hashes.first().unwrap(),
+                unord2_hashes.get(i).unwrap(),
+            );
+            assert_eq!(ord_hashes.first().unwrap(), ord_hashes.get(i).unwrap());
+        }
+        Ok(())
+    })
+    .await
 }
 
 #[tokio::test]

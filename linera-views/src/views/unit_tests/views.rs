@@ -66,7 +66,7 @@ where
 {
     use self::Operation::*;
 
-    let test_cases = [
+    let test_cases = vec![
         vec![DeleteFront],
         vec![PushBack(100)],
         vec![PushBack(200), DeleteFront],
@@ -120,7 +120,11 @@ where
             tweaked_test_case.insert(commit_location + 1, CommitAndReload);
             tweaked_test_case.push(CommitAndReload);
 
-            run_test_queue_operations(tweaked_test_case, contexts.new_context().await?).await?;
+            Box::pin(run_test_queue_operations(
+                tweaked_test_case,
+                contexts.new_context().await?,
+            ))
+            .await?;
         }
     }
 

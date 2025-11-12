@@ -74,7 +74,7 @@ where
         for operation in operations {
             match operation {
                 Operations::Save => {
-                    view.save().await.unwrap();
+                    Box::pin(view.save()).await.unwrap();
                 }
                 Operations::DeleteFront => {
                     view.queue.delete_front();
@@ -86,7 +86,7 @@ where
             black_box(view.queue.front().await.unwrap());
         }
         view.clear();
-        view.save().await.unwrap();
+        Box::pin(view.save()).await.unwrap();
         total_time += measurement.elapsed();
     }
 
@@ -156,7 +156,7 @@ where
         for operation in operations {
             match operation {
                 Operations::Save => {
-                    view.save().await.unwrap();
+                    Box::pin(view.save()).await.unwrap();
                 }
                 Operations::DeleteFront => {
                     view.queue.delete_front().await.unwrap();
@@ -168,7 +168,7 @@ where
             black_box(view.queue.front());
         }
         view.clear();
-        view.save().await.unwrap();
+        Box::pin(view.save()).await.unwrap();
         total_time += measurement.elapsed();
     }
 

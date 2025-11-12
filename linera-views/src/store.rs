@@ -244,9 +244,9 @@ pub trait TestKeyValueDatabase: KeyValueDatabase {
 
     /// Creates a database for testing purposes
     async fn connect_test_namespace() -> Result<Self, Self::Error> {
-        let config = Self::new_test_config().await?;
+        let config = Box::new(Self::new_test_config().await?);
         let namespace = generate_test_namespace();
-        Self::recreate_and_connect(&config, &namespace).await
+        Self::recreate_and_connect(&*config, &namespace).await
     }
 
     /// Creates a store for testing purposes

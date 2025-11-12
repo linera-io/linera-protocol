@@ -337,7 +337,7 @@ mod test {
             new_block_queue,
             false,
         );
-        let (block_id, state) = make_state_2(&storage).await;
+        let (block_id, state) = Box::pin(make_state_2(&storage)).await;
         let _ = tx.send(block_id);
 
         tokio::select! {

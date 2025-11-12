@@ -120,7 +120,7 @@ pub struct LruCachingDatabase<D> {
     /// The inner store that is called by the LRU cache one.
     database: D,
     /// The configuration.
-    config: StorageCacheConfig,
+    config: Box<StorageCacheConfig>,
 }
 
 /// A key-value store with added LRU caching.
@@ -384,7 +384,7 @@ pub struct LruCachingConfig<C> {
     /// The inner configuration of the `LruCachingStore`.
     pub inner_config: C,
     /// The cache size being used.
-    pub storage_cache_config: StorageCacheConfig,
+    pub storage_cache_config: Box<StorageCacheConfig>,
 }
 
 impl<D> KeyValueDatabase for LruCachingDatabase<D>
@@ -411,7 +411,7 @@ where
         let store = self.database.open_shared(root_key)?;
         let store = LruCachingStore::new(
             store,
-            self.config.clone(),
+            (*self.config).clone(),
             /* has_exclusive_access */ false,
         );
         Ok(store)
@@ -421,7 +421,7 @@ where
         let store = self.database.open_exclusive(root_key)?;
         let store = LruCachingStore::new(
             store,
-            self.config.clone(),
+            (*self.config).clone(),
             /* has_exclusive_access */ true,
         );
         Ok(store)
@@ -496,7 +496,7 @@ where
 {
     async fn new_test_config() -> Result<LruCachingConfig<D::Config>, D::Error> {
         let inner_config = D::new_test_config().await?;
-        let storage_cache_config = DEFAULT_STORAGE_CACHE_CONFIG;
+        let storage_cache_config = Box::new(DEFAULT_STORAGE_CACHE_CONFIG);
         Ok(LruCachingConfig {
             inner_config,
             storage_cache_config,

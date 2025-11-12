@@ -75,84 +75,90 @@ impl Clone for TestValidator {
 
 impl TestValidator {
     /// Creates a new [`TestValidator`].
-    pub async fn new() -> Self {
-        let validator_keypair = ValidatorKeypair::generate();
-        let account_secret = AccountSecretKey::generate();
-        let epoch = Epoch::ZERO;
-        let committee = Committee::make_simple(vec![(
-            validator_keypair.public_key,
-            account_secret.public(),
-        )]);
-        let wasm_runtime = Some(WasmRuntime::default());
-        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(wasm_runtime)
-            .now_or_never()
-            .expect("execution of DbStorage::new should not await anything");
-        let clock = storage.clock().clone();
-        let worker = WorkerState::new(
-            "Single validator node".to_string(),
-            Some(validator_keypair.secret_key.copy()),
-            storage.clone(),
-            5_000,
-            10_000,
-        );
+    pub async fn new() -> Box<Self> {
+        Box::pin(async move {
+            let validator_keypair = ValidatorKeypair::generate();
+            let account_secret = AccountSecretKey::generate();
+            let epoch = Epoch::ZERO;
+            let committee = Committee::make_simple(vec![(
+                validator_keypair.public_key,
+                account_secret.public(),
+            )]);
+            let wasm_runtime = Some(WasmRuntime::default());
+            let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(wasm_runtime)
+                .now_or_never()
+                .expect("execution of DbStorage::new should not await anything");
+            let clock = storage.clock().clone();
+            let worker = WorkerState::new(
+                "Single validator node".to_string(),
+                Some(validator_keypair.secret_key.copy()),
+                storage.clone(),
+                5_000,
+                10_000,
+            );
 
-        // Create an admin chain.
-        let key_pair = AccountSecretKey::generate();
+            // Create an admin chain.
+            let key_pair = AccountSecretKey::generate();
 
-        let new_chain_config = InitialChainConfig {
-            ownership: ChainOwnership::single(key_pair.public().into()),
-            min_active_epoch: epoch,
-            max_active_epoch: epoch,
-            epoch,
-            balance: Amount::from_tokens(1_000_000),
-            application_permissions: ApplicationPermissions::default(),
-        };
+            let new_chain_config = InitialChainConfig {
+                ownership: ChainOwnership::single(key_pair.public().into()),
+                min_active_epoch: epoch,
+                max_active_epoch: epoch,
+                epoch,
+                balance: Amount::from_tokens(1_000_000),
+                application_permissions: ApplicationPermissions::default(),
+            };
 
-        let origin = ChainOrigin::Root(0);
-        let description = ChainDescription::new(origin, new_chain_config, Timestamp::from(0));
-        let admin_chain_id = description.id();
+            let origin = ChainOrigin::Root(0);
+            let description = Box::new(ChainDescription::new(
+                origin,
+                new_chain_config,
+                Timestamp::from(0),
+            ));
+            let admin_chain_id = description.id();
 
-        let committee_blob = Blob::new_committee(
-            bcs::to_bytes(&committee).expect("serializing a committee should succeed"),
-        );
+            let committee_blob = Blob::new_committee(
+                bcs::to_bytes(&committee).expect("serializing a committee should succeed"),
+            );
 
-        let network_description = NetworkDescription {
-            name: "Test network".to_string(),
-            genesis_config_hash: CryptoHash::test_hash("genesis config"),
-            genesis_timestamp: description.timestamp(),
-            genesis_committee_blob_hash: committee_blob.id().hash,
-            admin_chain_id,
-        };
-        storage
-            .write_network_description(&network_description)
-            .await
-            .unwrap();
-        storage
-            .write_blob(&committee_blob)
-            .await
-            .expect("writing a blob should succeed");
-        worker
-            .storage_client()
-            .create_chain(description.clone())
-            .await
-            .expect("Failed to create root admin chain");
+            let network_description = NetworkDescription {
+                name: "Test network".to_string(),
+                genesis_config_hash: CryptoHash::test_hash("genesis config"),
+                genesis_timestamp: description.timestamp(),
+                genesis_committee_blob_hash: committee_blob.id().hash,
+                admin_chain_id,
+            };
+            storage
+                .write_network_description(&network_description)
+                .await
+                .unwrap();
+            storage
+                .write_blob(&committee_blob)
+                .await
+                .expect("writing a blob should succeed");
+            worker
+                .storage_client()
+                .create_chain((*description).clone())
+                .await
+                .expect("Failed to create root admin chain");
 
-        let validator = TestValidator {
-            validator_secret: validator_keypair.secret_key,
-            account_secret,
-            committee: Arc::new(Mutex::new((epoch, committee))),
-            storage,
-            worker,
-            clock,
-            admin_chain_id,
-            chains: Arc::default(),
-        };
+            let validator = Box::new(TestValidator {
+                validator_secret: validator_keypair.secret_key,
+                account_secret,
+                committee: Arc::new(Mutex::new((epoch, committee))),
+                storage,
+                worker,
+                clock,
+                admin_chain_id,
+                chains: Arc::default(),
+            });
 
-        let chain = ActiveChain::new(key_pair, description.clone(), validator.clone());
+            let chain = ActiveChain::new(key_pair, description, validator.clone());
+            validator.chains.pin().insert(chain.id(), chain);
 
-        validator.chains.pin().insert(description.id(), chain);
-
-        validator
+            validator
+        })
+        .await
     }
 
     /// Creates a new [`TestValidator`] with a single microchain with the bytecode of the crate
@@ -160,7 +166,7 @@ impl TestValidator {
     ///
     /// Returns the new [`TestValidator`] and the [`ModuleId`] of the published module.
     pub async fn with_current_module<Abi, Parameters, InstantiationArgument>() -> (
-        TestValidator,
+        Box<TestValidator>,
         ModuleId<Abi, Parameters, InstantiationArgument>,
     ) {
         let validator = TestValidator::new().await;
@@ -182,7 +188,7 @@ impl TestValidator {
     pub async fn with_current_application<Abi, Parameters, InstantiationArgument>(
         parameters: Parameters,
         instantiation_argument: InstantiationArgument,
-    ) -> (TestValidator, ApplicationId<Abi>, ActiveChain)
+    ) -> (Box<TestValidator>, ApplicationId<Abi>, ActiveChain)
     where
         Abi: ContractAbi,
         Parameters: Serialize,
@@ -287,13 +293,17 @@ impl TestValidator {
         let description = self
             .request_new_chain_from_admin_chain(key_pair.public().into())
             .await;
-        let chain = ActiveChain::new(key_pair, description.clone(), self.clone());
+        let chain = Box::new(ActiveChain::new(
+            key_pair,
+            description.clone(),
+            Box::new(self.clone()),
+        ));
 
         chain.handle_received_messages().await;
 
-        self.chains.pin().insert(description.id(), chain.clone());
+        self.chains.pin().insert(description.id(), (*chain).clone());
 
-        chain
+        *chain
     }
 
     /// Creates a new microchain and returns the [`ActiveChain`] that can be used to add blocks to
@@ -311,7 +321,10 @@ impl TestValidator {
     /// Adds a block to the admin chain to create a new chain.
     ///
     /// Returns the [`ChainDescription`] of the new chain.
-    async fn request_new_chain_from_admin_chain(&self, owner: AccountOwner) -> ChainDescription {
+    async fn request_new_chain_from_admin_chain(
+        &self,
+        owner: AccountOwner,
+    ) -> Box<ChainDescription> {
         let admin_id = self.admin_chain_id;
         let pinned = self.chains.pin();
         let admin_chain = pinned
@@ -340,7 +353,11 @@ impl TestValidator {
             chain_index: 0,
         };
 
-        ChainDescription::new(origin, new_chain_config, Timestamp::from(0))
+        Box::new(ChainDescription::new(
+            origin,
+            new_chain_config,
+            Timestamp::from(0),
+        ))
     }
 
     /// Returns the [`ActiveChain`] reference to the microchain identified by `chain_id`.

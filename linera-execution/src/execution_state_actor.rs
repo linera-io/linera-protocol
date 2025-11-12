@@ -814,40 +814,43 @@ where
         context: OperationContext,
         operation: Operation,
     ) -> Result<(), ExecutionError> {
-        assert_eq!(context.chain_id, self.state.context().extra().chain_id());
-        match operation {
-            Operation::System(op) => {
-                let new_application = self
-                    .state
-                    .system
-                    .execute_operation(context, *op, self.txn_tracker, self.resource_controller)
-                    .await?;
-                if let Some((application_id, argument)) = new_application {
-                    let user_action = UserAction::Instantiate(context, argument);
+        Box::pin(async move {
+            assert_eq!(context.chain_id, self.state.context().extra().chain_id());
+            match operation {
+                Operation::System(op) => {
+                    let new_application = self
+                        .state
+                        .system
+                        .execute_operation(context, op, self.txn_tracker, self.resource_controller)
+                        .await?;
+                    if let Some((application_id, argument)) = new_application {
+                        let user_action = UserAction::Instantiate(context, argument);
+                        self.run_user_action(
+                            application_id,
+                            user_action,
+                            context.refund_grant_to(),
+                            None,
+                        )
+                        .await?;
+                    }
+                }
+                Operation::User {
+                    application_id,
+                    bytes,
+                } => {
                     self.run_user_action(
                         application_id,
-                        user_action,
+                        UserAction::Operation(context, bytes),
                         context.refund_grant_to(),
                         None,
                     )
                     .await?;
                 }
             }
-            Operation::User {
-                application_id,
-                bytes,
-            } => {
-                self.run_user_action(
-                    application_id,
-                    UserAction::Operation(context, bytes),
-                    context.refund_grant_to(),
-                    None,
-                )
-                .await?;
-            }
-        }
-        self.process_subscriptions(context.into()).await?;
-        Ok(())
+            self.process_subscriptions(context.into()).await?;
+            Ok(())
+        })
+        .await
     }
 
     pub async fn execute_message(
@@ -856,27 +859,30 @@ where
         message: Message,
         grant: Option<&mut Amount>,
     ) -> Result<(), ExecutionError> {
-        assert_eq!(context.chain_id, self.state.context().extra().chain_id());
-        match message {
-            Message::System(message) => {
-                let outcome = self.state.system.execute_message(context, message).await?;
-                self.txn_tracker.add_outgoing_messages(outcome);
-            }
-            Message::User {
-                application_id,
-                bytes,
-            } => {
-                self.run_user_action(
+        Box::pin(async move {
+            assert_eq!(context.chain_id, self.state.context().extra().chain_id());
+            match message {
+                Message::System(message) => {
+                    let outcome = self.state.system.execute_message(context, message).await?;
+                    self.txn_tracker.add_outgoing_messages(outcome);
+                }
+                Message::User {
                     application_id,
-                    UserAction::Message(context, bytes),
-                    context.refund_grant_to,
-                    grant,
-                )
-                .await?;
+                    bytes,
+                } => {
+                    self.run_user_action(
+                        application_id,
+                        UserAction::Message(context, bytes),
+                        context.refund_grant_to,
+                        grant,
+                    )
+                    .await?;
+                }
             }
-        }
-        self.process_subscriptions(context.into()).await?;
-        Ok(())
+            self.process_subscriptions(context.into()).await?;
+            Ok(())
+        })
+        .await
     }
 
     pub fn bounce_message(

@@ -39,9 +39,9 @@ use crate::{ContractAbi, ServiceAbi};
 /// A reference to a single microchain inside a [`TestValidator`].
 pub struct ActiveChain {
     key_pair: AccountSecretKey,
-    description: ChainDescription,
+    description: Box<ChainDescription>,
     tip: Arc<Mutex<Option<ConfirmedBlockCertificate>>>,
-    validator: TestValidator,
+    validator: Box<TestValidator>,
 }
 
 impl Clone for ActiveChain {
@@ -63,8 +63,8 @@ impl ActiveChain {
     /// `description` is used as the identifier of the microchain.
     pub fn new(
         key_pair: AccountSecretKey,
-        description: ChainDescription,
-        validator: TestValidator,
+        description: Box<ChainDescription>,
+        validator: Box<TestValidator>,
     ) -> Self {
         ActiveChain {
             key_pair,

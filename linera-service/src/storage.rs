@@ -88,8 +88,8 @@ pub struct CommonStorageOptions {
 }
 
 impl CommonStorageOptions {
-    pub fn storage_cache_config(&self) -> StorageCacheConfig {
-        StorageCacheConfig {
+    pub fn storage_cache_config(&self) -> Box<StorageCacheConfig> {
+        Box::new(StorageCacheConfig {
             max_cache_size: self.storage_max_cache_size,
             max_value_entry_size: self.storage_max_value_entry_size,
             max_find_keys_entry_size: self.storage_max_find_keys_entry_size,
@@ -98,7 +98,7 @@ impl CommonStorageOptions {
             max_cache_value_size: self.storage_max_cache_value_size,
             max_cache_find_keys_size: self.storage_max_cache_find_keys_size,
             max_cache_find_key_values_size: self.storage_max_cache_find_key_values_size,
-        }
+        })
     }
 }
 

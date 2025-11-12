@@ -685,7 +685,7 @@ async fn main() {
                 path_with_guard,
                 max_stream_queries,
             };
-            let storage_cache_config = StorageCacheConfig {
+            let storage_cache_config = Box::new(StorageCacheConfig {
                 max_cache_size,
                 max_value_entry_size,
                 max_find_keys_entry_size,
@@ -694,7 +694,7 @@ async fn main() {
                 max_cache_value_size,
                 max_cache_find_keys_size,
                 max_cache_find_key_values_size,
-            };
+            });
             let config = RocksDbStoreConfig {
                 inner_config,
                 storage_cache_config,

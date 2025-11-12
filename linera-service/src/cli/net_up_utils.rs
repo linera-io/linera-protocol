@@ -32,7 +32,7 @@ use crate::{
 
 struct StorageConfigProvider {
     /// The storage config.
-    config: StorageConfig,
+    config: Box<StorageConfig>,
     #[cfg(feature = "storage-service")]
     _service_guard: Option<StorageServiceGuard>,
 }
@@ -51,10 +51,10 @@ impl StorageConfigProvider {
                     endpoint: service_endpoint,
                 };
                 let namespace = "table_default".to_string();
-                let config = StorageConfig {
+                let config = Box::new(StorageConfig {
                     inner_storage_config,
                     namespace,
-                };
+                });
                 Ok(StorageConfigProvider {
                     config,
                     _service_guard,
@@ -66,7 +66,7 @@ impl StorageConfigProvider {
             }
             #[cfg(feature = "storage-service")]
             Some(storage) => {
-                let config = StorageConfig::from_str(storage)?;
+                let config = Box::new(StorageConfig::from_str(storage)?);
                 Ok(StorageConfigProvider {
                     config,
                     _service_guard: None,

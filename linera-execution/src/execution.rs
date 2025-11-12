@@ -210,17 +210,17 @@ where
                 let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
                 let outcome = match endpoint {
                     Some(endpoint) => {
-                        self.query_user_application_with_long_lived_service(
+                        Box::pin(self.query_user_application_with_long_lived_service(
                             application_id,
                             context,
                             bytes,
                             &mut endpoint.incoming_execution_requests,
                             &mut endpoint.runtime_request_sender,
-                        )
+                        ))
                         .await?
                     }
                     None => {
-                        self.query_user_application(application_id, context, bytes)
+                        Box::pin(self.query_user_application(application_id, context, bytes))
                             .await?
                     }
                 };

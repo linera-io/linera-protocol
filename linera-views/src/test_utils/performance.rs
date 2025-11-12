@@ -35,7 +35,7 @@ const LEN_VALUE: usize = 10000;
 async fn clear_store<S: KeyValueStore>(store: &S) {
     let mut batch = Batch::new();
     batch.delete_key_prefix(PREFIX.to_vec());
-    store.write_batch(batch).await.unwrap();
+    Box::pin(store.write_batch(batch)).await.unwrap();
 }
 
 /// Benchmarks the `contains_key` operation.
@@ -57,7 +57,7 @@ where
         for key_value in &key_values[..NUM_INSERT] {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
-        store.write_batch(batch).await.unwrap();
+        Box::pin(store.write_batch(batch)).await.unwrap();
 
         let measurement = Instant::now();
         for key_value in &key_values {
@@ -90,7 +90,7 @@ where
         for key_value in &key_values[..NUM_INSERT] {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
-        store.write_batch(batch).await.unwrap();
+        Box::pin(store.write_batch(batch)).await.unwrap();
         let keys = key_values
             .into_iter()
             .map(|(key, _)| key)
@@ -125,7 +125,7 @@ where
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
-        store.write_batch(batch).await.unwrap();
+        Box::pin(store.write_batch(batch)).await.unwrap();
 
         let measurement = Instant::now();
         f(store.find_keys_by_prefix(PREFIX_SEARCH).await.unwrap());
@@ -156,7 +156,7 @@ where
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
-        store.write_batch(batch).await.unwrap();
+        Box::pin(store.write_batch(batch)).await.unwrap();
 
         let measurement = Instant::now();
         f(store
@@ -190,7 +190,7 @@ where
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
-        store.write_batch(batch).await.unwrap();
+        Box::pin(store.write_batch(batch)).await.unwrap();
 
         let measurement = Instant::now();
         for (key, _) in &key_values {
@@ -223,7 +223,7 @@ where
         for key_value in &key_values {
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
-        store.write_batch(batch).await.unwrap();
+        Box::pin(store.write_batch(batch)).await.unwrap();
         let keys = key_values
             .into_iter()
             .map(|(key, _)| key)
@@ -258,7 +258,7 @@ where
         }
 
         let measurement = Instant::now();
-        store.write_batch(batch).await.unwrap();
+        Box::pin(store.write_batch(batch)).await.unwrap();
         total_time += measurement.elapsed();
 
         clear_store(&store).await;

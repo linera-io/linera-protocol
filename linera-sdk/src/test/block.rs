@@ -27,7 +27,7 @@ use super::TestValidator;
 /// [`ConfirmedBlockCertificate`]s using a [`TestValidator`].
 pub struct BlockBuilder {
     block: ProposedBlock,
-    validator: TestValidator,
+    validator: Box<TestValidator>,
 }
 
 impl BlockBuilder {
@@ -47,7 +47,7 @@ impl BlockBuilder {
         owner: AccountOwner,
         epoch: Epoch,
         previous_block: Option<&ConfirmedBlockCertificate>,
-        validator: TestValidator,
+        validator: Box<TestValidator>,
     ) -> Self {
         let previous_block_hash = previous_block.map(|certificate| certificate.hash());
         let height = previous_block

@@ -62,12 +62,12 @@ async fn application_message_index() -> anyhow::Result<()> {
     let vm_runtime = VmRuntime::Wasm;
     let module_id = ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
 
-    let operation = SystemOperation::CreateApplication {
+    let operation = Box::new(SystemOperation::CreateApplication {
         module_id,
         parameters: vec![],
         instantiation_argument: vec![],
         required_application_ids: vec![],
-    };
+    });
     let mut txn_tracker = TransactionTracker::default();
     view.context()
         .extra()
@@ -95,7 +95,7 @@ async fn open_chain_message_index() {
         application_permissions: Default::default(),
     };
     let mut txn_tracker = TransactionTracker::default();
-    let operation = SystemOperation::OpenChain(config.clone());
+    let operation = Box::new(SystemOperation::OpenChain(config.clone()));
     let mut controller = ResourceController::default();
     let new_application = view
         .system

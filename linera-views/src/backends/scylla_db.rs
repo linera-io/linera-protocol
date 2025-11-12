@@ -414,40 +414,44 @@ impl ScyllaDbClient {
         batch: UnorderedBatch,
     ) -> Result<(), ScyllaDbStoreInternalError> {
         let session = &self.session;
-        let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Unlogged);
+        let mut batch_query = Box::new(scylla::statement::batch::Batch::new(BatchType::Unlogged));
         let mut batch_values = Vec::new();
-        let query1 = &self.write_batch_delete_prefix_unbounded;
-        let query2 = &self.write_batch_delete_prefix_bounded;
-        Self::check_batch_len(&batch)?;
-        for key_prefix in batch.key_prefix_deletions {
-            Self::check_key_size(&key_prefix)?;
-            match get_upper_bound_option(&key_prefix) {
-                None => {
-                    let values = vec![root_key.to_vec(), key_prefix];
-                    batch_values.push(values);
-                    batch_query.append_statement(query1.clone());
-                }
-                Some(upper_bound) => {
-                    let values = vec![root_key.to_vec(), key_prefix, upper_bound];
-                    batch_values.push(values);
-                    batch_query.append_statement(query2.clone());
+        {
+            let query1 = &self.write_batch_delete_prefix_unbounded;
+            let query2 = &self.write_batch_delete_prefix_bounded;
+            Self::check_batch_len(&batch)?;
+            for key_prefix in batch.key_prefix_deletions {
+                Self::check_key_size(&key_prefix)?;
+                match get_upper_bound_option(&key_prefix) {
+                    None => {
+                        let values = vec![root_key.to_vec(), key_prefix];
+                        batch_values.push(values);
+                        batch_query.append_statement(query1.clone());
+                    }
+                    Some(upper_bound) => {
+                        let values = vec![root_key.to_vec(), key_prefix, upper_bound];
+                        batch_values.push(values);
+                        batch_query.append_statement(query2.clone());
+                    }
                 }
             }
         }
-        let query3 = &self.write_batch_deletion;
-        for key in batch.simple_unordered_batch.deletions {
-            Self::check_key_size(&key)?;
-            let values = vec![root_key.to_vec(), key];
-            batch_values.push(values);
-            batch_query.append_statement(query3.clone());
-        }
-        let query4 = &self.write_batch_insertion;
-        for (key, value) in batch.simple_unordered_batch.insertions {
-            Self::check_key_size(&key)?;
-            Self::check_value_size(&value)?;
-            let values = vec![root_key.to_vec(), key, value];
-            batch_values.push(values);
-            batch_query.append_statement(query4.clone());
+        {
+            let query3 = &self.write_batch_deletion;
+            for key in batch.simple_unordered_batch.deletions {
+                Self::check_key_size(&key)?;
+                let values = vec![root_key.to_vec(), key];
+                batch_values.push(values);
+                batch_query.append_statement(query3.clone());
+            }
+            let query4 = &self.write_batch_insertion;
+            for (key, value) in batch.simple_unordered_batch.insertions {
+                Self::check_key_size(&key)?;
+                Self::check_value_size(&value)?;
+                let values = vec![root_key.to_vec(), key, value];
+                batch_values.push(values);
+                batch_query.append_statement(query4.clone());
+            }
         }
         session.batch(&batch_query, batch_values).await?;
         Ok(())

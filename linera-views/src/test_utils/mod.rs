@@ -173,7 +173,7 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
         set_keys.insert(&key[..]);
         batch.put_key_value_bytes(key.clone(), value.clone());
     }
-    store.write_batch(batch).await.unwrap();
+    Box::pin(store.write_batch(batch)).await.unwrap();
     for key_prefix in keys
         .iter()
         .flat_map(|key| (0..=key.len()).map(|u| &key[..u]))
@@ -419,7 +419,7 @@ pub async fn run_test_batch_from_blank<C: KeyValueStore>(
     batch: Batch,
 ) {
     let kv_state = realize_batch(&batch);
-    key_value_store.write_batch(batch).await.unwrap();
+    Box::pin(key_value_store.write_batch(batch)).await.unwrap();
     // Checking the consistency
     let key_values = read_key_values_prefix(key_value_store, &key_prefix).await;
     assert_eq!(key_values, kv_state);
@@ -466,7 +466,7 @@ where
         keys.push(key);
         values.push(Some(value));
     }
-    store.write_batch(batch).await.unwrap();
+    Box::pin(store.write_batch(batch)).await.unwrap();
     // We reconnect so that the read is not using the cache.
     let store = D::connect(&config, &namespace).await.unwrap();
     let store = store.open_exclusive(&[]).unwrap();
@@ -517,7 +517,9 @@ pub async fn tombstone_triggering_test<C: KeyValueStore>(key_value_store: C) {
 
     // Deleting them all
     let t1 = Instant::now();
-    key_value_store.write_batch(batch_delete).await.unwrap();
+    Box::pin(key_value_store.write_batch(batch_delete))
+        .await
+        .unwrap();
     tracing::info!("batch_delete in {} ms", t1.elapsed().as_millis());
 
     for iter in 0..5 {
@@ -582,12 +584,14 @@ async fn run_test_batch_from_state<C: KeyValueStore>(
         kv_state.insert(key.clone(), value.clone());
         batch_insert.put_key_value_bytes(key, value);
     }
-    key_value_store.write_batch(batch_insert).await.unwrap();
+    Box::pin(key_value_store.write_batch(batch_insert))
+        .await
+        .unwrap();
     let key_values = read_key_values_prefix(key_value_store, &key_prefix).await;
     assert_eq!(key_values, kv_state);
 
     update_state_from_batch(&mut kv_state, &batch);
-    key_value_store.write_batch(batch).await.unwrap();
+    Box::pin(key_value_store.write_batch(batch)).await.unwrap();
     let key_values = read_key_values_prefix(key_value_store, &key_prefix).await;
     assert_eq!(key_values, kv_state);
 }
@@ -699,70 +703,73 @@ async fn namespaces_with_prefix<D: KeyValueDatabase>(
 /// This tests everything except the `delete_all` which would
 /// interact with other namespaces.
 pub async fn namespace_admin_test<D: TestKeyValueDatabase>() {
-    let config = D::new_test_config().await.expect("config");
-    {
-        let namespace = generate_test_namespace();
-        D::create(&config, &namespace)
-            .await
-            .expect("first creation of a namespace");
-        // Creating a namespace two times should returns an error
-        assert!(D::create(&config, &namespace).await.is_err());
-    }
-    let prefix = generate_test_namespace();
-    let namespaces = namespaces_with_prefix::<D>(&config, &prefix).await;
-    assert_eq!(namespaces.len(), 0);
-    let mut rng = make_deterministic_rng();
-    let size = 9;
-    // Creating the initial list of namespaces
-    let mut working_namespaces = BTreeSet::new();
-    for i in 0..size {
-        let namespace = format!("{}_{}", prefix, i);
-        assert!(!D::exists(&config, &namespace).await.expect("test"));
-        working_namespaces.insert(namespace);
-    }
-    // Creating the namespaces
-    for namespace in &working_namespaces {
-        D::create(&config, namespace)
-            .await
-            .expect("creation of a namespace");
-        assert!(D::exists(&config, namespace).await.expect("test"));
-    }
-    // Connecting to all of them at once
-    {
-        let mut connections = Vec::new();
-        for namespace in &working_namespaces {
-            let connection = D::connect(&config, namespace)
+    Box::pin(async move {
+        let config = D::new_test_config().await.expect("config");
+        {
+            let namespace = generate_test_namespace();
+            D::create(&config, &namespace)
                 .await
-                .expect("a connection to the namespace");
-            connections.push(connection);
+                .expect("first creation of a namespace");
+            // Creating a namespace two times should returns an error
+            assert!(D::create(&config, &namespace).await.is_err());
         }
-    }
-    // Listing all of them
-    let namespaces = namespaces_with_prefix::<D>(&config, &prefix).await;
-    assert_eq!(namespaces, working_namespaces);
-    // Selecting at random some for deletion
-    let mut kept_namespaces = BTreeSet::new();
-    for namespace in working_namespaces {
-        let delete = rng.gen::<bool>();
-        if delete {
+        let prefix = generate_test_namespace();
+        let namespaces = namespaces_with_prefix::<D>(&config, &prefix).await;
+        assert_eq!(namespaces.len(), 0);
+        let mut rng = make_deterministic_rng();
+        let size = 9;
+        // Creating the initial list of namespaces
+        let mut working_namespaces = BTreeSet::new();
+        for i in 0..size {
+            let namespace = format!("{}_{}", prefix, i);
+            assert!(!D::exists(&config, &namespace).await.expect("test"));
+            working_namespaces.insert(namespace);
+        }
+        // Creating the namespaces
+        for namespace in &working_namespaces {
+            D::create(&config, namespace)
+                .await
+                .expect("creation of a namespace");
+            assert!(D::exists(&config, namespace).await.expect("test"));
+        }
+        // Connecting to all of them at once
+        {
+            let mut connections = Vec::new();
+            for namespace in &working_namespaces {
+                let connection = D::connect(&config, namespace)
+                    .await
+                    .expect("a connection to the namespace");
+                connections.push(connection);
+            }
+        }
+        // Listing all of them
+        let namespaces = namespaces_with_prefix::<D>(&config, &prefix).await;
+        assert_eq!(namespaces, working_namespaces);
+        // Selecting at random some for deletion
+        let mut kept_namespaces = BTreeSet::new();
+        for namespace in working_namespaces {
+            let delete = rng.gen::<bool>();
+            if delete {
+                D::delete(&config, &namespace)
+                    .await
+                    .expect("A successful deletion");
+                assert!(!D::exists(&config, &namespace).await.expect("test"));
+            } else {
+                kept_namespaces.insert(namespace);
+            }
+        }
+        for namespace in &kept_namespaces {
+            assert!(D::exists(&config, namespace).await.expect("test"));
+        }
+        let namespaces = namespaces_with_prefix::<D>(&config, &prefix).await;
+        assert_eq!(namespaces, kept_namespaces);
+        for namespace in kept_namespaces {
             D::delete(&config, &namespace)
                 .await
                 .expect("A successful deletion");
-            assert!(!D::exists(&config, &namespace).await.expect("test"));
-        } else {
-            kept_namespaces.insert(namespace);
         }
-    }
-    for namespace in &kept_namespaces {
-        assert!(D::exists(&config, namespace).await.expect("test"));
-    }
-    let namespaces = namespaces_with_prefix::<D>(&config, &prefix).await;
-    assert_eq!(namespaces, kept_namespaces);
-    for namespace in kept_namespaces {
-        D::delete(&config, &namespace)
-            .await
-            .expect("A successful deletion");
-    }
+    })
+    .await
 }
 
 /// Tests listing the root keys.
@@ -771,85 +778,88 @@ where
     D: TestKeyValueDatabase,
     D::Store: KeyValueStore,
 {
-    let config = D::new_test_config().await.expect("config");
-    let namespace = generate_test_namespace();
-    let mut root_keys = Vec::new();
-    let mut keys = BTreeSet::new();
-    D::create(&config, &namespace).await.expect("creation");
-    let prefix = vec![0];
-    {
-        let size = 3;
-        let mut rng = make_deterministic_rng();
-        let database = D::connect(&config, &namespace).await.expect("store");
-        let shared_store = database.open_shared(&[]).expect("shared store");
-        root_keys.push(vec![]);
-        let mut batch = Batch::new();
-        for _ in 0..2 {
-            let key = get_random_byte_vector(&mut rng, &prefix, 4);
-            batch.put_key_value_bytes(key.clone(), vec![]);
-            keys.insert((vec![], key));
-        }
-        shared_store.write_batch(batch).await.expect("write batch");
-
-        for _ in 0..20 {
-            let root_key = get_random_byte_vector(&mut rng, &[], 4);
-            let exclusive_store = database.open_exclusive(&root_key).expect("exclusive store");
-            assert_eq!(exclusive_store.root_key().unwrap(), root_key);
-            root_keys.push(root_key.clone());
-            let size_select = rng.gen_range(0..size);
+    Box::pin(async move {
+        let config = D::new_test_config().await.expect("config");
+        let namespace = generate_test_namespace();
+        let mut root_keys = Vec::new();
+        let mut keys = BTreeSet::new();
+        D::create(&config, &namespace).await.expect("creation");
+        let prefix = vec![0];
+        {
+            let size = 3;
+            let mut rng = make_deterministic_rng();
+            let database = D::connect(&config, &namespace).await.expect("store");
+            let shared_store = database.open_shared(&[]).expect("shared store");
+            root_keys.push(vec![]);
             let mut batch = Batch::new();
-            for _ in 0..size_select {
+            for _ in 0..2 {
                 let key = get_random_byte_vector(&mut rng, &prefix, 4);
                 batch.put_key_value_bytes(key.clone(), vec![]);
-                keys.insert((root_key.clone(), key));
+                keys.insert((vec![], key));
             }
-            exclusive_store
-                .write_batch(batch)
+            shared_store.write_batch(batch).await.expect("write batch");
+
+            for _ in 0..20 {
+                let root_key = get_random_byte_vector(&mut rng, &[], 4);
+                let exclusive_store = database.open_exclusive(&root_key).expect("exclusive store");
+                assert_eq!(exclusive_store.root_key().unwrap(), root_key);
+                root_keys.push(root_key.clone());
+                let size_select = rng.gen_range(0..size);
+                let mut batch = Batch::new();
+                for _ in 0..size_select {
+                    let key = get_random_byte_vector(&mut rng, &prefix, 4);
+                    batch.put_key_value_bytes(key.clone(), vec![]);
+                    keys.insert((root_key.clone(), key));
+                }
+                exclusive_store
+                    .write_batch(batch)
+                    .await
+                    .expect("write batch");
+            }
+        }
+
+        let read_root_keys = {
+            let database = D::connect(&config, &namespace).await.expect("store");
+            database.list_root_keys().await.expect("read_root_keys")
+        };
+        let set_root_keys = root_keys.iter().cloned().collect::<HashSet<_>>();
+        for read_root_key in &read_root_keys {
+            assert!(set_root_keys.contains(read_root_key));
+        }
+
+        let mut read_keys = BTreeSet::new();
+        for root_key in read_root_keys {
+            let store = D::connect(&config, &namespace)
                 .await
-                .expect("write batch");
+                .expect("database")
+                .open_exclusive(&root_key)
+                .expect("store");
+            let keys = store.find_keys_by_prefix(&prefix).await.expect("keys");
+            for key in keys {
+                let mut big_key = prefix.clone();
+                let key = key.to_vec();
+                big_key.extend(key);
+                read_keys.insert((root_key.clone(), big_key));
+            }
         }
-    }
+        assert_eq!(keys, read_keys);
 
-    let read_root_keys = {
-        let database = D::connect(&config, &namespace).await.expect("store");
-        database.list_root_keys().await.expect("read_root_keys")
-    };
-    let set_root_keys = root_keys.iter().cloned().collect::<HashSet<_>>();
-    for read_root_key in &read_root_keys {
-        assert!(set_root_keys.contains(read_root_key));
-    }
+        // Checking prefix freeness of the (root_key, key). This is a
+        // common problem that needs to be tested.
+        let database = D::connect_test_namespace().await.expect("database");
+        let store1 = database.open_shared(&[2, 3, 4, 5]).expect("store1");
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(vec![6, 7], vec![123, 135]);
+        store1.write_batch(batch).await.expect("write_batch");
 
-    let mut read_keys = BTreeSet::new();
-    for root_key in read_root_keys {
-        let store = D::connect(&config, &namespace)
+        let store2 = database.open_shared(&[]).expect("store2");
+        let key_values = store2
+            .find_key_values_by_prefix(&[2])
             .await
-            .expect("database")
-            .open_exclusive(&root_key)
-            .expect("store");
-        let keys = store.find_keys_by_prefix(&prefix).await.expect("keys");
-        for key in keys {
-            let mut big_key = prefix.clone();
-            let key = key.to_vec();
-            big_key.extend(key);
-            read_keys.insert((root_key.clone(), big_key));
-        }
-    }
-    assert_eq!(keys, read_keys);
-
-    // Checking prefix freeness of the (root_key, key). This is a
-    // common problem that needs to be tested.
-    let database = D::connect_test_namespace().await.expect("database");
-    let store1 = database.open_shared(&[2, 3, 4, 5]).expect("store1");
-    let mut batch = Batch::new();
-    batch.put_key_value_bytes(vec![6, 7], vec![123, 135]);
-    store1.write_batch(batch).await.expect("write_batch");
-
-    let store2 = database.open_shared(&[]).expect("store2");
-    let key_values = store2
-        .find_key_values_by_prefix(&[2])
-        .await
-        .expect("key_values");
-    assert_eq!(key_values.len(), 0);
+            .expect("key_values");
+        assert_eq!(key_values.len(), 0);
+    })
+    .await
 }
 
 /// A store can be in exclusive access where it stores the absence of values
@@ -871,7 +881,7 @@ where
     D: TestKeyValueDatabase,
     D::Store: KeyValueStore,
 {
-    let config = D::new_test_config().await.expect("config");
+    let config = Box::new(D::new_test_config().await.expect("config"));
     let namespace = generate_test_namespace();
     D::create(&config, &namespace).await.expect("creation");
     let key = vec![42];
@@ -884,7 +894,9 @@ where
     };
     let mut batch1 = Batch::new();
     batch1.delete_key(key.clone());
-    store1.write_batch(batch1).await.expect("write batch1");
+    Box::pin(store1.write_batch(batch1))
+        .await
+        .expect("write batch1");
 
     let store2 = if exclusive_access {
         namespace.open_exclusive(&[]).expect("store2")
@@ -893,7 +905,9 @@ where
     };
     let mut batch2 = Batch::new();
     batch2.put_key_value_bytes(key.clone(), vec![]);
-    store2.write_batch(batch2).await.expect("write batch2");
+    Box::pin(store2.write_batch(batch2))
+        .await
+        .expect("write batch2");
 
     assert_eq!(store1.contains_key(&key).await.unwrap(), !exclusive_access);
 }
@@ -904,6 +918,6 @@ where
     D: TestKeyValueDatabase,
     D::Store: KeyValueStore,
 {
-    exclusive_access_admin_test::<D>(true).await;
-    exclusive_access_admin_test::<D>(false).await;
+    Box::pin(exclusive_access_admin_test::<D>(true)).await;
+    Box::pin(exclusive_access_admin_test::<D>(false)).await;
 }

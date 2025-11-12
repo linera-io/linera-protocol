@@ -42,7 +42,7 @@ where
     D: KeyValueDatabase,
 {
     pub database: D,
-    pub config: IndexerConfig<Config>,
+    pub config: Box<IndexerConfig<Config>>,
     pub indexer: Indexer<D>,
 }
 
@@ -62,7 +62,7 @@ where
         let indexer = Indexer::load(database.clone()).await?;
         Ok(Self {
             database,
-            config,
+            config: Box::new(config),
             indexer,
         })
     }

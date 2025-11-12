@@ -66,11 +66,11 @@ use crate::{
 /// Results from querying a validator about version, network description, and chain info.
 pub struct ValidatorQueryResults {
     /// The validator's version information.
-    pub version_info: Result<VersionInfo, Error>,
+    pub version_info: Result<Box<VersionInfo>, Error>,
     /// The validator's genesis config hash.
     pub genesis_config_hash: Result<CryptoHash, Error>,
     /// The validator's chain info (if valid and signature check passed).
-    pub chain_info: Result<ChainInfo, Error>,
+    pub chain_info: Result<Box<ChainInfo>, Error>,
 }
 
 impl ValidatorQueryResults {
@@ -667,14 +667,14 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         &self,
         address: &str,
         node: &impl ValidatorNode,
-    ) -> Result<VersionInfo, Error> {
+    ) -> Result<Box<VersionInfo>, Error> {
         match node.get_version_info().await {
             Ok(version_info) if version_info.is_compatible_with(&linera_version::VERSION_INFO) => {
                 debug!(
                     "Version information for validator {address}: {}",
                     version_info
                 );
-                Ok(version_info)
+                Ok(Box::new(version_info))
             }
             Ok(version_info) => Err(error::Inner::UnexpectedVersionInfo {
                 remote: Box::new(version_info),
@@ -721,7 +721,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         address: &str,
         node: &impl ValidatorNode,
         chain_id: ChainId,
-    ) -> Result<ChainInfo, Error> {
+    ) -> Result<Box<ChainInfo>, Error> {
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
         match node.handle_chain_info_query(query).await {
             Ok(response) => {
@@ -741,7 +741,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
                 } else {
                     warn!("Not checking signature as public key was not given");
                 }
-                Ok(*response.info)
+                Ok(response.info)
             }
             Err(error) => Err(error::Inner::UnavailableChainInfo {
                 address: address.to_string(),
@@ -762,24 +762,27 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         chain_id: ChainId,
         public_key: Option<&ValidatorPublicKey>,
     ) -> ValidatorQueryResults {
-        let version_info = self.check_compatible_version_info(address, node).await;
-        let genesis_config_hash = self.check_matching_network_description(address, node).await;
-        let chain_info = self
-            .check_validator_chain_info_response(public_key, address, node, chain_id)
-            .await;
+        Box::pin(async move {
+            let version_info = self.check_compatible_version_info(address, node).await;
+            let genesis_config_hash = self.check_matching_network_description(address, node).await;
+            let chain_info = self
+                .check_validator_chain_info_response(public_key, address, node, chain_id)
+                .await;
 
-        ValidatorQueryResults {
-            version_info,
-            genesis_config_hash,
-            chain_info,
-        }
+            ValidatorQueryResults {
+                version_info,
+                genesis_config_hash,
+                chain_info,
+            }
+        })
+        .await
     }
 
     /// Query the local node for version info, network description, and chain info.
     ///
     /// Returns a `ValidatorQueryResults` struct with the local node's information.
     pub async fn query_local_node(&self, chain_id: ChainId) -> ValidatorQueryResults {
-        let version_info = Ok(linera_version::VERSION_INFO.clone());
+        let version_info = Ok(Box::new(linera_version::VERSION_INFO.clone()));
         let genesis_config_hash = Ok(self
             .wallet()
             .genesis_config()
@@ -789,7 +792,6 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
             .make_chain_client(chain_id)
             .chain_info_with_manager_values()
             .await
-            .map(|info| *info)
             .map_err(|e| e.into());
 
         ValidatorQueryResults {

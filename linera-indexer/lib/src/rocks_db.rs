@@ -74,7 +74,7 @@ pub type RocksDbRunner = Runner<RocksDbDatabase, RocksDbConfig>;
 impl RocksDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
         let config = IndexerConfig::<RocksDbConfig>::parse();
-        let storage_cache_config = StorageCacheConfig {
+        let storage_cache_config = Box::new(StorageCacheConfig {
             max_cache_size: config.client.max_cache_size,
             max_value_entry_size: config.client.max_value_entry_size,
             max_find_keys_entry_size: config.client.max_find_keys_entry_size,
@@ -83,7 +83,7 @@ impl RocksDbRunner {
             max_cache_value_size: config.client.max_cache_value_size,
             max_cache_find_keys_size: config.client.max_cache_find_keys_size,
             max_cache_find_key_values_size: config.client.max_cache_find_key_values_size,
-        };
+        });
         let path_buf = config.client.storage.as_path().to_path_buf();
         let path_with_guard = PathWithGuard::new(path_buf);
         // The tests are run in single threaded mode, therefore we need
