@@ -4,13 +4,14 @@
 //! Code specific to the input of functions, that is selectors,
 //! constructor argument and instantiation argument.
 
+use alloy_primitives::Bytes;
 use linera_base::{
     crypto::CryptoHash,
     data_types::StreamUpdate,
     ensure,
-    identifiers::{ApplicationId, ChainId, StreamName},
+    identifiers::{ApplicationId, ChainId, GenericApplicationId, StreamId, StreamName},
 };
-use revm_primitives::{address, Address, U256};
+use revm_primitives::{address, Address, B256, U256};
 
 use crate::EvmExecutionError;
 
@@ -45,6 +46,80 @@ alloy_sol_types::sol! {
     }
 
     function process_streams(InternalStreamUpdate[] internal_streams);
+}
+
+fn crypto_hash_to_internal_crypto_hash(hash: CryptoHash) -> B256 {
+    let hash = <[u64; 4]>::from(hash);
+    let hash = linera_base::crypto::u64_array_to_be_bytes(hash);
+    hash.into()
+}
+
+impl From<ApplicationId> for InternalApplicationId {
+    fn from(application_id: ApplicationId) -> InternalApplicationId {
+        let application_description_hash =
+            crypto_hash_to_internal_crypto_hash(application_id.application_description_hash);
+        InternalApplicationId {
+            application_description_hash,
+        }
+    }
+}
+
+impl From<GenericApplicationId> for InternalGenericApplicationId {
+    fn from(generic_application_id: GenericApplicationId) -> InternalGenericApplicationId {
+        match generic_application_id {
+            GenericApplicationId::System => {
+                let application_description_hash = B256::ZERO;
+                InternalGenericApplicationId {
+                    choice: 0,
+                    user: InternalApplicationId {
+                        application_description_hash,
+                    },
+                }
+            }
+            GenericApplicationId::User(application_id) => InternalGenericApplicationId {
+                choice: 1,
+                user: application_id.into(),
+            },
+        }
+    }
+}
+
+impl From<ChainId> for InternalChainId {
+    fn from(chain_id: ChainId) -> InternalChainId {
+        let value = crypto_hash_to_internal_crypto_hash(chain_id.0);
+        InternalChainId { value }
+    }
+}
+
+impl From<StreamName> for InternalStreamName {
+    fn from(stream_name: StreamName) -> InternalStreamName {
+        let stream_name = Bytes::from(stream_name.0);
+        InternalStreamName { stream_name }
+    }
+}
+
+impl From<StreamId> for InternalStreamId {
+    fn from(stream_id: StreamId) -> InternalStreamId {
+        let application_id = stream_id.application_id.into();
+        let stream_name = stream_id.stream_name.into();
+        InternalStreamId {
+            application_id,
+            stream_name,
+        }
+    }
+}
+
+impl From<StreamUpdate> for InternalStreamUpdate {
+    fn from(stream_update: StreamUpdate) -> InternalStreamUpdate {
+        let chain_id = stream_update.chain_id.into();
+        let stream_id = stream_update.stream_id.into();
+        InternalStreamUpdate {
+            chain_id,
+            stream_id,
+            previous_index: stream_update.previous_index,
+            next_index: stream_update.next_index,
+        }
+    }
 }
 
 // This is the precompile address that contains the Linera specific
@@ -149,82 +224,11 @@ pub(crate) fn get_revm_execute_message_bytes(value: Vec<u8>) -> Vec<u8> {
 }
 
 pub(crate) fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
-    use alloy_primitives::{Bytes, B256};
     use alloy_sol_types::SolCall;
-    use linera_base::identifiers::{GenericApplicationId, StreamId};
-
-    fn crypto_hash_to_internal_crypto_hash(hash: CryptoHash) -> B256 {
-        let hash = <[u64; 4]>::from(hash);
-        let hash = linera_base::crypto::u64_array_to_be_bytes(hash);
-        hash.into()
-    }
-
-    fn chain_id_to_internal_chain_id(chain_id: ChainId) -> InternalChainId {
-        let value = crypto_hash_to_internal_crypto_hash(chain_id.0);
-        InternalChainId { value }
-    }
-
-    fn application_id_to_internal_application_id(
-        application_id: ApplicationId,
-    ) -> InternalApplicationId {
-        let application_description_hash =
-            crypto_hash_to_internal_crypto_hash(application_id.application_description_hash);
-        InternalApplicationId {
-            application_description_hash,
-        }
-    }
-
-    fn stream_name_to_internal_stream_name(stream_name: StreamName) -> InternalStreamName {
-        let stream_name = Bytes::from(stream_name.0);
-        InternalStreamName { stream_name }
-    }
-
-    fn generic_application_id_to_internal_generic_application_id(
-        generic_application_id: GenericApplicationId,
-    ) -> InternalGenericApplicationId {
-        match generic_application_id {
-            GenericApplicationId::System => {
-                let application_description_hash = B256::ZERO;
-                InternalGenericApplicationId {
-                    choice: 0,
-                    user: InternalApplicationId {
-                        application_description_hash,
-                    },
-                }
-            }
-            GenericApplicationId::User(application_id) => InternalGenericApplicationId {
-                choice: 1,
-                user: application_id_to_internal_application_id(application_id),
-            },
-        }
-    }
-
-    fn stream_id_to_internal_stream_id(stream_id: StreamId) -> InternalStreamId {
-        let application_id =
-            generic_application_id_to_internal_generic_application_id(stream_id.application_id);
-        let stream_name = stream_name_to_internal_stream_name(stream_id.stream_name);
-        InternalStreamId {
-            application_id,
-            stream_name,
-        }
-    }
-
-    fn stream_update_to_internal_stream_update(
-        stream_update: StreamUpdate,
-    ) -> InternalStreamUpdate {
-        let chain_id = chain_id_to_internal_chain_id(stream_update.chain_id);
-        let stream_id = stream_id_to_internal_stream_id(stream_update.stream_id);
-        InternalStreamUpdate {
-            chain_id,
-            stream_id,
-            previous_index: stream_update.previous_index,
-            next_index: stream_update.next_index,
-        }
-    }
 
     let internal_streams = streams
         .into_iter()
-        .map(stream_update_to_internal_stream_update)
+        .map(StreamUpdate::into)
         .collect();
 
     let fct_call = process_streamsCall { internal_streams };
