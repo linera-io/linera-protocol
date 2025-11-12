@@ -60,6 +60,7 @@ cfg-if.workspace = true
 clap.workspace = true
 custom_debug_derive.workspace = true
 futures.workspace = true
+indicatif.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-execution.workspace = true

@@ -2771,7 +2771,11 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Attempts to update a validator with the local information.
     #[instrument(level = "trace", skip(remote_node))]
-    pub async fn sync_validator(&self, remote_node: Env::ValidatorNode) -> Result<(), Error> {
+    pub async fn sync_validator(
+        &self,
+        parent_bar: indicatif::MultiProgress,
+        remote_node: Env::ValidatorNode,
+    ) -> Result<(), Error> {
         let validator_next_block_height = match remote_node
             .handle_chain_info_query(ChainInfoQuery::new(self.chain_id))
             .await
@@ -2791,6 +2795,21 @@ impl<Env: Environment> ChainClient<Env> {
             debug!("Validator is up-to-date with local state");
             return Ok(());
         };
+
+        let progress_bar = indicatif::ProgressBar::new(missing_certificate_count);
+        progress_bar.set_style(
+            indicatif::ProgressStyle::with_template(
+                "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} [{eta_precise}] {msg}",
+            )
+            .unwrap()
+            .progress_chars("##-"),
+        );
+        progress_bar.set_message(format!(
+            "chain: {}, validator: {}",
+            self.chain_id,
+            remote_node.address()
+        ));
+        let progress_bar = parent_bar.add(progress_bar);
 
         let missing_certificates_end = usize::try_from(local_chain_state.next_block_height.0)
             .expect("`usize` should be at least `u64`");
@@ -2824,7 +2843,9 @@ impl<Env: Environment> ChainClient<Env> {
                 )
                 .await
             {
-                Ok(_) => (),
+                Ok(_) => {
+                    progress_bar.inc(1);
+                }
                 Err(NodeError::BlobsNotFound(missing_blob_ids)) => {
                     // Upload the missing blobs we have and retry.
                     let missing_blobs: Vec<_> = self
@@ -2846,7 +2867,7 @@ impl<Env: Environment> ChainClient<Env> {
                 Err(err) => return Err(err.into()),
             }
         }
-
+        progress_bar.finish();
         Ok(())
     }
 }

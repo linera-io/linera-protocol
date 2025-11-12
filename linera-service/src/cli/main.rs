@@ -569,11 +569,12 @@ impl Runnable for Job {
                 }
 
                 let validator = context.make_node_provider().make_node(&address)?;
+                let progress_bar = indicatif::MultiProgress::new();
 
                 for chain_id in chains {
                     let chain = context.make_chain_client(chain_id);
 
-                    Box::pin(chain.sync_validator(validator.clone())).await?;
+                    Box::pin(chain.sync_validator(progress_bar.clone(), validator.clone())).await?;
                 }
                 let time_total = time_start.elapsed();
                 info!(
@@ -592,6 +593,7 @@ impl Runnable for Job {
                 }
 
                 let committee = context.wallet().genesis_config().committee.clone();
+                let multi_progressbar = indicatif::MultiProgress::new();
 
                 // Parallelize the validator loop - sync all validators concurrently
                 let tasks = committee
@@ -599,13 +601,15 @@ impl Runnable for Job {
                     .map(|(_validator_name, network_address)| {
                         let context = context.clone();
                         let chains = chains.clone();
+                        let bar = multi_progressbar.clone();
                         async move {
                             let validator =
                                 context.make_node_provider().make_node(network_address)?;
                             // For each validator, sync all chains sequentially
                             for chain_id in &chains {
                                 let chain = context.make_chain_client(*chain_id);
-                                Box::pin(chain.sync_validator(validator.clone())).await?;
+                                Box::pin(chain.sync_validator(bar.clone(), validator.clone()))
+                                    .await?;
                             }
                             anyhow::Result::<()>::Ok(())
                         }
