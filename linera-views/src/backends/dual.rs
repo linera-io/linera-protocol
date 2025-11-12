@@ -131,7 +131,7 @@ where
         Ok(result)
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error> {
         let result = match self {
             Self::First(store) => store
                 .contains_keys(keys)
@@ -147,7 +147,7 @@ where
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         let result = match self {
             Self::First(store) => store

@@ -210,7 +210,7 @@ where
         Ok(result)
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error> {
         let Some(cache) = &self.cache else {
             return self.store.contains_keys(keys).await;
         };
@@ -238,7 +238,7 @@ where
             }
         }
         if !key_requests.is_empty() {
-            let key_results = self.store.contains_keys(key_requests.clone()).await?;
+            let key_results = self.store.contains_keys(&key_requests).await?;
             let mut cache = cache.lock().unwrap();
             for ((index, result), key) in indices.into_iter().zip(key_results).zip(key_requests) {
                 results[index] = result;
@@ -250,7 +250,7 @@ where
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         let Some(cache) = &self.cache else {
             return self.store.read_multi_values_bytes(keys).await;
@@ -261,8 +261,8 @@ where
         let mut miss_keys = Vec::new();
         {
             let mut cache = cache.lock().unwrap();
-            for (i, key) in keys.into_iter().enumerate() {
-                if let Some(value) = cache.query_read_value(&key) {
+            for (i, key) in keys.iter().enumerate() {
+                if let Some(value) = cache.query_read_value(key) {
                     #[cfg(with_metrics)]
                     metrics::READ_VALUE_CACHE_HIT_COUNT
                         .with_label_values(&[])
@@ -275,15 +275,12 @@ where
                         .inc();
                     result.push(None);
                     cache_miss_indices.push(i);
-                    miss_keys.push(key);
+                    miss_keys.push(key.clone());
                 }
             }
         }
         if !miss_keys.is_empty() {
-            let values = self
-                .store
-                .read_multi_values_bytes(miss_keys.clone())
-                .await?;
+            let values = self.store.read_multi_values_bytes(&miss_keys).await?;
             let mut cache = cache.lock().unwrap();
             for (i, (key, value)) in cache_miss_indices
                 .into_iter()

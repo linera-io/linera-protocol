@@ -140,21 +140,21 @@ impl ReadableKeyValueStore for IndexedDbStore {
         Ok(count == 1)
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, IndexedDbStoreError> {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, IndexedDbStoreError> {
         future::try_join_all(
-            keys.into_iter()
-                .map(|key| async move { self.contains_key(&key).await }),
+            keys.iter()
+                .map(|key| async move { self.contains_key(key).await }),
         )
         .await
     }
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, IndexedDbStoreError> {
         future::try_join_all(
-            keys.into_iter()
-                .map(|key| async move { self.read_value_bytes(&key).await }),
+            keys.iter()
+                .map(|key| async move { self.read_value_bytes(key).await }),
         )
         .await
     }

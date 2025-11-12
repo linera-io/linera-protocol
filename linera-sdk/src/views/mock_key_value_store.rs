@@ -94,7 +94,7 @@ impl MockKeyValueStore {
     pub(crate) fn contains_keys_new(&self, keys: &[Vec<u8>]) -> u32 {
         self.contains_keys_promises.register(
             self.store
-                .contains_keys(keys.to_vec())
+                .contains_keys(keys)
                 .now_or_never()
                 .expect("Memory store should never wait for anything")
                 .expect("Memory store should never fail"),
@@ -111,7 +111,7 @@ impl MockKeyValueStore {
     pub(crate) fn read_multi_values_bytes_new(&self, keys: &[Vec<u8>]) -> u32 {
         self.read_multi_promises.register(
             self.store
-                .read_multi_values_bytes(keys.to_vec())
+                .read_multi_values_bytes(keys)
                 .now_or_never()
                 .expect("Memory store should never wait for anything")
                 .expect("Memory store should never fail"),

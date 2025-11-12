@@ -369,7 +369,7 @@ where
         let values = self
             .context
             .store()
-            .read_multi_values_bytes(vector_query)
+            .read_multi_values_bytes(&vector_query)
             .await?;
         for (i, value) in missed_indices.into_iter().zip(values) {
             results[i] = from_bytes_option(&value)?;

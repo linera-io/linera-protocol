@@ -841,12 +841,12 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
 
     async fn contains_keys(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<bool>, DynamoDbStoreInternalError> {
         let mut handles = Vec::new();
         for key in keys {
-            check_key_size(&key)?;
-            let key_db = build_key(&self.start_key, key);
+            check_key_size(key)?;
+            let key_db = build_key(&self.start_key, key.clone());
             let handle = self.contains_key_general(key_db);
             handles.push(handle);
         }
@@ -858,7 +858,7 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbStoreInternalError> {
         if keys.is_empty() {
             return Ok(Vec::new());

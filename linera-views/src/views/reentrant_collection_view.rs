@@ -562,7 +562,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 }
             }
         }
-        let values = self.context.store().read_multi_values_bytes(keys).await?;
+        let values = self.context.store().read_multi_values_bytes(&keys).await?;
         for (loaded_values, short_key) in values
             .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
             .zip(short_keys_to_load)
@@ -668,7 +668,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             }
         }
 
-        let found_keys = self.context.store().contains_keys(keys_to_check).await?;
+        let found_keys = self.context.store().contains_keys(&keys_to_check).await?;
         let entries_to_load = keys_to_check_metadata
             .into_iter()
             .zip(found_keys)
@@ -690,7 +690,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             let values = self
                 .context
                 .store()
-                .read_multi_values_bytes(keys_to_load)
+                .read_multi_values_bytes(&keys_to_load)
                 .await?;
             for (loaded_values, (position, short_key, context)) in values
                 .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
@@ -781,7 +781,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                     short_keys_and_indexes.push((short_key.to_vec(), index));
                 }
             }
-            let values = self.context.store().read_multi_values_bytes(keys).await?;
+            let values = self.context.store().read_multi_values_bytes(&keys).await?;
             for (loaded_values, (short_key, index)) in values
                 .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
                 .zip(short_keys_and_indexes)
@@ -855,7 +855,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 }
             }
 
-            let values = self.context.store().read_multi_values_bytes(keys).await?;
+            let values = self.context.store().read_multi_values_bytes(&keys).await?;
             for (loaded_values, short_key) in values
                 .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
                 .zip(short_keys_to_load)
