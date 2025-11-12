@@ -43,17 +43,6 @@ use crate::{
     remote_node::RemoteNode,
 };
 
-// Conditional Send trait bound for futures based on target architecture
-#[cfg(target_arch = "wasm32")]
-trait MaybeSendFuture: Future {}
-#[cfg(target_arch = "wasm32")]
-impl<T: Future> MaybeSendFuture for T {}
-
-#[cfg(not(target_arch = "wasm32"))]
-trait MaybeSendFuture: Future + Send {}
-#[cfg(not(target_arch = "wasm32"))]
-impl<T: Future + Send> MaybeSendFuture for T {}
-
 #[cfg(with_metrics)]
 pub(super) mod metrics {
     use std::sync::LazyLock;
@@ -255,7 +244,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
     where
         R: Cacheable + Clone + Send + 'static,
         F: Fn(RemoteNode<Env::ValidatorNode>) -> Fut,
-        Fut: MaybeSendFuture<Output = Result<R, NodeError>> + 'static,
+        Fut: Future<Output = Result<R, NodeError>> + 'static,
     {
         // Select the best available peer
         let peer = self
@@ -294,7 +283,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
     where
         R: Cacheable + Clone + Send + 'static,
         F: Fn(RemoteNode<Env::ValidatorNode>) -> Fut,
-        Fut: MaybeSendFuture<Output = Result<R, NodeError>> + 'static,
+        Fut: Future<Output = Result<R, NodeError>> + 'static,
     {
         self.add_peer(peer.clone()).await;
         self.in_flight_tracker
@@ -487,7 +476,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         operation: Fut,
     ) -> Result<T, NodeError>
     where
-        Fut: MaybeSendFuture<Output = Result<T, NodeError>> + 'static,
+        Fut: Future<Output = Result<T, NodeError>> + 'static,
     {
         let start_time = Instant::now();
         let public_key = peer.public_key;
@@ -560,7 +549,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
     where
         T: Cacheable + Clone + Send + 'static,
         F: Fn(RemoteNode<Env::ValidatorNode>) -> Fut,
-        Fut: MaybeSendFuture<Output = Result<T, NodeError>> + 'static,
+        Fut: Future<Output = Result<T, NodeError>> + 'static,
     {
         // Check cache for exact or subsuming match
         if let Some(result) = self.cache.get(&key).await {
@@ -729,32 +718,19 @@ impl<Env: Environment> RequestsScheduler<Env> {
     where
         T: 'static,
         F: Fn(RemoteNode<Env::ValidatorNode>) -> Fut,
-        Fut: MaybeSendFuture<Output = Result<T, NodeError>> + 'static,
+        Fut: Future<Output = Result<T, NodeError>> + 'static,
     {
         use futures::{
             future::{select, Either},
             stream::{FuturesUnordered, StreamExt},
-            FutureExt,
         };
         use linera_base::time::timer::sleep;
 
-        // Use LocalBoxFuture for wasm32, BoxFuture for other targets (which requires Send)
-        #[cfg(target_arch = "wasm32")]
-        type IndexedFuture<T> = futures::future::LocalBoxFuture<'static, Result<T, NodeError>>;
-        #[cfg(not(target_arch = "wasm32"))]
-        type IndexedFuture<T> = futures::future::BoxFuture<'static, Result<T, NodeError>>;
-
-        let mut futures: FuturesUnordered<IndexedFuture<T>> = FuturesUnordered::new();
+        let mut futures: FuturesUnordered<Fut> = FuturesUnordered::new();
         let peer_index = AtomicU32::new(0);
 
-        let push_future = |futures: &mut FuturesUnordered<IndexedFuture<T>>, fut: Fut| {
-            #[cfg(target_arch = "wasm32")]
-            #[allow(clippy::redundant_async_block)]
-            futures.push(async move { fut.await }.boxed_local());
-            #[cfg(not(target_arch = "wasm32"))]
-            // if removed types don't match.
-            #[allow(clippy::redundant_async_block)]
-            futures.push(async move { fut.await }.boxed());
+        let push_future = |futures: &mut FuturesUnordered<Fut>, fut: Fut| {
+            futures.push(fut);
             peer_index.fetch_add(1, Ordering::SeqCst)
         };
 
