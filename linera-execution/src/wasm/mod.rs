@@ -242,10 +242,15 @@ pub fn add_metering(bytecode: Bytecode) -> Result<Bytecode, WasmExecutionError> 
 const _: () = {
     use js_sys::wasm_bindgen::JsValue;
 
-    impl TryFrom<JsValue> for WasmServiceModule {
-        type Error = JsValue;
+    impl web_thread::AsJs for WasmServiceModule {
+        fn to_js(&self) -> Result<JsValue, JsValue> {
+            match self {
+                #[cfg(with_wasmer)]
+                Self::Wasmer { module } => Ok(::wasmer::Module::clone(&module).into()),
+            }
+        }
 
-        fn try_from(value: JsValue) -> Result<Self, JsValue> {
+        fn from_js(value: JsValue) -> Result<Self, JsValue> {
             // TODO(#2775): be generic over possible implementations
 
             cfg_if::cfg_if! {
@@ -260,20 +265,19 @@ const _: () = {
         }
     }
 
-    impl From<WasmServiceModule> for JsValue {
-        fn from(module: WasmServiceModule) -> JsValue {
-            match module {
+    impl web_thread::Post for WasmServiceModule { }
+
+    impl web_thread::AsJs for WasmContractModule {
+        fn to_js(&self) -> Result<JsValue, JsValue> {
+            match self {
                 #[cfg(with_wasmer)]
-                WasmServiceModule::Wasmer { module } => ::wasmer::Module::clone(&module).into(),
+                Self::Wasmer { module, engine: _ } => Ok(::wasmer::Module::clone(&module).into()),
             }
         }
-    }
 
-    impl TryFrom<JsValue> for WasmContractModule {
-        type Error = JsValue;
-
-        fn try_from(value: JsValue) -> Result<Self, JsValue> {
+        fn from_js(value: JsValue) -> Result<Self, JsValue> {
             // TODO(#2775): be generic over possible implementations
+
             cfg_if::cfg_if! {
                 if #[cfg(with_wasmer)] {
                     Ok(Self::Wasmer {
@@ -287,16 +291,7 @@ const _: () = {
         }
     }
 
-    impl From<WasmContractModule> for JsValue {
-        fn from(module: WasmContractModule) -> JsValue {
-            match module {
-                #[cfg(with_wasmer)]
-                WasmContractModule::Wasmer { module, engine: _ } => {
-                    ::wasmer::Module::clone(&module).into()
-                }
-            }
-        }
-    }
+    impl web_thread::Post for WasmContractModule { }
 };
 
 /// Errors that can occur when executing a user application in a WebAssembly module.

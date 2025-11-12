@@ -154,35 +154,41 @@ const _: () = {
     // TODO(#2775): add a vtable pointer into the JsValue rather than assuming the
     // implementor
 
-    impl From<UserContractCode> for JsValue {
-        fn from(code: UserContractCode) -> JsValue {
-            let module: WasmContractModule = *(code.0 as Box<dyn Any>)
-                .downcast()
-                .expect("we only support Wasm modules on the Web for now");
-            module.into()
+    impl web_thread::AsJs for UserContractCode {
+        fn to_js(&self) -> Result<JsValue, JsValue> {
+            ((&*self.0) as &dyn Any)
+                .downcast_ref::<WasmContractModule>()
+                .expect("we only support Wasm modules on the Web for now")
+                .to_js()
+        }
+
+        fn from_js(value: JsValue) -> Result<Self, JsValue> {
+            WasmContractModule::from_js(value).map(Into::into)
         }
     }
 
-    impl From<UserServiceCode> for JsValue {
-        fn from(code: UserServiceCode) -> JsValue {
-            let module: WasmServiceModule = *(code.0 as Box<dyn Any>)
-                .downcast()
-                .expect("we only support Wasm modules on the Web for now");
-            module.into()
+    impl web_thread::Post for UserContractCode {
+        fn transferables(&self) -> js_sys::Array {
+            self.0.transferables()
         }
     }
 
-    impl TryFrom<JsValue> for UserContractCode {
-        type Error = JsValue;
-        fn try_from(value: JsValue) -> Result<Self, JsValue> {
-            WasmContractModule::try_from(value).map(Into::into)
+    impl web_thread::AsJs for UserServiceCode {
+        fn to_js(&self) -> Result<JsValue, JsValue> {
+            ((&*self.0) as &dyn Any)
+                .downcast_ref::<WasmServiceModule>()
+                .expect("we only support Wasm modules on the Web for now")
+                .to_js()
+        }
+
+        fn from_js(value: JsValue) -> Result<Self, JsValue> {
+            WasmServiceModule::from_js(value).map(Into::into)
         }
     }
 
-    impl TryFrom<JsValue> for UserServiceCode {
-        type Error = JsValue;
-        fn try_from(value: JsValue) -> Result<Self, JsValue> {
-            WasmServiceModule::try_from(value).map(Into::into)
+    impl web_thread::Post for UserServiceCode {
+        fn transferables(&self) -> js_sys::Array {
+            self.0.transferables()
         }
     }
 };

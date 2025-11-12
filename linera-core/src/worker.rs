@@ -234,8 +234,6 @@ pub enum WorkerError {
     },
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
-    #[error("Failed to join spawned worker task")]
-    JoinError,
     #[error("Blob was not required by any pending block")]
     UnexpectedBlob,
     #[error("Number of published blobs per block must not exceed {0}")]
@@ -285,7 +283,6 @@ impl WorkerError {
             | WorkerError::ViewError(_)
             | WorkerError::ConfirmedLogEntryNotFound { .. }
             | WorkerError::PreprocessedBlocksEntryNotFound { .. }
-            | WorkerError::JoinError
             | WorkerError::MissingNetworkDescription
             | WorkerError::ChainActorSendError { .. }
             | WorkerError::ChainActorRecvError { .. }
@@ -618,7 +615,6 @@ where
             Ok(response)
         })
         .await
-        .unwrap_or_else(|_| Err(WorkerError::JoinError))
     }
 
     /// Tries to execute a block proposal without any verification other than block execution.
