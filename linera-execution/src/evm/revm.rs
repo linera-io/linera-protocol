@@ -827,7 +827,7 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
 impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// Gets the expected `ApplicationId`. We need to transfer
     /// native tokens before the application is created (see below).
-    /// Therefore, we need to pre-compute the obtained ApplicationId.
+    /// Therefore, we need to pre-compute the obtained application ID.
     fn get_expected_application_id(
         runtime: &mut Runtime,
         module_id: ModuleId,
@@ -864,7 +864,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// function can have some error case which are not supported
     /// in `fn create`, we call a `fn create_or_fail` that can
     /// return errors.
-    /// When the database runtime is created, the Evm contract
+    /// When the database runtime is created, the EVM contract
     /// may or may not have been created. Therefore, at startup
     /// we have `is_revm_instantiated = false`. That boolean
     /// can be updated after `set_is_initialized`.
@@ -1024,13 +1024,13 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// --- Call to the PRECOMPILE smart contract.
     /// --- Call to other EVM smart contract
     ///
-    /// The first case is handled by the using Revm. This is
+    /// The first case is handled by using Revm. This is
     /// when we call this contract.
     ///
     /// Calling the precompile is also handled by using Revm
     /// which would then use specific code for that purpose.
     ///
-    /// Calling other Evm contracts is handled here and we have
+    /// Calling other EVM contracts is handled here and we have
     /// to produce `Some(_)` as output. Note that in the Evm
     /// transferring ethers is the same as calling a function.
     ///
@@ -1088,17 +1088,6 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             }
         };
         let result = if contract_call {
-            // The input is non-trivial, we assume that we are calling a contract.
-            //
-            // The correct behavior is the following:
-            // * If a contract exists and input is empty, then the fallback function is called
-            //   if existing. Otherwise failure.
-            // * If not, then it is a user account and no execution occurs.
-            //
-            // So, the correct way is instead to test the existence of the application
-            // given the application_id. So, we would need following function in BaseRuntime:
-            // fn has_trivial_storage(&mut self, application: ApplicationId)
-            //       -> Result<bool, ExecutionError>;
             let authenticated = true;
             let result = {
                 let mut runtime = self.db.runtime.lock().unwrap();
@@ -1166,7 +1155,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
     /// function can have some error case which are not supported
     /// in `fn create`, we call a `fn create_or_fail` that can
     /// return errors.
-    /// When the database runtime is created, the Evm contract
+    /// When the database runtime is created, the EVM contract
     /// may or may not have been created. Therefore, at startup
     /// we have `is_revm_instantiated = false`. That boolean
     /// can be updated after `set_is_initialized`.

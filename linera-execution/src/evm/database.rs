@@ -220,7 +220,12 @@ where
             }));
         }
         if !self.changes.is_empty() {
-            // This is the case of service calls with empty storage.
+            // This case occurs in only one scenario:
+            // * A service call.
+            // * A service call to a contract that has not yet been
+            //   initialized by a contract call.
+            // When we do a service calls to a contract that has
+            // already been initialized, then changes will be empty.
             let account = self.changes.get(&address);
             return Ok(account.map(|account| account.info.clone()));
         }
@@ -238,12 +243,17 @@ where
             None => AccountInfo::default(),
             Some(bytes) => bcs::from_bytes(&bytes)?,
         };
-        // The funds have been immediately deposited in deposit_funds.
-        // The EVM will do the same before even the execution of
-        // the constructor or function.
-        // Therefore, we need to adjust the values.
-        // This will ensure that at any time the balances in EVM
-        // and Linera are exactly matching during the execution.
+        // The design is the following:
+        // * The funds have been deposited in deposit_funds.
+        // * The order of the operations is the following:
+        //   + Access to the storage (this functions) of relevant accounts.
+        //   + Transfer according to the input.
+        //   + Running the constructor.
+        // * So, the transfer is done twice: One at deposit_funds.
+        //   Another in the transfer by REVM.
+        // * So, we need to correct the balances so that when Revm
+        //   is doing the transfer, the balance are the ones after
+        //   deposit_funds.
         let start_balance = if self.caller == address {
             balance + self.value
         } else if self.contract_address == address {

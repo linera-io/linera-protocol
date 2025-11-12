@@ -90,7 +90,7 @@ impl EvmOperation {
         }
     }
 
-    /// Convert the input to a `Vec<u8>` if possible.
+    /// Converts the input to a `Vec<u8>` if possible.
     pub fn to_bytes(&self) -> Result<Vec<u8>, bcs::Error> {
         bcs::to_bytes(&self)
     }

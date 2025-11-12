@@ -58,6 +58,16 @@ use linera_service::{
 };
 use serde_json::{json, Value};
 use test_case::test_case;
+#[cfg(with_revm)]
+use {
+    alloy_primitives::{Address, Bytes, Log, B256, U256},
+    alloy_sol_types::{sol, SolCall, SolValue},
+    linera_execution::test_utils::solidity::{
+        get_evm_contract_path, load_solidity_example_by_name, read_evm_address_entry,
+        read_evm_u256_entry, read_evm_u64_entry, temporary_write_evm_module,
+    },
+    linera_sdk::abis::evm::EvmAbi,
+};
 
 /// The environment variable name to specify the number of iterations in the performance-related
 /// tests.
@@ -460,10 +470,6 @@ fn get_zero_operations(
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
-    use linera_sdk::abis::evm::EvmAbi;
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -538,14 +544,6 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::{Address, U256};
-    use alloy_sol_types::{sol, SolCall};
-    use linera_execution::test_utils::solidity::{
-        load_solidity_example_by_name, read_evm_address_entry, read_evm_u256_entry,
-        temporary_write_evm_module,
-    };
-    use linera_sdk::abis::evm::EvmAbi;
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -696,11 +694,6 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::{Address, U256};
-    use alloy_sol_types::{sol, SolCall};
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry};
-    use linera_sdk::abis::evm::EvmAbi;
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -817,7 +810,7 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     assert_contract_balance(&app_a, address2, balance_a_2).await?;
     assert_contract_balance(&app_a, address_app, balance_a_app).await?;
 
-    // Transfering amount
+    // Transferring amount
 
     let amount = Amount::from_tokens(1);
     let operation = send_cashCall {
@@ -899,11 +892,7 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::{Bytes, Log, U256};
-    use alloy_sol_types::{sol, SolValue};
     use linera_base::identifiers::{GenericApplicationId, StreamId, StreamName};
-    use linera_execution::test_utils::solidity::get_evm_contract_path;
-    use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1007,11 +996,7 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_sol_types::{sol, SolValue};
     use call_evm_counter::{CallCounterAbi, CallCounterRequest};
-    use linera_execution::test_utils::solidity::get_evm_contract_path;
-    use linera_sdk::abis::evm::EvmAbi;
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1105,10 +1090,6 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
-    use linera_sdk::abis::evm::EvmAbi;
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1211,11 +1192,7 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_sol_types::{sol, SolCall, SolValue};
     use counter_no_graphql::CounterNoGraphQlAbi;
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
-    use linera_sdk::abis::evm::EvmAbi;
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1303,11 +1280,6 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::{B256, U256};
-    use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
-    use linera_sdk::abis::evm::EvmAbi;
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1422,10 +1394,6 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_sol_types::{sol, SolCall};
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
-    use linera_sdk::abis::evm::EvmAbi;
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1496,11 +1464,6 @@ async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> 
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::B256;
-    use alloy_sol_types::{sol, SolCall};
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
-    use linera_sdk::abis::evm::EvmAbi;
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1616,10 +1579,6 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_sol_types::sol;
-    use linera_execution::test_utils::solidity::get_evm_contract_path;
-    use linera_sdk::abis::evm::EvmAbi;
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1702,11 +1661,6 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::{Address, B256, U256};
-    use alloy_sol_types::{sol, SolCall};
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry};
-    use linera_sdk::abis::evm::EvmAbi;
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1935,10 +1889,6 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::{B256, U256};
-    use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry};
-    use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let num_operations = 500;
     tracing::info!("Starting test {}", test_name!());
