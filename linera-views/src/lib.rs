@@ -123,8 +123,9 @@ pub use backends::{journaling, lru_caching, memory, value_splitting};
 pub use generic_array;
 #[doc(hidden)]
 pub use sha3;
+#[cfg(not(target_arch = "wasm32"))]
+pub use views::reentrant_collection_view;
 pub use views::{
     bucket_queue_view, collection_view, hashable_wrapper, historical_hash_wrapper,
-    key_value_store_view, log_view, map_view, queue_view, reentrant_collection_view, register_view,
-    set_view,
+    key_value_store_view, log_view, map_view, queue_view, register_view, set_view,
 };
