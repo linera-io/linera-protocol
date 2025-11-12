@@ -582,7 +582,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(chain_id).with_committees();
+        let query = Box::new(ChainInfoQuery::new(chain_id).with_committees());
         let info = self.local_node.handle_chain_info_query(query).await?.info;
         Ok(info)
     }

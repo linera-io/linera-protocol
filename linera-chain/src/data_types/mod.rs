@@ -313,10 +313,10 @@ pub enum OriginalProposal {
 #[derive(Clone, Debug, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct BlockProposal {
-    pub content: ProposalContent,
+    pub content: Box<ProposalContent>,
     pub signature: AccountSignature,
     #[debug(skip_if = Option::is_none)]
-    pub original_proposal: Option<OriginalProposal>,
+    pub original_proposal: Option<Box<OriginalProposal>>,
 }
 
 /// A message together with kind, authentication and grant information.
@@ -594,7 +594,7 @@ impl BlockProposal {
         let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
 
         Ok(Self {
-            content,
+            content: Box::new(content),
             signature,
             original_proposal: None,
         })
@@ -614,9 +614,9 @@ impl BlockProposal {
         let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
 
         Ok(Self {
-            content,
+            content: Box::new(content),
             signature,
-            original_proposal: Some(OriginalProposal::Fast(old_proposal.signature)),
+            original_proposal: Some(Box::new(OriginalProposal::Fast(old_proposal.signature))),
         })
     }
 
@@ -637,9 +637,9 @@ impl BlockProposal {
         let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
 
         Ok(Self {
-            content,
+            content: Box::new(content),
             signature,
-            original_proposal: Some(OriginalProposal::Regular { certificate }),
+            original_proposal: Some(Box::new(OriginalProposal::Regular { certificate })),
         })
     }
 
@@ -653,7 +653,7 @@ impl BlockProposal {
     }
 
     pub fn check_signature(&self) -> Result<(), CryptoError> {
-        self.signature.verify(&self.content)
+        self.signature.verify(&*self.content)
     }
 
     pub fn required_blob_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
@@ -678,7 +678,10 @@ impl BlockProposal {
 
     /// Checks that the original proposal, if present, matches the new one and has a higher round.
     pub fn check_invariants(&self) -> Result<(), &'static str> {
-        match (&self.original_proposal, &self.content.outcome) {
+        match (
+            self.original_proposal.as_ref().map(Box::as_ref),
+            &self.content.outcome,
+        ) {
             (None, None) => {}
             (Some(OriginalProposal::Fast(_)), None) => ensure!(
                 self.content.round > Round::Fast,
@@ -885,7 +888,7 @@ mod signing {
         assert_eq!(signature.owner(), public_key.into());
 
         let block_proposal = BlockProposal {
-            content: proposal,
+            content: Box::new(proposal),
             signature,
             original_proposal: None,
         };

@@ -209,11 +209,11 @@ pub trait KeyValueDatabase: WithError + Sized {
         namespace: &str,
     ) -> impl Future<Output = Result<Self, Self::Error>> {
         async {
-            if Self::exists(config, namespace).await? {
-                Self::delete(config, namespace).await?;
+            if Box::pin(Self::exists(config, namespace)).await? {
+                Box::pin(Self::delete(config, namespace)).await?;
             }
-            Self::create(config, namespace).await?;
-            Self::connect(config, namespace).await
+            Box::pin(Self::create(config, namespace)).await?;
+            Box::pin(Self::connect(config, namespace)).await
         }
     }
 }

@@ -114,7 +114,7 @@ where
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_chain_info_query(
         &self,
-        query: ChainInfoQuery,
+        query: Box<ChainInfoQuery>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
         let (response, _actions) = self.node.state.handle_chain_info_query(query).await?;
@@ -232,7 +232,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(chain_id);
+        let query = Box::new(ChainInfoQuery::new(chain_id));
         Ok(self.handle_chain_info_query(query).await?.info)
     }
 
@@ -257,11 +257,8 @@ where
         &self,
         sender_chain: ChainId,
     ) -> Result<(), LocalNodeError> {
-        let (_response, actions) = self
-            .node
-            .state
-            .handle_chain_info_query(ChainInfoQuery::new(sender_chain).with_network_actions())
-            .await?;
+        let query = Box::new(ChainInfoQuery::new(sender_chain).with_network_actions());
+        let (_response, actions) = self.node.state.handle_chain_info_query(query).await?;
         let mut requests = VecDeque::from_iter(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {
             let new_actions = self.node.state.handle_cross_chain_request(request).await?;

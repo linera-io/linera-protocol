@@ -345,7 +345,7 @@ where
         // if there is a validated block certificate from a later round.
         if let Some(vote) = self.confirmed_vote() {
             ensure!(
-                match proposal.original_proposal.as_ref() {
+                match proposal.original_proposal.as_ref().map(Box::as_ref) {
                     None => false,
                     Some(OriginalProposal::Regular { certificate }) =>
                         vote.round <= certificate.round,
@@ -457,7 +457,7 @@ where
     ) -> Result<Option<ValidatedOrConfirmedVote>, ChainError> {
         let round = proposal.content.round;
 
-        match &proposal.original_proposal {
+        match proposal.original_proposal.as_ref().map(Box::as_ref) {
             // If the validated block certificate is more recent, update our locking block.
             Some(OriginalProposal::Regular { certificate }) => {
                 if self

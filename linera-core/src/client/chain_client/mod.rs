@@ -460,7 +460,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the basic `ChainInfo` data for the local chain.
     #[instrument(level = "trace")]
     pub async fn chain_info(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(self.chain_id);
+        let query = Box::new(ChainInfoQuery::new(self.chain_id));
         let response = self
             .client
             .local_node
@@ -473,9 +473,11 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the basic `ChainInfo` data for the local chain, with chain manager values.
     #[instrument(level = "trace")]
     pub async fn chain_info_with_manager_values(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(self.chain_id)
-            .with_manager_values()
-            .with_committees();
+        let query = Box::new(
+            ChainInfoQuery::new(self.chain_id)
+                .with_manager_values()
+                .with_committees(),
+        );
         let response = self
             .client
             .local_node
@@ -499,7 +501,7 @@ impl<Env: Environment> ChainClient<Env> {
             return Ok(Vec::new());
         }
 
-        let query = ChainInfoQuery::new(self.chain_id).with_pending_message_bundles();
+        let query = Box::new(ChainInfoQuery::new(self.chain_id).with_pending_message_bundles());
         let info = self
             .client
             .local_node
@@ -1586,7 +1588,7 @@ impl<Env: Environment> ChainClient<Env> {
             self.chain_info().await?.next_block_height >= self.initial_next_block_height,
             Error::WalletSynchronizationError
         );
-        let mut query = ChainInfoQuery::new(self.chain_id);
+        let mut query = Box::new(ChainInfoQuery::new(self.chain_id));
         query.request_owner_balance = owner;
         let response = self
             .client
@@ -2619,14 +2621,17 @@ impl<Env: Environment> ChainClient<Env> {
             future: F,
             background_work: impl FusedStream<Item = ()>,
         ) -> F::Output {
-            tokio::pin!(future);
-            tokio::pin!(background_work);
-            loop {
-                futures::select! {
-                    _ = background_work.next() => (),
-                    result = future => return result,
+            Box::pin(async move {
+                tokio::pin!(future);
+                tokio::pin!(background_work);
+                loop {
+                    futures::select! {
+                        _ = background_work.next() => (),
+                        result = future => return result,
+                    }
                 }
-            }
+            })
+            .await
         }
 
         let mut senders = HashMap::new(); // Senders to cancel notification streams.
@@ -2658,11 +2663,11 @@ impl<Env: Environment> ChainClient<Env> {
                     .await
             {
                 if let Reason::NewBlock { .. } = notification.reason {
-                    match Box::pin(await_while_polling(
+                    match await_while_polling(
                         this.update_notification_streams(&mut senders, &listening_mode)
                             .fuse(),
                         &mut process_notifications,
-                    ))
+                    )
                     .await
                     {
                         Ok(handler) => process_notifications.push(handler),

@@ -296,10 +296,11 @@ impl ActiveChain {
     /// inboxes.
     pub async fn handle_received_messages(&self) {
         let chain_id = self.id();
+        let query = Box::new(ChainInfoQuery::new(chain_id).with_pending_message_bundles());
         let (information, _) = self
             .validator
             .worker()
-            .handle_chain_info_query(ChainInfoQuery::new(chain_id).with_pending_message_bundles())
+            .handle_chain_info_query(query)
             .await
             .expect("Failed to query chain's pending messages");
         let messages = information.info.requested_pending_message_bundles;

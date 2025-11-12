@@ -1067,7 +1067,7 @@ where
     ))]
     pub async fn handle_chain_info_query(
         &self,
-        query: ChainInfoQuery,
+        query: Box<ChainInfoQuery>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, query);
         #[cfg(with_metrics)]

@@ -161,7 +161,7 @@ where
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_chain_info_query(query, sender)
+            validator.do_handle_chain_info_query(Box::new(query), sender)
         })
         .await
     }
@@ -450,7 +450,7 @@ where
 
     async fn do_handle_chain_info_query(
         self,
-        query: ChainInfoQuery,
+        query: Box<ChainInfoQuery>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let validator = self.client.lock().await;
@@ -610,7 +610,9 @@ where
     ) -> Result<(), Result<Vec<ConfirmedBlockCertificate>, NodeError>> {
         // First, use do_handle_chain_info_query to get the certificate hashes
         let (query_sender, query_receiver) = oneshot::channel();
-        let query = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(heights);
+        let query = Box::new(
+            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(heights),
+        );
 
         let self_clone = self.clone();
         self.do_handle_chain_info_query(query, query_sender)

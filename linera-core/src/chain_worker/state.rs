@@ -284,7 +284,7 @@ where
     #[tracing::instrument(level = "debug", skip(self))]
     async fn handle_chain_info_query(
         &mut self,
-        query: ChainInfoQuery,
+        query: Box<ChainInfoQuery>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let create_network_actions = query.create_network_actions;
         if let Some((height, round)) = query.request_leader_timeout {
@@ -613,15 +613,15 @@ where
     ) -> Result<Vec<Blob>, WorkerError> {
         let owner = proposal.owner();
         let BlockProposal {
-            content:
-                ProposalContent {
-                    block,
-                    round,
-                    outcome: _,
-                },
+            content,
             original_proposal,
             signature: _,
         } = proposal;
+        let ProposalContent {
+            block,
+            round,
+            outcome: _,
+        } = &**content;
 
         let mut maybe_blobs = self
             .maybe_get_required_blobs(proposal.required_blob_ids(), None)
@@ -633,7 +633,10 @@ where
                 // TODO(#3203): Allow multiple pending proposals on permissionless chains.
                 chain.pending_proposed_blobs.clear();
             }
-            let validated = matches!(original_proposal, Some(OriginalProposal::Regular { .. }));
+            let validated = matches!(
+                original_proposal.as_ref().map(Box::as_ref),
+                Some(OriginalProposal::Regular { .. })
+            );
             chain
                 .pending_proposed_blobs
                 .try_load_entry_mut(&owner)
@@ -1403,7 +1406,7 @@ where
             WorkerError::InvalidOwner
         );
         let old_round = self.chain.manager.current_round();
-        match original_proposal {
+        match original_proposal.as_ref().map(Box::as_ref) {
             None => {
                 if let Some(signer) = block.authenticated_owner {
                     // Check the authentication of the operations in the new block.
@@ -1416,11 +1419,11 @@ where
             }
             Some(OriginalProposal::Fast(signature)) => {
                 let original_proposal = BlockProposal {
-                    content: ProposalContent {
+                    content: Box::new(ProposalContent {
                         block: content.block.clone(),
                         round: Round::Fast,
                         outcome: None,
-                    },
+                    }),
                     signature: *signature,
                     original_proposal: None,
                 };
@@ -1464,7 +1467,7 @@ where
             block,
             round,
             outcome,
-        } = content;
+        } = &**content;
 
         ensure!(
             block.timestamp.duration_since(local_time) <= self.config.grace_period,
@@ -1524,7 +1527,7 @@ where
     ))]
     async fn prepare_chain_info_response(
         &mut self,
-        query: ChainInfoQuery,
+        query: Box<ChainInfoQuery>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let chain = &self.chain;

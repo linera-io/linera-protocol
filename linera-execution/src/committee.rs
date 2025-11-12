@@ -71,7 +71,7 @@ pub struct Committee {
     /// The threshold to prove the validity of a statement.
     validity_threshold: u64,
     /// The policy agreed on for this epoch.
-    policy: ResourceControlPolicy,
+    policy: Box<ResourceControlPolicy>,
 }
 
 impl Serialize for Committee {
@@ -232,7 +232,7 @@ impl Committee {
             total_votes,
             quorum_threshold,
             validity_threshold,
-            policy,
+            policy: Box::new(policy),
         }
     }
 

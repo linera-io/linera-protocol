@@ -144,7 +144,7 @@ where
             }
             let execute = execute.clone();
             let remote_node = remote_node.clone();
-            Some(async move { (remote_node.public_key, execute(remote_node).await) })
+            Some(async move { (remote_node.public_key, Box::pin(execute(remote_node)).await) })
         })
         .collect();
 
@@ -705,7 +705,7 @@ where
             self.remote_node.handle_chain_info_query(query).await?
         };
         let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
-        let query = ChainInfoQuery::new(chain_id).with_manager_values();
+        let query = Box::new(ChainInfoQuery::new(chain_id).with_manager_values());
         let local_info = match self.client.local_node.handle_chain_info_query(query).await {
             Ok(response) => response.info,
             // We don't have the full chain description.

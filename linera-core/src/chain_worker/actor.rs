@@ -134,7 +134,7 @@ where
 
     /// Handle a [`ChainInfoQuery`].
     HandleChainInfoQuery {
-        query: ChainInfoQuery,
+        query: Box<ChainInfoQuery>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },

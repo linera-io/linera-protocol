@@ -16,7 +16,7 @@ use crate::{data_types::LiteValue, ChainError};
 /// Generic type representing a certificate for `value` of type `T`.
 #[derive(Debug)]
 pub struct GenericCertificate<T: CertificateValue> {
-    value: T,
+    value: Box<T>,
     pub round: Round,
     signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
 }
@@ -41,7 +41,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
 
         Self {
-            value,
+            value: Box::new(value),
             round,
             signatures,
         }
@@ -54,7 +54,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
 
     /// Consumes this certificate, returning the value it contains.
     pub fn into_value(self) -> T {
-        self.value
+        *self.value
     }
 
     /// Returns reference to the value contained in this certificate.
@@ -64,7 +64,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
 
     /// Consumes this certificate, returning the value it contains.
     pub fn into_inner(self) -> T {
-        self.value
+        *self.value
     }
 
     /// Returns the certified value's hash.
@@ -73,7 +73,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
     }
 
     pub fn destructure(self) -> (T, Round, Vec<(ValidatorPublicKey, ValidatorSignature)>) {
-        (self.value, self.round, self.signatures)
+        (*self.value, self.round, self.signatures)
     }
 
     pub fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
@@ -126,7 +126,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
         T: CertificateValue,
     {
         crate::certificate::LiteCertificate {
-            value: LiteValue::new(&self.value),
+            value: LiteValue::new(&*self.value),
             round: self.round,
             signatures: std::borrow::Cow::Borrowed(&self.signatures),
         }

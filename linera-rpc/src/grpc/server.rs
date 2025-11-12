@@ -675,7 +675,7 @@ where
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
-        let query = request.into_inner().try_into()?;
+        let query = Box::new(request.into_inner().try_into()?);
         trace!(?query, "Handling chain info query");
         match self.state.clone().handle_chain_info_query(query).await {
             Ok((info, actions)) => {
