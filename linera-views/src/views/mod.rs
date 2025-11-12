@@ -37,7 +37,6 @@ pub mod set_view;
 pub mod collection_view;
 
 /// The `ReentrantCollectionView` implements a map structure whose keys are ordered and the values are views with concurrent access.
-#[cfg(not(target_arch = "wasm32"))]
 pub mod reentrant_collection_view;
 
 /// The implementation of a key-value store view.
