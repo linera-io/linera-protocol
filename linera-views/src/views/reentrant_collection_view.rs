@@ -226,22 +226,10 @@ impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
         Ok(delete_view)
     }
 
-    #[cfg(not(any(target_arch = "wasm32", feature = "web")))]
     fn post_save(&mut self) {
         for (_index, update) in mem::take(&mut self.updates) {
             if let Update::Set(view) = update {
-                let mut view = view.write_arc_blocking();
-                view.post_save();
-            }
-        }
-        self.delete_storage_first = false;
-    }
-
-    #[cfg(any(target_arch = "wasm32", feature = "web"))]
-    fn post_save(&mut self) {
-        for (_index, update) in mem::take(&mut self.updates) {
-            if let Update::Set(view) = update {
-                let mut view = view.try_write().unwrap();
+                let mut view = view.try_write().expect("pre_save was called before");
                 view.post_save();
             }
         }
