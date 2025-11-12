@@ -226,10 +226,7 @@ pub(crate) fn get_revm_execute_message_bytes(value: Vec<u8>) -> Vec<u8> {
 pub(crate) fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
     use alloy_sol_types::SolCall;
 
-    let internal_streams = streams
-        .into_iter()
-        .map(StreamUpdate::into)
-        .collect();
+    let internal_streams = streams.into_iter().map(StreamUpdate::into).collect();
 
     let fct_call = process_streamsCall { internal_streams };
     fct_call.abi_encode()

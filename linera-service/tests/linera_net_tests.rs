@@ -86,8 +86,6 @@ async fn assert_contract_balance(
     Ok(())
 }
 
-
-
 /// The environment variable name to specify the number of iterations in the performance-related
 /// tests.
 const LINERA_TEST_ITERATIONS: &str = "LINERA_TEST_ITERATIONS";
