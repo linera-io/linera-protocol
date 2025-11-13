@@ -4,6 +4,7 @@
 use std::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
+    sync::Mutex,
 };
 
 #[cfg(with_metrics)]
@@ -44,7 +45,7 @@ pub struct HistoricallyHashableView<C, W> {
     /// The inner view.
     inner: W,
     /// Memoized hash, if any.
-    hash: Option<HasherOutput>,
+    hash: Mutex<Option<HasherOutput>>,
     /// Track context type.
     _phantom: PhantomData<C>,
 }
@@ -91,7 +92,7 @@ where
         HistoricallyHashableView {
             _phantom: PhantomData,
             stored_hash: self.stored_hash,
-            hash: self.hash,
+            hash: Mutex::new(*self.hash.get_mut().unwrap()),
             inner: self.inner.with_context(ctx).await,
         }
     }
@@ -128,7 +129,7 @@ where
         Ok(Self {
             _phantom: PhantomData,
             stored_hash: hash,
-            hash,
+            hash: Mutex::new(hash),
             inner,
         })
     }
@@ -141,34 +142,52 @@ where
 
     fn rollback(&mut self) {
         self.inner.rollback();
-        self.hash = self.stored_hash;
+        *self.hash.get_mut().unwrap() = self.stored_hash;
     }
 
     async fn has_pending_changes(&self) -> bool {
         self.inner.has_pending_changes().await
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut inner_batch = Batch::new();
-        self.inner.flush(&mut inner_batch)?;
-        let hash = Self::make_hash(self.stored_hash, &inner_batch)?;
+        self.inner.pre_save(&mut inner_batch)?;
+        let new_hash = {
+            let mut maybe_hash = self.hash.lock().unwrap();
+            match maybe_hash.as_mut() {
+                Some(hash) => *hash,
+                None => {
+                    let hash = Self::make_hash(self.stored_hash, &inner_batch)?;
+                    *maybe_hash = Some(hash);
+                    hash
+                }
+            }
+        };
         batch.operations.extend(inner_batch.operations);
-        if self.stored_hash != Some(hash) {
+
+        if self.stored_hash != Some(new_hash) {
             let mut key = self.inner.context().base_key().bytes.clone();
             let tag = key.last_mut().unwrap();
             *tag = KeyTag::Hash as u8;
-            batch.put_key_value(key, &hash)?;
-            self.stored_hash = Some(hash);
+            batch.put_key_value(key, &new_hash)?;
         }
-        // Remember the hash.
-        self.hash = Some(hash);
         // Never delete the stored hash, even if the inner view was cleared.
         Ok(false)
     }
 
+    fn post_save(&mut self) {
+        let new_hash = self
+            .hash
+            .get_mut()
+            .unwrap()
+            .expect("hash should be computed in pre_save");
+        self.stored_hash = Some(new_hash);
+        self.inner.post_save();
+    }
+
     fn clear(&mut self) {
         self.inner.clear();
-        self.hash = None;
+        *self.hash.get_mut().unwrap() = None;
     }
 }
 
@@ -180,26 +199,23 @@ where
         Ok(HistoricallyHashableView {
             _phantom: PhantomData,
             stored_hash: self.stored_hash,
-            hash: self.hash,
+            hash: Mutex::new(*self.hash.get_mut().unwrap()),
             inner: self.inner.clone_unchecked()?,
         })
     }
 }
 
-impl<W: ClonableView> HistoricallyHashableView<W::Context, W> {
+impl<W: View> HistoricallyHashableView<W::Context, W> {
     /// Obtains a hash of the history of the changes in the view.
     pub async fn historical_hash(&mut self) -> Result<HasherOutput, ViewError> {
-        if let Some(hash) = self.hash {
-            return Ok(hash);
+        if let Some(hash) = self.hash.get_mut().unwrap() {
+            return Ok(*hash);
         }
         let mut batch = Batch::new();
-        if self.inner.has_pending_changes().await {
-            let mut inner = self.inner.clone_unchecked()?;
-            inner.flush(&mut batch)?;
-        }
+        self.inner.pre_save(&mut batch)?;
         let hash = Self::make_hash(self.stored_hash, &batch)?;
         // Remember the hash that we just computed.
-        self.hash = Some(hash);
+        *self.hash.get_mut().unwrap() = Some(hash);
         Ok(hash)
     }
 }
@@ -215,7 +231,7 @@ impl<C, W> Deref for HistoricallyHashableView<C, W> {
 impl<C, W> DerefMut for HistoricallyHashableView<C, W> {
     fn deref_mut(&mut self) -> &mut W {
         // Clear the memoized hash.
-        self.hash = None;
+        *self.hash.get_mut().unwrap() = None;
         &mut self.inner
     }
 }
@@ -300,8 +316,9 @@ mod tests {
 
         // Flush and verify hash is stored
         let mut batch = Batch::new();
-        view.flush(&mut batch)?;
+        view.pre_save(&mut batch)?;
         context.store().write_batch(batch).await?;
+        view.post_save();
         assert!(!view.has_pending_changes().await);
         assert_eq!(hash1, view.historical_hash().await?);
 
@@ -322,8 +339,9 @@ mod tests {
         // Set initial value and flush
         view.set(42);
         let mut batch = Batch::new();
-        view.flush(&mut batch)?;
+        view.pre_save(&mut batch)?;
         context.store().write_batch(batch).await?;
+        view.post_save();
 
         let hash_after_flush = view.historical_hash().await?;
 
@@ -347,8 +365,9 @@ mod tests {
         // Set and persist a value
         view.set(42);
         let mut batch = Batch::new();
-        view.flush(&mut batch)?;
+        view.pre_save(&mut batch)?;
         context.store().write_batch(batch).await?;
+        view.post_save();
 
         let hash_before = view.historical_hash().await?;
         assert!(!view.has_pending_changes().await);
@@ -379,8 +398,9 @@ mod tests {
         // Set and persist a value
         view.set(42);
         let mut batch = Batch::new();
-        view.flush(&mut batch)?;
+        view.pre_save(&mut batch)?;
         context.store().write_batch(batch).await?;
+        view.post_save();
 
         assert_ne!(view.historical_hash().await?, HasherOutput::default());
 
@@ -390,9 +410,10 @@ mod tests {
 
         // Flush the clear operation
         let mut batch = Batch::new();
-        let delete_view = view.flush(&mut batch)?;
+        let delete_view = view.pre_save(&mut batch)?;
         assert!(!delete_view);
         context.store().write_batch(batch).await?;
+        view.post_save();
 
         // Verify the view is not reset to default
         assert_ne!(view.historical_hash().await?, HasherOutput::default());
@@ -409,8 +430,9 @@ mod tests {
         // Set a value
         view.set(42);
         let mut batch = Batch::new();
-        view.flush(&mut batch)?;
+        view.pre_save(&mut batch)?;
         context.store().write_batch(batch).await?;
+        view.post_save();
 
         let original_hash = view.historical_hash().await?;
 
@@ -450,9 +472,10 @@ mod tests {
 
         // Flush - this should update stored_hash
         let mut batch = Batch::new();
-        let delete_view = view.flush(&mut batch)?;
+        let delete_view = view.pre_save(&mut batch)?;
         assert!(!delete_view);
         context.store().write_batch(batch).await?;
+        view.post_save();
 
         assert!(!view.has_pending_changes().await);
 
@@ -496,8 +519,9 @@ mod tests {
                 if value % 2 == 0 {
                     // Immediately save after odd values.
                     let mut batch = Batch::new();
-                    view.flush(&mut batch)?;
+                    view.pre_save(&mut batch)?;
                     context.store().write_batch(batch).await?;
+                    view.post_save();
                 }
                 let current_hash = view.historical_hash().await?;
                 assert_ne!(previous_hash, current_hash);
@@ -523,16 +547,18 @@ mod tests {
         // Set and flush a value
         view.set(42);
         let mut batch = Batch::new();
-        view.flush(&mut batch)?;
+        view.pre_save(&mut batch)?;
         context.store().write_batch(batch).await?;
+        view.post_save();
 
         let hash_before = view.historical_hash().await?;
 
         // Flush again without changes - no new hash should be stored
         let mut batch = Batch::new();
-        view.flush(&mut batch)?;
+        view.pre_save(&mut batch)?;
         assert!(batch.is_empty());
         context.store().write_batch(batch).await?;
+        view.post_save();
 
         let hash_after = view.historical_hash().await?;
         assert_eq!(hash_before, hash_after);

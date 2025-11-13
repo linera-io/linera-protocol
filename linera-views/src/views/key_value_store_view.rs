@@ -13,7 +13,7 @@
 //!
 //! Key tags to create the sub-keys of a `KeyValueStoreView` on top of the base key.
 
-use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included, sync::Mutex};
+use std::{collections::BTreeMap, fmt::Debug, ops::Bound::Included, sync::Mutex};
 
 use allocative::Allocative;
 #[cfg(with_metrics)]
@@ -204,16 +204,23 @@ impl SizeData {
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C")]
 pub struct KeyValueStoreView<C> {
+    /// The view context.
     #[allocative(skip)]
     context: C,
+    /// Tracks deleted key prefixes.
     deletion_set: DeletionSet,
+    /// Pending changes not yet persisted to storage.
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
+    /// The total size of keys and values persisted in storage.
     stored_total_size: SizeData,
+    /// The total size of keys and values including pending changes.
     total_size: SizeData,
+    /// Map of key to value size for tracking storage usage.
     sizes: ByteMapView<C, u32>,
+    /// The hash persisted in storage.
     #[allocative(visit = visit_allocative_simple)]
     stored_hash: Option<HasherOutput>,
-    // We are only keeping track of the size of the mutex here.
+    /// Memoized hash, if any.
     #[allocative(visit = visit_allocative_simple)]
     hash: Mutex<Option<HasherOutput>>,
 }
@@ -305,59 +312,64 @@ impl<C: Context> View for KeyValueStoreView<C> {
         self.stored_hash != *hash
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.deletion_set.delete_storage_first {
             delete_view = true;
-            self.stored_total_size = SizeData::default();
             batch.delete_key_prefix(self.context.base_key().bytes.clone());
-            for (index, update) in mem::take(&mut self.updates) {
+            for (index, update) in self.updates.iter() {
                 if let Update::Set(value) = update {
                     let key = self
                         .context
                         .base_key()
-                        .base_tag_index(KeyTag::Index as u8, &index);
-                    batch.put_key_value_bytes(key, value);
+                        .base_tag_index(KeyTag::Index as u8, index);
+                    batch.put_key_value_bytes(key, value.clone());
                     delete_view = false;
                 }
             }
-            self.stored_hash = None
         } else {
-            for index in mem::take(&mut self.deletion_set.deleted_prefixes) {
+            for index in self.deletion_set.deleted_prefixes.iter() {
                 let key = self
                     .context
                     .base_key()
-                    .base_tag_index(KeyTag::Index as u8, &index);
+                    .base_tag_index(KeyTag::Index as u8, index);
                 batch.delete_key_prefix(key);
             }
-            for (index, update) in mem::take(&mut self.updates) {
+            for (index, update) in self.updates.iter() {
                 let key = self
                     .context
                     .base_key()
-                    .base_tag_index(KeyTag::Index as u8, &index);
+                    .base_tag_index(KeyTag::Index as u8, index);
                 match update {
                     Update::Removed => batch.delete_key(key),
-                    Update::Set(value) => batch.put_key_value_bytes(key, value),
+                    Update::Set(value) => batch.put_key_value_bytes(key, value.clone()),
                 }
             }
         }
-        self.sizes.flush(batch)?;
-        let hash = *self.hash.get_mut().unwrap();
+        self.sizes.pre_save(batch)?;
+        let hash = *self.hash.lock().unwrap();
         if self.stored_hash != hash {
             let key = self.context.base_key().base_tag(KeyTag::Hash as u8);
             match hash {
                 None => batch.delete_key(key),
                 Some(hash) => batch.put_key_value(key, &hash)?,
             }
-            self.stored_hash = hash;
         }
         if self.stored_total_size != self.total_size {
             let key = self.context.base_key().base_tag(KeyTag::TotalSize as u8);
             batch.put_key_value(key, &self.total_size)?;
-            self.stored_total_size = self.total_size;
         }
-        self.deletion_set.delete_storage_first = false;
         Ok(delete_view)
+    }
+
+    fn post_save(&mut self) {
+        self.deletion_set.delete_storage_first = false;
+        self.deletion_set.deleted_prefixes.clear();
+        self.updates.clear();
+        self.sizes.post_save();
+        let hash = *self.hash.lock().unwrap();
+        self.stored_hash = hash;
+        self.stored_total_size = self.total_size;
     }
 
     fn clear(&mut self) {
@@ -1295,7 +1307,8 @@ impl<C: Context> WritableKeyValueStore for ViewContainer<C> {
         let mut view = self.view.write().await;
         view.write_batch(batch).await?;
         let mut batch = Batch::new();
-        view.flush(&mut batch)?;
+        view.pre_save(&mut batch)?;
+        view.post_save();
         view.context()
             .store()
             .write_batch(batch)

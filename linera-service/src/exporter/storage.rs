@@ -358,8 +358,7 @@ where
         self.exporter_state_view
             .set_destination_states(self.shared_storage.destination_states.clone());
 
-        self.exporter_state_view.flush(&mut batch)?;
-        self.exporter_state_view.rollback();
+        self.exporter_state_view.pre_save(&mut batch)?;
         #[cfg(with_metrics)]
         metrics::SAVE_HISTOGRAM.measure_latency();
         if let Err(e) = self
@@ -371,6 +370,7 @@ where
         {
             Err(ExporterError::ViewError(e.into()))?;
         };
+        self.exporter_state_view.post_save();
 
         // clear the shared state only after persisting it
         // only matters for the shared updates buffer
@@ -462,7 +462,7 @@ where
 
     fn push(&mut self, value: CanonicalBlock) {
         let index = self.next_index();
-        let _ = self.state_updates_buffer.pin().insert(index, value.clone());
+        self.state_updates_buffer.pin().insert(index, value.clone());
         self.state_cache.insert(index, value);
     }
 
@@ -477,7 +477,8 @@ where
             self.state_context.push(value);
         }
 
-        let _ = self.state_context.flush(batch)?;
+        self.state_context.pre_save(batch)?;
+        self.state_context.post_save();
 
         Ok(())
     }

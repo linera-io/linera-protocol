@@ -94,12 +94,17 @@ pub trait View: Sized {
     /// by a flush then all the relevant data is removed on the storage.
     fn clear(&mut self);
 
-    /// Persists changes to storage. This leaves the view still usable and is essentially neutral to the
-    /// program running. Crash-resistant storage implementations are expected to accumulate the desired
-    /// changes in the `batch` variable first. If the view is dropped without calling `flush`, staged
-    /// changes are simply lost.
+    /// Computes the batch of operations to persist changes to storage without modifying the view.
+    /// Crash-resistant storage implementations accumulate the desired changes in the `batch` variable.
     /// The returned boolean indicates whether the operation removes the view or not.
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError>;
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError>;
+
+    /// Updates the view state after the batch has been executed in the database.
+    /// This should be called after `pre_save` and after the batch has been successfully written to storage.
+    /// This leaves the view in a clean state with no pending changes.
+    ///
+    /// May panic if `pre_save` was not called right before on `self`.
+    fn post_save(&mut self);
 
     /// Builds a trivial view that is already deleted
     fn new(context: Self::Context) -> Result<Self, ViewError> {
