@@ -1,6 +1,6 @@
 {
   "name": "@linera/client",
-  "version": "0.15.5",
+  "version": "0.15.6",
   "description": "Web client for the Linera blockchain",
   "publishConfig": {
     "access": "public"
