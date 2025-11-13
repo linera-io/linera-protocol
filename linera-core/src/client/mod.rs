@@ -587,6 +587,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
+        latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
     ) -> Result<(), ChainClientError> {
         let nodes = self.make_nodes(committee)?;
         communicate_with_quorum(
@@ -599,9 +600,10 @@ impl<Env: Environment> Client<Env> {
                     client: self.clone(),
                     admin_id: self.admin_id,
                 };
+                let certificate = latest_certificate.clone();
                 Box::pin(async move {
                     updater
-                        .send_chain_information(chain_id, height, delivery)
+                        .send_chain_information(chain_id, height, delivery, certificate)
                         .await
                 })
             },
@@ -2062,16 +2064,18 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Attempts to update all validators about the local chain.
-    #[instrument(level = "trace", skip(old_committee))]
+    #[instrument(level = "trace", skip(old_committee, latest_certificate))]
     pub async fn update_validators(
         &self,
         old_committee: Option<&Committee>,
+        latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
     ) -> Result<(), ChainClientError> {
         let update_validators_start = linera_base::time::Instant::now();
         // Communicate the new certificate now.
         if let Some(old_committee) = old_committee {
             let old_committee_start = linera_base::time::Instant::now();
-            self.communicate_chain_updates(old_committee).await?;
+            self.communicate_chain_updates(old_committee, latest_certificate.clone())
+                .await?;
             tracing::debug!(
                 old_committee_ms = old_committee_start.elapsed().as_millis(),
                 "communicated chain updates to old committee"
@@ -2082,7 +2086,8 @@ impl<Env: Environment> ChainClient<Env> {
                 // If the configuration just changed, communicate to the new committee as well.
                 // (This is actually more important that updating the previous committee.)
                 let new_committee_start = linera_base::time::Instant::now();
-                self.communicate_chain_updates(&new_committee).await?;
+                self.communicate_chain_updates(&new_committee, latest_certificate)
+                    .await?;
                 tracing::debug!(
                     new_committee_ms = new_committee_start.elapsed().as_millis(),
                     "communicated chain updates to new committee"
@@ -2094,15 +2099,22 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Broadcasts certified blocks to validators.
-    #[instrument(level = "trace", skip(committee))]
+    #[instrument(level = "trace", skip(committee, latest_certificate))]
     pub async fn communicate_chain_updates(
         &self,
         committee: &Committee,
+        latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
     ) -> Result<(), ChainClientError> {
         let delivery = self.options.cross_chain_message_delivery;
         let height = self.chain_info().await?.next_block_height;
         self.client
-            .communicate_chain_updates(committee, self.chain_id, height, delivery)
+            .communicate_chain_updates(
+                committee,
+                self.chain_id,
+                height,
+                delivery,
+                latest_certificate,
+            )
             .await
     }
 
@@ -2495,6 +2507,7 @@ impl<Env: Environment> ChainClient<Env> {
                 chain_id,
                 height,
                 CrossChainMessageDelivery::NonBlocking,
+                None,
             )
             .await?;
         Ok(*certificate)
@@ -3183,7 +3196,7 @@ impl<Env: Environment> ChainClient<Env> {
         self.send_timing(submit_block_proposal_start, TimingType::SubmitBlockProposal);
         debug!(round = %certificate.round, "Sending confirmed block to validators");
         let update_start = linera_base::time::Instant::now();
-        Box::pin(self.update_validators(Some(&committee))).await?;
+        Box::pin(self.update_validators(Some(&committee), Some(certificate.clone()))).await?;
         tracing::debug!(
             update_validators_ms = update_start.elapsed().as_millis(),
             total_process_ms = process_start.elapsed().as_millis(),
@@ -3240,7 +3253,7 @@ impl<Env: Environment> ChainClient<Env> {
         let committee = self.local_committee().await?;
         let certificate =
             Box::pin(self.client.finalize_block(&committee, certificate.clone())).await?;
-        Box::pin(self.update_validators(Some(&committee))).await?;
+        Box::pin(self.update_validators(Some(&committee), Some(certificate.clone()))).await?;
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 

@@ -459,7 +459,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     async fn update_validators(&self, notification: &Notification) -> Result<(), Error> {
         let chain_id = notification.chain_id;
         let listening_client = self.listening.get(&chain_id).expect("missing client");
-        if let Err(error) = listening_client.client.update_validators(None).await {
+        if let Err(error) = listening_client.client.update_validators(None, None).await {
             warn!(
                 "Failed to update validators about the local chain after \
                  receiving {notification:?} with error: {error:?}"
