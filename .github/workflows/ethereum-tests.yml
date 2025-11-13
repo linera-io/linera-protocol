@@ -2,8 +2,7 @@ name: Ethereum Tests
 
 on:
   push:
-    branches: [ 'devnet_*', 'testnet_*' ]
-  merge_group:
+    branches: [ main, 'devnet_*', 'testnet_*' ]
   pull_request:
     branches:
       - "**"
