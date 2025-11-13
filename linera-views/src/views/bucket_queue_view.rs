@@ -249,34 +249,30 @@ where
 
     fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
-        if self.delete_storage_first {
-            let key_prefix = self.context.base_key().bytes.clone();
-            batch.delete_key_prefix(key_prefix);
-            delete_view = true;
-        }
-        let mut temp_stored_buckets = self.stored_buckets.clone();
-        let mut temp_stored_position = self.stored_front_position;
+        let mut stored_buckets = self.stored_buckets.clone();
+        let mut stored_front_position = self.stored_front_position;
         if self.stored_count() == 0 {
             let key_prefix = self.context.base_key().bytes.clone();
             batch.delete_key_prefix(key_prefix);
-            temp_stored_buckets.clear();
-            temp_stored_position = 0;
+            delete_view = true;
+            stored_buckets.clear();
+            stored_front_position = 0;
         } else if let Some(cursor) = self.cursor {
             for _ in 0..cursor.idx {
-                let bucket = temp_stored_buckets.pop_front().unwrap();
+                let bucket = stored_buckets.pop_front().unwrap();
                 let index = bucket.index;
                 let key = self.get_index_key(index)?;
                 batch.delete_key(key);
             }
-            temp_stored_position = cursor.position;
+            stored_front_position = cursor.position;
             // We need to ensure that the first index is in the front.
-            let first_index = temp_stored_buckets[0].index;
+            let first_index = stored_buckets[0].index;
             if first_index != 0 {
-                temp_stored_buckets[0].index = 0;
+                stored_buckets[0].index = 0;
                 let key = self.get_index_key(first_index)?;
                 batch.delete_key(key);
                 let key = self.get_index_key(0)?;
-                let bucket = temp_stored_buckets.front().unwrap();
+                let bucket = stored_buckets.front().unwrap();
                 let State::Loaded { data } = &bucket.state else {
                     unreachable!();
                 };
@@ -285,25 +281,25 @@ where
         }
         if !self.new_back_values.is_empty() {
             delete_view = false;
-            let mut unused_index = match temp_stored_buckets.back() {
+            let mut index = match stored_buckets.back() {
                 Some(bucket) => bucket.index + 1,
                 None => 0,
             };
             let new_back_values = self.new_back_values.iter().cloned().collect::<Vec<_>>();
             for value_chunk in new_back_values.chunks(N) {
-                let key = self.get_index_key(unused_index)?;
+                let key = self.get_index_key(index)?;
                 batch.put_key_value(key, &value_chunk)?;
-                temp_stored_buckets.push_back(Bucket {
-                    index: unused_index,
-                    state: State::Loaded {
-                        data: value_chunk.to_vec(),
+                stored_buckets.push_back(Bucket {
+                    index,
+                    state: State::NotLoaded {
+                        length: value_chunk.len(),
                     },
                 });
-                unused_index += 1;
+                index += 1;
             }
         }
-        if !self.delete_storage_first || !temp_stored_buckets.is_empty() {
-            let stored_indices = StoredIndices::new(&temp_stored_buckets, temp_stored_position);
+        if !delete_view {
+            let stored_indices = StoredIndices::new(&stored_buckets, stored_front_position);
             let key = self.context.base_key().base_tag(KeyTag::Store as u8);
             batch.put_key_value(key, &stored_indices)?;
         }
@@ -324,13 +320,10 @@ where
             });
             self.stored_front_position = cursor.position;
             // We need to ensure that the first index is in the front.
-            let first_index = self.stored_buckets[0].index;
-            if first_index != 0 {
-                self.stored_buckets[0].index = 0;
-            }
+            self.stored_buckets[0].index = 0;
         }
         if !self.new_back_values.is_empty() {
-            let mut unused_index = match self.stored_buckets.back() {
+            let mut index = match self.stored_buckets.back() {
                 Some(bucket) => bucket.index + 1,
                 None => 0,
             };
@@ -338,12 +331,12 @@ where
             let new_back_values = new_back_values.into_iter().collect::<Vec<_>>();
             for value_chunk in new_back_values.chunks(N) {
                 self.stored_buckets.push_back(Bucket {
-                    index: unused_index,
+                    index,
                     state: State::Loaded {
                         data: value_chunk.to_vec(),
                     },
                 });
-                unused_index += 1;
+                index += 1;
             }
             if self.cursor.is_none() {
                 self.cursor = Some(Cursor {
