@@ -1032,7 +1032,7 @@ where
         .await
         .unwrap();
     client1
-        .communicate_chain_updates(&builder.initial_committee)
+        .communicate_chain_updates(&builder.initial_committee, None)
         .await
         .unwrap();
     // Client2 does not know about the money yet.
@@ -2881,7 +2881,7 @@ where
 
     // Update the validators on the chain.
     // If it works, it means the validator has been correctly updated.
-    client2.update_validators(None).await.unwrap();
+    client2.update_validators(None, None).await.unwrap();
 
     client2
         .transfer(

@@ -409,6 +409,7 @@ where
                     chain_id,
                     height,
                     CrossChainMessageDelivery::NonBlocking,
+                    None,
                 )
                 .await?;
             }
@@ -427,6 +428,7 @@ where
                     chain_id,
                     height,
                     CrossChainMessageDelivery::NonBlocking,
+                    None,
                 )
                 .await?;
             }
@@ -440,6 +442,7 @@ where
                     *chain_id,
                     height,
                     CrossChainMessageDelivery::NonBlocking,
+                    None,
                 )
                 .await?;
             }
@@ -475,6 +478,7 @@ where
                         chain_id,
                         proposal.content.block.height,
                         CrossChainMessageDelivery::NonBlocking,
+                        None,
                     )
                     .await?;
                 }
@@ -494,6 +498,7 @@ where
                         chain_id,
                         found_block_height,
                         CrossChainMessageDelivery::NonBlocking,
+                        None,
                     )
                     .await?;
                 }
@@ -519,6 +524,7 @@ where
                         origin,
                         height.try_add_one()?,
                         CrossChainMessageDelivery::Blocking,
+                        None,
                     )
                     .await?;
                 }
@@ -612,6 +618,7 @@ where
             self.admin_id,
             local_admin_info.next_block_height,
             CrossChainMessageDelivery::NonBlocking,
+            None,
         ))
         .await
     }
@@ -621,31 +628,35 @@ where
         chain_id: ChainId,
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
+        latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
     ) -> Result<(), ChainClientError> {
         let info = if let Ok(height) = target_block_height.try_sub_one() {
             // Figure out which certificates this validator is missing. In many cases, it's just the
             // last one, so we optimistically send that one right away.
-            let hash = self
-                .client
-                .local_node
-                .chain_state_view(chain_id)
-                .await?
-                .block_hashes([height])
-                .await?
-                .into_iter()
-                .next()
-                .ok_or_else(|| {
-                    ChainClientError::InternalError(
-                        "send_chain_information called with invalid target_block_height",
-                    )
-                })?;
-            let certificate = self
-                .client
-                .local_node
-                .storage_client()
-                .read_certificate(hash)
-                .await?
-                .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
+            let certificate = if let Some(cert) = latest_certificate {
+                cert
+            } else {
+                let hash = self
+                    .client
+                    .local_node
+                    .chain_state_view(chain_id)
+                    .await?
+                    .block_hashes([height])
+                    .await?
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| {
+                        ChainClientError::InternalError(
+                            "send_chain_information called with invalid target_block_height",
+                        )
+                    })?;
+                self.client
+                    .local_node
+                    .storage_client()
+                    .read_certificate(hash)
+                    .await?
+                    .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?
+            };
             let info = match self.send_confirmed_certificate(certificate, delivery).await {
                 Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(event_ids)))
                     if event_ids.iter().all(|event_id| {
@@ -782,7 +793,7 @@ where
             let mut updater = self.clone();
             async move {
                 updater
-                    .send_chain_information(chain_id, height, delivery)
+                    .send_chain_information(chain_id, height, delivery, None)
                     .await
             }
         }))
