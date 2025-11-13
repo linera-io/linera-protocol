@@ -41,7 +41,6 @@ use std::{
     borrow::{Borrow, Cow},
     collections::{btree_map::Entry, BTreeMap},
     marker::PhantomData,
-    mem,
 };
 
 use allocative::Allocative;
@@ -64,9 +63,12 @@ use crate::{
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, V: Allocative")]
 pub struct ByteMapView<C, V> {
+    /// The view context.
     #[allocative(skip)]
     context: C,
+    /// Tracks deleted key prefixes.
     deletion_set: DeletionSet,
+    /// Pending changes not yet persisted to storage.
     updates: BTreeMap<Vec<u8>, Update<V>>,
 }
 
@@ -156,33 +158,38 @@ where
         self.deletion_set.has_pending_changes() || !self.updates.is_empty()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.deletion_set.delete_storage_first {
             delete_view = true;
             batch.delete_key_prefix(self.context.base_key().bytes.clone());
-            for (index, update) in mem::take(&mut self.updates) {
+            for (index, update) in &self.updates {
                 if let Update::Set(value) = update {
-                    let key = self.context.base_key().base_index(&index);
-                    batch.put_key_value(key, &value)?;
+                    let key = self.context.base_key().base_index(index);
+                    batch.put_key_value(key, value)?;
                     delete_view = false;
                 }
             }
         } else {
-            for index in mem::take(&mut self.deletion_set.deleted_prefixes) {
-                let key = self.context.base_key().base_index(&index);
+            for index in &self.deletion_set.deleted_prefixes {
+                let key = self.context.base_key().base_index(index);
                 batch.delete_key_prefix(key);
             }
-            for (index, update) in mem::take(&mut self.updates) {
-                let key = self.context.base_key().base_index(&index);
+            for (index, update) in &self.updates {
+                let key = self.context.base_key().base_index(index);
                 match update {
                     Update::Removed => batch.delete_key(key),
-                    Update::Set(value) => batch.put_key_value(key, &value)?,
+                    Update::Set(value) => batch.put_key_value(key, value)?,
                 }
             }
         }
-        self.deletion_set.delete_storage_first = false;
         Ok(delete_view)
+    }
+
+    fn post_save(&mut self) {
+        self.updates.clear();
+        self.deletion_set.delete_storage_first = false;
+        self.deletion_set.deleted_prefixes.clear();
     }
 
     fn clear(&mut self) {
@@ -991,7 +998,9 @@ where
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, I, V: Allocative")]
 pub struct MapView<C, I, V> {
+    /// The underlying map storing entries with serialized keys.
     map: ByteMapView<C, V>,
+    /// Phantom data for the key type.
     #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
@@ -1050,8 +1059,12 @@ where
         self.map.has_pending_changes().await
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        self.map.flush(batch)
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.map.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.map.post_save()
     }
 
     fn clear(&mut self) {
@@ -1567,7 +1580,9 @@ where
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, I, V: Allocative")]
 pub struct CustomMapView<C, I, V> {
+    /// The underlying map storing entries with custom-serialized keys.
     map: ByteMapView<C, V>,
+    /// Phantom data for the key type.
     #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
@@ -1606,8 +1621,12 @@ where
         self.map.has_pending_changes().await
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        self.map.flush(batch)
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.map.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.map.post_save()
     }
 
     fn clear(&mut self) {

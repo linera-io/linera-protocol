@@ -132,6 +132,7 @@ fn stored_indices<T>(stored_data: &VecDeque<(usize, Bucket<T>)>, position: usize
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, T: Allocative, const N: usize")]
 pub struct BucketQueueView<C, T, const N: usize> {
+    /// The view context.
     #[allocative(skip)]
     context: C,
     /// The buckets of stored data. If missing, then it has not been loaded. The first index is always loaded.
@@ -215,24 +216,76 @@ where
         !self.new_back_values.is_empty()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
             let key_prefix = self.context.base_key().bytes.clone();
             batch.delete_key_prefix(key_prefix);
             delete_view = true;
         }
+        let mut temp_stored_data = self.stored_data.clone();
+        let mut temp_stored_position = self.stored_position;
         if self.stored_count() == 0 {
             let key_prefix = self.context.base_key().bytes.clone();
             batch.delete_key_prefix(key_prefix);
+            temp_stored_data.clear();
+            temp_stored_position = 0;
+        } else if let Some((i_block, position)) = self.cursor.position {
+            for _ in 0..i_block {
+                let block = temp_stored_data.pop_front().unwrap();
+                let index = block.0;
+                let key = self.get_index_key(index)?;
+                batch.delete_key(key);
+            }
+            temp_stored_position = position;
+            // We need to ensure that the first index is in the front.
+            let first_index = temp_stored_data[0].0;
+            if first_index != 0 {
+                temp_stored_data[0].0 = 0;
+                let key = self.get_index_key(first_index)?;
+                batch.delete_key(key);
+                let key = self.get_index_key(0)?;
+                let (_, data0) = temp_stored_data.front().unwrap();
+                let Bucket::Loaded { data } = data0 else {
+                    unreachable!();
+                };
+                batch.put_key_value(key, &data)?;
+            }
+        }
+        if !self.new_back_values.is_empty() {
+            delete_view = false;
+            let mut unused_index = match temp_stored_data.back() {
+                Some((index, _)) => index + 1,
+                None => 0,
+            };
+            let new_back_values = self.new_back_values.iter().cloned().collect::<Vec<_>>();
+            for value_chunk in new_back_values.chunks(N) {
+                let key = self.get_index_key(unused_index)?;
+                batch.put_key_value(key, &value_chunk)?;
+                temp_stored_data.push_back((
+                    unused_index,
+                    Bucket::Loaded {
+                        data: value_chunk.to_vec(),
+                    },
+                ));
+                unused_index += 1;
+            }
+        }
+        if !self.delete_storage_first || !temp_stored_data.is_empty() {
+            let stored_indices = stored_indices(&temp_stored_data, temp_stored_position);
+            let key = self.context.base_key().base_tag(KeyTag::Store as u8);
+            batch.put_key_value(key, &stored_indices)?;
+        }
+        Ok(delete_view)
+    }
+
+    fn post_save(&mut self) {
+        if self.stored_count() == 0 {
             self.stored_data.clear();
             self.stored_position = 0;
         } else if let Some((i_block, position)) = self.cursor.position {
             for _ in 0..i_block {
-                let block = self.stored_data.pop_front().unwrap();
-                let index = block.0;
-                let key = self.get_index_key(index)?;
-                batch.delete_key(key);
+                self.stored_data.pop_front();
             }
             self.cursor = Cursor {
                 position: Some((0, position)),
@@ -242,18 +295,9 @@ where
             let first_index = self.stored_data[0].0;
             if first_index != 0 {
                 self.stored_data[0].0 = 0;
-                let key = self.get_index_key(first_index)?;
-                batch.delete_key(key);
-                let key = self.get_index_key(0)?;
-                let (_, data0) = self.stored_data.front().unwrap();
-                let Bucket::Loaded { data } = data0 else {
-                    unreachable!();
-                };
-                batch.put_key_value(key, &data)?;
             }
         }
         if !self.new_back_values.is_empty() {
-            delete_view = false;
             let mut unused_index = match self.stored_data.back() {
                 Some((index, _)) => index + 1,
                 None => 0,
@@ -261,8 +305,6 @@ where
             let new_back_values = std::mem::take(&mut self.new_back_values);
             let new_back_values = new_back_values.into_iter().collect::<Vec<_>>();
             for value_chunk in new_back_values.chunks(N) {
-                let key = self.get_index_key(unused_index)?;
-                batch.put_key_value(key, &value_chunk)?;
                 self.stored_data.push_back((
                     unused_index,
                     Bucket::Loaded {
@@ -277,13 +319,7 @@ where
                 }
             }
         }
-        if !self.delete_storage_first || !self.stored_data.is_empty() {
-            let stored_indices = stored_indices(&self.stored_data, self.stored_position);
-            let key = self.context.base_key().base_tag(KeyTag::Store as u8);
-            batch.put_key_value(key, &stored_indices)?;
-        }
         self.delete_storage_first = false;
-        Ok(delete_view)
     }
 
     fn clear(&mut self) {

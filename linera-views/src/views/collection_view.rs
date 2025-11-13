@@ -48,8 +48,11 @@ mod metrics {
 /// `Vec<u8>`, one subview at a time.
 #[derive(Debug)]
 pub struct ByteCollectionView<C, W> {
+    /// The view context.
     context: C,
+    /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
+    /// Entries that may have staged changes.
     updates: RwLock<BTreeMap<Vec<u8>, Update<W>>>,
 }
 
@@ -149,36 +152,49 @@ impl<W: View> View for ByteCollectionView<W::Context, W> {
         !updates.is_empty()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
+        let updates = self
+            .updates
+            .try_read()
+            .ok_or_else(|| ViewError::TryLockError(vec![]))?;
         if self.delete_storage_first {
             delete_view = true;
             batch.delete_key_prefix(self.context.base_key().bytes.clone());
-            for (index, update) in mem::take(self.updates.get_mut()) {
-                if let Update::Set(mut view) = update {
-                    view.flush(batch)?;
-                    self.add_index(batch, &index);
+            for (index, update) in updates.iter() {
+                if let Update::Set(view) = update {
+                    view.pre_save(batch)?;
+                    self.add_index(batch, index);
                     delete_view = false;
                 }
             }
         } else {
-            for (index, update) in mem::take(self.updates.get_mut()) {
+            for (index, update) in updates.iter() {
                 match update {
-                    Update::Set(mut view) => {
-                        view.flush(batch)?;
-                        self.add_index(batch, &index);
+                    Update::Set(view) => {
+                        view.pre_save(batch)?;
+                        self.add_index(batch, index);
                     }
                     Update::Removed => {
-                        let key_subview = self.get_subview_key(&index);
-                        let key_index = self.get_index_key(&index);
+                        let key_subview = self.get_subview_key(index);
+                        let key_index = self.get_index_key(index);
                         batch.delete_key(key_index);
                         batch.delete_key_prefix(key_subview);
                     }
                 }
             }
         }
-        self.delete_storage_first = false;
         Ok(delete_view)
+    }
+
+    fn post_save(&mut self) {
+        for (_, update) in self.updates.get_mut().iter_mut() {
+            if let Update::Set(view) = update {
+                view.post_save();
+            }
+        }
+        self.delete_storage_first = false;
+        self.updates.get_mut().clear();
     }
 
     fn clear(&mut self) {
@@ -917,8 +933,12 @@ where
         self.collection.has_pending_changes().await
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        self.collection.flush(batch)
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.collection.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.collection.post_save()
     }
 
     fn clear(&mut self) {
@@ -1340,8 +1360,12 @@ impl<I: Send + Sync, W: View> View for CustomCollectionView<W::Context, I, W> {
         self.collection.has_pending_changes().await
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        self.collection.flush(batch)
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.collection.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.collection.post_save()
     }
 
     fn clear(&mut self) {
