@@ -724,6 +724,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
+        latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
     ) -> Result<(), chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
         communicate_with_quorum(
@@ -736,9 +737,10 @@ impl<Env: Environment> Client<Env> {
                     client: self.clone(),
                     admin_id: self.admin_id,
                 };
+                let certificate = latest_certificate.clone();
                 Box::pin(async move {
                     updater
-                        .send_chain_information(chain_id, height, delivery)
+                        .send_chain_information(chain_id, height, delivery, certificate)
                         .await
                 })
             },
