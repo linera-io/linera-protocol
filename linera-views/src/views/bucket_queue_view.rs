@@ -310,6 +310,7 @@ where
         if self.stored_count() == 0 {
             self.stored_buckets.clear();
             self.stored_front_position = 0;
+            self.cursor = None;
         } else if let Some(cursor) = self.cursor {
             for _ in 0..cursor.idx {
                 self.stored_buckets.pop_front();
