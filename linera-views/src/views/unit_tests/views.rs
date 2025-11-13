@@ -505,8 +505,9 @@ async fn test_flushing_cleared_view<V: TestView>(_view_type: PhantomData<V>) -> 
 /// Saves a [`View`] into the [`MemoryContext<()>`] storage simulation.
 async fn save_view<V: View>(context: &V::Context, view: &mut V) -> anyhow::Result<()> {
     let mut batch = Batch::new();
-    view.flush(&mut batch)?;
+    view.pre_save(&mut batch)?;
     context.store().write_batch(batch).await?;
+    view.post_save();
     Ok(())
 }
 

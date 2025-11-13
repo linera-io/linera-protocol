@@ -53,12 +53,17 @@ enum KeyTag {
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, T: Allocative")]
 pub struct QueueView<C, T> {
+    /// The view context.
     #[allocative(skip)]
     context: C,
+    /// The range of indices for entries persisted in storage.
     #[allocative(visit = visit_allocative_simple)]
     stored_indices: Range<usize>,
+    /// The number of entries to delete from the front.
     front_delete_count: usize,
+    /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
+    /// New values added to the back, not yet persisted to storage.
     new_back_values: VecDeque<T>,
 }
 
@@ -107,19 +112,20 @@ where
         !self.new_back_values.is_empty()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key().bytes.clone());
             delete_view = true;
         }
+        let mut new_stored_indices = self.stored_indices.clone();
         if self.stored_count() == 0 {
             let key_prefix = self.context.base_key().base_tag(KeyTag::Index as u8);
             batch.delete_key_prefix(key_prefix);
-            self.stored_indices = Range::default();
+            new_stored_indices = Range::default();
         } else if self.front_delete_count > 0 {
             let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
-            self.stored_indices.start += self.front_delete_count;
+            new_stored_indices.start += self.front_delete_count;
             for index in deletion_range {
                 let key = self
                     .context
@@ -134,19 +140,30 @@ where
                 let key = self
                     .context
                     .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &self.stored_indices.end)?;
+                    .derive_tag_key(KeyTag::Index as u8, &new_stored_indices.end)?;
                 batch.put_key_value(key, value)?;
-                self.stored_indices.end += 1;
+                new_stored_indices.end += 1;
             }
-            self.new_back_values.clear();
         }
-        if !self.delete_storage_first || !self.stored_indices.is_empty() {
+        if !self.delete_storage_first || !new_stored_indices.is_empty() {
             let key = self.context.base_key().base_tag(KeyTag::Store as u8);
-            batch.put_key_value(key, &self.stored_indices)?;
+            batch.put_key_value(key, &new_stored_indices)?;
+        }
+        Ok(delete_view)
+    }
+
+    fn post_save(&mut self) {
+        if self.stored_count() == 0 {
+            self.stored_indices = Range::default();
+        } else if self.front_delete_count > 0 {
+            self.stored_indices.start += self.front_delete_count;
+        }
+        if !self.new_back_values.is_empty() {
+            self.stored_indices.end += self.new_back_values.len();
+            self.new_back_values.clear();
         }
         self.front_delete_count = 0;
         self.delete_storage_first = false;
-        Ok(delete_view)
     }
 
     fn clear(&mut self) {

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Borrow, collections::BTreeMap, marker::PhantomData, mem};
+use std::{borrow::Borrow, collections::BTreeMap, marker::PhantomData};
 
 use allocative::Allocative;
 #[cfg(with_metrics)]
@@ -40,9 +40,12 @@ mod metrics {
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C")]
 pub struct ByteSetView<C> {
+    /// The view context.
     #[allocative(skip)]
     context: C,
+    /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
+    /// Pending changes not yet persisted to storage.
     updates: BTreeMap<Vec<u8>, Update<()>>,
 }
 
@@ -94,29 +97,33 @@ impl<C: Context> View for ByteSetView<C> {
         !self.updates.is_empty()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
             delete_view = true;
             batch.delete_key_prefix(self.context.base_key().bytes.clone());
-            for (index, update) in mem::take(&mut self.updates) {
+            for (index, update) in self.updates.iter() {
                 if let Update::Set(_) = update {
-                    let key = self.context.base_key().base_index(&index);
+                    let key = self.context.base_key().base_index(index);
                     batch.put_key_value_bytes(key, Vec::new());
                     delete_view = false;
                 }
             }
         } else {
-            for (index, update) in mem::take(&mut self.updates) {
-                let key = self.context.base_key().base_index(&index);
+            for (index, update) in self.updates.iter() {
+                let key = self.context.base_key().base_index(index);
                 match update {
                     Update::Removed => batch.delete_key(key),
                     Update::Set(_) => batch.put_key_value_bytes(key, Vec::new()),
                 }
             }
         }
-        self.delete_storage_first = false;
         Ok(delete_view)
+    }
+
+    fn post_save(&mut self) {
+        self.delete_storage_first = false;
+        self.updates.clear();
     }
 
     fn clear(&mut self) {
@@ -376,7 +383,9 @@ impl<C: Context> HashableView for ByteSetView<C> {
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, I")]
 pub struct SetView<C, I> {
+    /// The underlying set storing entries with serialized keys.
     set: ByteSetView<C>,
+    /// Phantom data for the key type.
     #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
@@ -424,8 +433,12 @@ impl<C: Context, I: Send + Sync + Serialize> View for SetView<C, I> {
         self.set.has_pending_changes().await
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        self.set.flush(batch)
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.set.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.set.post_save()
     }
 
     fn clear(&mut self) {
@@ -649,7 +662,9 @@ where
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, I")]
 pub struct CustomSetView<C, I> {
+    /// The underlying set storing entries with custom-serialized keys.
     set: ByteSetView<C>,
+    /// Phantom data for the key type.
     #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
@@ -687,8 +702,12 @@ where
         self.set.has_pending_changes().await
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        self.set.flush(batch)
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.set.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.set.post_save()
     }
 
     fn clear(&mut self) {
@@ -1039,8 +1058,9 @@ mod tests {
         assert_eq!(set.keys().await?, vec![vec![1, 2, 3], vec![4, 5, 6]]);
 
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
         // Should have no pending changes after flush
         assert!(!set.has_pending_changes().await);
 
@@ -1067,7 +1087,7 @@ mod tests {
 
         // Create a new batch and flush
         let mut batch = Batch::new();
-        let delete_view = set.flush(&mut batch)?;
+        let delete_view = set.pre_save(&mut batch)?;
         // The key assertion: delete_view should be false because we had Update::Set entries
         // This tests line 103: if let Update::Set(_) = update { ... delete_view = false; }
         assert!(!delete_view);
@@ -1076,6 +1096,7 @@ mod tests {
 
         // Write the batch and verify the final state
         set.context().store().write_batch(batch).await?;
+        set.post_save();
         // Should have no pending changes after final flush
         assert!(!set.has_pending_changes().await);
 
@@ -1100,13 +1121,14 @@ mod tests {
         // Add some initial data
         set.insert(vec![1, 2, 3]);
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // Clear the set and flush without adding anything back
         set.clear();
         let mut batch = Batch::new();
-        let delete_view = set.flush(&mut batch)?;
+        let delete_view = set.pre_save(&mut batch)?;
 
         // When there are no Update::Set entries after clear, delete_view should be true
         assert!(delete_view);
@@ -1124,8 +1146,9 @@ mod tests {
         set.insert(vec![1, 2, 3]);
         set.insert(vec![4, 5, 6]);
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // Clear the set
         set.clear();
@@ -1135,7 +1158,7 @@ mod tests {
         set.remove(vec![10, 11, 12]); // This creates Update::Removed (but gets optimized away due to delete_storage_first)
 
         let mut batch = Batch::new();
-        let delete_view = set.flush(&mut batch)?;
+        let delete_view = set.pre_save(&mut batch)?;
 
         // Should be false because we have Update::Set entries (line 103 logic)
         assert!(!delete_view);
@@ -1162,8 +1185,9 @@ mod tests {
 
         // Flush clears pending changes
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
         assert!(!set.has_pending_changes().await);
 
         // Remove creates pending changes
@@ -1199,8 +1223,9 @@ mod tests {
         set.insert(vec![3]);
         set.insert(vec![5]);
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // Add some pending updates that will be processed in the loop
         set.insert(vec![2]); // This will create an Update::Set
@@ -1235,8 +1260,9 @@ mod tests {
         set.insert(vec![2]);
         set.insert(vec![3]);
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         let mut count = 0;
 
@@ -1290,8 +1316,9 @@ mod tests {
         set.insert(vec![1]);
         set.insert(vec![3]);
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // Add pending updates that come before stored keys lexicographically
         set.insert(vec![0]); // This will be processed first as an Update::Set
@@ -1365,8 +1392,9 @@ mod tests {
         assert_eq!(set.keys().await?, vec![vec![1, 2, 3]]);
 
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // No pending changes after flush
         assert!(!set.has_pending_changes().await);
@@ -1403,8 +1431,9 @@ mod tests {
         set.insert(vec![2]);
         set.insert(vec![3]);
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // Verify items exist
         assert!(set.contains(&[1]).await?);
@@ -1435,8 +1464,9 @@ mod tests {
         set.insert(vec![1]);
         set.insert(vec![2]);
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // Clear the set (sets delete_storage_first = true)
         set.clear();
@@ -1466,8 +1496,9 @@ mod tests {
         set.insert(vec![4]);
         set.insert(vec![6]);
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // Add pending updates that will be processed alongside stored keys
         set.insert(vec![1]); // Update::Set - comes before stored keys
@@ -1504,8 +1535,9 @@ mod tests {
         set.insert(&42)?;
         set.insert(&84)?;
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // Clear the set
         set.clear();
@@ -1515,13 +1547,14 @@ mod tests {
         set.insert(&456)?;
 
         let mut batch = Batch::new();
-        let delete_view = set.flush(&mut batch)?;
+        let delete_view = set.pre_save(&mut batch)?;
 
         // Should be false due to Update::Set entries
         assert!(!delete_view);
 
         // Verify final state
         set.context().store().write_batch(batch).await?;
+        set.post_save();
         let new_set = SetView::<_, u32>::load(set.context().clone()).await?;
         assert!(new_set.contains(&123).await?);
         assert!(new_set.contains(&456).await?);
@@ -1626,8 +1659,9 @@ mod tests {
         assert_eq!(set.indices().await?, vec![42u128, 84u128]);
 
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // No pending changes after flush
         assert!(!set.has_pending_changes().await);
@@ -1655,13 +1689,14 @@ mod tests {
         assert_eq!(set.indices().await?, vec![123u128, 456u128]);
 
         let mut batch = Batch::new();
-        let delete_view = set.flush(&mut batch)?;
+        let delete_view = set.pre_save(&mut batch)?;
 
         // Should be false due to Update::Set entries
         assert!(!delete_view);
 
         // Verify final state
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // No pending changes after final flush
         assert!(!set.has_pending_changes().await);
@@ -1686,8 +1721,9 @@ mod tests {
         // Add and persist an item
         set.insert(&12345u128)?;
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // Verify it exists
         assert!(set.contains(&12345u128).await?);
@@ -1712,8 +1748,9 @@ mod tests {
         set.insert(&222u128)?;
         set.insert(&333u128)?;
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // Verify items exist
         assert!(set.contains(&111u128).await?);
@@ -1792,8 +1829,9 @@ mod tests {
         set.insert(&100u128)?;
         set.insert(&200u128)?;
         let mut batch = Batch::new();
-        set.flush(&mut batch)?;
+        set.pre_save(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+        set.post_save();
 
         // Verify initial state
         assert!(set.contains(&100u128).await?);

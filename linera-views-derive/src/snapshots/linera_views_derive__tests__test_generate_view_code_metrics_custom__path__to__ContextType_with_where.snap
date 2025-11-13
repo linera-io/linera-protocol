@@ -1,6 +1,6 @@
 ---
 source: linera-views-derive/src/lib.rs
-expression: "pretty(generate_view_code(input, true).unwrap())"
+expression: "pretty(generate_view_code(input, true))"
 ---
 impl<MyParam> linera_views::views::View for TestView<MyParam>
 where
@@ -127,14 +127,17 @@ where
         }
         false
     }
-    fn flush(
-        &mut self,
+    fn pre_save(
+        &self,
         batch: &mut linera_views::batch::Batch,
     ) -> Result<bool, linera_views::ViewError> {
-        use linera_views::views::View;
-        let deleted0 = self.register.flush(batch)?;
-        let deleted1 = self.collection.flush(batch)?;
+        let deleted0 = self.register.pre_save(batch)?;
+        let deleted1 = self.collection.pre_save(batch)?;
         Ok(deleted0 && deleted1)
+    }
+    fn post_save(&mut self) {
+        self.register.post_save();
+        self.collection.post_save();
     }
     fn clear(&mut self) {
         self.register.clear();
