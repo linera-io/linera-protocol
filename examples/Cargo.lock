@@ -3635,7 +3635,6 @@ dependencies = [
  "test-strategy",
  "thiserror 1.0.65",
  "tokio",
- "tokio-stream",
  "tokio-util",
  "tracing",
  "trait-variant",
