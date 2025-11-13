@@ -228,11 +228,15 @@ impl ServiceRuntimeActor {
                 runtime_request_sender,
             },
             task: thread.run((), move |()| async move {
-                ServiceSyncRuntime::new(execution_state_sender, QueryContext {
-                    chain_id,
-                    next_block_height: BlockHeight(0),
-                    local_time: Timestamp::from(0),
-                }).run(runtime_request_receiver)
+                ServiceSyncRuntime::new(
+                    execution_state_sender,
+                    QueryContext {
+                        chain_id,
+                        next_block_height: BlockHeight(0),
+                        local_time: Timestamp::from(0),
+                    },
+                )
+                .run(runtime_request_receiver)
             }),
             thread,
         }
@@ -303,12 +307,13 @@ where
         trace!("Starting `ChainWorkerActor`");
 
         while let Some((request, span)) = incoming_requests.recv().await {
-            let (_service_runtime_thread, service_runtime_task, service_runtime_endpoint) = if self.config.long_lived_services {
-                let actor = ServiceRuntimeActor::spawn(self.chain_id).await;
-                (Some(actor.thread), Some(actor.task), Some(actor.endpoint))
-            } else {
-                (None, None, None)
-            };
+            let (_service_runtime_thread, service_runtime_task, service_runtime_endpoint) =
+                if self.config.long_lived_services {
+                    let actor = ServiceRuntimeActor::spawn(self.chain_id).await;
+                    (Some(actor.thread), Some(actor.task), Some(actor.endpoint))
+                } else {
+                    (None, None, None)
+                };
 
             trace!("Loading chain state of {}", self.chain_id);
             let mut worker = ChainWorkerState::load(

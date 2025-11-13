@@ -288,7 +288,9 @@ pub trait Storage: Sized {
         };
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
         let contract_bytecode = web_thread::Thread::new()
-            .run_send((), move |()| async move { compressed_contract_bytecode.decompress() })
+            .run_send((), move |()| async move {
+                compressed_contract_bytecode.decompress()
+            })
             .await??;
         match application_description.module_id.vm_runtime {
             VmRuntime::Wasm => {
@@ -350,7 +352,9 @@ pub trait Storage: Sized {
         };
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
         let service_bytecode = web_thread::Thread::new()
-            .run_send((), move |()| async move { compressed_service_bytecode.decompress() })
+            .run_send((), move |()| async move {
+                compressed_service_bytecode.decompress()
+            })
             .await??;
         match application_description.module_id.vm_runtime {
             VmRuntime::Wasm => {

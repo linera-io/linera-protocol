@@ -12,9 +12,7 @@ pub type NonBlockingFuture<R> = future::RemoteHandle<R>;
 
 /// Spawns a new task, potentially on the current thread.
 #[cfg(not(web))]
-pub fn spawn<F: Future<Output: Send> + Send + 'static>(
-    future: F,
-) -> NonBlockingFuture<F::Output> {
+pub fn spawn<F: Future<Output: Send> + Send + 'static>(future: F) -> NonBlockingFuture<F::Output> {
     let (future, remote_handle) = future.remote_handle();
     tokio::task::spawn(future);
     remote_handle

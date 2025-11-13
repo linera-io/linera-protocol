@@ -249,7 +249,8 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     {
                         warn!("Background sync failed for chain {chain_id}: {e}");
                     }
-                }).forget();
+                })
+                .forget();
             }
         }
 

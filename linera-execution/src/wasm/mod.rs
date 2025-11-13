@@ -265,7 +265,7 @@ const _: () = {
         }
     }
 
-    impl web_thread::Post for WasmServiceModule { }
+    impl web_thread::Post for WasmServiceModule {}
 
     impl web_thread::AsJs for WasmContractModule {
         fn to_js(&self) -> Result<JsValue, JsValue> {
@@ -291,7 +291,7 @@ const _: () = {
         }
     }
 
-    impl web_thread::Post for WasmContractModule { }
+    impl web_thread::Post for WasmContractModule {}
 };
 
 /// Errors that can occur when executing a user application in a WebAssembly module.
