@@ -173,6 +173,41 @@ impl<N: Clone> InFlightTracker<N> {
         let peers = entry.alternative_peers.read().await;
         Some(peers.clone())
     }
+
+    /// Removes a specific peer from the alternative peers list.
+    ///
+    /// # Arguments
+    /// - `key`: The request key to look up
+    /// - `peer`: The peer to remove from alternatives
+    pub(super) async fn remove_alternative_peer(&self, key: &RequestKey, peer: &N)
+    where
+        N: PartialEq + Eq,
+    {
+        if let Some(entry) = self.entries.read().await.get(key) {
+            let mut alt_peers = entry.alternative_peers.write().await;
+            alt_peers.retain(|p| p != peer);
+        }
+    }
+
+    /// Pops and returns the newest alternative peer from the list.
+    ///
+    /// Removes and returns the last peer from the alternative peers list (LIFO - newest first).
+    /// Returns `None` if the entry doesn't exist or the list is empty.
+    ///
+    /// # Arguments
+    /// - `key`: The request key to look up
+    ///
+    /// # Returns
+    /// - `Some(N)`: The newest alternative peer
+    /// - `None`: No entry exists or alternatives list is empty
+    pub(super) async fn pop_alternative_peer(&self, key: &RequestKey) -> Option<N> {
+        if let Some(entry) = self.entries.read().await.get(key) {
+            let mut alt_peers = entry.alternative_peers.write().await;
+            alt_peers.pop()
+        } else {
+            None
+        }
+    }
 }
 
 /// Type of in-flight request match found.
