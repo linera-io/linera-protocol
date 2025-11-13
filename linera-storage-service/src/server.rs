@@ -657,7 +657,7 @@ async fn main() {
 
         #[cfg(with_rocksdb)]
         StorageServerOptions::RocksDb {
-	    namespace,
+            namespace,
             endpoint,
             path,
             max_stream_queries,
@@ -667,7 +667,7 @@ async fn main() {
             max_find_key_values_entry_size,
             max_cache_entries,
             max_cache_value_size,
-	    max_cache_find_keys_size,
+            max_cache_find_keys_size,
             max_cache_find_key_values_size,
         } => {
             let path_buf = path.into();
@@ -684,7 +684,7 @@ async fn main() {
                 max_find_keys_entry_size,
                 max_find_key_values_entry_size,
                 max_cache_entries,
-		max_cache_value_size,
+                max_cache_value_size,
                 max_cache_find_keys_size,
                 max_cache_find_key_values_size,
             };
