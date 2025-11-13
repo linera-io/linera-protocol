@@ -344,7 +344,7 @@ version = "1.88.0"
 
 [workspace.dependencies.web-thread]
 package = "web-thread-select"
-path = "../../web-thread/select"
+version = "0.1.0"
 
 [profile.release]
 lto = "thin"
