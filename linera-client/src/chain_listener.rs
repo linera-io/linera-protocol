@@ -170,7 +170,7 @@ impl<C: ClientContext> ListeningClient<C> {
     }
 
     async fn stop(self) {
-        // TODO(TODO): this is unnecessary: the join handle now also acts as an abort handle
+        // TODO(#4965): this is unnecessary: the join handle now also acts as an abort handle
         drop(self.abort_handle);
         self.join_handle.await;
     }
