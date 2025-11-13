@@ -55,8 +55,8 @@ enum KeyTag {
 struct StoredIndices {
     /// The description of each stored bucket.
     indices: Vec<StoredIndex>,
-    /// The position of the front in the first index.
-    position: usize,
+    /// The position of the front value in the first stored bucket.
+    front_position: usize,
 }
 
 /// The description of a stored bucket.
@@ -79,7 +79,10 @@ impl StoredIndices {
                 index: *index,
             })
             .collect::<Vec<_>>();
-        Self { indices, position }
+        Self {
+            indices,
+            front_position: position,
+        }
     }
 
     fn len(&self) -> usize {
@@ -136,9 +139,10 @@ pub struct BucketQueueView<C, T, const N: usize> {
     stored_data: VecDeque<(usize, Bucket<T>)>,
     /// The newly inserted back values.
     new_back_values: VecDeque<T>,
-    /// The stored position for the data
-    stored_position: usize,
-    /// The current position in the `stored_data`.
+    /// The position for the stored front value in the first stored bucket.
+    stored_front_position: usize,
+    /// The current position of the front value if it is in the stored buckets, and `None`
+    /// otherwise.
     cursor: Option<Cursor>,
     /// Whether the storage is to be deleted or not.
     delete_storage_first: bool,
@@ -186,13 +190,13 @@ where
         } else {
             Some(Cursor {
                 i_block: 0,
-                position: stored_indices.position,
+                position: stored_indices.front_position,
             })
         };
         Ok(Self {
             context,
             stored_data,
-            stored_position: stored_indices.position,
+            stored_front_position: stored_indices.front_position,
             new_back_values: VecDeque::new(),
             cursor,
             delete_storage_first: false,
@@ -206,7 +210,7 @@ where
         } else {
             Some(Cursor {
                 i_block: 0,
-                position: self.stored_position,
+                position: self.stored_front_position,
             })
         };
         self.new_back_values.clear();
@@ -220,7 +224,7 @@ where
             let Some(Cursor { i_block, position }) = self.cursor else {
                 return true;
             };
-            if i_block != 0 || position != self.stored_position {
+            if i_block != 0 || position != self.stored_front_position {
                 return true;
             }
         }
@@ -235,7 +239,7 @@ where
             delete_view = true;
         }
         let mut temp_stored_data = self.stored_data.clone();
-        let mut temp_stored_position = self.stored_position;
+        let mut temp_stored_position = self.stored_front_position;
         if self.stored_count() == 0 {
             let key_prefix = self.context.base_key().bytes.clone();
             batch.delete_key_prefix(key_prefix);
@@ -293,7 +297,7 @@ where
     fn post_save(&mut self) {
         if self.stored_count() == 0 {
             self.stored_data.clear();
-            self.stored_position = 0;
+            self.stored_front_position = 0;
         } else if let Some(Cursor { i_block, position }) = self.cursor {
             for _ in 0..i_block {
                 self.stored_data.pop_front();
@@ -302,7 +306,7 @@ where
                 i_block: 0,
                 position,
             });
-            self.stored_position = position;
+            self.stored_front_position = position;
             // We need to ensure that the first index is in the front.
             let first_index = self.stored_data[0].0;
             if first_index != 0 {
@@ -351,7 +355,7 @@ where
             context: self.context.clone(),
             stored_data: self.stored_data.clone(),
             new_back_values: self.new_back_values.clone(),
-            stored_position: self.stored_position,
+            stored_front_position: self.stored_front_position,
             cursor: self.cursor,
             delete_storage_first: self.delete_storage_first,
         })
