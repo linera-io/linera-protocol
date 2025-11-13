@@ -183,6 +183,72 @@ jobs:
           exit 1
         fi
 
+  ethereum-tests:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - uses: foundry-rs/foundry-toolchain@v1.4.0
+    - name: Ensure Solc Directory Exists
+      run: mkdir -p /home/runner/.solc
+    - name: Cache Solc
+      id: cache-solc
+      uses: actions/cache@v4
+      with:
+        path: /home/runner/.solc
+        key: solc-v0.8.25
+        restore-keys: solc-
+    - name: Get Solc
+      if: ${{ steps.cache-solc.outputs.cache-hit != 'true' }}
+      uses: ./.github/actions/get-solc
+      with:
+        version: v0.8.25
+    - name: Add Solc to PATH
+      run: echo "/home/runner/.solc" >> $GITHUB_PATH
+    - name: List the content of the Solc cache
+      run: ls /home/runner/.solc/v0.8.25/solc-static-linux
+    - name: Create a Solc symbolic link
+      run: ln -sf /home/runner/.solc/v0.8.25/solc-static-linux /home/runner/.solc/solc
+    - name: Check if Solc is in PATH
+      run: which solc || echo "Solc not found in PATH"
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install serde-generate-bin
+      run: |
+        cargo install serde-generate-bin@0.8.0 --locked
+    - name: Compile the LineraTypes.yaml
+      run: |
+        serdegen --language solidity --module-name LineraTypes --target-source-dir dest linera-execution/solidity/LineraTypes.yaml
+    - name: Check for generated LineraTypes.sol
+      run: |
+        if ! diff dest/LineraTypes.sol linera-execution/solidity/LineraTypes.sol
+        then
+          echo '`LineraTypes.sol` differs from the output of `serdegen`'
+          exit 1
+        fi
+    - name: Run the storage-service instance
+      run: |
+        cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
+    - name: Wait for storage service to be ready
+      run: |
+        STORAGE_HOST=$(echo "$LINERA_STORAGE_SERVICE" | cut -d: -f1)
+        STORAGE_PORT=$(echo "$LINERA_STORAGE_SERVICE" | cut -d: -f2)
+        until nc -z "$STORAGE_HOST" "$STORAGE_PORT"; do sleep 1; done
+    - name: Run Ethereum tests
+      run: |
+        cargo test -p linera-ethereum --features ethereum
+        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service
+    - name: Run REVM test
+      run: |
+        cargo test evm --features revm,storage-service
+
+
   storage-service-tests:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
