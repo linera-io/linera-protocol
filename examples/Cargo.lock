@@ -1489,9 +1489,9 @@ dependencies = [
 
 [[package]]
 name = "cfg-if"
-version = "1.0.0"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
+checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
 name = "cfg_aliases"
@@ -7014,18 +7014,19 @@ dependencies = [
 
 [[package]]
 name = "web-thread-select"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a3142e17b35295acdece9a50d9771028037db5fbc39d8747db9dabccdfc283e"
+checksum = "27c3f98861caac815f0aa966995e564b0b2db9abc259700ddee544fbdaf236b3"
 dependencies = [
+ "cfg-if",
  "web-thread-shim",
 ]
 
 [[package]]
 name = "web-thread-shim"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a792a7b2671989ccc0cbd10e6cffc968049cfd517fa60f4fd1270a9ae8ec056"
+checksum = "535507b55b73bb78d37bbc732c8bf8ebbc7b26902ab06fbf356fc3b46ad4b06c"
 dependencies = [
  "futures",
  "thiserror 2.0.17",
