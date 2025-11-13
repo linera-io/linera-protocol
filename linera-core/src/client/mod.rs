@@ -3813,6 +3813,15 @@ impl<Env: Environment> ChainClient<Env> {
         block.ok_or(ChainClientError::MissingConfirmedBlock(hash))
     }
 
+    #[instrument(level = "trace", skip(hash))]
+    pub async fn read_certificate(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
+        let certificate = self.client.storage_client().read_certificate(hash).await?;
+        certificate.ok_or(ChainClientError::ReadCertificatesError(vec![hash]))
+    }
+
     /// Handles any cross-chain requests for any pending outgoing messages.
     #[instrument(level = "trace")]
     pub async fn retry_pending_outgoing_messages(&self) -> Result<(), ChainClientError> {
