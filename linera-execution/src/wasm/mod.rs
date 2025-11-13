@@ -246,7 +246,7 @@ const _: () = {
         fn to_js(&self) -> Result<JsValue, JsValue> {
             match self {
                 #[cfg(with_wasmer)]
-                Self::Wasmer { module } => Ok(::wasmer::Module::clone(&module).into()),
+                Self::Wasmer { module } => Ok(::wasmer::Module::clone(module).into()),
             }
         }
 
@@ -271,7 +271,7 @@ const _: () = {
         fn to_js(&self) -> Result<JsValue, JsValue> {
             match self {
                 #[cfg(with_wasmer)]
-                Self::Wasmer { module, engine: _ } => Ok(::wasmer::Module::clone(&module).into()),
+                Self::Wasmer { module, engine: _ } => Ok(::wasmer::Module::clone(module).into()),
             }
         }
 
