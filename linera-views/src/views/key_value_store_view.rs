@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        from_bytes_option, from_bytes_option_or_default, get_interval, get_upper_bound,
+        from_bytes_option, from_bytes_option_or_default, get_key_range_for_prefix, get_upper_bound,
         DeletionSet, HasherOutput, SuffixClosedSetIterator, Update,
     },
     context::Context,
@@ -916,7 +916,7 @@ impl<C: Context> KeyValueStoreView<C> {
                     ensure!(key_prefix.len() <= max_key_size, ViewError::KeyTooLong);
                     let key_list = self
                         .updates
-                        .range(get_interval(key_prefix.clone()))
+                        .range(get_key_range_for_prefix(key_prefix.clone()))
                         .map(|x| x.0.to_vec())
                         .collect::<Vec<_>>();
                     for key in key_list {

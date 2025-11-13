@@ -15,7 +15,7 @@ use thiserror::Error;
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::{Batch, WriteOperation},
-    common::get_interval,
+    common::get_key_range_for_prefix,
     store::{
         KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
@@ -189,7 +189,7 @@ impl ReadableKeyValueStore for MemoryStore {
             .expect("MemoryStore lock should not be poisoned");
         let mut values = Vec::new();
         let len = key_prefix.len();
-        for (key, _value) in map.range(get_interval(key_prefix.to_vec())) {
+        for (key, _value) in map.range(get_key_range_for_prefix(key_prefix.to_vec())) {
             values.push(key[len..].to_vec())
         }
         Ok(values)
@@ -205,7 +205,7 @@ impl ReadableKeyValueStore for MemoryStore {
             .expect("MemoryStore lock should not be poisoned");
         let mut key_values = Vec::new();
         let len = key_prefix.len();
-        for (key, value) in map.range(get_interval(key_prefix.to_vec())) {
+        for (key, value) in map.range(get_key_range_for_prefix(key_prefix.to_vec())) {
             let key_value = (key[len..].to_vec(), value.to_vec());
             key_values.push(key_value);
         }
@@ -231,7 +231,7 @@ impl WritableKeyValueStore for MemoryStore {
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
                     let key_list = map
-                        .range(get_interval(key_prefix))
+                        .range(get_key_range_for_prefix(key_prefix))
                         .map(|x| x.0.to_vec())
                         .collect::<Vec<_>>();
                     for key in key_list {
