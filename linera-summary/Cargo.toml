@@ -22,9 +22,22 @@ humantime.workspace = true
 linera-version.workspace = true
 octocrab.workspace = true
 serde.workspace = true
-tokio.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
+
+[dependencies.tokio]
+workspace = true
+features = [
+  "rt",
+  "rt-multi-thread",
+]
+
+[dependencies.tracing-subscriber]
+workspace = true
+features = [
+    "fmt",
+    "registry",
+    "std",
+]
 
 [[bin]]
 name = "linera-summary"
