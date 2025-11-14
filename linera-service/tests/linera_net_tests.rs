@@ -32,7 +32,7 @@ use linera_base::{
 };
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
-    abis::fungible::NativeFungibleTokenAbi,
+    abis::fungible::FungibleTokenAbi,
     linera_base_types::{AccountSecretKey, BlobContent, BlockHeight, DataBlobHash},
 };
 #[cfg(any(
@@ -106,7 +106,7 @@ fn get_account_owner(client: &ClientWrapper) -> AccountOwner {
     client.get_owner().unwrap()
 }
 
-struct NativeFungibleApp(ApplicationWrapper<NativeFungibleTokenAbi>);
+struct NativeFungibleApp(ApplicationWrapper<FungibleTokenAbi>);
 
 impl NativeFungibleApp {
     async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
@@ -2373,12 +2373,12 @@ async fn publish_and_create_native_fungible(
     params: &fungible::Parameters,
     state: &fungible::InitialState,
     chain_id: Option<ChainId>,
-) -> Result<ApplicationId<NativeFungibleTokenAbi>> {
+) -> Result<ApplicationId<FungibleTokenAbi>> {
     let (contract, service) = client.build_example(name).await?;
-    use fungible::{FungibleTokenAbi, InitialState, Parameters};
+    use fungible::{InitialState, Parameters};
     if name == "native-fungible" {
         client
-            .publish_and_create::<NativeFungibleTokenAbi, Parameters, InitialState>(
+            .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
                 contract,
                 service,
                 VmRuntime::Wasm,

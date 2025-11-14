@@ -16,51 +16,6 @@ use serde::{Deserialize, Serialize};
 
 /// An operation
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
-pub enum NativeFungibleOperation {
-    /// Requests an account balance.
-    Balance {
-        /// Owner to query the balance for
-        owner: AccountOwner,
-    },
-    /// Requests this fungible token's ticker symbol.
-    TickerSymbol,
-    /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
-    Transfer {
-        /// Owner to transfer from
-        owner: AccountOwner,
-        /// Amount to be transferred
-        amount: Amount,
-        /// Target account to transfer the amount to
-        target_account: Account,
-    },
-    /// Same as `Transfer` but the source account may be remote. Depending on its
-    /// configuration, the target chain may take time or refuse to process
-    /// the message.
-    Claim {
-        /// Source account to claim amount from
-        source_account: Account,
-        /// Amount to be claimed
-        amount: Amount,
-        /// Target account to claim the amount into
-        target_account: Account,
-    },
-}
-
-/// An ABI for applications that implement a fungible token.
-pub struct NativeFungibleTokenAbi;
-
-impl ContractAbi for NativeFungibleTokenAbi {
-    type Operation = NativeFungibleOperation;
-    type Response = FungibleResponse;
-}
-
-impl ServiceAbi for NativeFungibleTokenAbi {
-    type Query = Request;
-    type QueryResponse = Response;
-}
-
-/// An operation
-#[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
 pub enum FungibleOperation {
     /// Requests an account balance.
     Balance {

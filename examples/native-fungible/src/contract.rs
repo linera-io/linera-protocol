@@ -5,7 +5,7 @@
 
 use linera_sdk::{
     abis::fungible::{
-        FungibleResponse, InitialState, NativeFungibleOperation, NativeFungibleTokenAbi, Parameters,
+        FungibleOperation, FungibleResponse, FungibleTokenAbi, InitialState, Parameters,
     },
     linera_base_types::{Account, AccountOwner, ChainId, WithContractAbi},
     Contract, ContractRuntime,
@@ -19,7 +19,7 @@ pub struct NativeFungibleTokenContract {
 linera_sdk::contract!(NativeFungibleTokenContract);
 
 impl WithContractAbi for NativeFungibleTokenContract {
-    type Abi = NativeFungibleTokenAbi;
+    type Abi = FungibleTokenAbi;
 }
 
 impl Contract for NativeFungibleTokenContract {
@@ -49,16 +49,20 @@ impl Contract for NativeFungibleTokenContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
-            NativeFungibleOperation::Balance { owner } => {
+            FungibleOperation::Balance { owner } => {
                 let balance = self.runtime.owner_balance(owner);
                 FungibleResponse::Balance(balance)
             }
 
-            NativeFungibleOperation::TickerSymbol => {
+            FungibleOperation::TickerSymbol => {
                 FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL))
             }
 
-            NativeFungibleOperation::Transfer {
+            FungibleOperation::Approve { .. } => {
+                panic!("Approve operation is not supported by native fungible token")
+            }
+
+            FungibleOperation::Transfer {
                 owner,
                 amount,
                 target_account,
@@ -76,7 +80,11 @@ impl Contract for NativeFungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            NativeFungibleOperation::Claim {
+            FungibleOperation::TransferFrom { .. } => {
+                panic!("TransferFrom operation is not supported by native fungible token")
+            }
+
+            FungibleOperation::Claim {
                 source_account,
                 amount,
                 target_account,
