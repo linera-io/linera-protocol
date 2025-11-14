@@ -1,0 +1,58 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="console is a library for Rust that provides access to various terminal features so you can build nicer looking command line interfaces.  It comes with various tools and utilities for working with Terminals and formatting text."><title>console - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="console" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../console/index.html">console</a><span class="version">0.15.11</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#terminal-access" title="Terminal Access">Terminal Access</a></li><li><a href="#colors-and-styles" title="Colors and Styles">Colors and Styles</a></li><li><a href="#working-with-ansi-codes" title="Working with ANSI Codes">Working with ANSI Codes</a></li><li><a href="#unicode-width-support" title="Unicode Width Support">Unicode Width Support</a></li><li><a href="#features" title="Features">Features</a></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>console</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/console/lib.rs.html#1-106">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>console is a library for Rust that provides access to various terminal
+features so you can build nicer looking command line interfaces.  It
+comes with various tools and utilities for working with Terminals and
+formatting text.</p>
+<p>Best paired with other libraries in the family:</p>
+<ul>
+<li><a href="https://docs.rs/dialoguer">dialoguer</a></li>
+<li><a href="https://docs.rs/indicatif">indicatif</a></li>
+</ul>
+<h2 id="terminal-access"><a class="doc-anchor" href="#terminal-access">§</a>Terminal Access</h2>
+<p>The terminal is abstracted through the <code>console::Term</code> type.  It can
+either directly provide access to the connected terminal or by buffering
+up commands.  A buffered terminal will however not be completely buffered
+on windows where cursor movements are currently directly passed through.</p>
+<p>Example usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">use </span>console::Term;
+
+<span class="kw">let </span>term = Term::stdout();
+term.write_line(<span class="string">"Hello World!"</span>)<span class="question-mark">?</span>;
+thread::sleep(Duration::from_millis(<span class="number">2000</span>));
+term.clear_line()<span class="question-mark">?</span>;</code></pre></div>
+<h2 id="colors-and-styles"><a class="doc-anchor" href="#colors-and-styles">§</a>Colors and Styles</h2>
+<p><code>console</code> automatically detects when to use colors based on the tty flag.  It also
+provides higher level wrappers for styling text and other things that can be
+displayed with the <code>style</code> function and utility types.</p>
+<p>Example usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>console::style;
+
+<span class="macro">println!</span>(<span class="string">"This is {} neat"</span>, style(<span class="string">"quite"</span>).cyan());</code></pre></div>
+<p>You can also store styles and apply them to text later:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>console::Style;
+
+<span class="kw">let </span>cyan = Style::new().cyan();
+<span class="macro">println!</span>(<span class="string">"This is {} neat"</span>, cyan.apply_to(<span class="string">"quite"</span>));</code></pre></div>
+<h2 id="working-with-ansi-codes"><a class="doc-anchor" href="#working-with-ansi-codes">§</a>Working with ANSI Codes</h2>
+<p>The crate provides the function <code>strip_ansi_codes</code> to remove ANSI codes
+from a string as well as <code>measure_text_width</code> to calculate the width of a
+string as it would be displayed by the terminal.  Both of those together
+are useful for more complex formatting.</p>
+<h2 id="unicode-width-support"><a class="doc-anchor" href="#unicode-width-support">§</a>Unicode Width Support</h2>
+<p>By default this crate depends on the <code>unicode-width</code> crate to calculate
+the width of terminal characters.  If you do not need this you can disable
+the <code>unicode-width</code> feature which will cut down on dependencies.</p>
+<h2 id="features"><a class="doc-anchor" href="#features">§</a>Features</h2>
+<p>By default all features are enabled.  The following features exist:</p>
+<ul>
+<li><code>unicode-width</code>: adds support for unicode width calculations</li>
+<li><code>ansi-parsing</code>: adds support for parsing ansi codes (this adds support
+for stripping and taking ansi escape codes into account for length
+calculations).</li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Emoji.html" title="struct console::Emoji">Emoji</a></dt><dd>“Intelligent” emoji formatter.</dd><dt><a class="struct" href="struct.Style.html" title="struct console::Style">Style</a></dt><dd>A stored style that can be applied.</dd><dt><a class="struct" href="struct.StyledObject.html" title="struct console::StyledObject">Styled<wbr>Object</a></dt><dd>A formatting wrapper that can be styled for a terminal.</dd><dt><a class="struct" href="struct.Term.html" title="struct console::Term">Term</a></dt><dd>Abstraction around a terminal.</dd><dt><a class="struct" href="struct.TermFeatures.html" title="struct console::TermFeatures">Term<wbr>Features</a></dt><dd>Gives access to the terminal features.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Alignment.html" title="enum console::Alignment">Alignment</a></dt><dd>Defines the alignment for padding operations.</dd><dt><a class="enum" href="enum.Attribute.html" title="enum console::Attribute">Attribute</a></dt><dd>A terminal style attribute.</dd><dt><a class="enum" href="enum.Color.html" title="enum console::Color">Color</a></dt><dd>A terminal color.</dd><dt><a class="enum" href="enum.Key.html" title="enum console::Key">Key</a></dt><dd>Key mapping</dd><dt><a class="enum" href="enum.TermFamily.html" title="enum console::TermFamily">Term<wbr>Family</a></dt><dd>The family of the terminal.</dd><dt><a class="enum" href="enum.TermTarget.html" title="enum console::TermTarget">Term<wbr>Target</a></dt><dd>Where the term is writing.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.colors_enabled.html" title="fn console::colors_enabled">colors_<wbr>enabled</a></dt><dd>Returns <code>true</code> if colors should be enabled for stdout.</dd><dt><a class="fn" href="fn.colors_enabled_stderr.html" title="fn console::colors_enabled_stderr">colors_<wbr>enabled_<wbr>stderr</a></dt><dd>Returns <code>true</code> if colors should be enabled for stderr.</dd><dt><a class="fn" href="fn.measure_text_width.html" title="fn console::measure_text_width">measure_<wbr>text_<wbr>width</a></dt><dd>Measure the width of a string in terminal characters.</dd><dt><a class="fn" href="fn.pad_str.html" title="fn console::pad_str">pad_str</a></dt><dd>Pads a string to fill a certain number of characters.</dd><dt><a class="fn" href="fn.pad_str_with.html" title="fn console::pad_str_with">pad_<wbr>str_<wbr>with</a></dt><dd>Pads a string with specific padding to fill a certain number of characters.</dd><dt><a class="fn" href="fn.set_colors_enabled.html" title="fn console::set_colors_enabled">set_<wbr>colors_<wbr>enabled</a></dt><dd>Forces colorization on or off for stdout.</dd><dt><a class="fn" href="fn.set_colors_enabled_stderr.html" title="fn console::set_colors_enabled_stderr">set_<wbr>colors_<wbr>enabled_<wbr>stderr</a></dt><dd>Forces colorization on or off for stderr.</dd><dt><a class="fn" href="fn.style.html" title="fn console::style">style</a></dt><dd>Wraps an object for formatting for styling.</dd><dt><a class="fn" href="fn.truncate_str.html" title="fn console::truncate_str">truncate_<wbr>str</a></dt><dd>Truncates a string to a certain number of characters.</dd><dt><a class="fn" href="fn.user_attended.html" title="fn console::user_attended">user_<wbr>attended</a></dt><dd>A fast way to check if the application has a user attended for stdout.</dd><dt><a class="fn" href="fn.user_attended_stderr.html" title="fn console::user_attended_stderr">user_<wbr>attended_<wbr>stderr</a></dt><dd>A fast way to check if the application has a user attended for stderr.</dd></dl></section></div></main></body></html>

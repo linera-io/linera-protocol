@@ -1,0 +1,66 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Adapters for connecting unstructured log records from the `log` crate into the `tracing` ecosystem."><title>tracing_log - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tracing_log" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../tracing_log/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../tracing_log/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt="logo"></a><h2><a href="../tracing_log/index.html">tracing_<wbr>log</a><span class="version">0.2.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#overview" title="Overview">Overview</a></li><li><a href="#usage" title="Usage">Usage</a><ul><li><a href="#convert-log-records-to-tracing-events" title="Convert log records to tracing `Event`s">Convert log records to tracing <code>Event</code>s</a></li><li><a href="#convert-tracing-events-to-logs" title="Convert tracing `Event`s to logs">Convert tracing <code>Event</code>s to logs</a></li><li><a href="#caution-mixing-both-conversions" title="Caution: Mixing both conversions">Caution: Mixing both conversions</a></li><li><a href="#feature-flags" title="Feature Flags">Feature Flags</a></li><li><a href="#supported-rust-versions" title="Supported Rust Versions">Supported Rust Versions</a></li></ul></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>tracing_log</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/tracing_log/lib.rs.html#1-600">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Adapters for connecting unstructured log records from the <code>log</code> crate into
+the <code>tracing</code> ecosystem.</p>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p><a href="https://crates.io/crates/tracing"><code>tracing</code></a> is a framework for instrumenting Rust programs with context-aware,
+structured, event-based diagnostic information. This crate provides
+compatibility layers for using <code>tracing</code> alongside the logging facade provided
+by the <a href="../log/index.html" title="mod log"><code>log</code></a> crate.</p>
+<p>This crate provides:</p>
+<ul>
+<li><a href="trait.AsTrace.html" title="trait tracing_log::AsTrace"><code>AsTrace</code></a> and <a href="trait.AsLog.html" title="trait tracing_log::AsLog"><code>AsLog</code></a> traits for converting between <code>tracing</code> and <code>log</code> types.</li>
+<li><a href="struct.LogTracer.html" title="struct tracing_log::LogTracer"><code>LogTracer</code></a>, a <a href="../log/trait.Log.html" title="trait log::Log"><code>log::Log</code></a> implementation that consumes <a href="../log/struct.Record.html" title="struct log::Record"><code>log::Record</code></a>s
+and outputs them as <a href="https://docs.rs/tracing/latest/tracing/struct.Event.html"><code>tracing::Event</code></a>.</li>
+</ul>
+<p><em>Compiler support: <a href="#supported-rust-versions">requires <code>rustc</code> 1.56+</a></em></p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2><h3 id="convert-log-records-to-tracing-events"><a class="doc-anchor" href="#convert-log-records-to-tracing-events">§</a>Convert log records to tracing <code>Event</code>s</h3>
+<p>To convert <a href="../log/struct.Record.html" title="struct log::Record"><code>log::Record</code></a>s as <a href="https://docs.rs/tracing/latest/tracing/struct.Event.html"><code>tracing::Event</code></a>s, set <code>LogTracer</code> as the default
+logger by calling its <a href="struct.LogTracer.html#method.init" title="associated function tracing_log::LogTracer::init"><code>init</code></a> or <a href="struct.LogTracer.html#method.init_with_filter" title="associated function tracing_log::LogTracer::init_with_filter"><code>init_with_filter</code></a> methods.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_log::LogTracer;
+<span class="kw">use </span>log;
+
+LogTracer::init()<span class="question-mark">?</span>;
+
+<span class="comment">// will be available for Subscribers as a tracing Event
+</span><span class="macro">log::trace!</span>(<span class="string">"an example trace log"</span>);</code></pre></div>
+<p>This conversion does not convert unstructured data in log records (such as
+values passed as format arguments to the <code>log!</code> macro) to structured
+<code>tracing</code> fields. However, it <em>does</em> attach these new events to to the
+span that was currently executing when the record was logged. This is the
+primary use-case for this library: making it possible to locate the log
+records emitted by dependencies which use <code>log</code> within the context of a
+trace.</p>
+<h3 id="convert-tracing-events-to-logs"><a class="doc-anchor" href="#convert-tracing-events-to-logs">§</a>Convert tracing <code>Event</code>s to logs</h3>
+<p>Enabling the <a href="https://docs.rs/tracing/latest/tracing/#crate-feature-flags">“log” and “log-always” feature flags</a> on the <code>tracing</code>
+crate will cause all <code>tracing</code> spans and events to emit <code>log::Record</code>s as
+they occur.</p>
+<h3 id="caution-mixing-both-conversions"><a class="doc-anchor" href="#caution-mixing-both-conversions">§</a>Caution: Mixing both conversions</h3>
+<p>Note that <code>log::Logger</code> implementations that convert log records to trace events
+should not be used with <code>Subscriber</code>s that convert trace events <em>back</em> into
+<code>log</code> records, as doing so will result in the event recursing between the subscriber
+and the logger forever (or, in real life, probably overflowing the call stack).</p>
+<p>If the logging of trace events generated from log records produced by the
+<code>log</code> crate is desired, either the <code>log</code> crate should not be used to
+implement this logging, or an additional layer of filtering will be
+required to avoid infinitely converting between <code>Event</code> and <code>log::Record</code>.</p>
+<h3 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature Flags</h3>
+<ul>
+<li><code>std</code>: enables features that require the Rust standard library (on by default)</li>
+<li><code>log-tracer</code>: enables the <code>LogTracer</code> type (on by default)</li>
+<li><code>interest-cache</code>: makes it possible to configure an interest cache for
+logs emitted through the <code>log</code> crate (see <a href="log_tracer::Builder::with_interest_cache"><code>Builder::with_interest_cache</code></a>); requires <code>std</code></li>
+</ul>
+<h3 id="supported-rust-versions"><a class="doc-anchor" href="#supported-rust-versions">§</a>Supported Rust Versions</h3>
+<p>Tracing is built against the latest stable release. The minimum supported
+version is 1.56. The current Tracing version is not guaranteed to build on
+Rust versions earlier than the minimum supported version.</p>
+<p>Tracing follows the same compiler support policies as the rest of the Tokio
+project. The current stable Rust compiler and the three most recent minor
+versions before it will always be supported. For example, if the current
+stable compiler version is 1.69, the minimum supported version will not be
+increased past 1.66, three minor versions prior. Increasing the minimum
+supported compiler version is not considered a semver breaking change as
+long as doing so complies with this policy.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.log"><code>pub use <a class="mod" href="../log/index.html" title="mod log">log</a>;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="log_tracer/index.html" title="mod tracing_log::log_tracer">log_<wbr>tracer</a></dt><dd>An adapter for converting <a href="../log/index.html" title="mod log"><code>log</code></a> records into <code>tracing</code> <code>Event</code>s.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.LogTracer.html" title="struct tracing_log::LogTracer">LogTracer</a></dt><dd>A simple “logger” that converts all log records into <code>tracing</code> <code>Event</code>s.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.AsLog.html" title="trait tracing_log::AsLog">AsLog</a></dt><dd>Trait implemented for <code>tracing</code> types that can be converted to a <code>log</code>
+equivalent.</dd><dt><a class="trait" href="trait.AsTrace.html" title="trait tracing_log::AsTrace">AsTrace</a></dt><dd>Trait implemented for <code>log</code> types that can be converted to a <code>tracing</code>
+equivalent.</dd><dt><a class="trait" href="trait.NormalizeEvent.html" title="trait tracing_log::NormalizeEvent">Normalize<wbr>Event</a></dt><dd>Extends log <code>Event</code>s to provide complete <code>Metadata</code>.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.format_trace.html" title="fn tracing_log::format_trace">format_<wbr>trace</a></dt><dd>Format a log record as a trace event in the current span.</dd></dl></section></div></main></body></html>

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("tikv_jemallocator", 0, "Bindings for jemalloc as an allocator\nHandle to the jemalloc allocator\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nReturn the usable size of the allocation pointed to by ptr.")

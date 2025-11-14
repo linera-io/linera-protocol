@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CustomSectionProtection","CustomSectionProtectionResolver"],"struct":["ArchivedCustomSection","ArchivedSectionBody","CustomSection","CustomSectionResolver","SectionBody","SectionBodyResolver","SectionIndex","SectionIndexResolver"],"trait":["CustomSectionLike"]};

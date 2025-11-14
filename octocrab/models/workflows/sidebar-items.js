@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Conclusion","Status"],"struct":["HeadCommit","Job","Run","Step","WorkFlow","WorkflowDispatch","WorkflowListArtifact"]};
