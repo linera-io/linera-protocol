@@ -25,19 +25,12 @@ serde.workspace = true
 tracing.workspace = true
 
 [dependencies.tokio]
+features = ["rt", "rt-multi-thread"]
 workspace = true
-features = [
-  "rt",
-  "rt-multi-thread",
-]
 
 [dependencies.tracing-subscriber]
+features = ["fmt", "registry", "std"]
 workspace = true
-features = [
-    "fmt",
-    "registry",
-    "std",
-]
 
 [[bin]]
 name = "linera-summary"
