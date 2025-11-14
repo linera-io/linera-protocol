@@ -37,60 +37,58 @@ mod metrics {
 }
 
 /// Key tags to create the sub-keys of a [`BucketQueueView`] on top of the base key.
-/// * The Front is special and downloaded at the view loading.
-/// * The Store is where the structure of the buckets is stored.
-/// * The Index is for storing the specific buckets.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the front of the view
+    /// Key tag for the front bucket (index 0).
     Front = MIN_VIEW_TAG,
-    /// Prefix for [`StoredIndices`]
+    /// Key tag for the `BucketStore`.
     Store,
-    /// Prefix for the indices of the log.
+    /// Key tag for the content of non-front buckets (index > 0).
     Index,
 }
 
-/// The description of the stored buckets.
+/// The metadata of the view in storage.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-struct StoredIndices {
-    /// The description of each stored bucket.
-    indices: Vec<StoredIndex>,
-    /// The position of the front value in the first stored bucket.
+struct BucketStore {
+    /// The descriptions of all stored buckets. The first description is expected to start
+    /// with index 0 (front bucket) and will be ignored.
+    descriptions: Vec<BucketDescription>,
+    /// The position of the front value in the front bucket.
     front_position: usize,
 }
 
-/// The description of a stored bucket.
+/// The description of a bucket in storage.
 #[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
-struct StoredIndex {
+struct BucketDescription {
     /// The length of the bucket (at most N).
     length: usize,
-    /// The index of the bucket in storage. If the index is 0 then it corresponds
-    /// to the first key (entry `KeyTag::Front`), otherwise to the keys with
-    /// prefix `KeyTag::Index`.
+    /// The index of the bucket in storage.
     index: usize,
 }
 
-impl StoredIndices {
+impl BucketStore {
     fn new<T>(stored_data: &VecDeque<Bucket<T>>, position: usize) -> Self {
-        let indices = stored_data.iter().map(Bucket::to_index).collect::<Vec<_>>();
+        let descriptions = stored_data
+            .iter()
+            .map(Bucket::to_description)
+            .collect::<Vec<_>>();
         Self {
-            indices,
+            descriptions,
             front_position: position,
         }
     }
 
     fn len(&self) -> usize {
-        self.indices.len()
+        self.descriptions.len()
     }
 }
 
-/// The position of a value in the stored data.
+/// The position of a value in the stored buckket.
 #[derive(Copy, Clone, Debug, Allocative)]
 struct Cursor {
-    /// The index in the vector of stored buckets. We use `idx` to differentiate from the
-    /// `index` used to compute storage keys.
-    idx: usize,
-    /// The position of the front value in the stored bucket.
+    /// The offset of the bucket in the vector of stored buckets.
+    offset: usize,
+    /// The position of the value in the stored bucket.
     position: usize,
 }
 
@@ -116,8 +114,8 @@ impl<T> Bucket<T> {
         }
     }
 
-    fn to_index(&self) -> StoredIndex {
-        StoredIndex {
+    fn to_description(&self) -> BucketDescription {
+        BucketDescription {
             length: self.len(),
             index: self.index,
         }
@@ -192,27 +190,29 @@ where
                 vec![]
             }
         });
-        let stored_indices = from_bytes_option_or_default::<StoredIndices>(value2)?;
-        for i in 1..stored_indices.len() {
-            let length = stored_indices.indices[i].length;
-            let index = stored_indices.indices[i].index;
+        let bucket_store = from_bytes_option_or_default::<BucketStore>(value2)?;
+        // Ignoring `bucket_store.descriptions[0]`.
+        // TODO(#4969): Remove redundant BucketDescription in BucketQueueView.
+        for i in 1..bucket_store.len() {
+            let length = bucket_store.descriptions[i].length;
+            let index = bucket_store.descriptions[i].index;
             stored_buckets.push_back(Bucket {
                 index,
                 state: State::NotLoaded { length },
             });
         }
-        let cursor = if stored_indices.indices.is_empty() {
+        let cursor = if bucket_store.descriptions.is_empty() {
             None
         } else {
             Some(Cursor {
-                idx: 0,
-                position: stored_indices.front_position,
+                offset: 0,
+                position: bucket_store.front_position,
             })
         };
         Ok(Self {
             context,
             stored_buckets,
-            stored_front_position: stored_indices.front_position,
+            stored_front_position: bucket_store.front_position,
             new_back_values: VecDeque::new(),
             cursor,
             delete_storage_first: false,
@@ -225,7 +225,7 @@ where
             None
         } else {
             Some(Cursor {
-                idx: 0,
+                offset: 0,
                 position: self.stored_front_position,
             })
         };
@@ -240,7 +240,7 @@ where
             let Some(cursor) = self.cursor else {
                 return true;
             };
-            if cursor.idx != 0 || cursor.position != self.stored_front_position {
+            if cursor.offset != 0 || cursor.position != self.stored_front_position {
                 return true;
             }
         }
@@ -258,10 +258,10 @@ where
             stored_buckets.clear();
             stored_front_position = 0;
         } else if let Some(cursor) = self.cursor {
-            for _ in 0..cursor.idx {
+            for _ in 0..cursor.offset {
                 let bucket = stored_buckets.pop_front().unwrap();
                 let index = bucket.index;
-                let key = self.get_index_key(index)?;
+                let key = self.get_bucket_key(index)?;
                 batch.delete_key(key);
             }
             stored_front_position = cursor.position;
@@ -269,12 +269,12 @@ where
             let first_index = stored_buckets[0].index;
             if first_index != 0 {
                 stored_buckets[0].index = 0;
-                let key = self.get_index_key(first_index)?;
+                let key = self.get_bucket_key(first_index)?;
                 batch.delete_key(key);
-                let key = self.get_index_key(0)?;
+                let key = self.get_bucket_key(0)?;
                 let bucket = stored_buckets.front().unwrap();
                 let State::Loaded { data } = &bucket.state else {
-                    unreachable!();
+                    unreachable!("The front bucket is always loaded.");
                 };
                 batch.put_key_value(key, data)?;
             }
@@ -287,10 +287,11 @@ where
             };
             let new_back_values = self.new_back_values.iter().cloned().collect::<Vec<_>>();
             for value_chunk in new_back_values.chunks(N) {
-                let key = self.get_index_key(index)?;
+                let key = self.get_bucket_key(index)?;
                 batch.put_key_value(key, &value_chunk)?;
                 stored_buckets.push_back(Bucket {
                     index,
+                    // This is only used for `BucketStore::new` below.
                     state: State::NotLoaded {
                         length: value_chunk.len(),
                     },
@@ -299,9 +300,9 @@ where
             }
         }
         if !delete_view {
-            let stored_indices = StoredIndices::new(&stored_buckets, stored_front_position);
+            let bucket_store = BucketStore::new(&stored_buckets, stored_front_position);
             let key = self.context.base_key().base_tag(KeyTag::Store as u8);
-            batch.put_key_value(key, &stored_indices)?;
+            batch.put_key_value(key, &bucket_store)?;
         }
         Ok(delete_view)
     }
@@ -312,11 +313,11 @@ where
             self.stored_front_position = 0;
             self.cursor = None;
         } else if let Some(cursor) = self.cursor {
-            for _ in 0..cursor.idx {
+            for _ in 0..cursor.offset {
                 self.stored_buckets.pop_front();
             }
             self.cursor = Some(Cursor {
-                idx: 0,
+                offset: 0,
                 position: cursor.position,
             });
             self.stored_front_position = cursor.position;
@@ -341,7 +342,7 @@ where
             }
             if self.cursor.is_none() {
                 self.cursor = Some(Cursor {
-                    idx: 0,
+                    offset: 0,
                     position: 0,
                 });
             }
@@ -373,8 +374,8 @@ where
 }
 
 impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
-    /// Gets the key corresponding to the index
-    fn get_index_key(&self, index: usize) -> Result<Vec<u8>, ViewError> {
+    /// Gets the key corresponding to this bucket index.
+    fn get_bucket_key(&self, index: usize) -> Result<Vec<u8>, ViewError> {
         Ok(if index == 0 {
             self.context.base_key().base_tag(KeyTag::Front as u8)
         } else {
@@ -404,8 +405,8 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
                 return 0;
             };
             let mut stored_count = 0;
-            for idx in cursor.idx..self.stored_buckets.len() {
-                stored_count += self.stored_buckets[idx].len();
+            for offset in cursor.offset..self.stored_buckets.len() {
+                stored_count += self.stored_buckets[offset].len();
             }
             stored_count -= cursor.position;
             stored_count
@@ -445,8 +446,8 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     /// ```
     pub fn front(&self) -> Option<&T> {
         match self.cursor {
-            Some(Cursor { idx, position }) => {
-                let bucket = &self.stored_buckets[idx];
+            Some(Cursor { offset, position }) => {
+                let bucket = &self.stored_buckets[offset];
                 let State::Loaded { data } = &bucket.state else {
                     unreachable!();
                 };
@@ -473,8 +474,8 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     /// ```
     pub fn front_mut(&mut self) -> Option<&mut T> {
         match self.cursor {
-            Some(Cursor { idx, position }) => {
-                let bucket = self.stored_buckets.get_mut(idx).unwrap();
+            Some(Cursor { offset, position }) => {
+                let bucket = self.stored_buckets.get_mut(offset).unwrap();
                 let State::Loaded { data } = &mut bucket.state else {
                     unreachable!();
                 };
@@ -500,20 +501,20 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     pub async fn delete_front(&mut self) -> Result<(), ViewError> {
         match self.cursor {
             Some(cursor) => {
-                let mut idx = cursor.idx;
+                let mut offset = cursor.offset;
                 let mut position = cursor.position + 1;
-                if self.stored_buckets[idx].len() == position {
-                    idx += 1;
+                if self.stored_buckets[offset].len() == position {
+                    offset += 1;
                     position = 0;
                 }
-                if idx == self.stored_buckets.len() {
+                if offset == self.stored_buckets.len() {
                     self.cursor = None;
                 } else {
-                    self.cursor = Some(Cursor { idx, position });
-                    let bucket = self.stored_buckets.get_mut(idx).unwrap();
+                    self.cursor = Some(Cursor { offset, position });
+                    let bucket = self.stored_buckets.get_mut(offset).unwrap();
                     let index = bucket.index;
                     if !bucket.is_loaded() {
-                        let key = self.get_index_key(index)?;
+                        let key = self.get_bucket_key(index)?;
                         let data = self.context.store().read_value(&key).await?;
                         let data = match data {
                             Some(value) => value,
@@ -522,7 +523,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                                 return Err(ViewError::MissingEntries(root_key));
                             }
                         };
-                        self.stored_buckets[idx].state = State::Loaded { data };
+                        self.stored_buckets[offset].state = State::Loaded { data };
                     }
                 }
             }
@@ -594,7 +595,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
             return Ok(None);
         };
         if !bucket.is_loaded() {
-            let key = self.get_index_key(bucket.index)?;
+            let key = self.get_bucket_key(bucket.index)?;
             let data = self.context.store().read_value(&key).await?;
             let data = match data {
                 Some(data) => data,
@@ -625,11 +626,11 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
         if let Some(cursor) = cursor {
             let mut keys = Vec::new();
             let mut position = cursor.position;
-            for idx in cursor.idx..self.stored_buckets.len() {
-                let bucket = &self.stored_buckets[idx];
+            for offset in cursor.offset..self.stored_buckets.len() {
+                let bucket = &self.stored_buckets[offset];
                 let size = bucket.len() - position;
                 if !bucket.is_loaded() {
-                    let key = self.get_index_key(bucket.index)?;
+                    let key = self.get_bucket_key(bucket.index)?;
                     keys.push(key);
                 };
                 if size >= count_remain {
@@ -642,8 +643,8 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
             let mut value_pos = 0;
             count_remain = count;
             let mut position = cursor.position;
-            for idx in cursor.idx..self.stored_buckets.len() {
-                let bucket = &self.stored_buckets[idx];
+            for offset in cursor.offset..self.stored_buckets.len() {
+                let bucket = &self.stored_buckets[offset];
                 let size = bucket.len() - position;
                 let data = match &bucket.state {
                     State::Loaded { data } => data,
@@ -720,13 +721,13 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                 unreachable!();
             };
             let mut position = cursor.position;
-            for idx in cursor.idx..self.stored_buckets.len() {
-                let size = self.stored_buckets[idx].len() - position;
+            for offset in cursor.offset..self.stored_buckets.len() {
+                let size = self.stored_buckets[offset].len() - position;
                 if increment < size {
                     return self
                         .read_context(
                             Some(Cursor {
-                                idx,
+                                offset,
                                 position: position + increment,
                             }),
                             count,
