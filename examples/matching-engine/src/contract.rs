@@ -421,7 +421,7 @@ impl MatchingEngineContract {
 
     /// Gets the order_id that increases starting from 0.
     fn get_new_order_id(&mut self) -> OrderId {
-        let value = self.state.next_order_number.get_mut();
+        let value = self.state.next_order_id.get_mut();
         let value_ret = *value;
         *value += 1;
         value_ret

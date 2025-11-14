@@ -70,9 +70,9 @@ pub struct LevelView {
 #[derive(RootView, SimpleObject)]
 #[view(context = Context)]
 pub struct MatchingEngineState {
-    ///The next_order_number contains the order_id so that
-    ///the order_id gets created from 0, to infinity.
-    pub next_order_number: RegisterView<OrderId>,
+    /// The next_order_id contains the order_id so that
+    /// the order_id gets created from 0, to infinity.
+    pub next_order_id: RegisterView<OrderId>,
     /// The map of the outstanding bids, by the bitwise complement of
     /// the revert of the price. The order is from the best price
     /// level (highest proposed by buyer) to the worst
