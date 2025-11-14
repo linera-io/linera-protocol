@@ -994,9 +994,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         drop(sender);
 
-        let validator_trackers = update_trackers
-            .await
-            .map_err(|_| Error::InternalError("could not join the update_trackers task"))?;
+        let validator_trackers = update_trackers.await;
 
         debug!(
             num_other_chains = %other_sender_chains.len(),

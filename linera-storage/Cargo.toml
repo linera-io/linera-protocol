@@ -48,6 +48,7 @@ papaya.workspace = true
 prometheus.workspace = true
 serde.workspace = true
 tracing.workspace = true
+web-thread.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

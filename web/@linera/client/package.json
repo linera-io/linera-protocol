@@ -46,6 +46,7 @@
     "tsc-alias": "^1.8.16",
     "typedoc": "^0.28.13",
     "typedoc-plugin-markdown": "^4.9.0",
+    "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }
 }

@@ -49,6 +49,7 @@ web = [
     "linera-storage/web",
     "linera-views/web",
     "wasm-bindgen-futures",
+    "web-thread/web",
 ]
 
 [dependencies]
@@ -84,6 +85,7 @@ tracing.workspace = true
 trait-set = "0.3.0"
 trait-variant.workspace = true
 wasm-bindgen-futures = { workspace = true, optional = true }
+web-thread.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 linera-storage-service = { workspace = true, optional = true }

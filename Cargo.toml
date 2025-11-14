@@ -275,7 +275,6 @@ wasm-bindgen = "0.2.92"
 wasm-bindgen-futures = "0.4.42"
 wasm-bindgen-test = "0.3.42"
 wasm-instrument = { package = "linera-wasm-instrument", version = "0.4.0-linera.1" }
-wasm_thread = "0.3.0"
 wasmer = { package = "linera-wasmer", version = "4.4.0-linera.7", default-features = false }
 wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.4.0-linera.7", default-features = false, features = [
     "std",
@@ -343,6 +342,10 @@ default-features = false
 features = ["rt-tokio", "rustls"]
 version = "1.88.0"
 
+[workspace.dependencies.web-thread]
+package = "web-thread-select"
+version = "0.2.0"
+
 [profile.release]
 lto = "thin"
 debug = true
@@ -367,10 +370,6 @@ opt-level = 3
 version = "0.4.1"
 git = "https://github.com/Twey/rust-indexed-db"
 branch = "no-uuid-wasm-bindgen"
-
-[patch.crates-io.wasm_thread]
-git = "https://github.com/Twey/wasm_thread"
-branch = "post-message"
 
 [workspace.metadata.spellcheck]
 config = "spellcheck-cfg.toml"

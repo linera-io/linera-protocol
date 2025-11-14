@@ -35,19 +35,9 @@ export default defineConfig({
       ],
     },
   },
-  build: {
-    rollupOptions: {
-      external: ['@linera/client'],
-    },
-  },
   esbuild: {
     supported: {
       'top-level-await': true,
     },
-  },
-  optimizeDeps: {
-    exclude: [
-      '@linera/client',
-    ],
   },
 })

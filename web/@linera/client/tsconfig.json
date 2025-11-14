@@ -9,6 +9,7 @@
         "declaration": true,
         "paths": {
             "@linera-web": ["./dist/linera.js"],
-        },
+            "web-thread:wasm-shim": ["./dist/linera.js"]
+        }
     }
 }

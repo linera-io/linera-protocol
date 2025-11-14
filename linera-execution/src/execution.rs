@@ -260,25 +260,19 @@ where
         let mut actor = ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller);
         let (code, description) = actor.load_service(application_id).await?;
 
-        let service_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
+        let thread = web_thread::Thread::new();
+        let service_runtime_task = thread.run_send(code, move |code| async move {
             let mut runtime =
                 ServiceSyncRuntime::new_with_deadline(execution_state_sender, context, deadline);
-
-            async move {
-                let code = codes.next().await.expect("we send this immediately below");
-                runtime.preload_service(application_id, code, description)?;
-                runtime.run_query(application_id, query)
-            }
-        })
-        .await;
-
-        service_runtime_task.send(code)?;
+            runtime.preload_service(application_id, code, description)?;
+            runtime.run_query(application_id, query)
+        });
 
         while let Some(request) = execution_state_receiver.next().await {
             actor.handle_request(request).await?;
         }
 
-        service_runtime_task.join().await
+        service_runtime_task.await?
     }
 
     async fn query_user_application_with_long_lived_service(

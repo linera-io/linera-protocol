@@ -287,13 +287,11 @@ pub trait Storage: Sized {
             compressed_bytes: content.into_arc_bytes(),
         };
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
-        let contract_bytecode =
-            linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
-                move |_| async move { compressed_contract_bytecode.decompress() },
-            )
-            .await
-            .join()
-            .await?;
+        let contract_bytecode = web_thread::Thread::new()
+            .run_send((), move |()| async move {
+                compressed_contract_bytecode.decompress()
+            })
+            .await??;
         match application_description.module_id.vm_runtime {
             VmRuntime::Wasm => {
                 cfg_if::cfg_if! {
@@ -353,12 +351,11 @@ pub trait Storage: Sized {
             compressed_bytes: content.into_arc_bytes(),
         };
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
-        let service_bytecode = linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
-            move |_| async move { compressed_service_bytecode.decompress() },
-        )
-        .await
-        .join()
-        .await?;
+        let service_bytecode = web_thread::Thread::new()
+            .run_send((), move |()| async move {
+                compressed_service_bytecode.decompress()
+            })
+            .await??;
         match application_description.module_id.vm_runtime {
             VmRuntime::Wasm => {
                 cfg_if::cfg_if! {
