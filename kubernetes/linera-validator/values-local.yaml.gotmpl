@@ -55,6 +55,7 @@ explorer:
 
 # Loki
 loki-stack:
+  enabled: {{ env "LINERA_HELMFILE_SET_LOKI_STACK_ENABLED" | default "true" }}
   loki:
     enabled: true
     isDefault: false
@@ -72,6 +73,9 @@ loki-stack:
 
 # Prometheus/Grafana
 kube-prometheus-stack:
+  enabled: {{ env "LINERA_HELMFILE_SET_PROMETHEUS_STACK_ENABLED" | default "true" }}
+  crds:
+    enabled: true
   grafana:
     sidecar:
       dashboards:
@@ -165,6 +169,18 @@ kube-prometheus-stack:
               regex: '([0-9]+\.[0-9]+)(\.?[0-9]*).*'
               replacement: '$1$2'
               target_label: svr
+
+# Pyroscope (controlled by --with-memory-profiling flag)
+pyroscope:
+  enabled: {{ env "LINERA_HELMFILE_SET_ENABLE_MEMORY_PROFILING" | default "false" }}
+
+# Pyroscope Alloy (eBPF profiling - internal to cluster)
+pyroscope-alloy:
+  enabled: {{ env "LINERA_HELMFILE_SET_ENABLE_MEMORY_PROFILING" | default "false" }}
+
+# Observability Alloy (External metrics/logs/traces export - optional)
+observability-alloy:
+  enabled: {{ env "LINERA_HELMFILE_SET_ENABLE_OBSERVABILITY_ALLOY" | default "false" }}
 
 # Environment
 environment: "kind"

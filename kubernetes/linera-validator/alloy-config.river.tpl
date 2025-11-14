@@ -66,8 +66,8 @@ discovery.relabel "linera_metrics" {
 prometheus.scrape "linera_metrics" {
   targets = discovery.relabel.linera_metrics.output
 
-  // Forward to OTLP converter - will only export if PROMETHEUS_ENABLED is set
-  forward_to = [otelcol.receiver.prometheus.default.receiver]
+  // Conditional forwarding - only export if PROMETHEUS_ENABLED is set to "true"
+  forward_to = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.receiver.prometheus.default.receiver] : []
 
   scrape_interval = "15s"
   scrape_timeout  = "10s"
@@ -78,8 +78,8 @@ prometheus.exporter.self "alloy" {}
 
 prometheus.scrape "alloy_metrics" {
   targets    = prometheus.exporter.self.alloy.targets
-  // Forward to OTLP converter - will only export if PROMETHEUS_ENABLED is set
-  forward_to = [otelcol.receiver.prometheus.default.receiver]
+  // Conditional forwarding - only export if PROMETHEUS_ENABLED is set to "true"
+  forward_to = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.receiver.prometheus.default.receiver] : []
 }
 
 // ==================== Prometheus Metrics Export (Optional) ====================
@@ -171,8 +171,8 @@ discovery.relabel "pod_logs" {
 // Read pod logs
 loki.source.kubernetes "pods" {
   targets    = discovery.relabel.pod_logs.output
-  // Forward to Loki - will only export if LOKI_ENABLED is set
-  forward_to = [loki.write.central.receiver]
+  // Conditional forwarding - only export if LOKI_ENABLED is set to "true"
+  forward_to = env("LOKI_ENABLED") == "true" ? [loki.write.central.receiver] : []
 }
 
 // Write logs to external Loki (only if enabled)
@@ -211,8 +211,8 @@ otelcol.receiver.otlp "default" {
   }
 
   output {
-    // Forward to Tempo - will only export if TEMPO_ENABLED is set
-    traces  = [otelcol.exporter.otlphttp.central.input]
+    // Conditional forwarding - only export if TEMPO_ENABLED is set to "true"
+    traces  = env("TEMPO_ENABLED") == "true" ? [otelcol.exporter.otlphttp.central.input] : []
   }
 }
 
