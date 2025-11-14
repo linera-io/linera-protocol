@@ -54,6 +54,9 @@ impl Contract for MatchingEngineContract {
     async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
         match operation {
             Operation::ExecuteOrder { order } => {
+                self.runtime
+                    .application_parameters()
+                    .check_precision(&order);
                 let owner = order.owner();
                 let chain_id = self.runtime.chain_id();
                 self.runtime

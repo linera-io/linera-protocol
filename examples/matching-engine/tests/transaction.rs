@@ -127,6 +127,7 @@ async fn single_transaction() {
     // Creating the matching engine chain
     let matching_parameter = Parameters {
         tokens: [token_id_a, token_id_b],
+        price_decimals: 0,
     };
     let matching_id = matching_chain
         .create_application(

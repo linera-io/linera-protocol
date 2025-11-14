@@ -3195,6 +3195,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     // Setting up the application matching engine.
     let parameter = Parameters {
         tokens: [token0, token1],
+        price_decimals: 0,
     };
     let module_id = node_service_admin
         .publish_module::<MatchingEngineAbi, Parameters, ()>(
@@ -3522,6 +3523,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
 
     let parameters = Parameters {
         tokens: [token0, token1],
+        price_decimals: 0,
     };
 
     // Create AMM application on Admin chain

@@ -112,7 +112,7 @@ Now, we publish and deploy the Matching Engine application:
 ```bash
 MATCHING_ENGINE=$(linera --wait-for-outgoing-messages \
     project publish-and-create examples/matching-engine \
-    --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""]}" \
+    --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""], \"price_decimals\":0}" \
     --required-application-ids $FUN1_APP_ID $FUN2_APP_ID)
 ```
 

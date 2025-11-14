@@ -13,7 +13,9 @@ use linera_sdk::{
 use matching_engine::{MatchingEngineAbi, Operation, Order, OrderNature, Parameters, Price};
 
 /// Helper to create test parameters with two fungible tokens
-async fn setup_matching_engine() -> (
+async fn setup_matching_engine(
+    price_decimals: u16,
+) -> (
     TestValidator,
     linera_sdk::linera_base_types::ApplicationId<matching_engine::MatchingEngineAbi>,
     linera_sdk::linera_base_types::ApplicationId<fungible::FungibleTokenAbi>,
@@ -39,10 +41,8 @@ async fn setup_matching_engine() -> (
         .publish_bytecode_files_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
         .await;
 
-    // Give users enough tokens to cover test scenarios
-    // For bids with price*quantity, users need sufficient token0
     let initial_state_a =
-        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10000));
+        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(100));
     let params_a = fungible::Parameters::new("TokenA");
     let token_id_a = user_chain_a
         .create_application(
@@ -54,7 +54,7 @@ async fn setup_matching_engine() -> (
         .await;
 
     let initial_state_b =
-        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(10000));
+        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(100));
     let params_b = fungible::Parameters::new("TokenB");
     let token_id_b = user_chain_b
         .create_application(
@@ -68,6 +68,7 @@ async fn setup_matching_engine() -> (
     // Create matching engine
     let matching_parameter = Parameters {
         tokens: [token_id_a, token_id_b],
+        price_decimals,
     };
     let matching_id = matching_chain
         .create_application(
@@ -99,7 +100,7 @@ async fn test_insert_bid_order() {
         user_chain_a,
         _user_chain_b,
         matching_chain,
-    ) = setup_matching_engine().await;
+    ) = setup_matching_engine(2).await;
 
     let owner_a = AccountOwner::from(user_chain_a.public_key());
 
@@ -141,7 +142,7 @@ async fn test_insert_ask_order() {
         _user_chain_a,
         user_chain_b,
         matching_chain,
-    ) = setup_matching_engine().await;
+    ) = setup_matching_engine(2).await;
 
     let owner_b = AccountOwner::from(user_chain_b.public_key());
 
@@ -182,7 +183,7 @@ async fn test_cancel_order() {
         user_chain_a,
         _user_chain_b,
         matching_chain,
-    ) = setup_matching_engine().await;
+    ) = setup_matching_engine(2).await;
 
     let owner_a = AccountOwner::from(user_chain_a.public_key());
 
@@ -255,7 +256,7 @@ async fn test_modify_order() {
         user_chain_a,
         _user_chain_b,
         matching_chain,
-    ) = setup_matching_engine().await;
+    ) = setup_matching_engine(2).await;
 
     let owner_a = AccountOwner::from(user_chain_a.public_key());
 
@@ -328,7 +329,7 @@ async fn test_multiple_orders_from_same_user() {
         user_chain_a,
         _user_chain_b,
         matching_chain,
-    ) = setup_matching_engine().await;
+    ) = setup_matching_engine(2).await;
 
     let owner_a = AccountOwner::from(user_chain_a.public_key());
 

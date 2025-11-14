@@ -32,7 +32,7 @@ async fn test_bid_ask_matching_exact_price() {
         .await;
 
     let initial_state_a =
-        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10000));
+        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(100));
     let token_id_a = user_chain_a
         .create_application(
             fungible_module_id_a,
@@ -43,7 +43,7 @@ async fn test_bid_ask_matching_exact_price() {
         .await;
 
     let initial_state_b =
-        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(10000));
+        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(100));
     let token_id_b = user_chain_b
         .create_application(
             fungible_module_id_b,
@@ -55,6 +55,7 @@ async fn test_bid_ask_matching_exact_price() {
 
     let matching_parameter = Parameters {
         tokens: [token_id_a, token_id_b],
+        price_decimals: 2,
     };
     let matching_id = matching_chain
         .create_application(
@@ -134,7 +135,7 @@ async fn test_bid_ask_matching_better_price() {
         .await;
 
     let initial_state_a =
-        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10000));
+        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(100));
     let token_id_a = user_chain_a
         .create_application(
             fungible_module_id_a,
@@ -145,7 +146,7 @@ async fn test_bid_ask_matching_better_price() {
         .await;
 
     let initial_state_b =
-        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(10000));
+        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(100));
     let token_id_b = user_chain_b
         .create_application(
             fungible_module_id_b,
@@ -157,6 +158,7 @@ async fn test_bid_ask_matching_better_price() {
 
     let matching_parameter = Parameters {
         tokens: [token_id_a, token_id_b],
+        price_decimals: 2,
     };
     let matching_id = matching_chain
         .create_application(
@@ -233,7 +235,7 @@ async fn test_partial_fill() {
         .await;
 
     let initial_state_a =
-        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10000));
+        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(100));
     let token_id_a = user_chain_a
         .create_application(
             fungible_module_id_a,
@@ -244,7 +246,7 @@ async fn test_partial_fill() {
         .await;
 
     let initial_state_b =
-        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(10000));
+        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(100));
     let token_id_b = user_chain_b
         .create_application(
             fungible_module_id_b,
@@ -256,6 +258,7 @@ async fn test_partial_fill() {
 
     let matching_parameter = Parameters {
         tokens: [token_id_a, token_id_b],
+        price_decimals: 2,
     };
     let matching_id = matching_chain
         .create_application(
@@ -344,7 +347,7 @@ async fn test_no_match_when_prices_dont_cross() {
         .await;
 
     let initial_state_a =
-        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10000));
+        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(100));
     let token_id_a = user_chain_a
         .create_application(
             fungible_module_id_a,
@@ -355,7 +358,7 @@ async fn test_no_match_when_prices_dont_cross() {
         .await;
 
     let initial_state_b =
-        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(10000));
+        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(100));
     let token_id_b = user_chain_b
         .create_application(
             fungible_module_id_b,
@@ -367,6 +370,7 @@ async fn test_no_match_when_prices_dont_cross() {
 
     let matching_parameter = Parameters {
         tokens: [token_id_a, token_id_b],
+        price_decimals: 2,
     };
     let matching_id = matching_chain
         .create_application(
