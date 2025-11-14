@@ -6,13 +6,23 @@ use std::collections::BTreeSet;
 use async_graphql::SimpleObject;
 use linera_sdk::{
     linera_base_types::{Account, AccountOwner, Amount},
-    views::{
-        linera_views, CustomCollectionView, MapView, QueueView, RegisterView, RootView, View,
-        ViewStorageContext,
-    },
+    views::linera_views,
+    KeyValueStore,
 };
-use matching_engine::{OrderId, OrderNature, Price, PriceAsk, PriceBid};
+use linera_views::views::{RootView, View};
+use matching_engine::{OrderId, OrderNature, Parameters, Price, PriceAsk, PriceBid};
 use serde::{Deserialize, Serialize};
+
+pub type Context = linera_views::context::ViewContext<Parameters, KeyValueStore>;
+
+pub type CustomCollectionView<K, V> =
+    linera_views::collection_view::CustomCollectionView<Context, K, V>;
+
+pub type MapView<K, V> = linera_views::map_view::MapView<Context, K, V>;
+
+pub type QueueView<T> = linera_views::queue_view::QueueView<Context, T>;
+
+pub type RegisterView<T> = linera_views::register_view::RegisterView<Context, T>;
 
 /// The order entry in the order book
 #[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]
@@ -51,14 +61,14 @@ pub struct AccountInfo {
 /// cancelled order is not the oldest, then it remains
 /// though with a size zero.
 #[derive(View, SimpleObject)]
-#[view(context = ViewStorageContext)]
+#[view(context = Context)]
 pub struct LevelView {
     pub queue: QueueView<OrderEntry>,
 }
 
 /// The matching engine containing the information.
 #[derive(RootView, SimpleObject)]
-#[view(context = ViewStorageContext)]
+#[view(context = Context)]
 pub struct MatchingEngineState {
     ///The next_order_number contains the order_id so that
     ///the order_id gets created from 0, to infinity.
