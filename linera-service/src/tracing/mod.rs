@@ -3,6 +3,9 @@
 
 //! This module provides unified handling for tracing subscribers within Linera binaries.
 
+pub mod chrome;
+pub mod opentelemetry;
+
 use std::{
     env,
     fs::{File, OpenOptions},
@@ -23,11 +26,6 @@ use tracing_subscriber::{
     registry::LookupSpan,
     util::SubscriberInitExt,
     EnvFilter,
-};
-
-#[cfg(not(target_arch = "wasm32"))]
-pub use crate::tracing_opentelemetry::{
-    init_with_chrome_trace_exporter, init_with_opentelemetry, ChromeTraceGuard,
 };
 
 pub(crate) struct EnvConfig {

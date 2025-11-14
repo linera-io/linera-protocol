@@ -2154,9 +2154,9 @@ async fn kill_all_processes(pids: &[u32]) {
 #[cfg(not(target_arch = "wasm32"))]
 fn init_tracing(
     options: &ClientOptions,
-) -> anyhow::Result<Option<linera_base::tracing::ChromeTraceGuard>> {
+) -> anyhow::Result<Option<linera_service::tracing::chrome::ChromeTraceGuard>> {
     if matches!(&options.command, ClientCommand::Faucet { .. }) {
-        linera_base::tracing::init_with_opentelemetry(
+        linera_service::tracing::opentelemetry::init(
             &options.command.log_file_name(),
             options.context_options.otlp_exporter_endpoint.as_deref(),
         );
@@ -2171,12 +2171,12 @@ fn init_tracing(
                 |s| s.to_string(),
             );
         let writer = std::fs::File::create(&trace_file_path)?;
-        Ok(Some(linera_base::tracing::init_with_chrome_trace_exporter(
+        Ok(Some(linera_service::tracing::chrome::init(
             &options.command.log_file_name(),
             writer,
         )))
     } else {
-        linera_base::tracing::init(&options.command.log_file_name());
+        linera_service::tracing::init(&options.command.log_file_name());
         Ok(None)
     }
 }

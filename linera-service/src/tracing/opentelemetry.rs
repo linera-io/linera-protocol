@@ -3,21 +3,17 @@
 
 //! OpenTelemetry integration for tracing with OTLP export and Chrome trace export.
 
-use tracing_chrome::ChromeLayerBuilder;
-use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
-#[cfg(feature = "opentelemetry")]
-use {
-    opentelemetry::{global, trace::TracerProvider},
-    opentelemetry_otlp::{SpanExporter, WithExportConfig},
-    opentelemetry_sdk::{
-        trace::{InMemorySpanExporter, SdkTracerProvider},
-        Resource,
-    },
-    tracing_opentelemetry::OpenTelemetryLayer,
-    tracing_subscriber::{
-        filter::{filter_fn, FilterFn},
-        layer::Layer,
-    },
+use opentelemetry::{global, trace::TracerProvider};
+use opentelemetry_otlp::{SpanExporter, WithExportConfig};
+#[cfg(with_testing)]
+use opentelemetry_sdk::trace::InMemorySpanExporter;
+use opentelemetry_sdk::{trace::SdkTracerProvider, Resource};
+use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing_subscriber::{
+    filter::{filter_fn, FilterFn},
+    layer::Layer,
+    prelude::__tracing_subscriber_SubscriberExt as _,
+    util::SubscriberInitExt,
 };
 
 /// Creates a filter that excludes spans with the `opentelemetry.skip` field.
@@ -39,7 +35,6 @@ use {
 ///     // created with knowledge that it might be skipped
 /// }
 /// ```
-#[cfg(feature = "opentelemetry")]
 fn opentelemetry_skip_filter() -> FilterFn<impl Fn(&tracing::Metadata<'_>) -> bool> {
     filter_fn(|metadata| {
         if !metadata.is_span() {
@@ -52,7 +47,6 @@ fn opentelemetry_skip_filter() -> FilterFn<impl Fn(&tracing::Metadata<'_>) -> bo
 /// Initializes tracing with a custom OpenTelemetry tracer provider.
 ///
 /// This is an internal function used by both production and test code.
-#[cfg(feature = "opentelemetry")]
 fn init_with_tracer_provider(log_name: &str, tracer_provider: SdkTracerProvider) {
     global::set_tracer_provider(tracer_provider.clone());
     let tracer = tracer_provider.tracer("linera");
@@ -76,7 +70,7 @@ fn init_with_tracer_provider(log_name: &str, tracer_provider: SdkTracerProvider)
 ///
 /// This is used for testing to avoid setting the global subscriber.
 /// Returns the layer, exporter, and tracer provider (which must be kept alive and shutdown).
-#[cfg(all(with_testing, feature = "opentelemetry"))]
+#[cfg(with_testing)]
 pub fn build_opentelemetry_layer_with_test_exporter(
     log_name: &str,
 ) -> (
@@ -111,8 +105,7 @@ pub fn build_opentelemetry_layer_with_test_exporter(
 /// Requires the `opentelemetry` feature.
 /// Only enables OpenTelemetry if LINERA_OTLP_EXPORTER_ENDPOINT env var is set.
 /// This prevents DNS errors in environments where OpenTelemetry is not deployed.
-#[cfg(feature = "opentelemetry")]
-pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: Option<&str>) {
+pub fn init(log_name: &str, otlp_endpoint: Option<&str>) {
     // Check if OpenTelemetry endpoint is configured via parameter or env var
     let endpoint = match otlp_endpoint {
         Some(ep) if !ep.is_empty() => ep.to_string(),
@@ -146,65 +139,4 @@ pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: Option<&str>) {
         .build();
 
     init_with_tracer_provider(log_name, tracer_provider);
-}
-
-/// Fallback when opentelemetry feature is not enabled.
-#[cfg(not(feature = "opentelemetry"))]
-pub fn init_with_opentelemetry(log_name: &str, _otlp_endpoint: Option<&str>) {
-    eprintln!(
-        "OTLP export requires the 'opentelemetry' feature to be enabled! Falling back to default tracing initialization."
-    );
-    crate::tracing::init(log_name);
-}
-
-/// Guard that flushes Chrome trace file when dropped.
-///
-/// Store this guard in a variable that lives for the duration of your program.
-/// When it's dropped, the trace file will be completed and closed.
-pub type ChromeTraceGuard = tracing_chrome::FlushGuard;
-
-/// Builds a Chrome trace layer and guard.
-///
-/// Returns a subscriber and guard. The subscriber should be used with `with_default`
-/// to avoid global state conflicts.
-pub fn build_chrome_trace_layer_with_exporter<W>(
-    log_name: &str,
-    writer: W,
-) -> (impl tracing::Subscriber + Send + Sync, ChromeTraceGuard)
-where
-    W: std::io::Write + Send + 'static,
-{
-    let (chrome_layer, guard) = ChromeLayerBuilder::new().writer(writer).build();
-
-    let config = crate::tracing::get_env_config(log_name);
-    let maybe_log_file_layer = config.maybe_log_file_layer();
-    let stderr_layer = config.stderr_layer();
-
-    let subscriber = tracing_subscriber::registry()
-        .with(chrome_layer)
-        .with(config.env_filter)
-        .with(maybe_log_file_layer)
-        .with(stderr_layer);
-
-    (subscriber, guard)
-}
-
-/// Initializes tracing with Chrome Trace JSON exporter.
-///
-/// Returns a guard that must be kept alive for the duration of the program.
-/// When the guard is dropped, the trace data is flushed and completed.
-///
-/// Exports traces to Chrome Trace JSON format which can be visualized in:
-/// - Chrome: `chrome://tracing`
-/// - Perfetto UI: <https://ui.perfetto.dev>
-///
-/// Note: Uses `try_init()` to avoid panicking if a global subscriber is already set.
-/// In that case, tracing may not work as expected.
-pub fn init_with_chrome_trace_exporter<W>(log_name: &str, writer: W) -> ChromeTraceGuard
-where
-    W: std::io::Write + Send + 'static,
-{
-    let (subscriber, guard) = build_chrome_trace_layer_with_exporter(log_name, writer);
-    let _ = subscriber.try_init();
-    guard
 }

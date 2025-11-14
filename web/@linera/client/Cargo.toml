@@ -24,8 +24,13 @@ serde.workspace = true
 serde-wasm-bindgen.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+tracing-web.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
+
+[dependencies.tracing-subscriber]
+features = ["ansi", "fmt", "std"]
+workspace = true
 
 [dependencies.linera-base]
 features = ["web"]

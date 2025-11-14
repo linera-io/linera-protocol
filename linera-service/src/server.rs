@@ -522,7 +522,7 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
 }
 
 async fn run(options: ServerOptions) {
-    linera_base::tracing::init_with_opentelemetry(
+    linera_service::tracing::opentelemetry::init(
         &log_file_name_for(&options.command),
         otlp_exporter_endpoint_for(&options.command),
     );
