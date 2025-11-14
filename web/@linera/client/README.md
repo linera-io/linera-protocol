@@ -13,11 +13,6 @@ policies, including in-memory keys and signing using an existing MetaMask wallet
 
 <!-- cargo-rdme end -->
 
-## Building
-
-Make sure your `cargo` invokes a nightly `rustc`. Then, you can build
-the package with `pnpm build` and publish it with `pnpm publish`.
-
 ## Contributing
 
 See the [CONTRIBUTING](../../../CONTRIBUTING.md) file for how to help out.
