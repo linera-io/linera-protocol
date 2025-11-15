@@ -40,7 +40,7 @@ async fn setup_matching_engine() -> (
         .await;
 
     // Give users enough tokens to cover test scenarios
-    // For bids with price*quantity, users need sufficient token0
+    // For bids with price*amount, users need sufficient token0
     let initial_state_a =
         fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10000));
     let params_a = fungible::Parameters::new("TokenA");
@@ -292,11 +292,11 @@ async fn test_modify_order() {
         .unwrap();
     let order_id = orders[0].as_u64().unwrap();
 
-    // Modify the order (reduce quantity)
+    // Modify the order (reduce amount)
     let modify_order = Order::Modify {
         owner: owner_a,
         order_id,
-        cancel_amount: Amount::from_tokens(5),
+        reduce_amount: Amount::from_tokens(5),
     };
     let operation = Operation::ExecuteOrder {
         order: modify_order,

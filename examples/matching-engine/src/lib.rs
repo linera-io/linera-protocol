@@ -26,12 +26,12 @@ impl ServiceAbi for MatchingEngineAbi {
 
 /// The asking or bidding price of token 1 in units of token 0.
 ///
-/// Forgetting about types and units, if `account` is buying `quantity` for a `price`:
+/// Forgetting about types and units, if `account` is buying `amount` for a `price`:
 /// ```ignore
-/// account[0] -= price * quantity;
-/// account[1] += quantity;
+/// account[0] -= price * amount;
+/// account[1] += amount;
 /// ```
-/// Thus the quantity (also called _count_) is an `Amount`.
+/// Thus the amount (also called _count_) is an `Amount`.
 ///
 /// When we have ask > bid then the winner for the residual cash is the liquidity provider.
 /// We choose to force the price to be an integer u64. This is because the tokens are undivisible.
@@ -121,10 +121,6 @@ impl CustomSerialize for PriceBid {
     }
 }
 
-pub fn product_price_amount(price: Price, count: Amount) -> Amount {
-    count.try_mul(price.price as u128).expect("product")
-}
-
 /// An identifier for a buy or sell order
 pub type OrderId = u64;
 
@@ -156,11 +152,22 @@ pub enum Order {
     Modify {
         owner: AccountOwner,
         order_id: OrderId,
-        cancel_amount: Amount,
+        reduce_amount: Amount,
     },
 }
 
 scalar!(Order);
+
+impl Order {
+    /// Get the owner from the order
+    pub fn owner(&self) -> AccountOwner {
+        match self {
+            Order::Insert { owner, .. } => *owner,
+            Order::Cancel { owner, .. } => *owner,
+            Order::Modify { owner, .. } => *owner,
+        }
+    }
+}
 
 /// When the matching engine is created we need to create to
 /// trade between two tokens 0 and 1. Those two tokens
@@ -172,6 +179,39 @@ pub struct Parameters {
 }
 
 scalar!(Parameters);
+
+impl Parameters {
+    pub fn product_price_amount(&self, price: Price, amount: Amount) -> Amount {
+        amount
+            .try_mul(price.price as u128)
+            .expect("overflow in pricing")
+    }
+
+    /// The application engine is trading between two tokens. Those tokens are the parameters of the
+    /// construction of the exchange and are accessed by index in the system.
+    pub fn fungible_id(&self, token_idx: u32) -> ApplicationId<FungibleTokenAbi> {
+        self.tokens[token_idx as usize]
+    }
+
+    /// Returns amount and type of tokens that need to be transferred to the matching engine when
+    /// an order is added:
+    /// * For an ask, just the token1 have to be put forward
+    /// * For a bid, the product of the price with the amount has to be put
+    pub fn get_amount_idx(
+        &self,
+        nature: &OrderNature,
+        price: &Price,
+        amount: &Amount,
+    ) -> (Amount, u32) {
+        match nature {
+            OrderNature::Bid => {
+                let size0 = self.product_price_amount(*price, *amount);
+                (size0, 0)
+            }
+            OrderNature::Ask => (*amount, 1),
+        }
+    }
+}
 
 /// Operations that can be sent to the application.
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
