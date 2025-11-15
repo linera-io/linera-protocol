@@ -1773,7 +1773,7 @@ mod graphql {
 
     use super::{CollectionView, CustomCollectionView, ReadGuardedView};
     use crate::{
-        graphql::{hash_name, mangle, missing_key_error, Entry, MapInput},
+        graphql::{hash_name, mangle, Entry, MapInput},
         views::View,
     };
 
@@ -1832,10 +1832,7 @@ mod graphql {
             &self,
             key: K,
         ) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
-            let value = self
-                .try_load_entry(&key)
-                .await?
-                .ok_or_else(|| missing_key_error(&key))?;
+            let value = self.try_load_entry(&key).await?;
             Ok(Entry { value, key })
         }
 
@@ -1856,7 +1853,7 @@ mod graphql {
             Ok(values
                 .into_iter()
                 .zip(keys)
-                .filter_map(|(value, key)| value.map(|value| Entry { value, key }))
+                .map(|(value, key)| Entry { value, key })
                 .collect())
         }
     }
@@ -1897,10 +1894,7 @@ mod graphql {
             &self,
             key: K,
         ) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
-            let value = self
-                .try_load_entry(&key)
-                .await?
-                .ok_or_else(|| missing_key_error(&key))?;
+            let value = self.try_load_entry(&key).await?;
             Ok(Entry { value, key })
         }
 
@@ -1921,7 +1915,7 @@ mod graphql {
             Ok(values
                 .into_iter()
                 .zip(keys)
-                .filter_map(|(value, key)| value.map(|value| Entry { value, key }))
+                .map(|(value, key)| Entry { value, key })
                 .collect())
         }
     }
