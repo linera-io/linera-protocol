@@ -17,7 +17,9 @@ use linera_base::{
         ChainDescription, ChainOrigin, Epoch, InitialChainConfig, OracleResponse, Timestamp,
     },
     ensure, hex_debug,
-    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, ModuleId, StreamId},
+    identifiers::{
+        Account, AccountOwner, BlobId, BlobType, ChainId, EventId, ModuleId, OwnerSpender, StreamId,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_views::{
@@ -89,6 +91,8 @@ pub struct SystemExecutionStateView<C> {
     pub balance: RegisterView<C, Amount>,
     /// Balances attributed to a given owner.
     pub balances: MapView<C, AccountOwner, Amount>,
+    /// Allowances for spending from one account by another.
+    pub allowances: MapView<C, OwnerSpender, Amount>,
     /// The timestamp of the most recent block.
     pub timestamp: RegisterView<C, Timestamp>,
     /// Whether this chain has been closed.
@@ -118,6 +122,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
             ownership: self.ownership.with_context(ctx.clone()).await,
             balance: self.balance.with_context(ctx.clone()).await,
             balances: self.balances.with_context(ctx.clone()).await,
+            allowances: self.allowances.with_context(ctx.clone()).await,
             timestamp: self.timestamp.with_context(ctx.clone()).await,
             closed: self.closed.with_context(ctx.clone()).await,
             application_permissions: self.application_permissions.with_context(ctx.clone()).await,
@@ -709,6 +714,81 @@ where
                     .with_authenticated_owner(authenticated_owner),
             ))
         }
+    }
+
+    pub async fn approve(
+        &mut self,
+        authenticated_owner: Option<AccountOwner>,
+        authenticated_application_id: Option<ApplicationId>,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), ExecutionError> {
+        ensure!(
+            authenticated_owner == Some(owner)
+                || authenticated_application_id.map(AccountOwner::from) == Some(owner),
+            ExecutionError::UnauthenticatedTransferOwner
+        );
+
+        let owner_spender = OwnerSpender::new(owner, spender);
+        if amount == Amount::ZERO {
+            self.allowances.remove(&owner_spender)?;
+            return Ok(());
+        }
+        let allowance = self.allowances.get_mut_or_default(&owner_spender).await?;
+        *allowance = amount;
+
+        Ok(())
+    }
+
+    pub async fn transfer_from(
+        &mut self,
+        authenticated_owner: Option<AccountOwner>,
+        authenticated_application_id: Option<ApplicationId>,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        recipient: Account,
+        amount: Amount,
+    ) -> Result<Option<OutgoingMessage>, ExecutionError> {
+        ensure!(
+            authenticated_owner == Some(spender)
+                || authenticated_application_id.map(AccountOwner::from) == Some(spender),
+            ExecutionError::UnauthenticatedTransferOwner
+        );
+        ensure!(
+            amount > Amount::ZERO,
+            ExecutionError::IncorrectTransferAmount
+        );
+
+        // Debit from allowance
+        let owner_spender = OwnerSpender::new(owner, spender);
+        let allowance = self
+            .allowances
+            .get_mut(&owner_spender)
+            .await?
+            .ok_or_else(|| ExecutionError::InsufficientAllowance {
+                allowance: Amount::ZERO,
+                owner,
+                spender,
+            })?;
+
+        allowance
+            .try_sub_assign(amount)
+            .map_err(|_| ExecutionError::InsufficientAllowance {
+                allowance: *allowance,
+                owner,
+                spender,
+            })?;
+
+        if allowance.is_zero() {
+            self.allowances.remove(&owner_spender)?;
+        }
+
+        // Debit from owner's balance
+        self.debit(&owner, amount).await?;
+
+        // Credit or send message
+        self.credit_or_send_message(owner, recipient, amount).await
     }
 
     /// Debits an [`Amount`] of tokens from an account's balance.
