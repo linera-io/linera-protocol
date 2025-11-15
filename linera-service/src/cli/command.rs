@@ -371,6 +371,10 @@ pub enum ClientCommand {
         /// info will be checked.
         #[arg(long)]
         public_key: Option<ValidatorPublicKey>,
+        /// Whether the query should trigger the chain's network actions on the validator
+        /// side.
+        #[arg(long)]
+        create_network_actions: bool,
     },
 
     /// Show the current set of validators for a chain. Also print some information about
@@ -381,6 +385,10 @@ pub enum ClientCommand {
         /// Skip validators with less voting weight that this.
         #[arg(long)]
         min_votes: Option<u64>,
+        /// Whether the query should trigger the chain's network actions on the validator
+        /// side.
+        #[arg(long)]
+        create_network_actions: bool,
     },
 
     /// Query validators for shard information about a specific chain.
