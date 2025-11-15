@@ -229,6 +229,39 @@ where
                 callback.respond(());
             }
 
+            Approve {
+                owner,
+                spender,
+                amount,
+                signer,
+                application_id,
+                callback,
+            } => {
+                self.state
+                    .system
+                    .approve(signer, Some(application_id), owner, spender, amount)
+                    .await?;
+                callback.respond(());
+            }
+
+            TransferFrom {
+                owner,
+                spender,
+                destination,
+                amount,
+                signer,
+                application_id,
+                callback,
+            } => {
+                let maybe_message = self
+                    .state
+                    .system
+                    .transfer_from(signer, Some(application_id), owner, spender, destination, amount)
+                    .await?;
+                self.txn_tracker.add_outgoing_messages(maybe_message);
+                callback.respond(());
+            }
+
             SystemTimestamp { callback } => {
                 let timestamp = *self.state.system.timestamp.get();
                 callback.respond(timestamp);
@@ -1204,6 +1237,29 @@ pub enum ExecutionRequest {
 
     Claim {
         source: Account,
+        destination: Account,
+        amount: Amount,
+        #[debug(skip_if = Option::is_none)]
+        signer: Option<AccountOwner>,
+        application_id: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<()>,
+    },
+
+    Approve {
+        owner: AccountOwner,
+        spender: AccountOwner,
+        amount: Amount,
+        #[debug(skip_if = Option::is_none)]
+        signer: Option<AccountOwner>,
+        application_id: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<()>,
+    },
+
+    TransferFrom {
+        owner: AccountOwner,
+        spender: AccountOwner,
         destination: Account,
         amount: Amount,
         #[debug(skip_if = Option::is_none)]

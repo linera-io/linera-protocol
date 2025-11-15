@@ -1329,6 +1329,56 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(())
     }
 
+    fn approve(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        let current_application = this.current_application();
+        let application_id = current_application.id;
+        let signer = current_application.signer;
+
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::Approve {
+                owner,
+                spender,
+                amount,
+                signer,
+                application_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
+    }
+
+    fn transfer_from(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        destination: Account,
+        amount: Amount,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        let current_application = this.current_application();
+        let application_id = current_application.id;
+        let signer = current_application.signer;
+
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::TransferFrom {
+                owner,
+                spender,
+                destination,
+                amount,
+                signer,
+                application_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
+    }
+
     fn try_call_application(
         &mut self,
         authenticated: bool,

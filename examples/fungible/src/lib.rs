@@ -3,7 +3,6 @@
 
 /* ABI of the Fungible Token Example Application */
 
-use async_graphql::scalar;
 pub use linera_sdk::abis::fungible::*;
 use linera_sdk::linera_base_types::{Account, AccountOwner, Amount};
 use serde::{Deserialize, Serialize};
@@ -42,24 +41,6 @@ pub enum Message {
     },
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct OwnerSpender {
-    /// Account to withdraw from
-    pub owner: AccountOwner,
-    /// Account to do the withdrawing
-    pub spender: AccountOwner,
-}
-
-scalar!(OwnerSpender);
-
-impl OwnerSpender {
-    pub fn new(owner: AccountOwner, spender: AccountOwner) -> Self {
-        if owner == spender {
-            panic!("owner should be different from spender");
-        }
-        Self { owner, spender }
-    }
-}
 
 /// Creates a fungible token application and distributes `initial_amounts` to new individual
 /// chains.

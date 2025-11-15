@@ -26,7 +26,7 @@ use linera_base::vm::{EvmInstantiation, EvmOperation, EvmQuery};
 use linera_base::{
     crypto::{CryptoHash, Secp256k1SecretKey},
     data_types::{Amount, ApplicationPermissions},
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, OwnerSpender},
     time::{Duration, Instant},
     vm::VmRuntime,
 };
@@ -235,7 +235,7 @@ impl FungibleApp {
     }
 
     async fn get_allowance(&self, owner: &AccountOwner, spender: &AccountOwner) -> Amount {
-        let owner_spender = fungible::OwnerSpender::new(*owner, *spender);
+        let owner_spender = OwnerSpender::new(*owner, *spender);
         let query = format!(
             "allowances {{ entry(key: {}) {{ value }} }}",
             owner_spender.to_value()

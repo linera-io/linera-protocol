@@ -517,6 +517,35 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Approves a `spender` to withdraw an `amount` of native tokens from the `owner`'s account.
+    fn approve(
+        caller: &mut Caller,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .approve(owner, spender, amount)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Transfers an `amount` of native tokens from `owner` to `destination` using `spender`'s allowance.
+    fn transfer_from(
+        caller: &mut Caller,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        destination: Account,
+        amount: Amount,
+    ) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .transfer_from(owner, spender, destination, amount)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Opens a new chain, configuring it with the provided `chain_ownership`,
     /// `application_permissions` and initial `balance` (debited from the current chain).
     fn open_chain(

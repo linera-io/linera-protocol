@@ -345,6 +345,12 @@ pub enum ExecutionError {
     IncorrectClaimAmount,
     #[error("Claim must be authenticated by the right owner")]
     UnauthenticatedClaimOwner,
+    #[error("The transferred amount must not exceed the allowance for spender {spender} from owner {owner}: {allowance}")]
+    InsufficientAllowance {
+        allowance: Amount,
+        owner: AccountOwner,
+        spender: AccountOwner,
+    },
     #[error("Admin operations are only allowed on the admin chain.")]
     AdminOperationOnNonAdminChain,
     #[error("Failed to create new committee: expected {expected}, but got {provided}")]
@@ -406,6 +412,7 @@ impl ExecutionError {
             | ExecutionError::FeesExceedFunding { .. }
             | ExecutionError::IncorrectClaimAmount
             | ExecutionError::UnauthenticatedClaimOwner
+            | ExecutionError::InsufficientAllowance { .. }
             | ExecutionError::AdminOperationOnNonAdminChain
             | ExecutionError::InvalidCommitteeEpoch { .. }
             | ExecutionError::InvalidCommitteeRemoval
@@ -965,6 +972,23 @@ pub trait ContractRuntime: BaseRuntime {
     fn claim(
         &mut self,
         source: Account,
+        destination: Account,
+        amount: Amount,
+    ) -> Result<(), ExecutionError>;
+
+    /// Approves spender to withdraw amount from owner's account.
+    fn approve(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), ExecutionError>;
+
+    /// Transfers amount from owner to destination using spender's allowance.
+    fn transfer_from(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError>;
