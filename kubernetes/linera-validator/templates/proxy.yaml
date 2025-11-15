@@ -89,6 +89,8 @@ spec:
               name: linera-port
             - containerPort: 20100
               name: private-port
+            - containerPort: {{ .Values.metricsPort }}
+              name: metrics
           command:
             - sh
             - -c

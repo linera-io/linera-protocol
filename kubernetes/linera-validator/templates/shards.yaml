@@ -81,6 +81,9 @@ spec:
         - name: linera-server
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.metricsPort }}
+              name: metrics
           command:
             - sh
             - -c

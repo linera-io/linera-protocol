@@ -1,0 +1,667 @@
+# Default values for linera-validator chart
+# This file provides sane defaults for all configuration options.
+# Override these values using environment variables or custom values files.
+
+# ============================================================================
+# Core Linera Configuration
+# ============================================================================
+
+# Container image configuration
+lineraImage: "linera:latest"
+lineraImagePullPolicy: "IfNotPresent"
+
+# Logging configuration
+logLevel: "info"
+
+# OpenTelemetry configuration
+# Set to empty string to disable OTLP tracing
+otlpExporterEndpoint: ""
+
+# Network ports
+proxyPort: 19100
+metricsPort: 21100
+
+# Deployment scaling
+numShards: 4
+numProxies: 1
+
+# Performance tuning
+# Set to empty string to use default Tokio thread count
+serverTokioThreads: ""
+
+# ============================================================================
+# Storage Configuration
+# ============================================================================
+
+# Primary storage backend
+# Default: ScyllaDB connection string
+storage: "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+
+# Storage replication factor
+storageReplicationFactor: 1
+
+# Dual storage mode (RocksDB + ScyllaDB)
+dualStore: false
+
+# RocksDB storage size per shard (only used if dualStore is true)
+rocksdbStorageSize: "2Gi"
+
+# Local SSD usage flag (GCP-specific)
+usingLocalSsd: false
+
+# GCP-specific run flag
+gcpRun: false
+
+# ============================================================================
+# Validator Configuration
+# ============================================================================
+
+validator:
+  # Server configuration file path
+  serverConfig: "working/server_1.json"
+  # Genesis configuration file path
+  genesisConfig: "working/genesis.json"
+
+# ============================================================================
+# Explorer Services (Indexer, Block Exporter, Web Explorer)
+# ============================================================================
+
+# Block Exporter - exports blocks for indexing
+blockExporter:
+  enabled: false
+  replicas: 1
+  port: 8882
+  metricsPort: 9091
+  storageSize: "1Gi"
+  logLevel: "info"
+  serviceMonitor:
+    enabled: false
+
+# Indexer - indexes blockchain data
+indexer:
+  enabled: false
+  image: "linera-indexer:latest"
+  imagePullPolicy: "IfNotPresent"
+  port: 8081
+  databasePath: "/data/indexer.db"
+  storageSize: "2Gi"
+  logLevel: "info"
+
+# Explorer - web interface for blockchain exploration
+explorer:
+  enabled: false
+  image: "linera-explorer:latest"
+  imagePullPolicy: "IfNotPresent"
+  frontendPort: 3001
+  apiPort: 3002
+  logLevel: "info"
+  ingress:
+    enabled: false
+    annotations: {}
+    hosts:
+      - host: "linera-explorer.local"
+        paths:
+          - path: "/"
+            pathType: "Prefix"
+    tls: []
+    # Example TLS configuration:
+    # tls:
+    #   - secretName: explorer-tls
+    #     hosts:
+    #       - linera-explorer.example.com
+
+# ============================================================================
+# Environment Configuration
+# ============================================================================
+
+# Environment type: "kind" (local), "GCP", etc.
+environment: "kind"
+
+# GCP-specific configuration (only used when environment is "GCP")
+staticIpGcpName: ""
+validatorDomainName: ""
+
+# ============================================================================
+# Monitoring & Observability
+# ============================================================================
+
+# Grafana Cloud integration
+writeToGrafanaCloud: false
+grafanaCloudUsername: ""
+grafanaCloudAPIToken: ""
+
+# Validator label for external metrics systems
+validatorLabel: "validator-1"
+
+# ============================================================================
+# Optional Monitoring Stack Dependencies
+# ============================================================================
+# These are disabled by default. Enable explicitly when needed.
+
+# Pyroscope Alloy - eBPF and memory profiling (ORIGINAL FUNCTIONALITY)
+# Enable via LINERA_HELMFILE_SET_ENABLE_MEMORY_PROFILING=true or --with-memory-profiling CLI flag
+# This is dedicated to continuous profiling and sends data to local Pyroscope server
+pyroscope-alloy:
+  enabled: false
+  alloy:
+    controller:
+      type: daemonset
+      hostPID: true
+    configMap:
+      create: true
+      # Original Pyroscope profiling configuration - DO NOT MODIFY
+      # This config does eBPF profiling and memory profiling for local Pyroscope
+      content: |-
+        // Alloy configuration for eBPF profiling of Linera components
+        // This is the ORIGINAL configuration for Pyroscope profiling only
+
+        // Kubernetes service discovery for shards
+        discovery.kubernetes "shards" {
+          role = "pod"
+          namespaces {
+            names = ["default"]
+          }
+          selectors {
+            role = "pod"
+            label = "app=shards"
+          }
+        }
+
+        // Kubernetes service discovery for proxies
+        discovery.kubernetes "proxies" {
+          role = "pod"
+          namespaces {
+            names = ["default"]
+          }
+          selectors {
+            role = "pod"
+            label = "app=proxy"
+          }
+        }
+
+        // Add service_name labels to shards targets
+        discovery.relabel "shards" {
+          targets = discovery.kubernetes.shards.targets
+          rule {
+            source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_label_app"]
+            separator = "/"
+            target_label = "service_name"
+            replacement = "ebpf/${1}/${2}"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_name"]
+            target_label = "pod_name"
+          }
+        }
+
+        // Add service_name labels to proxy targets
+        discovery.relabel "proxies" {
+          targets = discovery.kubernetes.proxies.targets
+          rule {
+            source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_label_app"]
+            separator = "/"
+            target_label = "service_name"
+            replacement = "ebpf/${1}/${2}"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_name"]
+            target_label = "pod_name"
+          }
+        }
+
+        // eBPF CPU profiling for shards
+        pyroscope.ebpf "shards_profiling" {
+          forward_to = [pyroscope.write.endpoint.receiver]
+          sample_rate = 99
+          targets = discovery.relabel.shards.output
+        }
+
+        // eBPF CPU profiling for proxies
+        pyroscope.ebpf "proxies_profiling" {
+          forward_to = [pyroscope.write.endpoint.receiver]
+          sample_rate = 99
+          targets = discovery.relabel.proxies.output
+        }
+
+        // Relabel shards targets for memory profiling on port 21100
+        discovery.relabel "shards_memory" {
+          targets = discovery.kubernetes.shards.targets
+          rule {
+            source_labels = ["__meta_kubernetes_pod_ip"]
+            target_label = "__address__"
+            replacement = "${1}:21100"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_label_app"]
+            separator = "/"
+            target_label = "service_name"
+            replacement = "memory/${1}/${2}"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_name"]
+            target_label = "pod_name"
+          }
+        }
+
+        // Relabel proxy targets for memory profiling on port 21100
+        discovery.relabel "proxies_memory" {
+          targets = discovery.kubernetes.proxies.targets
+          rule {
+            source_labels = ["__meta_kubernetes_pod_ip"]
+            target_label = "__address__"
+            replacement = "${1}:21100"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_label_app"]
+            separator = "/"
+            target_label = "service_name"
+            replacement = "memory/${1}/${2}"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_name"]
+            target_label = "pod_name"
+          }
+        }
+
+        // Memory profiling via jemalloc pprof HTTP endpoints
+        pyroscope.scrape "memory_profiling" {
+          targets = array.concat(
+            discovery.relabel.shards_memory.output,
+            discovery.relabel.proxies_memory.output,
+          )
+          forward_to = [pyroscope.write.endpoint.receiver]
+          profiling_config {
+            profile.memory {
+              enabled = true
+              path = "/debug/pprof"
+            }
+            profile.process_cpu {
+              enabled = false
+            }
+            profile.goroutine {
+              enabled = false
+            }
+            profile.block {
+              enabled = false
+            }
+            profile.mutex {
+              enabled = false
+            }
+          }
+          job_name = "memory-profiling"
+          scrape_interval = "30s"
+          scrape_timeout = "45s"
+        }
+
+        // Write profiles to local Pyroscope server
+        pyroscope.write "endpoint" {
+          endpoint {
+            url = "http://linera-core-pyroscope:4040"
+          }
+        }
+
+        // Logging configuration
+        logging {
+          level = "info"
+          format = "logfmt"
+          write_to = [loki.write.logs.receiver]
+        }
+
+        // Forward Alloy logs to Loki
+        loki.write "logs" {
+          endpoint {
+            url = "http://linera-core-loki:3100/loki/api/v1/push"
+          }
+          external_labels = {
+            "component" = "alloy-pyroscope",
+          }
+        }
+    securityContext:
+      privileged: true
+      runAsGroup: 0
+      runAsUser: 0
+
+# Observability Alloy - External metrics/logs/traces export (NEW FEATURE)
+# Enable via LINERA_HELMFILE_SET_OBSERVABILITY_ALLOY_ENABLED=true or --alloy-enabled CLI flag
+# This is dedicated to exporting observability data to external authenticated endpoints
+observability-alloy:
+  enabled: false
+  alloy:
+    controller:
+      type: daemonset
+    configMap:
+      create: true
+      # This config exports to external Prometheus, Loki, and Tempo with authentication
+      # Uses conditional forwarding based on ENABLED flags
+      content: |-
+        // Grafana Alloy configuration for Linera validator observability
+        // Collects metrics, logs, and traces and forwards to central stack
+
+        // ==================== Prometheus Metrics Scraping ====================
+
+        // Discover Kubernetes pods for scraping
+        discovery.kubernetes "pods" {
+          role = "pod"
+
+          namespaces {
+            names = [env("NAMESPACE")]
+          }
+        }
+
+        // Relabel discovered pods to scrape all pods in namespace
+        discovery.relabel "linera_metrics" {
+          targets = discovery.kubernetes.pods.targets
+
+          // Set job label based on container name
+          rule {
+            source_labels = ["__meta_kubernetes_pod_container_name"]
+            target_label  = "job"
+            replacement   = "linera-${1}"
+          }
+
+          // Set instance label to pod name
+          rule {
+            source_labels = ["__meta_kubernetes_pod_name"]
+            target_label  = "instance"
+          }
+
+          // Set namespace label
+          rule {
+            source_labels = ["__meta_kubernetes_namespace"]
+            target_label  = "namespace"
+          }
+
+          // Set cluster label
+          rule {
+            target_label  = "cluster"
+            replacement   = env("CLUSTER_NAME")
+          }
+
+          // Set validator label
+          rule {
+            target_label  = "validator"
+            replacement   = env("VALIDATOR_NAME")
+          }
+
+          // Use metrics port (21100)
+          rule {
+            source_labels = ["__meta_kubernetes_pod_container_port_number"]
+            regex         = "21100"
+            action        = "keep"
+          }
+
+          // Set __address__ to pod IP:port
+          rule {
+            source_labels = ["__meta_kubernetes_pod_ip", "__meta_kubernetes_pod_container_port_number"]
+            separator     = ":"
+            target_label  = "__address__"
+          }
+        }
+
+        // Scrape metrics from discovered pods
+        prometheus.scrape "linera_metrics" {
+          targets = discovery.relabel.linera_metrics.output
+
+          // Conditional forwarding - only export if PROMETHEUS_ENABLED is set to "true"
+          forward_to = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.receiver.prometheus.default.receiver] : []
+
+          scrape_interval = "15s"
+          scrape_timeout  = "10s"
+        }
+
+        // Expose Alloy's own metrics
+        prometheus.exporter.self "alloy" {}
+
+        prometheus.scrape "alloy_metrics" {
+          targets    = prometheus.exporter.self.alloy.targets
+          // Conditional forwarding - only export if PROMETHEUS_ENABLED is set to "true"
+          forward_to = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.receiver.prometheus.default.receiver] : []
+        }
+
+        // ==================== Prometheus Metrics Export (Optional) ====================
+
+        // Convert Prometheus metrics to OTLP and send to external Prometheus
+        // Enabled via PROMETHEUS_ENABLED environment variable
+        // Requires: PROMETHEUS_OTLP_URL, PROMETHEUS_OTLP_USER, PROMETHEUS_OTLP_PASS
+
+        // Export Prometheus metrics as OTLP (only if enabled)
+        otelcol.exporter.otlphttp "prometheus" {
+          client {
+            endpoint = env("PROMETHEUS_OTLP_URL")
+
+            auth = otelcol.auth.basic.prometheus_credentials.handler
+
+            tls {
+              insecure_skip_verify = false
+            }
+
+            compression = "gzip"
+
+            headers = {
+              "Content-Type" = "application/x-protobuf",
+            }
+          }
+
+          encoding = "proto"
+        }
+
+        // Basic auth for Prometheus OTLP
+        otelcol.auth.basic "prometheus_credentials" {
+          username = env("PROMETHEUS_OTLP_USER")
+          password = env("PROMETHEUS_OTLP_PASS")
+        }
+
+        // Convert Prometheus metrics to OTLP format (only if enabled)
+        otelcol.receiver.prometheus "default" {
+          output {
+            metrics = [otelcol.exporter.otlphttp.prometheus.input]
+          }
+        }
+
+        // ==================== Loki Logs Collection ====================
+
+        // Discover Kubernetes pods for log collection
+        discovery.kubernetes "pod_logs" {
+          role = "pod"
+
+          namespaces {
+            names = [env("NAMESPACE")]
+          }
+        }
+
+        // Relabel discovered pods for log collection
+        discovery.relabel "pod_logs" {
+          targets = discovery.kubernetes.pod_logs.targets
+
+          // Set pod label
+          rule {
+            source_labels = ["__meta_kubernetes_pod_name"]
+            target_label  = "pod"
+          }
+
+          // Set container label
+          rule {
+            source_labels = ["__meta_kubernetes_pod_container_name"]
+            target_label  = "container"
+          }
+
+          // Set namespace label
+          rule {
+            source_labels = ["__meta_kubernetes_namespace"]
+            target_label  = "namespace"
+          }
+
+          // Set cluster label
+          rule {
+            target_label  = "cluster"
+            replacement   = env("CLUSTER_NAME")
+          }
+
+          // Set validator label
+          rule {
+            target_label  = "validator"
+            replacement   = env("VALIDATOR_NAME")
+          }
+        }
+
+        // Read pod logs
+        loki.source.kubernetes "pods" {
+          targets    = discovery.relabel.pod_logs.output
+          // Conditional forwarding - only export if LOKI_ENABLED is set to "true"
+          forward_to = env("LOKI_ENABLED") == "true" ? [loki.write.central.receiver] : []
+        }
+
+        // Write logs to external Loki (only if enabled)
+        // Enabled via LOKI_ENABLED environment variable
+        // Requires: LOKI_PUSH_URL, LOKI_PUSH_USER, LOKI_PUSH_PASS
+        loki.write "central" {
+          endpoint {
+            url = env("LOKI_PUSH_URL")
+
+            basic_auth {
+              username = env("LOKI_PUSH_USER")
+              password = env("LOKI_PUSH_PASS")
+            }
+
+            tls_config {
+              insecure_skip_verify = false
+            }
+          }
+
+          external_labels = {
+            cluster   = env("CLUSTER_NAME"),
+            validator = env("VALIDATOR_NAME"),
+          }
+        }
+
+        // ==================== Tempo Traces Collection ====================
+
+        // OTLP receiver for traces
+        otelcol.receiver.otlp "default" {
+          grpc {
+            endpoint = "0.0.0.0:4317"
+          }
+
+          http {
+            endpoint = "0.0.0.0:4318"
+          }
+
+          output {
+            // Conditional forwarding - only export if TEMPO_ENABLED is set to "true"
+            traces  = env("TEMPO_ENABLED") == "true" ? [otelcol.exporter.otlphttp.central.input] : []
+          }
+        }
+
+        // Export traces to external Tempo (only if enabled)
+        // Enabled via TEMPO_ENABLED environment variable
+        // Requires: TEMPO_OTLP_URL, TEMPO_OTLP_USER, TEMPO_OTLP_PASS
+        otelcol.exporter.otlphttp "central" {
+          client {
+            endpoint = env("TEMPO_OTLP_URL")
+
+            auth = otelcol.auth.basic.credentials.handler
+
+            tls {
+              insecure_skip_verify = false
+            }
+          }
+        }
+
+        // Basic auth for OTLP
+        otelcol.auth.basic "credentials" {
+          username = env("TEMPO_OTLP_USER")
+          password = env("TEMPO_OTLP_PASS")
+        }
+    extraEnv:
+      - name: NAMESPACE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
+      - name: CLUSTER_NAME
+        value: ""
+      - name: VALIDATOR_NAME
+        value: ""
+      - name: PROMETHEUS_ENABLED
+        value: "false"
+      - name: PROMETHEUS_OTLP_URL
+        value: ""
+      - name: PROMETHEUS_OTLP_USER
+        value: ""
+      - name: PROMETHEUS_OTLP_PASS
+        value: ""
+      - name: LOKI_ENABLED
+        value: "false"
+      - name: LOKI_PUSH_URL
+        value: ""
+      - name: LOKI_PUSH_USER
+        value: ""
+      - name: LOKI_PUSH_PASS
+        value: ""
+      - name: TEMPO_ENABLED
+        value: "false"
+      - name: TEMPO_OTLP_URL
+        value: ""
+      - name: TEMPO_OTLP_USER
+        value: ""
+      - name: TEMPO_OTLP_PASS
+        value: ""
+
+# Loki Stack - log aggregation
+loki-stack:
+  enabled: false
+  loki:
+    enabled: false
+    isDefault: false
+    persistence:
+      enabled: true
+      size: "1Gi"
+    config:
+      limits_config:
+        reject_old_samples_max_age: "24h"
+  promtail:
+    enabled: false
+    config:
+      clients:
+        - url: "http://linera-core-loki:3100/loki/api/v1/push"
+
+# Kube Prometheus Stack - metrics and alerting
+kube-prometheus-stack:
+  enabled: false
+  grafana:
+    sidecar:
+      dashboards:
+        enabled: true
+        label: "grafana_dashboard"
+        labelValue: "1"
+        folderAnnotation: "grafana_folder"
+        provider:
+          foldersFromFilesStructure: true
+    persistence:
+      enabled: true
+      size: "1Gi"
+    plugins:
+      - "grafana-piechart-panel"
+  prometheus:
+    prometheusSpec:
+      scrapeInterval: "30s"
+      retention: "2d"
+      retentionSize: "1GB"
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: "standard"
+            accessModes:
+              - "ReadWriteOnce"
+            resources:
+              requests:
+                storage: "1Gi"
+      # Auto-discover ServiceMonitors across all namespaces
+      serviceMonitorSelector: {}
+      serviceMonitorNamespaceSelector: {}
+      serviceMonitorSelectorNilUsesHelmValues: false
+      ruleSelector: {}
+      ruleSelectorNilUsesHelmValues: false
+
+# Pyroscope - continuous profiling
+pyroscope:
+  enabled: false
