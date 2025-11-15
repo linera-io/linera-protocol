@@ -161,7 +161,7 @@ where
     /// returned.
     pub async fn create_root_context(store: S, extra: E) -> Result<Self, S::Error> {
         store.clear_journal().await?;
-        Ok(Self::new_unsafe(store, Vec::new(), extra))
+        Ok(Self::new_unchecked(store, Vec::new(), extra))
     }
 }
 
@@ -169,7 +169,7 @@ impl<E, S> ViewContext<E, S> {
     /// Creates a context for the given base key, store, and an extra argument. NOTE: this
     /// constructor doesn't check the journal of the store. In doubt, use
     /// [`ViewContext::create_root_context`] instead.
-    pub fn new_unsafe(store: S, base_key: Vec<u8>, extra: E) -> Self {
+    pub fn new_unchecked(store: S, base_key: Vec<u8>, extra: E) -> Self {
         Self {
             store,
             base_key: BaseKey { bytes: base_key },
