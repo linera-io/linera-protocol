@@ -3,17 +3,22 @@
 
 #![allow(dead_code)]
 
-use std::{cmp::min, collections::BTreeSet};
+use std::{
+    cmp::min,
+    collections::{BTreeMap, BTreeSet},
+};
 
 use async_graphql::SimpleObject;
 use fungible::Account;
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount},
+    linera_base_types::{AccountOwner, Amount, ChainId},
     views::{linera_views, linera_views::context::Context as _},
     KeyValueStore,
 };
 use linera_views::views::{RootView, View};
-use matching_engine::{OrderId, OrderNature, Parameters, Price, PriceAsk, PriceBid};
+use matching_engine::{
+    OrderId, OrderNature, Parameters, PendingOrderInfo, Price, PriceAsk, PriceBid,
+};
 use serde::{Deserialize, Serialize};
 
 pub type Context = linera_views::context::ViewContext<Parameters, KeyValueStore>;
@@ -51,7 +56,7 @@ pub struct KeyBook {
 }
 
 /// The AccountInfo used for storing which order_id are owned by
-/// each owner.
+/// each owner on the matching engine chain.
 #[derive(Default, Clone, Debug, Serialize, Deserialize, SimpleObject)]
 pub struct AccountInfo {
     /// The list of orders
@@ -73,6 +78,11 @@ pub struct LevelView {
 #[derive(RootView, SimpleObject)]
 #[view(context = Context)]
 pub struct MatchingEngineState {
+    /// Pending orders tracked on user chains (not used on matching engine chain).
+    /// Maps owner to a map of order_id to pending order details.
+    pub pending_orders: MapView<AccountOwner, BTreeMap<OrderId, PendingOrderInfo>>,
+
+    // -- Matching engine chain only --
     /// The next order_id to be used.
     pub next_order_id: RegisterView<OrderId>,
     /// The map of the outstanding bids, by the bitwise complement of
@@ -87,7 +97,7 @@ pub struct MatchingEngineState {
     /// fundamental information on the order (price, nature, account)
     pub orders: MapView<OrderId, KeyBook>,
     /// The map giving for each account owner the set of order_id
-    /// owned by that owner.
+    /// owned by that owner (used on the matching engine chain).
     pub account_info: MapView<AccountOwner, AccountInfo>,
 }
 
@@ -126,6 +136,28 @@ impl MatchingEngineState {
                     &value.account.owner, owner,
                     "The owner of the order is not matching with the owner put"
                 );
+            }
+        }
+    }
+
+    /// Gets the current amount of an order from the order book.
+    /// Returns None if the order doesn't exist or has been fully filled/cancelled.
+    pub async fn get_order_quantity(&mut self, order_id: &OrderId) -> Option<Amount> {
+        let key_book = self.orders.get(order_id).await.ok()??;
+
+        // Find the order in the appropriate price level
+        match key_book.nature {
+            OrderNature::Bid => {
+                let view = self.bid_level(&key_book.price.to_bid()).await;
+                let mut iter = view.queue.iter_mut().await.expect("Failed to iterate");
+                iter.find(|order| order.order_id == *order_id)
+                    .map(|order| order.quantity)
+            }
+            OrderNature::Ask => {
+                let view = self.ask_level(&key_book.price.to_ask()).await;
+                let mut iter = view.queue.iter_mut().await.expect("Failed to iterate");
+                iter.find(|order| order.order_id == *order_id)
+                    .map(|order| order.quantity)
             }
         }
     }
@@ -241,13 +273,21 @@ impl MatchingEngineState {
     /// * That clearing creates a number of transfer orders.
     /// * If after the level clearing the order is completely filled then it is not
     ///   inserted. Otherwise, it became a liquidity order in the matching engine
+    ///
+    /// Returns: (transfers, order_id, remaining_amount, filled_orders)
+    /// where filled_orders contains (chain_id, owner, order_id) for each filled order
     pub async fn insert_and_uncross_market(
         &mut self,
         account: &Account,
         quantity: Amount,
         nature: OrderNature,
         price: &Price,
-    ) -> Vec<Transfer> {
+    ) -> (
+        Vec<Transfer>,
+        OrderId,
+        Amount,
+        Vec<(ChainId, AccountOwner, OrderId)>,
+    ) {
         // Bids are ordered from the highest bid (most preferable) to the smallest bid.
         // Asks are ordered from the smallest (most preferable) to the highest.
         // The prices have custom serialization so that they are in increasing order.
@@ -255,6 +295,7 @@ impl MatchingEngineState {
         let order_id = self.get_new_order_id();
         let mut final_quantity = quantity;
         let mut transfers = Vec::new();
+        let mut filled_orders = Vec::new();
         match nature {
             OrderNature::Bid => {
                 let mut matching_price_asks = Vec::new();
@@ -284,6 +325,17 @@ impl MatchingEngineState {
                         self.asks
                             .remove_entry(&price_ask)
                             .expect("Failed to remove ask level");
+                    }
+                    // Collect filled orders with chain_id information
+                    for (owner, order_id) in &remove_entry {
+                        if let Some(key_book) = self
+                            .orders
+                            .get(order_id)
+                            .await
+                            .expect("Failed to load order")
+                        {
+                            filled_orders.push((key_book.account.chain_id, *owner, *order_id));
+                        }
                     }
                     self.remove_order_ids(remove_entry).await;
                     if final_quantity == Amount::ZERO {
@@ -331,6 +383,17 @@ impl MatchingEngineState {
                             .remove_entry(&price_bid)
                             .expect("Failed to remove bid level");
                     }
+                    // Collect filled orders with chain_id information
+                    for (owner, order_id) in &remove_entry {
+                        if let Some(key_book) = self
+                            .orders
+                            .get(order_id)
+                            .await
+                            .expect("Failed to load order")
+                        {
+                            filled_orders.push((key_book.account.chain_id, *owner, *order_id));
+                        }
+                    }
                     self.remove_order_ids(remove_entry).await;
                     if final_quantity == Amount::ZERO {
                         break;
@@ -349,7 +412,7 @@ impl MatchingEngineState {
                 }
             }
         }
-        transfers
+        (transfers, order_id, final_quantity, filled_orders)
     }
 }
 

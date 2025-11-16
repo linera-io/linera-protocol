@@ -124,7 +124,7 @@ impl CustomSerialize for PriceBid {
 /// An identifier for a buy or sell order
 pub type OrderId = u64;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum OrderNature {
     /// A bid for buying token 1 and paying in token 0
     Bid,
@@ -264,11 +264,37 @@ pub enum Operation {
     CloseChain,
 }
 
+/// Information about a pending order. The order ID is stored separately.
+#[derive(Clone, Debug, Serialize, Deserialize, SimpleObject)]
+pub struct PendingOrderInfo {
+    pub nature: OrderNature,
+    pub price: Price,
+    pub quantity: Amount,
+}
+
 /// Messages that can be processed by the application.
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Message {
     /// The order being transmitted from the chain and received by the chain of the order book.
     ExecuteOrder { order: Order },
+    /// Acknowledgment sent from the matching engine to the order sender when an order is
+    /// inserted and at least partially pending.
+    OrderPending {
+        owner: AccountOwner,
+        order_id: OrderId,
+        order_info: PendingOrderInfo,
+    },
+    /// Notification sent from the matching engine when an order is modified or cancelled.
+    OrderUpdated {
+        owner: AccountOwner,
+        order_id: OrderId,
+        new_quantity: Amount,
+    },
+    /// Notification sent from the matching engine when an order is fully cancelled or filled.
+    OrderRemoved {
+        owner: AccountOwner,
+        order_id: OrderId,
+    },
 }
 
 #[cfg(test)]
