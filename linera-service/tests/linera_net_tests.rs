@@ -3228,7 +3228,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         app_matching_a
             .order(matching_engine::Order::Insert {
                 owner: owner_a,
-                amount: Amount::from_tokens(3),
+                quantity: Amount::from_tokens(3),
                 nature: OrderNature::Bid,
                 price: Price { price },
             })
@@ -3239,7 +3239,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         app_matching_b
             .order(matching_engine::Order::Insert {
                 owner: owner_b,
-                amount: Amount::from_tokens(4),
+                quantity: Amount::from_tokens(4),
                 nature: OrderNature::Ask,
                 price: Price { price },
             })

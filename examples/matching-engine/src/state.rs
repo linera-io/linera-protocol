@@ -30,7 +30,7 @@ pub type RegisterView<T> = linera_views::register_view::RegisterView<Context, T>
 #[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]
 pub struct OrderEntry {
     /// The number of token1 being bought or sold
-    pub amount: Amount,
+    pub quantity: Amount,
     /// The one who has created the order
     pub account: Account,
     /// The order_id (needed for possible cancel or modification)
@@ -135,7 +135,7 @@ impl MatchingEngineState {
     pub async fn modify_order(
         &mut self,
         order_id: OrderId,
-        cancel_amount: ModifyAmount,
+        cancel_quantity: ModifyQuantity,
     ) -> Option<Transfer> {
         let key_book = self
             .orders
@@ -145,15 +145,15 @@ impl MatchingEngineState {
         let transfer = match key_book.nature {
             OrderNature::Bid => {
                 let view = self.bid_level(&key_book.price.to_bid()).await;
-                let (cancel_amount, remove_order_id) =
-                    view.modify_order_level(order_id, cancel_amount).await?;
+                let (cancel_quantity, remove_order_id) =
+                    view.modify_order_level(order_id, cancel_quantity).await?;
                 if remove_order_id {
                     self.remove_order_id((key_book.account.owner, order_id))
                         .await;
                 }
                 let cancel_amount = self
                     .parameters()
-                    .product_price_amount(key_book.price, cancel_amount);
+                    .product_price_amount(key_book.price, cancel_quantity);
                 Transfer {
                     account: key_book.account,
                     amount: cancel_amount,
@@ -162,15 +162,15 @@ impl MatchingEngineState {
             }
             OrderNature::Ask => {
                 let view = self.ask_level(&key_book.price.to_ask()).await;
-                let (cancel_amount, remove_order_id) =
-                    view.modify_order_level(order_id, cancel_amount).await?;
+                let (cancel_quantity, remove_order_id) =
+                    view.modify_order_level(order_id, cancel_quantity).await?;
                 if remove_order_id {
                     self.remove_order_id((key_book.account.owner, order_id))
                         .await;
                 }
                 Transfer {
                     account: key_book.account,
-                    amount: cancel_amount,
+                    amount: cancel_quantity,
                     token_idx: 1,
                 }
             }
@@ -243,7 +243,7 @@ impl MatchingEngineState {
     pub async fn insert_and_uncross_market(
         &mut self,
         account: &Account,
-        amount: Amount,
+        quantity: Amount,
         nature: OrderNature,
         price: &Price,
     ) -> Vec<Transfer> {
@@ -252,7 +252,7 @@ impl MatchingEngineState {
         // The prices have custom serialization so that they are in increasing order.
         // To reverse the order of the bids, we take the bitwise complement of the price.
         let order_id = self.get_new_order_id();
-        let mut final_amount = amount;
+        let mut final_quantity = quantity;
         let mut transfers = Vec::new();
         match nature {
             OrderNature::Bid => {
@@ -272,7 +272,7 @@ impl MatchingEngineState {
                     let remove_entry = view
                         .level_clearing(
                             account,
-                            &mut final_amount,
+                            &mut final_quantity,
                             &mut transfers,
                             &nature,
                             price_ask.to_price(),
@@ -285,14 +285,14 @@ impl MatchingEngineState {
                             .expect("Failed to remove ask level");
                     }
                     self.remove_order_ids(remove_entry).await;
-                    if final_amount == Amount::ZERO {
+                    if final_quantity == Amount::ZERO {
                         break;
                     }
                 }
-                if final_amount != Amount::ZERO {
+                if final_quantity != Amount::ZERO {
                     let view = self.bid_level(&price.to_bid()).await;
                     let order = OrderEntry {
-                        amount: final_amount,
+                        quantity: final_quantity,
                         account: *account,
                         order_id,
                     };
@@ -318,7 +318,7 @@ impl MatchingEngineState {
                     let remove_entry = view
                         .level_clearing(
                             account,
-                            &mut final_amount,
+                            &mut final_quantity,
                             &mut transfers,
                             &nature,
                             price_bid.to_price(),
@@ -331,14 +331,14 @@ impl MatchingEngineState {
                             .expect("Failed to remove bid level");
                     }
                     self.remove_order_ids(remove_entry).await;
-                    if final_amount == Amount::ZERO {
+                    if final_quantity == Amount::ZERO {
                         break;
                     }
                 }
-                if final_amount != Amount::ZERO {
+                if final_quantity != Amount::ZERO {
                     let view = self.ask_level(&price.to_ask()).await;
                     let order = OrderEntry {
-                        amount: final_amount,
+                        quantity: final_quantity,
                         account: *account,
                         order_id,
                     };
@@ -367,7 +367,7 @@ pub struct Transfer {
 /// modified which is a partial cancellation. The size of the
 /// order can never increase.
 #[derive(Clone, Debug)]
-pub enum ModifyAmount {
+pub enum ModifyQuantity {
     All,
     Partial(Amount),
 }
@@ -383,7 +383,7 @@ impl LevelView {
     pub async fn level_clearing(
         &mut self,
         account: &Account,
-        amount: &mut Amount,
+        quantity: &mut Amount,
         transfers: &mut Vec<Transfer>,
         nature: &OrderNature,
         price_level: Price,
@@ -397,9 +397,9 @@ impl LevelView {
             .await
             .expect("Failed to load iterator over orders");
         for order in orders {
-            let fill = min(order.amount, *amount);
-            amount.try_sub_assign(fill).unwrap();
-            order.amount.try_sub_assign(fill).unwrap();
+            let fill = min(order.quantity, *quantity);
+            quantity.try_sub_assign(fill).unwrap();
+            order.quantity.try_sub_assign(fill).unwrap();
             if fill > Amount::ZERO {
                 transfers.extend_from_slice(&Self::get_transfers(
                     &parameters,
@@ -411,10 +411,10 @@ impl LevelView {
                     price_insert,
                 ));
             }
-            if order.amount == Amount::ZERO {
+            if order.quantity == Amount::ZERO {
                 remove_order.push((order.account.owner, order.order_id));
             }
-            if *amount == Amount::ZERO {
+            if *quantity == Amount::ZERO {
                 break;
             }
         }
@@ -532,7 +532,7 @@ impl LevelView {
             .await
             .expect("Failed to load iterator over level queue");
         let n_remove = iter
-            .take_while(|order| order.amount == Amount::ZERO)
+            .take_while(|order| order.quantity == Amount::ZERO)
             .count();
         for _ in 0..n_remove {
             self.queue.delete_front();
@@ -546,7 +546,7 @@ impl LevelView {
     pub async fn modify_order_level(
         &mut self,
         order_id: OrderId,
-        reduce_amount: ModifyAmount,
+        reduce_quantity: ModifyQuantity,
     ) -> Option<(Amount, bool)> {
         let mut iter = self
             .queue
@@ -554,16 +554,16 @@ impl LevelView {
             .await
             .expect("Failed to load iterator over level queue");
         let state_order = iter.find(|order| order.order_id == order_id)?;
-        let new_amount = match reduce_amount {
-            ModifyAmount::All => Amount::ZERO,
-            ModifyAmount::Partial(reduce_amount) => state_order
-                .amount
-                .try_sub(reduce_amount)
-                .expect("Attempt to cancel a larger amount than available"),
+        let new_quantity = match reduce_quantity {
+            ModifyQuantity::All => Amount::ZERO,
+            ModifyQuantity::Partial(reduce_quantity) => state_order
+                .quantity
+                .try_sub(reduce_quantity)
+                .expect("Attempt to cancel a larger quantity than available"),
         };
-        let corr_reduce_amount = state_order.amount.try_sub(new_amount).unwrap();
-        state_order.amount = new_amount;
+        let corr_reduce_quantity = state_order.quantity.try_sub(new_quantity).unwrap();
+        state_order.quantity = new_quantity;
         self.remove_zero_orders_from_level().await;
-        Some((corr_reduce_amount, new_amount == Amount::ZERO))
+        Some((corr_reduce_quantity, new_quantity == Amount::ZERO))
     }
 }

@@ -13,7 +13,7 @@ use linera_sdk::{
 use matching_engine::{
     MatchingEngineAbi, Message, Operation, Order, OrderNature, Parameters, Price,
 };
-use state::{MatchingEngineState, ModifyAmount, Transfer};
+use state::{MatchingEngineState, ModifyQuantity, Transfer};
 
 pub struct MatchingEngineContract {
     state: MatchingEngineState,
@@ -73,7 +73,7 @@ impl Contract for MatchingEngineContract {
                     .await
                     .expect("Failed to read existing order IDs");
                 for order_id in order_ids {
-                    match self.state.modify_order(order_id, ModifyAmount::All).await {
+                    match self.state.modify_order(order_id, ModifyQuantity::All).await {
                         Some(transfer) => self.send_to(transfer),
                         // Orders with amount zero may have been cleared in an earlier iteration.
                         None => continue,
@@ -117,7 +117,7 @@ impl MatchingEngineContract {
     fn receive_from_account(
         &mut self,
         owner: &AccountOwner,
-        amount: &Amount,
+        quantity: &Amount,
         nature: &OrderNature,
         price: &Price,
     ) {
@@ -128,7 +128,7 @@ impl MatchingEngineContract {
         let (amount, token_idx) = self
             .runtime
             .application_parameters()
-            .get_amount_idx(nature, price, amount);
+            .get_amount_idx(nature, price, quantity);
         self.transfer(*owner, amount, destination, token_idx)
     }
 
@@ -169,15 +169,15 @@ impl MatchingEngineContract {
         match order {
             Order::Insert {
                 owner,
-                amount,
+                quantity,
                 nature,
                 price,
             } => {
-                self.receive_from_account(&owner, &amount, &nature, &price);
+                self.receive_from_account(&owner, &quantity, &nature, &price);
                 let account = Account { chain_id, owner };
                 let transfers = self
                     .state
-                    .insert_and_uncross_market(&account, amount, nature, &price)
+                    .insert_and_uncross_market(&account, quantity, nature, &price)
                     .await;
                 for transfer in transfers {
                     self.send_to(transfer);
@@ -187,7 +187,7 @@ impl MatchingEngineContract {
                 self.state.check_order_id(&order_id, &owner).await;
                 let transfer = self
                     .state
-                    .modify_order(order_id, ModifyAmount::All)
+                    .modify_order(order_id, ModifyQuantity::All)
                     .await
                     .expect("Order is not present therefore cannot be cancelled");
                 self.send_to(transfer);
@@ -195,12 +195,12 @@ impl MatchingEngineContract {
             Order::Modify {
                 owner,
                 order_id,
-                reduce_amount,
+                reduce_quantity,
             } => {
                 self.state.check_order_id(&order_id, &owner).await;
                 let transfer = self
                     .state
-                    .modify_order(order_id, ModifyAmount::Partial(reduce_amount))
+                    .modify_order(order_id, ModifyQuantity::Partial(reduce_quantity))
                     .await
                     .expect("Order is not present therefore cannot be cancelled");
                 self.send_to(transfer);
@@ -220,7 +220,7 @@ impl MatchingEngineContract {
         };
         if let Order::Insert {
             owner,
-            amount,
+            quantity,
             nature,
             price,
         } = order
@@ -230,7 +230,7 @@ impl MatchingEngineContract {
             let (amount, token_idx) = self
                 .runtime
                 .application_parameters()
-                .get_amount_idx(&nature, &price, &amount);
+                .get_amount_idx(&nature, &price, &quantity);
             self.transfer(owner, amount, destination, token_idx);
         }
         self.runtime

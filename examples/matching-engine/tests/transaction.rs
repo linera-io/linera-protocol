@@ -50,11 +50,11 @@ pub async fn get_orders(
 ///   * user_b with 9 tokens B.
 /// * Then we create the following orders:
 ///   * User_a: Offer to buy token B in exchange for token A for a price of 1 (or 2) with
-///     a amount of 3 token B.
+///     a quantity of 3 token B.
 ///     User_a thus commits 3 * 1 + 3 * 2 = 9 token A to the matching engine chain and is
 ///     left with 1 token A on chain A
 ///   * User_b: Offer to sell token B in exchange for token A for a price of 2 (or 4) with
-///     a amount of 4 token B
+///     a quantity of 4 token B
 ///     User_b thus commits 4 + 4 = 8 token B on the matching engine chain and is left
 ///     with 1 token B.
 /// * The price that is matching is 2 where a transaction can actually occur
@@ -143,7 +143,7 @@ async fn single_transaction() {
         let price = Price { price };
         let order = Order::Insert {
             owner: owner_a,
-            amount: Amount::from_tokens(3),
+            quantity: Amount::from_tokens(3),
             nature: OrderNature::Bid,
             price,
         };
@@ -195,7 +195,7 @@ async fn single_transaction() {
         let price = Price { price };
         let order = Order::Insert {
             owner: owner_b,
-            amount: Amount::from_tokens(4),
+            quantity: Amount::from_tokens(4),
             nature: OrderNature::Ask,
             price,
         };

@@ -26,12 +26,12 @@ impl ServiceAbi for MatchingEngineAbi {
 
 /// The asking or bidding price of token 1 in units of token 0.
 ///
-/// Forgetting about types and units, if `account` is buying `amount` for a `price`:
+/// Forgetting about types and units, if `account` is buying `quantity` for a `price`:
 /// ```ignore
-/// account[0] -= price * amount;
-/// account[1] += amount;
+/// account[0] -= price * quantity;
+/// account[1] += quantity;
 /// ```
-/// Thus the amount (also called _count_) is an `Amount`.
+/// Thus the quantity (also called _count_) is an `Amount`.
 ///
 /// When we have ask > bid then the winner for the residual cash is the liquidity provider.
 /// We choose to force the price to be an integer u64. This is because the tokens are undivisible.
@@ -139,7 +139,7 @@ pub enum Order {
     /// Insertion of an order
     Insert {
         owner: AccountOwner,
-        amount: Amount,
+        quantity: Amount,
         nature: OrderNature,
         price: Price,
     },
@@ -152,7 +152,7 @@ pub enum Order {
     Modify {
         owner: AccountOwner,
         order_id: OrderId,
-        reduce_amount: Amount,
+        reduce_quantity: Amount,
     },
 }
 
@@ -181,8 +181,8 @@ pub struct Parameters {
 scalar!(Parameters);
 
 impl Parameters {
-    pub fn product_price_amount(&self, price: Price, amount: Amount) -> Amount {
-        amount
+    pub fn product_price_amount(&self, price: Price, quantity: Amount) -> Amount {
+        quantity
             .try_mul(price.price as u128)
             .expect("overflow in pricing")
     }
@@ -201,14 +201,14 @@ impl Parameters {
         &self,
         nature: &OrderNature,
         price: &Price,
-        amount: &Amount,
+        quantity: &Amount,
     ) -> (Amount, u32) {
         match nature {
             OrderNature::Bid => {
-                let size0 = self.product_price_amount(*price, *amount);
+                let size0 = self.product_price_amount(*price, *quantity);
                 (size0, 0)
             }
-            OrderNature::Ask => (*amount, 1),
+            OrderNature::Ask => (*quantity, 1),
         }
     }
 }

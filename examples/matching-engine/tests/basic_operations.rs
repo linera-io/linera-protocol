@@ -40,7 +40,7 @@ async fn setup_matching_engine() -> (
         .await;
 
     // Give users enough tokens to cover test scenarios
-    // For bids with price*amount, users need sufficient token0
+    // For bids with price*quantity, users need sufficient token0
     let initial_state_a =
         fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10000));
     let params_a = fungible::Parameters::new("TokenA");
@@ -106,7 +106,7 @@ async fn test_insert_bid_order() {
     // Insert a bid order
     let order = Order::Insert {
         owner: owner_a,
-        amount: Amount::from_tokens(10),
+        quantity: Amount::from_tokens(10),
         nature: OrderNature::Bid,
         price: Price { price: 100 },
     };
@@ -148,7 +148,7 @@ async fn test_insert_ask_order() {
     // Insert an ask order
     let order = Order::Insert {
         owner: owner_b,
-        amount: Amount::from_tokens(5),
+        quantity: Amount::from_tokens(5),
         nature: OrderNature::Ask,
         price: Price { price: 200 },
     };
@@ -189,7 +189,7 @@ async fn test_cancel_order() {
     // Insert an order
     let order = Order::Insert {
         owner: owner_a,
-        amount: Amount::from_tokens(10),
+        quantity: Amount::from_tokens(10),
         nature: OrderNature::Bid,
         price: Price { price: 100 },
     };
@@ -262,7 +262,7 @@ async fn test_modify_order() {
     // Insert an order
     let order = Order::Insert {
         owner: owner_a,
-        amount: Amount::from_tokens(20),
+        quantity: Amount::from_tokens(20),
         nature: OrderNature::Bid,
         price: Price { price: 100 },
     };
@@ -292,11 +292,11 @@ async fn test_modify_order() {
         .unwrap();
     let order_id = orders[0].as_u64().unwrap();
 
-    // Modify the order (reduce amount)
+    // Modify the order (reduce quantity)
     let modify_order = Order::Modify {
         owner: owner_a,
         order_id,
-        reduce_amount: Amount::from_tokens(5),
+        reduce_quantity: Amount::from_tokens(5),
     };
     let operation = Operation::ExecuteOrder {
         order: modify_order,
@@ -336,7 +336,7 @@ async fn test_multiple_orders_from_same_user() {
     for price in [100, 150, 200] {
         let order = Order::Insert {
             owner: owner_a,
-            amount: Amount::from_tokens(5),
+            quantity: Amount::from_tokens(5),
             nature: OrderNature::Bid,
             price: Price { price },
         };

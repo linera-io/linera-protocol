@@ -68,7 +68,7 @@ async fn test_bid_ask_matching_exact_price() {
     // User A places a bid at price 100 for 10 tokens
     let bid_order = Order::Insert {
         owner: owner_a,
-        amount: Amount::from_tokens(10),
+        quantity: Amount::from_tokens(10),
         nature: OrderNature::Bid,
         price: Price { price: 100 },
     };
@@ -90,7 +90,7 @@ async fn test_bid_ask_matching_exact_price() {
     // User B places an ask at price 100 for 10 tokens - should match!
     let ask_order = Order::Insert {
         owner: owner_b,
-        amount: Amount::from_tokens(10),
+        quantity: Amount::from_tokens(10),
         nature: OrderNature::Ask,
         price: Price { price: 100 },
     };
@@ -170,7 +170,7 @@ async fn test_bid_ask_matching_better_price() {
     // User A places a bid at price 120 (willing to pay more)
     let bid_order = Order::Insert {
         owner: owner_a,
-        amount: Amount::from_tokens(10),
+        quantity: Amount::from_tokens(10),
         nature: OrderNature::Bid,
         price: Price { price: 120 },
     };
@@ -191,7 +191,7 @@ async fn test_bid_ask_matching_better_price() {
     // User B places an ask at price 100 (lower than bid) - should match!
     let ask_order = Order::Insert {
         owner: owner_b,
-        amount: Amount::from_tokens(10),
+        quantity: Amount::from_tokens(10),
         nature: OrderNature::Ask,
         price: Price { price: 100 },
     };
@@ -269,7 +269,7 @@ async fn test_partial_fill() {
     // User A places a bid for 20 tokens
     let bid_order = Order::Insert {
         owner: owner_a,
-        amount: Amount::from_tokens(20),
+        quantity: Amount::from_tokens(20),
         nature: OrderNature::Bid,
         price: Price { price: 100 },
     };
@@ -290,7 +290,7 @@ async fn test_partial_fill() {
     // User B places an ask for only 5 tokens - partial fill
     let ask_order = Order::Insert {
         owner: owner_b,
-        amount: Amount::from_tokens(5),
+        quantity: Amount::from_tokens(5),
         nature: OrderNature::Ask,
         price: Price { price: 100 },
     };
@@ -380,7 +380,7 @@ async fn test_no_match_when_prices_dont_cross() {
     // User A places a bid at price 100
     let bid_order = Order::Insert {
         owner: owner_a,
-        amount: Amount::from_tokens(10),
+        quantity: Amount::from_tokens(10),
         nature: OrderNature::Bid,
         price: Price { price: 100 },
     };
@@ -401,7 +401,7 @@ async fn test_no_match_when_prices_dont_cross() {
     // User B places an ask at price 150 (higher than bid) - should NOT match
     let ask_order = Order::Insert {
         owner: owner_b,
-        amount: Amount::from_tokens(10),
+        quantity: Amount::from_tokens(10),
         nature: OrderNature::Ask,
         price: Price { price: 150 },
     };
