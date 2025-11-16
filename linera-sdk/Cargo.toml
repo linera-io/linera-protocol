@@ -47,6 +47,7 @@ test = [
 
 [dependencies]
 async-graphql.workspace = true
+async-stream.workspace = true
 async-trait = { workspace = true, optional = true }
 
 # TODO(#3421): Remove the pinned version once the `linera-*` crates move to Rust Edition 2024

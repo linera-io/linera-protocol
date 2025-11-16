@@ -9,6 +9,7 @@ pub mod performance;
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
+use futures::TryStreamExt;
 use rand::{seq::SliceRandom, Rng};
 
 use crate::{
@@ -235,6 +236,13 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
         }
         let test_exists_direct = store.contains_keys(&keys).await.unwrap();
         let values_read = store.read_multi_values_bytes(&keys).await.unwrap();
+        // Test read_multi_values_bytes_iter
+        let values_from_iter = store
+            .read_multi_values_bytes_iter(keys)
+            .try_collect::<Vec<_>>()
+            .await
+            .expect("Error reading from iterator");
+        assert_eq!(values_read, values_from_iter);
         assert_eq!(values, values_read);
         assert_eq!(values, values_single_read);
         let values_read_stat = values_read.iter().map(|x| x.is_some()).collect::<Vec<_>>();
@@ -452,7 +460,9 @@ where
 {
     let mut rng = make_deterministic_rng();
     let namespace = generate_test_namespace();
-    let store = D::connect(&config, &namespace).await.unwrap();
+    let store = D::maybe_create_and_connect(&config, &namespace)
+        .await
+        .unwrap();
     let store = store.open_exclusive(&[]).unwrap();
     let key_prefix = vec![42, 54];
     let mut batch = Batch::new();
@@ -471,6 +481,13 @@ where
     let store = D::connect(&config, &namespace).await.unwrap();
     let store = store.open_exclusive(&[]).unwrap();
     let values_read = store.read_multi_values_bytes(&keys).await.unwrap();
+    // Test read_multi_values_bytes_iter
+    let values_from_iter = store
+        .read_multi_values_bytes_iter(keys)
+        .try_collect::<Vec<_>>()
+        .await
+        .expect("Error reading from iterator");
+    assert_eq!(values_read, values_from_iter);
     assert_eq!(values, values_read);
 }
 
