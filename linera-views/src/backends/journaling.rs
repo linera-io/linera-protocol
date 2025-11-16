@@ -131,7 +131,7 @@ where
     /// The size constant do not change
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE;
 
-    type ReadMultiIterator<'a> = JournalingKeyValueStoreReadMultiIterator<S::ReadMultiIterator<'a>> where Self: 'a;
+    type ReadMultiIterator = JournalingKeyValueStoreReadMultiIterator<S::ReadMultiIterator>;
 
     /// The read stuff does not change
     fn max_stream_queries(&self) -> usize {
@@ -161,7 +161,7 @@ where
         self.store.read_multi_values_bytes(keys).await
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
         JournalingKeyValueStoreReadMultiIterator(self.store.read_multi_values_bytes_iter(keys))
     }
 

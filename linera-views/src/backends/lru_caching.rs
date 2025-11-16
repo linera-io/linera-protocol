@@ -230,7 +230,7 @@ where
     // The LRU cache does not change the underlying store's size limits.
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
 
-    type ReadMultiIterator<'a> = LruCachingStoreReadMultiIterator<K, K::ReadMultiIterator<'a>> where Self: 'a;
+    type ReadMultiIterator = LruCachingStoreReadMultiIterator<K, K::ReadMultiIterator>;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -372,7 +372,7 @@ where
         Ok(result)
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
         if let Some(cache) = &self.cache {
             let mut is_cached = Vec::new();
             let mut uncached_keys = Vec::new();

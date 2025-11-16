@@ -139,7 +139,7 @@ impl ReadMultiIterator<IndexedDbStoreError> for IndexedDbStoreReadMultiIterator 
 impl ReadableKeyValueStore for IndexedDbStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 
-    type ReadMultiIterator<'a> = IndexedDbStoreReadMultiIterator where Self: 'a;
+    type ReadMultiIterator = IndexedDbStoreReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -185,7 +185,7 @@ impl ReadableKeyValueStore for IndexedDbStore {
         .await
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
         IndexedDbStoreReadMultiIterator {
             store: self.clone(),
             keys: keys.to_vec(),

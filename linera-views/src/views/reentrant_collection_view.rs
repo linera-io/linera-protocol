@@ -85,18 +85,17 @@ enum LoadInfo<W> {
 }
 
 /// Iterator for try_load_all_entries on ReentrantByteCollectionView.
-pub struct ByteReentrantCollectionViewTryLoadAllEntries<'a, C, W>
+pub struct ByteReentrantCollectionViewTryLoadAllEntries<C, W>
 where
     C: Context,
-    C::Store: 'a,
 {
     context: C,
     load_infos: std::vec::IntoIter<LoadInfo<W>>,
-    store_iter: <C::Store as crate::store::ReadableKeyValueStore>::ReadMultiIterator<'a>,
+    store_iter: <C::Store as crate::store::ReadableKeyValueStore>::ReadMultiIterator,
     current_loaded_values: Vec<Option<Vec<u8>>>,
 }
 
-impl<'a, C, W> ByteReentrantCollectionViewTryLoadAllEntries<'a, C, W>
+impl<C, W> ByteReentrantCollectionViewTryLoadAllEntries<C, W>
 where
     C: Context,
     W: View<Context = C>,
@@ -104,7 +103,7 @@ where
     /// Returns the next entry, or None if iteration is complete.
     pub async fn next<E>(&mut self) -> Result<Option<(Vec<u8>, ReadGuardedView<W>)>, ViewError>
     where
-        <C::Store as crate::store::ReadableKeyValueStore>::ReadMultiIterator<'a>:
+        <C::Store as crate::store::ReadableKeyValueStore>::ReadMultiIterator:
             crate::store::ReadMultiIterator<E>,
         E: crate::store::KeyValueStoreError,
         ViewError: From<E>,
@@ -140,16 +139,15 @@ where
 }
 
 /// Iterator for try_load_all_entries on ReentrantCollectionView.
-pub struct ReentrantCollectionViewTryLoadAllEntries<'a, C, I, W>
+pub struct ReentrantCollectionViewTryLoadAllEntries<C, I, W>
 where
     C: Context,
-    C::Store: 'a,
 {
-    inner: ByteReentrantCollectionViewTryLoadAllEntries<'a, C, W>,
+    inner: ByteReentrantCollectionViewTryLoadAllEntries<C, W>,
     _phantom: PhantomData<I>,
 }
 
-impl<'a, C, I, W> ReentrantCollectionViewTryLoadAllEntries<'a, C, I, W>
+impl<C, I, W> ReentrantCollectionViewTryLoadAllEntries<C, I, W>
 where
     C: Context,
     W: View<Context = C>,
@@ -158,7 +156,7 @@ where
     /// Returns the next entry, or None if iteration is complete.
     pub async fn next<E>(&mut self) -> Result<Option<(I, ReadGuardedView<W>)>, ViewError>
     where
-        <C::Store as crate::store::ReadableKeyValueStore>::ReadMultiIterator<'a>:
+        <C::Store as crate::store::ReadableKeyValueStore>::ReadMultiIterator:
             crate::store::ReadMultiIterator<E>,
         E: crate::store::KeyValueStoreError,
         ViewError: From<E>,
@@ -174,16 +172,15 @@ where
 }
 
 /// Iterator for try_load_all_entries on ReentrantCustomCollectionView.
-pub struct ReentrantCustomCollectionViewTryLoadAllEntries<'a, C, I, W>
+pub struct ReentrantCustomCollectionViewTryLoadAllEntries<C, I, W>
 where
     C: Context,
-    C::Store: 'a,
 {
-    inner: ByteReentrantCollectionViewTryLoadAllEntries<'a, C, W>,
+    inner: ByteReentrantCollectionViewTryLoadAllEntries<C, W>,
     _phantom: PhantomData<I>,
 }
 
-impl<'a, C, I, W> ReentrantCustomCollectionViewTryLoadAllEntries<'a, C, I, W>
+impl<C, I, W> ReentrantCustomCollectionViewTryLoadAllEntries<C, I, W>
 where
     C: Context,
     W: View<Context = C>,
@@ -192,7 +189,7 @@ where
     /// Returns the next entry, or None if iteration is complete.
     pub async fn next<E>(&mut self) -> Result<Option<(I, ReadGuardedView<W>)>, ViewError>
     where
-        <C::Store as crate::store::ReadableKeyValueStore>::ReadMultiIterator<'a>:
+        <C::Store as crate::store::ReadableKeyValueStore>::ReadMultiIterator:
             crate::store::ReadMultiIterator<E>,
         E: crate::store::KeyValueStoreError,
         ViewError: From<E>,
@@ -980,7 +977,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
     /// ```
     pub async fn try_load_all_entries_iter(
         &self,
-    ) -> Result<ByteReentrantCollectionViewTryLoadAllEntries<'_, W::Context, W>, ViewError> {
+    ) -> Result<ByteReentrantCollectionViewTryLoadAllEntries<W::Context, W>, ViewError> {
         // First determine the short_keys
         let short_keys = self.keys().await?;
 
@@ -1768,7 +1765,7 @@ where
     /// ```
     pub async fn try_load_all_entries_iter(
         &self,
-    ) -> Result<ReentrantCollectionViewTryLoadAllEntries<'_, W::Context, I, W>, ViewError> {
+    ) -> Result<ReentrantCollectionViewTryLoadAllEntries<W::Context, I, W>, ViewError> {
         let inner = self.collection.try_load_all_entries_iter().await?;
         Ok(ReentrantCollectionViewTryLoadAllEntries {
             inner,
@@ -2359,8 +2356,7 @@ where
     /// ```
     pub async fn try_load_all_entries_iter(
         &self,
-    ) -> Result<ReentrantCustomCollectionViewTryLoadAllEntries<'_, W::Context, I, W>, ViewError>
-    {
+    ) -> Result<ReentrantCustomCollectionViewTryLoadAllEntries<W::Context, I, W>, ViewError> {
         let inner = self.collection.try_load_all_entries_iter().await?;
         Ok(ReentrantCustomCollectionViewTryLoadAllEntries {
             inner,

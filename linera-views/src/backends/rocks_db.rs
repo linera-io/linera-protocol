@@ -480,7 +480,7 @@ impl ReadMultiIterator<RocksDbStoreInternalError> for RocksDbStoreReadMultiItera
 impl ReadableKeyValueStore for RocksDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
 
-    type ReadMultiIterator<'a> = RocksDbStoreReadMultiIterator where Self: 'a;
+    type ReadMultiIterator = RocksDbStoreReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -546,7 +546,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
             .await
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
         RocksDbStoreReadMultiIterator {
             keys: keys.to_vec(),
             executor: self.executor.clone(),

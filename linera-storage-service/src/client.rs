@@ -140,7 +140,7 @@ impl ReadMultiIterator<StorageServiceStoreError> for StorageServiceStoreInternal
 impl ReadableKeyValueStore for StorageServiceStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
 
-    type ReadMultiIterator<'a> = StorageServiceStoreInternalReadMultiIterator where Self: 'a;
+    type ReadMultiIterator = StorageServiceStoreInternalReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -257,7 +257,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         }
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
         StorageServiceStoreInternalReadMultiIterator {
             store: self.clone(),
             keys: keys.to_vec(),

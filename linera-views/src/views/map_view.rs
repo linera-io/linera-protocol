@@ -440,7 +440,7 @@ where
     pub fn multi_get_iter(
         &self,
         short_keys: Vec<Vec<u8>>,
-    ) -> MapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'_>> {
+    ) -> MapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator> {
         let size = short_keys.len();
         let mut vector_query = Vec::new();
         let mut cached = Vec::with_capacity(size);
@@ -1326,10 +1326,7 @@ where
     pub fn multi_get_iter<'a, Q>(
         &self,
         indices: impl IntoIterator<Item = &'a Q>,
-    ) -> Result<
-        MapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'_>>,
-        ViewError,
-    >
+    ) -> Result<MapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + 'a,
@@ -1899,10 +1896,7 @@ where
     pub fn multi_get_iter<'a, Q>(
         &self,
         indices: impl IntoIterator<Item = &'a Q>,
-    ) -> Result<
-        MapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'_>>,
-        ViewError,
-    >
+    ) -> Result<MapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + 'a,

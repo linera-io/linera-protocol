@@ -142,7 +142,7 @@ impl ReadMultiIterator<MemoryStoreError> for MemoryStoreReadMultiIterator {
 impl ReadableKeyValueStore for MemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 
-    type ReadMultiIterator<'a> = MemoryStoreReadMultiIterator where Self: 'a;
+    type ReadMultiIterator = MemoryStoreReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -194,7 +194,7 @@ impl ReadableKeyValueStore for MemoryStore {
         Ok(result)
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
         let map = self
             .map
             .read()

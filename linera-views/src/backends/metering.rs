@@ -324,7 +324,7 @@ where
 {
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE;
 
-    type ReadMultiIterator<'a> = MeteredStoreReadMultiIterator<S::ReadMultiIterator<'a>> where Self: 'a;
+    type ReadMultiIterator = MeteredStoreReadMultiIterator<S::ReadMultiIterator>;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -399,7 +399,7 @@ where
         self.store.read_multi_values_bytes(keys).await
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
         // Record metrics for the iterator creation
         self.counter
             .read_multi_values_num_entries

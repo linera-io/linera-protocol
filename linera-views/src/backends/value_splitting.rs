@@ -166,7 +166,7 @@ where
 {
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE - 4;
 
-    type ReadMultiIterator<'a> = ValueSplittingStoreReadMultiIterator<S, S::ReadMultiIterator<'a>> where Self: 'a;
+    type ReadMultiIterator = ValueSplittingStoreReadMultiIterator<S, S::ReadMultiIterator>;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -278,7 +278,7 @@ where
         Ok(big_values)
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
         // Create big_keys (keys with [0,0,0,0] suffix) for the first segments
         let big_keys: Vec<Vec<u8>> = keys
             .iter()
@@ -542,7 +542,9 @@ where
 impl ReadableKeyValueStore for LimitedTestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 
-    type ReadMultiIterator<'a> = LimitedTestMemoryStoreReadMultiIterator<<MemoryStore as ReadableKeyValueStore>::ReadMultiIterator<'a>> where Self: 'a;
+    type ReadMultiIterator = LimitedTestMemoryStoreReadMultiIterator<
+        <MemoryStore as ReadableKeyValueStore>::ReadMultiIterator,
+    >;
 
     fn max_stream_queries(&self) -> usize {
         self.inner.max_stream_queries()
@@ -571,7 +573,7 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
         self.inner.read_multi_values_bytes(keys).await
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
         LimitedTestMemoryStoreReadMultiIterator {
             inner: self.inner.read_multi_values_bytes_iter(keys),
         }

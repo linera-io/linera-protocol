@@ -1282,7 +1282,7 @@ impl KeyValueStoreError for ViewContainerError {
 impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
     const MAX_KEY_SIZE: usize = <C::Store as ReadableKeyValueStore>::MAX_KEY_SIZE;
 
-    type ReadMultiIterator<'a> = ViewContainerReadMultiIterator<C> where Self: 'a;
+    type ReadMultiIterator = ViewContainerReadMultiIterator<C>;
 
     fn max_stream_queries(&self) -> usize {
         1
@@ -1315,7 +1315,7 @@ impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
         Ok(view.multi_get(keys).await?)
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
         ViewContainerReadMultiIterator {
             store: self.clone(),
             keys,
