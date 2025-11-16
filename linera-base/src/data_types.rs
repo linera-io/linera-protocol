@@ -463,7 +463,7 @@ macro_rules! impl_wrapped_number {
                 Ok(())
             }
 
-            /// Saturating multiplication.
+            /// Saturating division.
             pub fn saturating_div(&self, other: $wrapped) -> Self {
                 Self(self.0.checked_div(other).unwrap_or($wrapped::MAX))
             }
