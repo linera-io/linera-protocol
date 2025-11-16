@@ -125,7 +125,7 @@ impl ReadMultiIterator<IndexedDbStoreError> for IndexedDbStoreReadMultiIterator 
         match &mut self.current_values {
             None => {
                 let keys = std::mem::take(&mut self.keys);
-                let values = self.store.read_multi_values_bytes(keys).await?;
+                let values = self.store.read_multi_values_bytes(&keys).await?;
                 let mut iter = values.into_iter();
                 let first = iter.next();
                 self.current_values = Some(iter);

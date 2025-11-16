@@ -961,6 +961,23 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
     }
 
     /// Returns an iterator for loading all entries.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
+    ///     ReentrantByteCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.try_load_entry_mut(&[0, 1]).await.unwrap();
+    /// }
+    /// let mut iter = view.try_load_all_entries_iter().await.unwrap();
+    /// assert!(iter.next().await.unwrap().is_some());
+    /// assert!(iter.next().await.unwrap().is_none());
+    /// # })
+    /// ```
     pub async fn try_load_all_entries_iter(
         &self,
     ) -> Result<ByteReentrantCollectionViewTryLoadAllEntries<'_, W::Context, W>, ViewError> {
@@ -1732,6 +1749,23 @@ where
     }
 
     /// Returns an iterator over all the entries in the collection.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
+    ///     ReentrantCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    /// }
+    /// let mut iter = view.try_load_all_entries_iter().await.unwrap();
+    /// assert!(iter.next().await.unwrap().is_some());
+    /// assert!(iter.next().await.unwrap().is_none());
+    /// # })
+    /// ```
     pub async fn try_load_all_entries_iter(
         &self,
     ) -> Result<ReentrantCollectionViewTryLoadAllEntries<'_, W::Context, I, W>, ViewError> {
@@ -2306,6 +2340,23 @@ where
     }
 
     /// Returns an iterator over all the entries in the collection.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
+    ///     ReentrantCustomCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    /// }
+    /// let mut iter = view.try_load_all_entries_iter().await.unwrap();
+    /// assert!(iter.next().await.unwrap().is_some());
+    /// assert!(iter.next().await.unwrap().is_none());
+    /// # })
+    /// ```
     pub async fn try_load_all_entries_iter(
         &self,
     ) -> Result<ReentrantCustomCollectionViewTryLoadAllEntries<'_, W::Context, I, W>, ViewError>

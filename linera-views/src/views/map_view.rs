@@ -431,9 +431,10 @@ where
     /// let mut map = ByteMapView::load(context).await.unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
     /// let mut iter = map.multi_get_iter(vec![vec![0, 1], vec![0, 2]]);
-    /// let (key1, value1) = iter.next().await.unwrap();
-    /// assert_eq!(key1, vec![0, 1]);
+    /// let value1 = iter.next().await.unwrap().unwrap();
     /// assert_eq!(value1, Some(String::from("Hello")));
+    /// assert!(iter.next().await.unwrap().unwrap().is_none());
+    /// assert!(iter.next().await.unwrap().is_none());
     /// # })
     /// ```
     pub fn multi_get_iter(
