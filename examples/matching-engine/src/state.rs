@@ -140,35 +140,13 @@ impl MatchingEngineState {
         }
     }
 
-    /// Gets the current amount of an order from the order book.
-    /// Returns None if the order doesn't exist or has been fully filled/cancelled.
-    pub async fn get_order_quantity(&mut self, order_id: &OrderId) -> Option<Amount> {
-        let key_book = self.orders.get(order_id).await.ok()??;
-
-        // Find the order in the appropriate price level
-        match key_book.nature {
-            OrderNature::Bid => {
-                let view = self.bid_level(&key_book.price.to_bid()).await;
-                let mut iter = view.queue.iter_mut().await.expect("Failed to iterate");
-                iter.find(|order| order.order_id == *order_id)
-                    .map(|order| order.quantity)
-            }
-            OrderNature::Ask => {
-                let view = self.ask_level(&key_book.price.to_ask()).await;
-                let mut iter = view.queue.iter_mut().await.expect("Failed to iterate");
-                iter.find(|order| order.order_id == *order_id)
-                    .map(|order| order.quantity)
-            }
-        }
-    }
-
     /// Modifies the order from the order_id.
     /// This means that some transfers have to be done and the size depends
     /// whether ask or bid.
     pub async fn modify_order(
         &mut self,
         order_id: OrderId,
-        cancel_quantity: ModifyQuantity,
+        new_quantity: Amount,
     ) -> Option<Transfer> {
         let key_book = self
             .orders
@@ -179,7 +157,7 @@ impl MatchingEngineState {
             OrderNature::Bid => {
                 let view = self.bid_level(&key_book.price.to_bid()).await;
                 let (cancel_quantity, remove_order_id) =
-                    view.modify_order_level(order_id, cancel_quantity).await?;
+                    view.modify_order_level(order_id, new_quantity).await?;
                 if remove_order_id {
                     self.remove_order_id((key_book.account.owner, order_id))
                         .await;
@@ -196,7 +174,7 @@ impl MatchingEngineState {
             OrderNature::Ask => {
                 let view = self.ask_level(&key_book.price.to_ask()).await;
                 let (cancel_quantity, remove_order_id) =
-                    view.modify_order_level(order_id, cancel_quantity).await?;
+                    view.modify_order_level(order_id, new_quantity).await?;
                 if remove_order_id {
                     self.remove_order_id((key_book.account.owner, order_id))
                         .await;
@@ -427,15 +405,6 @@ pub struct Transfer {
     pub token_idx: u32,
 }
 
-/// An order can be cancelled which removes it totally or
-/// modified which is a partial cancellation. The size of the
-/// order can never increase.
-#[derive(Clone, Debug)]
-pub enum ModifyQuantity {
-    All,
-    Partial(Amount),
-}
-
 impl LevelView {
     fn parameters(&self) -> Parameters {
         *self.context().extra()
@@ -610,7 +579,7 @@ impl LevelView {
     pub async fn modify_order_level(
         &mut self,
         order_id: OrderId,
-        reduce_quantity: ModifyQuantity,
+        new_quantity: Amount,
     ) -> Option<(Amount, bool)> {
         let mut iter = self
             .queue
@@ -618,16 +587,12 @@ impl LevelView {
             .await
             .expect("Failed to load iterator over level queue");
         let state_order = iter.find(|order| order.order_id == order_id)?;
-        let new_quantity = match reduce_quantity {
-            ModifyQuantity::All => Amount::ZERO,
-            ModifyQuantity::Partial(reduce_quantity) => state_order
-                .quantity
-                .try_sub(reduce_quantity)
-                .expect("Attempt to cancel a larger quantity than available"),
-        };
-        let corr_reduce_quantity = state_order.quantity.try_sub(new_quantity).unwrap();
+        let cancel_quantity = state_order
+            .quantity
+            .try_sub(new_quantity)
+            .expect("Attempt to increase quantity");
         state_order.quantity = new_quantity;
         self.remove_zero_orders_from_level().await;
-        Some((corr_reduce_quantity, new_quantity == Amount::ZERO))
+        Some((cancel_quantity, new_quantity == Amount::ZERO))
     }
 }

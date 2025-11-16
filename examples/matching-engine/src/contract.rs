@@ -14,7 +14,7 @@ use linera_sdk::{
 use matching_engine::{
     MatchingEngineAbi, Message, Operation, Order, OrderNature, Parameters, PendingOrderInfo, Price,
 };
-use state::{MatchingEngineState, ModifyQuantity, Transfer};
+use state::{MatchingEngineState, Transfer};
 
 pub struct MatchingEngineContract {
     state: MatchingEngineState,
@@ -77,7 +77,7 @@ impl Contract for MatchingEngineContract {
                     .await
                     .expect("Failed to read existing order IDs");
                 for order_id in order_ids {
-                    match self.state.modify_order(order_id, ModifyQuantity::All).await {
+                    match self.state.modify_order(order_id, Amount::ZERO).await {
                         Some(transfer) => self.send_to(transfer),
                         // Orders with amount zero may have been cleared in an earlier iteration.
                         None => continue,
@@ -138,23 +138,15 @@ impl Contract for MatchingEngineContract {
                     .expect("Failed to load pending orders")
                     .expect("Account should have pending orders");
 
-                // Update the pending order
-                if let Some(order) = pending_orders.get_mut(&order_id) {
-                    order.quantity = new_quantity;
+                if new_quantity == Amount::ZERO {
+                    // Remove the pending order
+                    pending_orders.remove(&order_id);
+                } else {
+                    // Update the pending order
+                    if let Some(order) = pending_orders.get_mut(&order_id) {
+                        order.quantity = new_quantity;
+                    }
                 }
-            }
-            Message::OrderRemoved { owner, order_id } => {
-                // This message is received on the sender chain from the matching engine
-                let pending_orders = self
-                    .state
-                    .pending_orders
-                    .get_mut(&owner)
-                    .await
-                    .expect("Failed to load pending orders")
-                    .expect("Account should have pending orders");
-
-                // Remove the pending order
-                pending_orders.remove(&order_id);
             }
         }
     }
@@ -239,9 +231,10 @@ impl MatchingEngineContract {
                 let matching_engine_chain = self.runtime.chain_id();
                 for (filled_chain_id, filled_owner, filled_order_id) in filled_orders {
                     if filled_chain_id != matching_engine_chain {
-                        let removal_message = Message::OrderRemoved {
+                        let removal_message = Message::OrderUpdated {
                             owner: filled_owner,
                             order_id: filled_order_id,
+                            new_quantity: Amount::ZERO,
                         };
                         self.runtime
                             .prepare_message(removal_message)
@@ -278,47 +271,10 @@ impl MatchingEngineContract {
                     }
                 }
             }
-            Order::Cancel { owner, order_id } => {
-                self.state.check_order_id(&order_id, &owner).await;
-                let key_book = self
-                    .state
-                    .orders
-                    .get(&order_id)
-                    .await
-                    .expect("Failed to load order")
-                    .expect("Order should exist");
-                let sender_chain_id = key_book.account.chain_id;
-
-                let transfer = self
-                    .state
-                    .modify_order(order_id, ModifyQuantity::All)
-                    .await
-                    .expect("Order is not present therefore cannot be cancelled");
-                self.send_to(transfer);
-
-                // Send removal notification to the sender chain (if different from matching engine chain)
-                if sender_chain_id != self.runtime.chain_id() {
-                    let removal_message = Message::OrderRemoved { owner, order_id };
-                    self.runtime
-                        .prepare_message(removal_message)
-                        .with_authentication()
-                        .send_to(sender_chain_id);
-                } else {
-                    let pending_orders = self
-                        .state
-                        .pending_orders
-                        .get_mut(&owner)
-                        .await
-                        .expect("Failed to load pending orders")
-                        .expect("Account should have pending orders");
-                    // Remove the pending order
-                    pending_orders.remove(&order_id);
-                }
-            }
             Order::Modify {
                 owner,
                 order_id,
-                reduce_quantity,
+                new_quantity,
             } => {
                 self.state.check_order_id(&order_id, &owner).await;
                 let key_book = self
@@ -332,56 +288,34 @@ impl MatchingEngineContract {
 
                 let transfer = self
                     .state
-                    .modify_order(order_id, ModifyQuantity::Partial(reduce_quantity))
+                    .modify_order(order_id, new_quantity)
                     .await
-                    .expect("Order is not present therefore cannot be cancelled");
+                    .expect("Failed to modify order");
                 self.send_to(transfer);
 
-                // Get the remaining quantity after modification
-                if let Some(new_quantity) = self.state.get_order_quantity(&order_id).await {
-                    // Order still exists with reduced amount
-                    if sender_chain_id != self.runtime.chain_id() {
-                        // Send update notification to the sender chain (if different from matching engine chain)
-                        let update_message = Message::OrderUpdated {
-                            owner,
-                            order_id,
-                            new_quantity,
-                        };
-                        self.runtime
-                            .prepare_message(update_message)
-                            .with_authentication()
-                            .send_to(sender_chain_id);
-                    } else {
-                        let pending_orders = self
-                            .state
-                            .pending_orders
-                            .get_mut(&owner)
-                            .await
-                            .expect("Failed to load pending orders")
-                            .expect("Account should have pending orders");
-                        // Update the pending order
-                        if let Some(order) = pending_orders.get_mut(&order_id) {
-                            order.quantity = new_quantity;
-                        }
-                    }
+                // Order still exists with reduced amount
+                if sender_chain_id != self.runtime.chain_id() {
+                    // Send update notification to the sender chain (if different from matching engine chain)
+                    let update_message = Message::OrderUpdated {
+                        owner,
+                        order_id,
+                        new_quantity,
+                    };
+                    self.runtime
+                        .prepare_message(update_message)
+                        .with_authentication()
+                        .send_to(sender_chain_id);
                 } else {
-                    // Order was fully cancelled
-                    if sender_chain_id != self.runtime.chain_id() {
-                        let removal_message = Message::OrderRemoved { owner, order_id };
-                        self.runtime
-                            .prepare_message(removal_message)
-                            .with_authentication()
-                            .send_to(sender_chain_id);
-                    } else {
-                        let pending_orders = self
-                            .state
-                            .pending_orders
-                            .get_mut(&owner)
-                            .await
-                            .expect("Failed to load pending orders")
-                            .expect("Account should have pending orders");
-                        // Remove the pending order
-                        pending_orders.remove(&order_id);
+                    let pending_orders = self
+                        .state
+                        .pending_orders
+                        .get_mut(&owner)
+                        .await
+                        .expect("Failed to load pending orders")
+                        .expect("Account should have pending orders");
+                    // Update the pending order
+                    if let Some(order) = pending_orders.get_mut(&order_id) {
+                        order.quantity = new_quantity;
                     }
                 }
             }
