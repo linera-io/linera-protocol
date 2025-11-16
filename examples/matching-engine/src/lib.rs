@@ -136,23 +136,19 @@ scalar!(OrderNature);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Order {
-    /// Insertion of an order
+    /// Insert an order
     Insert {
         owner: AccountOwner,
         quantity: Amount,
         nature: OrderNature,
         price: Price,
     },
-    /// Cancelling of an order
-    Cancel {
-        owner: AccountOwner,
-        order_id: OrderId,
-    },
-    /// Modifying order (only decreasing is allowed)
+    /// Modify an order. The quantity can only be decreased. If nul, the order is
+    /// canceled.
     Modify {
         owner: AccountOwner,
         order_id: OrderId,
-        reduce_quantity: Amount,
+        new_quantity: Amount,
     },
 }
 
@@ -163,7 +159,6 @@ impl Order {
     pub fn owner(&self) -> AccountOwner {
         match self {
             Order::Insert { owner, .. } => *owner,
-            Order::Cancel { owner, .. } => *owner,
             Order::Modify { owner, .. } => *owner,
         }
     }
@@ -177,10 +172,7 @@ impl Order {
         // Get the quantity/amount to check based on the order type
         let quantity = match self {
             Order::Insert { quantity, .. } => *quantity,
-            Order::Modify {
-                reduce_quantity, ..
-            } => *reduce_quantity,
-            Order::Cancel { .. } => return Ok(()), // No quantity to check
+            Order::Modify { new_quantity, .. } => *new_quantity,
         };
 
         // Calculate the minimum precision unit allowed
@@ -284,16 +276,11 @@ pub enum Message {
         order_id: OrderId,
         order_info: PendingOrderInfo,
     },
-    /// Notification sent from the matching engine when an order is modified or cancelled.
+    /// Notification sent from the matching engine when an order is modified, filled, or cancelled.
     OrderUpdated {
         owner: AccountOwner,
         order_id: OrderId,
         new_quantity: Amount,
-    },
-    /// Notification sent from the matching engine when an order is fully cancelled or filled.
-    OrderRemoved {
-        owner: AccountOwner,
-        order_id: OrderId,
     },
 }
 
@@ -333,19 +320,23 @@ mod tests {
         let modify_valid = Order::Modify {
             owner,
             order_id: 1,
-            reduce_quantity: Amount::from_attos(200),
+            new_quantity: Amount::from_attos(200),
         };
         assert!(modify_valid.check_precision(price_decimals).is_ok());
 
         let modify_invalid = Order::Modify {
             owner,
             order_id: 1,
-            reduce_quantity: Amount::from_attos(199),
+            new_quantity: Amount::from_attos(199),
         };
         assert!(modify_invalid.check_precision(price_decimals).is_err());
 
-        // Test Cancel order (should always succeed)
-        let cancel_order = Order::Cancel { owner, order_id: 1 };
+        // Test order cancellation.
+        let cancel_order = Order::Modify {
+            owner,
+            order_id: 1,
+            new_quantity: Amount::ZERO,
+        };
         assert!(cancel_order.check_precision(price_decimals).is_ok());
 
         // Test with price_decimals = 0 (any quantity should be valid)
