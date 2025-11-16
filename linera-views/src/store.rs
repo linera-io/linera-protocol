@@ -38,11 +38,26 @@ pub trait WithError {
     type Error: KeyValueStoreError;
 }
 
+/// Trait for async iterator over multiple values.
+#[cfg_attr(not(web), trait_variant::make(Send))]
+pub trait ReadMultiIterator<E: KeyValueStoreError> {
+    /// Returns the next value from the iterator.
+    /// Returns `Ok(None)` when iteration is complete.
+    /// Returns `Ok(Some(None))` when a key doesn't exist.
+    /// Returns `Ok(Some(Some(value)))` when a key exists with a value.
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, E>;
+}
+
 /// Asynchronous read key-value operations.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait ReadableKeyValueStore: WithError {
     /// The maximal size of keys that can be stored.
     const MAX_KEY_SIZE: usize;
+
+    /// The type of the async iterator for reading multiple values.
+    type ReadMultiIterator<'a>: ReadMultiIterator<Self::Error>
+    where
+        Self: 'a;
 
     /// Retrieve the number of stream queries.
     fn max_stream_queries(&self) -> usize;
@@ -64,6 +79,9 @@ pub trait ReadableKeyValueStore: WithError {
         &self,
         keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
+
+    /// Returns an iterator for reading multiple values using the provided `keys`.
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_>;
 
     /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
@@ -263,6 +281,9 @@ pub mod inactive_store {
     /// A store which does not actually store anything - used for caching views.
     pub struct InactiveStore;
 
+    /// An iterator for the InactiveStore that always panics.
+    pub struct InactiveStoreReadMultiIterator;
+
     /// An error struct for the inactive store.
     #[derive(Clone, Copy, Debug)]
     pub struct InactiveStoreError;
@@ -289,8 +310,16 @@ pub mod inactive_store {
         type Error = InactiveStoreError;
     }
 
+    impl ReadMultiIterator<InactiveStoreError> for InactiveStoreReadMultiIterator {
+        async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, InactiveStoreError> {
+            panic!("attempt to iterate over an inactive store!")
+        }
+    }
+
     impl ReadableKeyValueStore for InactiveStore {
         const MAX_KEY_SIZE: usize = 0;
+
+        type ReadMultiIterator<'a> = InactiveStoreReadMultiIterator where Self: 'a;
 
         fn max_stream_queries(&self) -> usize {
             0
@@ -317,6 +346,10 @@ pub mod inactive_store {
             _keys: &[Vec<u8>],
         ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
             panic!("attempt to read from an inactive store!")
+        }
+
+        fn read_multi_values_bytes_iter(&self, _keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+            InactiveStoreReadMultiIterator
         }
 
         async fn find_keys_by_prefix(

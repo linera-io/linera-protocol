@@ -23,7 +23,7 @@ use crate::{
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
     historical_hash_wrapper::HistoricallyHashableView,
-    store::ReadableKeyValueStore as _,
+    store::{ReadMultiIterator as _, ReadableKeyValueStore as _},
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -71,6 +71,139 @@ impl<T> std::ops::Deref for WriteGuardedView<T> {
 impl<T> std::ops::DerefMut for WriteGuardedView<T> {
     fn deref_mut(&mut self) -> &mut T {
         self.0.deref_mut()
+    }
+}
+
+enum LoadInfo<W> {
+    Loaded {
+        short_key: Vec<u8>,
+        view: Arc<RwLock<W>>,
+    },
+    NotLoaded {
+        short_key: Vec<u8>,
+    },
+}
+
+/// Iterator for try_load_all_entries on ReentrantByteCollectionView.
+pub struct ByteReentrantCollectionViewTryLoadAllEntries<'a, C, W>
+where
+    C: Context,
+    C::Store: 'a,
+{
+    context: C,
+    load_infos: std::vec::IntoIter<LoadInfo<W>>,
+    store_iter: <C::Store as crate::store::ReadableKeyValueStore>::ReadMultiIterator<'a>,
+    current_loaded_values: Vec<Option<Vec<u8>>>,
+}
+
+impl<'a, C, W> ByteReentrantCollectionViewTryLoadAllEntries<'a, C, W>
+where
+    C: Context,
+    W: View<Context = C>,
+{
+    /// Returns the next entry, or None if iteration is complete.
+    pub async fn next<E>(&mut self) -> Result<Option<(Vec<u8>, ReadGuardedView<W>)>, ViewError>
+    where
+        <C::Store as crate::store::ReadableKeyValueStore>::ReadMultiIterator<'a>:
+            crate::store::ReadMultiIterator<E>,
+        E: crate::store::KeyValueStoreError,
+        ViewError: From<E>,
+    {
+        let Some(load_info) = self.load_infos.next() else {
+            return Ok(None);
+        };
+
+        let (short_key, view) = match load_info {
+            LoadInfo::Loaded { short_key, view } => (short_key, view),
+            LoadInfo::NotLoaded { short_key } => {
+                self.current_loaded_values.clear();
+                for _ in 0..W::NUM_INIT_KEYS {
+                    let value = self.store_iter.next().await?.unwrap();
+                    self.current_loaded_values.push(value);
+                }
+                let key = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                let context = self.context.clone_with_base_key(key);
+                let view = W::post_load(context, &self.current_loaded_values)?;
+                let wrapped_view = Arc::new(RwLock::new(view));
+                (short_key, wrapped_view)
+            }
+        };
+        let guard = ReadGuardedView(
+            view.try_read_arc()
+                .ok_or_else(|| ViewError::TryLockError(short_key.clone()))?,
+        );
+        Ok(Some((short_key, guard)))
+    }
+}
+
+/// Iterator for try_load_all_entries on ReentrantCollectionView.
+pub struct ReentrantCollectionViewTryLoadAllEntries<'a, C, I, W>
+where
+    C: Context,
+    C::Store: 'a,
+{
+    inner: ByteReentrantCollectionViewTryLoadAllEntries<'a, C, W>,
+    _phantom: PhantomData<I>,
+}
+
+impl<'a, C, I, W> ReentrantCollectionViewTryLoadAllEntries<'a, C, I, W>
+where
+    C: Context,
+    W: View<Context = C>,
+    I: Serialize + DeserializeOwned,
+{
+    /// Returns the next entry, or None if iteration is complete.
+    pub async fn next<E>(&mut self) -> Result<Option<(I, ReadGuardedView<W>)>, ViewError>
+    where
+        <C::Store as crate::store::ReadableKeyValueStore>::ReadMultiIterator<'a>:
+            crate::store::ReadMultiIterator<E>,
+        E: crate::store::KeyValueStoreError,
+        ViewError: From<E>,
+    {
+        match self.inner.next().await? {
+            None => Ok(None),
+            Some((short_key, view)) => {
+                let index = BaseKey::deserialize_value(&short_key)?;
+                Ok(Some((index, view)))
+            }
+        }
+    }
+}
+
+/// Iterator for try_load_all_entries on ReentrantCustomCollectionView.
+pub struct ReentrantCustomCollectionViewTryLoadAllEntries<'a, C, I, W>
+where
+    C: Context,
+    C::Store: 'a,
+{
+    inner: ByteReentrantCollectionViewTryLoadAllEntries<'a, C, W>,
+    _phantom: PhantomData<I>,
+}
+
+impl<'a, C, I, W> ReentrantCustomCollectionViewTryLoadAllEntries<'a, C, I, W>
+where
+    C: Context,
+    W: View<Context = C>,
+    I: CustomSerialize,
+{
+    /// Returns the next entry, or None if iteration is complete.
+    pub async fn next<E>(&mut self) -> Result<Option<(I, ReadGuardedView<W>)>, ViewError>
+    where
+        <C::Store as crate::store::ReadableKeyValueStore>::ReadMultiIterator<'a>:
+            crate::store::ReadMultiIterator<E>,
+        E: crate::store::KeyValueStoreError,
+        ViewError: From<E>,
+    {
+        match self.inner.next().await? {
+            None => Ok(None),
+            Some((short_key, view)) => {
+                let index = I::from_custom_bytes(&short_key)?;
+                Ok(Some((index, view)))
+            }
+        }
     }
 }
 
@@ -827,6 +960,45 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             .collect()
     }
 
+    /// Returns an iterator for loading all entries.
+    pub async fn try_load_all_entries_iter(
+        &self,
+    ) -> Result<ByteReentrantCollectionViewTryLoadAllEntries<'_, W::Context, W>, ViewError> {
+        // First determine the short_keys
+        let short_keys = self.keys().await?;
+
+        // Extract updates (only Set variants) into a map
+        let mut load_infos = Vec::new();
+        let mut keys = Vec::new();
+        for short_key in short_keys {
+            if let Some(Update::Set(view)) = self.updates.get(&short_key) {
+                load_infos.push(LoadInfo::Loaded {
+                    short_key,
+                    view: view.clone(),
+                });
+            } else if !self.delete_storage_first {
+                let key = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                let context = self.context.clone_with_base_key(key);
+                keys.extend(W::pre_load(&context)?);
+                load_infos.push(LoadInfo::NotLoaded { short_key });
+            }
+        }
+
+        // Third, create the iter from the "keys"
+        let store_iter = self.context.store().read_multi_values_bytes_iter(keys);
+
+        // Create the iterator struct with context
+        Ok(ByteReentrantCollectionViewTryLoadAllEntries {
+            context: self.context.clone(),
+            load_infos: load_infos.into_iter(),
+            store_iter,
+            current_loaded_values: Vec::with_capacity(W::NUM_INIT_KEYS),
+        })
+    }
+
     /// Loads all the entries for writing at once.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1558,6 +1730,17 @@ where
             })
             .collect()
     }
+
+    /// Returns an iterator over all the entries in the collection.
+    pub async fn try_load_all_entries_iter(
+        &self,
+    ) -> Result<ReentrantCollectionViewTryLoadAllEntries<'_, W::Context, I, W>, ViewError> {
+        let inner = self.collection.try_load_all_entries_iter().await?;
+        Ok(ReentrantCollectionViewTryLoadAllEntries {
+            inner,
+            _phantom: PhantomData,
+        })
+    }
 }
 
 impl<I, W> ReentrantCollectionView<W::Context, I, W>
@@ -2120,6 +2303,18 @@ where
                 Ok((index, view))
             })
             .collect()
+    }
+
+    /// Returns an iterator over all the entries in the collection.
+    pub async fn try_load_all_entries_iter(
+        &self,
+    ) -> Result<ReentrantCustomCollectionViewTryLoadAllEntries<'_, W::Context, I, W>, ViewError>
+    {
+        let inner = self.collection.try_load_all_entries_iter().await?;
+        Ok(ReentrantCustomCollectionViewTryLoadAllEntries {
+            inner,
+            _phantom: PhantomData,
+        })
     }
 }
 

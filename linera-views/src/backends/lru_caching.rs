@@ -14,7 +14,10 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::{Batch, WriteOperation},
     lru_prefix_cache::{LruPrefixCache, StorageCacheConfig},
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueDatabase, KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
+    },
 };
 
 #[cfg(with_metrics)]
@@ -146,12 +149,88 @@ where
     type Error = S::Error;
 }
 
+/// Iterator for reading multiple values from LruCachingStore when there is a cache.
+pub struct LruCachingStoreReadMultiIteratorInner<K, I> {
+    inner: I,
+    store: K,
+    cache: Arc<Mutex<LruPrefixCache>>,
+    is_cached: Vec<bool>,
+    keys: Vec<Vec<u8>>,
+    index: usize,
+}
+
+impl<I, K, E> ReadMultiIterator<E> for LruCachingStoreReadMultiIteratorInner<K, I>
+where
+    I: ReadMultiIterator<E>,
+    E: KeyValueStoreError + 'static,
+    K: ReadableKeyValueStore<Error = E>,
+{
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, E> {
+        if self.index >= self.keys.len() {
+            return Ok(None);
+        }
+        let key = &self.keys[self.index];
+        let index = self.index;
+        self.index += 1;
+        let value = if self.is_cached[index] {
+            {
+                let mut cache = self.cache.lock().unwrap();
+                if let Some(value) = cache.query_read_value(key) {
+                    #[cfg(with_metrics)]
+                    metrics::READ_VALUE_CACHE_HIT_COUNT
+                        .with_label_values(&[])
+                        .inc();
+                    return Ok(Some(value));
+                }
+            }
+            // The key has been evicted. Should be rare.
+            self.store.read_value_bytes(key).await?
+        } else {
+            // We unwrap since we know we are not at the end.
+            self.inner.next().await?.unwrap()
+        };
+        #[cfg(with_metrics)]
+        metrics::READ_VALUE_CACHE_MISS_COUNT
+            .with_label_values(&[])
+            .inc();
+        {
+            let mut cache = self.cache.lock().unwrap();
+            cache.insert_read_value(key, &value);
+        }
+        Ok(Some(value))
+    }
+}
+
+/// Iterator for reading multiple values from LruCachingStore.
+pub enum LruCachingStoreReadMultiIterator<K, I> {
+    /// Iterator when there is no cache - delegates directly to inner store.
+    NoCache(I),
+    /// Iterator when cache is enabled - checks cache before fetching from store.
+    Cache(LruCachingStoreReadMultiIteratorInner<K, I>),
+}
+
+impl<I, K, E> ReadMultiIterator<E> for LruCachingStoreReadMultiIterator<K, I>
+where
+    I: ReadMultiIterator<E>,
+    E: KeyValueStoreError + 'static,
+    K: ReadableKeyValueStore<Error = E>,
+{
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, E> {
+        match self {
+            LruCachingStoreReadMultiIterator::NoCache(inner) => inner.next().await,
+            LruCachingStoreReadMultiIterator::Cache(inner) => inner.next().await,
+        }
+    }
+}
+
 impl<K> ReadableKeyValueStore for LruCachingStore<K>
 where
-    K: ReadableKeyValueStore,
+    K: ReadableKeyValueStore + Clone,
 {
     // The LRU cache does not change the underlying store's size limits.
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
+
+    type ReadMultiIterator<'a> = LruCachingStoreReadMultiIterator<K, K::ReadMultiIterator<'a>> where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -291,6 +370,35 @@ where
             }
         }
         Ok(result)
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+        if let Some(cache) = &self.cache {
+            let mut is_cached = Vec::new();
+            let mut uncached_keys = Vec::new();
+            {
+                let cache = cache.lock().unwrap();
+                for key in &keys {
+                    let test = cache.test_key_presence(key);
+                    is_cached.push(test);
+                    if !test {
+                        uncached_keys.push(key.clone());
+                    }
+                }
+            }
+            let inner = self.store.read_multi_values_bytes_iter(uncached_keys);
+            let inner = LruCachingStoreReadMultiIteratorInner {
+                inner,
+                store: self.store.clone(),
+                cache: cache.clone(),
+                is_cached,
+                keys,
+                index: 0,
+            };
+            LruCachingStoreReadMultiIterator::Cache(inner)
+        } else {
+            LruCachingStoreReadMultiIterator::NoCache(self.store.read_multi_values_bytes_iter(keys))
+        }
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {

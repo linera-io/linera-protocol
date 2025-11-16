@@ -359,12 +359,12 @@ where
             } else if let Some(blob) = self.chain.pending_validated_blobs.get(blob_id).await? {
                 *maybe_blob = Some(blob);
             } else {
-                for (_, pending_blobs) in self
+                let mut iter = self
                     .chain
                     .pending_proposed_blobs
-                    .try_load_all_entries()
-                    .await?
-                {
+                    .try_load_all_entries_iter()
+                    .await?;
+                while let Some((_, pending_blobs)) = iter.next().await? {
                     if let Some(blob) = pending_blobs.get(blob_id).await? {
                         *maybe_blob = Some(blob);
                         break;
@@ -1069,14 +1069,24 @@ where
         start: BlockHeight,
         end: BlockHeight,
     ) -> Result<Vec<CryptoHash>, WorkerError> {
-        let mut hashes = Vec::new();
+        // Build the list of keys
+        let mut heights = Vec::new();
         let mut height = start;
         while height < end {
-            match self.chain.preprocessed_blocks.get(&height).await? {
+            heights.push(height);
+            height = height.try_add_one()?;
+        }
+
+        // Build the multi_get_iter
+        let mut iter = self.chain.preprocessed_blocks.multi_get_iter(&heights)?;
+
+        // Write a while loop
+        let mut hashes = Vec::new();
+        while let Some(hash_opt) = iter.next().await? {
+            match hash_opt {
                 Some(hash) => hashes.push(hash),
                 None => break,
             }
-            height = height.try_add_one()?;
         }
         Ok(hashes)
     }

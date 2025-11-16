@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
@@ -85,12 +85,88 @@ where
     type Error = ValueSplittingError<D::Error>;
 }
 
-impl<S> ReadableKeyValueStore for ValueSplittingStore<S>
+/// Iterator for reading multiple values from ValueSplittingStore.
+pub struct ValueSplittingStoreReadMultiIterator<S, I>
 where
     S: ReadableKeyValueStore,
+{
+    store: S,
+    keys: Vec<Vec<u8>>,
+    first_segments_iter: I,
+    current_index: usize,
+}
+
+impl<S, I, E> ReadMultiIterator<ValueSplittingError<E>>
+    for ValueSplittingStoreReadMultiIterator<S, I>
+where
+    S: ReadableKeyValueStore<Error = E>,
+    I: ReadMultiIterator<E>,
+    E: crate::store::KeyValueStoreError + 'static,
+{
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, ValueSplittingError<E>> {
+        // Get the next original key
+        if self.current_index >= self.keys.len() {
+            return Ok(None);
+        }
+        let key = &self.keys[self.current_index];
+        self.current_index += 1;
+
+        // Get the next value from the first segments iterator
+        let value = self
+            .first_segments_iter
+            .next()
+            .await
+            .map_err(ValueSplittingError::InnerStoreError)?
+            .expect("keys and first_segments should have same length");
+
+        let Some(value) = value else {
+            return Ok(Some(None));
+        };
+
+        // Read the count from the first segment
+        let count = ValueSplittingStore::<S>::read_count_from_value(&value)?;
+        let mut big_value = value[4..].to_vec();
+
+        if count == 1 {
+            return Ok(Some(Some(big_value)));
+        }
+
+        // Need to fetch additional segments
+        let mut segment_keys = Vec::new();
+        for i in 1..count {
+            let segment_key = ValueSplittingStore::<S>::get_segment_key(key, i)?;
+            segment_keys.push(segment_key);
+        }
+
+        let segments = self
+            .store
+            .read_multi_values_bytes(&segment_keys)
+            .await
+            .map_err(ValueSplittingError::InnerStoreError)?;
+
+        for segment in segments {
+            match segment {
+                None => {
+                    return Err(ValueSplittingError::MissingSegment);
+                }
+                Some(segment) => {
+                    big_value.extend(segment);
+                }
+            }
+        }
+
+        Ok(Some(Some(big_value)))
+    }
+}
+
+impl<S> ReadableKeyValueStore for ValueSplittingStore<S>
+where
+    S: ReadableKeyValueStore + Clone,
     S::Error: 'static,
 {
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE - 4;
+
+    type ReadMultiIterator<'a> = ValueSplittingStoreReadMultiIterator<S, S::ReadMultiIterator<'a>> where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -200,6 +276,28 @@ where
             }
         }
         Ok(big_values)
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+        // Create big_keys (keys with [0,0,0,0] suffix) for the first segments
+        let big_keys: Vec<Vec<u8>> = keys
+            .iter()
+            .map(|key| {
+                let mut big_key = key.clone();
+                big_key.extend(&[0, 0, 0, 0]);
+                big_key
+            })
+            .collect();
+
+        // Create iterator for first segments
+        let first_segments_iter = self.store.read_multi_values_bytes_iter(big_keys);
+
+        ValueSplittingStoreReadMultiIterator {
+            store: self.store.clone(),
+            keys,
+            first_segments_iter,
+            current_index: 0,
+        }
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
@@ -424,9 +522,27 @@ impl WithError for LimitedTestMemoryStore {
     type Error = MemoryStoreError;
 }
 
+/// Iterator for reading multiple values from LimitedTestMemoryStore.
+#[cfg(with_testing)]
+pub struct LimitedTestMemoryStoreReadMultiIterator<I> {
+    inner: I,
+}
+
+#[cfg(with_testing)]
+impl<I> ReadMultiIterator<MemoryStoreError> for LimitedTestMemoryStoreReadMultiIterator<I>
+where
+    I: ReadMultiIterator<MemoryStoreError>,
+{
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, MemoryStoreError> {
+        self.inner.next().await
+    }
+}
+
 #[cfg(with_testing)]
 impl ReadableKeyValueStore for LimitedTestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
+
+    type ReadMultiIterator<'a> = LimitedTestMemoryStoreReadMultiIterator<<MemoryStore as ReadableKeyValueStore>::ReadMultiIterator<'a>> where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.inner.max_stream_queries()
@@ -453,6 +569,12 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
         keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, MemoryStoreError> {
         self.inner.read_multi_values_bytes(keys).await
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+        LimitedTestMemoryStoreReadMultiIterator {
+            inner: self.inner.read_multi_values_bytes_iter(keys),
+        }
     }
 
     async fn find_keys_by_prefix(

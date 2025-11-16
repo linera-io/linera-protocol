@@ -17,7 +17,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::get_key_range_for_prefix,
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
@@ -126,8 +126,23 @@ impl WithError for MemoryStore {
     type Error = MemoryStoreError;
 }
 
+/// Iterator for reading multiple values from MemoryStore.
+/// All values are fetched upfront and returned one by one.
+/// None values indicate keys that don't exist.
+pub struct MemoryStoreReadMultiIterator {
+    values: std::vec::IntoIter<Option<Vec<u8>>>,
+}
+
+impl ReadMultiIterator<MemoryStoreError> for MemoryStoreReadMultiIterator {
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, MemoryStoreError> {
+        Ok(self.values.next())
+    }
+}
+
 impl ReadableKeyValueStore for MemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
+
+    type ReadMultiIterator<'a> = MemoryStoreReadMultiIterator where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -177,6 +192,17 @@ impl ReadableKeyValueStore for MemoryStore {
             result.push(map.get(key).cloned());
         }
         Ok(result)
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+        let map = self
+            .map
+            .read()
+            .expect("MemoryStore lock should not be poisoned");
+        let values: Vec<Option<Vec<u8>>> = keys.iter().map(|key| map.get(key).cloned()).collect();
+        MemoryStoreReadMultiIterator {
+            values: values.into_iter(),
+        }
     }
 
     async fn find_keys_by_prefix(

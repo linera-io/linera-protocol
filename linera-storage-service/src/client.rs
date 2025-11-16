@@ -19,7 +19,10 @@ use linera_views::store::TestKeyValueDatabase;
 use linera_views::{
     batch::{Batch, WriteOperation},
     lru_caching::LruCachingDatabase,
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueDatabase, ReadMultiIterator, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
+    },
     FutureSyncExt as _,
 };
 use serde::de::DeserializeOwned;
@@ -91,8 +94,36 @@ impl WithError for StorageServiceStoreInternal {
     type Error = StorageServiceStoreError;
 }
 
+/// Iterator for reading multiple values from StorageServiceStoreInternal.
+pub struct StorageServiceStoreInternalReadMultiIterator {
+    store: StorageServiceStoreInternal,
+    keys: Vec<Vec<u8>>,
+    values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
+}
+
+impl ReadMultiIterator<StorageServiceStoreError> for StorageServiceStoreInternalReadMultiIterator {
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, StorageServiceStoreError> {
+        match &mut self.values {
+            None => {
+                // Fetch all values on first call
+                let keys = std::mem::take(&mut self.keys);
+                let results = self.store.read_multi_values_bytes(&keys).await?;
+
+                let mut iter = results.into_iter();
+                let first = iter.next();
+                self.values = Some(iter);
+
+                Ok(first)
+            }
+            Some(values) => Ok(values.next()),
+        }
+    }
+}
+
 impl ReadableKeyValueStore for StorageServiceStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
+
+    type ReadMultiIterator<'a> = StorageServiceStoreInternalReadMultiIterator where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -206,6 +237,14 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
             Ok(values)
         } else {
             self.read_entries(message_index, num_chunks).await
+        }
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+        StorageServiceStoreInternalReadMultiIterator {
+            store: self.clone(),
+            keys: keys.to_vec(),
+            values: None,
         }
     }
 

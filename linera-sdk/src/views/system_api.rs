@@ -9,7 +9,7 @@ use std::sync::Arc;
 use linera_base::ensure;
 use linera_views::{
     batch::Batch,
-    store::{ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{ReadMultiIterator, ReadableKeyValueStore, WithError, WritableKeyValueStore},
 };
 use thiserror::Error;
 
@@ -86,6 +86,32 @@ impl WithError for KeyValueStore {
     type Error = KeyValueStoreError;
 }
 
+/// Iterator for reading multiple values from KeyValueStore.
+pub struct KeyValueStoreReadMultiIterator {
+    store: KeyValueStore,
+    keys: Vec<Vec<u8>>,
+    values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
+}
+
+impl ReadMultiIterator<KeyValueStoreError> for KeyValueStoreReadMultiIterator {
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, KeyValueStoreError> {
+        match &mut self.values {
+            None => {
+                // Fetch all values on first call
+                let keys = std::mem::take(&mut self.keys);
+                let results = self.store.read_multi_values_bytes(&keys).await?;
+
+                let mut iter = results.into_iter();
+                let first = iter.next();
+                self.values = Some(iter);
+
+                Ok(first)
+            }
+            Some(values) => Ok(values.next()),
+        }
+    }
+}
+
 /// The error type for [`KeyValueStore`] operations.
 #[derive(Error, Debug)]
 pub enum KeyValueStoreError {
@@ -106,6 +132,8 @@ impl ReadableKeyValueStore for KeyValueStore {
     // The KeyValueStore of the system_api does not have limits
     // on the size of its values.
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
+
+    type ReadMultiIterator<'a> = KeyValueStoreReadMultiIterator where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         1
@@ -150,6 +178,14 @@ impl ReadableKeyValueStore for KeyValueStore {
         let promise = self.wit_api.read_multi_values_bytes_new(keys);
         yield_once().await;
         Ok(self.wit_api.read_multi_values_bytes_wait(promise))
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+        KeyValueStoreReadMultiIterator {
+            store: self.clone(),
+            keys,
+            values: None,
+        }
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, KeyValueStoreError> {

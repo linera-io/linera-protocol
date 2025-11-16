@@ -18,7 +18,10 @@ use prometheus::{HistogramVec, IntCounterVec};
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueDatabase, ReadMultiIterator, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
+    },
 };
 
 #[derive(Clone)]
@@ -302,11 +305,26 @@ where
     type Error = S::Error;
 }
 
+/// Iterator for reading multiple values from MeteredStore.
+pub struct MeteredStoreReadMultiIterator<I>(I);
+
+impl<I, E> ReadMultiIterator<E> for MeteredStoreReadMultiIterator<I>
+where
+    I: ReadMultiIterator<E>,
+    E: crate::store::KeyValueStoreError,
+{
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, E> {
+        self.0.next().await
+    }
+}
+
 impl<S> ReadableKeyValueStore for MeteredStore<S>
 where
     S: ReadableKeyValueStore,
 {
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE;
+
+    type ReadMultiIterator<'a> = MeteredStoreReadMultiIterator<S::ReadMultiIterator<'a>> where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -379,6 +397,21 @@ where
             .with_label_values(&[])
             .observe(key_sizes as f64);
         self.store.read_multi_values_bytes(keys).await
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+        // Record metrics for the iterator creation
+        self.counter
+            .read_multi_values_num_entries
+            .with_label_values(&[])
+            .observe(keys.len() as f64);
+        let key_sizes = keys.iter().map(|k| k.len()).sum::<usize>();
+        self.counter
+            .read_multi_values_key_sizes
+            .with_label_values(&[])
+            .observe(key_sizes as f64);
+
+        MeteredStoreReadMultiIterator(self.store.read_multi_values_bytes_iter(keys))
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {

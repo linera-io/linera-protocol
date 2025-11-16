@@ -21,6 +21,8 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{data_types::ArithmeticError, ensure, visit_allocative_simple};
 use serde::{Deserialize, Serialize};
 
+#[cfg(with_testing)]
+use crate::store::ReadMultiIterator;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
@@ -1230,6 +1232,34 @@ impl<C> WithError for ViewContainer<C> {
     type Error = ViewContainerError;
 }
 
+/// Iterator for reading multiple values from ViewContainer.
+#[cfg(with_testing)]
+pub struct ViewContainerReadMultiIterator<C: Context> {
+    store: ViewContainer<C>,
+    keys: Vec<Vec<u8>>,
+    values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
+}
+
+#[cfg(with_testing)]
+impl<C: Context> ReadMultiIterator<ViewContainerError> for ViewContainerReadMultiIterator<C> {
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, ViewContainerError> {
+        match &mut self.values {
+            None => {
+                // Fetch all values on first call
+                let keys = std::mem::take(&mut self.keys);
+                let results = self.store.read_multi_values_bytes(&keys).await?;
+
+                let mut iter = results.into_iter();
+                let first = iter.next();
+                self.values = Some(iter);
+
+                Ok(first)
+            }
+            Some(values) => Ok(values.next()),
+        }
+    }
+}
+
 #[cfg(with_testing)]
 /// The error type for [`ViewContainer`] operations.
 #[derive(Error, Debug)]
@@ -1251,6 +1281,8 @@ impl KeyValueStoreError for ViewContainerError {
 #[cfg(with_testing)]
 impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
     const MAX_KEY_SIZE: usize = <C::Store as ReadableKeyValueStore>::MAX_KEY_SIZE;
+
+    type ReadMultiIterator<'a> = ViewContainerReadMultiIterator<C> where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         1
@@ -1281,6 +1313,14 @@ impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
     ) -> Result<Vec<Option<Vec<u8>>>, ViewContainerError> {
         let view = self.view.read().await;
         Ok(view.multi_get(keys).await?)
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+        ViewContainerReadMultiIterator {
+            store: self.clone(),
+            keys,
+            values: None,
+        }
     }
 
     async fn find_keys_by_prefix(

@@ -11,7 +11,7 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
@@ -77,6 +77,30 @@ where
     type Error = DualStoreError<S1::Error, S2::Error>;
 }
 
+/// Iterator for reading multiple values from DualStore.
+pub enum DualStoreReadMultiIterator<I1, I2> {
+    /// First store iterator.
+    First(I1),
+    /// Second store iterator.
+    Second(I2),
+}
+
+impl<I1, I2, E1, E2> ReadMultiIterator<DualStoreError<E1, E2>>
+    for DualStoreReadMultiIterator<I1, I2>
+where
+    I1: ReadMultiIterator<E1>,
+    I2: ReadMultiIterator<E2>,
+    E1: crate::store::KeyValueStoreError,
+    E2: crate::store::KeyValueStoreError,
+{
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, DualStoreError<E1, E2>> {
+        match self {
+            Self::First(iter) => iter.next().await.map_err(DualStoreError::First),
+            Self::Second(iter) => iter.next().await.map_err(DualStoreError::Second),
+        }
+    }
+}
+
 impl<S1, S2> ReadableKeyValueStore for DualStore<S1, S2>
 where
     S1: ReadableKeyValueStore,
@@ -88,6 +112,11 @@ where
     } else {
         S2::MAX_KEY_SIZE
     };
+
+    type ReadMultiIterator<'a> =
+        DualStoreReadMultiIterator<S1::ReadMultiIterator<'a>, S2::ReadMultiIterator<'a>>
+    where
+        Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         match self {
@@ -160,6 +189,17 @@ where
                 .map_err(DualStoreError::Second)?,
         };
         Ok(result)
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+        match self {
+            Self::First(store) => {
+                DualStoreReadMultiIterator::First(store.read_multi_values_bytes_iter(keys))
+            }
+            Self::Second(store) => {
+                DualStoreReadMultiIterator::Second(store.read_multi_values_bytes_iter(keys))
+            }
+        }
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {

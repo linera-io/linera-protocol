@@ -47,8 +47,8 @@ use crate::{
     journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadMultiIterator,
+        ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
     FutureSyncExt as _,
@@ -609,8 +609,46 @@ impl WithError for ScyllaDbStoreInternal {
     type Error = ScyllaDbStoreInternalError;
 }
 
+/// Iterator for reading multiple values from ScyllaDB.
+pub struct ScyllaDbStoreReadMultiIterator {
+    store: ScyllaDbStoreInternal,
+    key_batches: std::vec::IntoIter<Vec<Vec<u8>>>,
+    current_values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
+}
+
+impl ReadMultiIterator<ScyllaDbStoreInternalError> for ScyllaDbStoreReadMultiIterator {
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, ScyllaDbStoreInternalError> {
+        loop {
+            match &mut self.current_values {
+                None => match self.key_batches.next() {
+                    Some(keys) => {
+                        let values = {
+                            let store = self.store.store.deref();
+                            let root_key = self.store.root_key.clone();
+                            let _guard = self.store.acquire().await;
+                            Box::pin(store.read_multi_values_internal(&root_key, keys)).await?
+                        };
+                        self.current_values = Some(values.into_iter());
+                        continue;
+                    }
+                    None => return Ok(None),
+                },
+                Some(current_values) => match current_values.next() {
+                    Some(value) => return Ok(Some(value)),
+                    None => {
+                        self.current_values = None;
+                        continue;
+                    }
+                },
+            }
+        }
+    }
+}
+
 impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
+
+    type ReadMultiIterator<'a> = ScyllaDbStoreReadMultiIterator where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -671,6 +709,19 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
             .into_iter()
             .collect::<Result<_, _>>()?;
         Ok(results.into_iter().flatten().collect())
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+        let batches: Vec<Vec<Vec<u8>>> = keys
+            .chunks(MAX_MULTI_KEYS)
+            .map(|chunk| chunk.to_vec())
+            .collect();
+
+        ScyllaDbStoreReadMultiIterator {
+            store: self.clone(),
+            key_batches: batches.into_iter(),
+            current_values: None,
+        }
     }
 
     async fn find_keys_by_prefix(

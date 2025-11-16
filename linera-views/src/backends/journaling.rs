@@ -26,7 +26,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     store::{
-        DirectKeyValueStore, KeyValueDatabase, ReadableKeyValueStore, WithError,
+        DirectKeyValueStore, KeyValueDatabase, ReadMultiIterator, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
     views::MIN_VIEW_TAG,
@@ -110,6 +110,19 @@ where
     type Error = S::Error;
 }
 
+/// Iterator for reading multiple values from JournalingKeyValueStore.
+pub struct JournalingKeyValueStoreReadMultiIterator<I>(I);
+
+impl<I, E> ReadMultiIterator<E> for JournalingKeyValueStoreReadMultiIterator<I>
+where
+    I: ReadMultiIterator<E>,
+    E: crate::store::KeyValueStoreError + From<JournalConsistencyError>,
+{
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, E> {
+        self.0.next().await
+    }
+}
+
 impl<S> ReadableKeyValueStore for JournalingKeyValueStore<S>
 where
     S: ReadableKeyValueStore,
@@ -117,6 +130,8 @@ where
 {
     /// The size constant do not change
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE;
+
+    type ReadMultiIterator<'a> = JournalingKeyValueStoreReadMultiIterator<S::ReadMultiIterator<'a>> where Self: 'a;
 
     /// The read stuff does not change
     fn max_stream_queries(&self) -> usize {
@@ -144,6 +159,10 @@ where
         keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         self.store.read_multi_values_bytes(keys).await
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
+        JournalingKeyValueStoreReadMultiIterator(self.store.read_multi_values_bytes_iter(keys))
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
