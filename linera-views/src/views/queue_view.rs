@@ -58,9 +58,9 @@ pub struct QueueView<C, T> {
     context: C,
     /// The range of indices for entries persisted in storage.
     #[allocative(visit = visit_allocative_simple)]
-    stored_indices: Range<usize>,
+    stored_indices: Range<u64>,
     /// The number of entries to delete from the front.
-    front_delete_count: usize,
+    front_delete_count: u64,
     /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
     /// New values added to the back, not yet persisted to storage.
@@ -124,7 +124,10 @@ where
             batch.delete_key_prefix(key_prefix);
             new_stored_indices = Range::default();
         } else if self.front_delete_count > 0 {
-            let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
+            let deletion_range = self
+                .stored_indices
+                .clone()
+                .take(self.front_delete_count as usize);
             new_stored_indices.start += self.front_delete_count;
             for index in deletion_range {
                 let key = self
@@ -159,7 +162,7 @@ where
             self.stored_indices.start += self.front_delete_count;
         }
         if !self.new_back_values.is_empty() {
-            self.stored_indices.end += self.new_back_values.len();
+            self.stored_indices.end += self.new_back_values.len() as u64;
             self.new_back_values.clear();
         }
         self.front_delete_count = 0;
@@ -189,11 +192,11 @@ where
 }
 
 impl<C, T> QueueView<C, T> {
-    fn stored_count(&self) -> usize {
+    fn stored_count(&self) -> u64 {
         if self.delete_storage_first {
             0
         } else {
-            self.stored_indices.len() - self.front_delete_count
+            (self.stored_indices.end - self.stored_indices.start) - self.front_delete_count
         }
     }
 }
@@ -203,7 +206,7 @@ where
     C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
-    async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
+    async fn get(&self, index: u64) -> Result<Option<T>, ViewError> {
         let key = self
             .context
             .base_key()
@@ -306,7 +309,7 @@ where
     /// # })
     /// ```
     pub fn count(&self) -> usize {
-        self.stored_count() + self.new_back_values.len()
+        self.stored_count() as usize + self.new_back_values.len()
     }
 
     /// Obtains the extra data.
@@ -314,8 +317,8 @@ where
         self.context.extra()
     }
 
-    async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
-        let count = range.len();
+    async fn read_context(&self, range: Range<u64>) -> Result<Vec<T>, ViewError> {
+        let count = (range.end - range.start) as usize;
         let mut keys = Vec::with_capacity(count);
         for index in range {
             let key = self
@@ -360,13 +363,13 @@ where
         if !self.delete_storage_first {
             let stored_remainder = self.stored_count();
             let start = self.stored_indices.end - stored_remainder;
-            if count <= stored_remainder {
-                values.extend(self.read_context(start..(start + count)).await?);
+            if count as u64 <= stored_remainder {
+                values.extend(self.read_context(start..(start + count as u64)).await?);
             } else {
                 values.extend(self.read_context(start..self.stored_indices.end).await?);
                 values.extend(
                     self.new_back_values
-                        .range(0..(count - stored_remainder))
+                        .range(0..(count - stored_remainder as usize))
                         .cloned(),
                 );
             }
@@ -405,7 +408,7 @@ where
                     .cloned(),
             );
         } else {
-            let start = self.stored_indices.end + new_back_len - count;
+            let start = self.stored_indices.end + new_back_len as u64 - count as u64;
             values.extend(self.read_context(start..self.stored_indices.end).await?);
             values.extend(self.new_back_values.iter().cloned());
         }
@@ -435,7 +438,7 @@ where
             let stored_remainder = self.stored_count();
             let start = self.stored_indices.end - stored_remainder;
             let elements = self.read_context(start..self.stored_indices.end).await?;
-            let shift = self.stored_indices.end - start;
+            let shift = (self.stored_indices.end - start) as usize;
             for elt in elements {
                 self.new_back_values.push_back(elt);
             }
