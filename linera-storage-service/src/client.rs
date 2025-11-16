@@ -99,24 +99,41 @@ pub struct StorageServiceStoreInternalReadMultiIterator {
     store: StorageServiceStoreInternal,
     keys: Vec<Vec<u8>>,
     values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
+    current_position: usize,
 }
 
 impl ReadMultiIterator<StorageServiceStoreError> for StorageServiceStoreInternalReadMultiIterator {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, StorageServiceStoreError> {
-        match &mut self.values {
-            None => {
-                // Fetch all values on first call
-                let keys = std::mem::take(&mut self.keys);
-                let results = self.store.read_multi_values_bytes(&keys).await?;
+        const BATCH_SIZE: usize = 50;
 
-                let mut iter = results.into_iter();
-                let first = iter.next();
-                self.values = Some(iter);
-
-                Ok(first)
+        // Try to get next value from current batch
+        if let Some(ref mut values_iter) = self.values {
+            if let Some(value) = values_iter.next() {
+                return Ok(Some(value));
             }
-            Some(values) => Ok(values.next()),
         }
+
+        // Current batch exhausted, check if we have more keys to load
+        if self.current_position >= self.keys.len() {
+            return Ok(None);
+        }
+
+        // Calculate the end position for this batch
+        let end_position = std::cmp::min(self.current_position + BATCH_SIZE, self.keys.len());
+
+        // Extract the next batch of keys
+        let batch_keys = &self.keys[self.current_position..end_position];
+        self.current_position = end_position;
+
+        // Load the batch
+        let results = self.store.read_multi_values_bytes(batch_keys).await?;
+
+        // Store the results as an iterator
+        let mut iter = results.into_iter();
+        let first = iter.next();
+        self.values = Some(iter);
+
+        Ok(first)
     }
 }
 
@@ -245,6 +262,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
             store: self.clone(),
             keys: keys.to_vec(),
             values: None,
+            current_position: 0,
         }
     }
 
