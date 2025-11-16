@@ -6004,6 +6004,7 @@ version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-graphql",
+ "async-stream",
  "async-trait",
  "base64ct",
  "bcs",
@@ -6210,6 +6211,7 @@ version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-lock",
+ "async-stream",
  "bcs",
  "cfg_aliases",
  "clap",
@@ -6278,6 +6280,7 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "async-lock",
+ "async-stream",
  "aws-config",
  "aws-sdk-dynamodb",
  "aws-smithy-types",
