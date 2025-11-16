@@ -770,17 +770,17 @@ where
             return Ok(info);
         }
 
-        let batch_size = self.client.options().certificate_upload_batch_size as usize;
-        for chunk in heights.chunks(batch_size) {
-            let certificates = self
-                .read_certificates_for_heights(chain_id, chunk.to_vec())
-                .await?;
-
-            for certificate in certificates {
-                self.send_confirmed_certificate(&certificate, delivery)
+        // Send any additional missing certificates in order
+        Box::pin(async {
+            let storage = self.client.local_node.storage_client();
+            let mut stream = storage.read_certificates_by_heights_iter(chain_id, heights);
+            while let Some(certificate) = stream.next().await {
+                self.send_confirmed_certificate(&certificate?, delivery)
                     .await?;
             }
-        }
+            Ok::<_, chain_client::Error>(())
+        })
+        .await?;
 
         Ok(info)
     }
@@ -947,28 +947,18 @@ where
             .into_iter()
             .map(|(chain_id, heights)| {
                 let mut updater = self.clone();
-                async move {
-                    // Get all block hashes for this chain at the specified heights in one call
-                    let heights_vec: Vec<_> = heights.into_iter().collect();
-                    let certificates = updater
-                        .client
-                        .local_node
-                        .storage_client()
-                        .read_certificates_by_heights(chain_id, &heights_vec)
-                        .await?
-                        .into_iter()
-                        .flatten()
-                        .collect::<Vec<_>>();
-
-                    // Send each certificate
-                    for certificate in certificates {
+                Box::pin(async move {
+                    let heights_vec = heights.into_iter().collect::<Vec<_>>();
+                    let storage = updater.client.local_node.storage_client();
+                    let mut stream =
+                        storage.read_certificates_by_heights_iter(chain_id, heights_vec);
+                    while let Some(certificate) = stream.next().await {
                         updater
-                            .send_confirmed_certificate(&certificate, delivery)
+                            .send_confirmed_certificate(&certificate?, delivery)
                             .await?;
                     }
-
                     Ok::<_, chain_client::Error>(())
-                }
+                })
             })
             .collect::<FuturesUnordered<_>>()
             .try_collect::<Vec<_>>()

@@ -126,6 +126,7 @@ impl WithError for MemoryStore {
     type Error = MemoryStoreError;
 }
 
+/// Iterator for reading multiple values from MemoryStore.
 impl ReadableKeyValueStore for MemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 

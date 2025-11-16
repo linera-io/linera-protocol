@@ -105,6 +105,7 @@ impl WithError for IndexedDbDatabase {
     type Error = IndexedDbStoreError;
 }
 
+/// Iterator for reading multiple values from IndexedDbStore.
 impl ReadableKeyValueStore for IndexedDbStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 
