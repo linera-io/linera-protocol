@@ -463,6 +463,11 @@ macro_rules! impl_wrapped_number {
                 Ok(())
             }
 
+            /// Saturating division.
+            pub fn saturating_div(&self, other: $wrapped) -> Self {
+                Self(self.0.checked_div(other).unwrap_or($wrapped::MAX))
+            }
+
             /// Saturating multiplication.
             pub const fn saturating_mul(&self, other: $wrapped) -> Self {
                 Self(self.0.saturating_mul(other))
@@ -727,7 +732,7 @@ impl Amount {
     }
 
     /// Divides this by the other amount. If the other is 0, it returns `u128::MAX`.
-    pub fn saturating_div(self, other: Amount) -> u128 {
+    pub fn saturating_ratio(self, other: Amount) -> u128 {
         self.0.checked_div(other.0).unwrap_or(u128::MAX)
     }
 
