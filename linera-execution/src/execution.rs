@@ -58,9 +58,10 @@ where
         #[derive(Serialize, Deserialize)]
         struct ExecutionStateViewHash([u8; 32]);
         impl BcsHashable<'_> for ExecutionStateViewHash {}
+        let ExecutionStateView { system, users } = self;
         let mut hasher = linera_views::sha3::Sha3_256::default();
-        hasher.update_with_bytes(&self.system.historical_hash().await?)?;
-        hasher.update_with_bytes(&self.users.historical_hash().await?)?;
+        hasher.update_with_bytes(&system.historical_hash().await?)?;
+        hasher.update_with_bytes(&users.historical_hash().await?)?;
         let output = hasher.finalize();
         Ok(CryptoHash::new(&ExecutionStateViewHash(output.into())))
     }
