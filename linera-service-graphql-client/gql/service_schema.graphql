@@ -508,7 +508,8 @@ input Committee {
 	"""
 	quorumThreshold: Int!
 	"""
-	The threshold to prove the validity of a statement.
+	The threshold to prove the validity of a statement. I.e. the assumption is that strictly
+	less than `validity_threshold` are faulty.
 	"""
 	validityThreshold: Int!
 	"""
