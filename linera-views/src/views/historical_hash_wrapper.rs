@@ -7,8 +7,10 @@ use std::{
     sync::Mutex,
 };
 
+use allocative::Allocative;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::visit_allocative_simple;
 
 use crate::{
     batch::Batch,
@@ -38,15 +40,19 @@ mod metrics {
 }
 
 /// Wrapper to compute the hash of the view based on its history of modifications.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, W: Allocative")]
 pub struct HistoricallyHashableView<C, W> {
     /// The hash in storage.
+    #[allocative(visit = visit_allocative_simple)]
     stored_hash: Option<HasherOutput>,
     /// The inner view.
     inner: W,
     /// Memoized hash, if any.
+    #[allocative(visit = visit_allocative_simple)]
     hash: Mutex<Option<HasherOutput>>,
     /// Track context type.
+    #[allocative(skip)]
     _phantom: PhantomData<C>,
 }
 

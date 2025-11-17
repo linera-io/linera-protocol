@@ -13,10 +13,7 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId},
     ownership::ChainOwnership,
 };
-use linera_views::{
-    context::MemoryContext,
-    views::{CryptoHashView, View},
-};
+use linera_views::{context::MemoryContext, views::View};
 
 use super::{dummy_chain_description, dummy_committees, MockApplication, RegisterMockApplication};
 use crate::{
