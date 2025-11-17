@@ -573,9 +573,9 @@ dependencies = [
 
 [[package]]
 name = "cfg-if"
-version = "1.0.3"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fd1289c04a9ea8cb22300a459a72a385d7c73d3259e2ed7dcb2af674838cfa9"
+checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
 name = "cfg_aliases"
@@ -2264,7 +2264,6 @@ dependencies = [
  "test-strategy",
  "thiserror 1.0.69",
  "tokio",
- "tokio-stream",
  "tokio-util",
  "tracing",
  "tracing-chrome",
@@ -2336,6 +2335,7 @@ dependencies = [
  "tracing",
  "trait-set",
  "trait-variant",
+ "web-thread-select",
 ]
 
 [[package]]
@@ -2374,6 +2374,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "web-thread-select",
 ]
 
 [[package]]
@@ -2437,6 +2438,7 @@ dependencies = [
  "serde",
  "tokio",
  "tracing",
+ "web-thread-select",
 ]
 
 [[package]]
@@ -5079,6 +5081,26 @@ checksum = "9367c417a924a74cae129e6a2ae3b47fabb1f8995595ab474029da749a8be120"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "web-thread-select"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27c3f98861caac815f0aa966995e564b0b2db9abc259700ddee544fbdaf236b3"
+dependencies = [
+ "cfg-if",
+ "web-thread-shim",
+]
+
+[[package]]
+name = "web-thread-shim"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "535507b55b73bb78d37bbc732c8bf8ebbc7b26902ab06fbf356fc3b46ad4b06c"
+dependencies = [
+ "futures",
+ "thiserror 2.0.17",
 ]
 
 [[package]]

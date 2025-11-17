@@ -233,8 +233,6 @@ pub enum WorkerError {
     },
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
-    #[error("Failed to join spawned worker task")]
-    JoinError,
     #[error("Blob was not required by any pending block")]
     UnexpectedBlob,
     #[error("Number of published blobs per block must not exceed {0}")]
@@ -251,6 +249,9 @@ pub enum WorkerError {
         chain_id: ChainId,
         error: Box<dyn std::error::Error + Send + Sync>,
     },
+
+    #[error("thread error: {0}")]
+    Thread(#[from] web_thread::Error),
 }
 
 impl WorkerError {
@@ -281,10 +282,10 @@ impl WorkerError {
             | WorkerError::ViewError(_)
             | WorkerError::ConfirmedLogEntryNotFound { .. }
             | WorkerError::PreprocessedBlocksEntryNotFound { .. }
-            | WorkerError::JoinError
             | WorkerError::MissingNetworkDescription
             | WorkerError::ChainActorSendError { .. }
             | WorkerError::ChainActorRecvError { .. }
+            | WorkerError::Thread(_)
             | WorkerError::ReadCertificatesError(_) => true,
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }
@@ -609,7 +610,6 @@ where
             Ok(response)
         })
         .await
-        .unwrap_or_else(|_| Err(WorkerError::JoinError))
     }
 
     /// Tries to execute a block proposal without any verification other than block execution.

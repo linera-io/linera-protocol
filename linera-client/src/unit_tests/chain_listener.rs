@@ -173,7 +173,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     }
 
     cancellation_token.cancel();
-    handle.await?;
+    handle.await;
 
     Ok(())
 }
@@ -234,7 +234,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     }
 
     cancellation_token.cancel();
-    handle.await?;
+    handle.await;
 
     Ok(())
 }

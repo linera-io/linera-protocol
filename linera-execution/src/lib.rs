@@ -43,7 +43,6 @@ use linera_base::{
         GenericApplicationId, ModuleId, StreamName,
     },
     ownership::ChainOwnership,
-    task,
     vm::VmRuntime,
 };
 use linera_views::{batch::Batch, ViewError};
@@ -111,7 +110,7 @@ pub type UserContractInstance = Box<dyn UserContract>;
 pub type UserServiceInstance = Box<dyn UserService>;
 
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
-pub trait UserContractModule: dyn_clone::DynClone + Any + task::Post + Send + Sync {
+pub trait UserContractModule: dyn_clone::DynClone + Any + web_thread::Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
@@ -127,7 +126,7 @@ impl<T: UserContractModule + Send + Sync + 'static> From<T> for UserContractCode
 dyn_clone::clone_trait_object!(UserContractModule);
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
-pub trait UserServiceModule: dyn_clone::DynClone + Any + task::Post + Send + Sync {
+pub trait UserServiceModule: dyn_clone::DynClone + Any + web_thread::Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
@@ -165,35 +164,41 @@ const _: () = {
     // TODO(#2775): add a vtable pointer into the JsValue rather than assuming the
     // implementor
 
-    impl From<UserContractCode> for JsValue {
-        fn from(code: UserContractCode) -> JsValue {
-            let module: WasmContractModule = *(code.0 as Box<dyn Any>)
-                .downcast()
-                .expect("we only support Wasm modules on the Web for now");
-            module.into()
+    impl web_thread::AsJs for UserContractCode {
+        fn to_js(&self) -> Result<JsValue, JsValue> {
+            ((&*self.0) as &dyn Any)
+                .downcast_ref::<WasmContractModule>()
+                .expect("we only support Wasm modules on the Web for now")
+                .to_js()
+        }
+
+        fn from_js(value: JsValue) -> Result<Self, JsValue> {
+            WasmContractModule::from_js(value).map(Into::into)
         }
     }
 
-    impl From<UserServiceCode> for JsValue {
-        fn from(code: UserServiceCode) -> JsValue {
-            let module: WasmServiceModule = *(code.0 as Box<dyn Any>)
-                .downcast()
-                .expect("we only support Wasm modules on the Web for now");
-            module.into()
+    impl web_thread::Post for UserContractCode {
+        fn transferables(&self) -> js_sys::Array {
+            self.0.transferables()
         }
     }
 
-    impl TryFrom<JsValue> for UserContractCode {
-        type Error = JsValue;
-        fn try_from(value: JsValue) -> Result<Self, JsValue> {
-            WasmContractModule::try_from(value).map(Into::into)
+    impl web_thread::AsJs for UserServiceCode {
+        fn to_js(&self) -> Result<JsValue, JsValue> {
+            ((&*self.0) as &dyn Any)
+                .downcast_ref::<WasmServiceModule>()
+                .expect("we only support Wasm modules on the Web for now")
+                .to_js()
+        }
+
+        fn from_js(value: JsValue) -> Result<Self, JsValue> {
+            WasmServiceModule::from_js(value).map(Into::into)
         }
     }
 
-    impl TryFrom<JsValue> for UserServiceCode {
-        type Error = JsValue;
-        fn try_from(value: JsValue) -> Result<Self, JsValue> {
-            WasmServiceModule::try_from(value).map(Into::into)
+    impl web_thread::Post for UserServiceCode {
+        fn transferables(&self) -> js_sys::Array {
+            self.0.transferables()
         }
     }
 };
@@ -282,10 +287,8 @@ pub enum ExecutionError {
     UnauthorizedHttpRequest(reqwest::Url),
     #[error("Attempt to perform an HTTP request to an invalid URL")]
     InvalidUrlForHttpRequest(#[from] url::ParseError),
-    #[error("Failed to send contract code to worker thread: {0:?}")]
-    ContractModuleSend(#[from] linera_base::task::SendError<UserContractCode>),
-    #[error("Failed to send service code to worker thread: {0:?}")]
-    ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
+    #[error("Worker thread failure: {0:?}")]
+    Thread(#[from] web_thread::Error),
     #[error("The chain being queried is not active {0}")]
     InactiveChain(ChainId),
     #[error("Blobs not found: {0:?}")]
@@ -392,8 +395,7 @@ impl ExecutionError {
             ExecutionError::MissingRuntimeResponse
             | ExecutionError::ViewError(_)
             | ExecutionError::ReqwestError(_)
-            | ExecutionError::ContractModuleSend(_)
-            | ExecutionError::ServiceModuleSend(_)
+            | ExecutionError::Thread(_)
             | ExecutionError::NoNetworkDescriptionFound
             | ExecutionError::InternalError(_)
             | ExecutionError::IoError(_) => true,
