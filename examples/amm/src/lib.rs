@@ -5,10 +5,9 @@
 
 use async_graphql::{scalar, Request, Response};
 use linera_sdk::{
-    graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, Amount, ContractAbi, ServiceAbi},
     abis::fungible::FungibleTokenAbi,
-    linera_base_types::ApplicationId,
+    graphql::GraphQLMutationRoot,
+    linera_base_types::{AccountOwner, Amount, ApplicationId, ContractAbi, ServiceAbi},
 };
 use serde::{Deserialize, Serialize};
 
