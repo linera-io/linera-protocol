@@ -38,11 +38,7 @@ use linera_views::dynamo_db::DynamoDbDatabase;
 use linera_views::rocks_db::RocksDbDatabase;
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::ScyllaDbDatabase;
-use linera_views::{
-    context::Context,
-    memory::MemoryDatabase,
-    views::{CryptoHashView, View},
-};
+use linera_views::{context::Context, memory::MemoryDatabase, views::View};
 use test_case::test_case;
 
 use super::TestEnvironment;

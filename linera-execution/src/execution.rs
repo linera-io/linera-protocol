@@ -6,17 +6,19 @@ use std::{collections::BTreeMap, vec};
 use allocative::Allocative;
 use futures::{FutureExt, StreamExt};
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, StreamUpdate},
     identifiers::{AccountOwner, BlobId},
     time::Instant,
 };
 use linera_views::{
     context::Context,
+    historical_hash_wrapper::HistoricallyHashableView,
     key_value_store_view::KeyValueStoreView,
-    reentrant_collection_view::HashedReentrantCollectionView,
-    views::{ClonableView, ReplaceContext, View},
+    reentrant_collection_view::HistoricallyHashedReentrantCollectionView,
+    views::{ClonableView, Hasher as _, ReplaceContext, View},
+    ViewError,
 };
-use linera_views_derive::CryptoHashView;
 #[cfg(with_testing)]
 use {
     crate::{
@@ -30,20 +32,37 @@ use {
 use super::{execution_state_actor::ExecutionRequest, runtime::ServiceRuntimeRequest};
 use crate::{
     execution_state_actor::ExecutionStateActor, resources::ResourceController,
-    system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ExecutionError,
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageContext, OperationContext,
-    ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime, Timestamp,
-    TransactionTracker,
+    system::SystemExecutionStateView, ApplicationDescription, ApplicationId, BcsHashable,
+    Deserialize, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageContext,
+    OperationContext, ProcessStreamsContext, Query, QueryContext, QueryOutcome, Serialize,
+    ServiceSyncRuntime, Timestamp, TransactionTracker,
 };
 
 /// A view accessing the execution state of a chain.
-#[derive(Debug, ClonableView, CryptoHashView, Allocative)]
+#[derive(Debug, ClonableView, View, Allocative)]
 #[allocative(bound = "C")]
 pub struct ExecutionStateView<C> {
     /// System application.
-    pub system: SystemExecutionStateView<C>,
+    pub system: HistoricallyHashableView<C, SystemExecutionStateView<C>>,
     /// User applications.
-    pub users: HashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
+    pub users: HistoricallyHashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
+}
+
+impl<C> ExecutionStateView<C>
+where
+    C: Context + Clone + Send + Sync + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    pub async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
+        #[derive(Serialize, Deserialize)]
+        struct ExecutionStateViewHash([u8; 32]);
+        impl BcsHashable<'_> for ExecutionStateViewHash {}
+        let mut hasher = linera_views::sha3::Sha3_256::default();
+        hasher.update_with_bytes(&self.system.historical_hash().await?)?;
+        hasher.update_with_bytes(&self.users.historical_hash().await?)?;
+        let output = hasher.finalize();
+        Ok(CryptoHash::new(&ExecutionStateViewHash(output.into())))
+    }
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
