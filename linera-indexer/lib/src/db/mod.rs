@@ -6,6 +6,8 @@
 #[cfg(test)]
 pub(crate) mod tests;
 
+pub mod common;
+pub mod postgres;
 pub mod sqlite;
 
 use async_trait::async_trait;
