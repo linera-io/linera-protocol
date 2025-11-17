@@ -66,6 +66,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 assert_matches.workspace = true
+dockertest = "0.5"
 
 [build-dependencies]
 tonic-build = { workspace = true, features = ["prost"] }
