@@ -70,29 +70,30 @@ impl PostgresDatabase {
 
     /// Initialize the database schema
     async fn initialize_schema(&self) -> Result<(), PostgresError> {
+        // Helper to execute multi-statement SQL by splitting on semicolons
+        async fn execute_multi(pool: &PgPool, sql: &str) -> Result<(), PostgresError> {
+            for statement in sql.split(';') {
+                let trimmed = statement.trim();
+                if !trimmed.is_empty() {
+                    sqlx::query(trimmed).execute(pool).await?;
+                }
+            }
+            Ok(())
+        }
+
         // Create core tables
-        sqlx::query(CREATE_BLOCKS_TABLE).execute(&self.pool).await?;
-        sqlx::query(CREATE_BLOBS_TABLE).execute(&self.pool).await?;
+        execute_multi(&self.pool, CREATE_BLOCKS_TABLE).await?;
+        execute_multi(&self.pool, CREATE_BLOBS_TABLE).await?;
 
         // Create denormalized tables for block data
-        sqlx::query(CREATE_OPERATIONS_TABLE)
-            .execute(&self.pool)
-            .await?;
-        sqlx::query(CREATE_OUTGOING_MESSAGES_TABLE)
-            .execute(&self.pool)
-            .await?;
-        sqlx::query(CREATE_EVENTS_TABLE).execute(&self.pool).await?;
-        sqlx::query(CREATE_ORACLE_RESPONSES_TABLE)
-            .execute(&self.pool)
-            .await?;
+        execute_multi(&self.pool, CREATE_OPERATIONS_TABLE).await?;
+        execute_multi(&self.pool, CREATE_OUTGOING_MESSAGES_TABLE).await?;
+        execute_multi(&self.pool, CREATE_EVENTS_TABLE).await?;
+        execute_multi(&self.pool, CREATE_ORACLE_RESPONSES_TABLE).await?;
 
         // Create existing message-related tables
-        sqlx::query(CREATE_INCOMING_BUNDLES_TABLE)
-            .execute(&self.pool)
-            .await?;
-        sqlx::query(CREATE_POSTED_MESSAGES_TABLE)
-            .execute(&self.pool)
-            .await?;
+        execute_multi(&self.pool, CREATE_INCOMING_BUNDLES_TABLE).await?;
+        execute_multi(&self.pool, CREATE_POSTED_MESSAGES_TABLE).await?;
 
         Ok(())
     }
