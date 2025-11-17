@@ -142,7 +142,7 @@ where
 
     /// Returns a storage context suitable for a root view.
     pub fn root_view_storage_context(&self) -> ViewStorageContext {
-        ViewStorageContext::new_unsafe(self.key_value_store(), Vec::new(), ())
+        ViewStorageContext::new_unchecked(self.key_value_store(), Vec::new(), ())
     }
 
     /// Configures the application parameters to return during the test.

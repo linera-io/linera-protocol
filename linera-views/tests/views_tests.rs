@@ -111,7 +111,7 @@ impl StateStorage for KeyValueStoreTestStorage {
         self.accessed_chains.insert(id);
         let base_key = bcs::to_bytes(&id)?;
         let store = self.store.clone();
-        let context = Self::Context::new_unsafe(store, base_key, id);
+        let context = Self::Context::new_unchecked(store, base_key, id);
         StateView::load(context).await
     }
 }
