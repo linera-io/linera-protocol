@@ -3523,7 +3523,6 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
 
     let parameters = Parameters {
         tokens: [token0, token1],
-        price_decimals: 0,
     };
 
     // Create AMM application on Admin chain
