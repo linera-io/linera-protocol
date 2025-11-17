@@ -76,10 +76,7 @@ async fn single_transaction() {
     let mut matching_chain = validator.new_chain().await;
     let admin_account = AccountOwner::from(matching_chain.public_key());
 
-    let fungible_module_id_a = user_chain_a
-        .publish_bytecode_files_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
-        .await;
-    let fungible_module_id_b = user_chain_b
+    let fungible_module_id = user_chain_a
         .publish_bytecode_files_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
         .await;
 
@@ -88,7 +85,7 @@ async fn single_transaction() {
     let params_a = fungible::Parameters::new("A");
     let token_id_a = user_chain_a
         .create_application(
-            fungible_module_id_a,
+            fungible_module_id,
             params_a,
             initial_state_a.build(),
             vec![],
@@ -99,7 +96,7 @@ async fn single_transaction() {
     let params_b = fungible::Parameters::new("B");
     let token_id_b = user_chain_b
         .create_application(
-            fungible_module_id_b,
+            fungible_module_id,
             params_b,
             initial_state_b.build(),
             vec![],
@@ -127,7 +124,7 @@ async fn single_transaction() {
     // Creating the matching engine chain
     let matching_parameter = Parameters {
         tokens: [token_id_a, token_id_b],
-        price_decimals: 0,
+        price_decimals: 2,
     };
     let matching_id = matching_chain
         .create_application(
@@ -140,7 +137,7 @@ async fn single_transaction() {
 
     // Creating the bid orders
     let mut bid_certificates = Vec::new();
-    for price in [1, 2] {
+    for price in [100, 200] {
         let price = Price { price };
         let order = Order::Insert {
             owner: owner_a,
@@ -192,7 +189,7 @@ async fn single_transaction() {
     }
 
     let mut ask_certificates = Vec::new();
-    for price in [4, 2] {
+    for price in [400, 200] {
         let price = Price { price };
         let order = Order::Insert {
             owner: owner_b,

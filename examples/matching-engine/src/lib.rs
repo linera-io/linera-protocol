@@ -26,7 +26,7 @@ impl ServiceAbi for MatchingEngineAbi {
 
 /// The asking or bidding price of token 1 in units of token 0.
 ///
-/// Forgetting about types and units, if `account` is buying `quantity` for a `price`:
+/// Forgetting about types and units, if `account` is buying `quantity` for a `price` value:
 /// ```ignore
 /// account[0] -= price * quantity * 10^-price_decimals;
 /// account[1] += quantity;
@@ -35,7 +35,7 @@ impl ServiceAbi for MatchingEngineAbi {
 ///
 /// The `quantity` (also called _count_) is of type `Amount` as well as the balance of the
 /// accounts. Therefore, the number of decimals used by quantities in a valid order must
-/// be not exceed `Amount::DECIMAL_PLACES - price_decimals`.
+/// not exceed `Amount::DECIMAL_PLACES - price_decimals`.
 ///
 /// When we have ask > bid then the winner for the residual cash is the liquidity provider.
 /// We choose to force the price to be an integer u64. This is because the tokens are undivisible.
@@ -46,7 +46,7 @@ impl ServiceAbi for MatchingEngineAbi {
 )]
 #[graphql(input_name = "PriceInput")]
 pub struct Price {
-    /// A price divided by 10^price_decimals.
+    /// A price expressed as a multiple of 10^-price_decimals increments.
     pub price: u64,
 }
 
@@ -62,7 +62,7 @@ impl Price {
 #[derive(Clone, Copy, Debug, SimpleObject, InputObject)]
 #[graphql(input_name = "PriceAskInput")]
 pub struct PriceAsk {
-    /// A price divided by 10^price_decimals.
+    /// A price expressed as a multiple of 10^-price_decimals increments.
     pub price: u64,
 }
 
@@ -92,7 +92,7 @@ impl CustomSerialize for PriceAsk {
 #[derive(Clone, Copy, Debug, SimpleObject, InputObject)]
 #[graphql(input_name = "PriceBidInput")]
 pub struct PriceBid {
-    /// A price multiplied by 10^price_decimals.
+    /// A price expressed as a multiple of 10^-price_decimals increments.
     pub price: u64,
 }
 
