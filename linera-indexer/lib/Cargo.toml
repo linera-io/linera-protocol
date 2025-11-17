@@ -56,7 +56,7 @@ linera-version.workspace = true
 linera-views.workspace = true
 prost.workspace = true
 reqwest.workspace = true
-sqlx = { workspace = true, features = ["runtime-tokio-rustls", "sqlite"] }
+sqlx = { workspace = true, features = ["runtime-tokio-rustls", "sqlite", "postgres"] }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tokio-stream = "0.1"
