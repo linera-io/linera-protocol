@@ -7,8 +7,9 @@ use async_graphql::{scalar, Request, Response};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, Amount, ContractAbi, ServiceAbi},
+    abis::fungible::FungibleTokenAbi,
+    linera_base_types::ApplicationId,
 };
-pub use matching_engine::Parameters;
 use serde::{Deserialize, Serialize};
 
 pub struct AmmAbi;
@@ -95,3 +96,12 @@ pub enum Message {
         owner: AccountOwner,
     },
 }
+
+/// The parameters used when an AMM application is instantiated.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub struct Parameters {
+    /// The token0 and token1 used for the AMM.
+    pub tokens: [ApplicationId<FungibleTokenAbi>; 2],
+}
+
+scalar!(Parameters);

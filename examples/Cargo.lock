@@ -721,7 +721,6 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "linera-sdk",
- "matching-engine",
  "num-bigint",
  "num-traits",
  "serde",
