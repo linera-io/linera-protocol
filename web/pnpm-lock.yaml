@@ -30,6 +30,9 @@ importers:
       typedoc-plugin-markdown:
         specifier: ^4.9.0
         version: 4.9.0(typedoc@0.28.13(typescript@5.9.3))
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@vitest/browser@3.2.4)(yaml@2.8.1)

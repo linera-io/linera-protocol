@@ -162,10 +162,9 @@ impl<C: ClientContext> ListeningClient<C> {
     }
 
     async fn stop(self) {
+        // TODO(#4965): this is unnecessary: the join handle now also acts as an abort handle
         drop(self.abort_handle);
-        if let Err(error) = self.join_handle.await {
-            warn!("Failed to join listening task: {error:?}");
-        }
+        self.join_handle.await;
     }
 }
 
@@ -231,7 +230,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 let context = Arc::clone(&context);
                 let cancellation_token = cancellation_token.clone();
                 let chain_id = *chain_id;
-                drop(linera_base::task::spawn(async move {
+                linera_base::task::spawn(async move {
                     if let Err(e) = Self::background_sync_received_certificates(
                         context,
                         chain_id,
@@ -241,7 +240,8 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     {
                         warn!("Background sync failed for chain {chain_id}: {e}");
                     }
-                }));
+                })
+                .forget();
             }
         }
 
