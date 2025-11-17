@@ -823,15 +823,7 @@ impl LruPrefixCache {
     /// Returns whether the cache can decide if a key is present or not.
     pub(crate) fn test_key_presence(&self, key: &[u8]) -> bool {
         // First, query the value map
-        let result = match self.value_map.get(key) {
-            None => false,
-            Some(entry) => match entry {
-                ValueEntry::DoesNotExist => false,
-                ValueEntry::Exists => false,
-                ValueEntry::Value(_) => true,
-            },
-        };
-        if result {
+        if matches!(self.value_map.get(key), Some(ValueEntry::Value(_))) {
             return true;
         }
         if self.has_exclusive_access {
