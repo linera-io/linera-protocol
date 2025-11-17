@@ -33,7 +33,7 @@ use sqlx::{
 };
 use thiserror::Error;
 
-use crate::db::{DatabaseTransaction, IncomingBundleInfo, IndexerDatabase, PostedMessageInfo};
+use crate::db::{IncomingBundleInfo, IndexerDatabase, PostedMessageInfo};
 
 #[derive(Error, Debug)]
 pub enum SqliteError {
@@ -1123,13 +1123,15 @@ pub struct BlockSummary {
 impl IndexerDatabase for SqliteDatabase {
     type Error = SqliteError;
 
-    async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, SqliteError> {
+    type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
+
+    async fn begin_transaction(&self) -> Result<Self::Transaction<'_>, SqliteError> {
         self.begin_transaction().await
     }
 
     async fn insert_blob_tx(
         &self,
-        tx: &mut DatabaseTransaction<'_>,
+        tx: &mut Self::Transaction<'_>,
         blob_id: &BlobId,
         data: &[u8],
     ) -> Result<(), SqliteError> {
@@ -1138,7 +1140,7 @@ impl IndexerDatabase for SqliteDatabase {
 
     async fn insert_block_tx(
         &self,
-        tx: &mut DatabaseTransaction<'_>,
+        tx: &mut Self::Transaction<'_>,
         hash: &CryptoHash,
         chain_id: &ChainId,
         height: BlockHeight,
@@ -1149,7 +1151,7 @@ impl IndexerDatabase for SqliteDatabase {
             .await
     }
 
-    async fn commit_transaction(&self, tx: DatabaseTransaction<'_>) -> Result<(), SqliteError> {
+    async fn commit_transaction(&self, tx: Self::Transaction<'_>) -> Result<(), SqliteError> {
         self.commit_transaction(tx).await
     }
 
