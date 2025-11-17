@@ -34,9 +34,6 @@ pub mod port;
 pub mod prometheus_util;
 #[cfg(not(chain))]
 pub mod task;
-pub mod vm;
-#[cfg(not(chain))]
-pub use task::Blocking;
 pub mod time;
 #[cfg_attr(web, path = "tracing_web.rs")]
 pub mod tracing;
@@ -44,6 +41,7 @@ pub mod tracing;
 pub mod tracing_opentelemetry;
 #[cfg(test)]
 mod unit_tests;
+pub mod vm;
 
 pub use graphql::BcsHexParseError;
 #[doc(hidden)]
