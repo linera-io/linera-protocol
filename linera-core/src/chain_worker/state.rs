@@ -659,6 +659,14 @@ where
         // Check that the chain is active and ready for this validated block.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         self.initialize_and_save_if_needed().await?;
+        let tip_state = self.chain.tip_state.get();
+        ensure!(
+            header.height == tip_state.next_block_height,
+            ChainError::UnexpectedBlockHeight {
+                expected_block_height: tip_state.next_block_height,
+                found_block_height: header.height,
+            }
+        );
         let (epoch, committee) = self.chain.current_committee()?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(committee)?;
@@ -747,21 +755,62 @@ where
         {
             certificate.check(committee)?;
         } else {
-            let committees = self.storage.committees_for(epoch..=epoch).await?;
-            let Some(committee) = committees.get(&epoch) else {
-                let net_description = self
+            // Inline committees_for logic with specific error handling.
+            let net_description = self
+                .storage
+                .read_network_description()
+                .await?
+                .ok_or_else(|| WorkerError::MissingNetworkDescription)?;
+            let admin_chain_id = net_description.admin_chain_id;
+
+            let committee = if epoch == Epoch::ZERO {
+                // Genesis epoch is stored in NetworkDescription.
+                let blob_id = BlobId::new(
+                    net_description.genesis_committee_blob_hash,
+                    BlobType::Committee,
+                );
+                let committee_blob = self
                     .storage
-                    .read_network_description()
+                    .read_blob(blob_id)
                     .await?
-                    .ok_or_else(|| WorkerError::MissingNetworkDescription)?;
-                return Err(WorkerError::EventsNotFound(vec![EventId {
-                    chain_id: net_description.admin_chain_id,
-                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                    index: epoch.0,
-                }]));
+                    .ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))?;
+                bcs::from_bytes::<Committee>(committee_blob.bytes())
+                    .map_err(|e| WorkerError::from(linera_views::ViewError::from(e)))?
+            } else {
+                // Read the epoch creation event.
+                let epoch_creation_events = self
+                    .storage
+                    .read_events_from_index(
+                        &admin_chain_id,
+                        &StreamId::system(EPOCH_STREAM_NAME),
+                        epoch.0,
+                    )
+                    .await?;
+
+                let event = epoch_creation_events
+                    .into_iter()
+                    .find(|index_and_event| index_and_event.index == epoch.0)
+                    .ok_or_else(|| {
+                        WorkerError::EventsNotFound(vec![EventId {
+                            chain_id: admin_chain_id,
+                            stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                            index: epoch.0,
+                        }])
+                    })?;
+
+                let committee_hash: CryptoHash = bcs::from_bytes(&event.event)
+                    .map_err(|e| WorkerError::from(linera_views::ViewError::from(e)))?;
+                let blob_id = BlobId::new(committee_hash, BlobType::Committee);
+                let committee_blob = self
+                    .storage
+                    .read_blob(blob_id)
+                    .await?
+                    .ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))?;
+                bcs::from_bytes::<Committee>(committee_blob.bytes())
+                    .map_err(|e| WorkerError::from(linera_views::ViewError::from(e)))?
             };
             // This line is duplicated, but this avoids cloning and a lifetimes error.
-            certificate.check(committee)?;
+            certificate.check(&committee)?;
         }
 
         // Certificate check passed - which means the blobs the block requires are legitimate and
@@ -835,17 +884,6 @@ where
             .iter()
             .filter_map(|blob_id| blobs.remove(blob_id))
             .collect::<Vec<_>>();
-
-        // If height is zero, we haven't initialized the chain state or verified the epoch before -
-        // do it now.
-        // This will fail if the chain description blob is still missing - but that's alright,
-        // because we already wrote the blob state above, so the client can now upload the
-        // blob, which will get accepted, and retry.
-        if height == BlockHeight::ZERO {
-            self.initialize_and_save_if_needed().await?;
-            let (epoch, _) = self.chain.current_committee()?;
-            check_block_epoch(epoch, chain_id, block.header.epoch)?;
-        }
 
         // Execute the block and update inboxes.
         let local_time = self.storage.clock().current_time();
@@ -1382,6 +1420,8 @@ where
         } = &proposal;
         let block = &content.block;
         let chain = &self.chain;
+        // Check if the chain is ready for this new block proposal.
+        chain.tip_state.get().verify_block_chaining(block)?;
         // Check the epoch.
         let (epoch, committee) = chain.current_committee()?;
         check_block_epoch(epoch, block.chain_id, block.epoch)?;
@@ -1431,8 +1471,6 @@ where
                 original_proposal.check_signature()?;
             }
         }
-        // Check if the chain is ready for this new block proposal.
-        chain.tip_state.get().verify_block_chaining(block)?;
         if chain.manager.check_proposed_block(&proposal)? == manager::Outcome::Skip {
             // We already voted for this block.
             return Ok((self.chain_info_response(), NetworkActions::default()));

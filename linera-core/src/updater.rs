@@ -263,9 +263,10 @@ where
         let mut sent_admin_chain = false;
         let mut sent_blobs = false;
         loop {
-            result = match result {
+            match result {
                 Err(NodeError::EventsNotFound(event_ids))
-                    if !sent_admin_chain
+                    if self.admin_id != certificate.block().header.chain_id
+                        && !sent_admin_chain
                         && certificate.inner().chain_id() != self.admin_id
                         && event_ids.iter().all(|event_id| {
                             event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
@@ -275,9 +276,18 @@ where
                     // The validator doesn't have the committee that signed the certificate.
                     self.update_admin_chain().await?;
                     sent_admin_chain = true;
-                    self.remote_node
-                        .handle_confirmed_certificate(certificate.clone(), delivery)
-                        .await
+                }
+                Err(NodeError::BlobsNotFound(blob_ids))
+                    if blob_ids
+                        .iter()
+                        .all(|id| id.blob_type == BlobType::Committee) =>
+                {
+                    if sent_admin_chain || self.admin_id == certificate.block().header.chain_id {
+                        return Err(NodeError::BlobsNotFound(blob_ids).into());
+                    }
+                    // The validator doesn't have the committee that signed the certificate.
+                    self.update_admin_chain().await?;
+                    sent_admin_chain = true;
                 }
                 Err(NodeError::BlobsNotFound(blob_ids)) if !sent_blobs => {
                     // The validator is missing the blobs required by the certificate.
@@ -292,12 +302,13 @@ where
                     let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
                     self.remote_node.node.upload_blobs(blobs).await?;
                     sent_blobs = true;
-                    self.remote_node
-                        .handle_confirmed_certificate(certificate.clone(), delivery)
-                        .await
                 }
                 result => return Ok(result?),
-            };
+            }
+            result = self
+                .remote_node
+                .handle_confirmed_certificate(certificate.clone(), delivery)
+                .await;
         }
     }
 
@@ -630,26 +641,30 @@ where
         delivery: CrossChainMessageDelivery,
         latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
     ) -> Result<(), ChainClientError> {
-        let info = if let Ok(height) = target_block_height.try_sub_one() {
+        let info = if let Some(height) = target_block_height
+            .try_sub_one()
+            .ok()
+            .filter(|_| chain_id != self.admin_id)
+        {
             // Figure out which certificates this validator is missing. In many cases, it's just the
             // last one, so we optimistically send that one right away.
-            let certificate = if let Some(cert) = latest_certificate {
-                cert
+            let hash = self
+                .client
+                .local_node
+                .chain_state_view(chain_id)
+                .await?
+                .block_hashes([height])
+                .await?
+                .into_iter()
+                .next()
+                .ok_or_else(|| {
+                    ChainClientError::InternalError(
+                        "send_chain_information called with invalid target_block_height",
+                    )
+                })?;
+            let certificate = if let Some(certificate) = latest_certificate {
+                certificate
             } else {
-                let hash = self
-                    .client
-                    .local_node
-                    .chain_state_view(chain_id)
-                    .await?
-                    .block_hashes([height])
-                    .await?
-                    .into_iter()
-                    .next()
-                    .ok_or_else(|| {
-                        ChainClientError::InternalError(
-                            "send_chain_information called with invalid target_block_height",
-                        )
-                    })?;
                 self.client
                     .local_node
                     .storage_client()
@@ -657,24 +672,9 @@ where
                     .await?
                     .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?
             };
-            let info = match self.send_confirmed_certificate(certificate, delivery).await {
-                Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(event_ids)))
-                    if event_ids.iter().all(|event_id| {
-                        event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
-                            && event_id.chain_id == self.admin_id
-                    }) =>
-                {
-                    if chain_id != self.admin_id {
-                        tracing::error!(
-                            "Missing epochs were not handled by send_confirmed_certificate."
-                        );
-                    }
-                    let query = ChainInfoQuery::new(chain_id);
-                    self.remote_node.handle_chain_info_query(query).await?
-                }
-                Err(err) => return Err(err),
-                Ok(info) => info,
-            };
+            let info = self
+                .send_confirmed_certificate(certificate, delivery)
+                .await?;
             // Obtain the missing blocks and the manager state from the local node.
             let heights = (info.next_block_height.0..target_block_height.0).map(BlockHeight);
             let validator_missing_hashes = self
