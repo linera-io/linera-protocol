@@ -1,5 +1,26 @@
 services:
-  # 1. Storage Service - starts first
+  # 0. PostgreSQL Database - starts first
+  postgres:
+    image: postgres:16-alpine
+    container_name: linera-postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-linera_indexer}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - linera-network
+
+  # 1. Storage Service - starts after postgres
   linera-storage-service:
     image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
     container_name: linera-storage-service
@@ -16,6 +37,9 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - linera-network
 
@@ -26,16 +50,19 @@ services:
     ports:
       - "${INDEXER_PORT:-8081}:${INDEXER_PORT:-8081}"
     command: >
-      sh -c "set -ex; ./linera-indexer-grpc
-      --port ${INDEXER_PORT:-8081}
-      --database-path ${INDEXER_DATABASE_PATH:-/data/indexer.db}
+      sh -c "set -ex;
+      ./linera-indexer-grpc
+      --port $${INDEXER_PORT:-8081}
+      --postgres postgresql://$${POSTGRES_USER:-postgres}:$${POSTGRES_PASSWORD:-postgres}@postgres:5432/$${POSTGRES_DB:-linera_indexer}"
     environment:
       - INDEXER_PORT=${INDEXER_PORT:-8081}
-      - INDEXER_DATABASE_PATH=${INDEXER_DATABASE_PATH:-/data/indexer.db}
-    volumes:
-      - ./indexer-data:/data
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-linera_indexer}
     depends_on:
       linera-storage-service:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost ${INDEXER_PORT:-8081}"]
@@ -121,13 +148,13 @@ services:
       - "${EXPLORER_API_PORT:-3002}:3002"
     environment:
       - NODE_ENV=production
-      - DB_PATH=/data/indexer.db
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-linera_indexer}
       - EXPLORER_FRONTEND_PORT=${EXPLORER_FRONTEND_PORT:-3001}
       - EXPLORER_API_PORT=${EXPLORER_API_PORT:-3002}
-    volumes:
-      - ./indexer-data:/data:ro
     depends_on:
       linera-indexer:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     healthcheck:
       test:
@@ -143,7 +170,7 @@ services:
       - linera-network
 
 volumes:
-  indexer-data:
+  postgres-data:
     driver: local
   exporter-data:
     driver: local

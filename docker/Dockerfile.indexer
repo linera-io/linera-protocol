@@ -73,9 +73,12 @@ ENV GIT_COMMIT=${git_commit}
 ENV RUSTFLAGS=${rustflags}
 
 
-# Build linera CLI and block exporter with scylladb and metrics features
+# Build linera CLI, storage server, server, proxy, and block exporter with scylladb and metrics features
 RUN cargo build ${build_flag:+"$build_flag"} \
     --bin linera \
+    --bin linera-storage-server \
+    --bin linera-server \
+    --bin linera-proxy \
     --bin linera-exporter \
     --features $build_features
 
@@ -87,6 +90,9 @@ RUN cargo build ${build_flag:+"$build_flag"} \
 # Move binaries to avoid directory conflicts and clean up to save space
 RUN mv \
     target/"$build_folder"/linera \
+    target/"$build_folder"/linera-storage-server \
+    target/"$build_folder"/linera-server \
+    target/"$build_folder"/linera-proxy \
     target/"$build_folder"/linera-exporter \
     target/"$build_folder"/linera-indexer-grpc \
     ./
@@ -96,6 +102,9 @@ FROM scratch AS builder_copy
 ARG binaries
 COPY \
     "$binaries"/linera \
+    "$binaries"/linera-storage-server \
+    "$binaries"/linera-server \
+    "$binaries"/linera-proxy \
     "$binaries"/linera-exporter \
     "$binaries"/linera-indexer-grpc \
     ./
@@ -124,9 +133,12 @@ RUN update-ca-certificates
 
 ARG target
 
-# Copy linera CLI, indexer and exporter binaries
+# Copy linera CLI, storage server, server, proxy, indexer and exporter binaries
 COPY --from=binaries \
     linera \
+    linera-storage-server \
+    linera-server \
+    linera-proxy \
     linera-indexer-grpc  \
     linera-exporter \
     ./
