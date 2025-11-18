@@ -20,7 +20,7 @@ mod transaction_tracker;
 mod util;
 mod wasm;
 
-use std::{any::Any, collections::BTreeMap, fmt, ops::RangeInclusive, str::FromStr, sync::Arc};
+use std::{any::Any, fmt, str::FromStr, sync::Arc};
 
 use allocative::Allocative;
 use async_graphql::SimpleObject;
@@ -459,11 +459,6 @@ pub trait ExecutionRuntimeContext {
     async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
-
-    async fn committees_for(
-        &self,
-        epoch_range: RangeInclusive<Epoch>,
-    ) -> Result<BTreeMap<Epoch, Committee>, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
@@ -1162,26 +1157,6 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             genesis_committee_blob_hash: CryptoHash::test_hash("genesis committee"),
             name: "dummy network description".to_string(),
         }))
-    }
-
-    async fn committees_for(
-        &self,
-        epoch_range: RangeInclusive<Epoch>,
-    ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
-        let pinned = self.blobs.pin();
-        let committee_blob_bytes = pinned
-            .values()
-            .find(|blob| blob.content().blob_type() == BlobType::Committee)
-            .ok_or_else(|| ViewError::NotFound("committee not found".to_owned()))?
-            .bytes()
-            .to_vec();
-        let committee: Committee = bcs::from_bytes(&committee_blob_bytes)?;
-        // TODO(#4146): this currently assigns the first found committee to all epochs,
-        // which should be fine for the tests we have at the moment, but might not be in
-        // the future.
-        Ok((epoch_range.start().0..=epoch_range.end().0)
-            .map(|epoch| (Epoch::from(epoch), committee.clone()))
-            .collect())
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
