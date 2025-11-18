@@ -143,7 +143,7 @@ pub enum Order {
         nature: OrderNature,
         price: Price,
     },
-    /// Modify an order. The quantity can only be decreased. If nul, the order is
+    /// Modify an order. The quantity can only be decreased. If zero, the order is
     /// canceled.
     Modify {
         owner: AccountOwner,
