@@ -256,14 +256,14 @@ where
     F: FnOnce(String) -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + Send + 'static,
 {
-    // Set DOCKER_HOST if not already set - prioritize macOS Docker Desktop location
-    if std::env::var("DOCKER_HOST").is_err() {
-        // Check common Docker socket locations
-        if let Ok(home) = std::env::var("HOME") {
-            let docker_desktop_sock = format!("{}/.docker/run/docker.sock", home);
-            if std::path::Path::new(&docker_desktop_sock).exists() {
-                std::env::set_var("DOCKER_HOST", format!("unix://{}", docker_desktop_sock));
-            }
+    if let Ok(home) = std::env::var("HOME") {
+        let docker_desktop_sock = if cfg!(target_os = "macos") {
+            format!("{}/.docker/run/docker.sock", home)
+        } else {
+            format!("{}/var/run/docker.sock", home)
+        };
+        if std::path::Path::new(&docker_desktop_sock).exists() {
+            std::env::set_var("DOCKER_HOST", format!("unix://{}", docker_desktop_sock));
         }
     }
 
