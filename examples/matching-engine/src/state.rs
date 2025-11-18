@@ -78,7 +78,7 @@ pub struct LevelView {
 #[view(context = Context)]
 pub struct MatchingEngineState {
     /// Pending orders tracked on user chains (not used on matching engine chain).
-    /// Maps owner to a map of order_id to pending order details.
+    /// Maps owner to a map of order ID to pending order details.
     pub pending_orders: MapView<AccountOwner, BTreeMap<OrderId, PendingOrderInfo>>,
 
     // -- Matching engine chain only --
