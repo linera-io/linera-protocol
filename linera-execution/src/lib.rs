@@ -1150,11 +1150,19 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+        let pinned = self.blobs.pin();
+        let genesis_committee_blob_hash = pinned
+            .iter()
+            .find(|(_, blob)| blob.content().blob_type() == BlobType::Committee)
+            .map_or_else(
+                || CryptoHash::test_hash("genesis committee"),
+                |(_, blob)| blob.id().hash,
+            );
         Ok(Some(NetworkDescription {
             admin_chain_id: dummy_chain_description(0).id(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),
             genesis_timestamp: Timestamp::from(0),
-            genesis_committee_blob_hash: CryptoHash::test_hash("genesis committee"),
+            genesis_committee_blob_hash,
             name: "dummy network description".to_string(),
         }))
     }
