@@ -303,7 +303,7 @@ impl MatchingEngineState {
                             .remove_entry(&price_ask)
                             .expect("Failed to remove ask level");
                     }
-                    // Collect filled orders with chain_id information
+                    // Collect filled orders with chain ID information
                     for (owner, order_id) in &remove_entry {
                         if let Some(key_book) = self
                             .orders
