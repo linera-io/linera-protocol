@@ -172,6 +172,9 @@ pub enum WorkerError {
     #[error(transparent)]
     ChainError(#[from] Box<ChainError>),
 
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
+
     // Chain access control
     #[error("Block was not signed by an authorized owner")]
     InvalidOwner,
@@ -279,7 +282,8 @@ impl WorkerError {
             | WorkerError::UnexpectedBlob
             | WorkerError::TooManyPublishedBlobs(_)
             | WorkerError::ViewError(ViewError::NotFound(_)) => false,
-            WorkerError::InvalidCrossChainRequest
+            WorkerError::BcsError(_)
+            | WorkerError::InvalidCrossChainRequest
             | WorkerError::ViewError(_)
             | WorkerError::ConfirmedLogEntryNotFound { .. }
             | WorkerError::PreprocessedBlocksEntryNotFound { .. }

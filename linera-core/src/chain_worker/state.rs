@@ -762,61 +762,35 @@ where
         {
             certificate.check(committee)?;
         } else {
-            // Inline committees_for logic with specific error handling.
             let net_description = self
                 .storage
                 .read_network_description()
                 .await?
                 .ok_or_else(|| WorkerError::MissingNetworkDescription)?;
-            let admin_chain_id = net_description.admin_chain_id;
-
-            let committee = if epoch == Epoch::ZERO {
+            let committee_hash = if epoch == Epoch::ZERO {
                 // Genesis epoch is stored in NetworkDescription.
-                let blob_id = BlobId::new(
-                    net_description.genesis_committee_blob_hash,
-                    BlobType::Committee,
-                );
-                let committee_blob = self
-                    .storage
-                    .read_blob(blob_id)
-                    .await?
-                    .ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))?;
-                bcs::from_bytes::<Committee>(committee_blob.bytes())
-                    .map_err(|e| WorkerError::from(linera_views::ViewError::from(e)))?
+                net_description.genesis_committee_blob_hash
             } else {
                 // Read the epoch creation event.
-                let epoch_creation_events = self
+                let event_id = EventId {
+                    chain_id: net_description.admin_chain_id,
+                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                    index: epoch.0,
+                };
+                let event = self
                     .storage
-                    .read_events_from_index(
-                        &admin_chain_id,
-                        &StreamId::system(EPOCH_STREAM_NAME),
-                        epoch.0,
-                    )
-                    .await?;
-
-                let event = epoch_creation_events
-                    .into_iter()
-                    .find(|index_and_event| index_and_event.index == epoch.0)
-                    .ok_or_else(|| {
-                        WorkerError::EventsNotFound(vec![EventId {
-                            chain_id: admin_chain_id,
-                            stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                            index: epoch.0,
-                        }])
-                    })?;
-
-                let committee_hash: CryptoHash = bcs::from_bytes(&event.event)
-                    .map_err(|e| WorkerError::from(linera_views::ViewError::from(e)))?;
-                let blob_id = BlobId::new(committee_hash, BlobType::Committee);
-                let committee_blob = self
-                    .storage
-                    .read_blob(blob_id)
+                    .read_event(event_id.clone())
                     .await?
-                    .ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))?;
-                bcs::from_bytes::<Committee>(committee_blob.bytes())
-                    .map_err(|e| WorkerError::from(linera_views::ViewError::from(e)))?
+                    .ok_or_else(|| WorkerError::EventsNotFound(vec![event_id]))?;
+                bcs::from_bytes(&event)?
             };
-            // This line is duplicated, but this avoids cloning and a lifetimes error.
+            let blob_id = BlobId::new(committee_hash, BlobType::Committee);
+            let committee_blob = self
+                .storage
+                .read_blob(blob_id)
+                .await?
+                .ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))?;
+            let committee = bcs::from_bytes(committee_blob.bytes())?;
             certificate.check(&committee)?;
         }
 
