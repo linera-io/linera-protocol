@@ -251,8 +251,8 @@ impl MatchingEngineState {
     /// * If after the level clearing the order is completely filled then it is not
     ///   inserted. Otherwise, it became a liquidity order in the matching engine
     ///
-    /// Returns: (transfers, order_id, remaining_amount, filled_orders)
-    /// where filled_orders contains (chain_id, owner, order_id) for each filled order
+    /// Returns: `(transfers, order_id, remaining_amount, filled_orders)`
+    /// where `filled_orders` contains `(chain_id, owner, order_id)` for each filled order
     pub async fn insert_and_uncross_market(
         &mut self,
         account: &Account,
