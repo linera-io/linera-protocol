@@ -36,6 +36,22 @@ spec:
             - "{{ .Values.indexer.port }}"
             - "--database-path"
             - "{{ .Values.indexer.databasePath }}"
+            - "--max-cache-size"
+            - "{{ .Values.storageCacheConfig.maxCacheSize }}"
+            - "--max-value-entry-size"
+            - "{{ .Values.storageCacheConfig.maxValueEntrySize }}"
+            - "--max-find-keys-entry-size"
+            - "{{ .Values.storageCacheConfig.maxFindKeysEntrySize }}"
+            - "--max-find-key-values-entry-size"
+            - "{{ .Values.storageCacheConfig.maxFindKeyValuesEntrySize }}"
+            - "--max-cache-entries"
+            - "{{ .Values.storageCacheConfig.maxCacheEntries }}"
+            - "--max-cache-value-size"
+            - "{{ .Values.storageCacheConfig.maxCacheValueSize }}"
+            - "--max-cache-find-keys-size"
+            - "{{ .Values.storageCacheConfig.maxCacheFindKeysSize }}"
+            - "--max-cache-find-key-values-size"
+            - "{{ .Values.storageCacheConfig.maxCacheFindKeyValuesSize }}"
           ports:
             - containerPort: {{ .Values.indexer.port }}
               name: grpc

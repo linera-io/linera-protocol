@@ -53,6 +53,22 @@ services:
       - scylladb:tcp:scylla:9042
       - --storage-replication-factor
       - "1"
+      - --storage-max-cache-size
+      - "10000000"
+      - --storage-max-value-entry-size
+      - "1000000"
+      - --storage-max-find-keys-entry-size
+      - "1000000"
+      - --storage-max-find-key-values-entry-size
+      - "1000000"
+      - --storage-max-cache-entries
+      - "1000"
+      - --storage-max-cache-value-size
+      - "10000000"
+      - --storage-max-cache-find-keys-size
+      - "10000000"
+      - --storage-max-cache-find-key-values-size
+      - "10000000"
       - /config/server.json
     volumes:
       - .:/config
@@ -77,6 +93,22 @@ services:
       - "0"
       - --storage-replication-factor
       - "1"
+      - --storage-max-cache-size
+      - "10000000"
+      - --storage-max-value-entry-size
+      - "1000000"
+      - --storage-max-find-keys-entry-size
+      - "1000000"
+      - --storage-max-find-key-values-entry-size
+      - "1000000"
+      - --storage-max-cache-entries
+      - "1000"
+      - --storage-max-cache-value-size
+      - "10000000"
+      - --storage-max-cache-find-keys-size
+      - "10000000"
+      - --storage-max-cache-find-key-values-size
+      - "10000000"
     volumes:
       - .:/config
     labels:

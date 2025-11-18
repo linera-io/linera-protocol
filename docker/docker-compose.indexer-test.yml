@@ -25,7 +25,17 @@ services:
     ports:
       - "${INDEXER_PORT:-8081}:${INDEXER_PORT:-8081}"
     command: >
-      sh -c "set -ex; ./linera-indexer-grpc --port ${INDEXER_PORT:-8081} --database-path ${INDEXER_DATABASE_PATH:-/data/indexer.db}"
+      sh -c "set -ex; ./linera-indexer-grpc
+      --port ${INDEXER_PORT:-8081}
+      --database-path ${INDEXER_DATABASE_PATH:-/data/indexer.db}
+      --max-cache-size 10000000
+      --max-value-entry-size 1000000
+      --max-find-keys-entry-size 1000000
+      --max-find-key-values-entry-size 1000000
+      --max-cache-entries 1000
+      --max-cache-value-size 10000000
+      --max-cache-find-keys-size 10000000
+      --max-cache-find-key-values-size 10000000"
     environment:
       - INDEXER_PORT=${INDEXER_PORT:-8081}
       - INDEXER_DATABASE_PATH=${INDEXER_DATABASE_PATH:-/data/indexer.db}

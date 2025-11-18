@@ -40,6 +40,26 @@ storage: "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
 # Storage replication factor
 storageReplicationFactor: 1
 
+# LRU cache configuration for storage operations
+# These settings control memory usage for caching storage queries
+storageCacheConfig:
+  # Maximum total cache size in bytes (default: 10MB)
+  maxCacheSize: 10000000
+  # Maximum size of a single value entry in bytes (default: 1MB)
+  maxValueEntrySize: 1000000
+  # Maximum size of a find-keys entry in bytes (default: 1MB)
+  maxFindKeysEntrySize: 1000000
+  # Maximum size of a find-key-values entry in bytes (default: 1MB)
+  maxFindKeyValuesEntrySize: 1000000
+  # Maximum number of entries in the cache (default: 1000)
+  maxCacheEntries: 1000
+  # Maximum memory for value cache in bytes (default: 10MB)
+  maxCacheValueSize: 10000000
+  # Maximum memory for find_keys_by_prefix cache in bytes (default: 10MB)
+  maxCacheFindKeysSize: 10000000
+  # Maximum memory for find_key_values_by_prefix cache in bytes (default: 10MB)
+  maxCacheFindKeyValuesSize: 10000000
+
 # Dual storage mode (RocksDB + ScyllaDB)
 dualStore: false
 
