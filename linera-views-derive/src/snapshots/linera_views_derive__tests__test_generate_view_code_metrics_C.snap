@@ -22,8 +22,11 @@ where
             RegisterView<C, usize>,
         > as linera_views::views::View>::NUM_INIT_KEYS;
     type Context = C;
-    fn context(&self) -> &C {
-        self.register.context()
+    fn context(&self) -> C {
+        use linera_views::context::Context as _;
+        let __bytes_to_trim = 2;
+        let context = self.register.context();
+        context.clone_with_trimmed_key(__bytes_to_trim)
     }
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
         use linera_views::context::Context as _;

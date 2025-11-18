@@ -65,6 +65,18 @@ impl BaseKey {
         Ok(key)
     }
 
+    /// Returns this key with a number of final bytes trimmed.
+    fn trimmed_key(&self, n: usize) -> Result<Vec<u8>, bcs::Error> {
+        if self.bytes.len() < n {
+            return Err(bcs::Error::Custom(format!(
+                "attempted to trim {} bytes from key of length {}",
+                n,
+                self.bytes.len()
+            )));
+        }
+        Ok(self.bytes[0..self.bytes.len() - n].to_vec())
+    }
+
     /// Obtains the short `Vec<u8>` key from the key by serialization.
     pub fn derive_short_key<I: Serialize + ?Sized>(index: &I) -> Result<Vec<u8>, bcs::Error> {
         bcs::to_bytes(index)
@@ -109,6 +121,15 @@ where
     fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self {
         let mut context = self.clone();
         context.base_key_mut().bytes = base_key;
+        context
+    }
+
+    /// Obtains a similar [`Context`] implementation with the last `n` bytes of the base
+    /// key trimmed.
+    fn clone_with_trimmed_key(&self, n: usize) -> Self {
+        let mut context = self.clone();
+        let key = context.base_key().trimmed_key(n).unwrap();
+        context.base_key_mut().bytes = key;
         context
     }
 }

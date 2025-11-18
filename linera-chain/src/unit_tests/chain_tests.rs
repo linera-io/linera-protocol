@@ -267,7 +267,8 @@ async fn test_application_permissions() -> anyhow::Result<()> {
 
     let mut chain = ChainStateView::new(chain_id).await;
 
-    let extra = &chain.context().extra();
+    let context = chain.context();
+    let extra = context.extra();
     {
         let pinned = extra.user_contracts().pin();
         pinned.insert(application_id, application.clone().into());
@@ -721,7 +722,8 @@ async fn prepare_test_with_dummy_mock_application(
     let (app_description, contract_blob, service_blob) = env.make_app_description();
     let application_id = ApplicationId::from(&app_description);
     let application = MockApplication::default();
-    let extra = &chain.context().extra();
+    let context = chain.context();
+    let extra = context.extra();
     {
         let pinned = extra.user_contracts().pin();
         pinned.insert(application_id, application.clone().into());

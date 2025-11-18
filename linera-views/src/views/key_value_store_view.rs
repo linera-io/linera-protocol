@@ -234,7 +234,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for KeyValueStoreView<C> {
     ) -> Self::Target {
         let hash = *self.hash.lock().unwrap();
         KeyValueStoreView {
-            context: ctx.clone()(self.context()),
+            context: ctx.clone()(&self.context),
             deletion_set: self.deletion_set.clone(),
             updates: self.updates.clone(),
             stored_total_size: self.stored_total_size,
@@ -251,8 +251,8 @@ impl<C: Context> View for KeyValueStoreView<C> {
 
     type Context = C;
 
-    fn context(&self) -> &C {
-        &self.context
+    fn context(&self) -> C {
+        self.context.clone()
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {

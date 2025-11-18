@@ -560,7 +560,8 @@ where
                         stream_id,
                         index,
                     };
-                    let extra = self.context().extra();
+                    let context = self.context();
+                    let extra = context.extra();
                     txn_tracker
                         .oracle(|| async {
                             if !extra.contains_event(event_id.clone()).await? {

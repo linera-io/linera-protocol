@@ -57,7 +57,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for ByteSetView<C> {
         ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
     ) -> Self::Target {
         ByteSetView {
-            context: ctx(self.context()),
+            context: ctx(&self.context),
             delete_storage_first: self.delete_storage_first,
             updates: self.updates.clone(),
         }
@@ -69,8 +69,8 @@ impl<C: Context> View for ByteSetView<C> {
 
     type Context = C;
 
-    fn context(&self) -> &C {
-        &self.context
+    fn context(&self) -> C {
+        self.context.clone()
     }
 
     fn pre_load(_context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -409,7 +409,7 @@ impl<C: Context, I: Send + Sync + Serialize> View for SetView<C, I> {
 
     type Context = C;
 
-    fn context(&self) -> &C {
+    fn context(&self) -> C {
         self.set.context()
     }
 
@@ -678,7 +678,7 @@ where
 
     type Context = C;
 
-    fn context(&self) -> &C {
+    fn context(&self) -> C {
         self.set.context()
     }
 

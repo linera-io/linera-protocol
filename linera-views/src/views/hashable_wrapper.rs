@@ -77,8 +77,9 @@ where
 
     type Context = W::Context;
 
-    fn context(&self) -> &Self::Context {
-        self.inner.context()
+    fn context(&self) -> Self::Context {
+        // The inner context has our base key + the KeyTag::Inner byte
+        self.inner.context().clone_with_trimmed_key(1)
     }
 
     fn pre_load(context: &Self::Context) -> Result<Vec<Vec<u8>>, ViewError> {

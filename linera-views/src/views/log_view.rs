@@ -72,8 +72,8 @@ where
 
     type Context = C;
 
-    fn context(&self) -> &C {
-        &self.context
+    fn context(&self) -> C {
+        self.context.clone()
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {

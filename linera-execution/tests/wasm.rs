@@ -48,14 +48,16 @@ async fn test_fuel_for_counter_wasm_application(
     let contract =
         WasmContractModule::from_file("tests/fixtures/counter_contract.wasm", wasm_runtime).await?;
     {
-        let pinned = view.context().extra().user_contracts().pin();
+        let context = view.context();
+        let pinned = context.extra().user_contracts().pin();
         pinned.insert(app_id, contract.into());
     }
 
     let service =
         WasmServiceModule::from_file("tests/fixtures/counter_service.wasm", wasm_runtime).await?;
     {
-        let pinned = view.context().extra().user_services().pin();
+        let context = view.context();
+        let pinned = context.extra().user_services().pin();
         pinned.insert(app_id, service.into());
     }
 

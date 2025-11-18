@@ -123,8 +123,8 @@ impl<W: View> View for ByteCollectionView<W::Context, W> {
 
     type Context = W::Context;
 
-    fn context(&self) -> &Self::Context {
-        &self.context
+    fn context(&self) -> Self::Context {
+        self.context.clone()
     }
 
     fn pre_load(_context: &Self::Context) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -909,7 +909,7 @@ where
 
     type Context = W::Context;
 
-    fn context(&self) -> &Self::Context {
+    fn context(&self) -> Self::Context {
         self.collection.context()
     }
 
@@ -1336,7 +1336,7 @@ impl<I: Send + Sync, W: View> View for CustomCollectionView<W::Context, I, W> {
 
     type Context = W::Context;
 
-    fn context(&self) -> &Self::Context {
+    fn context(&self) -> Self::Context {
         self.collection.context()
     }
 
