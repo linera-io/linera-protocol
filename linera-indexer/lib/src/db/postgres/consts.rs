@@ -30,7 +30,6 @@ CREATE TABLE IF NOT EXISTS blocks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_blocks_chain_height ON blocks(chain_id, height);
-CREATE INDEX IF NOT EXISTS idx_blocks_chain_id ON blocks(chain_id);
 CREATE INDEX IF NOT EXISTS idx_blocks_epoch ON blocks(epoch);
 CREATE INDEX IF NOT EXISTS idx_blocks_timestamp ON blocks(timestamp);
 CREATE INDEX IF NOT EXISTS idx_blocks_state_hash ON blocks(state_hash);
