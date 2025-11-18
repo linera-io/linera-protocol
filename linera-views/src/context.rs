@@ -66,10 +66,10 @@ impl BaseKey {
     }
 
     /// Returns this key with a number of final bytes trimmed.
-    pub fn trimmed_key(&self, n: usize) -> Result<Vec<u8>, bcs::Error> {
+    fn trimmed_key(&self, n: usize) -> Result<Vec<u8>, bcs::Error> {
         if self.bytes.len() < n {
             return Err(bcs::Error::Custom(format!(
-                "attempted to trim {} bytes from key of lenght {}",
+                "attempted to trim {} bytes from key of length {}",
                 n,
                 self.bytes.len()
             )));

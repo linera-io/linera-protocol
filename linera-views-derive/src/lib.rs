@@ -133,6 +133,10 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
         });
     }
 
+    // derive_key_logic above adds one byte to the key as a tag, and then either one or two more
+    // bytes for field indices, depending on how many fields there are. Thus, we need to trim 2
+    // bytes if there are less than 256 child fields (then the field index fits within one byte),
+    // or 3 bytes if there are more.
     let trim_key_logic = if num_fields < 256 {
         quote! {
             let __bytes_to_trim = 2;
