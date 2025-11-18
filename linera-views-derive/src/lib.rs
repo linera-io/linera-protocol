@@ -176,6 +176,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
             type Context = #context;
 
             fn context(&self) -> #context {
+                use linera_views::{context::Context as _};
                 #trim_key_logic
                 let context = self.#first_name_quote.context();
                 context.clone_with_trimmed_key(__bytes_to_trim)
