@@ -25,8 +25,11 @@ where
             RegisterView<CustomContext, usize>,
         > as linera_views::views::View>::NUM_INIT_KEYS;
     type Context = CustomContext;
-    fn context(&self) -> &CustomContext {
-        self.register.context()
+    fn context(&self) -> CustomContext {
+        use linera_views::context::Context as _;
+        let __bytes_to_trim = 2;
+        let context = self.register.context();
+        context.clone_with_trimmed_key(__bytes_to_trim)
     }
     fn pre_load(
         context: &CustomContext,
