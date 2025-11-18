@@ -3,14 +3,14 @@ set -e
 
 echo "Starting Linera Explorer..."
 
-# Wait for database file to exist (created by indexer)
-echo "Waiting for indexer database..."
-while [ ! -f "${DB_PATH:-/data/indexer.db}" ]; do
-    echo "Database not found at ${DB_PATH:-/data/indexer.db}, waiting..."
-    sleep 2
-done
+# Log which database type is being used
+if [ -n "$DATABASE_URL" ]; then
+    echo "Using PostgreSQL database"
+else
+    echo "Using SQLite database at ${DB_PATH:-/data/indexer.db}"
+fi
 
-echo "Database found, starting services..."
+echo "Starting services..."
 
 # Start the API server in the background
 echo "Starting API server on port 3002..."
