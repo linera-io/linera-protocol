@@ -83,7 +83,7 @@ where
         ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
     ) -> Self::Target {
         ByteMapView {
-            context: ctx(self.context()),
+            context: ctx(&self.context),
             deletion_set: self.deletion_set.clone(),
             updates: self.updates.clone(),
         }
@@ -133,8 +133,8 @@ where
 
     type Context = C;
 
-    fn context(&self) -> &C {
-        &self.context
+    fn context(&self) -> C {
+        self.context.clone()
     }
 
     fn pre_load(_context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -1035,7 +1035,7 @@ where
 
     type Context = C;
 
-    fn context(&self) -> &C {
+    fn context(&self) -> C {
         self.map.context()
     }
 
@@ -1597,7 +1597,7 @@ where
 
     type Context = C;
 
-    fn context(&self) -> &C {
+    fn context(&self) -> C {
         self.map.context()
     }
 

@@ -62,7 +62,7 @@ where
     ) -> Self::Target {
         RegisterView {
             delete_storage_first: self.delete_storage_first,
-            context: ctx(self.context()),
+            context: ctx(&self.context),
             stored_value: self.stored_value.clone(),
             update: self.update.clone(),
         }
@@ -78,8 +78,8 @@ where
 
     type Context = C;
 
-    fn context(&self) -> &C {
-        &self.context
+    fn context(&self) -> C {
+        self.context.clone()
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {

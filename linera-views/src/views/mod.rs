@@ -62,7 +62,7 @@ pub trait View: Sized {
     type Context: crate::context::Context;
 
     /// Obtains a mutable reference to the internal context.
-    fn context(&self) -> &Self::Context;
+    fn context(&self) -> Self::Context;
 
     /// Creates the keys needed for loading the view
     fn pre_load(context: &Self::Context) -> Result<Vec<Vec<u8>>, ViewError>;

@@ -508,7 +508,8 @@ where
             }
 
             ReadEvent { event_id, callback } => {
-                let extra = self.state.context().extra();
+                let context = self.state.context();
+                let extra = context.extra();
                 let event = self
                     .txn_tracker
                     .oracle(|| async {

@@ -220,7 +220,8 @@ where
         service: Blob,
     ) -> anyhow::Result<(ApplicationId, MockApplication)> {
         let id = From::from(&description);
-        let extra = self.context().extra();
+        let context = self.context();
+        let extra = context.extra();
         let mock_application = MockApplication::default();
 
         extra

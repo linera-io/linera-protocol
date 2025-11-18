@@ -133,6 +133,16 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
         });
     }
 
+    let trim_key_logic = if num_fields < 256 {
+        quote! {
+            let __bytes_to_trim = 2;
+        }
+    } else {
+        quote! {
+            let __bytes_to_trim = 3;
+        }
+    };
+
     let first_name_quote = name_quotes.first().ok_or(Error::new_spanned(
         &input,
         "Struct must have at least one field",
@@ -165,8 +175,10 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
 
             type Context = #context;
 
-            fn context(&self) -> &#context {
-                self.#first_name_quote.context()
+            fn context(&self) -> #context {
+                #trim_key_logic
+                let context = self.#first_name_quote.context();
+                context.clone_with_trimmed_key(__bytes_to_trim)
             }
 
             fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
