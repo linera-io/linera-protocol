@@ -1,7 +1,7 @@
 import { Block, BlockInfo, IncomingBundle, PostedMessage, ChainInfo, Operation, Message, Event, OracleResponse, IncomingBundleWithMessages } from '../types/blockchain';
 
-// Use relative path for API calls - works in all environments (local dev via proxy, production via ingress)
-const API_BASE_URL = '/api';
+// Use environment variable if set (for production), otherwise use relative path (for dev with Vite proxy)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export class BlockchainAPI {
   // Get all blocks with pagination

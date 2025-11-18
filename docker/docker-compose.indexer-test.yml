@@ -151,6 +151,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-linera_indexer}
       - EXPLORER_FRONTEND_PORT=${EXPLORER_FRONTEND_PORT:-3001}
       - EXPLORER_API_PORT=${EXPLORER_API_PORT:-3002}
+      - VITE_API_BASE_URL=http://localhost:${EXPLORER_API_PORT:-3002}/api
     depends_on:
       linera-indexer:
         condition: service_healthy

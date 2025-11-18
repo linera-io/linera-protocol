@@ -2,6 +2,9 @@
 # Stage 1: Build the frontend
 FROM node:18-alpine AS frontend-builder
 
+# Build argument for API base URL (injected at build time)
+ARG VITE_API_BASE_URL=http://localhost:3002/api
+
 RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
@@ -20,7 +23,8 @@ RUN npm ci
 # Copy source code
 COPY linera-explorer-new/src ./src
 
-# Build frontend
+# Build frontend with the API URL baked in
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN npm run build
 
 # Stage 2: Setup backend dependencies
