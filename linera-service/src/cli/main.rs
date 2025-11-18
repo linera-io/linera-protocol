@@ -2234,6 +2234,7 @@ fn main() -> anyhow::Result<process::ExitCode> {
         builder
     };
 
+    runtime.thread_stack_size(4 << 20);
     if let Some(blocking_threads) = options.tokio_blocking_threads {
         runtime.max_blocking_threads(blocking_threads);
     }
