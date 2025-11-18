@@ -13,7 +13,7 @@ fi
 echo "Starting services..."
 
 # Start the API server in the background
-echo "Starting API server on port 3002..."
+echo "Starting API server on port ${EXPLORER_API_PORT:-3002}..."
 cd /app && node server/index.js &
 API_PID=$!
 
@@ -21,8 +21,8 @@ API_PID=$!
 sleep 3
 
 # Start frontend server (serve static files)
-echo "Starting frontend server on port 3001..."
-npx serve -s dist -l 3001 &
+echo "Starting frontend server on port ${EXPLORER_FRONTEND_PORT:-3001}..."
+npx serve -s dist -l ${EXPLORER_FRONTEND_PORT:-3001} &
 FRONTEND_PID=$!
 
 # Function to handle shutdown
