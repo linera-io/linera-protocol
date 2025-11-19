@@ -142,6 +142,8 @@ pub struct MessagePolicy {
     /// A collection of applications: If `Some`, only bundles with at least one message by any
     /// of these applications will be accepted.
     accept_messages_with_application_ids: Option<HashSet<GenericApplicationId>>,
+    /// A collection of applications: If `Some`, only bundles all of whose messages are by these
+    /// applications will be accepted.
     reject_messages_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
 }
 
