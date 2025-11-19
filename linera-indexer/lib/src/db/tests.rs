@@ -11,6 +11,7 @@ use linera_base::{
     data_types::{BlockHeight, Timestamp},
     identifiers::{BlobId, ChainId},
 };
+use linera_chain::types::ConfirmedBlockCertificate;
 use sqlx::Sqlite;
 
 use crate::{
@@ -35,6 +36,12 @@ impl Default for MockFailingDatabase {
 
 pub enum MockDatabaseError {
     Serialization(String),
+}
+
+impl From<bincode::Error> for MockDatabaseError {
+    fn from(err: bincode::Error) -> Self {
+        MockDatabaseError::Serialization(err.to_string())
+    }
 }
 
 impl From<MockDatabaseError> for ProcessingError {
@@ -192,28 +199,42 @@ impl IndexerDatabase for MockSuccessDatabase {
     /// Override the high-level method to succeed and store data
     async fn store_block_with_blobs(
         &self,
-        block_hash: &CryptoHash,
-        chain_id: &ChainId,
-        height: BlockHeight,
-        timestamp: Timestamp,
-        block_data: &[u8],
-        blobs: &[(BlobId, Vec<u8>, Option<u32>)],
-    ) -> Result<(), Self::Error> {
-        // Store all blobs
+        block_cert: &ConfirmedBlockCertificate,
+        pending_blobs: &HashMap<BlobId, Vec<u8>>,
+    ) -> Result<(), Self::Error>
+    where
+        Self::Error: From<bincode::Error>,
+    {
+        let block_hash = block_cert.hash();
+        let chain_id = block_cert.inner().chain_id();
+        let height = block_cert.inner().height();
+        let timestamp = block_cert.inner().timestamp();
+
+        let block_data = bincode::serialize(block_cert).unwrap();
+
         {
             let mut blob_storage = self.blobs.write().unwrap();
-            for (blob_id, blob_data, _txn_index) in blobs {
+            for (blob_id, blob_data) in pending_blobs {
                 blob_storage.insert(*blob_id, blob_data.clone());
+            }
+        }
+
+        let block = block_cert.inner().block();
+        {
+            let mut blob_storage = self.blobs.write().unwrap();
+            for transaction_blobs in block.body.blobs.iter() {
+                for blob in transaction_blobs {
+                    let blob_id = blob.id();
+                    let blob_data = bincode::serialize(blob).unwrap();
+                    blob_storage.insert(blob_id, blob_data);
+                }
             }
         }
 
         // Store the block
         {
             let mut block_storage = self.blocks.write().unwrap();
-            block_storage.insert(
-                *block_hash,
-                (*chain_id, height, timestamp, block_data.to_vec()),
-            );
+            block_storage.insert(block_hash, (chain_id, height, timestamp, block_data));
         }
 
         Ok(())

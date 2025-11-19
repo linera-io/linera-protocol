@@ -8,15 +8,12 @@ use std::{collections::HashMap, sync::RwLock};
 use async_trait::async_trait;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::BlockHeight,
+    data_types::{BlockHeight, Timestamp},
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types::IncomingBundle;
+use linera_chain::types::ConfirmedBlockCertificate;
 
-use crate::{
-    database_trait::{DatabaseTransaction, IndexerDatabase},
-    sqlite_db::{IncomingBundleInfo, PostedMessageInfo, SqliteError},
-};
+use crate::db::{sqlite::SqliteError, IncomingBundleInfo, IndexerDatabase, PostedMessageInfo};
 
 /// Mock database that fails on transaction operations for testing error paths
 pub struct MockFailingDatabase;
@@ -35,7 +32,10 @@ impl Default for MockFailingDatabase {
 
 #[async_trait]
 impl IndexerDatabase for MockFailingDatabase {
-    async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, SqliteError> {
+    type Error = SqliteError;
+    type Transaction<'a> = ();
+
+    async fn begin_transaction(&self) -> Result<Self::Transaction<'_>, SqliteError> {
         // Always fail transaction creation for testing error paths
         Err(SqliteError::Serialization(
             "Mock: Cannot create real transaction".to_string(),
@@ -44,7 +44,7 @@ impl IndexerDatabase for MockFailingDatabase {
 
     async fn insert_block_tx(
         &self,
-        _tx: &mut DatabaseTransaction<'_>,
+        _tx: &mut Self::Transaction<'_>,
         _hash: &CryptoHash,
         _chain_id: &ChainId,
         _height: BlockHeight,
@@ -54,7 +54,18 @@ impl IndexerDatabase for MockFailingDatabase {
         Ok(())
     }
 
-    async fn commit_transaction(&self, _tx: DatabaseTransaction<'_>) -> Result<(), SqliteError> {
+    async fn insert_blob_tx(
+        &self,
+        _tx: &mut Self::Transaction<'_>,
+        _blob_id: &BlobId,
+        _data: &[u8],
+        _block_hash: Option<CryptoHash>,
+        _transaction_index: Option<u32>,
+    ) -> Result<(), SqliteError> {
+        Ok(())
+    }
+
+    async fn commit_transaction(&self, _tx: Self::Transaction<'_>) -> Result<(), SqliteError> {
         Ok(())
     }
 
@@ -158,33 +169,57 @@ impl MockSuccessDatabase {
 
 #[async_trait]
 impl IndexerDatabase for MockSuccessDatabase {
+    type Error = SqliteError;
+    type Transaction<'a> = ();
+
     /// Override the high-level method to succeed and store data
     async fn store_block_with_blobs(
         &self,
-        block_hash: &CryptoHash,
-        chain_id: &ChainId,
-        height: BlockHeight,
-        timestamp: Timestamp,
-        block_data: &[u8],
-        blobs: &[(BlobId, Vec<u8>, Option<u32>)],
-    ) -> Result<(), SqliteError> {
-        // Store all blobs
+        block_cert: &ConfirmedBlockCertificate,
+        pending_blobs: &HashMap<BlobId, Vec<u8>>,
+    ) -> Result<(), SqliteError>
+    where
+        SqliteError: From<bincode::Error>,
+    {
+        // Extract block metadata
+        let block_hash = block_cert.hash();
+        let chain_id = block_cert.inner().chain_id();
+        let height = block_cert.inner().height();
+
+        // Serialize the block certificate
+        let block_data = bincode::serialize(block_cert).unwrap();
+
+        // Store standalone blobs
         {
             let mut blob_storage = self.blobs.write().unwrap();
-            for (blob_id, blob_data, _txn_index) in blobs {
+            for (blob_id, blob_data) in pending_blobs {
                 blob_storage.insert(*blob_id, blob_data.clone());
+            }
+        }
+
+        // Extract and store blobs from the block body
+        let block = block_cert.inner().block();
+        {
+            let mut blob_storage = self.blobs.write().unwrap();
+            for transaction_blobs in block.body.blobs.iter() {
+                for blob in transaction_blobs {
+                    let blob_id = blob.id();
+                    let blob_data = bincode::serialize(blob).unwrap();
+                    blob_storage.insert(blob_id, blob_data);
+                }
             }
         }
 
         // Store the block
         {
             let mut block_storage = self.blocks.write().unwrap();
-            block_storage.insert(*block_hash, (*chain_id, height, block_data.to_vec()));
+            block_storage.insert(block_hash, (chain_id, height, block_data));
         }
 
         Ok(())
     }
-    async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, SqliteError> {
+
+    async fn begin_transaction(&self) -> Result<Self::Transaction<'_>, SqliteError> {
         // We can't create a real transaction, but for successful testing we can just
         // return an error that indicates we can't create a mock transaction
         Err(SqliteError::Serialization(
@@ -194,7 +229,7 @@ impl IndexerDatabase for MockSuccessDatabase {
 
     async fn insert_block_tx(
         &self,
-        _tx: &mut DatabaseTransaction<'_>,
+        _tx: &mut Self::Transaction<'_>,
         _hash: &CryptoHash,
         _chain_id: &ChainId,
         _height: BlockHeight,
@@ -204,7 +239,18 @@ impl IndexerDatabase for MockSuccessDatabase {
         Ok(())
     }
 
-    async fn commit_transaction(&self, _tx: DatabaseTransaction<'_>) -> Result<(), SqliteError> {
+    async fn insert_blob_tx(
+        &self,
+        _tx: &mut Self::Transaction<'_>,
+        _blob_id: &BlobId,
+        _data: &[u8],
+        _block_hash: Option<CryptoHash>,
+        _transaction_index: Option<u32>,
+    ) -> Result<(), SqliteError> {
+        Ok(())
+    }
+
+    async fn commit_transaction(&self, _tx: Self::Transaction<'_>) -> Result<(), SqliteError> {
         Ok(())
     }
 
