@@ -250,6 +250,144 @@ async fn test_incoming_bundles_storage_and_query() {
     .await;
 }
 
+#[tokio::test]
+async fn test_block_with_embedded_blobs() {
+    run_with_postgres(|database_url| async move {
+        let db = PostgresDatabase::new(&database_url)
+            .await
+            .expect("Failed to create test database");
+
+        // Create blobs that will be embedded in the block
+        let blob1 = Blob::new_data(b"embedded blob 1".to_vec());
+        let blob2 = Blob::new_data(b"embedded blob 2".to_vec());
+        let blob3 = Blob::new_data(b"embedded blob 3".to_vec());
+
+        // Create a standalone blob (not in the block)
+        let standalone_blob = Blob::new_data(b"standalone blob".to_vec());
+        let standalone_blob_data = bincode::serialize(&standalone_blob).unwrap();
+
+        // Create a test block with blobs in its body
+        let chain_id = ChainId(CryptoHash::new(&TestString::new("test_chain")));
+        let height = BlockHeight(1);
+        let timestamp = Timestamp::now();
+
+        let mut test_block = create_test_block(chain_id, height);
+        // Add blobs to two different transactions
+        test_block.body.blobs = vec![
+            vec![blob1.clone(), blob2.clone()], // Transaction 0 has 2 blobs
+            vec![blob3.clone()],                // Transaction 1 has 1 blob
+        ];
+
+        let block_hash = Hashed::new(test_block.clone()).hash();
+        let block_data = bincode::serialize(&test_block).unwrap();
+
+        // Prepare blobs for storage:
+        // - standalone blob with no transaction index
+        // - embedded blobs with their transaction indices
+        let blobs = vec![
+            (standalone_blob.id(), standalone_blob_data.clone(), None),
+            (blob1.id(), bincode::serialize(&blob1).unwrap(), Some(0)),
+            (blob2.id(), bincode::serialize(&blob2).unwrap(), Some(0)),
+            (blob3.id(), bincode::serialize(&blob3).unwrap(), Some(1)),
+        ];
+
+        // Store block with blobs
+        db.store_block_with_blobs(
+            &block_hash,
+            &chain_id,
+            height,
+            timestamp,
+            &block_data,
+            &blobs,
+        )
+        .await
+        .unwrap();
+
+        // Verify block was stored
+        let retrieved_block = db.get_block(&block_hash).await.unwrap();
+        assert_eq!(block_data, retrieved_block);
+
+        // Verify all blobs were stored
+        assert!(db.get_blob(&standalone_blob.id()).await.is_ok());
+        assert!(db.get_blob(&blob1.id()).await.is_ok());
+        assert!(db.get_blob(&blob2.id()).await.is_ok());
+        assert!(db.get_blob(&blob3.id()).await.is_ok());
+
+        // Query the database directly to verify metadata
+        use sqlx::Row;
+        let pool = &db.pool;
+
+        // Check standalone blob has no block_hash or transaction_index
+        let standalone_row =
+            sqlx::query("SELECT block_hash, transaction_index FROM blobs WHERE hash = $1")
+                .bind(standalone_blob.id().hash.to_string())
+                .fetch_one(pool)
+                .await
+                .unwrap();
+
+        let block_hash_val: Option<String> = standalone_row.get("block_hash");
+        let txn_index_val: Option<i64> = standalone_row.get("transaction_index");
+        assert!(
+            block_hash_val.is_none(),
+            "Standalone blob should not have block_hash"
+        );
+        assert!(
+            txn_index_val.is_none(),
+            "Standalone blob should not have transaction_index"
+        );
+
+        // Check embedded blobs have correct block_hash and transaction_index
+        let blob1_row =
+            sqlx::query("SELECT block_hash, transaction_index FROM blobs WHERE hash = $1")
+                .bind(blob1.id().hash.to_string())
+                .fetch_one(pool)
+                .await
+                .unwrap();
+
+        let blob1_block_hash: Option<String> = blob1_row.get("block_hash");
+        let blob1_txn_index: Option<i64> = blob1_row.get("transaction_index");
+        assert_eq!(
+            blob1_block_hash,
+            Some(block_hash.to_string()),
+            "Blob1 should reference the block"
+        );
+        assert_eq!(blob1_txn_index, Some(0), "Blob1 should be in transaction 0");
+
+        let blob2_row =
+            sqlx::query("SELECT block_hash, transaction_index FROM blobs WHERE hash = $1")
+                .bind(blob2.id().hash.to_string())
+                .fetch_one(pool)
+                .await
+                .unwrap();
+
+        let blob2_block_hash: Option<String> = blob2_row.get("block_hash");
+        let blob2_txn_index: Option<i64> = blob2_row.get("transaction_index");
+        assert_eq!(
+            blob2_block_hash,
+            Some(block_hash.to_string()),
+            "Blob2 should reference the block"
+        );
+        assert_eq!(blob2_txn_index, Some(0), "Blob2 should be in transaction 0");
+
+        let blob3_row =
+            sqlx::query("SELECT block_hash, transaction_index FROM blobs WHERE hash = $1")
+                .bind(blob3.id().hash.to_string())
+                .fetch_one(pool)
+                .await
+                .unwrap();
+
+        let blob3_block_hash: Option<String> = blob3_row.get("block_hash");
+        let blob3_txn_index: Option<i64> = blob3_row.get("transaction_index");
+        assert_eq!(
+            blob3_block_hash,
+            Some(block_hash.to_string()),
+            "Blob3 should reference the block"
+        );
+        assert_eq!(blob3_txn_index, Some(1), "Blob3 should be in transaction 1");
+    })
+    .await;
+}
+
 /// Helper function to run a test with a Postgres container
 async fn run_with_postgres<F, Fut>(test_fn: F)
 where
