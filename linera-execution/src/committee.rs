@@ -68,7 +68,8 @@ pub struct Committee {
     total_votes: u64,
     /// The threshold to form a quorum.
     quorum_threshold: u64,
-    /// The threshold to prove the validity of a statement.
+    /// The threshold to prove the validity of a statement. I.e. the assumption is that strictly
+    /// less than `validity_threshold` are faulty.
     validity_threshold: u64,
     /// The policy agreed on for this epoch.
     policy: ResourceControlPolicy,
