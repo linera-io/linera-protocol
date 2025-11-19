@@ -5,7 +5,7 @@ use std::{collections::HashSet, fmt, iter, path::PathBuf};
 
 use linera_base::{
     data_types::{ApplicationPermissions, TimeDelta},
-    identifiers::{AccountOwner, ApplicationId, ChainId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, GenericApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
     time::Duration,
 };
@@ -135,6 +135,16 @@ pub struct ClientContextOptions {
     #[arg(long, value_parser = util::parse_chain_set)]
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 
+    /// A set of application IDs. If specified, only bundles with at least one message from one of
+    /// these applications will be accepted.
+    #[arg(long, value_parser = util::parse_app_set)]
+    pub reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
+
+    /// A set of application IDs. If specified, only bundles where all messages are from one of
+    /// these applications will be accepted.
+    #[arg(long, value_parser = util::parse_app_set)]
+    pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
+
     /// Enable timing reports during operations
     #[cfg(not(web))]
     #[arg(long)]
@@ -247,6 +257,9 @@ impl ClientContextOptions {
         let message_policy = MessagePolicy::new(
             self.blanket_message_policy,
             self.restrict_chain_ids_to.clone(),
+            self.reject_message_bundles_without_application_ids.clone(),
+            self.reject_message_bundles_with_other_application_ids
+                .clone(),
         );
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);

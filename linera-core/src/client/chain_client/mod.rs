@@ -521,12 +521,7 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
-            .filter_map(|mut bundle| {
-                self.options
-                    .message_policy
-                    .must_handle(&mut bundle)
-                    .then_some(bundle)
-            })
+            .filter_map(|bundle| self.options.message_policy.apply(bundle))
             .take(self.options.max_pending_message_bundles)
             .collect())
     }
