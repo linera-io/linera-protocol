@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
+use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Operation as CrowdFundingOperation};
 use fungible::{FungibleOperation, InitialState, Parameters};
 use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
@@ -927,6 +928,227 @@ where
         operations: vec![],
     };
     assert_eq!(outcome, expected);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_memory_message_policy_accept_apps(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_message_policy_accept_apps(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+#[ignore]
+#[cfg(feature = "storage-service")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_service_message_policy_accept_apps(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_message_policy_accept_apps(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime))
+        .await
+}
+
+#[ignore]
+#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_rocks_db_message_policy_accept_apps(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_message_policy_accept_apps(
+        RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await,
+    )
+    .await
+}
+
+#[ignore]
+#[cfg(feature = "dynamodb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_message_policy_accept_apps(
+    wasm_runtime: WasmRuntime,
+) -> anyhow::Result<()> {
+    run_test_message_policy_accept_apps(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime))
+        .await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_message_policy_accept_apps(
+    wasm_runtime: WasmRuntime,
+) -> anyhow::Result<()> {
+    run_test_message_policy_accept_apps(ScyllaDbStorageBuilder::with_wasm_runtime(wasm_runtime))
+        .await
+}
+
+async fn run_test_message_policy_accept_apps<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let keys = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
+        .await?
+        .with_policy(ResourceControlPolicy::all_categories());
+    let pledger_chain = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let mut campaign_chain = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
+
+    let pledger_owner = pledger_chain.preferred_owner().unwrap();
+    let campaign_owner = campaign_chain.preferred_owner().unwrap();
+
+    // Create a fungible token application.
+    let fungible_module = pledger_chain.publish_wasm_example("fungible").await?;
+    let fungible_module =
+        fungible_module.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
+    let accounts = BTreeMap::from_iter([(pledger_owner, Amount::from_tokens(1_000))]);
+    let state = InitialState { accounts };
+    let params = Parameters::new("FUN");
+    let (fungible_id, _cert) = pledger_chain
+        .create_application(fungible_module, &params, &state, vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // Create a crowd-funding application that uses the fungible token.
+    let crowd_funding_module = pledger_chain.publish_wasm_example("crowd-funding").await?;
+    let crowd_funding_module =
+        crowd_funding_module.with_abi::<CrowdFundingAbi, ApplicationId, InstantiationArgument>();
+    let deadline = Timestamp::from(u64::MAX);
+    let target = Amount::from_tokens(10);
+    let instantiation_arg = InstantiationArgument {
+        owner: campaign_owner,
+        deadline,
+        target,
+    };
+    let (crowd_funding_id, _cert) = campaign_chain
+        .create_application(
+            crowd_funding_module,
+            &fungible_id.forget_abi(),
+            &instantiation_arg,
+            vec![],
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Make a pledge from pledger_chain to campaign_chain.
+    // This creates a cross-chain bundle with messages from both fungible and crowd-funding apps.
+    let pledge_amount = Amount::from_tokens(5);
+    pledger_chain
+        .execute_operation(Operation::user(
+            crowd_funding_id,
+            &CrowdFundingOperation::Pledge {
+                owner: pledger_owner,
+                amount: pledge_amount,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+
+    campaign_chain.synchronize_from_validators().await?;
+
+    // Test 1: Accept bundles with at least one message from fungible app.
+    campaign_chain.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        Some([fungible_id.forget_abi().into()].into_iter().collect()),
+        None,
+    );
+    let certs = campaign_chain.process_inbox().await?.0;
+    assert_eq!(certs.len(), 1, "Should accept bundle with fungible message");
+
+    // Reset for next test by making another pledge.
+    pledger_chain
+        .execute_operation(Operation::user(
+            crowd_funding_id,
+            &CrowdFundingOperation::Pledge {
+                owner: pledger_owner,
+                amount: pledge_amount,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+    campaign_chain.synchronize_from_validators().await?;
+
+    // Test 2: Accept bundles with at least one message from crowd-funding app.
+    campaign_chain.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        Some([crowd_funding_id.forget_abi().into()].into_iter().collect()),
+        None,
+    );
+    let certs = campaign_chain.process_inbox().await?.0;
+    assert_eq!(
+        certs.len(),
+        1,
+        "Should accept bundle with crowd-funding message"
+    );
+
+    // Reset for next test.
+    pledger_chain
+        .execute_operation(Operation::user(
+            crowd_funding_id,
+            &CrowdFundingOperation::Pledge {
+                owner: pledger_owner,
+                amount: pledge_amount,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+    campaign_chain.synchronize_from_validators().await?;
+
+    // Test 3: Reject bundles without any message from a non-existent app.
+    // Use a different application description hash to create a fake app ID.
+    let fake_app_id = ApplicationId::new(CryptoHash::test_hash("fake app"));
+    campaign_chain.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        Some([fake_app_id.into()].into_iter().collect()),
+        None,
+    );
+    let certs = campaign_chain.process_inbox().await?.0;
+    assert_eq!(
+        certs.len(),
+        0,
+        "Should reject bundle without message from fake app"
+    );
+
+    // Test 4: Reject bundles that contain messages from apps not in the allowlist.
+    // The bundle has messages from both fungible and crowd-funding, but we only allow fungible.
+    campaign_chain.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        None,
+        Some([fungible_id.forget_abi().into()].into_iter().collect()),
+    );
+    let certs = campaign_chain.process_inbox().await?.0;
+    assert_eq!(
+        certs.len(),
+        0,
+        "Should reject bundle with message from non-allowed crowd-funding app"
+    );
+
+    // Test 5: Accept bundles when all app messages are in the allowlist.
+    campaign_chain.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        None,
+        Some(
+            [
+                fungible_id.forget_abi().into(),
+                crowd_funding_id.forget_abi().into(),
+            ]
+            .into_iter()
+            .collect(),
+        ),
+    );
+    let certs = campaign_chain.process_inbox().await?.0;
+    assert_eq!(
+        certs.len(),
+        1,
+        "Should accept bundle when all app messages are allowed"
+    );
 
     Ok(())
 }
