@@ -823,6 +823,8 @@ where
     receiver.options_mut().message_policy = MessagePolicy::new(
         BlanketMessagePolicy::Accept,
         Some([sender.chain_id()].into_iter().collect()),
+        None,
+        None,
     );
 
     // Receiver should only process the event from sender now.
@@ -844,7 +846,8 @@ where
     );
 
     // Let's receive from everyone again.
-    receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Accept, None);
+    receiver.options_mut().message_policy =
+        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None);
 
     // Receiver should now process the event from sender2 as well.
     let certs = receiver.process_inbox().await.unwrap().0;

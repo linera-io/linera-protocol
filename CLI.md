@@ -169,6 +169,8 @@ Client implementation and command-line tool for the Linera blockchain
     Don't include any messages in blocks, and don't make any decision whether to accept or reject
 
 * `--restrict-chain-ids-to <RESTRICT_CHAIN_IDS_TO>` — A set of chains to restrict incoming messages from. By default, messages from all chains are accepted. To reject messages from all chains, specify an empty string
+* `--accept-messages-with-application-ids <ACCEPT_MESSAGES_WITH_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles with at least one message from one of these applications will be accepted
+* `--reject-messages-with-other-application-ids <REJECT_MESSAGES_WITH_OTHER_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles where all messages are from one of these applications will be accepted
 * `--timings` — Enable timing reports during operations
 * `--timing-interval <TIMING_INTERVAL>` — Interval in seconds between timing reports (defaults to 5)
 

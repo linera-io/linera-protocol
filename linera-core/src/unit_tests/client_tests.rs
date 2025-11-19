@@ -2697,7 +2697,8 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Ignore, None);
+    receiver.options_mut().message_policy =
+        MessagePolicy::new(BlanketMessagePolicy::Ignore, None, None, None);
     receiver.synchronize_from_validators().await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
@@ -2708,7 +2709,8 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Reject, None);
+    receiver.options_mut().message_policy =
+        MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None);
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     sender.synchronize_from_validators().await?;
@@ -2742,6 +2744,8 @@ where
     receiver.options_mut().message_policy = MessagePolicy::new(
         BlanketMessagePolicy::Accept,
         Some([sender.chain_id()].into_iter().collect()),
+        None,
+        None,
     );
     receiver.synchronize_from_validators().await?;
     let certs = receiver.process_inbox().await?.0;
@@ -2750,7 +2754,8 @@ where
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ONE);
 
     // Let's accept the other one, too.
-    receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Accept, None);
+    receiver.options_mut().message_policy =
+        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None);
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     assert_eq!(
@@ -3121,7 +3126,7 @@ where
             None,
             BlockHeight::ZERO,
             chain_client::Options {
-                message_policy: MessagePolicy::new(BlanketMessagePolicy::Reject, None),
+                message_policy: MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None),
                 ..chain_client::Options::test_default()
             },
         )
