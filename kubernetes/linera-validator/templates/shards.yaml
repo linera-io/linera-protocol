@@ -93,7 +93,9 @@ spec:
                 --storage {{ .Values.storage | quote }} \
                 --server /config/server.json \
                 --shard $ORDINAL \
-                --storage-replication-factor {{ .Values.storageReplicationFactor | quote }}
+                --storage-replication-factor {{ .Values.storageReplicationFactor | quote }} \
+                --storage-max-cache-size {{ .Values.storageCacheConfig.maxCacheSize | int }} \
+                --storage-max-cache-entries {{ .Values.storageCacheConfig.maxCacheEntries | int }} \
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}

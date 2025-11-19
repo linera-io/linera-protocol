@@ -99,6 +99,8 @@ spec:
               exec ./linera-proxy \
                 --storage scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042 \
                 --storage-replication-factor {{ .Values.storageReplicationFactor | quote }} \
+                --storage-max-cache-size {{ .Values.storageCacheConfig.maxCacheSize | int }} \
+                --storage-max-cache-entries {{ .Values.storageCacheConfig.maxCacheEntries | int }} \
                 --id "$ORDINAL" \
                 /config/server.json
           env:

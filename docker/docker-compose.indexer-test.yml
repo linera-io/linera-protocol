@@ -10,7 +10,8 @@ services:
     environment:
       - LINERA_STORAGE_SERVICE_PORT=${LINERA_STORAGE_SERVICE_PORT:-1235}
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost ${LINERA_STORAGE_SERVICE_PORT:-1235}"]
+      test:
+        ["CMD-SHELL", "nc -z localhost ${LINERA_STORAGE_SERVICE_PORT:-1235}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -25,7 +26,9 @@ services:
     ports:
       - "${INDEXER_PORT:-8081}:${INDEXER_PORT:-8081}"
     command: >
-      sh -c "set -ex; ./linera-indexer-grpc --port ${INDEXER_PORT:-8081} --database-path ${INDEXER_DATABASE_PATH:-/data/indexer.db}"
+      sh -c "set -ex; ./linera-indexer-grpc
+      --port ${INDEXER_PORT:-8081}
+      --database-path ${INDEXER_DATABASE_PATH:-/data/indexer.db}
     environment:
       - INDEXER_PORT=${INDEXER_PORT:-8081}
       - INDEXER_DATABASE_PATH=${INDEXER_DATABASE_PATH:-/data/indexer.db}
@@ -127,7 +130,11 @@ services:
       linera-indexer:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${EXPLORER_API_PORT:-3002}/api/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:${EXPLORER_API_PORT:-3002}/api/health || exit 1",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -146,3 +153,4 @@ volumes:
 networks:
   linera-network:
     driver: bridge
+
