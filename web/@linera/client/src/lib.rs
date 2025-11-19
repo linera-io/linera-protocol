@@ -83,6 +83,8 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     wait_for_outgoing_messages: false,
     blanket_message_policy: linera_core::client::BlanketMessagePolicy::Accept,
     restrict_chain_ids_to: None,
+    accept_messages_with_application_ids: None,
+    reject_messages_with_other_application_ids: None,
     long_lived_services: false,
     blob_download_timeout: linera_base::time::Duration::from_millis(1000),
     certificate_batch_download_timeout: linera_base::time::Duration::from_millis(1000),
