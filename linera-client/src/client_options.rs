@@ -143,7 +143,7 @@ pub struct ClientContextOptions {
     /// A set of application IDs. If specified, only bundles where all messages are from one of
     /// these applications will be accepted.
     #[arg(long, value_parser = util::parse_app_set)]
-    pub reject_messages_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
+    pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
 
     /// Enable timing reports during operations
     #[cfg(not(web))]
@@ -258,7 +258,8 @@ impl ClientContextOptions {
             self.blanket_message_policy,
             self.restrict_chain_ids_to.clone(),
             self.reject_message_bundles_without_application_ids.clone(),
-            self.reject_messages_with_other_application_ids.clone(),
+            self.reject_message_bundles_with_other_application_ids
+                .clone(),
         );
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);

@@ -144,7 +144,7 @@ pub struct MessagePolicy {
     reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
     /// A collection of applications: If `Some`, only bundles all of whose messages are by these
     /// applications will be accepted.
-    reject_messages_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
+    reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
 }
 
 #[derive(Copy, Clone, Debug, clap::ValueEnum)]
@@ -164,13 +164,13 @@ impl MessagePolicy {
         blanket: BlanketMessagePolicy,
         restrict_chain_ids_to: Option<HashSet<ChainId>>,
         reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
-        reject_messages_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
+        reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
     ) -> Self {
         Self {
             blanket,
             restrict_chain_ids_to,
             reject_message_bundles_without_application_ids,
-            reject_messages_with_other_application_ids,
+            reject_message_bundles_with_other_application_ids,
         }
     }
 
@@ -180,7 +180,7 @@ impl MessagePolicy {
             blanket: BlanketMessagePolicy::Accept,
             restrict_chain_ids_to: None,
             reject_message_bundles_without_application_ids: None,
-            reject_messages_with_other_application_ids: None,
+            reject_message_bundles_with_other_application_ids: None,
         }
     }
 
@@ -199,7 +199,7 @@ impl MessagePolicy {
                 return None;
             }
         }
-        if let Some(app_ids) = &self.reject_messages_with_other_application_ids {
+        if let Some(app_ids) = &self.reject_message_bundles_with_other_application_ids {
             if !bundle
                 .messages()
                 .all(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
