@@ -164,13 +164,14 @@ impl IndexerDatabase for MockSuccessDatabase {
         block_hash: &CryptoHash,
         chain_id: &ChainId,
         height: BlockHeight,
+        timestamp: Timestamp,
         block_data: &[u8],
-        blobs: &[(BlobId, Vec<u8>)],
+        blobs: &[(BlobId, Vec<u8>, Option<u32>)],
     ) -> Result<(), SqliteError> {
         // Store all blobs
         {
             let mut blob_storage = self.blobs.write().unwrap();
-            for (blob_id, blob_data) in blobs {
+            for (blob_id, blob_data, _txn_index) in blobs {
                 blob_storage.insert(*blob_id, blob_data.clone());
             }
         }
