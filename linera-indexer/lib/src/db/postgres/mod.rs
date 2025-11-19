@@ -49,7 +49,7 @@ pub enum PostgresError {
 }
 
 pub struct PostgresDatabase {
-    pool: PgPool,
+    pub(crate) pool: PgPool,
 }
 
 impl PostgresDatabase {
