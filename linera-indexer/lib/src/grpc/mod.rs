@@ -81,7 +81,11 @@ where
         D::Error: Into<ProcessingError>,
     {
         futures::stream::unfold(
-            (stream, database, HashMap::<BlobId, Vec<u8>>::new()),
+            (
+                stream,
+                database,
+                HashMap::<BlobId, (Vec<u8>, Option<u32>)>::new(),
+            ),
             |(mut input_stream, database, mut pending_blobs)| async move {
                 loop {
                     match input_stream.next().await {
@@ -128,7 +132,7 @@ where
     /// For blocks, it processes them and returns `Ok(Some(()))` on success or `Err(ProcessingError)` on failure.
     async fn process_element(
         database: &D,
-        pending_blobs: &mut HashMap<BlobId, Vec<u8>>,
+        pending_blobs: &mut HashMap<BlobId, (Vec<u8>, Option<u32>)>,
         element: Element,
     ) -> Result<Option<()>, ProcessingError>
     where
@@ -143,7 +147,8 @@ where
                     bincode::serialize(&blob).map_err(ProcessingError::BlobSerialization)?;
 
                 info!("Received blob: {}", blob_id);
-                pending_blobs.insert(blob_id, blob_data);
+                // Standalone blobs don't have a transaction index
+                pending_blobs.insert(blob_id, (blob_data, None));
                 Ok(None) // No response for blobs, just store them
             }
             Some(Payload::Block(proto_block)) => {
@@ -162,14 +167,27 @@ where
                     block_hash, chain_id, height
                 );
 
+                // Extract blobs from the block body and add them to pending_blobs
+                let block = block_cert.inner().block();
+                for (txn_index, transaction_blobs) in block.body.blobs.iter().enumerate() {
+                    for blob in transaction_blobs {
+                        let blob_id = blob.id();
+                        let blob_data =
+                            bincode::serialize(blob).map_err(ProcessingError::BlobSerialization)?;
+                        pending_blobs.insert(blob_id, (blob_data, Some(txn_index as u32)));
+                    }
+                }
+
                 // Serialize block BEFORE taking any database locks
                 let block_data =
                     bincode::serialize(&block_cert).map_err(ProcessingError::BlockSerialization)?;
 
                 // Convert pending blobs to the format expected by the high-level API
-                let blobs: Vec<(BlobId, Vec<u8>)> = pending_blobs
+                let blobs: Vec<(BlobId, Vec<u8>, Option<u32>)> = pending_blobs
                     .iter()
-                    .map(|(blob_id, blob_data)| (*blob_id, blob_data.clone()))
+                    .map(|(blob_id, (blob_data, txn_index))| {
+                        (*blob_id, blob_data.clone(), *txn_index)
+                    })
                     .collect();
 
                 // Use the high-level atomic API - this manages all locking internally

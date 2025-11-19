@@ -27,6 +27,10 @@ pub trait IndexerDatabase: Send + Sync {
 
     /// Atomically store a block with its required blobs
     /// This is the high-level API that can be implemented in terms of the other methods
+    ///
+    /// Blobs are tuples of (BlobId, data, Option<transaction_index>)
+    /// - For blobs received as standalone elements: transaction_index is None
+    /// - For blobs extracted from block.body.blobs: transaction_index indicates which transaction created them
     async fn store_block_with_blobs(
         &self,
         block_hash: &CryptoHash,
@@ -34,19 +38,32 @@ pub trait IndexerDatabase: Send + Sync {
         height: BlockHeight,
         timestamp: Timestamp,
         block_data: &[u8],
-        blobs: &[(BlobId, Vec<u8>)],
+        blobs: &[(BlobId, Vec<u8>, Option<u32>)],
     ) -> Result<(), Self::Error> {
         // Start atomic transaction
         let mut tx = self.begin_transaction().await?;
 
-        // Insert all blobs first
-        for (blob_id, blob_data) in blobs {
-            self.insert_blob_tx(&mut tx, blob_id, blob_data).await?;
-        }
-
-        // Insert the block
+        // Insert the block first to satisfy foreign key constraint
         self.insert_block_tx(&mut tx, block_hash, chain_id, height, timestamp, block_data)
             .await?;
+
+        // Insert all blobs
+        // Only blobs extracted from the block (those with transaction_index) get the block_hash
+        for (blob_id, blob_data, transaction_index) in blobs {
+            let block_hash_for_blob = if transaction_index.is_some() {
+                Some(*block_hash)
+            } else {
+                None
+            };
+            self.insert_blob_tx(
+                &mut tx,
+                blob_id,
+                blob_data,
+                block_hash_for_blob,
+                *transaction_index,
+            )
+            .await?;
+        }
 
         // Commit transaction - this is the only point where data becomes visible
         self.commit_transaction(tx).await?;
@@ -63,6 +80,8 @@ pub trait IndexerDatabase: Send + Sync {
         tx: &mut Self::Transaction<'_>,
         blob_id: &BlobId,
         data: &[u8],
+        block_hash: Option<CryptoHash>,
+        transaction_index: Option<u32>,
     ) -> Result<(), Self::Error>;
 
     /// Insert a block within a transaction

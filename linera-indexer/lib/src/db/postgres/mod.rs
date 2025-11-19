@@ -114,16 +114,22 @@ impl PostgresDatabase {
         tx: &mut Transaction<'_, Postgres>,
         blob_id: &BlobId,
         data: &[u8],
+        block_hash: Option<CryptoHash>,
+        transaction_index: Option<u32>,
     ) -> Result<(), PostgresError> {
         let blob_id_str = blob_id.hash.to_string();
         let blob_type = format!("{:?}", blob_id.blob_type);
+        let block_hash_str = block_hash.as_ref().map(|h| h.to_string());
+        let transaction_index_i64 = transaction_index.map(|i| i as i64);
 
-        // For now, we don't have block_hash and application_id context here
-        // These could be passed as optional parameters in the future
-        sqlx::query("INSERT INTO blobs (hash, blob_type, data) VALUES ($1, $2, $3) ON CONFLICT (hash) DO NOTHING")
+        sqlx::query(
+            "INSERT INTO blobs (hash, blob_type, data, block_hash, transaction_index) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (hash) DO NOTHING"
+        )
             .bind(&blob_id_str)
             .bind(&blob_type)
             .bind(data)
+            .bind(block_hash_str)
+            .bind(transaction_index_i64)
             .execute(&mut **tx)
             .await?;
         Ok(())
@@ -1050,8 +1056,11 @@ impl IndexerDatabase for PostgresDatabase {
         tx: &mut Self::Transaction<'_>,
         blob_id: &BlobId,
         data: &[u8],
+        block_hash: Option<CryptoHash>,
+        transaction_index: Option<u32>,
     ) -> Result<(), PostgresError> {
-        self.insert_blob_tx(tx, blob_id, data).await
+        self.insert_blob_tx(tx, blob_id, data, block_hash, transaction_index)
+            .await
     }
 
     async fn insert_block_tx(
