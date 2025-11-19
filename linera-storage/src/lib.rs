@@ -6,32 +6,31 @@
 mod db_storage;
 mod migration;
 
-use std::{collections::BTreeMap, ops::RangeInclusive, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use itertools::Itertools;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, Epoch,
-        NetworkDescription, TimeDelta, Timestamp,
+        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, NetworkDescription,
+        TimeDelta, Timestamp,
     },
-    identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
+    identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
 };
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
-use linera_execution::{
-    committee::Committee, system::EPOCH_STREAM_NAME, BlobState, ExecutionError,
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, TransactionTracker, UserContractCode,
-    UserServiceCode, WasmRuntime,
-};
 #[cfg(with_revm)]
 use linera_execution::{
     evm::revm::{EvmContractModule, EvmServiceModule},
     EvmRuntime,
+};
+use linera_execution::{
+    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, TransactionTracker,
+    UserContractCode, UserServiceCode, WasmRuntime,
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
@@ -179,66 +178,6 @@ pub trait Storage: Sized {
         &self,
         information: &NetworkDescription,
     ) -> Result<(), ViewError>;
-
-    /// Returns a map of the committees for the given epochs.
-    async fn committees_for(
-        &self,
-        epoch_range: RangeInclusive<Epoch>,
-    ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
-        // Short-circuit for an empty input range.
-        if epoch_range.is_empty() {
-            return Ok(BTreeMap::new());
-        }
-        let min_epoch = epoch_range.start();
-        let max_epoch = epoch_range.end();
-        let read_committee = async |committee_hash| -> Result<Committee, ViewError> {
-            let blob_id = BlobId::new(committee_hash, BlobType::Committee);
-            let committee_blob = self
-                .read_blob(blob_id)
-                .await?
-                .ok_or_else(|| ViewError::NotFound(format!("blob {}", blob_id)))?;
-            Ok(bcs::from_bytes(committee_blob.bytes())?)
-        };
-
-        let network_description = self
-            .read_network_description()
-            .await?
-            .ok_or_else(|| ViewError::NotFound("NetworkDescription not found".to_owned()))?;
-        let admin_chain_id = network_description.admin_chain_id;
-        let mut result = BTreeMap::new();
-        // special case: the genesis epoch is stored in the NetworkDescription
-        if *min_epoch == Epoch::ZERO {
-            let genesis_committee =
-                read_committee(network_description.genesis_committee_blob_hash).await?;
-            result.insert(Epoch::ZERO, genesis_committee);
-        }
-
-        let start_index = min_epoch.0.max(1);
-        let epoch_creation_events = self
-            .read_events_from_index(
-                &admin_chain_id,
-                &StreamId::system(EPOCH_STREAM_NAME),
-                start_index,
-            )
-            .await?;
-
-        result.extend(
-            futures::future::try_join_all(
-                epoch_creation_events
-                    .into_iter()
-                    .take_while(|index_and_event| index_and_event.index <= max_epoch.0)
-                    .map(|index_and_event| async move {
-                        let epoch = Epoch::from(index_and_event.index);
-                        let maybe_blob_hash = bcs::from_bytes::<CryptoHash>(&index_and_event.event);
-                        let committee = read_committee(maybe_blob_hash?).await?;
-                        Result::<_, ViewError>::Ok((epoch, committee))
-                    }),
-            )
-            .await?,
-        );
-
-        Ok(result)
-    }
 
     /// Initializes a chain in a simple way (used for testing and to create a genesis state).
     ///
@@ -499,13 +438,6 @@ where
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         self.storage.read_network_description().await
-    }
-
-    async fn committees_for(
-        &self,
-        epoch_range: RangeInclusive<Epoch>,
-    ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
-        self.storage.committees_for(epoch_range).await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

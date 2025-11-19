@@ -18,7 +18,7 @@ use linera_base::{
     },
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId},
 };
 use linera_chain::{
     data_types::{
@@ -30,7 +30,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
-    system::EPOCH_STREAM_NAME, Committee, ExecutionStateView, Query, QueryContext, QueryOutcome,
+    Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
     ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
@@ -659,6 +659,14 @@ where
         // Check that the chain is active and ready for this validated block.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         self.initialize_and_save_if_needed().await?;
+        let tip_state = self.chain.tip_state.get();
+        ensure!(
+            header.height == tip_state.next_block_height,
+            ChainError::UnexpectedBlockHeight {
+                expected_block_height: tip_state.next_block_height,
+                found_block_height: header.height,
+            }
+        );
         let (epoch, committee) = self.chain.current_committee()?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(committee)?;
@@ -747,21 +755,23 @@ where
         {
             certificate.check(committee)?;
         } else {
-            let committees = self.storage.committees_for(epoch..=epoch).await?;
-            let Some(committee) = committees.get(&epoch) else {
-                let net_description = self
-                    .storage
-                    .read_network_description()
-                    .await?
-                    .ok_or_else(|| WorkerError::MissingNetworkDescription)?;
-                return Err(WorkerError::EventsNotFound(vec![EventId {
-                    chain_id: net_description.admin_chain_id,
-                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                    index: epoch.0,
-                }]));
-            };
-            // This line is duplicated, but this avoids cloning and a lifetimes error.
-            certificate.check(committee)?;
+            let committee = self
+                .chain
+                .execution_state
+                .context()
+                .extra()
+                .get_committees(epoch..=epoch)
+                .await
+                .map_err(|error| {
+                    ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
+                })?
+                .remove(&epoch)
+                .ok_or_else(|| {
+                    ChainError::InternalError(format!(
+                        "missing committee for epoch {epoch}; this is a bug"
+                    ))
+                })?;
+            certificate.check(&committee)?;
         }
 
         // Certificate check passed - which means the blobs the block requires are legitimate and
@@ -835,17 +845,6 @@ where
             .iter()
             .filter_map(|blob_id| blobs.remove(blob_id))
             .collect::<Vec<_>>();
-
-        // If height is zero, we haven't initialized the chain state or verified the epoch before -
-        // do it now.
-        // This will fail if the chain description blob is still missing - but that's alright,
-        // because we already wrote the blob state above, so the client can now upload the
-        // blob, which will get accepted, and retry.
-        if height == BlockHeight::ZERO {
-            self.initialize_and_save_if_needed().await?;
-            let (epoch, _) = self.chain.current_committee()?;
-            check_block_epoch(epoch, chain_id, block.header.epoch)?;
-        }
 
         // Execute the block and update inboxes.
         let local_time = self.storage.clock().current_time();
@@ -1382,6 +1381,8 @@ where
         } = &proposal;
         let block = &content.block;
         let chain = &self.chain;
+        // Check if the chain is ready for this new block proposal.
+        chain.tip_state.get().verify_block_chaining(block)?;
         // Check the epoch.
         let (epoch, committee) = chain.current_committee()?;
         check_block_epoch(epoch, block.chain_id, block.epoch)?;
@@ -1431,8 +1432,6 @@ where
                 original_proposal.check_signature()?;
             }
         }
-        // Check if the chain is ready for this new block proposal.
-        chain.tip_state.get().verify_block_chaining(block)?;
         if chain.manager.check_proposed_block(&proposal)? == manager::Outcome::Skip {
             // We already voted for this block.
             return Ok((self.chain_info_response(), NetworkActions::default()));
