@@ -782,57 +782,18 @@ where
         self.description.set(Some(description));
         self.epoch.set(epoch);
 
-        let net_description = self
+        let committees = self
+            .context()
+            .extra()
+            .get_committees(min_active_epoch..=max_active_epoch)
+            .await?;
+        let admin_chain_id = self
             .context()
             .extra()
             .get_network_description()
             .await?
-            .ok_or(ExecutionError::NoNetworkDescriptionFound)?;
-        let admin_chain_id = net_description.admin_chain_id;
-        let mut committees = BTreeMap::new();
-
-        // Special case: the genesis epoch is stored in the NetworkDescription.
-        if min_active_epoch == Epoch::ZERO {
-            let blob_id = BlobId::new(
-                net_description.genesis_committee_blob_hash,
-                BlobType::Committee,
-            );
-            let committee_blob = self
-                .context()
-                .extra()
-                .get_blob(blob_id)
-                .await?
-                .ok_or(ExecutionError::BlobsNotFound(vec![blob_id]))?;
-            let genesis_committee: Committee = bcs::from_bytes(committee_blob.bytes())?;
-            committees.insert(Epoch::ZERO, genesis_committee);
-        }
-
-        // Read epoch creation events for epochs >= 1.
-        let start_epoch = min_active_epoch.0.max(1);
-        for epoch_index in start_epoch..=max_active_epoch.0 {
-            let event_id = EventId {
-                chain_id: admin_chain_id,
-                stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                index: epoch_index,
-            };
-            let event = self
-                .context()
-                .extra()
-                .get_event(event_id.clone())
-                .await?
-                .ok_or(ExecutionError::EventsNotFound(vec![event_id]))?;
-
-            let committee_hash: CryptoHash = bcs::from_bytes(&event)?;
-            let blob_id = BlobId::new(committee_hash, BlobType::Committee);
-            let committee_blob = self
-                .context()
-                .extra()
-                .get_blob(blob_id)
-                .await?
-                .ok_or(ExecutionError::BlobsNotFound(vec![blob_id]))?;
-            let committee: Committee = bcs::from_bytes(committee_blob.bytes())?;
-            committees.insert(Epoch::from(epoch_index), committee);
-        }
+            .ok_or(ExecutionError::NoNetworkDescriptionFound)?
+            .admin_chain_id;
 
         self.committees.set(committees);
         self.admin_id.set(Some(admin_chain_id));

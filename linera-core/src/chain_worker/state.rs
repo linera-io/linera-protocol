@@ -18,7 +18,7 @@ use linera_base::{
     },
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId},
 };
 use linera_chain::{
     data_types::{
@@ -30,7 +30,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
-    system::EPOCH_STREAM_NAME, Committee, ExecutionStateView, Query, QueryContext, QueryOutcome,
+    Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
     ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
@@ -762,35 +762,22 @@ where
         {
             certificate.check(committee)?;
         } else {
-            let net_description = self
-                .storage
-                .read_network_description()
-                .await?
-                .ok_or_else(|| WorkerError::MissingNetworkDescription)?;
-            let committee_hash = if epoch == Epoch::ZERO {
-                // Genesis epoch is stored in NetworkDescription.
-                net_description.genesis_committee_blob_hash
-            } else {
-                // Read the epoch creation event.
-                let event_id = EventId {
-                    chain_id: net_description.admin_chain_id,
-                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                    index: epoch.0,
-                };
-                let event = self
-                    .storage
-                    .read_event(event_id.clone())
-                    .await?
-                    .ok_or_else(|| WorkerError::EventsNotFound(vec![event_id]))?;
-                bcs::from_bytes(&event)?
-            };
-            let blob_id = BlobId::new(committee_hash, BlobType::Committee);
-            let committee_blob = self
-                .storage
-                .read_blob(blob_id)
-                .await?
-                .ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))?;
-            let committee = bcs::from_bytes(committee_blob.bytes())?;
+            let committee = self
+                .chain
+                .execution_state
+                .context()
+                .extra()
+                .get_committees(epoch..=epoch)
+                .await
+                .map_err(|error| {
+                    ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
+                })?
+                .remove(&epoch)
+                .ok_or_else(|| {
+                    ChainError::InternalError(format!(
+                        "missing committee for epoch {epoch}; this is a bug"
+                    ))
+                })?;
             certificate.check(&committee)?;
         }
 

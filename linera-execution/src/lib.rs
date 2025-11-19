@@ -20,7 +20,7 @@ mod transaction_tracker;
 mod util;
 mod wasm;
 
-use std::{any::Any, fmt, str::FromStr, sync::Arc};
+use std::{any::Any, collections::BTreeMap, fmt, ops::RangeInclusive, str::FromStr, sync::Arc};
 
 use allocative::Allocative;
 use async_graphql::SimpleObject;
@@ -37,10 +37,10 @@ use linera_base::{
         Bytecode, DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate,
         Timestamp,
     },
-    doc_scalar, hex_debug, http,
+    doc_scalar, ensure, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, DataBlobHash, EventId,
-        GenericApplicationId, ModuleId, StreamName,
+        GenericApplicationId, ModuleId, StreamId, StreamName,
     },
     ownership::ChainOwnership,
     vm::VmRuntime,
@@ -52,6 +52,7 @@ use thiserror::Error;
 
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;
+use crate::system::EPOCH_STREAM_NAME;
 #[cfg(with_testing)]
 use crate::test_utils::dummy_chain_description;
 #[cfg(all(with_testing, with_wasm_runtime))]
@@ -451,6 +452,82 @@ pub trait ExecutionRuntimeContext {
     async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
+
+    /// Returns the committees for the epochs in the given range.
+    async fn get_committees(
+        &self,
+        epoch_range: RangeInclusive<Epoch>,
+    ) -> Result<BTreeMap<Epoch, Committee>, ExecutionError> {
+        let net_description = self
+            .get_network_description()
+            .await?
+            .ok_or(ExecutionError::NoNetworkDescriptionFound)?;
+        let committee_hashes = futures::future::join_all(
+            (epoch_range.start().0..=epoch_range.end().0).map(|epoch| async move {
+                if epoch == 0 {
+                    // Genesis epoch is stored in NetworkDescription.
+                    Ok((epoch, net_description.genesis_committee_blob_hash))
+                } else {
+                    let event_id = EventId {
+                        chain_id: net_description.admin_chain_id,
+                        stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                        index: epoch,
+                    };
+                    let event = self
+                        .get_event(event_id.clone())
+                        .await?
+                        .ok_or_else(|| ExecutionError::EventsNotFound(vec![event_id]))?;
+                    Ok((epoch, bcs::from_bytes(&event)?))
+                }
+            }),
+        )
+        .await;
+        let missing_events = committee_hashes
+            .iter()
+            .filter_map(|result| {
+                if let Err(ExecutionError::EventsNotFound(event_ids)) = result {
+                    return Some(event_ids);
+                }
+                None
+            })
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>();
+        ensure!(
+            missing_events.is_empty(),
+            ExecutionError::EventsNotFound(missing_events)
+        );
+        let committee_hashes = committee_hashes
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+        let committees = futures::future::join_all(committee_hashes.into_iter().map(
+            |(epoch, committee_hash)| async move {
+                let blob_id = BlobId::new(committee_hash, BlobType::Committee);
+                let committee_blob = self
+                    .get_blob(blob_id)
+                    .await?
+                    .ok_or_else(|| ExecutionError::BlobsNotFound(vec![blob_id]))?;
+                Ok((Epoch(epoch), bcs::from_bytes(committee_blob.bytes())?))
+            },
+        ))
+        .await;
+        let missing_blobs = committees
+            .iter()
+            .filter_map(|result| {
+                if let Err(ExecutionError::BlobsNotFound(blob_ids)) = result {
+                    return Some(blob_ids);
+                }
+                None
+            })
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>();
+        ensure!(
+            missing_blobs.is_empty(),
+            ExecutionError::BlobsNotFound(missing_blobs)
+        );
+        committees.into_iter().collect()
+    }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
