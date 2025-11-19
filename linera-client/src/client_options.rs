@@ -138,7 +138,7 @@ pub struct ClientContextOptions {
     /// A set of application IDs. If specified, only bundles with at least one message from one of
     /// these applications will be accepted.
     #[arg(long, value_parser = util::parse_app_set)]
-    pub accept_messages_with_application_ids: Option<HashSet<GenericApplicationId>>,
+    pub reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
 
     /// A set of application IDs. If specified, only bundles where all messages are from one of
     /// these applications will be accepted.
@@ -257,7 +257,7 @@ impl ClientContextOptions {
         let message_policy = MessagePolicy::new(
             self.blanket_message_policy,
             self.restrict_chain_ids_to.clone(),
-            self.accept_messages_with_application_ids.clone(),
+            self.reject_message_bundles_without_application_ids.clone(),
             self.reject_messages_with_other_application_ids.clone(),
         );
         let cross_chain_message_delivery =

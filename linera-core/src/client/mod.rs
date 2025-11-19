@@ -141,7 +141,7 @@ pub struct MessagePolicy {
     restrict_chain_ids_to: Option<HashSet<ChainId>>,
     /// A collection of applications: If `Some`, only bundles with at least one message by any
     /// of these applications will be accepted.
-    accept_messages_with_application_ids: Option<HashSet<GenericApplicationId>>,
+    reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
     /// A collection of applications: If `Some`, only bundles all of whose messages are by these
     /// applications will be accepted.
     reject_messages_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
@@ -163,13 +163,13 @@ impl MessagePolicy {
     pub fn new(
         blanket: BlanketMessagePolicy,
         restrict_chain_ids_to: Option<HashSet<ChainId>>,
-        accept_messages_with_application_ids: Option<HashSet<GenericApplicationId>>,
+        reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
         reject_messages_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
     ) -> Self {
         Self {
             blanket,
             restrict_chain_ids_to,
-            accept_messages_with_application_ids,
+            reject_message_bundles_without_application_ids,
             reject_messages_with_other_application_ids,
         }
     }
@@ -179,7 +179,7 @@ impl MessagePolicy {
         Self {
             blanket: BlanketMessagePolicy::Accept,
             restrict_chain_ids_to: None,
-            accept_messages_with_application_ids: None,
+            reject_message_bundles_without_application_ids: None,
             reject_messages_with_other_application_ids: None,
         }
     }
@@ -191,7 +191,7 @@ impl MessagePolicy {
                 return None;
             }
         }
-        if let Some(app_ids) = &self.accept_messages_with_application_ids {
+        if let Some(app_ids) = &self.reject_message_bundles_without_application_ids {
             if !bundle
                 .messages()
                 .any(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
