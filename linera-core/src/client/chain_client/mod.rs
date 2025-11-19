@@ -719,18 +719,24 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Attempts to update all validators about the local chain.
-    #[instrument(level = "trace", skip(old_committee))]
-    pub async fn update_validators(&self, old_committee: Option<&Committee>) -> Result<(), Error> {
+    #[instrument(level = "trace", skip(old_committee, latest_certificate))]
+    pub async fn update_validators(
+        &self,
+        old_committee: Option<&Committee>,
+        latest_certificate: Option<ConfirmedBlockCertificate>,
+    ) -> Result<(), Error> {
         let update_validators_start = linera_base::time::Instant::now();
         // Communicate the new certificate now.
         if let Some(old_committee) = old_committee {
-            self.communicate_chain_updates(old_committee).await?
+            self.communicate_chain_updates(old_committee, latest_certificate.clone())
+                .await?
         };
         if let Ok(new_committee) = self.local_committee().await {
             if Some(&new_committee) != old_committee {
                 // If the configuration just changed, communicate to the new committee as well.
                 // (This is actually more important that updating the previous committee.)
-                self.communicate_chain_updates(&new_committee).await?;
+                self.communicate_chain_updates(&new_committee, latest_certificate)
+                    .await?;
             }
         }
         self.send_timing(update_validators_start, TimingType::UpdateValidators);
@@ -739,11 +745,21 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Broadcasts certified blocks to validators.
     #[instrument(level = "trace", skip(committee))]
-    pub async fn communicate_chain_updates(&self, committee: &Committee) -> Result<(), Error> {
+    pub async fn communicate_chain_updates(
+        &self,
+        committee: &Committee,
+        latest_certificate: Option<ConfirmedBlockCertificate>,
+    ) -> Result<(), Error> {
         let delivery = self.options.cross_chain_message_delivery;
         let height = self.chain_info().await?.next_block_height;
         self.client
-            .communicate_chain_updates(committee, self.chain_id, height, delivery)
+            .communicate_chain_updates(
+                committee,
+                self.chain_id,
+                height,
+                delivery,
+                latest_certificate,
+            )
             .await
     }
 
@@ -1135,6 +1151,7 @@ impl<Env: Environment> ChainClient<Env> {
                 chain_id,
                 height,
                 CrossChainMessageDelivery::NonBlocking,
+                None,
             )
             .await?;
         Ok(*certificate)
@@ -1782,7 +1799,8 @@ impl<Env: Environment> ChainClient<Env> {
         };
         self.send_timing(submit_block_proposal_start, TimingType::SubmitBlockProposal);
         debug!(round = %certificate.round, "Sending confirmed block to validators");
-        self.update_validators(Some(&committee)).await?;
+        self.update_validators(Some(&committee), Some(certificate.clone()))
+            .await?;
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
@@ -1836,7 +1854,8 @@ impl<Env: Environment> ChainClient<Env> {
             .client
             .finalize_block(&committee, certificate.clone())
             .await?;
-        self.update_validators(Some(&committee)).await?;
+        self.update_validators(Some(&committee), Some(certificate.clone()))
+            .await?;
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
@@ -2382,6 +2401,15 @@ impl<Env: Environment> ChainClient<Env> {
             .read_confirmed_block(hash)
             .await?;
         block.ok_or(Error::MissingConfirmedBlock(hash))
+    }
+
+    #[instrument(level = "trace", skip(hash))]
+    pub async fn read_certificate(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<ConfirmedBlockCertificate, Error> {
+        let certificate = self.client.storage_client().read_certificate(hash).await?;
+        certificate.ok_or(Error::ReadCertificatesError(vec![hash]))
     }
 
     /// Handles any cross-chain requests for any pending outgoing messages.
