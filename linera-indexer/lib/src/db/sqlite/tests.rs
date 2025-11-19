@@ -1,15 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+
 use linera_base::{
     crypto::{CryptoHash, TestString},
-    data_types::{Amount, Blob, BlockHeight, Epoch, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, Epoch, Round, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, ChainId},
 };
 use linera_chain::{
-    block::{Block, BlockBody, BlockHeader},
+    block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
     data_types::{IncomingBundle, MessageAction, PostedMessage},
+    types::ConfirmedBlockCertificate,
 };
 use linera_execution::{Message, MessageKind};
 use linera_service_graphql_client::MessageBundle;
@@ -26,7 +29,7 @@ async fn test_sqlite_database_operations() {
     let blob_data = bincode::serialize(&blob).unwrap();
 
     let mut tx = db.begin_transaction().await.unwrap();
-    db.insert_blob_tx(&mut tx, &blob_hash, &blob_data)
+    db.insert_blob_tx(&mut tx, &blob_hash, &blob_data, None, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -51,7 +54,7 @@ async fn test_atomic_transaction_behavior() {
     // Start transaction but don't commit
     {
         let mut tx = db.begin_transaction().await.unwrap();
-        db.insert_blob_tx(&mut tx, &blob_hash, &blob_data)
+        db.insert_blob_tx(&mut tx, &blob_hash, &blob_data, None, None)
             .await
             .unwrap();
         // tx is dropped here without commit, should rollback
@@ -62,7 +65,7 @@ async fn test_atomic_transaction_behavior() {
 
     // Now test successful commit
     let mut tx = db.begin_transaction().await.unwrap();
-    db.insert_blob_tx(&mut tx, &blob_hash, &blob_data)
+    db.insert_blob_tx(&mut tx, &blob_hash, &blob_data, None, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -82,30 +85,24 @@ async fn test_high_level_atomic_api() {
     let blob1_data = bincode::serialize(&blob1).unwrap();
     let blob2_data = bincode::serialize(&blob2).unwrap();
 
-    // Create a proper test block
+    // Create a proper test block certificate
     let chain_id = ChainId(CryptoHash::new(blob2.content()));
     let height = BlockHeight(1);
-    let timestamp = Timestamp::now();
     let test_block = create_test_block(chain_id, height);
-    let block_hash = Hashed::new(test_block.clone()).hash();
-    let block_data = bincode::serialize(&test_block).unwrap();
+    let confirmed_block = ConfirmedBlock::new(test_block);
+    let block_cert = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
 
-    let blobs = vec![
-        (blob1.id(), blob1_data.clone()),
-        (blob2.id(), blob2_data.clone()),
-    ];
+    let block_hash = block_cert.hash();
+    let block_data = bincode::serialize(&block_cert).unwrap();
+
+    let mut pending_blobs = HashMap::new();
+    pending_blobs.insert(blob1.id(), blob1_data.clone());
+    pending_blobs.insert(blob2.id(), blob2_data.clone());
 
     // Test atomic storage of block with blobs
-    db.store_block_with_blobs(
-        &block_hash,
-        &chain_id,
-        height,
-        timestamp,
-        &block_data,
-        &blobs,
-    )
-    .await
-    .unwrap();
+    db.store_block_with_blobs(&block_cert, &pending_blobs)
+        .await
+        .unwrap();
 
     // Verify block was stored
     let retrieved_block = db.get_block(&block_hash).await.unwrap();
