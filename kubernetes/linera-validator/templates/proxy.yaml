@@ -100,13 +100,7 @@ spec:
                 --storage scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042 \
                 --storage-replication-factor {{ .Values.storageReplicationFactor | quote }} \
                 --storage-max-cache-size {{ .Values.storageCacheConfig.maxCacheSize | int }} \
-                --storage-max-value-entry-size {{ .Values.storageCacheConfig.maxValueEntrySize | int }} \
-                --storage-max-find-keys-entry-size {{ .Values.storageCacheConfig.maxFindKeysEntrySize | int }} \
-                --storage-max-find-key-values-entry-size {{ .Values.storageCacheConfig.maxFindKeyValuesEntrySize | int }} \
                 --storage-max-cache-entries {{ .Values.storageCacheConfig.maxCacheEntries | int }} \
-                --storage-max-cache-value-size {{ .Values.storageCacheConfig.maxCacheValueSize | int }} \
-                --storage-max-cache-find-keys-size {{ .Values.storageCacheConfig.maxCacheFindKeysSize | int }} \
-                --storage-max-cache-find-key-values-size {{ .Values.storageCacheConfig.maxCacheFindKeyValuesSize | int }} \
                 --id "$ORDINAL" \
                 /config/server.json
           env:
