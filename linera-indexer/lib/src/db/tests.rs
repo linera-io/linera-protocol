@@ -63,6 +63,8 @@ impl IndexerDatabase for MockFailingDatabase {
         _tx: &mut Self::Transaction<'_>,
         _blob_id: &BlobId,
         _data: &[u8],
+        _block_hash: Option<CryptoHash>,
+        _transaction_index: Option<u32>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -195,12 +197,12 @@ impl IndexerDatabase for MockSuccessDatabase {
         height: BlockHeight,
         timestamp: Timestamp,
         block_data: &[u8],
-        blobs: &[(BlobId, Vec<u8>)],
+        blobs: &[(BlobId, Vec<u8>, Option<u32>)],
     ) -> Result<(), Self::Error> {
         // Store all blobs
         {
             let mut blob_storage = self.blobs.write().unwrap();
-            for (blob_id, blob_data) in blobs {
+            for (blob_id, blob_data, _txn_index) in blobs {
                 blob_storage.insert(*blob_id, blob_data.clone());
             }
         }
@@ -229,6 +231,8 @@ impl IndexerDatabase for MockSuccessDatabase {
         _tx: &mut Self::Transaction<'_>,
         _blob_id: &BlobId,
         _data: &[u8],
+        _block_hash: Option<CryptoHash>,
+        _transaction_index: Option<u32>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
