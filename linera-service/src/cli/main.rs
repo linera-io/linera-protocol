@@ -97,6 +97,48 @@ use tracing::{debug, error, info, warn, Instrument as _};
 
 struct Job(Options);
 
+/// Check if an error is retryable (HTTP 502, 503, 504, timeouts, connection errors)
+fn is_retryable_error(err: &anyhow::Error) -> bool {
+    // Check for reqwest errors in the error chain
+    if let Some(reqwest_err) = err.downcast_ref::<reqwest::Error>() {
+        // Check for retryable HTTP status codes (502, 503, 504)
+        if let Some(status) = reqwest_err.status() {
+            return status == reqwest::StatusCode::BAD_GATEWAY
+                || status == reqwest::StatusCode::SERVICE_UNAVAILABLE
+                || status == reqwest::StatusCode::GATEWAY_TIMEOUT;
+        }
+        // Check for connection errors or timeouts
+        return reqwest_err.is_timeout() || reqwest_err.is_connect();
+    }
+    false
+}
+
+/// Retry a faucet operation with exponential backoff
+async fn retry_faucet_operation<F, Fut, T>(operation: F) -> anyhow::Result<T>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<T>>,
+{
+    let max_retries = 5;
+    let mut attempt = 0;
+
+    loop {
+        attempt += 1;
+        match operation().await {
+            Ok(result) => return Ok(result),
+            Err(err) if attempt < max_retries && is_retryable_error(&err) => {
+                let backoff_ms = 100 * 2_u64.pow(attempt - 1);
+                warn!(
+                    "Faucet operation failed with retryable error (attempt {}/{}): {:?}. Retrying after {}ms",
+                    attempt, max_retries, err, backoff_ms
+                );
+                tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+            }
+            Err(err) => return Err(err),
+        }
+    }
+}
+
 fn read_json(string: Option<String>, path: Option<PathBuf>) -> anyhow::Result<Vec<u8>> {
     let value = match (string, path) {
         (Some(_), Some(_)) => bail!("cannot have both a json string and file"),
@@ -818,8 +860,14 @@ impl Runnable for Job {
                                 let client = client.clone();
                                 let faucet_client = faucet_client.clone();
                                 join_set.spawn(async move {
-                                    client.wallet_init(Some(&faucet_client)).await?;
-                                    client.request_chain(&faucet_client, true).await?;
+                                    retry_faucet_operation(|| {
+                                        client.wallet_init(Some(&faucet_client))
+                                    })
+                                    .await?;
+                                    retry_faucet_operation(|| {
+                                        client.request_chain(&faucet_client, true)
+                                    })
+                                    .await?;
                                     Ok::<_, anyhow::Error>(())
                                 });
                             }
@@ -882,8 +930,14 @@ impl Runnable for Job {
                             for client in clients.clone() {
                                 let faucet_client = faucet_client.clone();
                                 join_set.spawn(async move {
-                                    client.wallet_init(Some(&faucet_client)).await?;
-                                    client.request_chain(&faucet_client, true).await?;
+                                    retry_faucet_operation(|| {
+                                        client.wallet_init(Some(&faucet_client))
+                                    })
+                                    .await?;
+                                    retry_faucet_operation(|| {
+                                        client.request_chain(&faucet_client, true)
+                                    })
+                                    .await?;
                                     Ok::<_, anyhow::Error>(())
                                 });
                             }
