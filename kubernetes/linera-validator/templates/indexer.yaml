@@ -35,6 +35,7 @@ spec:
             - "--port"
             - "{{ .Values.indexer.port }}"
             - "--database-path"
+            - "{{ .Values.indexer.databasePath }}"
           ports:
             - containerPort: {{ .Values.indexer.port }}
               name: grpc
