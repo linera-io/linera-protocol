@@ -98,6 +98,7 @@ alloy-primitives.workspace = true
 assert_matches.workspace = true
 counter.workspace = true
 criterion.workspace = true
+crowd-funding.workspace = true
 fungible.workspace = true
 hex-game.workspace = true
 linera-core = { path = ".", default-features = false, features = ["test"] }
