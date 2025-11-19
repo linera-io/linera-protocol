@@ -80,6 +80,12 @@ mod metrics {
     pub static TRANSACTION_COUNT: LazyLock<IntCounterVec> =
         LazyLock::new(|| register_int_counter_vec("transaction_count", "Transaction count", &[]));
 
+    pub static INCOMING_BUNDLE_COUNT: LazyLock<IntCounter> =
+        LazyLock::new(|| register_int_counter("incoming_bundle_count", "Incoming bundle count"));
+
+    pub static OPERATION_COUNT: LazyLock<IntCounter> =
+        LazyLock::new(|| register_int_counter("operation_count", "Operation count"));
+
     pub static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
     });
@@ -979,6 +985,8 @@ where
             certificate.round.type_name(),
             certificate.round.number(),
             certificate.block().body.transactions.len() as u64,
+            certificate.block().body.incoming_bundles().count() as u64,
+            certificate.block().body.operations().count() as u64,
             certificate
                 .signatures()
                 .iter()
@@ -998,6 +1006,8 @@ where
                     round_type,
                     round_number,
                     confirmed_transactions,
+                    confirmed_incoming_bundles,
+                    confirmed_operations,
                     validators_with_signatures,
                 ) = metrics_data;
                 metrics::NUM_BLOCKS.with_label_values(&[]).inc();
@@ -1008,6 +1018,12 @@ where
                     metrics::TRANSACTION_COUNT
                         .with_label_values(&[])
                         .inc_by(confirmed_transactions);
+                    if confirmed_incoming_bundles > 0 {
+                        metrics::INCOMING_BUNDLE_COUNT.inc_by(confirmed_incoming_bundles);
+                    }
+                    if confirmed_operations > 0 {
+                        metrics::OPERATION_COUNT.inc_by(confirmed_operations);
+                    }
                 }
 
                 for validator_name in validators_with_signatures {
