@@ -782,20 +782,22 @@ where
         self.timestamp.set(description.timestamp());
         self.description.set(Some(description));
         self.epoch.set(epoch);
+
         let committees = self
             .context()
             .extra()
-            .committees_for(min_active_epoch..=max_active_epoch)
+            .get_committees(min_active_epoch..=max_active_epoch)
             .await?;
-        self.committees.set(committees);
-        let admin_id = self
+        let admin_chain_id = self
             .context()
             .extra()
             .get_network_description()
             .await?
             .ok_or(ExecutionError::NoNetworkDescriptionFound)?
             .admin_chain_id;
-        self.admin_id.set(Some(admin_id));
+
+        self.committees.set(committees);
+        self.admin_id.set(Some(admin_chain_id));
         self.ownership.set(ownership);
         self.balance.set(balance);
         self.application_permissions.set(application_permissions);

@@ -246,7 +246,7 @@ where
         let mut sent_admin_chain = false;
         let mut sent_blobs = false;
         loop {
-            result = match result {
+            match result {
                 Err(NodeError::EventsNotFound(event_ids))
                     if !sent_admin_chain
                         && certificate.inner().chain_id() != self.admin_id
@@ -258,9 +258,6 @@ where
                     // The validator doesn't have the committee that signed the certificate.
                     self.update_admin_chain().await?;
                     sent_admin_chain = true;
-                    self.remote_node
-                        .handle_confirmed_certificate(certificate.clone(), delivery)
-                        .await
                 }
                 Err(NodeError::BlobsNotFound(blob_ids)) if !sent_blobs => {
                     // The validator is missing the blobs required by the certificate.
@@ -275,12 +272,13 @@ where
                     let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
                     self.remote_node.node.upload_blobs(blobs).await?;
                     sent_blobs = true;
-                    self.remote_node
-                        .handle_confirmed_certificate(certificate.clone(), delivery)
-                        .await
                 }
                 result => return Ok(result?),
-            };
+            }
+            result = self
+                .remote_node
+                .handle_confirmed_certificate(certificate.clone(), delivery)
+                .await;
         }
     }
 
@@ -295,7 +293,7 @@ where
             .await;
 
         let chain_id = certificate.inner().chain_id();
-        Ok(match &result {
+        match &result {
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
                 self.remote_node
                     .check_blobs_not_found(&certificate, blob_ids)?;
@@ -308,9 +306,6 @@ where
                     .await?
                     .ok_or_else(|| original_err.clone())?;
                 self.remote_node.send_pending_blobs(chain_id, blobs).await?;
-                self.remote_node
-                    .handle_validated_certificate(certificate)
-                    .await
             }
             Err(error) => {
                 self.sync_if_needed(
@@ -320,12 +315,13 @@ where
                     error,
                 )
                 .await?;
-                self.remote_node
-                    .handle_validated_certificate(certificate)
-                    .await
             }
-            _ => result,
-        }?)
+            _ => return Ok(result?),
+        }
+        Ok(self
+            .remote_node
+            .handle_validated_certificate(certificate)
+            .await?)
     }
 
     /// Requests a vote for a timeout certificate for the given round from the remote node.
@@ -641,22 +637,15 @@ where
                     .ok_or_else(|| chain_client::Error::MissingConfirmedBlock(hash))?
             };
             let info = match self.send_confirmed_certificate(certificate, delivery).await {
-                Err(chain_client::Error::RemoteNodeError(NodeError::EventsNotFound(event_ids)))
-                    if event_ids.iter().all(|event_id| {
-                        event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
-                            && event_id.chain_id == self.admin_id
-                    }) =>
-                {
-                    if chain_id != self.admin_id {
-                        tracing::error!(
-                            "Missing epochs were not handled by send_confirmed_certificate."
-                        );
-                    }
+                Ok(info) => info,
+                Err(error) => {
+                    tracing::debug!(
+                        address = self.remote_node.address(), %error,
+                        "validator failed to handle confirmed certificate; sending whole chain",
+                    );
                     let query = ChainInfoQuery::new(chain_id);
                     self.remote_node.handle_chain_info_query(query).await?
                 }
-                Err(err) => return Err(err),
-                Ok(info) => info,
             };
             // Obtain the missing blocks and the manager state from the local node.
             let heights = (info.next_block_height.0..target_block_height.0).map(BlockHeight);

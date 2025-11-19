@@ -2200,6 +2200,8 @@ fn main() -> anyhow::Result<process::ExitCode> {
         builder
     };
 
+    // The default stack size 2 MiB causes some stack overflows in ValidatorUpdater methods.
+    runtime.thread_stack_size(4 << 20);
     if let Some(blocking_threads) = options.tokio_blocking_threads {
         runtime.max_blocking_threads(blocking_threads);
     }

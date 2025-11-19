@@ -172,6 +172,9 @@ pub enum WorkerError {
     #[error(transparent)]
     ChainError(#[from] Box<ChainError>),
 
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
+
     // Chain access control
     #[error("Block was not signed by an authorized owner")]
     InvalidOwner,
@@ -279,7 +282,8 @@ impl WorkerError {
             | WorkerError::UnexpectedBlob
             | WorkerError::TooManyPublishedBlobs(_)
             | WorkerError::ViewError(ViewError::NotFound(_)) => false,
-            WorkerError::InvalidCrossChainRequest
+            WorkerError::BcsError(_)
+            | WorkerError::InvalidCrossChainRequest
             | WorkerError::ViewError(_)
             | WorkerError::ConfirmedLogEntryNotFound { .. }
             | WorkerError::PreprocessedBlocksEntryNotFound { .. }
@@ -297,16 +301,14 @@ impl From<ChainError> for WorkerError {
     #[instrument(level = "trace", skip(chain_error))]
     fn from(chain_error: ChainError) -> Self {
         match chain_error {
-            ChainError::ExecutionError(execution_error, context) => {
-                if let ExecutionError::BlobsNotFound(blob_ids) = *execution_error {
-                    Self::BlobsNotFound(blob_ids)
-                } else {
-                    Self::ChainError(Box::new(ChainError::ExecutionError(
-                        execution_error,
-                        context,
-                    )))
-                }
-            }
+            ChainError::ExecutionError(execution_error, context) => match *execution_error {
+                ExecutionError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+                ExecutionError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
+                _ => Self::ChainError(Box::new(ChainError::ExecutionError(
+                    execution_error,
+                    context,
+                ))),
+            },
             error => Self::ChainError(Box::new(error)),
         }
     }
