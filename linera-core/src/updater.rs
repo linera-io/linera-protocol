@@ -629,23 +629,23 @@ where
         let info = if let Ok(height) = target_block_height.try_sub_one() {
             // Figure out which certificates this validator is missing. In many cases, it's just the
             // last one, so we optimistically send that one right away.
-            let hash = self
-                .client
-                .local_node
-                .chain_state_view(chain_id)
-                .await?
-                .block_hashes([height])
-                .await?
-                .into_iter()
-                .next()
-                .ok_or_else(|| {
-                    ChainClientError::InternalError(
-                        "send_chain_information called with invalid target_block_height",
-                    )
-                })?;
-            let certificate = if let Some(certificate) = latest_certificate {
-                certificate
+            let certificate = if let Some(cert) = latest_certificate {
+                cert
             } else {
+                let hash = self
+                    .client
+                    .local_node
+                    .chain_state_view(chain_id)
+                    .await?
+                    .block_hashes([height])
+                    .await?
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| {
+                        ChainClientError::InternalError(
+                            "send_chain_information called with invalid target_block_height",
+                        )
+                    })?;
                 self.client
                     .local_node
                     .storage_client()
