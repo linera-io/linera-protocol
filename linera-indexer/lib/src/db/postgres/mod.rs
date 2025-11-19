@@ -48,6 +48,12 @@ pub enum PostgresError {
     BlobNotFound(BlobId),
 }
 
+impl From<bincode::Error> for PostgresError {
+    fn from(err: bincode::Error) -> Self {
+        PostgresError::Serialization(err.to_string())
+    }
+}
+
 pub struct PostgresDatabase {
     pub(crate) pool: PgPool,
 }

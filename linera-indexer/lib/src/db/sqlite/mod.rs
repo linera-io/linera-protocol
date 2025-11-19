@@ -48,6 +48,12 @@ pub enum SqliteError {
     BlobNotFound(BlobId),
 }
 
+impl From<bincode::Error> for SqliteError {
+    fn from(err: bincode::Error) -> Self {
+        SqliteError::Serialization(err.to_string())
+    }
+}
+
 pub struct SqliteDatabase {
     pool: SqlitePool,
 }

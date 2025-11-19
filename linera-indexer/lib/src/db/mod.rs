@@ -10,12 +10,15 @@ pub mod common;
 pub mod postgres;
 pub mod sqlite;
 
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
     identifiers::{BlobId, ChainId},
 };
+use linera_chain::types::ConfirmedBlockCertificate;
 use linera_service_graphql_client::MessageAction;
 
 /// Trait defining the database operations for the indexer
@@ -26,32 +29,63 @@ pub trait IndexerDatabase: Send + Sync {
     type Transaction<'a>: Send + Sync;
 
     /// Atomically store a block with its required blobs
-    /// This is the high-level API that can be implemented in terms of the other methods
     ///
-    /// Blobs are tuples of (BlobId, data, Option<transaction_index>)
-    /// - For blobs received as standalone elements: transaction_index is None
-    /// - For blobs extracted from block.body.blobs: transaction_index indicates which transaction created them
+    /// Arguments:
+    /// - block_cert: The confirmed block certificate containing the block data
+    /// - pending_blobs: Map of standalone blobs received before the block (blob_id -> blob_data)
+    ///   These blobs will be stored with NULL block_hash and transaction_index
     async fn store_block_with_blobs(
         &self,
-        block_hash: &CryptoHash,
-        chain_id: &ChainId,
-        height: BlockHeight,
-        timestamp: Timestamp,
-        block_data: &[u8],
-        blobs: &[(BlobId, Vec<u8>, Option<u32>)],
-    ) -> Result<(), Self::Error> {
+        block_cert: &ConfirmedBlockCertificate,
+        pending_blobs: &HashMap<BlobId, Vec<u8>>,
+    ) -> Result<(), Self::Error>
+    where
+        Self::Error: From<bincode::Error>,
+    {
+        let block_hash = block_cert.hash();
+        let chain_id = block_cert.inner().chain_id();
+        let height = block_cert.inner().height();
+        let timestamp = block_cert.inner().timestamp();
+
+        let block_data = bincode::serialize(block_cert)?;
+
+        // Extract blobs from the block body
+        let block = block_cert.inner().block();
+        let mut all_blobs: Vec<(BlobId, Vec<u8>, Option<u32>)> = Vec::new();
+
+        // Add standalone blobs (no transaction index)
+        for (blob_id, blob_data) in pending_blobs {
+            all_blobs.push((*blob_id, blob_data.clone(), None));
+        }
+
+        // Add blobs from the block body (with transaction index)
+        for (txn_index, transaction_blobs) in block.body.blobs.iter().enumerate() {
+            for blob in transaction_blobs {
+                let blob_id = blob.id();
+                let blob_data = bincode::serialize(blob)?;
+                all_blobs.push((blob_id, blob_data, Some(txn_index as u32)));
+            }
+        }
+
         // Start atomic transaction
         let mut tx = self.begin_transaction().await?;
 
         // Insert the block first to satisfy foreign key constraint
-        self.insert_block_tx(&mut tx, block_hash, chain_id, height, timestamp, block_data)
-            .await?;
+        self.insert_block_tx(
+            &mut tx,
+            &block_hash,
+            &chain_id,
+            height,
+            timestamp,
+            &block_data,
+        )
+        .await?;
 
         // Insert all blobs
         // Only blobs extracted from the block (those with transaction_index) get the block_hash
-        for (blob_id, blob_data, transaction_index) in blobs {
+        for (blob_id, blob_data, transaction_index) in &all_blobs {
             let block_hash_for_blob = if transaction_index.is_some() {
-                Some(*block_hash)
+                Some(block_hash)
             } else {
                 None
             };
