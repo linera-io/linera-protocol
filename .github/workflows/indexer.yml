@@ -26,8 +26,6 @@ permissions:
 
 jobs:
   indexer-check:
-    needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -46,7 +44,7 @@ jobs:
         cargo check --locked -p linera-indexer-example
     - name: Run indexer unit tests
       run: |
-        cargo test --locked -p linera-indexer --lib -- --skip db::postgres --skip db::sqlite
+        cargo test --locked -p linera-indexer --lib -- --skip db::postgres
 
   indexer-integration-tests:
     if: github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch'
