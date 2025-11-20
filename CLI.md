@@ -54,6 +54,14 @@ This document contains the help content for the `linera` command-line program.
 * [`linera chain`↴](#linera-chain)
 * [`linera chain show-block`↴](#linera-chain-show-block)
 * [`linera chain show-chain-description`↴](#linera-chain-show-chain-description)
+* [`linera validator`↴](#linera-validator)
+* [`linera validator query`↴](#linera-validator-query)
+* [`linera validator query-batch`↴](#linera-validator-query-batch)
+* [`linera validator list`↴](#linera-validator-list)
+* [`linera validator add`↴](#linera-validator-add)
+* [`linera validator remove`↴](#linera-validator-remove)
+* [`linera validator batch-update`↴](#linera-validator-batch-update)
+* [`linera validator sync`↴](#linera-validator-sync)
 * [`linera project`↴](#linera-project)
 * [`linera project new`↴](#linera-project-new)
 * [`linera project test`↴](#linera-project-test)
@@ -92,12 +100,12 @@ Client implementation and command-line tool for the Linera blockchain
 * `sync-balance` — (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the local balance
 * `sync` — Synchronize the local state of the chain with a quorum validators
 * `process-inbox` — Process all pending incoming messages from the inbox of the given chain by creating as many blocks as needed to execute all (non-failing) messages. Failing messages will be marked as rejected and may bounce to their sender depending on their configuration
-* `query-validator` — Show the version and genesis config hash of a new validator, and print a warning if it is incompatible. Also print some information about the given chain while we are at it
-* `query-validators` — Show the current set of validators for a chain. Also print some information about the given chain while we are at it
-* `sync-validator` — Synchronizes a validator with the local state of chains
-* `set-validator` — Add or modify a validator (admin only)
-* `remove-validator` — Remove a validator (admin only)
-* `change-validators` — Add, modify, and/or remove multiple validators in a single epoch (admin only)
+* `query-validator` — (DEPRECATED) Show the version and genesis config hash of a new validator
+* `query-validators` — (DEPRECATED) Show the current set of validators for a chain
+* `sync-validator` — (DEPRECATED) Synchronizes a validator with the local state of chains
+* `set-validator` — (DEPRECATED) Add or modify a validator (admin only)
+* `remove-validator` — (DEPRECATED) Remove a validator (admin only)
+* `change-validators` — (DEPRECATED) Add, modify, and/or remove multiple validators in a single epoch (admin only)
 * `revoke-epochs` — Deprecates all committees up to and including the specified one
 * `resource-control-policy` — View or update the resource control policy
 * `benchmark` — Run benchmarks to test network performance
@@ -116,6 +124,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `retry-pending-block` — Retry a block we unsuccessfully tried to propose earlier
 * `wallet` — Show the contents of the wallet
 * `chain` — Show the information about a chain
+* `validator` — Manage network validators
 * `project` — Manage Linera projects
 * `net` — Manage a local Linera Network
 * `storage` — Operation on the storage
@@ -478,7 +487,9 @@ Process all pending incoming messages from the inbox of the given chain by creat
 
 ## `linera query-validator`
 
-Show the version and genesis config hash of a new validator, and print a warning if it is incompatible. Also print some information about the given chain while we are at it
+(DEPRECATED) Show the version and genesis config hash of a new validator.
+
+**Deprecated:** Use `linera validator query` instead.
 
 **Usage:** `linera query-validator [OPTIONS] <ADDRESS> [CHAIN_ID]`
 
@@ -495,7 +506,9 @@ Show the version and genesis config hash of a new validator, and print a warning
 
 ## `linera query-validators`
 
-Show the current set of validators for a chain. Also print some information about the given chain while we are at it
+(DEPRECATED) Show the current set of validators for a chain.
+
+**Deprecated:** Use `linera validator list` instead.
 
 **Usage:** `linera query-validators [OPTIONS] [CHAIN_ID]`
 
@@ -511,7 +524,9 @@ Show the current set of validators for a chain. Also print some information abou
 
 ## `linera sync-validator`
 
-Synchronizes a validator with the local state of chains
+(DEPRECATED) Synchronizes a validator with the local state of chains.
+
+**Deprecated:** Use `linera validator sync` instead.
 
 **Usage:** `linera sync-validator [OPTIONS] <ADDRESS>`
 
@@ -527,9 +542,9 @@ Synchronizes a validator with the local state of chains
 
 ## `linera set-validator`
 
-Add or modify a validator (admin only)
+(DEPRECATED) Add or modify a validator (admin only)
 
-Deprecated: Use change-validators instead, which allows adding, changing and removing any number of validators in a single operation.
+**Deprecated:** Use `linera validator add` or `linera validator batch-update` instead.
 
 **Usage:** `linera set-validator [OPTIONS] --public-key <PUBLIC_KEY> --account-key <ACCOUNT_KEY> --address <ADDRESS>`
 
@@ -547,9 +562,9 @@ Deprecated: Use change-validators instead, which allows adding, changing and rem
 
 ## `linera remove-validator`
 
-Remove a validator (admin only)
+(DEPRECATED) Remove a validator (admin only)
 
-Deprecated: Use change-validators instead, which allows adding, changing and removing any number of validators in a single operation.
+**Deprecated:** Use `linera validator remove` or `linera validator batch-update` instead.
 
 **Usage:** `linera remove-validator --public-key <PUBLIC_KEY>`
 
@@ -561,9 +576,9 @@ Deprecated: Use change-validators instead, which allows adding, changing and rem
 
 ## `linera change-validators`
 
-Add, modify, and/or remove multiple validators in a single epoch (admin only)
+(DEPRECATED) Add, modify, and/or remove multiple validators in a single epoch (admin only)
 
-This command allows you to make multiple validator changes (additions, modifications, and removals) in a single new epoch, avoiding the creation of unnecessary short-lived epochs.
+**Deprecated:** Use `linera validator batch-update` instead for JSON-based batch operations.
 
 **Usage:** `linera change-validators [OPTIONS]`
 
@@ -1141,6 +1156,138 @@ Show the chain description of a chain
 ###### **Arguments:**
 
 * `<CHAIN_ID>` — The chain ID to show (if not specified, the default chain from the wallet is used)
+
+
+
+## `linera validator`
+
+Manage network validators
+
+**Usage:** `linera validator <COMMAND>`
+
+###### **Subcommands:**
+
+* `query` — Query a validator's status and compatibility
+* `query-batch` — Query multiple validators from a JSON file
+* `list` — List all validators for a chain
+* `add` — Add a new validator (admin only)
+* `remove` — Remove a validator (admin only)
+* `batch-update` — Add, modify, and/or remove validators from a JSON file (admin only)
+* `sync` — Synchronize a validator with local chain state
+
+
+
+## `linera validator query`
+
+Query a validator's status and compatibility
+
+**Usage:** `linera validator query [OPTIONS] <ADDRESS> [CHAIN_ID]`
+
+###### **Arguments:**
+
+* `<ADDRESS>` — The validator's network address (e.g., grpcs://validator.net:443)
+* `<CHAIN_ID>` — The chain to query. If omitted, query the default chain of the wallet
+
+###### **Options:**
+
+* `--public-key <PUBLIC_KEY>` — The public key of the validator. If given, the signature will be checked
+
+
+
+## `linera validator query-batch`
+
+Query multiple validators from a JSON file
+
+**Usage:** `linera validator query-batch [OPTIONS] <FILE>`
+
+###### **Arguments:**
+
+* `<FILE>` — Path to JSON file containing validator list
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — The chain to query. If omitted, query the default chain of the wallet
+
+
+
+## `linera validator list`
+
+List all validators for a chain
+
+**Usage:** `linera validator list [OPTIONS] [CHAIN_ID]`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>` — The chain to query. If omitted, query the default chain of the wallet
+
+###### **Options:**
+
+* `--min-votes <MIN_VOTES>` — Skip validators with less voting weight than this
+
+
+
+## `linera validator add`
+
+Add a new validator (admin only)
+
+**Usage:** `linera validator add [OPTIONS] --public-key <PUBLIC_KEY> --account-key <ACCOUNT_KEY> --address <ADDRESS>`
+
+###### **Options:**
+
+* `--public-key <PUBLIC_KEY>` — The public key of the validator
+* `--account-key <ACCOUNT_KEY>` — The public key of the account controlled by the validator
+* `--address <ADDRESS>` — Network address
+* `--votes <VOTES>` — Voting power
+
+  Default value: `1`
+* `--skip-online-check` — Skip the version and genesis config checks
+
+
+
+## `linera validator remove`
+
+Remove a validator (admin only)
+
+**Usage:** `linera validator remove --public-key <PUBLIC_KEY>`
+
+###### **Options:**
+
+* `--public-key <PUBLIC_KEY>` — The public key of the validator
+
+
+
+## `linera validator batch-update`
+
+Add, modify, and/or remove validators from a JSON file (admin only)
+
+JSON format supports two styles: 1. Simple list: {"validators": [{...}]} - adds all validators 2. Operations: {"add": [{...}], "modify": [{...}], "remove": ["pubkey"]}
+
+**Usage:** `linera validator batch-update [OPTIONS] <FILE>`
+
+###### **Arguments:**
+
+* `<FILE>` — Path to JSON file containing validator operations
+
+###### **Options:**
+
+* `--dry-run` — Perform a dry run without making changes
+* `--skip-online-check` — Skip the version and genesis config checks for added and modified validators
+
+
+
+## `linera validator sync`
+
+Synchronize a validator with local chain state
+
+**Usage:** `linera validator sync [OPTIONS] <ADDRESS>`
+
+###### **Arguments:**
+
+* `<ADDRESS>` — The public address of the validator to synchronize
+
+###### **Options:**
+
+* `--chains <CHAINS>` — The chains to synchronize, or the default chain if empty
 
 
 
