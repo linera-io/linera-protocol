@@ -34,6 +34,9 @@ pub struct ChainWorkerConfig {
     /// Process one cross-chain update request every N regular requests for anti-starvation.
     /// A value of 0 disables anti-starvation (cross-chain updates only processed when regular queue is empty).
     pub cross_chain_update_anti_starvation_ratio: u32,
+    /// Maximum number of cross-chain updates to batch together in a single processing round.
+    /// Higher values improve throughput but increase latency for individual updates.
+    pub cross_chain_update_batch_size: usize,
 }
 
 impl ChainWorkerConfig {
@@ -68,6 +71,7 @@ impl Default for ChainWorkerConfig {
             sender_chain_ttl: Duration::from_secs(1),
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
             cross_chain_update_anti_starvation_ratio: 10,
+            cross_chain_update_batch_size: 1000,
         }
     }
 }

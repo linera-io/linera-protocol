@@ -20,7 +20,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{BlockProposal, MessageBundle, ProposedBlock},
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
-    ChainStateView,
+    ChainError, ChainStateView,
 };
 use linera_execution::{
     ExecutionStateView, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint,
@@ -396,6 +396,30 @@ where
                 // Both senders were dropped.
                 break;
             };
+
+            // Check if we should batch cross-chain updates.
+            let (requests_to_process, batched_span) = if matches!(request, ChainWorkerRequest::ProcessCrossChainUpdate { .. }) {
+                // Drain additional cross-chain updates for batching.
+                let batch_size = self.config.cross_chain_update_batch_size;
+                let mut batch = vec![(request, span)];
+
+                // Try to drain up to batch_size - 1 more cross-chain updates.
+                while batch.len() < batch_size {
+                    match incoming_cross_chain_updates.try_recv() {
+                        Ok((req, req_span)) => batch.push((req, req_span)),
+                        Err(_) => break, // Queue is empty.
+                    }
+                }
+
+                if batch.len() > 1 {
+                    trace!("Batching {} cross-chain updates", batch.len());
+                }
+
+                (batch, tracing::Span::current())
+            } else {
+                (vec![(request, span.clone())], span)
+            };
+
             let (_service_runtime_thread, service_runtime_task, service_runtime_endpoint) =
                 if self.config.long_lived_services {
                     let actor = ServiceRuntimeActor::spawn(self.chain_id).await;
@@ -415,12 +439,52 @@ where
                 self.chain_id,
                 service_runtime_endpoint,
             )
-            .instrument(span.clone())
+            .instrument(batched_span.clone())
             .await?;
 
-            Box::pin(worker.handle_request(request))
-                .instrument(span)
-                .await;
+            // Process all requests (either a single request or a batch).
+            if requests_to_process.len() == 1 {
+                let (request, span) = requests_to_process.into_iter().next().unwrap();
+                Box::pin(worker.handle_request(request))
+                    .instrument(span)
+                    .await;
+            } else {
+                // Process batch of cross-chain updates.
+                let mut updates = Vec::new();
+                let mut callbacks = Vec::new();
+
+                for (request, _span) in requests_to_process {
+                    if let ChainWorkerRequest::ProcessCrossChainUpdate { origin, bundles, callback } = request {
+                        updates.push((origin, bundles));
+                        callbacks.push(callback);
+                    }
+                }
+
+                let results = Box::pin(worker.process_cross_chain_update_batch(updates))
+                    .instrument(batched_span)
+                    .await;
+
+                // Send responses to all callbacks.
+                match results {
+                    Ok(heights) => {
+                        for (callback, height) in callbacks.into_iter().zip(heights) {
+                            let _ = callback.send(Ok(height));
+                        }
+                    }
+                    Err(err) => {
+                        // Send the error to the first callback, and a generic error to the rest.
+                        let mut callbacks_iter = callbacks.into_iter();
+                        if let Some(first_callback) = callbacks_iter.next() {
+                            let _ = first_callback.send(Err(err));
+                        }
+                        for callback in callbacks_iter {
+                            let _ = callback.send(Err(WorkerError::ChainError(Box::new(
+                                ChainError::InternalError("Batch processing failed".to_string())
+                            ))));
+                        }
+                    }
+                }
+            }
 
             loop {
                 // Check both queues and decide which to process.

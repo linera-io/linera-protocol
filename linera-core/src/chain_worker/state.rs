@@ -1015,6 +1015,62 @@ where
         Ok(Some(last_updated_height))
     }
 
+    /// Processes a batch of cross-chain updates efficiently with a single save operation.
+    #[instrument(level = "trace", skip(self, updates))]
+    pub(super) async fn process_cross_chain_update_batch(
+        &mut self,
+        updates: Vec<(ChainId, Vec<(Epoch, MessageBundle)>)>,
+    ) -> Result<Vec<Option<BlockHeight>>, WorkerError> {
+        let mut results = Vec::with_capacity(updates.len());
+
+        for (origin, bundles) in updates {
+            // Only process certificates with relevant heights and epochs.
+            let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
+            let last_anticipated_block_height =
+                self.chain.last_anticipated_block_height(&origin).await?;
+            let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
+            let recipient = self.chain_id();
+            let bundles = helper.select_message_bundles(
+                &origin,
+                recipient,
+                next_height_to_receive,
+                last_anticipated_block_height,
+                bundles,
+            )?;
+            let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
+                results.push(None);
+                continue;
+            };
+            // Process the received messages in certificates.
+            let local_time = self.storage.clock().current_time();
+            let mut previous_height = None;
+            for bundle in bundles {
+                let add_to_received_log = previous_height != Some(bundle.height);
+                previous_height = Some(bundle.height);
+                // Update the staged chain state with the received block.
+                self.chain
+                    .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
+                    .await?;
+            }
+            if !self.config.allow_inactive_chains && !self.chain.is_active() {
+                // Refuse to create a chain state if the chain is still inactive by
+                // now. Accordingly, do not send a confirmation, so that the
+                // cross-chain update is retried later.
+                warn!(
+                    "Refusing to deliver messages to {recipient:?} from {origin:?} \
+                    at height {last_updated_height} because the recipient is still inactive",
+                );
+                results.push(None);
+                continue;
+            }
+            results.push(Some(last_updated_height));
+        }
+
+        // Save the chain once for all updates.
+        self.save().await?;
+        Ok(results)
+    }
+
     /// Handles the cross-chain request confirming that the recipient was updated.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
