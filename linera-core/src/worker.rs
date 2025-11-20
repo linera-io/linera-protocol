@@ -364,6 +364,8 @@ where
     chain_worker_tasks: Arc<Mutex<JoinSet>>,
     /// The cache of running [`ChainWorkerActor`]s.
     chain_workers: Arc<Mutex<BTreeMap<ChainId, ChainActorEndpoint<StorageClient>>>>,
+    /// The cache of cross-chain update endpoints for [`ChainWorkerActor`]s.
+    cross_chain_workers: Arc<Mutex<BTreeMap<ChainId, CrossChainActorEndpoint<StorageClient>>>>,
 }
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
@@ -381,12 +383,19 @@ where
             delivery_notifiers: self.delivery_notifiers.clone(),
             chain_worker_tasks: self.chain_worker_tasks.clone(),
             chain_workers: self.chain_workers.clone(),
+            cross_chain_workers: self.cross_chain_workers.clone(),
         }
     }
 }
 
 /// The sender endpoint for [`ChainWorkerRequest`]s.
 type ChainActorEndpoint<StorageClient> = mpsc::UnboundedSender<(
+    ChainWorkerRequest<<StorageClient as Storage>::Context>,
+    tracing::Span,
+)>;
+
+/// The sender endpoint for cross-chain update requests.
+type CrossChainActorEndpoint<StorageClient> = mpsc::UnboundedSender<(
     ChainWorkerRequest<<StorageClient as Storage>::Context>,
     tracing::Span,
 )>;
@@ -415,6 +424,7 @@ where
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
             chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
+            cross_chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
@@ -436,6 +446,7 @@ where
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
             chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
+            cross_chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
@@ -826,10 +837,10 @@ where
         let request = request_builder(callback);
 
         // Call the endpoint, possibly a new one.
-        let new_receiver = self.call_and_maybe_create_chain_worker_endpoint(chain_id, request)?;
+        let new_receivers = self.call_and_maybe_create_chain_worker_endpoint(chain_id, request)?;
 
         // We just created an endpoint: spawn the actor.
-        if let Some(receiver) = new_receiver {
+        if let Some((receiver, cross_chain_receiver)) = new_receivers {
             let delivery_notifier = self
                 .delivery_notifiers
                 .lock()
@@ -852,6 +863,7 @@ where
                 delivery_notifier,
                 chain_id,
                 receiver,
+                cross_chain_receiver,
                 is_tracked,
             );
 
@@ -885,32 +897,59 @@ where
         chain_id: ChainId,
         request: ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<
-        Option<
+        Option<(
             mpsc::UnboundedReceiver<(ChainWorkerRequest<StorageClient::Context>, tracing::Span)>,
-        >,
+            mpsc::UnboundedReceiver<(ChainWorkerRequest<StorageClient::Context>, tracing::Span)>,
+        )>,
         WorkerError,
     > {
         let mut chain_workers = self.chain_workers.lock().unwrap();
+        let mut cross_chain_workers = self.cross_chain_workers.lock().unwrap();
 
-        let (sender, new_receiver) = if let Some(endpoint) = chain_workers.remove(&chain_id) {
-            (endpoint, None)
+        // Determine which queue to use based on request type.
+        let is_cross_chain_update =
+            matches!(request, ChainWorkerRequest::ProcessCrossChainUpdate { .. });
+
+        let (sender, cross_chain_sender, new_receivers) =
+            if let Some(endpoint) = chain_workers.get(&chain_id) {
+                let cross_chain_endpoint = cross_chain_workers
+                    .get(&chain_id)
+                    .expect("Cross-chain endpoint must exist if regular endpoint exists");
+                (endpoint.clone(), cross_chain_endpoint.clone(), None)
+            } else {
+                let (sender, receiver) = mpsc::unbounded_channel();
+                let (cross_chain_sender, cross_chain_receiver) = mpsc::unbounded_channel();
+                (
+                    sender.clone(),
+                    cross_chain_sender.clone(),
+                    Some((receiver, cross_chain_receiver)),
+                )
+            };
+
+        // Send to the appropriate queue.
+        let send_result = if is_cross_chain_update {
+            cross_chain_sender.send((request, tracing::Span::current()))
         } else {
-            let (sender, receiver) = mpsc::unbounded_channel();
-            (sender, Some(receiver))
+            sender.send((request, tracing::Span::current()))
         };
 
-        if let Err(e) = sender.send((request, tracing::Span::current())) {
-            // The actor was dropped. Give up without (re-)inserting the endpoint in the cache.
+        if let Err(e) = send_result {
+            // The actor was dropped. Remove endpoints from cache.
+            chain_workers.remove(&chain_id);
+            cross_chain_workers.remove(&chain_id);
             return Err(WorkerError::ChainActorSendError {
                 chain_id,
                 error: Box::new(e),
             });
         }
 
-        // Put back the sender in the cache for next time.
-        chain_workers.insert(chain_id, sender);
+        // Put back the senders in the cache for next time.
+        if new_receivers.is_some() {
+            chain_workers.insert(chain_id, sender);
+            cross_chain_workers.insert(chain_id, cross_chain_sender);
+        }
 
-        Ok(new_receiver)
+        Ok(new_receivers)
     }
 
     #[instrument(skip_all, fields(

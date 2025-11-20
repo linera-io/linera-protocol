@@ -262,6 +262,10 @@ where
             ChainWorkerRequest<StorageClient::Context>,
             tracing::Span,
         )>,
+        incoming_cross_chain_updates: mpsc::UnboundedReceiver<(
+            ChainWorkerRequest<StorageClient::Context>,
+            tracing::Span,
+        )>,
         is_tracked: bool,
     ) {
         let actor = ChainWorkerActor {
@@ -274,7 +278,10 @@ where
             chain_id,
             is_tracked,
         };
-        if let Err(err) = actor.handle_requests(incoming_requests).await {
+        if let Err(err) = actor
+            .handle_requests(incoming_requests, incoming_cross_chain_updates)
+            .await
+        {
             tracing::error!("Chain actor error: {err}");
         }
     }
@@ -303,10 +310,92 @@ where
             ChainWorkerRequest<StorageClient::Context>,
             tracing::Span,
         )>,
+        mut incoming_cross_chain_updates: mpsc::UnboundedReceiver<(
+            ChainWorkerRequest<StorageClient::Context>,
+            tracing::Span,
+        )>,
     ) -> Result<(), WorkerError> {
         trace!("Starting `ChainWorkerActor`");
 
-        while let Some((request, span)) = incoming_requests.recv().await {
+        // Counter for anti-starvation: every Nth request should be from cross-chain queue.
+        let mut regular_requests_processed = 0u32;
+        let anti_starvation_ratio = self.config.cross_chain_update_anti_starvation_ratio;
+
+        // Helper to decide which queue to use.
+        let should_process_cross_chain_update =
+            |regular_count: u32, cross_chain_pending: usize, regular_pending: usize| -> bool {
+                // If cross-chain queue is empty, use regular.
+                if cross_chain_pending == 0 {
+                    return false;
+                }
+
+                // If regular queue is empty, use cross-chain.
+                if regular_pending == 0 {
+                    return true;
+                }
+
+                // Anti-starvation: every Nth request should be cross-chain.
+                if anti_starvation_ratio > 0 && regular_count % anti_starvation_ratio == 0 {
+                    return true;
+                }
+
+                // If there are many cross-chain updates queued (more than 10), prioritize them.
+                if cross_chain_pending > 10 {
+                    return true;
+                }
+
+                false
+            };
+
+        loop {
+            // Check both queues and decide which to process.
+            let regular_pending = incoming_requests.len();
+            let cross_chain_pending = incoming_cross_chain_updates.len();
+
+            let from_cross_chain = should_process_cross_chain_update(
+                regular_requests_processed,
+                cross_chain_pending,
+                regular_pending,
+            );
+
+            // Try to receive from the prioritized queue first without blocking.
+            let maybe_request = if from_cross_chain {
+                match incoming_cross_chain_updates.try_recv() {
+                    Ok(request) => Some(request),
+                    Err(_) => {
+                        // Cross-chain queue is empty, wait on both queues.
+                        futures::select! {
+                            request = incoming_cross_chain_updates.recv().fuse() => request,
+                            request = incoming_requests.recv().fuse() => {
+                                regular_requests_processed = regular_requests_processed.wrapping_add(1);
+                                request
+                            },
+                        }
+                    }
+                }
+            } else {
+                match incoming_requests.try_recv() {
+                    Ok(request) => {
+                        regular_requests_processed = regular_requests_processed.wrapping_add(1);
+                        Some(request)
+                    }
+                    Err(_) => {
+                        // Regular queue is empty, wait on both queues.
+                        futures::select! {
+                            request = incoming_cross_chain_updates.recv().fuse() => request,
+                            request = incoming_requests.recv().fuse() => {
+                                regular_requests_processed = regular_requests_processed.wrapping_add(1);
+                                request
+                            },
+                        }
+                    }
+                }
+            };
+
+            let Some((request, span)) = maybe_request else {
+                // Both senders were dropped.
+                break;
+            };
             let (_service_runtime_thread, service_runtime_task, service_runtime_endpoint) =
                 if self.config.long_lived_services {
                     let actor = ServiceRuntimeActor::spawn(self.chain_id).await;
@@ -334,15 +423,58 @@ where
                 .await;
 
             loop {
-                futures::select! {
-                    () = self.sleep_until_timeout().fuse() => break,
-                    maybe_request = incoming_requests.recv().fuse() => {
-                        let Some((request, span)) = maybe_request else {
-                            break; // Request sender was dropped.
-                        };
-                        Box::pin(worker.handle_request(request)).instrument(span).await;
+                // Check both queues and decide which to process.
+                let regular_pending = incoming_requests.len();
+                let cross_chain_pending = incoming_cross_chain_updates.len();
+
+                let from_cross_chain = should_process_cross_chain_update(
+                    regular_requests_processed,
+                    cross_chain_pending,
+                    regular_pending,
+                );
+
+                // Try to receive from the prioritized queue first without blocking.
+                let maybe_request = if from_cross_chain {
+                    match incoming_cross_chain_updates.try_recv() {
+                        Ok(request) => Some(request),
+                        Err(_) => {
+                            // Cross-chain queue is empty, wait on both queues plus timeout.
+                            futures::select! {
+                                () = self.sleep_until_timeout().fuse() => break,
+                                request = incoming_cross_chain_updates.recv().fuse() => request,
+                                request = incoming_requests.recv().fuse() => {
+                                    regular_requests_processed = regular_requests_processed.wrapping_add(1);
+                                    request
+                                },
+                            }
+                        }
                     }
-                }
+                } else {
+                    match incoming_requests.try_recv() {
+                        Ok(request) => {
+                            regular_requests_processed = regular_requests_processed.wrapping_add(1);
+                            Some(request)
+                        }
+                        Err(_) => {
+                            // Regular queue is empty, wait on both queues plus timeout.
+                            futures::select! {
+                                () = self.sleep_until_timeout().fuse() => break,
+                                request = incoming_cross_chain_updates.recv().fuse() => request,
+                                request = incoming_requests.recv().fuse() => {
+                                    regular_requests_processed = regular_requests_processed.wrapping_add(1);
+                                    request
+                                },
+                            }
+                        }
+                    }
+                };
+
+                let Some((request, span)) = maybe_request else {
+                    break; // Request sender was dropped.
+                };
+                Box::pin(worker.handle_request(request))
+                    .instrument(span)
+                    .await;
             }
 
             trace!("Unloading chain state of {} ...", self.chain_id);
