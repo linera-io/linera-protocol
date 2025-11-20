@@ -15,6 +15,7 @@ trait_set::trait_set! {
     pub trait Network = crate::node::ValidatorNodeProvider + AutoTraits;
     pub trait Signer = linera_base::crypto::Signer + AutoTraits;
     pub trait Storage = linera_storage::Storage + Clone + Send + Sync + 'static;
+    pub trait Wallet = crate::wallet::Wallet + AutoTraits;
 }
 
 pub trait Environment: AutoTraits {
@@ -23,8 +24,6 @@ pub trait Environment: AutoTraits {
     type Signer: Signer;
     type ValidatorNode: crate::node::ValidatorNode + AutoTraits + Clone;
     type StorageContext: linera_views::context::Context<Extra: linera_execution::ExecutionRuntimeContext>
-        + Send
-        + Sync
         + 'static;
 
     fn storage(&self) -> &Self::Storage;
