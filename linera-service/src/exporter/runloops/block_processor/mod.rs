@@ -81,21 +81,28 @@ where
                 Some(next_block_notification) = self.new_block_queue.recv() => {
                     let walker = Walker::new(&mut self.storage);
                     match walker.walk(next_block_notification).await {
-                        Ok(maybe_new_committee) if self.committee_destination_update => {
-                            tracing::trace!("new committee blob found, updating the committee destination.");
-                            if let Some(blob_id) = maybe_new_committee {
-                                let blob = match self.storage.get_blob(blob_id).await {
+                        Ok(Some(new_committee_blob)) if self.committee_destination_update => {
+                            tracing::info!(?new_committee_blob, "new committee blob found, updating the committee destination.");
+                                let blob = match self.storage.get_blob(new_committee_blob).await {
                                     Ok(blob) => blob,
                                     Err(error) => {
-                                        tracing::error!("unable to get the committee blob: {:?} from storage, , received error: {:?}", blob_id, error);
+                                        tracing::error!(
+                                            ?new_committee_blob,
+                                            ?error,
+                                            "failed to serialize the committee blob"
+                                        );
                                         return Err(error);
                                     },
                                 };
 
                                 let committee: Committee = match bcs::from_bytes(blob.bytes()) {
                                     Ok(committee) => committee,
-                                    Err(e) => {
-                                        tracing::error!("unable to serialize the committee blob: {:?}, received error: {:?}", blob_id, e);
+                                    Err(error) => {
+                                        tracing::error!(
+                                            ?new_committee_blob,
+                                            ?error,
+                                            "failed to serialize the committee blob"
+                                        );
                                         continue;
                                     }
                                 };
@@ -104,12 +111,15 @@ where
                                 self.exporters_tracker.shutdown_old_committee(committee_destinations.clone());
                                 self.storage.new_committee(committee_destinations.clone());
                                 self.exporters_tracker.start_committee_exporters(committee_destinations.clone());
-                            }
                         },
 
-                        Ok(_) => {
+                        Ok(Some(_)) => {
                             tracing::info!(block=?next_block_notification, "New committee blob found but exporter is not configured \
                              to update the committee destination, skipping.");
+                        },
+
+                        Ok(None) => {
+                            // No committee blob found, continue processing.
                         },
 
                         // this error variant is safe to retry as this block is already confirmed so this error will
