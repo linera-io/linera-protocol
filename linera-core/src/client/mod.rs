@@ -27,8 +27,8 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent,
-        ModuleId, StreamId,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId,
+        GenericApplicationId, IndexAndEvent, ModuleId, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
     time::{Duration, Instant},
@@ -1392,6 +1392,12 @@ pub struct MessagePolicy {
     /// accepted. `Option::None` means that messages from all chains are accepted. An empty
     /// `HashSet` denotes that messages from no chains are accepted.
     restrict_chain_ids_to: Option<HashSet<ChainId>>,
+    /// A collection of applications: If `Some`, only bundles with at least one message by any
+    /// of these applications will be accepted.
+    reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
+    /// A collection of applications: If `Some`, only bundles all of whose messages are by these
+    /// applications will be accepted.
+    reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
 }
 
 #[derive(Copy, Clone, Debug, clap::ValueEnum)]
@@ -1410,10 +1416,14 @@ impl MessagePolicy {
     pub fn new(
         blanket: BlanketMessagePolicy,
         restrict_chain_ids_to: Option<HashSet<ChainId>>,
+        reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
+        reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
     ) -> Self {
         Self {
             blanket,
             restrict_chain_ids_to,
+            reject_message_bundles_without_application_ids,
+            reject_message_bundles_with_other_application_ids,
         }
     }
 
@@ -1422,22 +1432,42 @@ impl MessagePolicy {
         Self {
             blanket: BlanketMessagePolicy::Accept,
             restrict_chain_ids_to: None,
+            reject_message_bundles_without_application_ids: None,
+            reject_message_bundles_with_other_application_ids: None,
         }
     }
 
     #[instrument(level = "trace", skip(self))]
-    fn must_handle(&self, bundle: &mut IncomingBundle) -> bool {
+    fn apply(&self, mut bundle: IncomingBundle) -> Option<IncomingBundle> {
+        if let Some(chain_ids) = &self.restrict_chain_ids_to {
+            if !chain_ids.contains(&bundle.origin) {
+                return None;
+            }
+        }
+        if let Some(app_ids) = &self.reject_message_bundles_without_application_ids {
+            if !bundle
+                .messages()
+                .any(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
+            {
+                return None;
+            }
+        }
+        if let Some(app_ids) = &self.reject_message_bundles_with_other_application_ids {
+            if !bundle
+                .messages()
+                .all(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
+            {
+                return None;
+            }
+        }
         if self.is_reject() {
             if bundle.bundle.is_skippable() {
-                return false;
+                return None;
             } else if !bundle.bundle.is_protected() {
                 bundle.action = MessageAction::Reject;
             }
         }
-        match &self.restrict_chain_ids_to {
-            None => true,
-            Some(chains) => chains.contains(&bundle.origin),
-        }
+        Some(bundle)
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -1865,12 +1895,7 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
-            .filter_map(|mut bundle| {
-                self.options
-                    .message_policy
-                    .must_handle(&mut bundle)
-                    .then_some(bundle)
-            })
+            .filter_map(|bundle| self.options.message_policy.apply(bundle))
             .take(self.options.max_pending_message_bundles)
             .collect())
     }

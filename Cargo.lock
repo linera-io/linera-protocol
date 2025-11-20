@@ -5317,6 +5317,7 @@ dependencies = [
  "clap",
  "counter",
  "criterion",
+ "crowd-funding",
  "custom_debug_derive",
  "fungible",
  "futures",
