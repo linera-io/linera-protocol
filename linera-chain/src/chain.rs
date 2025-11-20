@@ -27,7 +27,7 @@ use linera_views::{
     context::Context,
     log_view::LogView,
     map_view::MapView,
-    reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
+    reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView, WriteGuardedView},
     register_view::RegisterView,
     set_view::SetView,
     views::{ClonableView, CryptoHashView, RootView, View},
@@ -596,6 +596,70 @@ where
 
         // Process the inbox bundle and update the inbox state.
         let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
+        #[cfg(with_metrics)]
+        metrics::NUM_INBOXES
+            .with_label_values(&[])
+            .observe(self.inboxes.count().await? as f64);
+        let entry = BundleInInbox::new(*origin, &bundle);
+        let skippable = bundle.is_skippable();
+        let newly_added = inbox
+            .add_bundle(bundle)
+            .await
+            .map_err(|error| match error {
+                InboxError::ViewError(error) => ChainError::ViewError(error),
+                error => ChainError::InternalError(format!(
+                    "while processing messages in certified block: {error}"
+                )),
+            })?;
+        if newly_added && !skippable {
+            let seen = local_time;
+            self.unskippable_bundles
+                .push_back(TimestampedBundleInInbox { entry, seen });
+        }
+
+        // Remember the certificate for future validator/client synchronizations.
+        if add_to_received_log {
+            self.received_log.push(chain_and_height);
+        }
+        Ok(())
+    }
+
+    /// Variant of `receive_message_bundle` that uses a pre-loaded inbox view.
+    /// This is useful for batch processing where multiple inboxes are loaded at once.
+    pub async fn receive_message_bundle_with_inbox(
+        &mut self,
+        origin: &ChainId,
+        inbox: &mut WriteGuardedView<InboxStateView<C>>,
+        bundle: MessageBundle,
+        local_time: Timestamp,
+        add_to_received_log: bool,
+    ) -> Result<(), ChainError> {
+        assert!(!bundle.messages.is_empty());
+        let chain_id = self.chain_id();
+        tracing::trace!(
+            "Processing new messages to {chain_id:.8} from {origin} at height {}",
+            bundle.height,
+        );
+        let chain_and_height = ChainAndHeight {
+            chain_id: *origin,
+            height: bundle.height,
+        };
+
+        match self.initialize_if_needed(local_time).await {
+            Ok(_) => (),
+            // if the only issue was that we couldn't initialize the chain because of a
+            // missing chain description blob, we might still want to update the inbox
+            Err(ChainError::ExecutionError(exec_err, _))
+                if matches!(*exec_err, ExecutionError::BlobsNotFound(ref blobs)
+                if blobs.iter().all(|blob_id| {
+                    blob_id.blob_type == BlobType::ChainDescription && blob_id.hash == chain_id.0
+                })) => {}
+            err => {
+                return err;
+            }
+        }
+
+        // Process the inbox bundle and update the inbox state using the pre-loaded inbox.
         #[cfg(with_metrics)]
         metrics::NUM_INBOXES
             .with_label_values(&[])

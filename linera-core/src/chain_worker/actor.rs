@@ -398,27 +398,28 @@ where
             };
 
             // Check if we should batch cross-chain updates.
-            let (requests_to_process, batched_span) = if matches!(request, ChainWorkerRequest::ProcessCrossChainUpdate { .. }) {
-                // Drain additional cross-chain updates for batching.
-                let batch_size = self.config.cross_chain_update_batch_size;
-                let mut batch = vec![(request, span)];
+            let (requests_to_process, batched_span) =
+                if matches!(request, ChainWorkerRequest::ProcessCrossChainUpdate { .. }) {
+                    // Drain additional cross-chain updates for batching.
+                    let batch_size = self.config.cross_chain_update_batch_size;
+                    let mut batch = vec![(request, span)];
 
-                // Try to drain up to batch_size - 1 more cross-chain updates.
-                while batch.len() < batch_size {
-                    match incoming_cross_chain_updates.try_recv() {
-                        Ok((req, req_span)) => batch.push((req, req_span)),
-                        Err(_) => break, // Queue is empty.
+                    // Try to drain up to batch_size - 1 more cross-chain updates.
+                    while batch.len() < batch_size {
+                        match incoming_cross_chain_updates.try_recv() {
+                            Ok((req, req_span)) => batch.push((req, req_span)),
+                            Err(_) => break, // Queue is empty.
+                        }
                     }
-                }
 
-                if batch.len() > 1 {
-                    trace!("Batching {} cross-chain updates", batch.len());
-                }
+                    if batch.len() > 1 {
+                        trace!("Batching {} cross-chain updates", batch.len());
+                    }
 
-                (batch, tracing::Span::current())
-            } else {
-                (vec![(request, span.clone())], span)
-            };
+                    (batch, tracing::Span::current())
+                } else {
+                    (vec![(request, span.clone())], span)
+                };
 
             let (_service_runtime_thread, service_runtime_task, service_runtime_endpoint) =
                 if self.config.long_lived_services {
@@ -454,7 +455,12 @@ where
                 let mut callbacks = Vec::new();
 
                 for (request, _span) in requests_to_process {
-                    if let ChainWorkerRequest::ProcessCrossChainUpdate { origin, bundles, callback } = request {
+                    if let ChainWorkerRequest::ProcessCrossChainUpdate {
+                        origin,
+                        bundles,
+                        callback,
+                    } = request
+                    {
                         updates.push((origin, bundles));
                         callbacks.push(callback);
                     }
@@ -479,7 +485,7 @@ where
                         }
                         for callback in callbacks_iter {
                             let _ = callback.send(Err(WorkerError::ChainError(Box::new(
-                                ChainError::InternalError("Batch processing failed".to_string())
+                                ChainError::InternalError("Batch processing failed".to_string()),
                             ))));
                         }
                     }

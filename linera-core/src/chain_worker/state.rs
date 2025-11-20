@@ -1016,55 +1016,108 @@ where
     }
 
     /// Processes a batch of cross-chain updates efficiently with a single save operation.
+    /// Pre-loads all affected inboxes at once for better performance.
     #[instrument(level = "trace", skip(self, updates))]
     pub(super) async fn process_cross_chain_update_batch(
         &mut self,
         updates: Vec<(ChainId, Vec<(Epoch, MessageBundle)>)>,
     ) -> Result<Vec<Option<BlockHeight>>, WorkerError> {
-        let mut results = Vec::with_capacity(updates.len());
+        use std::collections::HashMap;
+
+        // Group updates by origin to handle deduplication - all updates for the same
+        // origin must be processed sequentially on the same inbox.
+        let mut updates_by_origin: HashMap<ChainId, Vec<Vec<(Epoch, MessageBundle)>>> =
+            HashMap::new();
+        let mut original_order: Vec<(ChainId, usize)> = Vec::new();
 
         for (origin, bundles) in updates {
-            // Only process certificates with relevant heights and epochs.
-            let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
-            let last_anticipated_block_height =
-                self.chain.last_anticipated_block_height(&origin).await?;
-            let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
-            let recipient = self.chain_id();
-            let bundles = helper.select_message_bundles(
-                &origin,
-                recipient,
-                next_height_to_receive,
-                last_anticipated_block_height,
-                bundles,
-            )?;
-            let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
-                results.push(None);
+            let origin_updates = updates_by_origin.entry(origin).or_default();
+            original_order.push((origin, origin_updates.len()));
+            origin_updates.push(bundles);
+        }
+
+        // Pre-load all unique inboxes at once to avoid sequential loading overhead.
+        let unique_origins: Vec<ChainId> = updates_by_origin.keys().copied().collect();
+        let loaded_inboxes = self
+            .chain
+            .inboxes
+            .try_load_entries_pairs_mut(unique_origins)
+            .await?;
+        let mut inbox_map: HashMap<ChainId, _> = loaded_inboxes.into_iter().collect();
+
+        let mut results_by_origin: HashMap<ChainId, Vec<Option<BlockHeight>>> = HashMap::new();
+
+        // Process each unique origin with its pre-loaded inbox.
+        for (origin, all_bundles) in updates_by_origin {
+            let Some(mut inbox) = inbox_map.remove(&origin) else {
+                results_by_origin.insert(origin, vec![None; all_bundles.len()]);
                 continue;
             };
-            // Process the received messages in certificates.
-            let local_time = self.storage.clock().current_time();
-            let mut previous_height = None;
-            for bundle in bundles {
-                let add_to_received_log = previous_height != Some(bundle.height);
-                previous_height = Some(bundle.height);
-                // Update the staged chain state with the received block.
-                self.chain
-                    .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
-                    .await?;
+
+            let mut origin_results = Vec::with_capacity(all_bundles.len());
+
+            for bundles in all_bundles {
+                // Only process certificates with relevant heights and epochs.
+                let next_height_to_receive = inbox.next_block_height_to_receive()?;
+                let last_anticipated_block_height =
+                    self.chain.last_anticipated_block_height(&origin).await?;
+                let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
+                let recipient = self.chain_id();
+                let bundles = helper.select_message_bundles(
+                    &origin,
+                    recipient,
+                    next_height_to_receive,
+                    last_anticipated_block_height,
+                    bundles,
+                )?;
+                let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
+                    origin_results.push(None);
+                    continue;
+                };
+                // Process the received messages in certificates.
+                let local_time = self.storage.clock().current_time();
+                let mut previous_height = None;
+                for bundle in bundles {
+                    let add_to_received_log = previous_height != Some(bundle.height);
+                    previous_height = Some(bundle.height);
+                    // Update the staged chain state with the received block using the pre-loaded inbox.
+                    self.chain
+                        .receive_message_bundle_with_inbox(
+                            &origin,
+                            &mut inbox,
+                            bundle,
+                            local_time,
+                            add_to_received_log,
+                        )
+                        .await?;
+                }
+                if !self.config.allow_inactive_chains && !self.chain.is_active() {
+                    // Refuse to create a chain state if the chain is still inactive by
+                    // now. Accordingly, do not send a confirmation, so that the
+                    // cross-chain update is retried later.
+                    warn!(
+                        "Refusing to deliver messages to {recipient:?} from {origin:?} \
+                        at height {last_updated_height} because the recipient is still inactive",
+                    );
+                    origin_results.push(None);
+                    continue;
+                }
+                origin_results.push(Some(last_updated_height));
             }
-            if !self.config.allow_inactive_chains && !self.chain.is_active() {
-                // Refuse to create a chain state if the chain is still inactive by
-                // now. Accordingly, do not send a confirmation, so that the
-                // cross-chain update is retried later.
-                warn!(
-                    "Refusing to deliver messages to {recipient:?} from {origin:?} \
-                    at height {last_updated_height} because the recipient is still inactive",
-                );
-                results.push(None);
-                continue;
-            }
-            results.push(Some(last_updated_height));
+
+            results_by_origin.insert(origin, origin_results);
         }
+
+        // Reconstruct results in original order.
+        let results: Vec<Option<BlockHeight>> = original_order
+            .into_iter()
+            .map(|(origin, idx)| {
+                results_by_origin
+                    .get(&origin)
+                    .and_then(|origin_results| origin_results.get(idx).copied())
+                    .flatten()
+            })
+            .collect();
 
         // Save the chain once for all updates.
         self.save().await?;
