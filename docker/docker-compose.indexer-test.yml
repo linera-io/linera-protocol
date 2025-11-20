@@ -22,7 +22,7 @@ services:
 
   # 1. Storage Service - starts after postgres
   linera-storage-service:
-    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
+    image: "${LINERA_STORAGE_SERVICE_IMAGE:-linera-storage-service}"
     container_name: linera-storage-service
     ports:
       - "${LINERA_STORAGE_SERVICE_PORT:-1235}:${LINERA_STORAGE_SERVICE_PORT:-1235}"
@@ -45,7 +45,7 @@ services:
 
   # 2. Indexer - starts after storage service is healthy
   linera-indexer:
-    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
+    image: "${LINERA_INDEXER_IMAGE:-linera-indexer}"
     container_name: linera-indexer
     ports:
       - "${INDEXER_PORT:-8081}:${INDEXER_PORT:-8081}"
@@ -75,7 +75,7 @@ services:
 
   # 3. Block Exporter - starts after indexer is healthy
   linera-block-exporter:
-    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
+    image: "${LINERA_EXPORTER_IMAGE:-linera-exporter}"
     container_name: linera-block-exporter
     ports:
       - "${BLOCK_EXPORTER_PORT:-8882}:${BLOCK_EXPORTER_PORT:-8882}"
@@ -106,7 +106,7 @@ services:
 
   # 4. Network (Validator + Faucet) - starts after block exporter
   linera-network:
-    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
+    image: "${LINERA_NETWORK_IMAGE:-linera-test}"
     container_name: linera-network
     ports:
       - "${FAUCET_PORT:-8080}:${FAUCET_PORT:-8080}"
