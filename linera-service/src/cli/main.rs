@@ -606,6 +606,524 @@ impl Runnable for Job {
                 }
             }
 
+            Validator(validator_command) => {
+                use linera_service::cli::command::{
+                    ValidatorBatchFile, ValidatorCommand, ValidatorToAdd,
+                };
+                match validator_command {
+                    ValidatorCommand::Query {
+                        address,
+                        chain_id,
+                        public_key,
+                    } => {
+                        let context = ClientContext::new(
+                            storage,
+                            options.context_options.clone(),
+                            wallet,
+                            signer.into_value(),
+                        );
+                        let node = context.make_node_provider().make_node(&address)?;
+                        let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                        println!(
+                            "Querying validator about chain {chain_id}.
+"
+                        );
+                        let results = context
+                            .query_validator(&address, &node, chain_id, public_key.as_ref())
+                            .await;
+
+                        for error in results.errors() {
+                            error!("{}", error);
+                        }
+
+                        results.print(public_key.as_ref(), Some(&address), None, None);
+
+                        if !results.errors().is_empty() {
+                            bail!(
+                                "Found one or several issue(s) while querying validator {address}"
+                            );
+                        }
+                    }
+
+                    ValidatorCommand::QueryBatch { file, chain_id } => {
+                        let context = ClientContext::new(
+                            storage,
+                            options.context_options.clone(),
+                            wallet,
+                            signer.into_value(),
+                        );
+                        let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+
+                        // Read and parse the JSON file
+                        let file_content = std::fs::read_to_string(&file)
+                            .context("Failed to read validator batch file")?;
+                        let batch: ValidatorBatchFile = serde_json::from_str(&file_content)
+                            .context("Failed to parse validator batch file")?;
+
+                        println!(
+                            "Querying {} validators about chain {chain_id}.
+",
+                            batch.validators.len()
+                        );
+
+                        let node_provider = context.make_node_provider();
+                        let mut total_errors = 0;
+
+                        for validator_spec in &batch.validators {
+                            let node = node_provider.make_node(&validator_spec.network_address)?;
+                            let results = context
+                                .query_validator(
+                                    &validator_spec.network_address,
+                                    &node,
+                                    chain_id,
+                                    Some(&validator_spec.public_key),
+                                )
+                                .await;
+
+                            for error in results.errors() {
+                                error!("{}", error);
+                                total_errors += 1;
+                            }
+
+                            results.print(
+                                Some(&validator_spec.public_key),
+                                Some(&validator_spec.network_address),
+                                None,
+                                None,
+                            );
+                            println!();
+                        }
+
+                        if total_errors > 0 {
+                            bail!("Found {total_errors} issue(s) while querying validators");
+                        }
+                    }
+
+                    ValidatorCommand::List {
+                        chain_id,
+                        min_votes,
+                    } => {
+                        let mut context = ClientContext::new(
+                            storage,
+                            options.context_options.clone(),
+                            wallet,
+                            signer.into_value(),
+                        );
+                        let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                        println!(
+                            "Querying validators about chain {chain_id}.
+"
+                        );
+                        let local_results = context.query_local_node(chain_id).await;
+                        let chain_client = context.make_chain_client(chain_id);
+                        info!("Querying validators about chain {}", chain_id);
+                        let result = chain_client.local_committee().await;
+                        context.update_wallet_from_client(&chain_client).await?;
+                        let committee = result.context("Failed to get local committee")?;
+                        info!(
+                            "Using the local set of validators: {:?}",
+                            committee.validators()
+                        );
+                        let node_provider = context.make_node_provider();
+                        let mut validator_results = Vec::new();
+                        for (name, state) in committee.validators() {
+                            if min_votes.is_some_and(|votes| state.votes < votes) {
+                                continue; // Skip validator with little voting weight.
+                            }
+                            let address = &state.network_address;
+                            let node = node_provider.make_node(address)?;
+                            let results = context
+                                .query_validator(address, &node, chain_id, Some(name))
+                                .await;
+                            validator_results.push((name, address, state.votes, results));
+                        }
+
+                        let mut faulty_validators = BTreeMap::<_, Vec<_>>::new();
+                        for (name, address, _votes, results) in &validator_results {
+                            for error in results.errors() {
+                                error!("{}", error);
+                                faulty_validators
+                                    .entry((*name, *address))
+                                    .or_default()
+                                    .push(error);
+                            }
+                        }
+
+                        // Print local node results first (everything)
+                        println!("Local Node:");
+                        local_results.print(None, None, None, None);
+                        println!();
+
+                        // Print validator results (only differences from local node)
+                        for (name, address, votes, results) in &validator_results {
+                            results.print(
+                                Some(name),
+                                Some(address),
+                                Some(*votes),
+                                Some(&local_results),
+                            );
+                            println!();
+                        }
+
+                        let num_ok_validators =
+                            committee.validators().len() - faulty_validators.len();
+                        if !faulty_validators.is_empty() {
+                            println!("{:#?}", faulty_validators);
+                        }
+                        info!(
+                            "{}/{} validators are OK.",
+                            num_ok_validators,
+                            committee.validators().len()
+                        );
+                    }
+
+                    ValidatorCommand::Add {
+                        public_key,
+                        account_key,
+                        address,
+                        votes,
+                        skip_online_check,
+                    } => {
+                        info!("Starting operations to add validator");
+                        let time_start = Instant::now();
+                        let context = ClientContext::new(
+                            storage,
+                            options.context_options.clone(),
+                            wallet,
+                            signer.into_value(),
+                        );
+
+                        let context = Arc::new(Mutex::new(context));
+                        let mut context = context.lock().await;
+
+                        // Check validator compatibility if requested
+                        if !skip_online_check {
+                            let node = context.make_node_provider().make_node(&address)?;
+                            context
+                                .check_compatible_version_info(&address, &node)
+                                .await?;
+                            context
+                                .check_matching_network_description(&address, &node)
+                                .await?;
+                        }
+
+                        let admin_id = context.wallet.genesis_admin_chain();
+                        let chain_client = context.make_chain_client(admin_id);
+                        // Synchronize the chain state to make sure we're applying the changes to the
+                        // latest committee.
+                        chain_client.synchronize_chain_state(admin_id).await?;
+                        let maybe_certificate = context
+                            .apply_client_command(&chain_client, |chain_client| {
+                                let chain_client = chain_client.clone();
+                                let address = address.clone();
+                                async move {
+                                    // Create the new committee.
+                                    let mut committee =
+                                        chain_client.local_committee().await.unwrap();
+                                    let policy = committee.policy().clone();
+                                    let mut validators = committee.validators().clone();
+
+                                    validators.insert(
+                                        public_key,
+                                        ValidatorState {
+                                            network_address: address,
+                                            votes,
+                                            account_public_key: account_key,
+                                        },
+                                    );
+
+                                    committee = Committee::new(validators, policy);
+                                    chain_client
+                                        .stage_new_committee(committee)
+                                        .await
+                                        .map(|outcome| outcome.map(Some))
+                                }
+                            })
+                            .await
+                            .context("Failed to stage committee")?;
+                        let Some(certificate) = maybe_certificate else {
+                            return Ok(());
+                        };
+                        info!(
+                            "Created new committee:
+{:?}",
+                            certificate
+                        );
+
+                        let time_total = time_start.elapsed();
+                        info!("Operations confirmed after {} ms", time_total.as_millis());
+                    }
+
+                    ValidatorCommand::Remove { public_key } => {
+                        info!("Starting operations to remove validator");
+                        let time_start = Instant::now();
+                        let context = ClientContext::new(
+                            storage,
+                            options.context_options.clone(),
+                            wallet,
+                            signer.into_value(),
+                        );
+
+                        let context = Arc::new(Mutex::new(context));
+                        let mut context = context.lock().await;
+
+                        let admin_id = context.wallet.genesis_admin_chain();
+                        let chain_client = context.make_chain_client(admin_id);
+                        // Synchronize the chain state to make sure we're applying the changes to the
+                        // latest committee.
+                        chain_client.synchronize_chain_state(admin_id).await?;
+                        let maybe_certificate = context
+                            .apply_client_command(&chain_client, |chain_client| {
+                                let chain_client = chain_client.clone();
+                                async move {
+                                    // Create the new committee.
+                                    let mut committee =
+                                        chain_client.local_committee().await.unwrap();
+                                    let policy = committee.policy().clone();
+                                    let mut validators = committee.validators().clone();
+
+                                    if validators.remove(&public_key).is_none() {
+                                        error!("Validator {public_key} does not exist; aborting.");
+                                        return Ok(ClientOutcome::Committed(None));
+                                    }
+
+                                    committee = Committee::new(validators, policy);
+                                    chain_client
+                                        .stage_new_committee(committee)
+                                        .await
+                                        .map(|outcome| outcome.map(Some))
+                                }
+                            })
+                            .await
+                            .context("Failed to stage committee")?;
+                        let Some(certificate) = maybe_certificate else {
+                            return Ok(());
+                        };
+                        info!(
+                            "Created new committee:
+{:?}",
+                            certificate
+                        );
+
+                        let time_total = time_start.elapsed();
+                        info!("Operations confirmed after {} ms", time_total.as_millis());
+                    }
+
+                    ValidatorCommand::BatchUpdate {
+                        file,
+                        dry_run,
+                        skip_online_check,
+                    } => {
+                        info!("Starting operations to batch update validators");
+                        let time_start = Instant::now();
+
+                        // Read and parse the JSON file
+                        let file_content = std::fs::read_to_string(&file)
+                            .context("Failed to read validator batch file")?;
+                        let batch: ValidatorBatchFile = serde_json::from_str(&file_content)
+                            .context("Failed to parse validator batch file")?;
+
+                        // Convert to ValidatorToAdd format
+                        let add_validators: Vec<ValidatorToAdd> =
+                            batch.add.into_iter().map(Into::into).collect();
+                        let modify_validators: Vec<ValidatorToAdd> =
+                            batch.modify.into_iter().map(Into::into).collect();
+                        let remove_validators = batch.remove;
+
+                        if dry_run {
+                            println!(
+                                "DRY RUN - No changes will be made
+"
+                            );
+                            println!("Validators to add ({}):", add_validators.len());
+                            for v in &add_validators {
+                                println!(
+                                    "  - {} (votes: {}, address: {})",
+                                    v.public_key, v.votes, v.address
+                                );
+                            }
+                            println!(
+                                "
+Validators to modify ({}):",
+                                modify_validators.len()
+                            );
+                            for v in &modify_validators {
+                                println!(
+                                    "  - {} (votes: {}, address: {})",
+                                    v.public_key, v.votes, v.address
+                                );
+                            }
+                            println!(
+                                "
+Validators to remove ({}):",
+                                remove_validators.len()
+                            );
+                            for pk in &remove_validators {
+                                println!("  - {}", pk);
+                            }
+                            return Ok(());
+                        }
+
+                        let context = ClientContext::new(
+                            storage,
+                            options.context_options.clone(),
+                            wallet,
+                            signer.into_value(),
+                        );
+
+                        let context = Arc::new(Mutex::new(context));
+                        let mut context = context.lock().await;
+
+                        // Check validator compatibility if requested
+                        if !skip_online_check {
+                            for validator in add_validators.iter().chain(modify_validators.iter()) {
+                                let node =
+                                    context.make_node_provider().make_node(&validator.address)?;
+                                context
+                                    .check_compatible_version_info(&validator.address, &node)
+                                    .await?;
+                                context
+                                    .check_matching_network_description(&validator.address, &node)
+                                    .await?;
+                            }
+                        }
+
+                        let admin_id = context.wallet.genesis_admin_chain();
+                        let chain_client = context.make_chain_client(admin_id);
+                        // Synchronize the chain state to make sure we're applying the changes to the
+                        // latest committee.
+                        chain_client.synchronize_chain_state(admin_id).await?;
+                        let maybe_certificate = context
+                            .apply_client_command(&chain_client, |chain_client| {
+                                let chain_client = chain_client.clone();
+                                let add_validators = add_validators.clone();
+                                let modify_validators = modify_validators.clone();
+                                let remove_validators = remove_validators.clone();
+                                async move {
+                                    // Create the new committee.
+                                    let mut committee = chain_client.local_committee().await.unwrap();
+                                    let policy = committee.policy().clone();
+                                    let mut validators = committee.validators().clone();
+
+                                    // Validate that all validators to add do not already exist.
+                                    for validator in &add_validators {
+                                        if validators.contains_key(&validator.public_key) {
+                                            error!(
+                                                "Cannot add existing validator: {}. Aborting operation.",
+                                                validator.public_key
+                                            );
+                                            return Ok(ClientOutcome::Committed(None));
+                                        }
+                                    }
+                                    // Validate that all validators to modify already exist and are actually modified.
+                                    for validator in &modify_validators {
+                                        match validators.get(&validator.public_key) {
+                                            None => {
+                                                error!(
+                                                    "Cannot modify nonexistent validator: {}. Aborting operation.",
+                                                    validator.public_key
+                                                );
+                                                return Ok(ClientOutcome::Committed(None));
+                                            }
+                                            Some(existing) => {
+                                                // Check that at least one field is different.
+                                                if existing.network_address == validator.address
+                                                    && existing.account_public_key == validator.account_key
+                                                    && existing.votes == validator.votes
+                                                {
+                                                    error!(
+                                                        "Validator {} is not being modified. Aborting operation.",
+                                                        validator.public_key
+                                                    );
+                                                    return Ok(ClientOutcome::Committed(None));
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Validate that all validators to remove exist.
+                                    for public_key in &remove_validators {
+                                        if !validators.contains_key(public_key) {
+                                            error!(
+                                                "Cannot remove nonexistent validator: {public_key}. Aborting operation."
+                                            );
+                                            return Ok(ClientOutcome::Committed(None));
+                                        }
+                                    }
+                                    // Add validators
+                                    for validator in add_validators {
+                                        validators.insert(
+                                            validator.public_key,
+                                            ValidatorState {
+                                                network_address: validator.address,
+                                                votes: validator.votes,
+                                                account_public_key: validator.account_key,
+                                            },
+                                        );
+                                    }
+                                    // Modify validators
+                                    for validator in modify_validators {
+                                        validators.insert(
+                                            validator.public_key,
+                                            ValidatorState {
+                                                network_address: validator.address,
+                                                votes: validator.votes,
+                                                account_public_key: validator.account_key,
+                                            },
+                                        );
+                                    }
+                                    // Remove validators
+                                    for public_key in remove_validators {
+                                        validators.remove(&public_key);
+                                    }
+
+                                    committee = Committee::new(validators, policy);
+                                    chain_client
+                                        .stage_new_committee(committee)
+                                        .await
+                                        .map(|outcome| outcome.map(Some))
+                                }
+                            })
+                            .await
+                            .context("Failed to stage committee")?;
+                        let Some(certificate) = maybe_certificate else {
+                            return Ok(());
+                        };
+                        info!(
+                            "Created new committee:
+{:?}",
+                            certificate
+                        );
+
+                        let time_total = time_start.elapsed();
+                        info!("Operations confirmed after {} ms", time_total.as_millis());
+                    }
+
+                    ValidatorCommand::Sync {
+                        address,
+                        mut chains,
+                    } => {
+                        let context = ClientContext::new(
+                            storage,
+                            options.context_options.clone(),
+                            wallet,
+                            signer.into_value(),
+                        );
+
+                        if chains.is_empty() {
+                            chains.push(context.default_chain());
+                        }
+
+                        let validator = context.make_node_provider().make_node(&address)?;
+
+                        for chain_id in chains {
+                            let chain = context.make_chain_client(chain_id);
+
+                            Box::pin(chain.sync_validator(validator.clone())).await?;
+                        }
+                    }
+                }
+            }
+
             command @ (SetValidator { .. }
             | RemoveValidator { .. }
             | ChangeValidators { .. }

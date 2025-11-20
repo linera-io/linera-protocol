@@ -194,6 +194,135 @@ use crate::util::{
     DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
 };
 
+/// JSON structure for batch validator operations
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidatorBatchFile {
+    #[serde(default)]
+    pub validators: Vec<ValidatorSpec>,
+    #[serde(default)]
+    pub add: Vec<ValidatorSpec>,
+    #[serde(default)]
+    pub modify: Vec<ValidatorSpec>,
+    #[serde(default)]
+    pub remove: Vec<ValidatorPublicKey>,
+}
+
+/// Validator specification from JSON
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidatorSpec {
+    pub public_key: ValidatorPublicKey,
+    pub account_key: AccountPublicKey,
+    pub network_address: String,
+    pub votes: u64,
+}
+
+impl From<ValidatorSpec> for ValidatorToAdd {
+    fn from(spec: ValidatorSpec) -> Self {
+        ValidatorToAdd {
+            public_key: spec.public_key,
+            account_key: spec.account_key,
+            address: spec.network_address,
+            votes: spec.votes,
+        }
+    }
+}
+
+#[derive(Clone, clap::Subcommand)]
+pub enum ValidatorCommand {
+    /// Query a validator's status and compatibility
+    Query {
+        /// The validator's network address (e.g., grpcs://validator.net:443)
+        address: String,
+
+        /// The chain to query. If omitted, query the default chain of the wallet.
+        chain_id: Option<ChainId>,
+
+        /// The public key of the validator. If given, the signature will be checked.
+        #[arg(long)]
+        public_key: Option<ValidatorPublicKey>,
+    },
+
+    /// Query multiple validators from a JSON file
+    QueryBatch {
+        /// Path to JSON file containing validator list
+        file: PathBuf,
+
+        /// The chain to query. If omitted, query the default chain of the wallet.
+        #[arg(long)]
+        chain_id: Option<ChainId>,
+    },
+
+    /// List all validators for a chain
+    List {
+        /// The chain to query. If omitted, query the default chain of the wallet.
+        chain_id: Option<ChainId>,
+
+        /// Skip validators with less voting weight than this.
+        #[arg(long)]
+        min_votes: Option<u64>,
+    },
+
+    /// Add a new validator (admin only)
+    Add {
+        /// The public key of the validator.
+        #[arg(long)]
+        public_key: ValidatorPublicKey,
+
+        /// The public key of the account controlled by the validator.
+        #[arg(long)]
+        account_key: AccountPublicKey,
+
+        /// Network address
+        #[arg(long)]
+        address: String,
+
+        /// Voting power
+        #[arg(long, default_value = "1")]
+        votes: u64,
+
+        /// Skip the version and genesis config checks.
+        #[arg(long)]
+        skip_online_check: bool,
+    },
+
+    /// Remove a validator (admin only)
+    Remove {
+        /// The public key of the validator.
+        #[arg(long)]
+        public_key: ValidatorPublicKey,
+    },
+
+    /// Add, modify, and/or remove validators from a JSON file (admin only)
+    ///
+    /// JSON format supports two styles:
+    /// 1. Simple list: {"validators": [{...}]} - adds all validators
+    /// 2. Operations: {"add": [{...}], "modify": [{...}], "remove": ["pubkey"]}
+    BatchUpdate {
+        /// Path to JSON file containing validator operations
+        file: PathBuf,
+
+        /// Perform a dry run without making changes
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip the version and genesis config checks for added and modified validators.
+        #[arg(long)]
+        skip_online_check: bool,
+    },
+
+    /// Synchronize a validator with local chain state
+    Sync {
+        /// The public address of the validator to synchronize.
+        address: String,
+
+        /// The chains to synchronize, or the default chain if empty.
+        #[arg(long, num_args = 0..)]
+        chains: Vec<ChainId>,
+    },
+}
+
 #[derive(Clone, clap::Subcommand)]
 pub enum ClientCommand {
     /// Transfer funds
@@ -353,8 +482,9 @@ pub enum ClientCommand {
         chain_id: Option<ChainId>,
     },
 
-    /// Show the version and genesis config hash of a new validator, and print a warning if it is
-    /// incompatible. Also print some information about the given chain while we are at it.
+    /// (DEPRECATED) Show the version and genesis config hash of a new validator.
+    ///
+    /// **Deprecated:** Use `linera validator query` instead.
     QueryValidator {
         /// The new validator's address.
         address: String,
@@ -366,8 +496,9 @@ pub enum ClientCommand {
         public_key: Option<ValidatorPublicKey>,
     },
 
-    /// Show the current set of validators for a chain. Also print some information about
-    /// the given chain while we are at it.
+    /// (DEPRECATED) Show the current set of validators for a chain.
+    ///
+    /// **Deprecated:** Use `linera validator list` instead.
     QueryValidators {
         /// The chain to query. If omitted, query the default chain of the wallet.
         chain_id: Option<ChainId>,
@@ -376,7 +507,9 @@ pub enum ClientCommand {
         min_votes: Option<u64>,
     },
 
-    /// Synchronizes a validator with the local state of chains.
+    /// (DEPRECATED) Synchronizes a validator with the local state of chains.
+    ///
+    /// **Deprecated:** Use `linera validator sync` instead.
     SyncValidator {
         /// The public address of the validator to synchronize.
         address: String,
@@ -386,10 +519,9 @@ pub enum ClientCommand {
         chains: Vec<ChainId>,
     },
 
-    /// Add or modify a validator (admin only)
+    /// (DEPRECATED) Add or modify a validator (admin only)
     ///
-    /// Deprecated: Use change-validators instead, which allows adding, changing and removing
-    /// any number of validators in a single operation.
+    /// **Deprecated:** Use `linera validator add` or `linera validator batch-update` instead.
     SetValidator {
         /// The public key of the validator.
         #[arg(long)]
@@ -412,20 +544,18 @@ pub enum ClientCommand {
         skip_online_check: bool,
     },
 
-    /// Remove a validator (admin only)
+    /// (DEPRECATED) Remove a validator (admin only)
     ///
-    /// Deprecated: Use change-validators instead, which allows adding, changing and removing
-    /// any number of validators in a single operation.
+    /// **Deprecated:** Use `linera validator remove` or `linera validator batch-update` instead.
     RemoveValidator {
         /// The public key of the validator.
         #[arg(long)]
         public_key: ValidatorPublicKey,
     },
 
-    /// Add, modify, and/or remove multiple validators in a single epoch (admin only)
+    /// (DEPRECATED) Add, modify, and/or remove multiple validators in a single epoch (admin only)
     ///
-    /// This command allows you to make multiple validator changes (additions, modifications,
-    /// and removals) in a single new epoch, avoiding the creation of unnecessary short-lived epochs.
+    /// **Deprecated:** Use `linera validator batch-update` instead for JSON-based batch operations.
     ChangeValidators {
         /// Validators to add, specified as "public_key,account_key,address,votes".
         /// Fails if the validator already exists in the committee.
@@ -997,6 +1127,10 @@ pub enum ClientCommand {
     #[command(subcommand)]
     Chain(ChainCommand),
 
+    /// Manage network validators.
+    #[command(subcommand)]
+    Validator(ValidatorCommand),
+
     /// Manage Linera projects.
     #[command(subcommand)]
     Project(ProjectCommand),
@@ -1067,6 +1201,7 @@ impl ClientCommand {
             | ClientCommand::Assign { .. }
             | ClientCommand::Wallet { .. }
             | ClientCommand::Chain { .. }
+            | ClientCommand::Validator { .. }
             | ClientCommand::RetryPendingBlock { .. } => "client".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Single { .. }) => "single-benchmark".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Multi { .. }) => "multi-benchmark".into(),
