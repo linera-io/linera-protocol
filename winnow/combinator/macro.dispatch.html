@@ -1,0 +1,61 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`match` for parsers"><title>dispatch in winnow::combinator - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="winnow" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../winnow/index.html">winnow</a><span class="version">0.7.12</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">dispatch</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example" title="Example">Example</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In winnow::<wbr>combinator</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">winnow</a>::<wbr><a href="index.html">combinator</a></div><h1>Macro <span class="macro">dispatch</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/winnow/macros/dispatch.rs.html#76-92">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! dispatch {
+    (
+        $scrutinee_parser:expr;
+        $( $arm_pat:pat $(if $arm_pred:expr)? =&gt; $arm_parser: expr ),+ $(,)?
+    ) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>match</code> for parsers</p>
+<p>While <code>match</code> works by accepting a value and returning values:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>result_value = <span class="kw">match </span>scrutinee_value {
+    ArmPattern =&gt; arm_value,
+};</code></pre></div>
+<p><code>dispatch!</code> composes parsers:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>result_parser = <span class="macro">dispatch!</span>{scrutinee_parser;
+    ArmPattern =&gt; arm_parser,
+};</code></pre></div>
+<p>This is useful when parsers have unique prefixes to test for.
+This offers better performance over
+<a href="fn.alt.html" title="fn winnow::combinator::alt"><code>alt</code></a> though it might be at the cost of duplicating parts of your grammar
+if you needed to <a href="fn.peek.html" title="fn winnow::combinator::peek"><code>peek(input_parser)</code></a> the scrutinee.</p>
+<p>For tight control over the error in a catch-all case, use <a href="fn.fail.html" title="fn winnow::combinator::fail"><code>fail</code></a>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>winnow::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>winnow::combinator::dispatch;
+
+<span class="kw">fn </span>integer(input: <span class="kw-2">&amp;mut &amp;</span>str) -&gt; ModalResult&lt;u64&gt; {
+    <span class="macro">dispatch!</span> {take(<span class="number">2usize</span>);
+        <span class="string">"0b" </span>=&gt; take_while(<span class="number">1</span>.., <span class="string">'0'</span>..=<span class="string">'1'</span>).try_map(|s| u64::from_str_radix(s, <span class="number">2</span>)),
+        <span class="string">"0o" </span>=&gt; take_while(<span class="number">1</span>.., <span class="string">'0'</span>..=<span class="string">'7'</span>).try_map(|s| u64::from_str_radix(s, <span class="number">8</span>)),
+        <span class="string">"0d" </span>=&gt; take_while(<span class="number">1</span>.., <span class="string">'0'</span>..=<span class="string">'9'</span>).try_map(|s| u64::from_str_radix(s, <span class="number">10</span>)),
+        <span class="string">"0x" </span>=&gt; take_while(<span class="number">1</span>.., (<span class="string">'0'</span>..=<span class="string">'9'</span>, <span class="string">'a'</span>..=<span class="string">'f'</span>, <span class="string">'A'</span>..=<span class="string">'F'</span>)).try_map(|s| u64::from_str_radix(s, <span class="number">16</span>)),
+        <span class="kw">_ </span>=&gt; fail::&lt;<span class="kw">_</span>, u64, <span class="kw">_</span>&gt;,
+    }
+    .parse_next(input)
+}
+
+<span class="macro">assert_eq!</span>(integer.parse_peek(<span class="string">"0x100 Hello"</span>), <span class="prelude-val">Ok</span>((<span class="string">" Hello"</span>, <span class="number">0x100</span>)));</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>winnow::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>winnow::combinator::dispatch;
+
+<span class="kw">fn </span>escaped(input: <span class="kw-2">&amp;mut &amp;</span>str) -&gt; ModalResult&lt;char&gt; {
+    preceded(<span class="string">'\\'</span>, escape_seq_char).parse_next(input)
+}
+
+<span class="kw">fn </span>escape_seq_char(input: <span class="kw-2">&amp;mut &amp;</span>str) -&gt; ModalResult&lt;char&gt; {
+    <span class="macro">dispatch!</span> {any;
+        <span class="string">'b' </span>=&gt; empty.value(<span class="string">'\u{8}'</span>),
+        <span class="string">'f' </span>=&gt; empty.value(<span class="string">'\u{c}'</span>),
+        <span class="string">'n' </span>=&gt; empty.value(<span class="string">'\n'</span>),
+        <span class="string">'r' </span>=&gt; empty.value(<span class="string">'\r'</span>),
+        <span class="string">'t' </span>=&gt; empty.value(<span class="string">'\t'</span>),
+        <span class="string">'\\' </span>=&gt; empty.value(<span class="string">'\\'</span>),
+        <span class="string">'"' </span>=&gt; empty.value(<span class="string">'"'</span>),
+        <span class="kw">_ </span>=&gt; fail::&lt;<span class="kw">_</span>, char, <span class="kw">_</span>&gt;,
+    }
+    .parse_next(input)
+}
+
+<span class="macro">assert_eq!</span>(escaped.parse_peek(<span class="string">"\\nHello"</span>), <span class="prelude-val">Ok</span>((<span class="string">"Hello"</span>, <span class="string">'\n'</span>)));</code></pre></div>
+</div></details></section></div></main></body></html>

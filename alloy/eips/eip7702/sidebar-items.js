@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Eip7702Error","RecoveredAuthority"],"mod":["constants"],"struct":["Authorization","RecoveredAuthorization","SignedAuthorization"]};

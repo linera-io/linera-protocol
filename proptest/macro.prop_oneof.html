@@ -1,0 +1,98 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Produce a strategy which picks one of the listed choices."><title>prop_oneof in proptest - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="proptest" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../proptest/index.html">proptest</a><span class="version">1.7.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">prop_<wbr>oneof</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example" title="Example">Example</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate proptest</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">proptest</a></div><h1>Macro <span class="macro">prop_oneof</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/proptest/sugar.rs.html#327-492">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! prop_oneof {
+    ($($item:expr),+ $(,)?) =&gt; { ... };
+    ($_weight0:expr =&gt; $item0:expr $(,)?) =&gt; { ... };
+    ($weight0:expr =&gt; $item0:expr,
+     $weight1:expr =&gt; $item1:expr $(,)?) =&gt; { ... };
+    ($weight0:expr =&gt; $item0:expr,
+     $weight1:expr =&gt; $item1:expr,
+     $weight2:expr =&gt; $item2:expr $(,)?) =&gt; { ... };
+    ($weight0:expr =&gt; $item0:expr,
+     $weight1:expr =&gt; $item1:expr,
+     $weight2:expr =&gt; $item2:expr,
+     $weight3:expr =&gt; $item3:expr $(,)?) =&gt; { ... };
+    ($weight0:expr =&gt; $item0:expr,
+     $weight1:expr =&gt; $item1:expr,
+     $weight2:expr =&gt; $item2:expr,
+     $weight3:expr =&gt; $item3:expr,
+     $weight4:expr =&gt; $item4:expr $(,)?) =&gt; { ... };
+    ($weight0:expr =&gt; $item0:expr,
+     $weight1:expr =&gt; $item1:expr,
+     $weight2:expr =&gt; $item2:expr,
+     $weight3:expr =&gt; $item3:expr,
+     $weight4:expr =&gt; $item4:expr,
+     $weight5:expr =&gt; $item5:expr $(,)?) =&gt; { ... };
+    ($weight0:expr =&gt; $item0:expr,
+     $weight1:expr =&gt; $item1:expr,
+     $weight2:expr =&gt; $item2:expr,
+     $weight3:expr =&gt; $item3:expr,
+     $weight4:expr =&gt; $item4:expr,
+     $weight5:expr =&gt; $item5:expr,
+     $weight6:expr =&gt; $item6:expr $(,)?) =&gt; { ... };
+    ($weight0:expr =&gt; $item0:expr,
+     $weight1:expr =&gt; $item1:expr,
+     $weight2:expr =&gt; $item2:expr,
+     $weight3:expr =&gt; $item3:expr,
+     $weight4:expr =&gt; $item4:expr,
+     $weight5:expr =&gt; $item5:expr,
+     $weight6:expr =&gt; $item6:expr,
+     $weight7:expr =&gt; $item7:expr $(,)?) =&gt; { ... };
+    ($weight0:expr =&gt; $item0:expr,
+     $weight1:expr =&gt; $item1:expr,
+     $weight2:expr =&gt; $item2:expr,
+     $weight3:expr =&gt; $item3:expr,
+     $weight4:expr =&gt; $item4:expr,
+     $weight5:expr =&gt; $item5:expr,
+     $weight6:expr =&gt; $item6:expr,
+     $weight7:expr =&gt; $item7:expr,
+     $weight8:expr =&gt; $item8:expr $(,)?) =&gt; { ... };
+    ($weight0:expr =&gt; $item0:expr,
+     $weight1:expr =&gt; $item1:expr,
+     $weight2:expr =&gt; $item2:expr,
+     $weight3:expr =&gt; $item3:expr,
+     $weight4:expr =&gt; $item4:expr,
+     $weight5:expr =&gt; $item5:expr,
+     $weight6:expr =&gt; $item6:expr,
+     $weight7:expr =&gt; $item7:expr,
+     $weight8:expr =&gt; $item8:expr,
+     $weight9:expr =&gt; $item9:expr $(,)?) =&gt; { ... };
+    ($($weight:expr =&gt; $item:expr),+ $(,)?) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Produce a strategy which picks one of the listed choices.</p>
+<p>This is conceptually equivalent to calling <code>prop_union</code> on the first two
+elements and then chaining <code>.or()</code> onto the rest after implicitly boxing
+all of them. As with <code>Union</code>, values shrink across elements on the
+assumption that earlier ones are “simpler”, so they should be listed in
+order of ascending complexity when possible.</p>
+<p>The macro invocation has two forms. The first is to simply list the
+strategies separated by commas; this will cause value generation to pick
+from the strategies uniformly. The other form is to provide a weight in the
+form of a <code>u32</code> before each strategy, separated from the strategy with
+<code>=&gt;</code>.</p>
+<p>Note that the exact type returned by the macro varies depending on how many
+inputs there are. In particular, if given exactly one option, it will
+return it unmodified. It is not recommended to depend on the particular
+type produced by this macro.</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Clone, Copy, Debug)]
+</span><span class="kw">enum </span>MyEnum {
+  Big(u64),
+  Medium(u32),
+  Little(i16),
+}
+
+<span class="kw">let </span>my_enum_strategy = <span class="macro">prop_oneof!</span>[
+  prop::num::i16::ANY.prop_map(MyEnum::Little),
+  prop::num::u32::ANY.prop_map(MyEnum::Medium),
+  prop::num::u64::ANY.prop_map(MyEnum::Big),
+];
+
+<span class="kw">let </span>my_weighted_strategy = <span class="macro">prop_oneof!</span>[
+  <span class="number">1 </span>=&gt; prop::num::i16::ANY.prop_map(MyEnum::Little),
+  <span class="comment">// Chose `Medium` twice as frequently as either `Little` or `Big`; i.e.,
+  // around 50% of values will be `Medium`, and 25% for each of `Little`
+  // and `Big`.
+  </span><span class="number">2 </span>=&gt; prop::num::u32::ANY.prop_map(MyEnum::Medium),
+  <span class="number">1 </span>=&gt; prop::num::u64::ANY.prop_map(MyEnum::Big),
+];</code></pre></div>
+</div></details></section></div></main></body></html>

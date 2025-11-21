@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["root"],"derive":["Allocative"],"fn":["register_root","size_of_unique","size_of_unique_allocated_data"],"macro":["ident_key"],"struct":["FlameGraph","FlameGraphBuilder","Key","Visitor"],"trait":["Allocative"]};

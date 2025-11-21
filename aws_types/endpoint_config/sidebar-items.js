@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AccountIdEndpointMode"],"struct":["AccountIdEndpointModeParseError","EndpointUrl","UseDualStack","UseFips"]};

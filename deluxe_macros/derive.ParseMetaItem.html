@@ -1,0 +1,230 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generates `ParseMetaItem` for a struct or enum."><title>ParseMetaItem in deluxe_macros - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="deluxe_macros" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../deluxe_macros/index.html">deluxe_<wbr>macros</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Parse<wbr>Meta<wbr>Item</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#container-attributes" title="Container Attributes">Container Attributes</a><ul><li><a href="#deluxedefault" title="`#[deluxe(default)]`"><code>#[deluxe(default)]</code></a></li><li><a href="#deluxedefault--expr" title="`#[deluxe(default = expr)]`"><code>#[deluxe(default = expr)]</code></a></li><li><a href="#deluxetransparent" title="`#[deluxe(transparent)]`"><code>#[deluxe(transparent)]</code></a></li><li><a href="#deluxetransparentflatten_named" title="`#[deluxe(transparent(flatten_named)]`"><code>#[deluxe(transparent(flatten_named)]</code></a></li><li><a href="#deluxeand_then--expr" title="`#[deluxe(and_then = expr)]`"><code>#[deluxe(and_then = expr)]</code></a></li><li><a href="#example" title="Example">Example</a></li><li><a href="#deluxeallow_unknown_fields" title="`#[deluxe(allow_unknown_fields)]`"><code>#[deluxe(allow_unknown_fields)]</code></a></li><li><a href="#deluxecrate--path" title="`#[deluxe(crate = path)]`"><code>#[deluxe(crate = path)]</code></a></li></ul></li><li><a href="#variant-attributes" title="Variant Attributes">Variant Attributes</a><ul><li><a href="#deluxerename--ident" title="`#[deluxe(rename = ident)]`"><code>#[deluxe(rename = ident)]</code></a></li><li><a href="#deluxealias--ident" title="`#[deluxe(alias = ident)]`"><code>#[deluxe(alias = ident)]</code></a></li><li><a href="#deluxetransparent-1" title="`#[deluxe(transparent)]`"><code>#[deluxe(transparent)]</code></a></li><li><a href="#deluxeflatten" title="`#[deluxe(flatten)]`"><code>#[deluxe(flatten)]</code></a></li><li><a href="#deluxeskip" title="`#[deluxe(skip)]`"><code>#[deluxe(skip)]</code></a></li><li><a href="#deluxeallow_unknown_fields-1" title="`#[deluxe(allow_unknown_fields)]`"><code>#[deluxe(allow_unknown_fields)]</code></a></li></ul></li><li><a href="#field-attributes" title="Field Attributes">Field Attributes</a><ul><li><a href="#deluxerename--ident-1" title="`#[deluxe(rename = ident)]`"><code>#[deluxe(rename = ident)]</code></a></li><li><a href="#deluxealias--ident-1" title="`#[deluxe(alias = ident)]`"><code>#[deluxe(alias = ident)]</code></a></li><li><a href="#deluxedefault-1" title="`#[deluxe(default)]`"><code>#[deluxe(default)]</code></a></li><li><a href="#deluxedefault--expr-1" title="`#[deluxe(default = expr)]`"><code>#[deluxe(default = expr)]</code></a></li><li><a href="#deluxeflatten-1" title="`#[deluxe(flatten)]`"><code>#[deluxe(flatten)]</code></a></li><li><a href="#deluxeflattenprefix--path" title="`#[deluxe(flatten(prefix = path)])`"><code>#[deluxe(flatten(prefix = path)])</code></a></li><li><a href="#deluxeappend" title="`#[deluxe(append)]`"><code>#[deluxe(append)]</code></a></li><li><a href="#deluxerest" title="`#[deluxe(rest)]`"><code>#[deluxe(rest)]</code></a></li><li><a href="#deluxemap--expr" title="`#[deluxe(map = expr)]`"><code>#[deluxe(map = expr)]</code></a></li><li><a href="#example-1" title="Example">Example</a></li><li><a href="#deluxewith--module" title="`#[deluxe(with = module)]`"><code>#[deluxe(with = module)]</code></a></li><li><a href="#deluxeskip-1" title="`#[deluxe(skip)]`"><code>#[deluxe(skip)]</code></a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate deluxe_<wbr>macros</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">deluxe_macros</a></div><h1>Derive Macro <span class="derive">ParseMetaItem</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/deluxe_macros/lib.rs.html#401-408">Source</a> </span></div><pre class="rust item-decl"><code>#[derive(ParseMetaItem)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[deluxe]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generates <a href="../deluxe_core/parse_meta/trait.ParseMetaItem.html" title="trait deluxe_core::parse_meta::ParseMetaItem"><code>ParseMetaItem</code></a> for a struct or enum.</p>
+<h4 id="container-attributes"><a class="doc-anchor" href="#container-attributes">§</a>Container Attributes</h4>
+<p>The following attributes are supported on structs and enums:</p>
+<ul>
+<li><h6 id="deluxedefault"><a class="doc-anchor" href="#deluxedefault">§</a><code>#[deluxe(default)]</code></h6>
+<p>Initializes the container with <a href="https://doc.rust-lang.org/1.86.0/core/default/trait.Default.html#tymethod.default" title="associated function core::default::Default::default"><code>Default::default</code></a> before parsing.</p>
+</li>
+<li><h6 id="deluxedefault--expr"><a class="doc-anchor" href="#deluxedefault--expr">§</a><code>#[deluxe(default = expr)]</code></h6>
+<p>Initializes the container with the value of <code>expr</code> before parsing. The expression will
+be evaluated every time it is needed to construct the field, and must evaluate to a value of
+the same type as the field.</p>
+</li>
+<li><h6 id="deluxetransparent"><a class="doc-anchor" href="#deluxetransparent">§</a><code>#[deluxe(transparent)]</code></h6>
+<p>Parses a struct with one field as if it were the field. Can only be used on a struct with a
+single parseable field. Analogous to <code>#[repr(transparent)]</code>. The struct can still contain
+fields that are <a href="#deluxeskip-1"><code>skip</code></a>, as those will be ignored by <code>transparent</code>.</p>
+</li>
+<li><h6 id="deluxetransparentflatten_named"><a class="doc-anchor" href="#deluxetransparentflatten_named">§</a><code>#[deluxe(transparent(flatten_named)]</code></h6>
+<p><code>#[deluxe(transparent(flatten_unnamed)]</code></p>
+<p><code>#[deluxe(transparent(flatten_unnamed, append)]</code></p>
+<p><code>#[deluxe(transparent(rest)]</code></p>
+<p>Parses a struct with one field as if it were the field, additionally implementing the traits
+required to use <code>flatten</code>, <code>rest</code>, or <code>append</code>.  Can only be used on a struct with a
+single parseable field.</p>
+<p>Currently, it is required to provide these additional attributes to generate the trait
+definitions to use <a href="#deluxeflatten-1"><code>flatten</code></a>, <a href="#deluxeappend"><code>append</code></a> or
+<a href="#deluxerest"><code>rest</code></a> on this type.</p>
+</li>
+<li><h6 id="deluxeand_then--expr"><a class="doc-anchor" href="#deluxeand_then--expr">§</a><code>#[deluxe(and_then = expr)]</code></h6>
+<p>Executes an additional function ater parsing to perform additional transformations or
+validation on the input.</p>
+<p>This attribute is a simple wrapper around
+<a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html#method.and_then" title="method core::result::Result::and_then"><code>Result::and_then</code></a>. The function returned by <code>expr</code> must
+conform to the signature <code>fn(T) -&gt; <a href="../deluxe_core/util/type.Result.html" title="type deluxe_core::util::Result">deluxe::Result</a>&lt;T&gt;</code>
+where <code>T</code> is the type of the struct/enum being parsed. Returning
+<a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html#variant.Err" title="variant core::result::Result::Err"><code>Err</code></a> will cause the entire parse to fail.</p>
+<p>This attribute can be specified multiple times. When multiple <code>and_then</code> attributes are
+present, Deluxe will chain each function in the order the attributes were specified.</p>
+<h6 id="example"><a class="doc-anchor" href="#example">§</a>Example</h6>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(deluxe::ParseMetaItem)]
+#[deluxe(and_then = <span class="self">Self</span>::validate)]
+</span><span class="kw">struct </span>Data(i32);
+<span class="kw">impl </span>Data {
+    <span class="kw">fn </span>validate(<span class="self">self</span>) -&gt; deluxe::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="comment">// ... perform some checks here ...
+        </span><span class="prelude-val">Ok</span>(<span class="self">self</span>)
+    }
+}</code></pre></div>
+</li>
+<li><h6 id="deluxeallow_unknown_fields"><a class="doc-anchor" href="#deluxeallow_unknown_fields">§</a><code>#[deluxe(allow_unknown_fields)]</code></h6>
+<p>Ignore any tokens and do not generate an error when an unknown field is encountered.</p>
+</li>
+<li><h6 id="deluxecrate--path"><a class="doc-anchor" href="#deluxecrate--path">§</a><code>#[deluxe(crate = path)]</code></h6>
+<p>Specifies <code>path</code> as a custom path to the <code>deluxe</code> crate. Useful if <code>proc_macro_crate</code> is
+unable to find the <code>deluxe</code> crate, for instance if the crate is only re-exported inside
+another dependency.</p>
+</li>
+</ul>
+<h4 id="variant-attributes"><a class="doc-anchor" href="#variant-attributes">§</a>Variant Attributes</h4>
+<p>The following attributes are supported on variants:</p>
+<ul>
+<li><h6 id="deluxerename--ident"><a class="doc-anchor" href="#deluxerename--ident">§</a><code>#[deluxe(rename = ident)]</code></h6>
+<p>Parse the variant with the given <code>ident</code> instead of its Rust name.</p>
+</li>
+<li><h6 id="deluxealias--ident"><a class="doc-anchor" href="#deluxealias--ident">§</a><code>#[deluxe(alias = ident)]</code></h6>
+<p>Parse the variant with the given <code>ident</code>, or its Rust name. Can be repeated multiple times to
+provide additional aliases.</p>
+</li>
+<li><h6 id="deluxetransparent-1"><a class="doc-anchor" href="#deluxetransparent-1">§</a><code>#[deluxe(transparent)]</code></h6>
+<p>Parses a variant with one field as if it were the field. Can only be used on a variant with a
+single parseable field. Analogous to <code>#[repr(transparent)]</code>. The variant can still contain
+fields that are <a href="#deluxeskip-1"><code>skip</code></a>, as those will be ignored by <code>transparent</code>.</p>
+</li>
+<li><h6 id="deluxeflatten"><a class="doc-anchor" href="#deluxeflatten">§</a><code>#[deluxe(flatten)]</code></h6>
+<p>Flattens the variant so that its unique fields are used as the key for this variant instead
+of its name. Can be used on multiple variants as long as they each have a unique set of
+parseable fields that can be used to identify the variant. Fields with
+<a href="#deluxeflatten-1"><code>flatten</code></a>, <a href="#deluxeappend"><code>append</code></a> or <a href="#deluxerest"><code>rest</code></a> are not
+counted as unique fields as their field names are ignored.</p>
+<p>A single variant with no parseable fields can also be flattened. In that case, that variant
+will always be parsed as the default variant. Setting a default variant in this way is
+mutually exclusive with using <a href="#deluxedefault"><code>#[deluxe(default)]</code></a> on the enum.</p>
+</li>
+<li><h6 id="deluxeskip"><a class="doc-anchor" href="#deluxeskip">§</a><code>#[deluxe(skip)]</code></h6>
+<p>Skips this variant from parsing entirely.</p>
+</li>
+<li><h6 id="deluxeallow_unknown_fields-1"><a class="doc-anchor" href="#deluxeallow_unknown_fields-1">§</a><code>#[deluxe(allow_unknown_fields)]</code></h6>
+<p>Ignore any tokens and do not generate an error when an unknown field is encountered in this
+variant.</p>
+</li>
+</ul>
+<h4 id="field-attributes"><a class="doc-anchor" href="#field-attributes">§</a>Field Attributes</h4>
+<p>The following attributes are supported on struct fields and enum fields:</p>
+<ul>
+<li><h6 id="deluxerename--ident-1"><a class="doc-anchor" href="#deluxerename--ident-1">§</a><code>#[deluxe(rename = ident)]</code></h6>
+<p>Parse the field with the given <code>ident</code> instead of its Rust name.</p>
+</li>
+<li><h6 id="deluxealias--ident-1"><a class="doc-anchor" href="#deluxealias--ident-1">§</a><code>#[deluxe(alias = ident)]</code></h6>
+<p>Parse the field with the given <code>ident</code>, or its Rust name. Can be repeated multiple times to
+provide additional aliases.</p>
+</li>
+<li><h6 id="deluxedefault-1"><a class="doc-anchor" href="#deluxedefault-1">§</a><code>#[deluxe(default)]</code></h6>
+<p>Initializes the field with the value of <a href="https://doc.rust-lang.org/1.86.0/core/default/trait.Default.html#tymethod.default" title="associated function core::default::Default::default"><code>Default::default</code></a> if the field is omitted.</p>
+<p>It is not necessary to use this on fields of type <a href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option</code></a> or <a href="../deluxe_core/util/struct.Flag.html" title="struct deluxe_core::util::Flag"><code>Flag</code></a>,
+or any other type that has a top-level <a href="#deluxedefault"><code>#[deluxe(default)]</code></a> on the type
+itself.</p>
+</li>
+<li><h6 id="deluxedefault--expr-1"><a class="doc-anchor" href="#deluxedefault--expr-1">§</a><code>#[deluxe(default = expr)]</code></h6>
+<p>Initializes the field with the value of <code>expr</code> if the field is omitted. The expression will
+be evaluated every time it is needed to construct the field, and must evaluate to a value of
+the same type as the field.</p>
+</li>
+<li><h6 id="deluxeflatten-1"><a class="doc-anchor" href="#deluxeflatten-1">§</a><code>#[deluxe(flatten)]</code></h6>
+<p>Flattens the field so that its fields are parsed inline as part of the current struct or enum
+variant.</p>
+<p>When the container uses named fields, only enums or other structs with named fields can be
+flattened. The fields from the flattened field can be freely interspersed with the fields
+from the containing struct or variant. This has the effect of making it so the order of
+flattened fields does not matter when using named fields.</p>
+<p>When the container uses unnamed fields, only unnamed structs, tuples, and collections/arrays
+can be flattened. The order of flattened unnamed fields is important. The fields of the
+flattened structure will be consumed starting from the position of the field in the
+containing tuple. Flattening a collection into a tuple struct/variant without a finite size
+will consume all fields from that position until the end.</p>
+<p>This attribute is implemented by either calling
+<a href="../deluxe_core/parse_meta/trait.ParseMetaFlatUnnamed.html#tymethod.parse_meta_flat_unnamed" title="associated function deluxe_core::parse_meta::ParseMetaFlatUnnamed::parse_meta_flat_unnamed"><code>ParseMetaFlatUnnamed::parse_meta_flat_unnamed</code></a>
+or
+<a href="../deluxe_core/parse_meta/trait.ParseMetaFlatNamed.html#tymethod.parse_meta_flat_named" title="associated function deluxe_core::parse_meta::ParseMetaFlatNamed::parse_meta_flat_named"><code>ParseMetaFlatNamed::parse_meta_flat_named</code></a>
+depending on the type of the containing structure. The appropriate trait will be
+automatically implemented when deriving <a href="derive.ParseMetaItem.html" title="derive deluxe_macros::ParseMetaItem"><code>ParseMetaItem</code></a>, but some implementations are
+provided for common collection types. Custom container types can support flattening by
+providing implementations of those traits.</p>
+</li>
+<li><h6 id="deluxeflattenprefix--path"><a class="doc-anchor" href="#deluxeflattenprefix--path">§</a><code>#[deluxe(flatten(prefix = path)])</code></h6>
+<p>Flattens the field so that its fields are parsed inline as part of the current struct or enum
+variant, only accepting fields that are prefixed with <code>path</code>. This can be used if the
+flattened structure contains field names that conflict with the fields in the containing
+structure.</p>
+<p>For all other details on this attribute, refer to <a href="#deluxeflatten-1"><code>flatten</code></a>.</p>
+</li>
+<li><h6 id="deluxeappend"><a class="doc-anchor" href="#deluxeappend">§</a><code>#[deluxe(append)]</code></h6>
+<p>Allows duplicates of this field. Additional fields parsed with the same name will be appended
+on to the previous value. This attribute is only allowed on named fields.</p>
+<p>This attribute is implemented by calling
+<a href="../deluxe_core/parse_meta/trait.ParseMetaAppend.html#tymethod.parse_meta_append" title="associated function deluxe_core::parse_meta::ParseMetaAppend::parse_meta_append"><code>ParseMetaAppend::parse_meta_append</code></a>. Some
+implementations are provided for common collection types. Custom container types can support
+appending by providing an implementation of that trait.</p>
+</li>
+<li><h6 id="deluxerest"><a class="doc-anchor" href="#deluxerest">§</a><code>#[deluxe(rest)]</code></h6>
+<p>Inserts all unknown fields into this field. Typically, this field will be a map type with
+<a href="https://docs.rs/syn/2.0.105/syn/path/struct.Path.html" title="struct syn::path::Path"><code>syn::Path</code></a> as the key. This attribute is only allowed on named fields.</p>
+<p>This attribute is implemented by calling
+<a href="../deluxe_core/parse_meta/trait.ParseMetaRest.html#tymethod.parse_meta_rest" title="associated function deluxe_core::parse_meta::ParseMetaRest::parse_meta_rest"><code>ParseMetaRest::parse_meta_rest</code></a>. Some
+implementations are provided for common collection types. Custom map types can be allowed as
+a rest field by providing an implementation of that trait.</p>
+</li>
+<li><h6 id="deluxemap--expr"><a class="doc-anchor" href="#deluxemap--expr">§</a><code>#[deluxe(map = expr)]</code></h6>
+<p><code>#[deluxe(and_then = expr)]</code></p>
+<p>Executes additional functions ater parsing to perform additional transformations or
+validation on the input.</p>
+<p>These attributes are simple wrappers around <a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html#method.map" title="method core::result::Result::map"><code>Result::map</code></a> and
+<a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html#method.and_then" title="method core::result::Result::and_then"><code>Result::and_then</code></a>. These attributes can be specified
+multiple times. When multiple are present, Deluxe will chain each function in the order the
+attributes were specified.</p>
+<p>For <code>map</code>, the function returned by <code>expr</code> must conform to the signature <code>fn(T) -&gt; U</code>. For
+<code>and_then</code>, the function returned by <code>expr</code> must conform to the signature <code>fn(T) -&gt;
+<a href="../deluxe_core/util/type.Result.html" title="type deluxe_core::util::Result">deluxe::Result</a>&lt;U&gt;</code>. Returning
+<a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html#variant.Err" title="variant core::result::Result::Err"><code>Err</code></a> will cause the entire parse to fail. Arbitrary types can be
+used for <code>T</code> and <code>U</code> as long as the following constraints hold:</p>
+<ul>
+<li>The first function must have a fully specified type for <code>T</code>, which will have its
+<a href="../deluxe_core/parse_meta/trait.ParseMetaItem.html" title="trait deluxe_core::parse_meta::ParseMetaItem"><code>ParseMetaItem</code></a> implementation used.</li>
+<li>The <code>U from any function in the chain matches the </code>T` for the following function.</li>
+<li>The last function must have a type for <code>U</code> that matches the type of the field.</li>
+</ul>
+<h6 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h6>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(deluxe::ParseMetaItem)]
+</span><span class="kw">struct </span>Data {
+    <span class="comment">// parses as an Ident but stored as a string
+    </span><span class="attr">#[deluxe(map = |i: syn::Ident| i.to_string())]
+    </span>ident_string: String,
+    <span class="comment">// converts an Ident to a string and does a validation
+    </span><span class="attr">#[deluxe(and_then = <span class="self">Self</span>::check_ident)]
+    </span>valid_ident_string: String,
+}
+
+<span class="kw">impl </span>Data {
+    <span class="kw">fn </span>check_ident(i: syn::Ident) -&gt; deluxe::Result&lt;String&gt; {
+        <span class="kw">let </span>s = i.to_string();
+        <span class="kw">if </span>s == <span class="string">"invalid" </span>{
+            <span class="prelude-val">Err</span>(syn::Error::new(i.span(), <span class="string">"`invalid` not allowed"</span>))
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(s)
+        }
+    }
+}</code></pre></div>
+</li>
+<li><h6 id="deluxewith--module"><a class="doc-anchor" href="#deluxewith--module">§</a><code>#[deluxe(with = module)]</code></h6>
+<p>When parsing, call functions from the path <code>module</code> instead of attempting to call
+<a href="../deluxe_core/parse_meta/trait.ParseMetaItem.html" title="trait deluxe_core::parse_meta::ParseMetaItem"><code>ParseMetaItem</code></a> functions. The path can be a module path or a
+path to a type containing associated functions.</p>
+<p>The functions will be called as <code>module::parse_meta_item</code>, <code>module::parse_meta_item_inline</code>,
+<code>module::parse_meta_item_flag</code>, <code>module::parse_meta_item_named</code>, and
+<code>module::missing_meta_item</code>. All five functions must be implemented, even if just to return
+an error. The signatures of these functions should match the equivalent functions in
+<a href="derive.ParseMetaItem.html" title="derive deluxe_macros::ParseMetaItem"><code>ParseMetaItem</code></a>, although they can be generic over the return type.
+Fields using this attribute are not required to implement
+<a href="derive.ParseMetaItem.html" title="derive deluxe_macros::ParseMetaItem"><code>ParseMetaItem</code></a>.</p>
+<p><code>parse_meta_item_inline</code> implementations can call
+<a href="../deluxe_core/parse_helpers/fn.parse_first.html" title="fn deluxe_core::parse_helpers::parse_first"><code>parse_first</code></a> to simply delegate the impementation
+to <code>parse_meta_item</code>. <code>parse_meta_item_flag</code> implementations can call
+<a href="../deluxe_core/parse_helpers/fn.flag_disallowed_error.html" title="fn deluxe_core::parse_helpers::flag_disallowed_error"><code>flag_disallowed_error</code></a> for a standard
+error if flags are not supported by the target type. <code>parse_meta_item_named</code> implementations
+can call <a href="../deluxe_core/macro.parse_named_meta_item_with.html" title="macro deluxe_core::parse_named_meta_item_with"><code>parse_named_meta_item_with!</code></a> using
+<code>self</code> as the last parameter for the standard behavior.</p>
+<p>Some common parsers are available in the <a href="../deluxe_core/with/index.html" title="mod deluxe_core::with"><code>with</code></a> module.</p>
+</li>
+<li><h6 id="deluxeskip-1"><a class="doc-anchor" href="#deluxeskip-1">§</a><code>#[deluxe(skip)]</code></h6>
+<p>Skips this field from parsing entirely. The field still must receive a default value through
+a <code>default</code> attribute either on the struct or the field, so the parse function can still
+construct the object. If not used in a struct with <a href="#deluxedefault"><code>default</code></a>, then this
+implies <a href="#deluxedefault-1"><code>default</code></a> on the field if it is omitted.</p>
+</li>
+</ul>
+</div></details></section></div></main></body></html>

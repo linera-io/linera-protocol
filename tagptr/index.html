@@ -1,0 +1,55 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Strongly typed pointers with reserved space for storing additional bit patterns within the same memory word."><title>tagptr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tagptr" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../tagptr/index.html">tagptr</a><span class="version">0.2.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#motivation" title="Motivation">Motivation</a></li><li><a href="#tag-bits-and-type-alignment" title="Tag Bits and Type Alignment">Tag Bits and Type Alignment</a></li><li><a href="#example" title="Example">Example</a></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>tagptr</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/tagptr/lib.rs.html#1-225">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Strongly typed pointers with reserved space for storing additional bit
+patterns within the same memory word.</p>
+<h2 id="motivation"><a class="doc-anchor" href="#motivation">§</a>Motivation</h2>
+<p>In low-level concurrent programming (synchronization primitives,
+lock-free data structures, etc) it is often required to store additional
+state information (tags) alongside pointers to objects in memory, since
+most atomic CPU instructions operate on pointer-wide memory words.
+The marked pointer types provided by this crate encapsulate the logic and
+pointer arithmetic for composing (creating), decomposing and mutating
+such pointers and tag values.</p>
+<h2 id="tag-bits-and-type-alignment"><a class="doc-anchor" href="#tag-bits-and-type-alignment">§</a>Tag Bits and Type Alignment</h2>
+<p>The possible space for storing tag bits in a pointer is determined by the
+alignment of the pointed-to type, as long as the pointer is well-aligned
+(e.g., not packed).
+For instance, pointers to types with an alignment of 2 (2^1) bytes (e.g.,
+<code>u16</code>) never use the first of their lower bits (i.e., it is always zero),
+pointers to types with an alignment of 8 (2^3) bytes such as <code>u64</code> never
+use their 3 lowest bits and so on.
+Great care must be taken at all times to avoid over- or underflows in the
+usually highly restricted range of valid tags for common tag sizes when
+doing arithmetic operations.
+Any operations resulting in tag values outside of their valid range will
+invariably corrupt the bits representing the pointer and hence invoke
+undefined behavior when dereferencing these pointers.</p>
+<p>Constructing a type such as <code>TagPtr&lt;u64, 4&gt;</code> is hence usually a user error,
+since a pointer to a <code>u64</code> has only 3 unused bits.
+The resulting type would consider the first actual bit of the pointer to be
+part of its tag and return a potentially corrupted pointer in methods such
+as <a href="struct.TagPtr.html#method.decompose" title="method tagptr::TagPtr::decompose"><code>decompose</code></a>.
+The <a href="fn.has_sufficient_alignment.html" title="fn tagptr::has_sufficient_alignment"><code>has_sufficient_alignment</code></a> and <a href="fn.assert_alignment.html" title="fn tagptr::assert_alignment"><code>assert_alignment</code></a> functions can be
+used to explicitly check for or assert this property.
+There is, however, one exception where using an otherwise ill-formed tag
+pointer type is valid:
+After composing a well-formed tag pointer instance (e.g., <code>TagPtr&lt;u64, 3&gt;</code>)
+it is valid to <a href="struct.TagPtr.html#method.cast" title="method tagptr::TagPtr::cast"><code>cast</code></a> it to a type with a smaller alignment
+and the same number of tag bits such as <code>TagPtr&lt;(), 3&gt;</code> for the purpose of
+type-erasure.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>Storing a boolean status flag alongside the pointer to a mutable <code>u64</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">type </span>TagPtr = tagptr::TagPtr&lt;u64, <span class="number">3</span>&gt;;
+
+<span class="kw">let </span><span class="kw-2">mut </span>val = <span class="number">0xCAFE</span>;
+<span class="kw">let </span>is_ok = <span class="bool-val">true</span>;
+
+<span class="kw">let </span>ptr = TagPtr::compose(<span class="kw-2">&amp;mut </span>val, is_ok <span class="kw">as </span>usize);
+<span class="kw">let </span>(reference, tag) = <span class="kw">unsafe </span>{ ptr.decompose_mut() };
+<span class="macro">assert_eq!</span>(reference, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;mut </span><span class="number">0xCAFE</span>));
+<span class="macro">assert_eq!</span>(tag == <span class="number">1</span>, <span class="bool-val">true</span>);</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.AtomicTagPtr.html" title="struct tagptr::AtomicTagPtr">Atomic<wbr>TagPtr</a></dt><dd>A raw pointer type which can be safely shared between threads and which can
+use up to <code>N</code> of its lower bits to store additional information (the <em>tag</em>).</dd><dt><a class="struct" href="struct.Null.html" title="struct tagptr::Null">Null</a></dt><dd>A type representing a <code>null</code> pointer with potential tag bits.</dd><dt><a class="struct" href="struct.TagNonNull.html" title="struct tagptr::TagNonNull">TagNon<wbr>Null</a></dt><dd>A non-nullable tagged raw pointer type similar to <a href="https://doc.rust-lang.org/1.86.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull"><code>NonNull</code></a> which can use
+up to <code>N</code> of its lower bits to store additional information (the <em>tag</em>).</dd><dt><a class="struct" href="struct.TagPtr.html" title="struct tagptr::TagPtr">TagPtr</a></dt><dd>A raw, unsafe pointer type like <code>*mut T</code> which can use up to <code>N</code> of its
+lower bits to store additional information (the <em>tag</em>).</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.assert_alignment.html" title="fn tagptr::assert_alignment">assert_<wbr>alignment</a></dt><dd>Asserts that the alignment of <code>U</code> is large enough so a pointer to an
+instance may store <code>N</code> tag bits.</dd><dt><a class="fn" href="fn.has_sufficient_alignment.html" title="fn tagptr::has_sufficient_alignment">has_<wbr>sufficient_<wbr>alignment</a></dt><dd>Returns <code>true</code> if the alignment of <code>T</code> is large enough so a pointer to an
+instance may store the given number of <code>tag_bits</code>.</dd></dl></section></div></main></body></html>

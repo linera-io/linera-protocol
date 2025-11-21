@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["APIService","APIServiceCondition","APIServiceSpec","APIServiceStatus","ServiceReference"]};
