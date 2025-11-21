@@ -14,7 +14,7 @@ use futures::{
     stream::{self, AbortHandle, FuturesUnordered, StreamExt},
 };
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 use linera_base::{
     crypto::{CryptoHash, Signer, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch},
@@ -1210,7 +1210,8 @@ impl<Env: Environment> Client<Env> {
         committee: Committee,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         #[cfg(with_metrics)]
-        let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
+        let _latency =
+            metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
 
         let validators = self.make_nodes(&committee)?;
         Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;

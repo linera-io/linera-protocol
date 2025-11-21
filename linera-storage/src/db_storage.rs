@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, NetworkDescription, TimeDelta, Timestamp},
@@ -532,7 +532,7 @@ where
         chain_id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, ViewError> {
         #[cfg(with_metrics)]
-        let _metric = metrics::LOAD_CHAIN_LATENCY.measure_latency();
+        let _metric = metrics::LOAD_CHAIN_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
         let runtime_context = ChainRuntimeContext {
             storage: self.clone(),
             chain_id,
