@@ -161,8 +161,11 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
                 &context.base_key().bytes,
             );
             #[cfg(not(target_arch = "wasm32"))]
-            use linera_views::metrics::prometheus_util::MeasureLatency as _;
-            let _latency = linera_views::metrics::LOAD_VIEW_LATENCY.measure_latency();
+            use linera_views::metrics::prometheus_util::{
+                MeasureLatency as _, MeasurementUnit
+            };
+            let _latency = linera_views::metrics::LOAD_VIEW_LATENCY
+                .measure_latency(MeasurementUnit::Milliseconds);
         }
     } else {
         quote! {}

@@ -5,7 +5,7 @@ use std::{borrow::Borrow, collections::BTreeMap, marker::PhantomData};
 
 use allocative::Allocative;
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -365,7 +365,8 @@ impl<C: Context> HashableView for ByteSetView<C> {
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = metrics::SET_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency =
+            metrics::SET_VIEW_HASH_RUNTIME.measure_latency(MeasurementUnit::Milliseconds);
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0u32;
         self.for_each_key(|key| {

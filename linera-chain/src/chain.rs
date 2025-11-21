@@ -54,7 +54,7 @@ use crate::{
 mod chain_tests;
 
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency;
+use linera_base::prometheus_util::{MeasureLatency, MeasurementUnit};
 
 #[cfg(with_metrics)]
 pub(crate) mod metrics {
@@ -86,7 +86,7 @@ pub(crate) mod metrics {
             "message_execution_latency",
             "Message execution latency",
             &[],
-            exponential_bucket_latencies(50.0),
+            exponential_bucket_interval(0.1_f64, 50_000.0),
         )
     });
 
@@ -95,7 +95,7 @@ pub(crate) mod metrics {
             "operation_execution_latency",
             "Operation execution latency",
             &[],
-            exponential_bucket_latencies(50.0),
+            exponential_bucket_interval(0.1_f64, 50_000.0),
         )
     });
 
@@ -780,7 +780,8 @@ where
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
-        let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency();
+        let _execution_latency =
+            metrics::BLOCK_EXECUTION_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
         chain.system.timestamp.set(block.timestamp);
 
         let policy = chain
@@ -868,7 +869,8 @@ where
 
         let state_hash = {
             #[cfg(with_metrics)]
-            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
+            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY
+                .measure_latency(MeasurementUnit::Milliseconds);
             chain.crypto_hash_mut().await?
         };
 
