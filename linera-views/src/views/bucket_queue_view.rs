@@ -285,18 +285,21 @@ where
                 Some(bucket) => bucket.index + 1,
                 None => 0,
             };
-            let new_back_values = self.new_back_values.iter().cloned().collect::<Vec<_>>();
-            for value_chunk in new_back_values.chunks(N) {
+            let mut start = 0;
+            while start < self.new_back_values.len() {
+                let end = std::cmp::min(start + N, self.new_back_values.len());
+                let value_chunk: Vec<_> = self.new_back_values.range(start..end).collect();
                 let key = self.get_bucket_key(index)?;
                 batch.put_key_value(key, &value_chunk)?;
                 stored_buckets.push_back(Bucket {
                     index,
                     // This is only used for `BucketStore::new` below.
                     state: State::NotLoaded {
-                        length: value_chunk.len(),
+                        length: end - start,
                     },
                 });
                 index += 1;
+                start = end;
             }
         }
         if !delete_view {
