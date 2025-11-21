@@ -67,17 +67,6 @@ struct BucketDescription {
 }
 
 impl BucketStore {
-    fn new<T>(stored_data: &VecDeque<Bucket<T>>, position: usize) -> Self {
-        let descriptions = stored_data
-            .iter()
-            .map(Bucket::to_description)
-            .collect::<Vec<_>>();
-        Self {
-            descriptions,
-            front_position: position,
-        }
-    }
-
     fn len(&self) -> usize {
         self.descriptions.len()
     }
@@ -249,41 +238,58 @@ where
 
     fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
-        let mut stored_buckets = self.stored_buckets.clone();
+        let mut descriptions = Vec::new();
         let mut stored_front_position = self.stored_front_position;
         if self.stored_count() == 0 {
             let key_prefix = self.context.base_key().bytes.clone();
             batch.delete_key_prefix(key_prefix);
             delete_view = true;
-            stored_buckets.clear();
             stored_front_position = 0;
         } else if let Some(cursor) = self.cursor {
-            for _ in 0..cursor.offset {
-                let bucket = stored_buckets.pop_front().unwrap();
+            // Delete buckets that are before the cursor
+            for i in 0..cursor.offset {
+                let bucket = &self.stored_buckets[i];
                 let index = bucket.index;
                 let key = self.get_bucket_key(index)?;
                 batch.delete_key(key);
             }
             stored_front_position = cursor.position;
-            // We need to ensure that the first index is in the front.
-            let first_index = stored_buckets[0].index;
-            if first_index != 0 {
-                stored_buckets[0].index = 0;
+            // Build descriptions for remaining buckets
+            let first_index = self.stored_buckets[cursor.offset].index;
+            let start_offset = if first_index != 0 {
+                // Need to move the first remaining bucket to index 0
                 let key = self.get_bucket_key(first_index)?;
                 batch.delete_key(key);
                 let key = self.get_bucket_key(0)?;
-                let bucket = stored_buckets.front().unwrap();
+                let bucket = &self.stored_buckets[cursor.offset];
                 let State::Loaded { data } = &bucket.state else {
                     unreachable!("The front bucket is always loaded.");
                 };
                 batch.put_key_value(key, data)?;
+                descriptions.push(BucketDescription {
+                    length: bucket.len(),
+                    index: 0,
+                });
+                cursor.offset + 1
+            } else {
+                cursor.offset
+            };
+            for bucket in self.stored_buckets.range(start_offset..) {
+                descriptions.push(bucket.to_description());
             }
         }
         if !self.new_back_values.is_empty() {
             delete_view = false;
-            let mut index = match stored_buckets.back() {
-                Some(bucket) => bucket.index + 1,
-                None => 0,
+            // Calculate the starting index for new buckets
+            // If stored_count() == 0, all stored buckets are being removed, so start at 0
+            // Otherwise, start after the last remaining bucket
+            let mut index = if self.stored_count() == 0 {
+                0
+            } else if let Some(last_description) = descriptions.last() {
+                last_description.index + 1
+            } else {
+                // This shouldn't happen if stored_count() > 0
+                0
             };
             let mut start = 0;
             while start < self.new_back_values.len() {
@@ -291,19 +297,19 @@ where
                 let value_chunk: Vec<_> = self.new_back_values.range(start..end).collect();
                 let key = self.get_bucket_key(index)?;
                 batch.put_key_value(key, &value_chunk)?;
-                stored_buckets.push_back(Bucket {
+                descriptions.push(BucketDescription {
                     index,
-                    // This is only used for `BucketStore::new` below.
-                    state: State::NotLoaded {
-                        length: end - start,
-                    },
+                    length: end - start,
                 });
                 index += 1;
                 start = end;
             }
         }
         if !delete_view {
-            let bucket_store = BucketStore::new(&stored_buckets, stored_front_position);
+            let bucket_store = BucketStore {
+                descriptions,
+                front_position: stored_front_position,
+            };
             let key = self.context.base_key().base_tag(KeyTag::Store as u8);
             batch.put_key_value(key, &bucket_store)?;
         }
