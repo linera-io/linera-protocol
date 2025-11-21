@@ -5,3 +5,4 @@
 
 pub mod command;
 pub mod net_up_utils;
+pub mod validator;
