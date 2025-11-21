@@ -67,14 +67,10 @@ struct BucketDescription {
 }
 
 impl BucketStore {
-    fn new<T>(stored_data: &VecDeque<Bucket<T>>, position: usize) -> Self {
-        let descriptions = stored_data
-            .iter()
-            .map(Bucket::to_description)
-            .collect::<Vec<_>>();
+    fn new(descriptions: Vec<BucketDescription>, front_position: usize) -> Self {
         Self {
             descriptions,
-            front_position: position,
+            front_position,
         }
     }
 
@@ -249,58 +245,73 @@ where
 
     fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
-        let mut stored_buckets = self.stored_buckets.clone();
+        let mut bucket_descriptions = Vec::new();
         let mut stored_front_position = self.stored_front_position;
+
         if self.stored_count() == 0 {
             let key_prefix = self.context.base_key().bytes.clone();
             batch.delete_key_prefix(key_prefix);
             delete_view = true;
-            stored_buckets.clear();
             stored_front_position = 0;
         } else if let Some(cursor) = self.cursor {
-            for _ in 0..cursor.offset {
-                let bucket = stored_buckets.pop_front().unwrap();
-                let index = bucket.index;
-                let key = self.get_bucket_key(index)?;
+            for offset in 0..cursor.offset {
+                let bucket = &self.stored_buckets[offset];
+                let key = self.get_bucket_key(bucket.index)?;
                 batch.delete_key(key);
             }
             stored_front_position = cursor.position;
-            // We need to ensure that the first index is in the front.
-            let first_index = stored_buckets[0].index;
+
+            let first_bucket = &self.stored_buckets[cursor.offset];
+            let first_index = first_bucket.index;
+
             if first_index != 0 {
-                stored_buckets[0].index = 0;
                 let key = self.get_bucket_key(first_index)?;
                 batch.delete_key(key);
                 let key = self.get_bucket_key(0)?;
-                let bucket = stored_buckets.front().unwrap();
-                let State::Loaded { data } = &bucket.state else {
+                let State::Loaded { data } = &first_bucket.state else {
                     unreachable!("The front bucket is always loaded.");
                 };
                 batch.put_key_value(key, data)?;
+                bucket_descriptions.push(BucketDescription {
+                    length: first_bucket.len(),
+                    index: 0,
+                });
+            } else {
+                bucket_descriptions.push(first_bucket.to_description());
+            }
+
+            for offset in (cursor.offset + 1)..self.stored_buckets.len() {
+                let bucket = &self.stored_buckets[offset];
+                bucket_descriptions.push(bucket.to_description());
             }
         }
+
         if !self.new_back_values.is_empty() {
             delete_view = false;
-            let mut index = match stored_buckets.back() {
-                Some(bucket) => bucket.index + 1,
-                None => 0,
+            let mut index = if !bucket_descriptions.is_empty() {
+                bucket_descriptions
+                    .last()
+                    .expect("bucket_descriptions is not empty")
+                    .index
+                    + 1
+            } else {
+                0
             };
+
             let new_back_values = self.new_back_values.iter().cloned().collect::<Vec<_>>();
             for value_chunk in new_back_values.chunks(N) {
                 let key = self.get_bucket_key(index)?;
                 batch.put_key_value(key, &value_chunk)?;
-                stored_buckets.push_back(Bucket {
+                bucket_descriptions.push(BucketDescription {
                     index,
-                    // This is only used for `BucketStore::new` below.
-                    state: State::NotLoaded {
-                        length: value_chunk.len(),
-                    },
+                    length: value_chunk.len(),
                 });
                 index += 1;
             }
         }
+
         if !delete_view {
-            let bucket_store = BucketStore::new(&stored_buckets, stored_front_position);
+            let bucket_store = BucketStore::new(bucket_descriptions, stored_front_position);
             let key = self.context.base_key().base_tag(KeyTag::Store as u8);
             batch.put_key_value(key, &bucket_store)?;
         }
