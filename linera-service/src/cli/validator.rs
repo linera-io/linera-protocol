@@ -12,15 +12,10 @@ use linera_base::{
     identifiers::ChainId,
 };
 use linera_client::{
-    chain_listener::ClientContext as _,
-    client_context::ClientContext,
-    client_options::ClientContextOptions,
-    wallet::Wallet,
+    chain_listener::ClientContext as _, client_context::ClientContext,
+    client_options::ClientContextOptions, wallet::Wallet,
 };
-use linera_core::{
-    data_types::ClientOutcome,
-    node::ValidatorNodeProvider,
-};
+use linera_core::{data_types::ClientOutcome, node::ValidatorNodeProvider};
 use linera_execution::committee::{Committee, ValidatorState};
 use linera_persistent::Persist;
 use linera_rpc::node_provider::NodeProvider;
@@ -204,25 +199,25 @@ where
             public_key,
         } => {
             let context = ClientContext::new(
-            storage.clone(),
-            context_options.clone(),
-            wallet,
-            signer,
-            block_cache_size,
-            execution_state_cache_size,
-        );
+                storage.clone(),
+                context_options.clone(),
+                wallet,
+                signer,
+                block_cache_size,
+                execution_state_cache_size,
+            );
             handle_query(context, address, chain_id, public_key).await
         }
 
         QueryBatch { file, chain_id } => {
             let context = ClientContext::new(
-            storage.clone(),
-            context_options.clone(),
-            wallet,
-            signer,
-            block_cache_size,
-            execution_state_cache_size,
-        );
+                storage.clone(),
+                context_options.clone(),
+                wallet,
+                signer,
+                block_cache_size,
+                execution_state_cache_size,
+            );
             handle_query_batch(context, file, chain_id).await
         }
 
@@ -231,13 +226,13 @@ where
             min_votes,
         } => {
             let context = ClientContext::new(
-            storage,
-            context_options,
-            wallet,
-            signer,
-            block_cache_size,
-            execution_state_cache_size,
-        );
+                storage,
+                context_options,
+                wallet,
+                signer,
+                block_cache_size,
+                execution_state_cache_size,
+            );
             handle_list(context, chain_id, min_votes).await
         }
 
@@ -249,13 +244,13 @@ where
             skip_online_check,
         } => {
             let context = ClientContext::new(
-            storage.clone(),
-            context_options.clone(),
-            wallet,
-            signer,
-            block_cache_size,
-            execution_state_cache_size,
-        );
+                storage.clone(),
+                context_options.clone(),
+                wallet,
+                signer,
+                block_cache_size,
+                execution_state_cache_size,
+            );
             let context = Arc::new(Mutex::new(context));
             handle_add(
                 context,
@@ -270,13 +265,13 @@ where
 
         Remove { public_key } => {
             let context = ClientContext::new(
-            storage.clone(),
-            context_options.clone(),
-            wallet,
-            signer,
-            block_cache_size,
-            execution_state_cache_size,
-        );
+                storage.clone(),
+                context_options.clone(),
+                wallet,
+                signer,
+                block_cache_size,
+                execution_state_cache_size,
+            );
             let context = Arc::new(Mutex::new(context));
             handle_remove(context, public_key).await
         }
@@ -287,26 +282,30 @@ where
             skip_online_check,
         } => {
             let context = ClientContext::new(
-            storage.clone(),
-            context_options.clone(),
-            wallet,
-            signer,
-            block_cache_size,
-            execution_state_cache_size,
-        );
+                storage.clone(),
+                context_options.clone(),
+                wallet,
+                signer,
+                block_cache_size,
+                execution_state_cache_size,
+            );
             let context = Arc::new(Mutex::new(context));
             handle_batch_update(context, file, dry_run, skip_online_check).await
         }
 
-        Sync { address, chains, check_online } => {
+        Sync {
+            address,
+            chains,
+            check_online,
+        } => {
             let context = ClientContext::new(
-            storage.clone(),
-            context_options.clone(),
-            wallet,
-            signer,
-            block_cache_size,
-            execution_state_cache_size,
-        );
+                storage.clone(),
+                context_options.clone(),
+                wallet,
+                signer,
+                block_cache_size,
+                execution_state_cache_size,
+            );
             let context = Arc::new(Mutex::new(context));
             handle_sync(context, address, chains, check_online).await
         }
@@ -331,7 +330,7 @@ where
     let node = context.make_node_provider().make_node(&address)?;
     let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
     println!("Querying validator about chain {chain_id}.\n");
-    
+
     let results = context
         .query_validator(&address, &node, chain_id, public_key.as_ref())
         .await;
@@ -345,7 +344,7 @@ where
     if !results.errors().is_empty() {
         bail!("Found one or several issue(s) while querying validator {address}");
     }
-    
+
     Ok(())
 }
 
@@ -362,31 +361,44 @@ where
 {
     let batch = parse_query_batch_file(Path::new(&file))?;
     let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-    println!("Querying {} validators about chain {chain_id}.\n", batch.validators.len());
-    
+    println!(
+        "Querying {} validators about chain {chain_id}.\n",
+        batch.validators.len()
+    );
+
     let node_provider = context.make_node_provider();
     let mut has_errors = false;
-    
+
     for spec in batch.validators {
         let node = node_provider.make_node(&spec.network_address)?;
         let results = context
-            .query_validator(&spec.network_address, &node, chain_id, Some(&spec.public_key))
+            .query_validator(
+                &spec.network_address,
+                &node,
+                chain_id,
+                Some(&spec.public_key),
+            )
             .await;
-        
+
         if !results.errors().is_empty() {
             has_errors = true;
             for error in results.errors() {
                 error!("Validator {}: {}", spec.public_key, error);
             }
         }
-        
-        results.print(Some(&spec.public_key), Some(&spec.network_address), None, None);
+
+        results.print(
+            Some(&spec.public_key),
+            Some(&spec.network_address),
+            None,
+            None,
+        );
     }
-    
+
     if has_errors {
         bail!("Found issues while querying validators");
     }
-    
+
     Ok(())
 }
 
@@ -403,22 +415,22 @@ where
 {
     let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
     println!("Querying validators about chain {chain_id}.\n");
-    
+
     let local_results = context.query_local_node(chain_id).await;
     let chain_client = context.make_chain_client(chain_id);
     info!("Querying validators about chain {}", chain_id);
     let result = chain_client.local_committee().await;
     context.update_wallet_from_client(&chain_client).await?;
     let committee = result.context("Failed to get local committee")?;
-    
+
     info!(
         "Using the local set of validators: {:?}",
         committee.validators()
     );
-    
+
     let node_provider = context.make_node_provider();
     let mut validator_results = Vec::new();
-    
+
     for (name, state) in committee.validators() {
         if min_votes.is_some_and(|votes| state.votes < votes) {
             continue; // Skip validator with little voting weight.
@@ -464,7 +476,7 @@ where
         }
         bail!("Found faulty validators");
     }
-    
+
     Ok(())
 }
 
@@ -484,7 +496,7 @@ where
 {
     info!("Starting operation to add validator");
     let time_start = std::time::Instant::now();
-    
+
     // Validate the validator spec
     let spec = ValidatorSpec {
         public_key,
@@ -493,21 +505,25 @@ where
         votes,
     };
     validate_validator_spec(&spec)?;
-    
+
     // Check validator is online if requested
     let mut context = context.lock().await;
     if !skip_online_check {
         let node = context.make_node_provider().make_node(&address)?;
-        context.check_compatible_version_info(&address, &node).await?;
-        context.check_matching_network_description(&address, &node).await?;
+        context
+            .check_compatible_version_info(&address, &node)
+            .await?;
+        context
+            .check_matching_network_description(&address, &node)
+            .await?;
     }
-    
+
     let admin_id = context.wallet().genesis_admin_chain();
     let chain_client = context.make_chain_client(admin_id);
-    
+
     // Synchronize the chain state
     chain_client.synchronize_chain_state(admin_id).await?;
-    
+
     let maybe_certificate = context
         .apply_client_command(&chain_client, |chain_client| {
             let chain_client = chain_client.clone();
@@ -526,7 +542,7 @@ where
                         account_public_key: account_key,
                     },
                 );
-                
+
                 committee = Committee::new(validators, policy);
                 chain_client
                     .stage_new_committee(committee)
@@ -536,7 +552,7 @@ where
         })
         .await
         .context("Failed to stage committee")?;
-        
+
     let Some(certificate) = maybe_certificate else {
         return Ok(());
     };
@@ -544,7 +560,7 @@ where
 
     let time_total = time_start.elapsed();
     info!("Operation confirmed after {} ms", time_total.as_millis());
-    
+
     Ok(())
 }
 
@@ -635,11 +651,17 @@ where
         info!("DRY RUN - No changes will be applied");
         info!("Add operations:");
         for spec in &batch.add {
-            info!("  + {} @ {} ({} votes)", spec.public_key, spec.network_address, spec.votes);
+            info!(
+                "  + {} @ {} ({} votes)",
+                spec.public_key, spec.network_address, spec.votes
+            );
         }
         info!("Modify operations:");
         for spec in &batch.modify {
-            info!("  * {} @ {} ({} votes)", spec.public_key, spec.network_address, spec.votes);
+            info!(
+                "  * {} @ {} ({} votes)",
+                spec.public_key, spec.network_address, spec.votes
+            );
         }
         info!("Remove operations:");
         for key in &batch.remove {
@@ -656,8 +678,12 @@ where
         info!("Checking validators are online...");
         for spec in batch.add.iter().chain(batch.modify.iter()) {
             let node = node_provider.make_node(&spec.network_address)?;
-            context_guard.check_compatible_version_info(&spec.network_address, &node).await?;
-            context_guard.check_matching_network_description(&spec.network_address, &node).await?;
+            context_guard
+                .check_compatible_version_info(&spec.network_address, &node)
+                .await?;
+            context_guard
+                .check_matching_network_description(&spec.network_address, &node)
+                .await?;
         }
         drop(context_guard);
     }
@@ -694,14 +720,19 @@ where
                             account_public_key: spec.account_key,
                         },
                     );
-                    info!("Added validator {} @ {} ({} votes)",
-                        spec.public_key, spec.network_address, spec.votes);
+                    info!(
+                        "Added validator {} @ {} ({} votes)",
+                        spec.public_key, spec.network_address, spec.votes
+                    );
                 }
 
                 // Apply modify operations SECOND
                 for spec in &batch.modify {
                     if !validators.contains_key(&spec.public_key) {
-                        warn!("Validator {} does not exist; skipping modify", spec.public_key);
+                        warn!(
+                            "Validator {} does not exist; skipping modify",
+                            spec.public_key
+                        );
                         continue;
                     }
                     validators.insert(
@@ -712,8 +743,10 @@ where
                             account_public_key: spec.account_key,
                         },
                     );
-                    info!("Modified validator {} @ {} ({} votes)",
-                        spec.public_key, spec.network_address, spec.votes);
+                    info!(
+                        "Modified validator {} @ {} ({} votes)",
+                        spec.public_key, spec.network_address, spec.votes
+                    );
                 }
 
                 // Apply remove operations LAST
@@ -768,8 +801,12 @@ where
     if check_online {
         let node_provider = context.make_node_provider();
         let node = node_provider.make_node(&address)?;
-        context.check_compatible_version_info(&address, &node).await?;
-        context.check_matching_network_description(&address, &node).await?;
+        context
+            .check_compatible_version_info(&address, &node)
+            .await?;
+        context
+            .check_matching_network_description(&address, &node)
+            .await?;
     }
 
     // If no chains specified, use all chains from wallet
@@ -779,7 +816,11 @@ where
         chains
     };
 
-    info!("Syncing {} chains to validator {}", chains_to_sync.len(), address);
+    info!(
+        "Syncing {} chains to validator {}",
+        chains_to_sync.len(),
+        address
+    );
 
     // Create validator node
     let node_provider = context.make_node_provider();
@@ -827,7 +868,10 @@ mod tests {
 
         let result = validate_validator_spec(&spec);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("votes must be greater than 0"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("votes must be greater than 0"));
     }
 
     #[test]
@@ -841,7 +885,10 @@ mod tests {
 
         let result = validate_validator_spec(&spec);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("network address cannot be empty"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("network address cannot be empty"));
     }
 
     #[test]
@@ -873,7 +920,11 @@ mod tests {
         temp_file.flush().unwrap();
 
         let result = parse_batch_file(temp_file.path());
-        assert!(result.is_ok(), "Failed to parse batch file: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to parse batch file: {:?}",
+            result.err()
+        );
 
         let parsed_batch = result.unwrap();
         assert_eq!(parsed_batch.add.len(), 1);
@@ -945,7 +996,11 @@ mod tests {
         temp_file.flush().unwrap();
 
         let result = parse_query_batch_file(temp_file.path());
-        assert!(result.is_ok(), "Failed to parse query batch file: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to parse query batch file: {:?}",
+            result.err()
+        );
 
         let parsed_batch = result.unwrap();
         assert_eq!(parsed_batch.validators.len(), 2);

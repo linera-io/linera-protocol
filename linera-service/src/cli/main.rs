@@ -24,13 +24,7 @@ pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0
 #[export_name = "_rjem_malloc_conf"]
 pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
 
-use std::{
-    collections::BTreeSet,
-    env,
-    path::PathBuf,
-    process,
-    sync::Arc,
-};
+use std::{collections::BTreeSet, env, path::PathBuf, process, sync::Arc};
 
 use anyhow::{anyhow, bail, ensure, Context, Error};
 use async_trait::async_trait;
@@ -60,22 +54,18 @@ use linera_core::{
     worker::Reason,
     JoinSetExt as _, LocalNodeError,
 };
-use linera_execution::{
-    committee::Committee,
-    WasmRuntime, WithWasmDefault as _,
-};
+use linera_execution::{committee::Committee, WasmRuntime, WithWasmDefault as _};
 use linera_faucet_server::{FaucetConfig, FaucetService};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
 use linera_persistent::{self as persistent, Persist, PersistExt as _};
 use linera_service::{
     cli::{
-        validator,
         command::{
             BenchmarkCommand, BenchmarkOptions, ChainCommand, ClientCommand, DatabaseToolCommand,
             NetCommand, ProjectCommand, WalletCommand,
         },
-        net_up_utils,
+        net_up_utils, validator,
     },
     cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     node_service::NodeService,
@@ -2453,7 +2443,7 @@ Make sure to use a Linera client compatible with this network.
         ClientCommand::Validator(_) => {
             options.run_with_storage(Job(options.clone())).await??;
             Ok(0)
-        },
+        }
 
         _ => {
             options.run_with_storage(Job(options.clone())).await??;
