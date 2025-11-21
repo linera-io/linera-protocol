@@ -688,6 +688,160 @@ where
         Ok(())
     }
 
+    /// Processes multiple message bundles from different origins concurrently.
+    /// Each inbox is loaded once and all its bundles are processed together.
+    /// Side effects to shared state (unskippable_bundles, received_log) are collected
+    /// during concurrent processing and applied sequentially at the end.
+    ///
+    /// # Arguments
+    /// * `updates` - Vec of (origin_chain_id, bundle, add_to_received_log)
+    /// * `local_time` - The current timestamp for tracking when bundles are seen
+    ///
+    /// # Returns
+    /// * `Vec<Result<(), ChainError>>` - One result per update, in the same order
+    pub async fn receive_message_bundles_batch(
+        &mut self,
+        updates: Vec<(ChainId, MessageBundle, bool)>,
+        local_time: Timestamp,
+    ) -> Result<Vec<Result<(), ChainError>>, ChainError> {
+        use std::collections::HashMap;
+
+        if updates.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let chain_id = self.chain_id();
+
+        // Initialize chain once upfront.
+        match self.initialize_if_needed(local_time).await {
+            Ok(_) => (),
+            Err(ChainError::ExecutionError(exec_err, _))
+                if matches!(*exec_err, ExecutionError::BlobsNotFound(ref blobs)
+                if blobs.iter().all(|blob_id| {
+                    blob_id.blob_type == BlobType::ChainDescription && blob_id.hash == chain_id.0
+                })) => {}
+            Err(err) => return Err(err),
+        }
+
+        // Group bundles by origin to deduplicate inbox loading.
+        let mut bundles_by_origin: HashMap<ChainId, Vec<(usize, MessageBundle, bool)>> =
+            HashMap::new();
+        for (idx, (origin, bundle, add_to_log)) in updates.into_iter().enumerate() {
+            bundles_by_origin
+                .entry(origin)
+                .or_default()
+                .push((idx, bundle, add_to_log));
+        }
+
+        // Load all unique inboxes at once.
+        let unique_origins: Vec<ChainId> = bundles_by_origin.keys().copied().collect();
+        let loaded_inboxes = self
+            .inboxes
+            .try_load_entries_pairs_mut(unique_origins)
+            .await?;
+
+        // Process each origin concurrently.
+        let processing_futures: Vec<_> = loaded_inboxes
+            .into_iter()
+            .filter_map(|(origin, mut inbox)| {
+                let bundles = bundles_by_origin.remove(&origin)?;
+
+                Some(async move {
+                    let mut results = Vec::with_capacity(bundles.len());
+                    let mut unskippable_effects = Vec::new();
+                    let mut received_log_effects = Vec::new();
+
+                    for (idx, bundle, add_to_log) in bundles {
+                        if bundle.messages.is_empty() {
+                            results.push((
+                                idx,
+                                Err(ChainError::InternalError(
+                                    "Message bundle cannot be empty".to_string(),
+                                )),
+                            ));
+                            continue;
+                        }
+
+                        let chain_and_height = ChainAndHeight {
+                            chain_id: origin,
+                            height: bundle.height,
+                        };
+                        let entry = BundleInInbox::new(origin, &bundle);
+                        let skippable = bundle.is_skippable();
+
+                        // Add bundle to the inbox.
+                        let newly_added = match inbox.add_bundle(bundle).await {
+                            Ok(added) => added,
+                            Err(error) => {
+                                results.push((
+                                    idx,
+                                    Err(match error {
+                                        InboxError::ViewError(error) => {
+                                            ChainError::ViewError(error)
+                                        }
+                                        error => ChainError::InternalError(format!(
+                                            "while processing messages in certified block: {error}"
+                                        )),
+                                    }),
+                                ));
+                                continue;
+                            }
+                        };
+
+                        // Collect side effects for later application.
+                        if newly_added && !skippable {
+                            unskippable_effects.push((entry, local_time));
+                        }
+                        if add_to_log {
+                            received_log_effects.push(chain_and_height);
+                        }
+
+                        results.push((idx, Ok(())));
+                    }
+
+                    Ok::<_, ChainError>((
+                        origin,
+                        results,
+                        unskippable_effects,
+                        received_log_effects,
+                    ))
+                })
+            })
+            .collect();
+
+        // Execute all processing concurrently.
+        let processing_results = futures::future::try_join_all(processing_futures).await?;
+
+        // Apply side effects to shared state sequentially.
+        for (_origin, _results, unskippable_effects, received_log_effects) in &processing_results {
+            for (entry, seen) in unskippable_effects {
+                self.unskippable_bundles
+                    .push_back(TimestampedBundleInInbox {
+                        entry: entry.clone(),
+                        seen: *seen,
+                    });
+            }
+            for chain_and_height in received_log_effects {
+                self.received_log.push(*chain_and_height);
+            }
+        }
+
+        // Reconstruct results in original order.
+        let total_updates = processing_results
+            .iter()
+            .map(|(_, results, _, _)| results.len())
+            .sum();
+        let mut final_results: Vec<Result<(), ChainError>> = Vec::with_capacity(total_updates);
+        final_results.resize_with(total_updates, || Ok(()));
+        for (_origin, results, _, _) in processing_results {
+            for (idx, result) in results {
+                final_results[idx] = result;
+            }
+        }
+
+        Ok(final_results)
+    }
+
     /// Updates the `received_log` trackers.
     pub fn update_received_certificate_trackers(
         &mut self,
