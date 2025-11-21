@@ -9,7 +9,7 @@ use std::{
 
 use futures::future::try_join_all;
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
@@ -108,7 +108,7 @@ where
             Ok(value) => Ok(value),
             Err(guard) => {
                 #[cfg(with_metrics)]
-                metrics::GET_CERTIFICATE_HISTOGRAM.measure_latency();
+                metrics::GET_CERTIFICATE_HISTOGRAM.measure_latency(MeasurementUnit::Milliseconds);
                 let block = self.storage.read_certificate(hash).await?;
                 let block = block.ok_or_else(|| ExporterError::ReadCertificateError(hash))?;
                 let heaped_block = Arc::new(block);
@@ -123,7 +123,7 @@ where
             Ok(blob) => Ok(blob),
             Err(guard) => {
                 #[cfg(with_metrics)]
-                metrics::GET_BLOB_HISTOGRAM.measure_latency();
+                metrics::GET_BLOB_HISTOGRAM.measure_latency(MeasurementUnit::Milliseconds);
                 let blob = self.storage.read_blob(blob_id).await?.unwrap();
                 let heaped_blob = Arc::new(blob);
                 let _ = guard.insert(heaped_blob.clone());
@@ -360,7 +360,7 @@ where
 
         self.exporter_state_view.pre_save(&mut batch)?;
         #[cfg(with_metrics)]
-        metrics::SAVE_HISTOGRAM.measure_latency();
+        metrics::SAVE_HISTOGRAM.measure_latency(MeasurementUnit::Milliseconds);
         if let Err(e) = self
             .exporter_state_view
             .context()
@@ -447,7 +447,8 @@ where
                     entry
                 } else {
                     #[cfg(with_metrics)]
-                    metrics::GET_CANONICAL_BLOCK_HISTOGRAM.measure_latency();
+                    metrics::GET_CANONICAL_BLOCK_HISTOGRAM
+                        .measure_latency(MeasurementUnit::Milliseconds);
                     self.state_context
                         .get(index)
                         .await?

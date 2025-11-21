@@ -14,7 +14,7 @@ use std::{
 use allocative::{Allocative, Key, Visitor};
 use async_lock::{RwLock, RwLockReadGuardArc, RwLockWriteGuardArc};
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -1056,7 +1056,8 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = metrics::REENTRANT_COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency = metrics::REENTRANT_COLLECTION_VIEW_HASH_RUNTIME
+            .measure_latency(MeasurementUnit::Milliseconds);
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
         let count = keys.len() as u32;
@@ -1087,7 +1088,8 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = metrics::REENTRANT_COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency = metrics::REENTRANT_COLLECTION_VIEW_HASH_RUNTIME
+            .measure_latency(MeasurementUnit::Milliseconds);
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
         let count = keys.len() as u32;

@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use custom_debug_derive::Debug;
 use futures::{channel::mpsc, StreamExt as _};
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, OracleResponse,
@@ -95,7 +95,8 @@ where
         id: ApplicationId,
     ) -> Result<(UserContractCode, ApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
-        let _latency = metrics::LOAD_CONTRACT_LATENCY.measure_latency();
+        let _latency =
+            metrics::LOAD_CONTRACT_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
         let blob_id = id.description_blob_id();
         let description = match self.txn_tracker.get_blob_content(&blob_id) {
             Some(blob) => bcs::from_bytes(blob.bytes())?,
@@ -120,7 +121,7 @@ where
         id: ApplicationId,
     ) -> Result<(UserServiceCode, ApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
-        let _latency = metrics::LOAD_SERVICE_LATENCY.measure_latency();
+        let _latency = metrics::LOAD_SERVICE_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
         let blob_id = id.description_blob_id();
         let description = match self.txn_tracker.get_blob_content(&blob_id) {
             Some(blob) => bcs::from_bytes(blob.bytes())?,

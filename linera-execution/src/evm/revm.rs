@@ -11,7 +11,7 @@ use std::{
 };
 
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
@@ -137,7 +137,8 @@ impl UserContractModule for EvmContractModule {
         runtime: ContractSyncRuntimeHandle,
     ) -> Result<UserContractInstance, ExecutionError> {
         #[cfg(with_metrics)]
-        let _instantiation_latency = metrics::CONTRACT_INSTANTIATION_LATENCY.measure_latency();
+        let _instantiation_latency =
+            metrics::CONTRACT_INSTANTIATION_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
 
         let instance: UserContractInstance = match self {
             #[cfg(with_revm)]
@@ -193,7 +194,8 @@ impl UserServiceModule for EvmServiceModule {
         runtime: ServiceSyncRuntimeHandle,
     ) -> Result<UserServiceInstance, ExecutionError> {
         #[cfg(with_metrics)]
-        let _instantiation_latency = metrics::SERVICE_INSTANTIATION_LATENCY.measure_latency();
+        let _instantiation_latency =
+            metrics::SERVICE_INSTANTIATION_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
 
         let instance: UserServiceInstance = match self {
             #[cfg(with_revm)]

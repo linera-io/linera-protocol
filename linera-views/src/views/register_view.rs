@@ -3,7 +3,7 @@
 
 use allocative::Allocative;
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -230,7 +230,8 @@ where
 
     fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = metrics::REGISTER_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency =
+            metrics::REGISTER_VIEW_HASH_RUNTIME.measure_latency(MeasurementUnit::Milliseconds);
         let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(self.get())?;
         Ok(hasher.finalize())

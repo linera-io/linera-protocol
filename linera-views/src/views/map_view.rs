@@ -17,7 +17,7 @@
 //! [class3]: map_view::CustomMapView
 
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -973,7 +973,8 @@ where
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = metrics::MAP_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency =
+            metrics::MAP_VIEW_HASH_RUNTIME.measure_latency(MeasurementUnit::Milliseconds);
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0u32;
         let prefix = Vec::new();

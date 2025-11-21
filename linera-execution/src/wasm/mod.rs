@@ -24,7 +24,7 @@ use std::path::Path;
 
 use linera_base::data_types::Bytecode;
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 use thiserror::Error;
 use wasm_instrument::{gas_metering, parity_wasm};
 #[cfg(with_wasmer)]
@@ -116,7 +116,8 @@ impl UserContractModule for WasmContractModule {
         runtime: ContractSyncRuntimeHandle,
     ) -> Result<UserContractInstance, ExecutionError> {
         #[cfg(with_metrics)]
-        let _instantiation_latency = metrics::CONTRACT_INSTANTIATION_LATENCY.measure_latency();
+        let _instantiation_latency =
+            metrics::CONTRACT_INSTANTIATION_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
 
         let instance: UserContractInstance = match self {
             #[cfg(with_wasmtime)]
@@ -178,7 +179,8 @@ impl UserServiceModule for WasmServiceModule {
         runtime: ServiceSyncRuntimeHandle,
     ) -> Result<UserServiceInstance, ExecutionError> {
         #[cfg(with_metrics)]
-        let _instantiation_latency = metrics::SERVICE_INSTANTIATION_LATENCY.measure_latency();
+        let _instantiation_latency =
+            metrics::SERVICE_INSTANTIATION_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
 
         let instance: UserServiceInstance = match self {
             #[cfg(with_wasmtime)]

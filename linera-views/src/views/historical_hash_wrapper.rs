@@ -8,7 +8,7 @@ use std::{
 };
 
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 
 use crate::{
     batch::Batch,
@@ -65,7 +65,8 @@ impl<C, W> HistoricallyHashableView<C, W> {
         batch: &Batch,
     ) -> Result<HasherOutput, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = metrics::HISTORICALLY_HASHABLE_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency = metrics::HISTORICALLY_HASHABLE_VIEW_HASH_RUNTIME
+            .measure_latency(MeasurementUnit::Milliseconds);
         let stored_hash = stored_hash.unwrap_or_default();
         if batch.is_empty() {
             return Ok(stored_hash);

@@ -8,7 +8,7 @@ use std::{
 
 use allocative::Allocative;
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 use linera_base::visit_allocative_simple;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -483,7 +483,8 @@ where
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = metrics::QUEUE_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency =
+            metrics::QUEUE_VIEW_HASH_RUNTIME.measure_latency(MeasurementUnit::Milliseconds);
         let elements = self.elements().await?;
         let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(&elements)?;
