@@ -10,7 +10,7 @@ use std::{
 
 use convert_case::{Case, Casing};
 use linera_base::prometheus_util::{
-    register_histogram_vec, register_int_counter_vec, MeasureLatency as _,
+    register_histogram_vec, register_int_counter_vec, MeasureLatency as _, MeasurementUnit,
 };
 use prometheus::{HistogramVec, IntCounterVec};
 
@@ -317,7 +317,10 @@ where
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        let _latency = self.counter.read_value_bytes_latency.measure_latency();
+        let _latency = self
+            .counter
+            .read_value_bytes_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         self.counter
             .read_value_key_size
             .with_label_values(&[])
@@ -339,7 +342,10 @@ where
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        let _latency = self.counter.contains_key_latency.measure_latency();
+        let _latency = self
+            .counter
+            .contains_key_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         self.counter
             .contains_key_key_size
             .with_label_values(&[])
@@ -348,7 +354,10 @@ where
     }
 
     async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error> {
-        let _latency = self.counter.contains_keys_latency.measure_latency();
+        let _latency = self
+            .counter
+            .contains_keys_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         self.counter
             .contains_keys_num_entries
             .with_label_values(&[])
@@ -368,7 +377,7 @@ where
         let _latency = self
             .counter
             .read_multi_values_bytes_latency
-            .measure_latency();
+            .measure_latency(MeasurementUnit::Milliseconds);
         self.counter
             .read_multi_values_num_entries
             .with_label_values(&[])
@@ -382,7 +391,10 @@ where
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let _latency = self.counter.find_keys_by_prefix_latency.measure_latency();
+        let _latency = self
+            .counter
+            .find_keys_by_prefix_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         self.counter
             .find_keys_by_prefix_prefix_size
             .with_label_values(&[])
@@ -410,7 +422,7 @@ where
         let _latency = self
             .counter
             .find_key_values_by_prefix_latency
-            .measure_latency();
+            .measure_latency(MeasurementUnit::Milliseconds);
         self.counter
             .find_key_values_by_prefix_prefix_size
             .with_label_values(&[])
@@ -439,7 +451,10 @@ where
     const MAX_VALUE_SIZE: usize = S::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        let _latency = self.counter.write_batch_latency.measure_latency();
+        let _latency = self
+            .counter
+            .write_batch_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         self.counter
             .write_batch_size
             .with_label_values(&[])
@@ -448,7 +463,10 @@ where
     }
 
     async fn clear_journal(&self) -> Result<(), Self::Error> {
-        let _metric = self.counter.clear_journal_latency.measure_latency();
+        let _metric = self
+            .counter
+            .clear_journal_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         self.store.clear_journal().await
     }
 }
@@ -467,21 +485,29 @@ where
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
         let name = D::get_name();
         let counter = get_counter(&name);
-        let _latency = counter.connect_latency.measure_latency();
+        let _latency = counter
+            .connect_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         let database = D::connect(config, namespace).await?;
         let counter = get_counter(&name);
         Ok(Self { counter, database })
     }
 
     fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
-        let _latency = self.counter.open_shared_latency.measure_latency();
+        let _latency = self
+            .counter
+            .open_shared_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         let store = self.database.open_shared(root_key)?;
         let counter = self.counter.clone();
         Ok(MeteredStore { counter, store })
     }
 
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
-        let _latency = self.counter.open_exclusive_latency.measure_latency();
+        let _latency = self
+            .counter
+            .open_exclusive_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         let store = self.database.open_exclusive(root_key)?;
         let counter = self.counter.clone();
         Ok(MeteredStore { counter, store })
@@ -490,7 +516,9 @@ where
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
         let name = D::get_name();
         let counter = get_counter(&name);
-        let _latency = counter.list_all_latency.measure_latency();
+        let _latency = counter
+            .list_all_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         let namespaces = D::list_all(config).await?;
         let counter = get_counter(&name);
         counter
@@ -501,21 +529,28 @@ where
     }
 
     async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let _latency = self.counter.list_root_keys_latency.measure_latency();
+        let _latency = self
+            .counter
+            .list_root_keys_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         self.database.list_root_keys().await
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
         let name = D::get_name();
         let counter = get_counter(&name);
-        let _latency = counter.delete_all_latency.measure_latency();
+        let _latency = counter
+            .delete_all_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         D::delete_all(config).await
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
         let name = D::get_name();
         let counter = get_counter(&name);
-        let _latency = counter.exists_latency.measure_latency();
+        let _latency = counter
+            .exists_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         let result = D::exists(config, namespace).await?;
         if result {
             let counter = get_counter(&name);
@@ -527,14 +562,18 @@ where
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
         let name = D::get_name();
         let counter = get_counter(&name);
-        let _latency = counter.create_latency.measure_latency();
+        let _latency = counter
+            .create_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         D::create(config, namespace).await
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
         let name = D::get_name();
         let counter = get_counter(&name);
-        let _latency = counter.delete_latency.measure_latency();
+        let _latency = counter
+            .delete_latency
+            .measure_latency(MeasurementUnit::Milliseconds);
         D::delete(config, namespace).await
     }
 }

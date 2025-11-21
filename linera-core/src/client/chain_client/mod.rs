@@ -16,7 +16,7 @@ use futures::{
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt, TryStreamExt},
 };
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 use linera_base::{
     abi::Abi,
     crypto::{signer, AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
@@ -668,7 +668,8 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     pub async fn prepare_chain(&self) -> Result<Box<ChainInfo>, Error> {
         #[cfg(with_metrics)]
-        let _latency = super::metrics::PREPARE_CHAIN_LATENCY.measure_latency();
+        let _latency =
+            super::metrics::PREPARE_CHAIN_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
 
         let mut info = self.synchronize_to_known_height().await?;
 
@@ -802,7 +803,8 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<(), Error> {
         debug!(chain_id = %self.chain_id, "starting find_received_certificates");
         #[cfg(with_metrics)]
-        let _latency = super::metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
+        let _latency = super::metrics::FIND_RECEIVED_CERTIFICATES_LATENCY
+            .measure_latency(MeasurementUnit::Milliseconds);
         // Use network information from the local chain.
         let chain_id = self.chain_id;
         let (_, committee) = self.admin_committee().await?;
@@ -1257,7 +1259,8 @@ impl<Env: Environment> ChainClient<Env> {
         blobs: Vec<Blob>,
     ) -> Result<ExecuteBlockOutcome, Error> {
         #[cfg(with_metrics)]
-        let _latency = super::metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
+        let _latency =
+            super::metrics::EXECUTE_BLOCK_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
 
         let mutex = self.client_mutex();
         let _guard = mutex.lock_owned().await;
@@ -2251,7 +2254,8 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
     ) -> Result<(Vec<ConfirmedBlockCertificate>, Option<RoundTimeout>), Error> {
         #[cfg(with_metrics)]
-        let _latency = super::metrics::PROCESS_INBOX_WITHOUT_PREPARE_LATENCY.measure_latency();
+        let _latency = super::metrics::PROCESS_INBOX_WITHOUT_PREPARE_LATENCY
+            .measure_latency(MeasurementUnit::Milliseconds);
 
         let mut certificates = Vec::new();
         loop {
