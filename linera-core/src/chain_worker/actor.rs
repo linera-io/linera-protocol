@@ -16,6 +16,7 @@ use linera_base::{
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, BlobId, ChainId},
+    time::Instant,
 };
 use linera_chain::{
     data_types::{BlockProposal, MessageBundle, ProposedBlock},
@@ -38,6 +39,22 @@ use crate::{
     value_cache::ValueCache,
     worker::{NetworkActions, WorkerError},
 };
+
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{exponential_bucket_interval, register_histogram};
+    use prometheus::Histogram;
+
+    pub static CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "chain_worker_request_queue_wait_time",
+            "Time (ms) a chain worker request waits in queue before being processed",
+            exponential_bucket_interval(0.1_f64, 10_000.0),
+        )
+    });
+}
 
 /// A request for the [`ChainWorkerActor`].
 #[derive(Debug)]
@@ -261,6 +278,7 @@ where
         incoming_requests: mpsc::UnboundedReceiver<(
             ChainWorkerRequest<StorageClient::Context>,
             tracing::Span,
+            Instant,
         )>,
         is_tracked: bool,
     ) {
@@ -302,11 +320,19 @@ where
         mut incoming_requests: mpsc::UnboundedReceiver<(
             ChainWorkerRequest<StorageClient::Context>,
             tracing::Span,
+            Instant,
         )>,
     ) -> Result<(), WorkerError> {
         trace!("Starting `ChainWorkerActor`");
 
-        while let Some((request, span)) = incoming_requests.recv().await {
+        while let Some((request, span, _queued_at)) = incoming_requests.recv().await {
+            // Record how long the request waited in queue (in milliseconds)
+            #[cfg(with_metrics)]
+            {
+                let queue_wait_time_ms = _queued_at.elapsed().as_secs_f64() * 1000.0;
+                metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
+            }
+
             let (_service_runtime_thread, service_runtime_task, service_runtime_endpoint) =
                 if self.config.long_lived_services {
                     let actor = ServiceRuntimeActor::spawn(self.chain_id).await;
@@ -337,9 +363,17 @@ where
                 futures::select! {
                     () = self.sleep_until_timeout().fuse() => break,
                     maybe_request = incoming_requests.recv().fuse() => {
-                        let Some((request, span)) = maybe_request else {
+                        let Some((request, span, _queued_at)) = maybe_request else {
                             break; // Request sender was dropped.
                         };
+
+                        // Record how long the request waited in queue (in milliseconds)
+                        #[cfg(with_metrics)]
+                        {
+                            let queue_wait_time_ms = _queued_at.elapsed().as_secs_f64() * 1000.0;
+                            metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
+                        }
+
                         Box::pin(worker.handle_request(request)).instrument(span).await;
                     }
                 }

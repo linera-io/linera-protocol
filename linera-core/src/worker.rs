@@ -15,6 +15,7 @@ use linera_base::{
     doc_scalar,
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
+    time::Instant,
 };
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
@@ -389,6 +390,7 @@ where
 type ChainActorEndpoint<StorageClient> = mpsc::UnboundedSender<(
     ChainWorkerRequest<<StorageClient as Storage>::Context>,
     tracing::Span,
+    Instant,
 )>;
 
 pub(crate) type DeliveryNotifiers = HashMap<ChainId, DeliveryNotifier>;
@@ -886,7 +888,11 @@ where
         request: ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<
         Option<
-            mpsc::UnboundedReceiver<(ChainWorkerRequest<StorageClient::Context>, tracing::Span)>,
+            mpsc::UnboundedReceiver<(
+                ChainWorkerRequest<StorageClient::Context>,
+                tracing::Span,
+                Instant,
+            )>,
         >,
         WorkerError,
     > {
@@ -899,7 +905,7 @@ where
             (sender, Some(receiver))
         };
 
-        if let Err(e) = sender.send((request, tracing::Span::current())) {
+        if let Err(e) = sender.send((request, tracing::Span::current(), Instant::now())) {
             // The actor was dropped. Give up without (re-)inserting the endpoint in the cache.
             return Err(WorkerError::ChainActorSendError {
                 chain_id,
