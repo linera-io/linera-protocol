@@ -13,6 +13,8 @@ use std::{
 
 use futures::{channel::mpsc, StreamExt as _};
 use linera_base::identifiers::ChainId;
+#[cfg(with_metrics)]
+use linera_base::time::Instant;
 use linera_core::data_types::CrossChainRequest;
 use rand::Rng as _;
 use tracing::{trace, warn};
@@ -20,14 +22,29 @@ use tracing::{trace, warn};
 use crate::config::ShardId;
 
 #[cfg(with_metrics)]
-static CROSS_CHAIN_MESSAGE_TASKS: std::sync::LazyLock<prometheus::IntGauge> =
-    std::sync::LazyLock::new(|| {
-        prometheus::register_int_gauge!(
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{
+        exponential_bucket_latencies, register_histogram, register_int_gauge,
+    };
+    use prometheus::{Histogram, IntGauge};
+
+    pub static CROSS_CHAIN_MESSAGE_TASKS: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
             "cross_chain_message_tasks",
             "Number of concurrent cross-chain message tasks",
         )
-        .expect("IntGauge can be created")
     });
+
+    pub static CROSS_CHAIN_QUEUE_WAIT_TIME: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "cross_chain_queue_wait_time",
+            "Time (ms) a cross-chain message waits in queue before handle_request is called",
+            exponential_bucket_latencies(10_000.0),
+        )
+    });
+}
 
 #[expect(clippy::too_many_arguments)]
 pub(crate) async fn forward_cross_chain_queries<F, G>(
@@ -46,7 +63,16 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
     let mut steps = futures::stream::FuturesUnordered::new();
     let mut job_states: HashMap<QueueId, JobState> = HashMap::new();
 
-    let run_task = |task: Task| async move { handle_request(task.shard_id, task.request).await };
+    let run_task = |task: Task| async move {
+        // Record how long the message waited in queue (in milliseconds)
+        #[cfg(with_metrics)]
+        {
+            let queue_wait_time_ms = task.queued_at.elapsed().as_secs_f64() * 1000.0;
+            metrics::CROSS_CHAIN_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
+        }
+
+        handle_request(task.shard_id, task.request).await
+    };
 
     let run_action = |action, queue, state: JobState| async move {
         linera_base::time::timer::sleep(cross_chain_sender_delay).await;
@@ -87,7 +113,8 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
 
     loop {
         #[cfg(with_metrics)]
-        CROSS_CHAIN_MESSAGE_TASKS.set(job_states.len() as i64);
+        metrics::CROSS_CHAIN_MESSAGE_TASKS.set(job_states.len() as i64);
+
         tokio::select! {
             Some((queue, action)) = steps.next() => {
                 let Entry::Occupied(mut state) = job_states.entry(queue) else {
@@ -119,6 +146,8 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
                 let task = Task {
                     shard_id,
                     request,
+                    #[cfg(with_metrics)]
+                    queued_at: Instant::now(),
                 };
 
                 match job_states.entry(queue) {
@@ -190,6 +219,9 @@ struct Task {
     pub shard_id: ShardId,
     /// The cross-chain request to be sent.
     pub request: linera_core::data_types::CrossChainRequest,
+    /// When this task was queued.
+    #[cfg(with_metrics)]
+    pub queued_at: Instant,
 }
 
 #[derive(Clone)]
