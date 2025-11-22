@@ -26,8 +26,8 @@ use serde::{Deserialize, Serialize};
 use crate::client::ChainClientError;
 
 /// A range of block heights as used in `ChainInfoQuery`.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Eq, PartialEq))]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub struct BlockHeightRange {
     /// Starting point
     pub start: BlockHeight,
@@ -59,8 +59,8 @@ impl BlockHeightRange {
 }
 
 /// Request information about a chain.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Eq, PartialEq))]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub struct ChainInfoQuery {
     /// The chain ID.
     pub chain_id: ChainId,
