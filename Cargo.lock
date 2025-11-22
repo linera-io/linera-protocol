@@ -5347,7 +5347,6 @@ dependencies = [
  "linera-base",
  "linera-execution",
  "linera-views",
- "linera-views-derive",
  "linera-wasm-instrument",
  "linera-wasmer",
  "linera-wasmer-compiler-singlepass",
