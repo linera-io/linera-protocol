@@ -474,13 +474,20 @@ impl Runnable for Job {
                 address,
                 chain_id,
                 public_key,
+                create_network_actions,
             } => {
                 let context = options.create_client_context(storage, wallet, signer.into_value());
                 let node = context.make_node_provider().make_node(&address)?;
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 println!("Querying validator about chain {chain_id}.\n");
                 let results = context
-                    .query_validator(&address, &node, chain_id, public_key.as_ref())
+                    .query_validator(
+                        &address,
+                        &node,
+                        chain_id,
+                        public_key.as_ref(),
+                        create_network_actions,
+                    )
                     .await;
 
                 for error in results.errors() {
@@ -497,6 +504,7 @@ impl Runnable for Job {
             QueryValidators {
                 chain_id,
                 min_votes,
+                create_network_actions,
             } => {
                 let mut context =
                     options.create_client_context(storage, wallet, signer.into_value());
@@ -521,7 +529,13 @@ impl Runnable for Job {
                     let address = &state.network_address;
                     let node = node_provider.make_node(address)?;
                     let results = context
-                        .query_validator(address, &node, chain_id, Some(name))
+                        .query_validator(
+                            address,
+                            &node,
+                            chain_id,
+                            Some(name),
+                            create_network_actions,
+                        )
                         .await;
                     validator_results.push((name, address, state.votes, results));
                 }
@@ -553,15 +567,17 @@ impl Runnable for Job {
                     println!();
                 }
 
-                let num_ok_validators = committee.validators().len() - faulty_validators.len();
-                if !faulty_validators.is_empty() {
-                    println!("{:#?}", faulty_validators);
+                if min_votes.is_none() {
+                    let num_ok_validators = committee.validators().len() - faulty_validators.len();
+                    if !faulty_validators.is_empty() {
+                        println!("{:#?}", faulty_validators);
+                    }
+                    info!(
+                        "{}/{} validators are OK.",
+                        num_ok_validators,
+                        committee.validators().len()
+                    );
                 }
-                info!(
-                    "{}/{} validators are OK.",
-                    num_ok_validators,
-                    committee.validators().len()
-                );
             }
 
             QueryShardInfo { chain_id } => {

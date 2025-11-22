@@ -115,23 +115,23 @@ impl ValidatorQueryResults {
             Ok(version_info) => {
                 if ref_version.is_none_or(|ref_v| ref_v.crate_version != version_info.crate_version)
                 {
-                    println!("Linera protocol: v{}", version_info.crate_version);
+                    println!("Linera protocol differs: v{}", version_info.crate_version);
                 }
                 if ref_version.is_none_or(|ref_v| ref_v.rpc_hash != version_info.rpc_hash) {
-                    println!("RPC API hash: {}", version_info.rpc_hash);
+                    println!("RPC API hash differs: {}", version_info.rpc_hash);
                 }
                 if ref_version.is_none_or(|ref_v| ref_v.graphql_hash != version_info.graphql_hash) {
-                    println!("GraphQL API hash: {}", version_info.graphql_hash);
+                    println!("GraphQL API hash differs: {}", version_info.graphql_hash);
                 }
                 if ref_version.is_none_or(|ref_v| ref_v.wit_hash != version_info.wit_hash) {
-                    println!("WIT API hash: v{}", version_info.wit_hash);
+                    println!("WIT API hash differs: v{}", version_info.wit_hash);
                 }
                 if ref_version.is_none_or(|ref_v| {
                     (&ref_v.git_commit, ref_v.git_dirty)
                         != (&version_info.git_commit, version_info.git_dirty)
                 }) {
                     println!(
-                        "Source code: {}/tree/{}{}",
+                        "Source code differs: {}/tree/{}{}",
                         env!("CARGO_PKG_REPOSITORY"),
                         version_info.git_commit,
                         if version_info.git_dirty {
@@ -149,7 +149,7 @@ impl ValidatorQueryResults {
             reference.and_then(|ref_results| ref_results.genesis_config_hash.as_ref().ok());
         match &self.genesis_config_hash {
             Ok(hash) if ref_genesis_hash.is_some_and(|ref_hash| ref_hash == hash) => {}
-            Ok(hash) => println!("Genesis config hash: {hash}"),
+            Ok(hash) => println!("Genesis config hash differs: {hash}"),
             Err(err) => println!("Error getting genesis config: {err}"),
         }
 
@@ -158,26 +158,26 @@ impl ValidatorQueryResults {
             Ok(info) => {
                 if ref_info.is_none_or(|ref_info| info.block_hash != ref_info.block_hash) {
                     if let Some(hash) = info.block_hash {
-                        println!("Block hash: {}", hash);
+                        println!("Block hash differs: {}", hash);
                     } else {
-                        println!("Block hash: None");
+                        println!("Block hash differs: None");
                     }
                 }
                 if ref_info
                     .is_none_or(|ref_info| info.next_block_height != ref_info.next_block_height)
                 {
-                    println!("Next height: {}", info.next_block_height);
+                    println!("Next height differs: {}", info.next_block_height);
                 }
                 if ref_info.is_none_or(|ref_info| info.timestamp != ref_info.timestamp) {
-                    println!("Timestamp: {}", info.timestamp);
+                    println!("Timestamp differs: {}", info.timestamp);
                 }
                 if ref_info.is_none_or(|ref_info| info.epoch != ref_info.epoch) {
-                    println!("Epoch: {}", info.epoch);
+                    println!("Epoch differs: {}", info.epoch);
                 }
                 if ref_info.is_none_or(|ref_info| {
                     info.manager.current_round != ref_info.manager.current_round
                 }) {
-                    println!("Round: {}", info.manager.current_round);
+                    println!("Round differs: {}", info.manager.current_round);
                 }
                 if let Some(locking) = &info.manager.requested_locking {
                     match &**locking {
@@ -721,8 +721,10 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         address: &str,
         node: &impl ValidatorNode,
         chain_id: ChainId,
+        create_network_actions: bool,
     ) -> Result<ChainInfo, Error> {
-        let query = ChainInfoQuery::new(chain_id).with_manager_values();
+        let mut query = ChainInfoQuery::new(chain_id).with_manager_values();
+        query.create_network_actions = create_network_actions;
         match node.handle_chain_info_query(query).await {
             Ok(response) => {
                 debug!(
@@ -761,11 +763,18 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         node: &impl ValidatorNode,
         chain_id: ChainId,
         public_key: Option<&ValidatorPublicKey>,
+        create_network_actions: bool,
     ) -> ValidatorQueryResults {
         let version_info = self.check_compatible_version_info(address, node).await;
         let genesis_config_hash = self.check_matching_network_description(address, node).await;
         let chain_info = self
-            .check_validator_chain_info_response(public_key, address, node, chain_id)
+            .check_validator_chain_info_response(
+                public_key,
+                address,
+                node,
+                chain_id,
+                create_network_actions,
+            )
             .await;
 
         ValidatorQueryResults {
