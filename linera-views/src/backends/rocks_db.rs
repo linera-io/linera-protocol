@@ -29,11 +29,12 @@ use crate::{
     common::get_upper_bound_option,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
+use futures::stream::Stream;
 
 /// The prefixes being used in the system
 static ROOT_KEY_DOMAIN: [u8; 1] = [0];
@@ -424,63 +425,8 @@ impl WithError for RocksDbStoreInternal {
     type Error = RocksDbStoreInternalError;
 }
 
-/// Iterator for reading multiple values from RocksDbStoreInternal.
-/// Data is fetched by blocks of `BATCH_SIZE` so as to avoid memory
-/// congestion.
-pub struct RocksDbStoreReadMultiIterator {
-    keys: Vec<Vec<u8>>,
-    executor: RocksDbStoreExecutor,
-    spawn_mode: RocksDbSpawnMode,
-    values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
-    current_position: usize,
-}
-
-impl ReadMultiIterator<RocksDbStoreInternalError> for RocksDbStoreReadMultiIterator {
-    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, RocksDbStoreInternalError> {
-        const BATCH_SIZE: usize = 50;
-
-        // Try to get next value from current batch
-        if let Some(ref mut values_iter) = self.values {
-            if let Some(value) = values_iter.next() {
-                return Ok(Some(value));
-            }
-        }
-
-        // Current batch exhausted, check if we have more keys to load
-        if self.current_position >= self.keys.len() {
-            return Ok(None);
-        }
-
-        // Calculate the end position for this batch
-        let end_position = std::cmp::min(self.current_position + BATCH_SIZE, self.keys.len());
-
-        // Extract the next batch of keys
-        let batch_keys = self.keys[self.current_position..end_position].to_vec();
-        self.current_position = end_position;
-
-        // Load the batch
-        let executor = self.executor.clone();
-        let results = self
-            .spawn_mode
-            .spawn(
-                move |x| executor.read_multi_values_bytes_internal(x),
-                batch_keys,
-            )
-            .await?;
-
-        // Store the results as an iterator
-        let mut iter = results.into_iter();
-        let first = iter.next();
-        self.values = Some(iter);
-
-        Ok(first)
-    }
-}
-
 impl ReadableKeyValueStore for RocksDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-
-    type ReadMultiIterator = RocksDbStoreReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -546,13 +492,45 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
             .await
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
-        RocksDbStoreReadMultiIterator {
-            keys: keys.to_vec(),
-            executor: self.executor.clone(),
-            spawn_mode: self.spawn_mode,
-            values: None,
-            current_position: 0,
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+        const BATCH_SIZE: usize = 50;
+        let executor = self.executor.clone();
+        let spawn_mode = self.spawn_mode;
+
+        async_stream::stream! {
+            let mut current_position = 0;
+            while current_position < keys.len() {
+                // Calculate the end position for this batch
+                let end_position = std::cmp::min(current_position + BATCH_SIZE, keys.len());
+
+                // Extract the next batch of keys
+                let batch_keys = keys[current_position..end_position].to_vec();
+                current_position = end_position;
+
+                // Load the batch
+                let executor = executor.clone();
+                let results = spawn_mode
+                    .spawn(
+                        move |x| executor.read_multi_values_bytes_internal(x),
+                        batch_keys,
+                    )
+                    .await;
+
+                match results {
+                    Ok(values) => {
+                        for value in values {
+                            yield Ok(value);
+                        }
+                    }
+                    Err(e) => {
+                        yield Err(e);
+                        return;
+                    }
+                }
+            }
         }
     }
 

@@ -11,10 +11,11 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
+use futures::stream::Stream;
 
 /// A dual database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,30 +78,6 @@ where
     type Error = DualStoreError<S1::Error, S2::Error>;
 }
 
-/// Iterator for reading multiple values from DualStore.
-pub enum DualStoreReadMultiIterator<I1, I2> {
-    /// First store iterator.
-    First(I1),
-    /// Second store iterator.
-    Second(I2),
-}
-
-impl<I1, I2, E1, E2> ReadMultiIterator<DualStoreError<E1, E2>>
-    for DualStoreReadMultiIterator<I1, I2>
-where
-    I1: ReadMultiIterator<E1>,
-    I2: ReadMultiIterator<E2>,
-    E1: crate::store::KeyValueStoreError,
-    E2: crate::store::KeyValueStoreError,
-{
-    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, DualStoreError<E1, E2>> {
-        match self {
-            Self::First(iter) => iter.next().await.map_err(DualStoreError::First),
-            Self::Second(iter) => iter.next().await.map_err(DualStoreError::Second),
-        }
-    }
-}
-
 impl<S1, S2> ReadableKeyValueStore for DualStore<S1, S2>
 where
     S1: ReadableKeyValueStore,
@@ -112,9 +89,6 @@ where
     } else {
         S2::MAX_KEY_SIZE
     };
-
-    type ReadMultiIterator =
-        DualStoreReadMultiIterator<S1::ReadMultiIterator, S2::ReadMultiIterator>;
 
     fn max_stream_queries(&self) -> usize {
         match self {
@@ -189,14 +163,46 @@ where
         Ok(result)
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+        enum EitherStream<S1, S2> {
+            First(std::pin::Pin<Box<S1>>),
+            Second(std::pin::Pin<Box<S2>>),
+        }
+
+        impl<S1, S2, E1, E2> Stream for EitherStream<S1, S2>
+        where
+            S1: Stream<Item = Result<Option<Vec<u8>>, E1>>,
+            S2: Stream<Item = Result<Option<Vec<u8>>, E2>>,
+            E1: KeyValueStoreError,
+            E2: KeyValueStoreError,
+        {
+            type Item = Result<Option<Vec<u8>>, DualStoreError<E1, E2>>;
+
+            fn poll_next(
+                mut self: std::pin::Pin<&mut Self>,
+                cx: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<Option<Self::Item>> {
+                match &mut *self {
+                    EitherStream::First(s) => {
+                        s.as_mut().poll_next(cx).map(|opt| {
+                            opt.map(|res| res.map_err(DualStoreError::First))
+                        })
+                    }
+                    EitherStream::Second(s) => {
+                        s.as_mut().poll_next(cx).map(|opt| {
+                            opt.map(|res| res.map_err(DualStoreError::Second))
+                        })
+                    }
+                }
+            }
+        }
+
         match self {
-            Self::First(store) => {
-                DualStoreReadMultiIterator::First(store.read_multi_values_bytes_iter(keys))
-            }
-            Self::Second(store) => {
-                DualStoreReadMultiIterator::Second(store.read_multi_values_bytes_iter(keys))
-            }
+            Self::First(store) => EitherStream::First(Box::pin(store.read_multi_values_bytes_iter(keys))),
+            Self::Second(store) => EitherStream::Second(Box::pin(store.read_multi_values_bytes_iter(keys))),
         }
     }
 

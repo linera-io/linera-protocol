@@ -11,6 +11,8 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use rand::{seq::SliceRandom, Rng};
 
+use futures::stream::StreamExt;
+
 use crate::{
     batch::{
         Batch, WriteOperation,
@@ -18,7 +20,7 @@ use crate::{
     },
     random::{generate_test_namespace, make_deterministic_rng, make_nondeterministic_rng},
     store::{
-        KeyValueDatabase, KeyValueStore, ReadMultiIterator, ReadableKeyValueStore,
+        KeyValueDatabase, KeyValueStore, ReadableKeyValueStore,
         TestKeyValueDatabase, WritableKeyValueStore,
     },
 };
@@ -236,12 +238,13 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
         let test_exists_direct = store.contains_keys(&keys).await.unwrap();
         let values_read = store.read_multi_values_bytes(&keys).await.unwrap();
         // Test read_multi_values_bytes_iter
-        let mut iter = store.read_multi_values_bytes_iter(keys);
+        let mut iter = Box::pin(store.read_multi_values_bytes_iter(keys));
         let mut values_from_iter = Vec::new();
         loop {
-            match iter.next().await.unwrap() {
+            match iter.next().await {
                 None => break,
-                Some(value) => values_from_iter.push(value),
+                Some(Ok(value)) => values_from_iter.push(value),
+                Some(Err(e)) => panic!("Error reading from iterator: {:?}", e),
             }
         }
         assert_eq!(values_read, values_from_iter);
@@ -484,12 +487,13 @@ where
     let store = store.open_exclusive(&[]).unwrap();
     let values_read = store.read_multi_values_bytes(&keys).await.unwrap();
     // Test read_multi_values_bytes_iter
-    let mut iter = store.read_multi_values_bytes_iter(keys);
+    let mut iter = Box::pin(store.read_multi_values_bytes_iter(keys));
     let mut values_from_iter = Vec::new();
     loop {
-        match iter.next().await.unwrap() {
+        match iter.next().await {
             None => break,
-            Some(value) => values_from_iter.push(value),
+            Some(Ok(value)) => values_from_iter.push(value),
+            Some(Err(e)) => panic!("Error reading from iterator: {:?}", e),
         }
     }
     assert_eq!(values_read, values_from_iter);

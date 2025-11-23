@@ -44,6 +44,7 @@ use std::{
 };
 
 use allocative::Allocative;
+use futures::stream::StreamExt;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -55,7 +56,7 @@ use crate::{
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
     historical_hash_wrapper::HistoricallyHashableView,
-    store::{KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore},
+    store::{KeyValueStoreError, ReadableKeyValueStore},
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError},
 };
 
@@ -80,6 +81,17 @@ enum SlotState<V> {
     NeedsFetch,
 }
 
+/// Type alias for the stream used in multi-get operations.
+type MultiGetStream<'a, C> = std::pin::Pin<
+    Box<
+        dyn futures::stream::Stream<
+                Item = Result<Option<Vec<u8>>, <<C as Context>::Store as crate::store::WithError>::Error>,
+            > + Send
+            + Sync
+            + 'a,
+    >,
+>;
+
 /// Iterator for multi-get operations on map views.
 pub struct MapViewMultiGet<V, I> {
     cached_iter: std::vec::IntoIter<SlotState<V>>,
@@ -91,14 +103,14 @@ impl<V, I> MapViewMultiGet<V, I> {
     pub async fn next<E>(&mut self) -> Result<Option<Option<V>>, ViewError>
     where
         V: DeserializeOwned,
-        I: ReadMultiIterator<E>,
+        I: futures::stream::Stream<Item = Result<Option<Vec<u8>>, E>> + Unpin,
         E: KeyValueStoreError,
     {
         match self.cached_iter.next() {
             None => Ok(None),
             Some(SlotState::Cached(value)) => Ok(Some(value)),
             Some(SlotState::NeedsFetch) => {
-                let value_bytes = self.store_iter.next().await?;
+                let value_bytes = self.store_iter.next().await.transpose()?;
                 let value = match value_bytes {
                     Some(bytes) => from_bytes_option(&bytes)?,
                     None => None,
@@ -440,7 +452,7 @@ where
     pub fn multi_get_iter(
         &self,
         short_keys: Vec<Vec<u8>>,
-    ) -> MapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator> {
+    ) -> MapViewMultiGet<V, MultiGetStream<'_, C>> {
         let size = short_keys.len();
         let mut vector_query = Vec::new();
         let mut cached = Vec::with_capacity(size);
@@ -461,10 +473,10 @@ where
             }
         }
 
-        let store_iter = self
+        let store_iter = Box::pin(self
             .context
             .store()
-            .read_multi_values_bytes_iter(vector_query);
+            .read_multi_values_bytes_iter(vector_query));
 
         MapViewMultiGet {
             cached_iter: cached.into_iter(),
@@ -1326,7 +1338,7 @@ where
     pub fn multi_get_iter<'a, Q>(
         &self,
         indices: impl IntoIterator<Item = &'a Q>,
-    ) -> Result<MapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator>, ViewError>
+    ) -> Result<MapViewMultiGet<V, MultiGetStream<'_, C>>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + 'a,
@@ -1896,7 +1908,7 @@ where
     pub fn multi_get_iter<'a, Q>(
         &self,
         indices: impl IntoIterator<Item = &'a Q>,
-    ) -> Result<MapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator>, ViewError>
+    ) -> Result<MapViewMultiGet<V, MultiGetStream<'_, C>>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + 'a,

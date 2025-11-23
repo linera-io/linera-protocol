@@ -20,11 +20,12 @@ use linera_views::{
     batch::{Batch, WriteOperation},
     lru_caching::LruCachingDatabase,
     store::{
-        KeyValueDatabase, ReadMultiIterator, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
     FutureSyncExt as _,
 };
+use futures::stream::Stream;
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
 
@@ -94,53 +95,8 @@ impl WithError for StorageServiceStoreInternal {
     type Error = StorageServiceStoreError;
 }
 
-/// Iterator for reading multiple values from StorageServiceStoreInternal.
-pub struct StorageServiceStoreInternalReadMultiIterator {
-    store: StorageServiceStoreInternal,
-    keys: Vec<Vec<u8>>,
-    values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
-    current_position: usize,
-}
-
-impl ReadMultiIterator<StorageServiceStoreError> for StorageServiceStoreInternalReadMultiIterator {
-    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, StorageServiceStoreError> {
-        const BATCH_SIZE: usize = 50;
-
-        // Try to get next value from current batch
-        if let Some(ref mut values_iter) = self.values {
-            if let Some(value) = values_iter.next() {
-                return Ok(Some(value));
-            }
-        }
-
-        // Current batch exhausted, check if we have more keys to load
-        if self.current_position >= self.keys.len() {
-            return Ok(None);
-        }
-
-        // Calculate the end position for this batch
-        let end_position = std::cmp::min(self.current_position + BATCH_SIZE, self.keys.len());
-
-        // Extract the next batch of keys
-        let batch_keys = &self.keys[self.current_position..end_position];
-        self.current_position = end_position;
-
-        // Load the batch
-        let results = self.store.read_multi_values_bytes(batch_keys).await?;
-
-        // Store the results as an iterator
-        let mut iter = results.into_iter();
-        let first = iter.next();
-        self.values = Some(iter);
-
-        Ok(first)
-    }
-}
-
 impl ReadableKeyValueStore for StorageServiceStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-
-    type ReadMultiIterator = StorageServiceStoreInternalReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -257,12 +213,38 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         }
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
-        StorageServiceStoreInternalReadMultiIterator {
-            store: self.clone(),
-            keys: keys.to_vec(),
-            values: None,
-            current_position: 0,
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+        const BATCH_SIZE: usize = 50;
+        let store = self.clone();
+
+        async_stream::stream! {
+            let mut current_position = 0;
+            while current_position < keys.len() {
+                // Calculate the end position for this batch
+                let end_position = std::cmp::min(current_position + BATCH_SIZE, keys.len());
+
+                // Extract the next batch of keys
+                let batch_keys = &keys[current_position..end_position];
+                current_position = end_position;
+
+                // Load the batch
+                let results = store.read_multi_values_bytes(batch_keys).await;
+
+                match results {
+                    Ok(values) => {
+                        for value in values {
+                            yield Ok(value);
+                        }
+                    }
+                    Err(e) => {
+                        yield Err(e);
+                        return;
+                    }
+                }
+            }
         }
     }
 

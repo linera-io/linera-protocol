@@ -47,12 +47,13 @@ use crate::{
     journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadMultiIterator,
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError,
         ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
     FutureSyncExt as _,
 };
+use futures::stream::Stream;
 
 /// Name of the environment variable with the address to a DynamoDB local instance.
 const DYNAMODB_LOCAL_ENDPOINT: &str = "DYNAMODB_LOCAL_ENDPOINT";
@@ -813,40 +814,8 @@ impl WithError for DynamoDbStoreInternal {
 }
 
 /// Iterator for reading multiple values from DynamoDB.
-pub struct DynamoDbStoreReadMultiIterator {
-    store: DynamoDbStoreInternal,
-    key_batches: std::vec::IntoIter<Vec<Vec<u8>>>,
-    current_values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
-}
-
-impl ReadMultiIterator<DynamoDbStoreInternalError> for DynamoDbStoreReadMultiIterator {
-    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, DynamoDbStoreInternalError> {
-        loop {
-            match &mut self.current_values {
-                None => match self.key_batches.next() {
-                    Some(keys) => {
-                        let values = self.store.read_batch_values_bytes(&keys).await?;
-                        self.current_values = Some(values.into_iter());
-                        continue;
-                    }
-                    None => return Ok(None),
-                },
-                Some(current_values) => match current_values.next() {
-                    Some(value) => return Ok(Some(value)),
-                    None => {
-                        self.current_values = None;
-                        continue;
-                    }
-                },
-            }
-        }
-    }
-}
-
 impl ReadableKeyValueStore for DynamoDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-
-    type ReadMultiIterator = DynamoDbStoreReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -907,17 +876,33 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         Ok(results.into_iter().flatten().collect())
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator {
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
         // Split keys into batches
         let batches: Vec<Vec<Vec<u8>>> = keys
             .chunks(MAX_BATCH_GET_ITEM_SIZE)
             .map(|chunk| chunk.to_vec())
             .collect();
+        let store = self.clone();
 
-        DynamoDbStoreReadMultiIterator {
-            store: self.clone(),
-            key_batches: batches.into_iter(),
-            current_values: None,
+        async_stream::stream! {
+            for batch_keys in batches {
+                let values = store.read_batch_values_bytes(&batch_keys).await;
+
+                match values {
+                    Ok(vals) => {
+                        for value in vals {
+                            yield Ok(value);
+                        }
+                    }
+                    Err(e) => {
+                        yield Err(e);
+                        return;
+                    }
+                }
+            }
         }
     }
 
