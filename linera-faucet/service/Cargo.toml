@@ -1,0 +1,64 @@
+[package]
+name = "linera-faucet-service"
+description = "Standalone faucet service for the Linera protocol."
+documentation = "https://docs.rs/linera-faucet-service/latest/linera_faucet_service/"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["wasmer", "rocksdb", "storage-service"]
+wasmer = [
+    "linera-client/wasmer",
+    "linera-execution/wasmer",
+    "linera-storage/wasmer",
+]
+wasmtime = [
+    "linera-client/wasmtime",
+    "linera-execution/wasmtime",
+    "linera-storage/wasmtime",
+]
+rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb"]
+dynamodb = ["linera-views/dynamodb", "linera-core/dynamodb"]
+scylladb = ["linera-views/scylladb", "linera-core/scylladb"]
+metrics = [
+    "linera-base/metrics",
+    "linera-client/metrics",
+    "linera-faucet-server/metrics",
+]
+storage-service = ["linera-storage-service"]
+
+[[bin]]
+name = "linera-faucet"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+chrono = { workspace = true, features = ["clock"] }
+is-terminal.workspace = true
+clap.workspace = true
+linera-base.workspace = true
+linera-client = { workspace = true, features = ["fs"] }
+linera-core.workspace = true
+linera-execution = { workspace = true, features = ["fs"] }
+linera-faucet-server.workspace = true
+linera-persistent.workspace = true
+linera-service.workspace = true
+linera-storage.workspace = true
+linera-storage-service = { workspace = true, optional = true }
+linera-views.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tokio-util.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["fmt"] }
+
+[build-dependencies]
+cfg_aliases.workspace = true

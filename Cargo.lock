@@ -5512,6 +5512,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-faucet-service"
+version = "0.15.6"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "cfg_aliases",
+ "chrono",
+ "clap",
+ "is-terminal",
+ "linera-base",
+ "linera-client",
+ "linera-core",
+ "linera-execution",
+ "linera-faucet-server",
+ "linera-persistent",
+ "linera-service",
+ "linera-storage",
+ "linera-storage-service",
+ "linera-views",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber 0.3.19",
+]
+
+[[package]]
 name = "linera-indexer"
 version = "0.15.6"
 dependencies = [
