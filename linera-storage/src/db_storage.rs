@@ -255,11 +255,7 @@ impl MultiPartitionBatch {
         Self::default()
     }
 
-    fn put_key_values(
-        &mut self,
-        root_key: Vec<u8>,
-        key_values: Vec<(Vec<u8>, Vec<u8>)>,
-    ) {
+    fn put_key_values(&mut self, root_key: Vec<u8>, key_values: Vec<(Vec<u8>, Vec<u8>)>) {
         self.keys_value_bytes.push((root_key, key_values));
     }
 
