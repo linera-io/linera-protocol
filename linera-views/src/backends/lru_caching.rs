@@ -5,6 +5,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use futures::stream::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 
 #[cfg(with_testing)]
@@ -14,12 +15,8 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::{Batch, WriteOperation},
     lru_prefix_cache::{LruPrefixCache, StorageCacheConfig},
-    store::{
-        KeyValueDatabase, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
-    },
+    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
 };
-use futures::stream::{Stream, StreamExt};
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -309,13 +306,15 @@ where
                 let mut is_cached = Vec::new();
                 let mut uncached_keys = Vec::new();
 
-                for key in &keys {
-                    let cache_lock = cache.lock().unwrap();
-                    if cache_lock.test_key_presence(key) {
-                        is_cached.push(true);
-                    } else {
-                        is_cached.push(false);
-                        uncached_keys.push(key.clone());
+                {
+                    let cache = cache.lock().unwrap();
+                    for key in &keys {
+                        if cache.test_key_presence(key) {
+                            is_cached.push(true);
+                        } else {
+                            is_cached.push(false);
+                            uncached_keys.push(key.clone());
+                        }
                     }
                 }
 
@@ -324,8 +323,8 @@ where
                 for (i, key) in keys.iter().enumerate() {
                     let value = if is_cached[i] {
                         let cached_value = {
-                            let mut cache_lock = cache.lock().unwrap();
-                            cache_lock.query_read_value(key)
+                            let mut cache = cache.lock().unwrap();
+                            cache.query_read_value(key)
                         };
                         if let Some(value) = cached_value {
                             #[cfg(with_metrics)]
@@ -356,8 +355,8 @@ where
                     metrics::READ_VALUE_CACHE_MISS_COUNT.with_label_values(&[]).inc();
 
                     {
-                        let mut cache_lock = cache.lock().unwrap();
-                        cache_lock.insert_read_value(key, &value);
+                        let mut cache = cache.lock().unwrap();
+                        cache.insert_read_value(key, &value);
                     }
 
                     yield Ok(value);

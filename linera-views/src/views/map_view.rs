@@ -85,7 +85,10 @@ enum SlotState<V> {
 type MultiGetStream<'a, C> = std::pin::Pin<
     Box<
         dyn futures::stream::Stream<
-                Item = Result<Option<Vec<u8>>, <<C as Context>::Store as crate::store::WithError>::Error>,
+                Item = Result<
+                    Option<Vec<u8>>,
+                    <<C as Context>::Store as crate::store::WithError>::Error,
+                >,
             > + Send
             + Sync
             + 'a,
@@ -473,10 +476,11 @@ where
             }
         }
 
-        let store_iter = Box::pin(self
-            .context
-            .store()
-            .read_multi_values_bytes_iter(vector_query));
+        let store_iter = Box::pin(
+            self.context
+                .store()
+                .read_multi_values_bytes_iter(vector_query),
+        );
 
         MapViewMultiGet {
             cached_iter: cached.into_iter(),

@@ -19,6 +19,7 @@
 //! time the data in a block are written, the journal header is updated in the same
 //! transaction to mark the block as processed.
 
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use static_assertions as sa;
 use thiserror::Error;
@@ -31,7 +32,6 @@ use crate::{
     },
     views::MIN_VIEW_TAG,
 };
-use futures::stream::Stream;
 
 /// A journaling key-value database.
 #[derive(Clone)]

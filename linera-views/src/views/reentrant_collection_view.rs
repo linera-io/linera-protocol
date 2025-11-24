@@ -100,11 +100,12 @@ impl<C, W, S> ByteReentrantCollectionViewTryLoadAllEntries<C, W, S>
 where
     C: Context,
     W: View<Context = C>,
-    S: futures::stream::Stream<Item = Result<Option<Vec<u8>>, <C::Store as crate::store::WithError>::Error>> + Unpin,
+    S: futures::stream::Stream<
+            Item = Result<Option<Vec<u8>>, <C::Store as crate::store::WithError>::Error>,
+        > + Unpin,
 {
     /// Returns the next entry, or None if iteration is complete.
-    pub async fn next(&mut self) -> Result<Option<(Vec<u8>, ReadGuardedView<W>)>, ViewError>
-    {
+    pub async fn next(&mut self) -> Result<Option<(Vec<u8>, ReadGuardedView<W>)>, ViewError> {
         let Some(load_info) = self.load_infos.next() else {
             return Ok(None);
         };
@@ -149,11 +150,12 @@ where
     C: Context,
     W: View<Context = C>,
     I: Serialize + DeserializeOwned,
-    S: futures::stream::Stream<Item = Result<Option<Vec<u8>>, <C::Store as crate::store::WithError>::Error>> + Unpin,
+    S: futures::stream::Stream<
+            Item = Result<Option<Vec<u8>>, <C::Store as crate::store::WithError>::Error>,
+        > + Unpin,
 {
     /// Returns the next entry, or None if iteration is complete.
-    pub async fn next(&mut self) -> Result<Option<(I, ReadGuardedView<W>)>, ViewError>
-    {
+    pub async fn next(&mut self) -> Result<Option<(I, ReadGuardedView<W>)>, ViewError> {
         match self.inner.next().await? {
             None => Ok(None),
             Some((short_key, view)) => {
@@ -178,11 +180,12 @@ where
     C: Context,
     W: View<Context = C>,
     I: CustomSerialize,
-    S: futures::stream::Stream<Item = Result<Option<Vec<u8>>, <C::Store as crate::store::WithError>::Error>> + Unpin,
+    S: futures::stream::Stream<
+            Item = Result<Option<Vec<u8>>, <C::Store as crate::store::WithError>::Error>,
+        > + Unpin,
 {
     /// Returns the next entry, or None if iteration is complete.
-    pub async fn next(&mut self) -> Result<Option<(I, ReadGuardedView<W>)>, ViewError>
-    {
+    pub async fn next(&mut self) -> Result<Option<(I, ReadGuardedView<W>)>, ViewError> {
         match self.inner.next().await? {
             None => Ok(None),
             Some((short_key, view)) => {
@@ -966,7 +969,17 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
     /// ```
     pub async fn try_load_all_entries_iter(
         &self,
-    ) -> Result<ByteReentrantCollectionViewTryLoadAllEntries<W::Context, W, impl futures::stream::Stream<Item = Result<Option<Vec<u8>>, <W::Context as Context>::Error>> + Unpin + '_>, ViewError> {
+    ) -> Result<
+        ByteReentrantCollectionViewTryLoadAllEntries<
+            W::Context,
+            W,
+            impl futures::stream::Stream<
+                    Item = Result<Option<Vec<u8>>, <W::Context as Context>::Error>,
+                > + Unpin
+                + '_,
+        >,
+        ViewError,
+    > {
         // First determine the short_keys
         let short_keys = self.keys().await?;
 
@@ -1754,7 +1767,18 @@ where
     /// ```
     pub async fn try_load_all_entries_iter(
         &self,
-    ) -> Result<ReentrantCollectionViewTryLoadAllEntries<W::Context, I, W, impl futures::stream::Stream<Item = Result<Option<Vec<u8>>, <W::Context as Context>::Error>> + Unpin + '_>, ViewError> {
+    ) -> Result<
+        ReentrantCollectionViewTryLoadAllEntries<
+            W::Context,
+            I,
+            W,
+            impl futures::stream::Stream<
+                    Item = Result<Option<Vec<u8>>, <W::Context as Context>::Error>,
+                > + Unpin
+                + '_,
+        >,
+        ViewError,
+    > {
         let inner = self.collection.try_load_all_entries_iter().await?;
         Ok(ReentrantCollectionViewTryLoadAllEntries {
             inner,
@@ -2345,7 +2369,18 @@ where
     /// ```
     pub async fn try_load_all_entries_iter(
         &self,
-    ) -> Result<ReentrantCustomCollectionViewTryLoadAllEntries<W::Context, I, W, impl futures::stream::Stream<Item = Result<Option<Vec<u8>>, <W::Context as Context>::Error>> + Unpin + '_>, ViewError> {
+    ) -> Result<
+        ReentrantCustomCollectionViewTryLoadAllEntries<
+            W::Context,
+            I,
+            W,
+            impl futures::stream::Stream<
+                    Item = Result<Option<Vec<u8>>, <W::Context as Context>::Error>,
+                > + Unpin
+                + '_,
+        >,
+        ViewError,
+    > {
         let inner = self.collection.try_load_all_entries_iter().await?;
         Ok(ReentrantCustomCollectionViewTryLoadAllEntries {
             inner,

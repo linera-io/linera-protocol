@@ -9,6 +9,7 @@ use std::{
 };
 
 use convert_case::{Case, Casing};
+use futures::stream::Stream;
 use linera_base::prometheus_util::{
     register_histogram_vec, register_int_counter_vec, MeasureLatency as _,
 };
@@ -18,12 +19,8 @@ use prometheus::{HistogramVec, IntCounterVec};
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
-    store::{
-        KeyValueDatabase, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
-    },
+    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
 };
-use futures::stream::Stream;
 
 #[derive(Clone)]
 /// The implementation of the `KeyValueStoreMetrics` for the `KeyValueStore`.

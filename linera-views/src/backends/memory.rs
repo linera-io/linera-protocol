@@ -8,6 +8,7 @@ use std::{
     sync::{Arc, LazyLock, Mutex, RwLock},
 };
 
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -21,7 +22,6 @@ use crate::{
         WritableKeyValueStore,
     },
 };
-use futures::stream::Stream;
 
 /// The initial configuration of the system
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -189,7 +189,10 @@ impl ReadableKeyValueStore for MemoryStore {
             .map
             .read()
             .expect("MemoryStore lock should not be poisoned");
-        let values: Vec<Option<Vec<u8>>> = keys.iter().map(|key| map.get(key).cloned()).collect();
+        let values = keys
+            .iter()
+            .map(|key| map.get(key).cloned())
+            .collect::<Vec<_>>();
         async_stream::stream! {
             for value in values {
                 yield Ok(value);

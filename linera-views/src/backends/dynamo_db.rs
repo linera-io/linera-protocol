@@ -32,7 +32,7 @@ use aws_sdk_dynamodb::{
     Client,
 };
 use aws_smithy_types::error::operation::BuildError;
-use futures::future::join_all;
+use futures::{future::join_all, stream::Stream};
 use linera_base::ensure;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -47,13 +47,12 @@ use crate::{
     journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError,
-        ReadableKeyValueStore, WithError,
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
+        WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
     FutureSyncExt as _,
 };
-use futures::stream::Stream;
 
 /// Name of the environment variable with the address to a DynamoDB local instance.
 const DYNAMODB_LOCAL_ENDPOINT: &str = "DYNAMODB_LOCAL_ENDPOINT";
@@ -881,10 +880,10 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         keys: Vec<Vec<u8>>,
     ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
         // Split keys into batches
-        let batches: Vec<Vec<Vec<u8>>> = keys
+        let batches = keys
             .chunks(MAX_BATCH_GET_ITEM_SIZE)
             .map(|chunk| chunk.to_vec())
-            .collect();
+            .collect::<Vec<_>>();
         let store = self.clone();
 
         async_stream::stream! {

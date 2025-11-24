@@ -3,6 +3,7 @@
 
 //! Implements [`crate::store::KeyValueStore`] by combining two existing stores.
 
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -15,7 +16,6 @@ use crate::{
         WritableKeyValueStore,
     },
 };
-use futures::stream::Stream;
 
 /// A dual database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -186,23 +186,25 @@ where
                 cx: &mut std::task::Context<'_>,
             ) -> std::task::Poll<Option<Self::Item>> {
                 match &mut *self {
-                    EitherStream::First(s) => {
-                        s.as_mut().poll_next(cx).map(|opt| {
-                            opt.map(|res| res.map_err(DualStoreError::First))
-                        })
-                    }
-                    EitherStream::Second(s) => {
-                        s.as_mut().poll_next(cx).map(|opt| {
-                            opt.map(|res| res.map_err(DualStoreError::Second))
-                        })
-                    }
+                    EitherStream::First(s) => s
+                        .as_mut()
+                        .poll_next(cx)
+                        .map(|opt| opt.map(|res| res.map_err(DualStoreError::First))),
+                    EitherStream::Second(s) => s
+                        .as_mut()
+                        .poll_next(cx)
+                        .map(|opt| opt.map(|res| res.map_err(DualStoreError::Second))),
                 }
             }
         }
 
         match self {
-            Self::First(store) => EitherStream::First(Box::pin(store.read_multi_values_bytes_iter(keys))),
-            Self::Second(store) => EitherStream::Second(Box::pin(store.read_multi_values_bytes_iter(keys))),
+            Self::First(store) => {
+                EitherStream::First(Box::pin(store.read_multi_values_bytes_iter(keys)))
+            }
+            Self::Second(store) => {
+                EitherStream::Second(Box::pin(store.read_multi_values_bytes_iter(keys)))
+            }
         }
     }
 

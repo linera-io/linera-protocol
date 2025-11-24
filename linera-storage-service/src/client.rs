@@ -10,7 +10,7 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use futures::future::join_all;
+use futures::{future::join_all, stream::Stream};
 use linera_base::ensure;
 #[cfg(with_metrics)]
 use linera_views::metering::MeteredDatabase;
@@ -19,13 +19,9 @@ use linera_views::store::TestKeyValueDatabase;
 use linera_views::{
     batch::{Batch, WriteOperation},
     lru_caching::LruCachingDatabase,
-    store::{
-        KeyValueDatabase, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
-    },
+    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
     FutureSyncExt as _,
 };
-use futures::stream::Stream;
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
 
@@ -49,6 +45,9 @@ use crate::{
 
 // The maximum key size is set to 1M rather arbitrarily.
 const MAX_KEY_SIZE: usize = 1000000;
+
+// The batch size in `read_multi_values_bytes_iter`.
+const BATCH_SIZE: usize = 50;
 
 // The shared store client.
 // * Interior mutability is required for the client because
@@ -217,7 +216,6 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
-        const BATCH_SIZE: usize = 50;
         let store = self.clone();
 
         async_stream::stream! {

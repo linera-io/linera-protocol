@@ -14,7 +14,7 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use futures::{future::join_all, StreamExt as _};
+use futures::{future::join_all, stream::Stream, StreamExt as _};
 use linera_base::ensure;
 use scylla::{
     client::{
@@ -47,13 +47,12 @@ use crate::{
     journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError,
-        ReadableKeyValueStore, WithError,
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
+        WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
     FutureSyncExt as _,
 };
-use futures::stream::Stream;
 
 /// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
 /// The limit is in reality 100. But we need one entry for the root key.
@@ -678,10 +677,10 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
-        let batches: Vec<Vec<Vec<u8>>> = keys
+        let batches = keys
             .chunks(MAX_MULTI_KEYS)
             .map(|chunk| chunk.to_vec())
-            .collect();
+            .collect::<Vec<_>>();
         let store = self.clone();
 
         async_stream::stream! {

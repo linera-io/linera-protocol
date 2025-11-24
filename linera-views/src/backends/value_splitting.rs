@@ -3,6 +3,7 @@
 
 //! Adds support for large values to a given store by splitting them between several keys.
 
+use futures::stream::{Stream, StreamExt};
 use linera_base::ensure;
 use thiserror::Error;
 
@@ -13,7 +14,6 @@ use crate::{
         WritableKeyValueStore,
     },
 };
-use futures::stream::{Stream, StreamExt};
 #[cfg(with_testing)]
 use crate::{
     memory::{MemoryStore, MemoryStoreError},
@@ -85,7 +85,6 @@ where
 {
     type Error = ValueSplittingError<D::Error>;
 }
-
 
 impl<S> ReadableKeyValueStore for ValueSplittingStore<S>
 where
@@ -209,14 +208,14 @@ where
         keys: Vec<Vec<u8>>,
     ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
         // Create big_keys (keys with [0,0,0,0] suffix) for the first segments
-        let big_keys: Vec<Vec<u8>> = keys
+        let big_keys = keys
             .iter()
             .map(|key| {
                 let mut big_key = key.clone();
                 big_key.extend(&[0, 0, 0, 0]);
                 big_key
             })
-            .collect();
+            .collect::<Vec<_>>();
 
         let store = self.store.clone();
         let mut first_segments_stream = Box::pin(self.store.read_multi_values_bytes_iter(big_keys));

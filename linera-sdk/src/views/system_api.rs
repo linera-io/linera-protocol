@@ -6,12 +6,12 @@
 #[cfg(with_testing)]
 use std::sync::Arc;
 
+use futures::stream::Stream;
 use linera_base::ensure;
 use linera_views::{
     batch::Batch,
     store::{ReadableKeyValueStore, WithError, WritableKeyValueStore},
 };
-use futures::stream::Stream;
 use thiserror::Error;
 
 #[cfg(with_testing)]

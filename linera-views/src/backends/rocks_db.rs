@@ -13,6 +13,7 @@ use std::{
     },
 };
 
+use futures::stream::Stream;
 use linera_base::ensure;
 use rocksdb::{BlockBasedOptions, Cache, DBCompactionStyle, SliceTransform};
 use serde::{Deserialize, Serialize};
@@ -34,7 +35,6 @@ use crate::{
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
-use futures::stream::Stream;
 
 /// The prefixes being used in the system
 static ROOT_KEY_DOMAIN: [u8; 1] = [0];
@@ -55,6 +55,9 @@ const MAX_KEY_SIZE: usize = 8 * 1024 * 1024 - 400;
 const WRITE_BUFFER_SIZE: usize = 256 * 1024 * 1024; // 256 MiB
 const MAX_WRITE_BUFFER_NUMBER: i32 = 6;
 const HYPER_CLOCK_CACHE_BLOCK_SIZE: usize = 8 * 1024; // 8 KiB
+
+// The size of batches in the `read_multi_values_bytes_iter`.
+const BATCH_SIZE: usize = 50;
 
 /// The RocksDB client that we use.
 type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
@@ -496,7 +499,6 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
-        const BATCH_SIZE: usize = 50;
         let executor = self.executor.clone();
         let spawn_mode = self.spawn_mode;
 

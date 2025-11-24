@@ -9,9 +9,8 @@ pub mod performance;
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use rand::{seq::SliceRandom, Rng};
-
 use futures::stream::StreamExt;
+use rand::{seq::SliceRandom, Rng};
 
 use crate::{
     batch::{
@@ -20,8 +19,8 @@ use crate::{
     },
     random::{generate_test_namespace, make_deterministic_rng, make_nondeterministic_rng},
     store::{
-        KeyValueDatabase, KeyValueStore, ReadableKeyValueStore,
-        TestKeyValueDatabase, WritableKeyValueStore,
+        KeyValueDatabase, KeyValueStore, ReadableKeyValueStore, TestKeyValueDatabase,
+        WritableKeyValueStore,
     },
 };
 

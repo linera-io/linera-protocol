@@ -5,7 +5,7 @@
 
 use std::rc::Rc;
 
-use futures::future;
+use futures::{future, stream::Stream};
 use indexed_db_futures::{js_sys, prelude::*, web_sys};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -18,7 +18,6 @@ use crate::{
         WritableKeyValueStore,
     },
 };
-use futures::stream::Stream;
 
 /// The initial configuration of the system
 #[derive(Debug, Clone, Serialize, Deserialize)]
