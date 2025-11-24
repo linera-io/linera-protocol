@@ -161,15 +161,9 @@ impl ReadableKeyValueStore for KeyValueStore {
 
         async_stream::stream! {
             // Fetch all values at once
-            match store.read_multi_values_bytes(&keys).await {
-                Ok(values) => {
-                    for value in values {
-                        yield Ok(value);
-                    }
-                }
-                Err(e) => {
-                    yield Err(e);
-                }
+            let values = store.read_multi_values_bytes(&keys).await?;
+            for value in values {
+                yield Ok(value);
             }
         }
     }

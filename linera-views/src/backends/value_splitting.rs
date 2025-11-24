@@ -240,13 +240,7 @@ where
                 };
 
                 // Read the count from the first segment
-                let count = match ValueSplittingStore::<S>::read_count_from_value(&value) {
-                    Ok(c) => c,
-                    Err(e) => {
-                        yield Err(e);
-                        return;
-                    }
-                };
+                let count = ValueSplittingStore::<S>::read_count_from_value(&value)?;
 
                 let mut big_value = value[4..].to_vec();
 
@@ -258,13 +252,7 @@ where
                 // Need to fetch additional segments
                 let mut segment_keys = Vec::new();
                 for i in 1..count {
-                    let segment_key = match ValueSplittingStore::<S>::get_segment_key(&key, i) {
-                        Ok(k) => k,
-                        Err(e) => {
-                            yield Err(e);
-                            return;
-                        }
-                    };
+                    let segment_key = ValueSplittingStore::<S>::get_segment_key(&key, i)?;
                     segment_keys.push(segment_key);
                 }
 

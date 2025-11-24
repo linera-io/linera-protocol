@@ -514,23 +514,15 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
 
                 // Load the batch
                 let executor = executor.clone();
-                let results = spawn_mode
+                let values = spawn_mode
                     .spawn(
                         move |x| executor.read_multi_values_bytes_internal(x),
                         batch_keys,
                     )
-                    .await;
+                    .await?;
 
-                match results {
-                    Ok(values) => {
-                        for value in values {
-                            yield Ok(value);
-                        }
-                    }
-                    Err(e) => {
-                        yield Err(e);
-                        return;
-                    }
+                for value in values {
+                    yield Ok(value);
                 }
             }
         }

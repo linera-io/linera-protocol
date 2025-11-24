@@ -685,23 +685,15 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
 
         async_stream::stream! {
             for batch_keys in batches {
-                let values = {
+                let vals = {
                     let store_ref = store.store.deref();
                     let root_key = store.root_key.clone();
                     let _guard = store.acquire().await;
-                    Box::pin(store_ref.read_multi_values_internal(&root_key, batch_keys)).await
+                    Box::pin(store_ref.read_multi_values_internal(&root_key, batch_keys)).await?
                 };
 
-                match values {
-                    Ok(vals) => {
-                        for value in vals {
-                            yield Ok(value);
-                        }
-                    }
-                    Err(e) => {
-                        yield Err(e);
-                        return;
-                    }
+                for value in vals {
+                    yield Ok(value);
                 }
             }
         }

@@ -332,21 +332,11 @@ where
                             value
                         } else {
                             // The key has been evicted. Should be rare.
-                            match store.read_value_bytes(key).await {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    yield Err(e);
-                                    return;
-                                }
-                            }
+                            store.read_value_bytes(key).await?
                         }
                     } else {
                         match uncached_stream.next().await {
-                            Some(Ok(v)) => v,
-                            Some(Err(e)) => {
-                                yield Err(e);
-                                return;
-                            }
+                            Some(result) => result?,
                             None => None,
                         }
                     };

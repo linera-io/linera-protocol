@@ -227,20 +227,9 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
                 // Extract the next batch of keys
                 let batch_keys = &keys[current_position..end_position];
                 current_position = end_position;
-
-                // Load the batch
-                let results = store.read_multi_values_bytes(batch_keys).await;
-
-                match results {
-                    Ok(values) => {
-                        for value in values {
-                            yield Ok(value);
-                        }
-                    }
-                    Err(e) => {
-                        yield Err(e);
-                        return;
-                    }
+                let values = store.read_multi_values_bytes(batch_keys).await?;
+                for value in values {
+                    yield Ok(value);
                 }
             }
         }

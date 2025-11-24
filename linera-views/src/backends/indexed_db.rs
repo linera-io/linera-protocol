@@ -167,16 +167,9 @@ impl ReadableKeyValueStore for IndexedDbStore {
     ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
         let store = self.clone();
         async_stream::stream! {
-            let values = store.read_multi_values_bytes(&keys).await;
-            match values {
-                Ok(vals) => {
-                    for value in vals {
-                        yield Ok(value);
-                    }
-                }
-                Err(e) => {
-                    yield Err(e);
-                }
+            let vals = store.read_multi_values_bytes(&keys).await?;
+            for value in vals {
+                yield Ok(value);
             }
         }
     }

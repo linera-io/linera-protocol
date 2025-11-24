@@ -888,18 +888,10 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
 
         async_stream::stream! {
             for batch_keys in batches {
-                let values = store.read_batch_values_bytes(&batch_keys).await;
+                let vals = store.read_batch_values_bytes(&batch_keys).await?;
 
-                match values {
-                    Ok(vals) => {
-                        for value in vals {
-                            yield Ok(value);
-                        }
-                    }
-                    Err(e) => {
-                        yield Err(e);
-                        return;
-                    }
+                for value in vals {
+                    yield Ok(value);
                 }
             }
         }
