@@ -14,7 +14,7 @@ use linera_base::{
         OracleResponse, Timestamp,
     },
     ensure,
-    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, StreamId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -648,7 +648,7 @@ where
         self.execution_state
             .system
             .current_committee()
-            .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
+            .ok_or_else(|| ChainError::BlobsNotFound(vec![BlobId::chain(self.chain_id())]))
     }
 
     pub fn ownership(&self) -> &ChainOwnership {
@@ -786,7 +786,7 @@ where
         let policy = chain
             .system
             .current_committee()
-            .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?
+            .ok_or_else(|| ChainError::BlobsNotFound(vec![BlobId::chain(block.chain_id)]))?
             .1
             .policy()
             .clone();

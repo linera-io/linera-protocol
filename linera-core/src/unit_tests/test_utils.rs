@@ -350,7 +350,9 @@ where
             FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
                 error: "offline".to_string(),
             }),
-            FaultType::NoChains => Err(NodeError::InactiveChain(proposal.content.block.chain_id)),
+            FaultType::NoChains => Err(NodeError::BlobsNotFound(vec![BlobId::chain(
+                proposal.content.block.chain_id,
+            )])),
             FaultType::DontSendValidateVote
             | FaultType::Honest
             | FaultType::DontSendConfirmVote
@@ -410,7 +412,9 @@ where
                     error: "refusing to process validated block".to_string(),
                 })
             }
-            FaultType::NoChains => Err(NodeError::InactiveChain(certificate.value().chain_id())),
+            FaultType::NoChains => Err(NodeError::BlobsNotFound(vec![BlobId::chain(
+                certificate.value().chain_id(),
+            )])),
             FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::DontProcessValidated
@@ -458,7 +462,9 @@ where
             FaultType::Offline => Err(NodeError::ClientIoError {
                 error: "offline".to_string(),
             }),
-            FaultType::NoChains => Err(NodeError::InactiveChain(query.chain_id)),
+            FaultType::NoChains => Err(NodeError::BlobsNotFound(vec![BlobId::chain(
+                query.chain_id,
+            )])),
             FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::DontProcessValidated

@@ -411,20 +411,7 @@ where
                 )
                 .await?;
             }
-            NodeError::InactiveChain(chain_id) => {
-                tracing::debug!(
-                    address,
-                    %chain_id,
-                    "Validator has inactive chain; sending chain info.",
-                );
-                self.send_chain_information(
-                    *chain_id,
-                    height,
-                    CrossChainMessageDelivery::NonBlocking,
-                    None,
-                )
-                .await?;
-            }
+
             _ => {}
         }
         Ok(())
@@ -537,9 +524,7 @@ where
                     )
                     .await?;
                 }
-                Err(NodeError::BlobsNotFound(_) | NodeError::InactiveChain(_))
-                    if !blob_ids.is_empty() =>
-                {
+                Err(NodeError::BlobsNotFound(_)) if !blob_ids.is_empty() => {
                     tracing::debug!("Missing blobs");
                     // For `BlobsNotFound`, we assume that the local node should already be
                     // updated with the needed blobs, so sending the chain information about the

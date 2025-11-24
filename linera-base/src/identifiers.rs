@@ -281,6 +281,14 @@ impl BlobId {
     pub fn new(hash: CryptoHash, blob_type: BlobType) -> Self {
         Self { hash, blob_type }
     }
+
+    /// Creates a new `BlobId` from a `ChainId`.
+    pub fn chain(chain_id: ChainId) -> Self {
+        Self {
+            hash: chain_id.0,
+            blob_type: BlobType::ChainDescription,
+        }
+    }
 }
 
 impl fmt::Display for BlobId {

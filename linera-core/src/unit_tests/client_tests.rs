@@ -859,7 +859,7 @@ where
     assert_matches!(
         result,
         Err(chain_client::Error::CommunicationError(
-            CommunicationError::Trusted(NodeError::InactiveChain(_))
+            CommunicationError::Trusted(NodeError::BlobsNotFound(_))
         )),
         "unexpected result"
     );

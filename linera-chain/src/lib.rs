@@ -26,7 +26,7 @@ use linera_base::{
     bcs,
     crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
-    identifiers::{ApplicationId, ChainId},
+    identifiers::{ApplicationId, BlobId, ChainId},
 };
 use linera_execution::ExecutionError;
 use linera_views::ViewError;
@@ -43,8 +43,8 @@ pub enum ChainError {
     #[error("Execution error: {0} during {1:?}")]
     ExecutionError(Box<ExecutionError>, ChainExecutionContext),
 
-    #[error("The chain being queried is not active {0}")]
-    InactiveChain(ChainId),
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
     #[error(
         "Cannot vote for block proposal of chain {chain_id} because a message \
          from chain {origin} at height {height} has not been received yet"
@@ -168,7 +168,7 @@ impl ChainError {
             ChainError::CryptoError(_)
             | ChainError::ArithmeticError(_)
             | ChainError::ViewError(ViewError::NotFound(_))
-            | ChainError::InactiveChain(_)
+            | ChainError::BlobsNotFound(_)
             | ChainError::IncorrectMessageOrder { .. }
             | ChainError::CannotRejectMessage { .. }
             | ChainError::CannotSkipMessage { .. }

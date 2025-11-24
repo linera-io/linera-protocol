@@ -231,9 +231,6 @@ pub enum NodeError {
     WorkerError { error: String },
 
     // This error must be normalized during conversions.
-    #[error("The chain {0} is not active in validator")]
-    InactiveChain(ChainId),
-
     #[error("Round number should be {0:?}")]
     WrongRound(Round),
 
@@ -385,7 +382,7 @@ impl From<ChainError> for NodeError {
                 origin,
                 height,
             },
-            ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
+            ChainError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             ChainError::ExecutionError(execution_error, context) => match *execution_error {
                 ExecutionError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
                 ExecutionError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),

@@ -488,10 +488,9 @@ where
             }
             ProcessNewEpoch(epoch) => {
                 self.check_next_epoch(epoch)?;
-                let admin_id = self
-                    .admin_id
-                    .get()
-                    .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
+                let admin_id = self.admin_id.get().ok_or_else(|| {
+                    ExecutionError::BlobsNotFound(vec![BlobId::chain(context.chain_id)])
+                })?;
                 let event_id = EventId {
                     chain_id: admin_id,
                     stream_id: StreamId::system(EPOCH_STREAM_NAME),
@@ -515,10 +514,9 @@ where
                     self.committees.get_mut().remove(&epoch).is_some(),
                     ExecutionError::InvalidCommitteeRemoval
                 );
-                let admin_id = self
-                    .admin_id
-                    .get()
-                    .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
+                let admin_id = self.admin_id.get().ok_or_else(|| {
+                    ExecutionError::BlobsNotFound(vec![BlobId::chain(context.chain_id)])
+                })?;
                 let event_id = EventId {
                     chain_id: admin_id,
                     stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),

@@ -626,7 +626,7 @@ impl<Env: Environment> ChainClient<Env> {
         let manager = self.chain_info().await?.manager;
         ensure!(
             manager.ownership.is_active(),
-            LocalNodeError::InactiveChain(self.chain_id)
+            LocalNodeError::BlobsNotFound(vec![BlobId::chain(self.chain_id)])
         );
 
         let is_owner = manager
@@ -1950,7 +1950,7 @@ impl<Env: Environment> ChainClient<Env> {
             let ownership = self.prepare_chain().await?.manager.ownership;
             ensure!(
                 ownership.is_active(),
-                ChainError::InactiveChain(self.chain_id)
+                ChainError::BlobsNotFound(vec![BlobId::chain(self.chain_id)])
             );
             let mut owners = ownership.owners.into_iter().collect::<Vec<_>>();
             owners.extend(ownership.super_owners.into_iter().zip(iter::repeat(100)));
@@ -2429,7 +2429,7 @@ impl<Env: Environment> ChainClient<Env> {
                 self.client.update_from_info(&info);
                 Ok(Some(info))
             }
-            Err(LocalNodeError::BlobsNotFound(_) | LocalNodeError::InactiveChain(_)) => Ok(None),
+            Err(LocalNodeError::BlobsNotFound(_)) => Ok(None),
             Err(err) => Err(err.into()),
         }
     }

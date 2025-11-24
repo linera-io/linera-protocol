@@ -60,9 +60,6 @@ pub enum LocalNodeError {
     #[error("Worker operation failed: {0}")]
     WorkerError(WorkerError),
 
-    #[error("The local node doesn't have an active chain {0}")]
-    InactiveChain(ChainId),
-
     #[error("The chain info response received from the local node is invalid")]
     InvalidChainInfoResponse,
 
@@ -282,7 +279,7 @@ where
             FuturesUnordered::from_iter(chain_ids.into_iter().map(|chain_id| async move {
                 let chain = match self.chain_state_view(*chain_id).await {
                     Ok(chain) => chain,
-                    Err(LocalNodeError::BlobsNotFound(_) | LocalNodeError::InactiveChain(_)) => {
+                    Err(LocalNodeError::BlobsNotFound(_)) => {
                         return Ok((*chain_id, BlockHeight::ZERO))
                     }
                     Err(err) => Err(err)?,
@@ -357,7 +354,9 @@ impl LocalChainInfoExt for ChainInfo {
         self.requested_committees
             .ok_or(LocalNodeError::InvalidChainInfoResponse)?
             .remove(&self.epoch)
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
+            .ok_or(LocalNodeError::BlobsNotFound(vec![BlobId::chain(
+                self.chain_id,
+            )]))
     }
 
     fn current_committee(&self) -> Result<&Committee, LocalNodeError> {
@@ -365,6 +364,8 @@ impl LocalChainInfoExt for ChainInfo {
             .as_ref()
             .ok_or(LocalNodeError::InvalidChainInfoResponse)?
             .get(&self.epoch)
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
+            .ok_or(LocalNodeError::BlobsNotFound(vec![BlobId::chain(
+                self.chain_id,
+            )]))
     }
 }
