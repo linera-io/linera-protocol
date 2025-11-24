@@ -3,7 +3,7 @@
 
 //! Implements [`crate::store::KeyValueStore`] by combining two existing stores.
 
-use futures::stream::Stream;
+use futures::stream::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -167,43 +167,20 @@ where
         &self,
         keys: Vec<Vec<u8>>,
     ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
-        enum EitherStream<S1, S2> {
-            First(std::pin::Pin<Box<S1>>),
-            Second(std::pin::Pin<Box<S2>>),
-        }
-
-        impl<S1, S2, E1, E2> Stream for EitherStream<S1, S2>
-        where
-            S1: Stream<Item = Result<Option<Vec<u8>>, E1>>,
-            S2: Stream<Item = Result<Option<Vec<u8>>, E2>>,
-            E1: KeyValueStoreError,
-            E2: KeyValueStoreError,
-        {
-            type Item = Result<Option<Vec<u8>>, DualStoreError<E1, E2>>;
-
-            fn poll_next(
-                mut self: std::pin::Pin<&mut Self>,
-                cx: &mut std::task::Context<'_>,
-            ) -> std::task::Poll<Option<Self::Item>> {
-                match &mut *self {
-                    EitherStream::First(s) => s
-                        .as_mut()
-                        .poll_next(cx)
-                        .map(|opt| opt.map(|res| res.map_err(DualStoreError::First))),
-                    EitherStream::Second(s) => s
-                        .as_mut()
-                        .poll_next(cx)
-                        .map(|opt| opt.map(|res| res.map_err(DualStoreError::Second))),
+        async_stream::stream! {
+            match self {
+                Self::First(store) => {
+                    let mut stream = Box::pin(store.read_multi_values_bytes_iter(keys));
+                    while let Some(result) = stream.next().await {
+                        yield result.map_err(DualStoreError::First);
+                    }
                 }
-            }
-        }
-
-        match self {
-            Self::First(store) => {
-                EitherStream::First(Box::pin(store.read_multi_values_bytes_iter(keys)))
-            }
-            Self::Second(store) => {
-                EitherStream::Second(Box::pin(store.read_multi_values_bytes_iter(keys)))
+                Self::Second(store) => {
+                    let mut stream = Box::pin(store.read_multi_values_bytes_iter(keys));
+                    while let Some(result) = stream.next().await {
+                        yield result.map_err(DualStoreError::Second);
+                    }
+                }
             }
         }
     }
