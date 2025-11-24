@@ -554,6 +554,7 @@ library LineraTypes {
     struct ChainOwnership {
         AccountOwner[] super_owners;
         key_values_AccountOwner_uint64[] owners;
+        OptionAccountOwner first_leader;
         uint32 multi_leader_rounds;
         bool open_multi_leader_rounds;
         TimeoutConfig timeout_config;
@@ -566,6 +567,7 @@ library LineraTypes {
     {
         bytes memory result = bcs_serialize_seq_AccountOwner(input.super_owners);
         result = abi.encodePacked(result, bcs_serialize_seq_key_values_AccountOwner_uint64(input.owners));
+        result = abi.encodePacked(result, bcs_serialize_OptionAccountOwner(input.first_leader));
         result = abi.encodePacked(result, bcs_serialize_uint32(input.multi_leader_rounds));
         result = abi.encodePacked(result, bcs_serialize_bool(input.open_multi_leader_rounds));
         return abi.encodePacked(result, bcs_serialize_TimeoutConfig(input.timeout_config));
@@ -581,13 +583,15 @@ library LineraTypes {
         (new_pos, super_owners) = bcs_deserialize_offset_seq_AccountOwner(pos, input);
         key_values_AccountOwner_uint64[] memory owners;
         (new_pos, owners) = bcs_deserialize_offset_seq_key_values_AccountOwner_uint64(new_pos, input);
+        OptionAccountOwner memory first_leader;
+        (new_pos, first_leader) = bcs_deserialize_offset_OptionAccountOwner(new_pos, input);
         uint32 multi_leader_rounds;
         (new_pos, multi_leader_rounds) = bcs_deserialize_offset_uint32(new_pos, input);
         bool open_multi_leader_rounds;
         (new_pos, open_multi_leader_rounds) = bcs_deserialize_offset_bool(new_pos, input);
         TimeoutConfig memory timeout_config;
         (new_pos, timeout_config) = bcs_deserialize_offset_TimeoutConfig(new_pos, input);
-        return (new_pos, ChainOwnership(super_owners, owners, multi_leader_rounds, open_multi_leader_rounds, timeout_config));
+        return (new_pos, ChainOwnership(super_owners, owners, first_leader, multi_leader_rounds, open_multi_leader_rounds, timeout_config));
     }
 
     function bcs_deserialize_ChainOwnership(bytes memory input)
