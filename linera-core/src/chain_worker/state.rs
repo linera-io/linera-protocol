@@ -181,9 +181,16 @@ where
                 origin,
                 bundles,
                 callback,
-            } => callback
-                .send(self.process_cross_chain_update(origin, bundles).await)
-                .is_ok(),
+            } => {
+                // Forward to batch processing path (works for single items).
+                let results = self
+                    .process_cross_chain_update_batch(vec![(origin, bundles)])
+                    .await;
+                match results {
+                    Ok(mut heights) => callback.send(Ok(heights.pop().flatten())).is_ok(),
+                    Err(err) => callback.send(Err(err)).is_ok(),
+                }
+            }
             ChainWorkerRequest::ConfirmUpdatedRecipient {
                 recipient,
                 latest_height,
@@ -966,55 +973,6 @@ where
         }
     }
 
-    /// Updates the chain's inboxes, receiving messages from a cross-chain update.
-    #[instrument(level = "trace", skip(self, bundles))]
-    async fn process_cross_chain_update(
-        &mut self,
-        origin: ChainId,
-        bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
-        // Only process certificates with relevant heights and epochs.
-        let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
-        let last_anticipated_block_height =
-            self.chain.last_anticipated_block_height(&origin).await?;
-        let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
-        let recipient = self.chain_id();
-        let bundles = helper.select_message_bundles(
-            &origin,
-            recipient,
-            next_height_to_receive,
-            last_anticipated_block_height,
-            bundles,
-        )?;
-        let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
-            return Ok(None);
-        };
-        // Process the received messages in certificates.
-        let local_time = self.storage.clock().current_time();
-        let mut previous_height = None;
-        for bundle in bundles {
-            let add_to_received_log = previous_height != Some(bundle.height);
-            previous_height = Some(bundle.height);
-            // Update the staged chain state with the received block.
-            self.chain
-                .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
-                .await?;
-        }
-        if !self.config.allow_inactive_chains && !self.chain.is_active() {
-            // Refuse to create a chain state if the chain is still inactive by
-            // now. Accordingly, do not send a confirmation, so that the
-            // cross-chain update is retried later.
-            warn!(
-                "Refusing to deliver messages to {recipient:?} from {origin:?} \
-                at height {last_updated_height} because the recipient is still inactive",
-            );
-            return Ok(None);
-        }
-        // Save the chain.
-        self.save().await?;
-        Ok(Some(last_updated_height))
-    }
-
     /// Processes a batch of cross-chain updates efficiently with a single save operation.
     /// Pre-loads all affected inboxes at once for better performance.
     #[instrument(level = "trace", skip(self, updates))]
@@ -1035,26 +993,14 @@ where
             origin_updates.push(bundles);
         }
 
-        // Pre-load all unique inboxes to get next_height_to_receive for filtering.
-        let unique_origins: Vec<ChainId> = updates_by_origin.keys().copied().collect();
-        let loaded_inboxes = self
-            .chain
-            .inboxes
-            .try_load_entries_pairs_mut(unique_origins)
-            .await?;
-
         // Filter bundles using CrossChainUpdateHelper and prepare for batch processing.
         let mut batch_updates = Vec::new();
         let mut update_tracking: Vec<(ChainId, usize, Option<BlockHeight>)> = Vec::new();
         let recipient = self.chain_id();
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
 
-        for (origin, inbox) in loaded_inboxes {
-            let Some(all_bundles) = updates_by_origin.remove(&origin) else {
-                continue;
-            };
-
-            let next_height_to_receive = inbox.next_block_height_to_receive()?;
+        for (origin, all_bundles) in updates_by_origin {
+            let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
             let last_anticipated_block_height =
                 self.chain.last_anticipated_block_height(&origin).await?;
 
@@ -1082,6 +1028,34 @@ where
             }
         }
 
+        // Check for inactive chains before processing.
+        let is_active = self.chain.is_active();
+        let allow_inactive = self.config.allow_inactive_chains;
+
+        if !batch_updates.is_empty() && !allow_inactive && !is_active {
+            // Refuse to process messages if the chain is still inactive.
+            let mut results_by_origin: HashMap<ChainId, Vec<Option<BlockHeight>>> = HashMap::new();
+            for (origin, _batch_idx, _last_updated_height) in update_tracking {
+                warn!(
+                    "Refusing to deliver messages to {recipient:?} from {origin:?} \
+                    because the recipient is still inactive",
+                );
+                results_by_origin.entry(origin).or_default().push(None);
+            }
+
+            // Reconstruct results in original order without saving.
+            let results: Vec<Option<BlockHeight>> = original_order
+                .into_iter()
+                .map(|(origin, idx)| {
+                    results_by_origin
+                        .get(&origin)
+                        .and_then(|origin_results| origin_results.get(idx).copied())
+                        .flatten()
+                })
+                .collect();
+            return Ok(results);
+        }
+
         // Process all bundles concurrently via ChainStateView's batch method.
         let local_time = self.storage.clock().current_time();
         let _batch_results = self
@@ -1089,24 +1063,13 @@ where
             .receive_message_bundles_batch(batch_updates, local_time)
             .await?;
 
-        // Check for inactive chains and construct results.
-        let is_active = self.chain.is_active();
-        let allow_inactive = self.config.allow_inactive_chains;
-
+        // All messages were accepted - construct success results.
         let mut results_by_origin: HashMap<ChainId, Vec<Option<BlockHeight>>> = HashMap::new();
         for (origin, _batch_idx, last_updated_height) in update_tracking {
-            if !allow_inactive && !is_active {
-                warn!(
-                    "Refusing to deliver messages to {recipient:?} from {origin:?} \
-                    because the recipient is still inactive",
-                );
-                results_by_origin.entry(origin).or_default().push(None);
-            } else {
-                results_by_origin
-                    .entry(origin)
-                    .or_default()
-                    .push(last_updated_height);
-            }
+            results_by_origin
+                .entry(origin)
+                .or_default()
+                .push(last_updated_height);
         }
 
         // Reconstruct results in original order.

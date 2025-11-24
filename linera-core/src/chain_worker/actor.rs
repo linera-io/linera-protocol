@@ -444,13 +444,13 @@ where
             .await?;
 
             // Process all requests (either a single request or a batch).
-            if requests_to_process.len() == 1 {
-                let (request, span) = requests_to_process.into_iter().next().unwrap();
-                Box::pin(worker.handle_request(request))
-                    .instrument(span)
-                    .await;
-            } else {
-                // Process batch of cross-chain updates.
+            // Check if we're processing cross-chain updates (which should use batch processing).
+            let is_cross_chain_batch = requests_to_process.first().is_some_and(|(req, _)| {
+                matches!(req, ChainWorkerRequest::ProcessCrossChainUpdate { .. })
+            });
+
+            if is_cross_chain_batch {
+                // Process batch of cross-chain updates (works for single items too).
                 let mut updates = Vec::new();
                 let mut callbacks = Vec::new();
 
@@ -490,6 +490,12 @@ where
                         }
                     }
                 }
+            } else if requests_to_process.len() == 1 {
+                // Handle single non-cross-chain request.
+                let (request, span) = requests_to_process.into_iter().next().unwrap();
+                Box::pin(worker.handle_request(request))
+                    .instrument(span)
+                    .await;
             }
 
             loop {

@@ -19,7 +19,7 @@ use linera_base::{
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, ProposedBlock},
+    data_types::{BlockExecutionOutcome, BlockProposal, ProposedBlock},
     types::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
@@ -761,28 +761,6 @@ where
         .await
     }
 
-    #[instrument(level = "trace", skip(self, origin, recipient, bundles), fields(
-        nickname = %self.nickname,
-        origin = %origin,
-        recipient = %recipient,
-        num_bundles = %bundles.len()
-    ))]
-    async fn process_cross_chain_update(
-        &self,
-        origin: ChainId,
-        recipient: ChainId,
-        bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
-        self.query_chain_worker(recipient, move |callback| {
-            ChainWorkerRequest::ProcessCrossChainUpdate {
-                origin,
-                bundles,
-                callback,
-            }
-        })
-        .await
-    }
-
     /// Returns a stored [`ConfirmedBlockCertificate`] for a chain's block.
     #[instrument(level = "trace", skip(self, chain_id, height), fields(
         nickname = %self.nickname,
@@ -1209,7 +1187,13 @@ where
                 let mut actions = NetworkActions::default();
                 let origin = sender;
                 let Some(height) = self
-                    .process_cross_chain_update(origin, recipient, bundles)
+                    .query_chain_worker(recipient, move |callback| {
+                        ChainWorkerRequest::ProcessCrossChainUpdate {
+                            origin,
+                            bundles,
+                            callback,
+                        }
+                    })
                     .await?
                 else {
                     return Ok(actions);
