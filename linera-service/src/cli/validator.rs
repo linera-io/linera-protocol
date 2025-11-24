@@ -245,8 +245,8 @@ fn parse_batch_file(path: Option<&str>) -> Result<ValidatorBatchFile> {
         }
     };
 
-    let batch: ValidatorBatchFile = serde_json::from_str(&contents)
-        .context("Failed to parse batch JSON")?;
+    let batch: ValidatorBatchFile =
+        serde_json::from_str(&contents).context("Failed to parse batch JSON")?;
 
     // Validate all specs
     for (public_key, spec_opt) in &batch {
@@ -267,7 +267,6 @@ fn parse_query_batch_file(path: &Path) -> Result<ValidatorQueryBatch> {
         .with_context(|| format!("Failed to parse query batch file: {}", path.display()))?;
     Ok(batch)
 }
-
 
 /// Main entry point for handling validator commands.
 pub async fn handle_command<S, W, Si>(
@@ -784,7 +783,10 @@ where
         println!("Validators to ADD:");
         for (pk, spec) in &adds {
             println!("  + {}", pk);
-            println!("    Address:     {}", spec.network_address.as_ref().unwrap());
+            println!(
+                "    Address:     {}",
+                spec.network_address.as_ref().unwrap()
+            );
             println!("    Account Key: {}", spec.account_key.unwrap());
             println!("    Votes:       {}", spec.votes());
         }
@@ -795,7 +797,10 @@ where
         println!("Validators to MODIFY:");
         for (pk, spec) in &modifies {
             println!("  * {}", pk);
-            println!("    New Address:     {}", spec.network_address.as_ref().unwrap());
+            println!(
+                "    New Address:     {}",
+                spec.network_address.as_ref().unwrap()
+            );
             println!("    New Account Key: {}", spec.account_key.unwrap());
             println!("    New Votes:       {}", spec.votes());
         }
@@ -914,9 +919,15 @@ where
                             );
 
                             if exists {
-                                info!("Modified validator {} @ {} ({} votes)", public_key, address, votes);
+                                info!(
+                                    "Modified validator {} @ {} ({} votes)",
+                                    public_key, address, votes
+                                );
                             } else {
-                                info!("Added validator {} @ {} ({} votes)", public_key, address, votes);
+                                info!(
+                                    "Added validator {} @ {} ({} votes)",
+                                    public_key, address, votes
+                                );
                             }
                         }
                     }
@@ -1005,9 +1016,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::io::Write;
+
     use tempfile::NamedTempFile;
+
+    use super::*;
 
     #[test]
     fn test_validate_validator_change_spec_valid() {
