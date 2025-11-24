@@ -1126,17 +1126,17 @@ mod tests {
         assert_eq!(parsed_batch.len(), 3);
 
         // Check pk0 (add)
-        assert!(parsed_batch.get(&pk0).is_some());
+        assert!(parsed_batch.contains_key(&pk0));
         let spec0 = parsed_batch.get(&pk0).unwrap().as_ref().unwrap();
         assert_eq!(spec0.votes, Some(100));
 
         // Check pk1 (modify)
-        assert!(parsed_batch.get(&pk1).is_some());
+        assert!(parsed_batch.contains_key(&pk1));
         let spec1 = parsed_batch.get(&pk1).unwrap().as_ref().unwrap();
         assert_eq!(spec1.votes, Some(150));
 
         // Check pk2 (remove)
-        assert!(parsed_batch.get(&pk2).is_some());
+        assert!(parsed_batch.contains_key(&pk2));
         assert!(parsed_batch.get(&pk2).unwrap().is_none());
     }
 
