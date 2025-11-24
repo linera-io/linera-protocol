@@ -39,8 +39,8 @@ path = "src/main.rs"
 anyhow.workspace = true
 async-trait.workspace = true
 chrono = { workspace = true, features = ["clock"] }
-is-terminal.workspace = true
 clap.workspace = true
+is-terminal.workspace = true
 linera-base.workspace = true
 linera-client = { workspace = true, features = ["fs"] }
 linera-execution = { workspace = true, features = ["fs"] }
