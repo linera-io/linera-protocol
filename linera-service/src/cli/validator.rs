@@ -3,7 +3,7 @@
 
 //! Validator management commands.
 
-use std::{path::Path, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use anyhow::{bail, Context, Result};
 use clap::Subcommand;
@@ -39,17 +39,71 @@ pub struct ValidatorSpec {
     pub votes: u64,
 }
 
-/// Structure for batch validator operations from JSON file.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ValidatorBatchFile {
-    #[serde(default)]
-    pub add: Vec<ValidatorSpec>,
-    #[serde(default)]
-    pub modify: Vec<ValidatorSpec>,
-    #[serde(default)]
-    pub remove: Vec<ValidatorPublicKey>,
+impl ValidatorSpec {
+    /// Validate the validator specification.
+    fn validate(&self) -> Result<()> {
+        if self.votes == 0 {
+            bail!("Validator votes must be greater than 0");
+        }
+        if self.network_address.is_empty() {
+            bail!("Validator network address cannot be empty");
+        }
+        Ok(())
+    }
 }
+
+/// Specification for validator changes in batch operations.
+/// When all fields are None, this represents a removal operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidatorChangeSpec {
+    pub account_key: Option<AccountPublicKey>,
+    #[serde(rename = "address")]
+    pub network_address: Option<String>,
+    pub votes: Option<u64>,
+}
+
+impl ValidatorChangeSpec {
+    /// Check if this spec represents an empty/remove operation.
+    fn is_empty(&self) -> bool {
+        self.account_key.is_none() && self.network_address.is_none() && self.votes.is_none()
+    }
+
+    /// Validate that all required fields are present for add/modify operations.
+    fn validate(&self) -> Result<()> {
+        if self.is_empty() {
+            return Ok(()); // Empty is valid (represents removal)
+        }
+
+        if self.account_key.is_none() {
+            bail!("account_key is required for add/modify operations");
+        }
+        if self.network_address.is_none() {
+            bail!("address is required for add/modify operations");
+        }
+        let address = self.network_address.as_ref().unwrap();
+        if address.is_empty() {
+            bail!("Validator network address cannot be empty");
+        }
+        let votes = self.votes.unwrap_or(1);
+        if votes == 0 {
+            bail!("Validator votes must be greater than 0");
+        }
+
+        Ok(())
+    }
+
+    /// Get the votes value, defaulting to 1 if not specified.
+    fn votes(&self) -> u64 {
+        self.votes.unwrap_or(1)
+    }
+}
+
+/// Structure for batch validator operations from JSON file.
+/// Maps validator public keys to their desired state:
+/// - `None` or empty spec (all fields None) means remove the validator
+/// - `Some(spec)` with values means add or modify the validator
+pub type ValidatorBatchFile = HashMap<ValidatorPublicKey, Option<ValidatorChangeSpec>>;
 
 /// Structure for batch validator queries from JSON file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,94 +114,148 @@ pub struct ValidatorQueryBatch {
 /// Validator subcommands.
 #[derive(Debug, Clone, Subcommand)]
 pub enum ValidatorCommand {
-    /// Query a single validator's state.
-    Query {
-        /// Network address of the validator to query.
+    /// Add a validator to the committee.
+    ///
+    /// Adds a new validator with the specified public key, account key, network address,
+    /// and voting weight. The validator must not already exist in the committee.
+    Add {
+        /// Public key of the validator to add
+        #[arg(long)]
+        public_key: ValidatorPublicKey,
+        /// Account public key for receiving payments and rewards
+        #[arg(long)]
+        account_key: AccountPublicKey,
+        /// Network address where the validator can be reached (e.g., grpcs://host:port)
+        #[arg(long)]
         address: String,
-        /// Optional chain ID to query about (defaults to default chain).
+        /// Voting weight for consensus (default: 1)
+        #[arg(long, default_value = "1")]
+        votes: u64,
+        /// Skip online connectivity verification before adding
         #[arg(long)]
-        chain_id: Option<ChainId>,
-        /// Optional validator public key to query about.
-        #[arg(long)]
-        public_key: Option<ValidatorPublicKey>,
+        skip_online_check: bool,
     },
 
-    /// Query multiple validators from a JSON file.
-    QueryBatch {
-        /// Path to JSON file with validator query specifications.
+    /// Query multiple validators using a JSON specification file.
+    ///
+    /// Reads validator specifications from a JSON file and queries their state.
+    /// The JSON should contain an array of validator objects with publicKey and networkAddress.
+    BatchQuery {
+        /// Path to JSON file containing validator query specifications
         file: String,
-        /// Optional chain ID to query about (defaults to default chain).
+        /// Chain ID to query (defaults to default chain)
         #[arg(long)]
         chain_id: Option<ChainId>,
+    },
+
+    /// Apply multiple validator changes from JSON input.
+    ///
+    /// Reads a JSON object mapping validator public keys to their desired state:
+    /// - Key with state object (address, votes, accountKey): add or modify validator
+    /// - Key with null or {}: remove validator
+    /// - Keys not present: unchanged
+    ///
+    /// Input can be provided via file path, stdin pipe, or shell redirect.
+    BatchUpdate {
+        /// Path to JSON file with validator changes (omit or use "-" for stdin)
+        file: Option<String>,
+        /// Preview changes without applying them
+        #[arg(long)]
+        dry_run: bool,
+        /// Skip confirmation prompt (use with caution)
+        #[arg(long, short = 'y')]
+        yes: bool,
+        /// Skip online connectivity checks for validators being added or modified
+        #[arg(long)]
+        skip_online_check: bool,
     },
 
     /// List all validators in the committee.
+    ///
+    /// Displays the current validator set with their network addresses, voting weights,
+    /// and connection status. Optionally filter by minimum voting weight.
     List {
-        /// Optional chain ID (defaults to default chain).
+        /// Chain ID to query (defaults to default chain)
         #[arg(long)]
         chain_id: Option<ChainId>,
-        /// Optional minimum votes threshold to filter validators.
+        /// Only show validators with at least this many votes
         #[arg(long)]
         min_votes: Option<u64>,
     },
 
-    /// Add a new validator to the committee.
-    Add {
-        /// Validator public key.
-        #[arg(long)]
-        public_key: ValidatorPublicKey,
-        /// Account public key for the validator.
-        #[arg(long)]
-        account_key: AccountPublicKey,
-        /// Network address of the validator.
-        #[arg(long)]
+    /// Query a single validator's state and connectivity.
+    ///
+    /// Connects to a validator at the specified network address and queries its
+    /// view of the blockchain state, including block height and committee information.
+    Query {
+        /// Network address of the validator (e.g., grpcs://host:port)
         address: String,
-        /// Voting weight for the validator.
-        #[arg(long, default_value = "1")]
-        votes: u64,
-        /// Skip online connectivity check.
+        /// Chain ID to query about (defaults to default chain)
         #[arg(long)]
-        skip_online_check: bool,
+        chain_id: Option<ChainId>,
+        /// Expected public key of the validator (for verification)
+        #[arg(long)]
+        public_key: Option<ValidatorPublicKey>,
     },
 
     /// Remove a validator from the committee.
+    ///
+    /// Removes the validator with the specified public key from the committee.
+    /// The validator will no longer participate in consensus.
     Remove {
-        /// Public key of validator to remove.
+        /// Public key of the validator to remove
         #[arg(long)]
         public_key: ValidatorPublicKey,
     },
 
-    /// Batch update validators from a JSON file.
-    BatchUpdate {
-        /// Path to JSON file with batch operations.
-        file: String,
-        /// Perform validation only without executing operations.
-        #[arg(long)]
-        dry_run: bool,
-        /// Skip online connectivity checks for new validators.
-        #[arg(long)]
-        skip_online_check: bool,
-    },
-
-    /// Synchronize validator configuration from network address.
+    /// Synchronize chain state to a validator.
+    ///
+    /// Pushes the current chain state from local storage to a validator node,
+    /// ensuring the validator has up-to-date information about specified chains.
     Sync {
-        /// Network address of the validator to sync with.
+        /// Network address of the validator to sync (e.g., grpcs://host:port)
         address: String,
-        /// Optional list of chain IDs to sync (defaults to default chain).
+        /// Chain IDs to synchronize (defaults to all chains in wallet)
         #[arg(long)]
         chains: Vec<ChainId>,
-        /// Check that validator is online before syncing (default: false).
+        /// Verify validator is online before syncing
         #[arg(long)]
         check_online: bool,
     },
 }
 
-/// Parse a batch operations file.
-fn parse_batch_file(path: &Path) -> Result<ValidatorBatchFile> {
-    let contents = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read batch file: {}", path.display()))?;
+/// Parse a batch operations file or stdin.
+/// If path is None or "-", reads from stdin.
+/// Otherwise reads from the specified file path.
+fn parse_batch_file(path: Option<&str>) -> Result<ValidatorBatchFile> {
+    let contents = match path {
+        None | Some("-") => {
+            // Read from stdin
+            use std::io::Read;
+            let mut buffer = String::new();
+            std::io::stdin()
+                .read_to_string(&mut buffer)
+                .context("Failed to read from stdin")?;
+            buffer
+        }
+        Some(path_str) => {
+            // Read from file
+            std::fs::read_to_string(path_str)
+                .with_context(|| format!("Failed to read batch file: {}", path_str))?
+        }
+    };
+
     let batch: ValidatorBatchFile = serde_json::from_str(&contents)
-        .with_context(|| format!("Failed to parse batch file: {}", path.display()))?;
+        .context("Failed to parse batch JSON")?;
+
+    // Validate all specs
+    for (public_key, spec_opt) in &batch {
+        if let Some(spec) = spec_opt {
+            spec.validate()
+                .with_context(|| format!("Invalid validator spec for {}", public_key))?;
+        }
+    }
+
     Ok(batch)
 }
 
@@ -160,20 +268,6 @@ fn parse_query_batch_file(path: &Path) -> Result<ValidatorQueryBatch> {
     Ok(batch)
 }
 
-/// Validate a validator specification.
-fn validate_validator_spec(spec: &ValidatorSpec) -> Result<()> {
-    // Validate votes
-    if spec.votes == 0 {
-        bail!("Validator votes must be greater than 0");
-    }
-
-    // Validate network address is not empty
-    if spec.network_address.is_empty() {
-        bail!("Validator network address cannot be empty");
-    }
-
-    Ok(())
-}
 
 /// Main entry point for handling validator commands.
 pub async fn handle_command<S, W, Si>(
@@ -193,49 +287,6 @@ where
     use ValidatorCommand::*;
 
     match command {
-        Query {
-            address,
-            chain_id,
-            public_key,
-        } => {
-            let context = ClientContext::new(
-                storage.clone(),
-                context_options.clone(),
-                wallet,
-                signer,
-                block_cache_size,
-                execution_state_cache_size,
-            );
-            handle_query(context, address, chain_id, public_key).await
-        }
-
-        QueryBatch { file, chain_id } => {
-            let context = ClientContext::new(
-                storage.clone(),
-                context_options.clone(),
-                wallet,
-                signer,
-                block_cache_size,
-                execution_state_cache_size,
-            );
-            handle_query_batch(context, file, chain_id).await
-        }
-
-        List {
-            chain_id,
-            min_votes,
-        } => {
-            let context = ClientContext::new(
-                storage,
-                context_options,
-                wallet,
-                signer,
-                block_cache_size,
-                execution_state_cache_size,
-            );
-            handle_list(context, chain_id, min_votes).await
-        }
-
         Add {
             public_key,
             account_key,
@@ -263,7 +314,7 @@ where
             .await
         }
 
-        Remove { public_key } => {
+        BatchQuery { file, chain_id } => {
             let context = ClientContext::new(
                 storage.clone(),
                 context_options.clone(),
@@ -272,13 +323,13 @@ where
                 block_cache_size,
                 execution_state_cache_size,
             );
-            let context = Arc::new(Mutex::new(context));
-            handle_remove(context, public_key).await
+            handle_query_batch(context, file, chain_id).await
         }
 
         BatchUpdate {
             file,
             dry_run,
+            yes,
             skip_online_check,
         } => {
             let context = ClientContext::new(
@@ -290,7 +341,51 @@ where
                 execution_state_cache_size,
             );
             let context = Arc::new(Mutex::new(context));
-            handle_batch_update(context, file, dry_run, skip_online_check).await
+            handle_batch_update(context, file.as_deref(), dry_run, yes, skip_online_check).await
+        }
+
+        List {
+            chain_id,
+            min_votes,
+        } => {
+            let context = ClientContext::new(
+                storage,
+                context_options,
+                wallet,
+                signer,
+                block_cache_size,
+                execution_state_cache_size,
+            );
+            handle_list(context, chain_id, min_votes).await
+        }
+
+        Query {
+            address,
+            chain_id,
+            public_key,
+        } => {
+            let context = ClientContext::new(
+                storage.clone(),
+                context_options.clone(),
+                wallet,
+                signer,
+                block_cache_size,
+                execution_state_cache_size,
+            );
+            handle_query(context, address, chain_id, public_key).await
+        }
+
+        Remove { public_key } => {
+            let context = ClientContext::new(
+                storage.clone(),
+                context_options.clone(),
+                wallet,
+                signer,
+                block_cache_size,
+                execution_state_cache_size,
+            );
+            let context = Arc::new(Mutex::new(context));
+            handle_remove(context, public_key).await
         }
 
         Sync {
@@ -504,7 +599,7 @@ where
         network_address: address.clone(),
         votes,
     };
-    validate_validator_spec(&spec)?;
+    spec.validate()?;
 
     // Check validator is online if requested
     let mut context = context.lock().await;
@@ -622,8 +717,9 @@ where
 /// Handle batch-update command: apply a batch file with add/modify/remove operations.
 async fn handle_batch_update<S, W, Si>(
     context: MutexedContext<S, W, Si>,
-    file: String,
+    file: Option<&str>,
     dry_run: bool,
+    yes: bool,
     skip_online_check: bool,
 ) -> Result<()>
 where
@@ -634,40 +730,115 @@ where
     info!("Starting batch update operation");
     let time_start = std::time::Instant::now();
 
-    // Parse the batch file
-    let batch = parse_batch_file(Path::new(&file))?;
+    // Parse the batch file or stdin
+    let batch = parse_batch_file(file)?;
 
-    // Validate all specs
-    for spec in batch.add.iter().chain(batch.modify.iter()) {
-        validate_validator_spec(spec)?;
+    if batch.is_empty() {
+        println!("No validator changes specified in input.");
+        return Ok(());
     }
 
-    info!("Batch file parsed successfully:");
-    info!("  {} validators to add", batch.add.len());
-    info!("  {} validators to modify", batch.modify.len());
-    info!("  {} validators to remove", batch.remove.len());
+    // Separate operations by type for logging and validation
+    let mut adds = Vec::new();
+    let mut modifies = Vec::new();
+    let mut removes = Vec::new();
+
+    // Get current committee to determine if operation is add or modify
+    let context_guard = context.lock().await;
+    let admin_id = context_guard.wallet().genesis_admin_chain();
+    let chain_client = context_guard.make_chain_client(admin_id);
+    let current_committee = chain_client.local_committee().await?;
+    let current_validators = current_committee.validators();
+    drop(context_guard);
+
+    for (public_key, spec_opt) in &batch {
+        match spec_opt {
+            None => {
+                removes.push(*public_key);
+            }
+            Some(spec) if spec.is_empty() => {
+                removes.push(*public_key);
+            }
+            Some(spec) => {
+                if current_validators.contains_key(public_key) {
+                    modifies.push((public_key, spec));
+                } else {
+                    adds.push((public_key, spec));
+                }
+            }
+        }
+    }
+
+    // Display recap of changes
+    println!("\n╔══════════════════════════════════════════════════════════════════════════════╗");
+    println!("║                        VALIDATOR BATCH UPDATE RECAP                          ║");
+    println!("╚══════════════════════════════════════════════════════════════════════════════╝\n");
+
+    println!("Summary:");
+    println!("  • {} validator(s) to add", adds.len());
+    println!("  • {} validator(s) to modify", modifies.len());
+    println!("  • {} validator(s) to remove", removes.len());
+    println!();
+
+    if !adds.is_empty() {
+        println!("Validators to ADD:");
+        for (pk, spec) in &adds {
+            println!("  + {}", pk);
+            println!("    Address:     {}", spec.network_address.as_ref().unwrap());
+            println!("    Account Key: {}", spec.account_key.unwrap());
+            println!("    Votes:       {}", spec.votes());
+        }
+        println!();
+    }
+
+    if !modifies.is_empty() {
+        println!("Validators to MODIFY:");
+        for (pk, spec) in &modifies {
+            println!("  * {}", pk);
+            println!("    New Address:     {}", spec.network_address.as_ref().unwrap());
+            println!("    New Account Key: {}", spec.account_key.unwrap());
+            println!("    New Votes:       {}", spec.votes());
+        }
+        println!();
+    }
+
+    if !removes.is_empty() {
+        println!("Validators to REMOVE:");
+        for pk in &removes {
+            println!("  - {}", pk);
+        }
+        println!();
+    }
 
     if dry_run {
-        info!("DRY RUN - No changes will be applied");
-        info!("Add operations:");
-        for spec in &batch.add {
-            info!(
-                "  + {} @ {} ({} votes)",
-                spec.public_key, spec.network_address, spec.votes
-            );
-        }
-        info!("Modify operations:");
-        for spec in &batch.modify {
-            info!(
-                "  * {} @ {} ({} votes)",
-                spec.public_key, spec.network_address, spec.votes
-            );
-        }
-        info!("Remove operations:");
-        for key in &batch.remove {
-            info!("  - {}", key);
-        }
+        println!("═════════════════════════════════════════════════════════════════════════════");
+        println!("DRY RUN MODE: No changes will be applied");
+        println!("═════════════════════════════════════════════════════════════════════════════\n");
         return Ok(());
+    }
+
+    // Confirmation prompt (unless --yes flag is set)
+    if !yes {
+        println!("═════════════════════════════════════════════════════════════════════════════");
+        println!("⚠️  WARNING: This operation will modify the validator committee.");
+        println!("             Changes are permanent and will be broadcast to the network.");
+        println!("═════════════════════════════════════════════════════════════════════════════\n");
+        println!("Do you want to proceed? Type 'YES' (uppercase) to confirm: ");
+
+        use std::io::{self, Write};
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .context("Failed to read confirmation input")?;
+
+        let input = input.trim();
+        if input != "YES" {
+            println!("\nOperation cancelled. (Expected 'YES', got '{}')", input);
+            return Ok(());
+        }
+        println!("\nConfirmed. Proceeding with batch update...\n");
     }
 
     // Check all validators are online if requested
@@ -676,13 +847,14 @@ where
         let node_provider = context_guard.make_node_provider();
 
         info!("Checking validators are online...");
-        for spec in batch.add.iter().chain(batch.modify.iter()) {
-            let node = node_provider.make_node(&spec.network_address)?;
+        for (_, spec) in adds.iter().chain(modifies.iter()) {
+            let address = spec.network_address.as_ref().unwrap();
+            let node = node_provider.make_node(address)?;
             context_guard
-                .check_compatible_version_info(&spec.network_address, &node)
+                .check_compatible_version_info(address, &node)
                 .await?;
             context_guard
-                .check_matching_network_description(&spec.network_address, &node)
+                .check_matching_network_description(address, &node)
                 .await?;
         }
         drop(context_guard);
@@ -706,55 +878,47 @@ where
                 let policy = committee.policy().clone();
                 let mut validators = committee.validators().clone();
 
-                // Apply add operations FIRST
-                for spec in &batch.add {
-                    if validators.contains_key(&spec.public_key) {
-                        warn!("Validator {} already exists; skipping add", spec.public_key);
-                        continue;
-                    }
-                    validators.insert(
-                        spec.public_key,
-                        ValidatorState {
-                            network_address: spec.network_address.clone(),
-                            votes: spec.votes,
-                            account_public_key: spec.account_key,
-                        },
-                    );
-                    info!(
-                        "Added validator {} @ {} ({} votes)",
-                        spec.public_key, spec.network_address, spec.votes
-                    );
-                }
+                // Apply operations based on the batch specification
+                for (public_key, spec_opt) in &batch {
+                    match spec_opt {
+                        None => {
+                            // Explicit null - remove
+                            if validators.remove(public_key).is_none() {
+                                warn!("Validator {} does not exist; skipping remove", public_key);
+                            } else {
+                                info!("Removed validator {}", public_key);
+                            }
+                        }
+                        Some(spec) if spec.is_empty() => {
+                            // Empty object - remove
+                            if validators.remove(public_key).is_none() {
+                                warn!("Validator {} does not exist; skipping remove", public_key);
+                            } else {
+                                info!("Removed validator {}", public_key);
+                            }
+                        }
+                        Some(spec) => {
+                            // Has values - add or modify
+                            let address = spec.network_address.as_ref().unwrap().clone();
+                            let votes = spec.votes();
+                            let account_key = spec.account_key.unwrap();
 
-                // Apply modify operations SECOND
-                for spec in &batch.modify {
-                    if !validators.contains_key(&spec.public_key) {
-                        warn!(
-                            "Validator {} does not exist; skipping modify",
-                            spec.public_key
-                        );
-                        continue;
-                    }
-                    validators.insert(
-                        spec.public_key,
-                        ValidatorState {
-                            network_address: spec.network_address.clone(),
-                            votes: spec.votes,
-                            account_public_key: spec.account_key,
-                        },
-                    );
-                    info!(
-                        "Modified validator {} @ {} ({} votes)",
-                        spec.public_key, spec.network_address, spec.votes
-                    );
-                }
+                            let exists = validators.contains_key(public_key);
+                            validators.insert(
+                                *public_key,
+                                ValidatorState {
+                                    network_address: address.clone(),
+                                    votes,
+                                    account_public_key: account_key,
+                                },
+                            );
 
-                // Apply remove operations LAST
-                for public_key in &batch.remove {
-                    if validators.remove(public_key).is_none() {
-                        warn!("Validator {} does not exist; skipping remove", public_key);
-                    } else {
-                        info!("Removed validator {}", public_key);
+                            if exists {
+                                info!("Modified validator {} @ {} ({} votes)", public_key, address, votes);
+                            } else {
+                                info!("Added validator {} @ {} ({} votes)", public_key, address, votes);
+                            }
+                        }
                     }
                 }
 
@@ -846,27 +1010,25 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[test]
-    fn test_validate_validator_spec_valid() {
-        let spec = ValidatorSpec {
-            public_key: ValidatorPublicKey::test_key(0),
-            account_key: AccountPublicKey::test_key(0),
-            network_address: "grpcs://validator.example.com:443".to_string(),
-            votes: 100,
+    fn test_validate_validator_change_spec_valid() {
+        let spec = ValidatorChangeSpec {
+            account_key: Some(AccountPublicKey::test_key(0)),
+            network_address: Some("grpcs://validator.example.com:443".to_string()),
+            votes: Some(100),
         };
 
-        assert!(validate_validator_spec(&spec).is_ok());
+        assert!(spec.validate().is_ok());
     }
 
     #[test]
-    fn test_validate_validator_spec_zero_votes() {
-        let spec = ValidatorSpec {
-            public_key: ValidatorPublicKey::test_key(0),
-            account_key: AccountPublicKey::test_key(0),
-            network_address: "grpcs://validator.example.com:443".to_string(),
-            votes: 0,
+    fn test_validate_validator_change_spec_zero_votes() {
+        let spec = ValidatorChangeSpec {
+            account_key: Some(AccountPublicKey::test_key(0)),
+            network_address: Some("grpcs://validator.example.com:443".to_string()),
+            votes: Some(0),
         };
 
-        let result = validate_validator_spec(&spec);
+        let result = spec.validate();
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -875,15 +1037,14 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_validator_spec_empty_address() {
-        let spec = ValidatorSpec {
-            public_key: ValidatorPublicKey::test_key(0),
-            account_key: AccountPublicKey::test_key(0),
-            network_address: String::new(),
-            votes: 100,
+    fn test_validate_validator_change_spec_empty_address() {
+        let spec = ValidatorChangeSpec {
+            account_key: Some(AccountPublicKey::test_key(0)),
+            network_address: Some(String::new()),
+            votes: Some(100),
         };
 
-        let result = validate_validator_spec(&spec);
+        let result = spec.validate();
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -892,26 +1053,48 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_batch_file_valid() {
-        // Generate correct JSON format using test keys
-        let spec1 = ValidatorSpec {
-            public_key: ValidatorPublicKey::test_key(0),
-            account_key: AccountPublicKey::test_key(0),
-            network_address: "grpcs://validator1.example.com:443".to_string(),
-            votes: 100,
-        };
-        let spec2 = ValidatorSpec {
-            public_key: ValidatorPublicKey::test_key(1),
-            account_key: AccountPublicKey::test_key(1),
-            network_address: "grpcs://validator2.example.com:443".to_string(),
-            votes: 150,
+    fn test_validate_validator_change_spec_empty() {
+        let spec = ValidatorChangeSpec {
+            account_key: None,
+            network_address: None,
+            votes: None,
         };
 
-        let batch = ValidatorBatchFile {
-            add: vec![spec1],
-            modify: vec![spec2],
-            remove: vec![ValidatorPublicKey::test_key(2)],
-        };
+        assert!(spec.is_empty());
+        assert!(spec.validate().is_ok()); // Empty is valid (represents removal)
+    }
+
+    #[test]
+    fn test_parse_batch_file_valid() {
+        // Generate correct JSON format using test keys
+        let pk0 = ValidatorPublicKey::test_key(0);
+        let pk1 = ValidatorPublicKey::test_key(1);
+        let pk2 = ValidatorPublicKey::test_key(2);
+
+        let mut batch = ValidatorBatchFile::new();
+
+        // Add operation - validator with full spec
+        batch.insert(
+            pk0,
+            Some(ValidatorChangeSpec {
+                account_key: Some(AccountPublicKey::test_key(0)),
+                network_address: Some("grpcs://validator1.example.com:443".to_string()),
+                votes: Some(100),
+            }),
+        );
+
+        // Modify operation - validator with full spec (would be modify if validator exists)
+        batch.insert(
+            pk1,
+            Some(ValidatorChangeSpec {
+                account_key: Some(AccountPublicKey::test_key(1)),
+                network_address: Some("grpcs://validator2.example.com:443".to_string()),
+                votes: Some(150),
+            }),
+        );
+
+        // Remove operation - null
+        batch.insert(pk2, None);
 
         let json = serde_json::to_string(&batch).unwrap();
 
@@ -919,7 +1102,7 @@ mod tests {
         temp_file.write_all(json.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let result = parse_batch_file(temp_file.path());
+        let result = parse_batch_file(Some(temp_file.path().to_str().unwrap()));
         assert!(
             result.is_ok(),
             "Failed to parse batch file: {:?}",
@@ -927,11 +1110,21 @@ mod tests {
         );
 
         let parsed_batch = result.unwrap();
-        assert_eq!(parsed_batch.add.len(), 1);
-        assert_eq!(parsed_batch.modify.len(), 1);
-        assert_eq!(parsed_batch.remove.len(), 1);
-        assert_eq!(parsed_batch.add[0].votes, 100);
-        assert_eq!(parsed_batch.modify[0].votes, 150);
+        assert_eq!(parsed_batch.len(), 3);
+
+        // Check pk0 (add)
+        assert!(parsed_batch.get(&pk0).is_some());
+        let spec0 = parsed_batch.get(&pk0).unwrap().as_ref().unwrap();
+        assert_eq!(spec0.votes, Some(100));
+
+        // Check pk1 (modify)
+        assert!(parsed_batch.get(&pk1).is_some());
+        let spec1 = parsed_batch.get(&pk1).unwrap().as_ref().unwrap();
+        assert_eq!(spec1.votes, Some(150));
+
+        // Check pk2 (remove)
+        assert!(parsed_batch.get(&pk2).is_some());
+        assert!(parsed_batch.get(&pk2).unwrap().is_none());
     }
 
     #[test]
@@ -942,13 +1135,11 @@ mod tests {
         temp_file.write_all(json.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let result = parse_batch_file(temp_file.path());
+        let result = parse_batch_file(Some(temp_file.path().to_str().unwrap()));
         assert!(result.is_ok());
 
         let batch = result.unwrap();
-        assert_eq!(batch.add.len(), 0);
-        assert_eq!(batch.modify.len(), 0);
-        assert_eq!(batch.remove.len(), 0);
+        assert_eq!(batch.len(), 0);
     }
 
     #[test]
@@ -959,14 +1150,42 @@ mod tests {
         temp_file.write_all(json.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let result = parse_batch_file(temp_file.path());
+        let result = parse_batch_file(Some(temp_file.path().to_str().unwrap()));
         assert!(result.is_err());
     }
 
     #[test]
     fn test_parse_batch_file_nonexistent() {
-        let result = parse_batch_file(Path::new("/nonexistent/file.json"));
+        let result = parse_batch_file(Some("/nonexistent/file.json"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_batch_file_empty_spec_as_remove() {
+        // Test that empty object {} is treated as removal
+        let pk = ValidatorPublicKey::test_key(0);
+        let mut batch = ValidatorBatchFile::new();
+        batch.insert(
+            pk,
+            Some(ValidatorChangeSpec {
+                account_key: None,
+                network_address: None,
+                votes: None,
+            }),
+        );
+
+        let json = serde_json::to_string(&batch).unwrap();
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(json.as_bytes()).unwrap();
+        temp_file.flush().unwrap();
+
+        let result = parse_batch_file(Some(temp_file.path().to_str().unwrap()));
+        assert!(result.is_ok());
+
+        let parsed_batch = result.unwrap();
+        let spec = parsed_batch.get(&pk).unwrap().as_ref().unwrap();
+        assert!(spec.is_empty());
     }
 
     #[test]
