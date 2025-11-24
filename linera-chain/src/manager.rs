@@ -884,7 +884,16 @@ impl ChainManagerInfo {
             Round::Fast => self.ownership.super_owners.contains(identity),
             Round::MultiLeader(_) => true,
             Round::SingleLeader(r) => {
-                if let Some(distribution) = calculate_distribution(self.ownership.owners.iter()) {
+                if r == 0
+                    && self
+                        .ownership
+                        .first_leader
+                        .is_some_and(|owner| owner == *identity)
+                {
+                    true
+                } else if let Some(distribution) =
+                    calculate_distribution(self.ownership.owners.iter())
+                {
                     let leader_index = round_leader_index(r, seed, Some(&distribution))
                         .expect("cannot fail if distribution is set");
                     self.ownership.owners.keys().nth(leader_index) == Some(identity)

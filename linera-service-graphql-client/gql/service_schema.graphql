@@ -476,6 +476,7 @@ Change ownership operation metadata.
 type ChangeOwnershipOperationMetadata {
 	superOwners: [AccountOwner!]!
 	owners: [OwnerWithWeight!]!
+	firstLeader: AccountOwner
 	multiLeaderRounds: Int!
 	openMultiLeaderRounds: Boolean!
 	timeoutConfig: TimeoutConfigMetadata!
@@ -1094,6 +1095,10 @@ type MutationRoot {
 		Whether multi-leader rounds are unrestricted, that is not limited to chain owners.
 		"""
 		openMultiLeaderRounds: Boolean!,
+		"""
+		The leader of the first single-leader round. If not set, this is random like other rounds.
+		"""
+		firstLeader: AccountOwner,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""

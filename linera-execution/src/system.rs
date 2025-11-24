@@ -192,6 +192,9 @@ pub enum SystemOperation {
         /// The regular owners, with their weights that determine how often they are round leader.
         #[debug(skip_if = Vec::is_empty)]
         owners: Vec<(AccountOwner, u64)>,
+        /// The leader of the first single-leader round. If not set, this is random like other rounds.
+        #[debug(skip_if = Option::is_none)]
+        first_leader: Option<AccountOwner>,
         /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
         multi_leader_rounds: u32,
         /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
@@ -369,6 +372,7 @@ where
             ChangeOwnership {
                 super_owners,
                 owners,
+                first_leader,
                 multi_leader_rounds,
                 open_multi_leader_rounds,
                 timeout_config,
@@ -376,6 +380,7 @@ where
                 self.ownership.set(ChainOwnership {
                     super_owners: super_owners.into_iter().collect(),
                     owners: owners.into_iter().collect(),
+                    first_leader,
                     multi_leader_rounds,
                     open_multi_leader_rounds,
                     timeout_config,

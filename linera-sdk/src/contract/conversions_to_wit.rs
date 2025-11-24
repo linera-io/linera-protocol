@@ -221,6 +221,7 @@ impl From<ChainOwnership> for wit_contract_api::ChainOwnership {
         let ChainOwnership {
             super_owners,
             owners,
+            first_leader,
             multi_leader_rounds,
             open_multi_leader_rounds,
             timeout_config,
@@ -231,6 +232,7 @@ impl From<ChainOwnership> for wit_contract_api::ChainOwnership {
                 .into_iter()
                 .map(|(owner, weight)| (owner.into(), weight))
                 .collect(),
+            first_leader: first_leader.map(Into::into),
             multi_leader_rounds,
             open_multi_leader_rounds,
             timeout_config: timeout_config.into(),

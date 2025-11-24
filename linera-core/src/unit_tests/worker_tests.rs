@@ -3318,6 +3318,7 @@ where
         .with_operation(SystemOperation::ChangeOwnership {
             super_owners: Vec::new(),
             owners: vec![(owner0, 100), (owner1, 100)],
+            first_leader: None,
             multi_leader_rounds: 0,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
@@ -3567,6 +3568,7 @@ where
         make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
             super_owners: vec![owner0],
             owners: vec![(owner0, 100), (owner1, 100)],
+            first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig {
@@ -3672,6 +3674,7 @@ where
         make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
             super_owners: vec![],
             owners: vec![(owner, 100)],
+            first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: true,
             timeout_config: TimeoutConfig {
@@ -3751,6 +3754,7 @@ where
         .with_operation(SystemOperation::ChangeOwnership {
             super_owners: vec![owner0],
             owners: vec![(owner0, 100), (owner1, 100)],
+            first_leader: None,
             multi_leader_rounds: 3,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig {

@@ -300,6 +300,7 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
 * `--super-owners <SUPER_OWNERS>` — The new super owners
 * `--owners <OWNERS>` — The new regular owners
+* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If not set, this is random like other rounds
 * `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners.
 
    If they are specified there must be exactly one weight for each owner. If no weights are given, every owner will have weight 100.
@@ -352,6 +353,7 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 * `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
 * `--super-owners <SUPER_OWNERS>` — The new super owners
 * `--owners <OWNERS>` — The new regular owners
+* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If not set, this is random like other rounds
 * `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners.
 
    If they are specified there must be exactly one weight for each owner. If no weights are given, every owner will have weight 100.
