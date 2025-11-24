@@ -642,6 +642,11 @@ where
                 ownership.open_multi_leader_rounds || ownership.owners.contains_key(proposal_owner)
             }
             Round::SingleLeader(r) => {
+                if r == 0 {
+                    if let Some(first_leader) = &self.ownership.get().first_leader {
+                        return Ok(first_leader == proposal_owner);
+                    }
+                }
                 let Some(index) =
                     round_leader_index(r, *self.seed.get(), self.distribution.get().as_ref())
                 else {
@@ -667,6 +672,11 @@ where
     fn round_leader(&self, round: Round) -> Option<&AccountOwner> {
         match round {
             Round::SingleLeader(r) => {
+                if r == 0 {
+                    if let Some(first_leader) = &self.ownership.get().first_leader {
+                        return Some(first_leader);
+                    }
+                }
                 let index =
                     round_leader_index(r, *self.seed.get(), self.distribution.get().as_ref())?;
                 self.ownership.get().owners.keys().nth(index)
@@ -884,13 +894,9 @@ impl ChainManagerInfo {
             Round::Fast => self.ownership.super_owners.contains(identity),
             Round::MultiLeader(_) => true,
             Round::SingleLeader(r) => {
-                if r == 0
-                    && self
-                        .ownership
-                        .first_leader
-                        .is_some_and(|owner| owner == *identity)
-                {
-                    true
+                if r == 0 && self.ownership.first_leader.is_some() {
+                    // When first_leader is set, only that leader can propose in round 0.
+                    self.ownership.first_leader.as_ref() == Some(identity)
                 } else if let Some(distribution) =
                     calculate_distribution(self.ownership.owners.iter())
                 {
