@@ -58,6 +58,7 @@ serde-name.workspace = true
 serde_bytes.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
+sync_wrapper.workspace = true
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["time"] }
