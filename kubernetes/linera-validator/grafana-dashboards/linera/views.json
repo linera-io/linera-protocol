@@ -15,6 +15,7 @@
       }
     ]
   },
+  "description": "Metrics related to view loading, saving, and caching operations",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 2,
@@ -26,6 +27,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Rate of view save operations per second, broken down by pod. Higher values indicate more state changes being persisted.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -63,19 +65,7 @@
             }
           },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
+          "unit": "ops"
         },
         "overrides": []
       },
@@ -95,11 +85,10 @@
         },
         "tooltip": {
           "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
       "targets": [
         {
           "datasource": {
@@ -107,8 +96,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_save_view[1m])) by (pod)",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_save_view{validator=~\"$validator\"}[1m])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         },
@@ -118,14 +107,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_save_view[1m]))",
+          "expr": "sum(rate(linera_save_view{validator=~\"$validator\"}[1m]))",
           "hide": false,
           "legendFormat": "Total",
           "range": true,
           "refId": "B"
         }
       ],
-      "title": "Save view per second (averaged for the past minute)",
+      "title": "Save View Rate",
       "type": "timeseries"
     },
     {
@@ -133,6 +122,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Rate of view load operations per second, broken down by pod. Higher values indicate more state being read from storage.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -170,19 +160,7 @@
             }
           },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
+          "unit": "ops"
         },
         "overrides": []
       },
@@ -202,11 +180,10 @@
         },
         "tooltip": {
           "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
       "targets": [
         {
           "datasource": {
@@ -214,8 +191,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_load_view[1m])) by (pod)",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_load_view{validator=~\"$validator\"}[1m])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         },
@@ -225,14 +202,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_load_view[1m])) ",
+          "expr": "sum(rate(linera_load_view{validator=~\"$validator\"}[1m]))",
           "hide": false,
           "legendFormat": "Total",
           "range": true,
           "refId": "B"
         }
       ],
-      "title": "Load view per second (averaged for the past minute)",
+      "title": "Load View Rate",
       "type": "timeseries"
     },
     {
@@ -240,6 +217,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Percentage of cache hits vs total cache accesses. Higher values indicate better cache efficiency and less storage I/O.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -277,19 +255,6 @@
             }
           },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
           "unit": "percent"
         },
         "overrides": []
@@ -310,11 +275,10 @@
         },
         "tooltip": {
           "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
       "targets": [
         {
           "datasource": {
@@ -322,22 +286,51 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(\n    sum(rate(linera_num_cache_success[1m])) by (pod)\n    /\n    (\n        sum(rate(linera_num_cache_success[1m])) by (pod)\n        + sum(rate(linera_num_cache_fault[1m])) by (pod)\n    )\n) * 100",
-          "legendFormat": "__auto",
+          "expr": "(\n    sum(rate(linera_num_cache_success{validator=~\"$validator\"}[1m])) by (pod)\n    /\n    (\n        sum(rate(linera_num_cache_success{validator=~\"$validator\"}[1m])) by (pod)\n        + sum(rate(linera_num_cache_fault{validator=~\"$validator\"}[1m])) by (pod)\n    )\n) * 100",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Cache hit ratio (1m)",
+      "title": "Cache Hit Ratio",
       "type": "timeseries"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": [],
+  "tags": ["linera"],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(linera_load_view, validator)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Validator",
+        "multi": false,
+        "name": "validator",
+        "options": [],
+        "query": {
+          "query": "label_values(linera_load_view, validator)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-1h",
