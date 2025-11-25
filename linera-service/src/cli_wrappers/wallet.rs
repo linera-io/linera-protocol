@@ -1058,33 +1058,41 @@ impl ClientWrapper {
         modify_validators: &[(String, String, usize, usize)], // (public_key, account_key, port, votes)
         remove_validators: &[String],
     ) -> Result<()> {
-        use std::collections::HashMap;
+        use std::str::FromStr;
 
-        use serde_json::Value;
+        use linera_base::crypto::{AccountPublicKey, ValidatorPublicKey};
 
-        // Build JSON object for validator changes
-        let mut changes = HashMap::new();
+        // Build a map that will be serialized to JSON
+        // Use the exact types that deserialization expects
+        let mut changes = std::collections::HashMap::new();
 
         // Add/modify validators
-        for (public_key, account_key, port, votes) in
+        for (public_key_str, account_key_str, port, votes) in
             add_validators.iter().chain(modify_validators.iter())
         {
+            let public_key = ValidatorPublicKey::from_str(public_key_str)
+                .with_context(|| format!("Invalid validator public key: {}", public_key_str))?;
+
+            let account_key = AccountPublicKey::from_str(account_key_str)
+                .with_context(|| format!("Invalid account public key: {}", account_key_str))?;
+
             let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
-            changes.insert(
-                public_key.clone(),
-                serde_json::json!({
-                    "accountKey": {
-                        "Secp256k1": account_key
-                    },
-                    "address": address,
-                    "votes": votes,
-                }),
-            );
+
+            // Create ValidatorChange struct
+            let change = crate::cli::validator::ValidatorChange {
+                account_key,
+                network_address: address,
+                votes: std::num::NonZero::new(*votes as u64).context("Votes must be non-zero")?,
+            };
+
+            changes.insert(public_key, Some(change));
         }
 
-        // Remove validators (set to null)
-        for validator_key in remove_validators {
-            changes.insert(validator_key.clone(), Value::Null);
+        // Remove validators (set to None)
+        for validator_key_str in remove_validators {
+            let public_key = ValidatorPublicKey::from_str(validator_key_str)
+                .with_context(|| format!("Invalid validator public key: {}", validator_key_str))?;
+            changes.insert(public_key, None);
         }
 
         // Create temporary file with JSON
