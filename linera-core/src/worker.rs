@@ -933,32 +933,34 @@ where
     /// Sends a cross-chain update request to the appropriate worker queue.
     async fn send_cross_chain_update(
         &self,
-        chain_id: ChainId,
-        request: CrossChainUpdateRequest,
+        recipient: ChainId,
+        origin: ChainId,
+        bundles: Vec<(Epoch, linera_chain::data_types::MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         let (callback, response) = oneshot::channel();
         let request = CrossChainUpdateRequest {
+            origin,
+            bundles,
             callback,
-            ..request
         };
 
-        let (_, cross_chain_sender, _) = self.ensure_chain_worker_exists(chain_id);
+        let (_, cross_chain_sender, _) = self.ensure_chain_worker_exists(recipient);
 
         cross_chain_sender
             .send((request, tracing::Span::current()))
             .map_err(|e| {
-                self.remove_chain_worker_endpoints(chain_id);
+                self.remove_chain_worker_endpoints(recipient);
                 WorkerError::ChainActorSendError {
-                    chain_id,
+                    chain_id: recipient,
                     error: Box::new(e),
                 }
             })?;
 
         match response.await {
             Err(e) => {
-                self.remove_chain_worker_endpoints(chain_id);
+                self.remove_chain_worker_endpoints(recipient);
                 Err(WorkerError::ChainActorRecvError {
-                    chain_id,
+                    chain_id: recipient,
                     error: Box::new(e),
                 })
             }
@@ -969,32 +971,34 @@ where
     /// Sends a confirmation request to the appropriate worker queue.
     async fn send_confirmation(
         &self,
-        chain_id: ChainId,
-        request: ConfirmUpdatedRecipientRequest,
+        sender: ChainId,
+        recipient: ChainId,
+        latest_height: BlockHeight,
     ) -> Result<(), WorkerError> {
         let (callback, response) = oneshot::channel();
         let request = ConfirmUpdatedRecipientRequest {
+            recipient,
+            latest_height,
             callback,
-            ..request
         };
 
-        let (_, _, confirmation_sender) = self.ensure_chain_worker_exists(chain_id);
+        let (_, _, confirmation_sender) = self.ensure_chain_worker_exists(sender);
 
         confirmation_sender
             .send((request, tracing::Span::current()))
             .map_err(|e| {
-                self.remove_chain_worker_endpoints(chain_id);
+                self.remove_chain_worker_endpoints(sender);
                 WorkerError::ChainActorSendError {
-                    chain_id,
+                    chain_id: sender,
                     error: Box::new(e),
                 }
             })?;
 
         match response.await {
             Err(e) => {
-                self.remove_chain_worker_endpoints(chain_id);
+                self.remove_chain_worker_endpoints(sender);
                 Err(WorkerError::ChainActorRecvError {
-                    chain_id,
+                    chain_id: sender,
                     error: Box::new(e),
                 })
             }
@@ -1258,14 +1262,10 @@ where
             } => {
                 let mut actions = NetworkActions::default();
                 let origin = sender;
-                // Create a placeholder callback that will be replaced in send_cross_chain_update.
-                let (callback, _) = oneshot::channel();
-                let request = CrossChainUpdateRequest {
-                    origin,
-                    bundles,
-                    callback,
-                };
-                let Some(height) = self.send_cross_chain_update(recipient, request).await? else {
+                let Some(height) = self
+                    .send_cross_chain_update(recipient, origin, bundles)
+                    .await?
+                else {
                     return Ok(actions);
                 };
                 actions.notifications.push(Notification {
@@ -1286,14 +1286,8 @@ where
                 recipient,
                 latest_height,
             } => {
-                // Create a placeholder callback that will be replaced in send_confirmation.
-                let (callback, _) = oneshot::channel();
-                let request = ConfirmUpdatedRecipientRequest {
-                    recipient,
-                    latest_height,
-                    callback,
-                };
-                self.send_confirmation(sender, request).await?;
+                self.send_confirmation(sender, recipient, latest_height)
+                    .await?;
                 Ok(NetworkActions::default())
             }
         }

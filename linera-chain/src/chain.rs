@@ -426,61 +426,27 @@ where
             .with_execution_context(ChainExecutionContext::DescribeApplication)
     }
 
-    /// Marks messages as received for multiple recipients concurrently.
-    /// Each outbox is loaded once and all its confirmations are processed together.
-    /// Counter updates to shared state are collected during concurrent processing
-    /// and applied sequentially at the end.
+    /// Marks messages as received for multiple recipients.
+    /// Takes a map from recipient to the maximum confirmed height.
     ///
-    /// # Arguments
-    /// * `confirmations` - Vec of (recipient_chain_id, latest_height)
-    ///
-    /// # Returns
-    /// * `Vec<bool>` - One result per confirmation, indicating if any messages were marked
+    /// Returns `true` if any messages were marked as received.
     pub async fn mark_messages_as_received(
         &mut self,
-        confirmations: Vec<(ChainId, BlockHeight)>,
-    ) -> Result<Vec<bool>, ChainError> {
-        use std::collections::HashMap;
-
-        if confirmations.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // Group confirmations by recipient to handle multiple confirmations for the same chain.
-        let mut confirmations_by_recipient: HashMap<ChainId, Vec<(usize, BlockHeight)>> =
-            HashMap::new();
-        for (idx, (recipient, height)) in confirmations.into_iter().enumerate() {
-            confirmations_by_recipient
-                .entry(recipient)
-                .or_default()
-                .push((idx, height));
-        }
-
-        // Load all unique outboxes at once.
-        let unique_recipients: Vec<ChainId> = confirmations_by_recipient.keys().copied().collect();
-        let loaded_outboxes = self
-            .outboxes
-            .try_load_entries_pairs_mut(unique_recipients)
-            .await?;
+        max_height_by_recipient: BTreeMap<ChainId, BlockHeight>,
+    ) -> Result<bool, ChainError> {
+        // Load all outboxes at once.
+        let recipients: Vec<ChainId> = max_height_by_recipient.keys().copied().collect();
+        let loaded_outboxes = self.outboxes.try_load_entries_pairs_mut(recipients).await?;
 
         // Process each recipient concurrently.
         let processing_futures: Vec<_> = loaded_outboxes
             .into_iter()
             .filter_map(|(recipient, mut outbox)| {
-                let heights = confirmations_by_recipient.remove(&recipient)?;
+                let max_height = *max_height_by_recipient.get(&recipient)?;
 
                 Some(async move {
-                    let mut results = Vec::with_capacity(heights.len());
-                    let mut all_updates = Vec::new();
-
-                    for (idx, height) in heights {
-                        let updates = outbox.mark_messages_as_received(height).await?;
-                        let has_updates = !updates.is_empty();
-                        all_updates.extend(updates);
-                        results.push((idx, has_updates));
-                    }
-
-                    Ok::<_, ChainError>((recipient, results, all_updates, outbox))
+                    let updates = outbox.mark_messages_as_received(max_height).await?;
+                    Ok::<_, ChainError>((recipient, updates, outbox))
                 })
             })
             .collect();
@@ -489,8 +455,12 @@ where
         let processing_results = futures::future::try_join_all(processing_futures).await?;
 
         // Apply counter updates to shared state sequentially.
-        for (recipient, _results, all_updates, outbox) in &processing_results {
-            for update in all_updates {
+        let mut any_updates = false;
+        for (recipient, updates, outbox) in &processing_results {
+            if !updates.is_empty() {
+                any_updates = true;
+            }
+            for update in updates {
                 let counter = self
                     .outbox_counters
                     .get_mut()
@@ -518,20 +488,7 @@ where
             .with_label_values(&[])
             .observe(self.outboxes.count().await? as f64);
 
-        // Reconstruct results in original order.
-        let total_confirmations = processing_results
-            .iter()
-            .map(|(_, results, _, _)| results.len())
-            .sum();
-        let mut final_results: Vec<bool> = Vec::with_capacity(total_confirmations);
-        final_results.resize(total_confirmations, false);
-        for (_recipient, results, _, _) in processing_results {
-            for (idx, has_updates) in results {
-                final_results[idx] = has_updates;
-            }
-        }
-
-        Ok(final_results)
+        Ok(any_updates)
     }
 
     /// Returns true if there are no more outgoing messages in flight up to the given
@@ -618,11 +575,11 @@ where
 
     /// Processes multiple message bundles from different origins concurrently.
     /// Each inbox is loaded once and all its bundles are processed together.
-    /// Side effects to shared state (unskippable_bundles, received_log) are collected
+    /// Side effects to shared state (`unskippable_bundles`, `received_log`) are collected
     /// during concurrent processing and applied sequentially at the end.
     ///
     /// # Arguments
-    /// * `updates` - Vec of (origin_chain_id, bundle, add_to_received_log)
+    /// * `updates` - Vec of `(origin_chain_id, bundle, add_to_received_log)`
     /// * `local_time` - The current timestamp for tracking when bundles are seen
     ///
     /// # Returns
@@ -632,8 +589,6 @@ where
         updates: Vec<(ChainId, MessageBundle, bool)>,
         local_time: Timestamp,
     ) -> Result<Vec<Result<(), ChainError>>, ChainError> {
-        use std::collections::HashMap;
-
         if updates.is_empty() {
             return Ok(Vec::new());
         }
@@ -652,8 +607,8 @@ where
         }
 
         // Group bundles by origin to deduplicate inbox loading.
-        let mut bundles_by_origin: HashMap<ChainId, Vec<(usize, MessageBundle, bool)>> =
-            HashMap::new();
+        let mut bundles_by_origin: BTreeMap<ChainId, Vec<(usize, MessageBundle, bool)>> =
+            BTreeMap::new();
         for (idx, (origin, bundle, add_to_log)) in updates.into_iter().enumerate() {
             bundles_by_origin
                 .entry(origin)

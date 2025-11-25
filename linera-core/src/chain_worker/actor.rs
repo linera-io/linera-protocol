@@ -192,6 +192,20 @@ pub(crate) struct ConfirmUpdatedRecipientRequest {
     pub callback: oneshot::Sender<Result<(), WorkerError>>,
 }
 
+/// A callback sender for cross-chain update results, mapped by origin chain ID.
+type CrossChainUpdateCallbacks =
+    BTreeMap<ChainId, Vec<oneshot::Sender<Result<Option<BlockHeight>, WorkerError>>>>;
+
+/// The type of request to process next in the actor loop.
+enum RequestType {
+    /// A cross-chain update request.
+    CrossChainUpdate,
+    /// A confirmation that a recipient was updated.
+    Confirmation,
+    /// A regular chain worker request.
+    Regular,
+}
+
 /// The actor worker type.
 pub(crate) struct ChainWorkerActor<StorageClient>
 where
@@ -338,11 +352,6 @@ where
         let min_regular_percentage = self.config.min_regular_request_percentage as u64;
         let batch_size = self.config.cross_chain_update_batch_size;
 
-        // Which type of request to handle next.
-        const CROSS_CHAIN_UPDATE: u8 = 0;
-        const CONFIRMATION: u8 = 1;
-        const REGULAR: u8 = 2;
-
         // The first iteration waits indefinitely; subsequent iterations have a timeout.
         let mut first_iteration = true;
 
@@ -372,16 +381,16 @@ where
             let request_type = if regular_pending > 0
                 && (total_count == 0 || regular_count * 100 / total_count < min_regular_percentage)
             {
-                Some(REGULAR)
+                Some(RequestType::Regular)
             } else if confirmation_pending > 0 || cross_chain_pending > 0 {
                 // Handle whichever cross-chain queue has more; confirmations win ties.
                 if confirmation_pending >= cross_chain_pending {
-                    Some(CONFIRMATION)
+                    Some(RequestType::Confirmation)
                 } else {
-                    Some(CROSS_CHAIN_UPDATE)
+                    Some(RequestType::CrossChainUpdate)
                 }
             } else if regular_pending > 0 {
-                Some(REGULAR)
+                Some(RequestType::Regular)
             } else {
                 None
             };
@@ -396,17 +405,17 @@ where
                             req = incoming_cross_chain_updates.recv().fuse() => {
                                 let Some(req) = req else { break };
                                 first_cross_chain_update = Some(req);
-                                CROSS_CHAIN_UPDATE
+                                RequestType::CrossChainUpdate
                             },
                             req = incoming_confirmations.recv().fuse() => {
                                 let Some(req) = req else { break };
                                 first_confirmation = Some(req);
-                                CONFIRMATION
+                                RequestType::Confirmation
                             },
                             req = incoming_requests.recv().fuse() => {
                                 let Some(req) = req else { break };
                                 first_regular = Some(req);
-                                REGULAR
+                                RequestType::Regular
                             },
                         }
                     } else {
@@ -430,17 +439,17 @@ where
                             req = incoming_cross_chain_updates.recv().fuse() => {
                                 let Some(req) = req else { break };
                                 first_cross_chain_update = Some(req);
-                                CROSS_CHAIN_UPDATE
+                                RequestType::CrossChainUpdate
                             },
                             req = incoming_confirmations.recv().fuse() => {
                                 let Some(req) = req else { break };
                                 first_confirmation = Some(req);
-                                CONFIRMATION
+                                RequestType::Confirmation
                             },
                             req = incoming_requests.recv().fuse() => {
                                 let Some(req) = req else { break };
                                 first_regular = Some(req);
-                                REGULAR
+                                RequestType::Regular
                             },
                         }
                     }
@@ -482,21 +491,30 @@ where
 
             // Process the request based on type.
             match request_type {
-                CROSS_CHAIN_UPDATE => {
-                    // Drain up to batch_size requests, starting with the first if provided.
-                    let mut updates = Vec::new();
-                    let mut callbacks = Vec::new();
+                RequestType::CrossChainUpdate => {
+                    // Drain requests and group by origin, merging bundles.
+                    let mut updates: BTreeMap<ChainId, Vec<(Epoch, MessageBundle)>> =
+                        BTreeMap::new();
+                    let mut callbacks_by_origin: CrossChainUpdateCallbacks = BTreeMap::new();
+                    let mut count = 0;
+
                     if let Some((req, _span)) = first_cross_chain_update {
-                        total_count += 1;
-                        updates.push((req.origin, req.bundles));
-                        callbacks.push(req.callback);
+                        updates.entry(req.origin).or_default().extend(req.bundles);
+                        callbacks_by_origin
+                            .entry(req.origin)
+                            .or_default()
+                            .push(req.callback);
+                        count += 1;
                     }
-                    while updates.len() < batch_size {
+                    while count < batch_size {
                         match incoming_cross_chain_updates.try_recv() {
                             Ok((req, _span)) => {
-                                total_count += 1;
-                                updates.push((req.origin, req.bundles));
-                                callbacks.push(req.callback);
+                                updates.entry(req.origin).or_default().extend(req.bundles);
+                                callbacks_by_origin
+                                    .entry(req.origin)
+                                    .or_default()
+                                    .push(req.callback);
+                                count += 1;
                             }
                             Err(_) => break,
                         }
@@ -506,47 +524,67 @@ where
                         continue; // Queue was empty after all.
                     }
 
-                    if updates.len() > 1 {
-                        trace!("Batching {} cross-chain updates", updates.len());
+                    total_count += 1; // Count the batch as one request.
+
+                    if count > 1 {
+                        trace!("Batching {count} cross-chain updates");
                     }
 
-                    let results = Box::pin(worker.process_cross_chain_update(updates)).await;
-                    match results {
-                        Ok(heights) => {
-                            for (callback, height) in callbacks.into_iter().zip(heights) {
-                                let _ = callback.send(Ok(height));
+                    // Sort and deduplicate bundles for each origin.
+                    for bundles in updates.values_mut() {
+                        // Sort by height, then transaction_index, then epoch (descending).
+                        bundles.sort_by(|(epoch_a, a), (epoch_b, b)| {
+                            a.height
+                                .cmp(&b.height)
+                                .then_with(|| a.transaction_index.cmp(&b.transaction_index))
+                                .then_with(|| epoch_b.cmp(epoch_a))
+                        });
+                        // Deduplicate by (height, transaction_index), keeping latest epoch.
+                        bundles.dedup_by(|(_, a), (_, b)| {
+                            a.height == b.height && a.transaction_index == b.transaction_index
+                        });
+                    }
+
+                    match Box::pin(worker.process_cross_chain_update(updates)).await {
+                        Ok(heights_by_origin) => {
+                            for (origin, height) in heights_by_origin {
+                                if let Some(callbacks) = callbacks_by_origin.remove(&origin) {
+                                    for callback in callbacks {
+                                        let _ = callback.send(Ok(height));
+                                    }
+                                }
                             }
                         }
                         Err(err) => {
-                            let mut iter = callbacks.into_iter();
-                            if let Some(first) = iter.next() {
-                                let _ = first.send(Err(err));
-                            }
-                            for callback in iter {
-                                let _ = callback.send(Err(WorkerError::ChainError(Box::new(
-                                    ChainError::InternalError(
-                                        "Batch processing failed".to_string(),
-                                    ),
-                                ))));
-                            }
+                            let all_callbacks: Vec<_> =
+                                callbacks_by_origin.into_values().flatten().collect();
+                            send_batch_error(all_callbacks, err);
                         }
                     }
                 }
-                CONFIRMATION => {
-                    // Drain up to batch_size requests, starting with the first if provided.
-                    let mut confirmations = Vec::new();
+                RequestType::Confirmation => {
+                    // Drain requests and group by recipient, keeping max height.
+                    let mut confirmations: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
                     let mut callbacks = Vec::new();
+                    let mut count = 0;
+
                     if let Some((req, _span)) = first_confirmation {
-                        total_count += 1;
-                        confirmations.push((req.recipient, req.latest_height));
+                        confirmations
+                            .entry(req.recipient)
+                            .and_modify(|h| *h = (*h).max(req.latest_height))
+                            .or_insert(req.latest_height);
                         callbacks.push(req.callback);
+                        count += 1;
                     }
-                    while confirmations.len() < batch_size {
+                    while count < batch_size {
                         match incoming_confirmations.try_recv() {
                             Ok((req, _span)) => {
-                                total_count += 1;
-                                confirmations.push((req.recipient, req.latest_height));
+                                confirmations
+                                    .entry(req.recipient)
+                                    .and_modify(|h| *h = (*h).max(req.latest_height))
+                                    .or_insert(req.latest_height);
                                 callbacks.push(req.callback);
+                                count += 1;
                             }
                             Err(_) => break,
                         }
@@ -556,33 +594,22 @@ where
                         continue; // Queue was empty after all.
                     }
 
-                    if confirmations.len() > 1 {
-                        trace!("Batching {} confirmations", confirmations.len());
+                    total_count += 1; // Count the batch as one request.
+
+                    if count > 1 {
+                        trace!("Batching {count} confirmations");
                     }
 
-                    let results = Box::pin(worker.confirm_updated_recipient(confirmations)).await;
-                    match results {
-                        Ok(results) => {
-                            for (callback, result) in callbacks.into_iter().zip(results) {
-                                let _ = callback.send(result);
+                    match Box::pin(worker.confirm_updated_recipient(confirmations)).await {
+                        Ok(()) => {
+                            for callback in callbacks {
+                                let _ = callback.send(Ok(()));
                             }
                         }
-                        Err(err) => {
-                            let mut iter = callbacks.into_iter();
-                            if let Some(first) = iter.next() {
-                                let _ = first.send(Err(err));
-                            }
-                            for callback in iter {
-                                let _ = callback.send(Err(WorkerError::ChainError(Box::new(
-                                    ChainError::InternalError(
-                                        "Batch processing failed".to_string(),
-                                    ),
-                                ))));
-                            }
-                        }
+                        Err(err) => send_batch_error(callbacks, err),
                     }
                 }
-                REGULAR => {
+                RequestType::Regular => {
                     let Some((request, span)) =
                         first_regular.or_else(|| incoming_requests.try_recv().ok())
                     else {
@@ -594,7 +621,6 @@ where
                         .instrument(span)
                         .await;
                 }
-                _ => unreachable!(),
             }
         }
 
@@ -620,5 +646,18 @@ fn elide_option<T>(option: &Option<T>, f: &mut fmt::Formatter) -> fmt::Result {
     match option {
         Some(_) => write!(f, "Some(..)"),
         None => write!(f, "None"),
+    }
+}
+
+/// Sends an error to the first callback and a generic batch failure to the rest.
+fn send_batch_error<T>(callbacks: Vec<oneshot::Sender<Result<T, WorkerError>>>, err: WorkerError) {
+    let mut iter = callbacks.into_iter();
+    if let Some(first) = iter.next() {
+        let _ = first.send(Err(err));
+    }
+    for callback in iter {
+        let _ = callback.send(Err(WorkerError::ChainError(Box::new(
+            ChainError::InternalError("Batch processing failed".to_string()),
+        ))));
     }
 }

@@ -950,57 +950,42 @@ where
     }
 
     /// Processes a batch of cross-chain updates efficiently with a single save operation.
-    /// Pre-loads all affected inboxes at once for better performance.
+    /// Takes a map from origin chain to bundles (already deduplicated by caller).
+    /// Returns a map from origin chain to the last updated height (if any).
     #[instrument(level = "trace", skip(self, updates))]
     pub(super) async fn process_cross_chain_update(
         &mut self,
-        updates: Vec<(ChainId, Vec<(Epoch, MessageBundle)>)>,
-    ) -> Result<Vec<Option<BlockHeight>>, WorkerError> {
-        use std::collections::HashMap;
-
-        // Group updates by origin to handle deduplication.
-        let mut updates_by_origin: HashMap<ChainId, Vec<Vec<(Epoch, MessageBundle)>>> =
-            HashMap::new();
-        let mut original_order: Vec<(ChainId, usize)> = Vec::new();
-
-        for (origin, bundles) in updates {
-            let origin_updates = updates_by_origin.entry(origin).or_default();
-            original_order.push((origin, origin_updates.len()));
-            origin_updates.push(bundles);
-        }
-
-        // Filter bundles using CrossChainUpdateHelper and prepare for batch processing.
-        let mut batch_updates = Vec::new();
-        let mut update_tracking: Vec<(ChainId, usize, Option<BlockHeight>)> = Vec::new();
+        updates: BTreeMap<ChainId, Vec<(Epoch, MessageBundle)>>,
+    ) -> Result<BTreeMap<ChainId, Option<BlockHeight>>, WorkerError> {
         let recipient = self.chain_id();
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
 
-        for (origin, all_bundles) in updates_by_origin {
+        // Filter bundles and prepare for batch processing.
+        let mut batch_updates = Vec::new();
+        let mut last_height_by_origin: BTreeMap<ChainId, Option<BlockHeight>> = BTreeMap::new();
+
+        for (origin, bundles) in updates {
             let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
             let last_anticipated_block_height =
                 self.chain.last_anticipated_block_height(&origin).await?;
 
-            for bundles in all_bundles {
-                let filtered_bundles = helper.select_message_bundles(
-                    &origin,
-                    recipient,
-                    next_height_to_receive,
-                    last_anticipated_block_height,
-                    bundles,
-                )?;
+            let filtered_bundles = helper.select_message_bundles(
+                &origin,
+                recipient,
+                next_height_to_receive,
+                last_anticipated_block_height,
+                bundles,
+            )?;
 
-                let last_updated_height = filtered_bundles.last().map(|bundle| bundle.height);
-                let batch_start_idx = batch_updates.len();
+            let last_updated_height = filtered_bundles.last().map(|bundle| bundle.height);
+            last_height_by_origin.insert(origin, last_updated_height);
 
-                // Add filtered bundles to batch with add_to_received_log flags.
-                let mut previous_height = None;
-                for bundle in filtered_bundles {
-                    let add_to_received_log = previous_height != Some(bundle.height);
-                    previous_height = Some(bundle.height);
-                    batch_updates.push((origin, bundle, add_to_received_log));
-                }
-
-                update_tracking.push((origin, batch_start_idx, last_updated_height));
+            // Add filtered bundles to batch with add_to_received_log flags.
+            let mut previous_height = None;
+            for bundle in filtered_bundles {
+                let add_to_received_log = previous_height != Some(bundle.height);
+                previous_height = Some(bundle.height);
+                batch_updates.push((origin, bundle, add_to_received_log));
             }
         }
 
@@ -1020,24 +1005,17 @@ where
                 }
             }
 
-            let mut results_by_origin: HashMap<ChainId, Vec<Option<BlockHeight>>> = HashMap::new();
-            for (origin, _batch_idx, _last_updated_height) in update_tracking {
+            for origin in last_height_by_origin.keys() {
                 warn!(
                     "Refusing to deliver messages to {recipient:?} from {origin:?} \
                     because the recipient is still inactive",
                 );
-                results_by_origin.entry(origin).or_default().push(None);
             }
 
-            // Reconstruct results in original order without processing bundles.
-            let results: Vec<Option<BlockHeight>> = original_order
-                .into_iter()
-                .map(|(origin, idx)| {
-                    results_by_origin
-                        .get(&origin)
-                        .and_then(|origin_results| origin_results.get(idx).copied())
-                        .flatten()
-                })
+            // Return None for all origins since messages weren't processed.
+            let results = last_height_by_origin
+                .keys()
+                .map(|origin| (*origin, None))
                 .collect();
 
             // Save the chain to persist the received_log updates.
@@ -1045,74 +1023,42 @@ where
             return Ok(results);
         }
 
-        // Process all bundles concurrently via ChainStateView's batch method.
+        // Process all bundles via ChainStateView's batch method.
         let local_time = self.storage.clock().current_time();
-        let _batch_results = self
-            .chain
+        self.chain
             .receive_message_bundles_batch(batch_updates, local_time)
             .await?;
 
-        // All messages were accepted - construct success results.
-        let mut results_by_origin: HashMap<ChainId, Vec<Option<BlockHeight>>> = HashMap::new();
-        for (origin, _batch_idx, last_updated_height) in update_tracking {
-            results_by_origin
-                .entry(origin)
-                .or_default()
-                .push(last_updated_height);
-        }
-
-        // Reconstruct results in original order.
-        let results: Vec<Option<BlockHeight>> = original_order
-            .into_iter()
-            .map(|(origin, idx)| {
-                results_by_origin
-                    .get(&origin)
-                    .and_then(|origin_results| origin_results.get(idx).copied())
-                    .flatten()
-            })
-            .collect();
-
         // Save the chain once for all updates.
         self.save().await?;
-        Ok(results)
+        Ok(last_height_by_origin)
     }
 
     /// Handles a batch of cross-chain confirmation requests efficiently with a single save operation.
-    /// Pre-loads all affected outboxes at once for better performance.
+    /// Takes a map from recipient to the maximum confirmed height.
     #[instrument(level = "trace", skip(self, confirmations))]
     pub(super) async fn confirm_updated_recipient(
         &mut self,
-        confirmations: Vec<(ChainId, BlockHeight)>,
-    ) -> Result<Vec<Result<(), WorkerError>>, WorkerError> {
-        let results = self
-            .chain
-            .mark_messages_as_received(confirmations.clone())
-            .await?;
+        confirmations: BTreeMap<ChainId, BlockHeight>,
+    ) -> Result<(), WorkerError> {
+        let max_height = confirmations.values().max().copied();
 
-        // Check for each confirmation if messages were fully delivered.
-        let mut final_results = Vec::with_capacity(confirmations.len());
-        for ((_recipient, latest_height), has_updates) in
-            confirmations.into_iter().zip(results.into_iter())
-        {
-            if !has_updates {
-                final_results.push(Ok(()));
-                continue;
+        let has_updates = self.chain.mark_messages_as_received(confirmations).await?;
+
+        if has_updates {
+            if let Some(max_height) = max_height {
+                let fully_delivered = self
+                    .all_messages_to_tracked_chains_delivered_up_to(max_height)
+                    .await?;
+
+                if fully_delivered {
+                    self.delivery_notifier.notify(max_height);
+                }
             }
-
-            let fully_delivered = self
-                .all_messages_to_tracked_chains_delivered_up_to(latest_height)
-                .await?;
-
-            if fully_delivered {
-                self.delivery_notifier.notify(latest_height);
-            }
-
-            final_results.push(Ok(()));
         }
 
-        // Save the chain once for all confirmations.
         self.save().await?;
-        Ok(final_results)
+        Ok(())
     }
 
     #[instrument(skip_all, fields(
