@@ -469,6 +469,114 @@ where
         Ok(true)
     }
 
+    /// Marks messages as received for multiple recipients concurrently.
+    /// Each outbox is loaded once and all its confirmations are processed together.
+    /// Counter updates to shared state are collected during concurrent processing
+    /// and applied sequentially at the end.
+    ///
+    /// # Arguments
+    /// * `confirmations` - Vec of (recipient_chain_id, latest_height)
+    ///
+    /// # Returns
+    /// * `Vec<bool>` - One result per confirmation, indicating if any messages were marked
+    pub async fn mark_messages_as_received_batch(
+        &mut self,
+        confirmations: Vec<(ChainId, BlockHeight)>,
+    ) -> Result<Vec<bool>, ChainError> {
+        use std::collections::HashMap;
+
+        if confirmations.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Group confirmations by recipient to handle multiple confirmations for the same chain.
+        let mut confirmations_by_recipient: HashMap<ChainId, Vec<(usize, BlockHeight)>> =
+            HashMap::new();
+        for (idx, (recipient, height)) in confirmations.into_iter().enumerate() {
+            confirmations_by_recipient
+                .entry(recipient)
+                .or_default()
+                .push((idx, height));
+        }
+
+        // Load all unique outboxes at once.
+        let unique_recipients: Vec<ChainId> = confirmations_by_recipient.keys().copied().collect();
+        let loaded_outboxes = self
+            .outboxes
+            .try_load_entries_pairs_mut(unique_recipients)
+            .await?;
+
+        // Process each recipient concurrently.
+        let processing_futures: Vec<_> = loaded_outboxes
+            .into_iter()
+            .filter_map(|(recipient, mut outbox)| {
+                let heights = confirmations_by_recipient.remove(&recipient)?;
+
+                Some(async move {
+                    let mut results = Vec::with_capacity(heights.len());
+                    let mut all_updates = Vec::new();
+
+                    for (idx, height) in heights {
+                        let updates = outbox.mark_messages_as_received(height).await?;
+                        let has_updates = !updates.is_empty();
+                        all_updates.extend(updates);
+                        results.push((idx, has_updates));
+                    }
+
+                    Ok::<_, ChainError>((recipient, results, all_updates, outbox))
+                })
+            })
+            .collect();
+
+        // Execute all processing concurrently.
+        let processing_results = futures::future::try_join_all(processing_futures).await?;
+
+        // Apply counter updates to shared state sequentially.
+        for (recipient, _results, all_updates, outbox) in &processing_results {
+            for update in all_updates {
+                let counter = self
+                    .outbox_counters
+                    .get_mut()
+                    .get_mut(update)
+                    .ok_or_else(|| {
+                        ChainError::InternalError("message counter should be present".into())
+                    })?;
+                *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
+                if *counter == 0 {
+                    // Important for the test in `all_messages_delivered_up_to`.
+                    self.outbox_counters.get_mut().remove(update);
+                }
+            }
+            if outbox.queue.count() == 0 {
+                self.nonempty_outboxes.get_mut().remove(recipient);
+                // If the outbox is empty and not ahead of the executed blocks, remove it.
+                if *outbox.next_height_to_schedule.get() <= self.tip_state.get().next_block_height {
+                    self.outboxes.remove_entry(recipient)?;
+                }
+            }
+        }
+
+        #[cfg(with_metrics)]
+        metrics::NUM_OUTBOXES
+            .with_label_values(&[])
+            .observe(self.outboxes.count().await? as f64);
+
+        // Reconstruct results in original order.
+        let total_confirmations = processing_results
+            .iter()
+            .map(|(_, results, _, _)| results.len())
+            .sum();
+        let mut final_results: Vec<bool> = Vec::with_capacity(total_confirmations);
+        final_results.resize(total_confirmations, false);
+        for (_recipient, results, _, _) in processing_results {
+            for (idx, has_updates) in results {
+                final_results[idx] = has_updates;
+            }
+        }
+
+        Ok(final_results)
+    }
+
     /// Returns true if there are no more outgoing messages in flight up to the given
     /// block height.
     pub fn all_messages_delivered_up_to(&self, height: BlockHeight) -> bool {

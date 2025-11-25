@@ -266,6 +266,10 @@ where
             ChainWorkerRequest<StorageClient::Context>,
             tracing::Span,
         )>,
+        incoming_confirmations: mpsc::UnboundedReceiver<(
+            ChainWorkerRequest<StorageClient::Context>,
+            tracing::Span,
+        )>,
         is_tracked: bool,
     ) {
         let actor = ChainWorkerActor {
@@ -279,7 +283,11 @@ where
             is_tracked,
         };
         if let Err(err) = actor
-            .handle_requests(incoming_requests, incoming_cross_chain_updates)
+            .handle_requests(
+                incoming_requests,
+                incoming_cross_chain_updates,
+                incoming_confirmations,
+            )
             .await
         {
             tracing::error!("Chain actor error: {err}");
@@ -311,6 +319,10 @@ where
             tracing::Span,
         )>,
         mut incoming_cross_chain_updates: mpsc::UnboundedReceiver<(
+            ChainWorkerRequest<StorageClient::Context>,
+            tracing::Span,
+        )>,
+        mut incoming_confirmations: mpsc::UnboundedReceiver<(
             ChainWorkerRequest<StorageClient::Context>,
             tracing::Span,
         )>,
@@ -347,25 +359,75 @@ where
                 false
             };
 
+        // Similar helper for confirmations.
+        let should_process_confirmation =
+            |regular_count: u32, confirmation_pending: usize, regular_pending: usize| -> bool {
+                // If confirmation queue is empty, use regular.
+                if confirmation_pending == 0 {
+                    return false;
+                }
+
+                // If regular queue is empty, use confirmation.
+                if regular_pending == 0 {
+                    return true;
+                }
+
+                // Anti-starvation: every Nth request should be confirmation.
+                if anti_starvation_ratio > 0 && regular_count % anti_starvation_ratio == 0 {
+                    return true;
+                }
+
+                // If there are many confirmations queued (more than 10), prioritize them.
+                if confirmation_pending > 10 {
+                    return true;
+                }
+
+                false
+            };
+
         loop {
-            // Check both queues and decide which to process.
+            // Check all queues and decide which to process.
             let regular_pending = incoming_requests.len();
             let cross_chain_pending = incoming_cross_chain_updates.len();
+            let confirmation_pending = incoming_confirmations.len();
 
+            // Determine priority: check batch-able queues first.
             let from_cross_chain = should_process_cross_chain_update(
                 regular_requests_processed,
                 cross_chain_pending,
                 regular_pending,
             );
+            let from_confirmation = !from_cross_chain
+                && should_process_confirmation(
+                    regular_requests_processed,
+                    confirmation_pending,
+                    regular_pending,
+                );
 
             // Try to receive from the prioritized queue first without blocking.
             let maybe_request = if from_cross_chain {
                 match incoming_cross_chain_updates.try_recv() {
                     Ok(request) => Some(request),
                     Err(_) => {
-                        // Cross-chain queue is empty, wait on both queues.
+                        // Cross-chain queue is empty, wait on all queues.
                         futures::select! {
                             request = incoming_cross_chain_updates.recv().fuse() => request,
+                            request = incoming_confirmations.recv().fuse() => request,
+                            request = incoming_requests.recv().fuse() => {
+                                regular_requests_processed = regular_requests_processed.wrapping_add(1);
+                                request
+                            },
+                        }
+                    }
+                }
+            } else if from_confirmation {
+                match incoming_confirmations.try_recv() {
+                    Ok(request) => Some(request),
+                    Err(_) => {
+                        // Confirmation queue is empty, wait on all queues.
+                        futures::select! {
+                            request = incoming_cross_chain_updates.recv().fuse() => request,
+                            request = incoming_confirmations.recv().fuse() => request,
                             request = incoming_requests.recv().fuse() => {
                                 regular_requests_processed = regular_requests_processed.wrapping_add(1);
                                 request
@@ -380,9 +442,10 @@ where
                         Some(request)
                     }
                     Err(_) => {
-                        // Regular queue is empty, wait on both queues.
+                        // Regular queue is empty, wait on all queues.
                         futures::select! {
                             request = incoming_cross_chain_updates.recv().fuse() => request,
+                            request = incoming_confirmations.recv().fuse() => request,
                             request = incoming_requests.recv().fuse() => {
                                 regular_requests_processed = regular_requests_processed.wrapping_add(1);
                                 request
@@ -393,11 +456,11 @@ where
             };
 
             let Some((request, span)) = maybe_request else {
-                // Both senders were dropped.
+                // All senders were dropped.
                 break;
             };
 
-            // Check if we should batch cross-chain updates.
+            // Check if we should batch cross-chain updates or confirmations.
             let (requests_to_process, batched_span) =
                 if matches!(request, ChainWorkerRequest::ProcessCrossChainUpdate { .. }) {
                     // Drain additional cross-chain updates for batching.
@@ -414,6 +477,24 @@ where
 
                     if batch.len() > 1 {
                         trace!("Batching {} cross-chain updates", batch.len());
+                    }
+
+                    (batch, tracing::Span::current())
+                } else if matches!(request, ChainWorkerRequest::ConfirmUpdatedRecipient { .. }) {
+                    // Drain additional confirmations for batching.
+                    let batch_size = self.config.cross_chain_update_batch_size;
+                    let mut batch = vec![(request, span)];
+
+                    // Try to drain up to batch_size - 1 more confirmations.
+                    while batch.len() < batch_size {
+                        match incoming_confirmations.try_recv() {
+                            Ok((req, req_span)) => batch.push((req, req_span)),
+                            Err(_) => break, // Queue is empty.
+                        }
+                    }
+
+                    if batch.len() > 1 {
+                        trace!("Batching {} confirmations", batch.len());
                     }
 
                     (batch, tracing::Span::current())
@@ -447,6 +528,9 @@ where
             // Check if we're processing cross-chain updates (which should use batch processing).
             let is_cross_chain_batch = requests_to_process.first().is_some_and(|(req, _)| {
                 matches!(req, ChainWorkerRequest::ProcessCrossChainUpdate { .. })
+            });
+            let is_confirmation_batch = requests_to_process.first().is_some_and(|(req, _)| {
+                matches!(req, ChainWorkerRequest::ConfirmUpdatedRecipient { .. })
             });
 
             if is_cross_chain_batch {
@@ -490,8 +574,49 @@ where
                         }
                     }
                 }
+            } else if is_confirmation_batch {
+                // Process batch of confirmations (works for single items too).
+                let mut confirmations = Vec::new();
+                let mut callbacks = Vec::new();
+
+                for (request, _span) in requests_to_process {
+                    if let ChainWorkerRequest::ConfirmUpdatedRecipient {
+                        recipient,
+                        latest_height,
+                        callback,
+                    } = request
+                    {
+                        confirmations.push((recipient, latest_height));
+                        callbacks.push(callback);
+                    }
+                }
+
+                let results = Box::pin(worker.confirm_updated_recipient_batch(confirmations))
+                    .instrument(batched_span)
+                    .await;
+
+                // Send responses to all callbacks.
+                match results {
+                    Ok(results) => {
+                        for (callback, result) in callbacks.into_iter().zip(results) {
+                            let _ = callback.send(result);
+                        }
+                    }
+                    Err(err) => {
+                        // Send the error to the first callback, and a generic error to the rest.
+                        let mut callbacks_iter = callbacks.into_iter();
+                        if let Some(first_callback) = callbacks_iter.next() {
+                            let _ = first_callback.send(Err(err));
+                        }
+                        for callback in callbacks_iter {
+                            let _ = callback.send(Err(WorkerError::ChainError(Box::new(
+                                ChainError::InternalError("Batch processing failed".to_string()),
+                            ))));
+                        }
+                    }
+                }
             } else if requests_to_process.len() == 1 {
-                // Handle single non-cross-chain request.
+                // Handle single non-batch request.
                 let (request, span) = requests_to_process.into_iter().next().unwrap();
                 Box::pin(worker.handle_request(request))
                     .instrument(span)
@@ -499,25 +624,49 @@ where
             }
 
             loop {
-                // Check both queues and decide which to process.
+                // Check all queues and decide which to process.
                 let regular_pending = incoming_requests.len();
                 let cross_chain_pending = incoming_cross_chain_updates.len();
+                let confirmation_pending = incoming_confirmations.len();
 
                 let from_cross_chain = should_process_cross_chain_update(
                     regular_requests_processed,
                     cross_chain_pending,
                     regular_pending,
                 );
+                let from_confirmation = !from_cross_chain
+                    && should_process_confirmation(
+                        regular_requests_processed,
+                        confirmation_pending,
+                        regular_pending,
+                    );
 
                 // Try to receive from the prioritized queue first without blocking.
                 let maybe_request = if from_cross_chain {
                     match incoming_cross_chain_updates.try_recv() {
                         Ok(request) => Some(request),
                         Err(_) => {
-                            // Cross-chain queue is empty, wait on both queues plus timeout.
+                            // Cross-chain queue is empty, wait on all queues plus timeout.
                             futures::select! {
                                 () = self.sleep_until_timeout().fuse() => break,
                                 request = incoming_cross_chain_updates.recv().fuse() => request,
+                                request = incoming_confirmations.recv().fuse() => request,
+                                request = incoming_requests.recv().fuse() => {
+                                    regular_requests_processed = regular_requests_processed.wrapping_add(1);
+                                    request
+                                },
+                            }
+                        }
+                    }
+                } else if from_confirmation {
+                    match incoming_confirmations.try_recv() {
+                        Ok(request) => Some(request),
+                        Err(_) => {
+                            // Confirmation queue is empty, wait on all queues plus timeout.
+                            futures::select! {
+                                () = self.sleep_until_timeout().fuse() => break,
+                                request = incoming_cross_chain_updates.recv().fuse() => request,
+                                request = incoming_confirmations.recv().fuse() => request,
                                 request = incoming_requests.recv().fuse() => {
                                     regular_requests_processed = regular_requests_processed.wrapping_add(1);
                                     request
@@ -532,10 +681,11 @@ where
                             Some(request)
                         }
                         Err(_) => {
-                            // Regular queue is empty, wait on both queues plus timeout.
+                            // Regular queue is empty, wait on all queues plus timeout.
                             futures::select! {
                                 () = self.sleep_until_timeout().fuse() => break,
                                 request = incoming_cross_chain_updates.recv().fuse() => request,
+                                request = incoming_confirmations.recv().fuse() => request,
                                 request = incoming_requests.recv().fuse() => {
                                     regular_requests_processed = regular_requests_processed.wrapping_add(1);
                                     request

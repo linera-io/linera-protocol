@@ -22,8 +22,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, IncomingBundle, MessageAction, MessageBundle,
-        OriginalProposal, ProposalContent, ProposedBlock,
+        BlockExecutionOutcome, BlockProposal, ChainAndHeight, IncomingBundle, MessageAction,
+        MessageBundle, OriginalProposal, ProposalContent, ProposedBlock,
     },
     manager,
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
@@ -195,12 +195,16 @@ where
                 recipient,
                 latest_height,
                 callback,
-            } => callback
-                .send(
-                    self.confirm_updated_recipient(recipient, latest_height)
-                        .await,
-                )
-                .is_ok(),
+            } => {
+                // Forward to batch processing path (works for single items).
+                let results = self
+                    .confirm_updated_recipient_batch(vec![(recipient, latest_height)])
+                    .await;
+                match results {
+                    Ok(mut results) => callback.send(results.pop().unwrap_or(Ok(()))).is_ok(),
+                    Err(err) => callback.send(Err(err)).is_ok(),
+                }
+            }
             ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
                 .send(self.handle_chain_info_query(query).await)
                 .is_ok(),
@@ -1034,6 +1038,16 @@ where
 
         if !batch_updates.is_empty() && !allow_inactive && !is_active {
             // Refuse to process messages if the chain is still inactive.
+            // However, still update the received_log so validators can track pending messages.
+            for (origin, bundle, add_to_log) in &batch_updates {
+                if *add_to_log {
+                    self.chain.received_log.push(ChainAndHeight {
+                        chain_id: *origin,
+                        height: bundle.height,
+                    });
+                }
+            }
+
             let mut results_by_origin: HashMap<ChainId, Vec<Option<BlockHeight>>> = HashMap::new();
             for (origin, _batch_idx, _last_updated_height) in update_tracking {
                 warn!(
@@ -1043,7 +1057,7 @@ where
                 results_by_origin.entry(origin).or_default().push(None);
             }
 
-            // Reconstruct results in original order without saving.
+            // Reconstruct results in original order without processing bundles.
             let results: Vec<Option<BlockHeight>> = original_order
                 .into_iter()
                 .map(|(origin, idx)| {
@@ -1053,6 +1067,9 @@ where
                         .flatten()
                 })
                 .collect();
+
+            // Save the chain to persist the received_log updates.
+            self.save().await?;
             return Ok(results);
         }
 
@@ -1088,32 +1105,42 @@ where
         Ok(results)
     }
 
-    /// Handles the cross-chain request confirming that the recipient was updated.
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        recipient = %recipient,
-        latest_height = %latest_height
-    ))]
-    async fn confirm_updated_recipient(
+    /// Handles a batch of cross-chain confirmation requests efficiently with a single save operation.
+    /// Pre-loads all affected outboxes at once for better performance.
+    #[instrument(level = "trace", skip(self, confirmations))]
+    pub(super) async fn confirm_updated_recipient_batch(
         &mut self,
-        recipient: ChainId,
-        latest_height: BlockHeight,
-    ) -> Result<(), WorkerError> {
-        let fully_delivered = self
+        confirmations: Vec<(ChainId, BlockHeight)>,
+    ) -> Result<Vec<Result<(), WorkerError>>, WorkerError> {
+        let results = self
             .chain
-            .mark_messages_as_received(&recipient, latest_height)
-            .await?
-            && self
+            .mark_messages_as_received_batch(confirmations.clone())
+            .await?;
+
+        // Check for each confirmation if messages were fully delivered.
+        let mut final_results = Vec::with_capacity(confirmations.len());
+        for ((_recipient, latest_height), has_updates) in
+            confirmations.into_iter().zip(results.into_iter())
+        {
+            if !has_updates {
+                final_results.push(Ok(()));
+                continue;
+            }
+
+            let fully_delivered = self
                 .all_messages_to_tracked_chains_delivered_up_to(latest_height)
                 .await?;
 
-        self.save().await?;
+            if fully_delivered {
+                self.delivery_notifier.notify(latest_height);
+            }
 
-        if fully_delivered {
-            self.delivery_notifier.notify(latest_height);
+            final_results.push(Ok(()));
         }
 
-        Ok(())
+        // Save the chain once for all confirmations.
+        self.save().await?;
+        Ok(final_results)
     }
 
     #[instrument(skip_all, fields(
