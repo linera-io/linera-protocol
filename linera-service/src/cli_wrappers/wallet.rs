@@ -537,7 +537,10 @@ impl ClientWrapper {
         validator_address: impl Into<String>,
     ) -> Result<()> {
         let mut command = self.command().await?;
-        command.arg("sync-validator").arg(validator_address.into());
+        command
+            .arg("validator")
+            .arg("sync")
+            .arg(validator_address.into());
         let mut chain_ids = chain_ids.into_iter().peekable();
         if chain_ids.peek().is_some() {
             command
@@ -1027,7 +1030,8 @@ impl ClientWrapper {
         let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
         self.command()
             .await?
-            .arg("set-validator")
+            .arg("validator")
+            .arg("add")
             .args(["--public-key", &validator_key.0])
             .args(["--account-key", &validator_key.1])
             .args(["--address", &address])
@@ -1040,7 +1044,8 @@ impl ClientWrapper {
     pub async fn remove_validator(&self, validator_key: &str) -> Result<()> {
         self.command()
             .await?
-            .arg("remove-validator")
+            .arg("validator")
+            .arg("remove")
             .args(["--public-key", validator_key])
             .spawn_and_wait_for_stdout()
             .await?;
@@ -1053,26 +1058,50 @@ impl ClientWrapper {
         modify_validators: &[(String, String, usize, usize)], // (public_key, account_key, port, votes)
         remove_validators: &[String],
     ) -> Result<()> {
-        let mut command = self.command().await?;
-        command.arg("change-validators");
+        use std::collections::HashMap;
 
-        for (public_key, account_key, port, votes) in add_validators {
+        use serde_json::Value;
+
+        // Build JSON object for validator changes
+        let mut changes = HashMap::new();
+
+        // Add/modify validators
+        for (public_key, account_key, port, votes) in
+            add_validators.iter().chain(modify_validators.iter())
+        {
             let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
-            let validator_spec = format!("{public_key},{account_key},{address},{votes}");
-            command.args(["--add", &validator_spec]);
+            changes.insert(
+                public_key.clone(),
+                serde_json::json!({
+                    "accountKey": account_key,
+                    "address": address,
+                    "votes": votes,
+                }),
+            );
         }
 
-        for (public_key, account_key, port, votes) in modify_validators {
-            let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
-            let validator_spec = format!("{public_key},{account_key},{address},{votes}");
-            command.args(["--modify", &validator_spec]);
-        }
-
+        // Remove validators (set to null)
         for validator_key in remove_validators {
-            command.args(["--remove", validator_key]);
+            changes.insert(validator_key.clone(), Value::Null);
         }
 
-        command.spawn_and_wait_for_stdout().await?;
+        // Create temporary file with JSON
+        let temp_file = tempfile::NamedTempFile::new()
+            .context("Failed to create temporary file for validator changes")?;
+        serde_json::to_writer(&temp_file, &changes)
+            .context("Failed to write validator changes to file")?;
+        let temp_path = temp_file.path();
+
+        self.command()
+            .await?
+            .arg("validator")
+            .arg("update")
+            .arg("--file")
+            .arg(temp_path)
+            .arg("--yes") // Skip confirmation prompt
+            .spawn_and_wait_for_stdout()
+            .await?;
+
         Ok(())
     }
 
