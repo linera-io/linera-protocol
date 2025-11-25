@@ -3,10 +3,11 @@
 
 //! Validator management commands.
 
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{collections::HashMap, num::NonZero, path::Path, sync::Arc};
 
 use anyhow::{bail, Context, Result};
 use clap::Subcommand;
+use clio::Input;
 use linera_base::{
     crypto::{AccountPublicKey, Signer, ValidatorPublicKey},
     identifiers::ChainId,
@@ -31,16 +32,13 @@ pub struct ValidatorSpec {
     pub public_key: ValidatorPublicKey,
     pub account_key: AccountPublicKey,
     pub network_address: String,
-    #[serde(default)]
-    pub votes: u64,
+    #[serde(default = "default_votes")]
+    pub votes: NonZero<u64>,
 }
 
 impl ValidatorSpec {
     /// Validate the validator specification.
     fn validate(&self) -> Result<()> {
-        if self.votes == 0 {
-            bail!("Validator votes must be greater than 0");
-        }
         if self.network_address.is_empty() {
             bail!("Validator network address cannot be empty");
         }
@@ -56,12 +54,12 @@ pub struct ValidatorUpdate {
     #[serde(rename = "address")]
     pub network_address: String,
     #[serde(default = "default_votes")]
-    pub votes: u64,
+    pub votes: NonZero<u64>,
 }
 
 /// Default value for votes field (1).
-fn default_votes() -> u64 {
-    1
+fn default_votes() -> NonZero<u64> {
+    NonZero::new(1).unwrap()
 }
 
 impl ValidatorUpdate {
@@ -69,9 +67,6 @@ impl ValidatorUpdate {
     fn validate(&self) -> Result<()> {
         if self.network_address.is_empty() {
             bail!("Validator network address cannot be empty");
-        }
-        if self.votes == 0 {
-            bail!("Validator votes must be greater than 0");
         }
         Ok(())
     }
@@ -89,6 +84,7 @@ pub enum ValidatorChange {
 
 impl ValidatorChange {
     /// Check if this change represents a removal operation.
+    #[cfg(test)]
     fn is_remove(&self) -> bool {
         matches!(self, ValidatorChange::Remove {})
     }
@@ -152,7 +148,7 @@ pub enum ValidatorCommand {
     /// - Keys not present: unchanged
     ///
     /// Input can be provided via file path, stdin pipe, or shell redirect.
-    BatchUpdate {
+    Update {
         /// Path to JSON file with validator changes (omit or use "-" for stdin)
         file: Option<String>,
         /// Preview changes without applying them
@@ -221,25 +217,14 @@ pub enum ValidatorCommand {
 }
 
 /// Parse a batch operations file or stdin.
-/// If path is None or "-", reads from stdin.
-/// Otherwise reads from the specified file path.
-fn parse_batch_file(path: Option<&str>) -> Result<ValidatorBatchFile> {
-    let contents = match path {
-        None | Some("-") => {
-            // Read from stdin
-            use std::io::Read;
-            let mut buffer = String::new();
-            std::io::stdin()
-                .read_to_string(&mut buffer)
-                .context("Failed to read from stdin")?;
-            buffer
-        }
-        Some(path_str) => {
-            // Read from file
-            std::fs::read_to_string(path_str)
-                .with_context(|| format!("Failed to read batch file: {}", path_str))?
-        }
-    };
+/// Reads from the provided clio::Input, which handles both files and stdin transparently.
+fn parse_batch_file(mut input: Input) -> Result<ValidatorBatchFile> {
+    use std::io::Read;
+
+    let mut contents = String::new();
+    input
+        .read_to_string(&mut contents)
+        .context("Failed to read input")?;
 
     let batch: ValidatorBatchFile =
         serde_json::from_str(&contents).context("Failed to parse batch JSON")?;
@@ -321,7 +306,7 @@ where
             handle_query_batch(context, file, chain_id).await
         }
 
-        BatchUpdate {
+        Update {
             file,
             dry_run,
             yes,
@@ -336,7 +321,9 @@ where
                 execution_state_cache_size,
             );
             let context = Arc::new(Mutex::new(context));
-            handle_batch_update(context, file.as_deref(), dry_run, yes, skip_online_check).await
+            // Convert file path to clio::Input (handles stdin via "-" or None)
+            let input = Input::new(file.as_deref().unwrap_or("-"))?;
+            handle_batch_update(context, input, dry_run, yes, skip_online_check).await
         }
 
         List {
@@ -587,6 +574,10 @@ where
     info!("Starting operation to add validator");
     let time_start = std::time::Instant::now();
 
+    // Convert votes to NonZero
+    let votes = NonZero::new(votes)
+        .ok_or_else(|| anyhow::anyhow!("Validator votes must be greater than 0"))?;
+
     // Validate the validator spec
     let spec = ValidatorSpec {
         public_key,
@@ -628,7 +619,7 @@ where
                     public_key,
                     ValidatorState {
                         network_address: address,
-                        votes,
+                        votes: votes.get(),
                         account_public_key: account_key,
                     },
                 );
@@ -712,7 +703,7 @@ where
 /// Handle batch-update command: apply a batch file with add/modify/remove operations.
 async fn handle_batch_update<S, W, Si>(
     context: Arc<Mutex<ClientContext<linera_core::environment::Impl<S, NodeProvider, Si>, W>>>,
-    file: Option<&str>,
+    input: Input,
     dry_run: bool,
     yes: bool,
     skip_online_check: bool,
@@ -726,7 +717,7 @@ where
     let time_start = std::time::Instant::now();
 
     // Parse the batch file or stdin
-    let batch = parse_batch_file(file)?;
+    let batch = parse_batch_file(input)?;
 
     if batch.is_empty() {
         println!("No validator changes specified in input.");
@@ -889,7 +880,7 @@ where
                         Some(ValidatorChange::Update(spec)) => {
                             // Update object - add or modify validator
                             let address = &spec.network_address;
-                            let votes = spec.votes;
+                            let votes = spec.votes.get();
                             let account_key = spec.account_key;
 
                             let exists = validators.contains_key(public_key);
@@ -1011,26 +1002,10 @@ mod tests {
         let spec = ValidatorUpdate {
             account_key: AccountPublicKey::test_key(0),
             network_address: "grpcs://validator.example.com:443".to_string(),
-            votes: 100,
+            votes: NonZero::new(100).unwrap(),
         };
 
         assert!(spec.validate().is_ok());
-    }
-
-    #[test]
-    fn test_validate_validator_update_zero_votes() {
-        let spec = ValidatorUpdate {
-            account_key: AccountPublicKey::test_key(0),
-            network_address: "grpcs://validator.example.com:443".to_string(),
-            votes: 0,
-        };
-
-        let result = spec.validate();
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("votes must be greater than 0"));
     }
 
     #[test]
@@ -1038,7 +1013,7 @@ mod tests {
         let spec = ValidatorUpdate {
             account_key: AccountPublicKey::test_key(0),
             network_address: String::new(),
-            votes: 100,
+            votes: NonZero::new(100).unwrap(),
         };
 
         let result = spec.validate();
@@ -1064,7 +1039,7 @@ mod tests {
             Some(ValidatorChange::Update(ValidatorUpdate {
                 account_key: AccountPublicKey::test_key(0),
                 network_address: "grpcs://validator1.example.com:443".to_string(),
-                votes: 100,
+                votes: NonZero::new(100).unwrap(),
             })),
         );
 
@@ -1074,7 +1049,7 @@ mod tests {
             Some(ValidatorChange::Update(ValidatorUpdate {
                 account_key: AccountPublicKey::test_key(1),
                 network_address: "grpcs://validator2.example.com:443".to_string(),
-                votes: 150,
+                votes: NonZero::new(150).unwrap(),
             })),
         );
 
@@ -1087,7 +1062,8 @@ mod tests {
         temp_file.write_all(json.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let result = parse_batch_file(Some(temp_file.path().to_str().unwrap()));
+        let input = Input::new(temp_file.path().to_str().unwrap()).unwrap();
+        let result = parse_batch_file(input);
         assert!(
             result.is_ok(),
             "Failed to parse batch file: {:?}",
@@ -1101,7 +1077,7 @@ mod tests {
         assert!(parsed_batch.contains_key(&pk0));
         let change0 = parsed_batch.get(&pk0).unwrap().as_ref().unwrap();
         if let ValidatorChange::Update(spec) = change0 {
-            assert_eq!(spec.votes, 100);
+            assert_eq!(spec.votes.get(), 100);
         } else {
             panic!("Expected Update variant");
         }
@@ -1110,7 +1086,7 @@ mod tests {
         assert!(parsed_batch.contains_key(&pk1));
         let change1 = parsed_batch.get(&pk1).unwrap().as_ref().unwrap();
         if let ValidatorChange::Update(spec) = change1 {
-            assert_eq!(spec.votes, 150);
+            assert_eq!(spec.votes.get(), 150);
         } else {
             panic!("Expected Update variant");
         }
@@ -1128,7 +1104,8 @@ mod tests {
         temp_file.write_all(json.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let result = parse_batch_file(Some(temp_file.path().to_str().unwrap()));
+        let input = Input::new(temp_file.path().to_str().unwrap()).unwrap();
+        let result = parse_batch_file(input);
         assert!(result.is_ok());
 
         let batch = result.unwrap();
@@ -1143,14 +1120,16 @@ mod tests {
         temp_file.write_all(json.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let result = parse_batch_file(Some(temp_file.path().to_str().unwrap()));
+        let input = Input::new(temp_file.path().to_str().unwrap()).unwrap();
+        let result = parse_batch_file(input);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_parse_batch_file_nonexistent() {
-        let result = parse_batch_file(Some("/nonexistent/file.json"));
-        assert!(result.is_err());
+        // With clio, Input::new itself will fail for nonexistent files
+        let result = Input::new("/nonexistent/file.json");
+        assert!(result.is_err(), "Expected error for nonexistent file");
     }
 
     #[test]
@@ -1166,7 +1145,8 @@ mod tests {
         temp_file.write_all(json.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let result = parse_batch_file(Some(temp_file.path().to_str().unwrap()));
+        let input = Input::new(temp_file.path().to_str().unwrap()).unwrap();
+        let result = parse_batch_file(input);
         assert!(result.is_ok());
 
         let parsed_batch = result.unwrap();
@@ -1181,13 +1161,13 @@ mod tests {
             public_key: ValidatorPublicKey::test_key(0),
             account_key: AccountPublicKey::test_key(0),
             network_address: "grpcs://validator1.example.com:443".to_string(),
-            votes: 100,
+            votes: NonZero::new(100).unwrap(),
         };
         let spec2 = ValidatorSpec {
             public_key: ValidatorPublicKey::test_key(1),
             account_key: AccountPublicKey::test_key(1),
             network_address: "grpcs://validator2.example.com:443".to_string(),
-            votes: 150,
+            votes: NonZero::new(150).unwrap(),
         };
 
         let batch = ValidatorQueryBatch {
@@ -1209,8 +1189,8 @@ mod tests {
 
         let parsed_batch = result.unwrap();
         assert_eq!(parsed_batch.validators.len(), 2);
-        assert_eq!(parsed_batch.validators[0].votes, 100);
-        assert_eq!(parsed_batch.validators[1].votes, 150);
+        assert_eq!(parsed_batch.validators[0].votes.get(), 100);
+        assert_eq!(parsed_batch.validators[1].votes.get(), 150);
     }
 
     #[test]
