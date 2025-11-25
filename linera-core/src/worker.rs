@@ -36,7 +36,8 @@ use tracing::{error, instrument, trace, warn};
 
 use crate::{
     chain_worker::{
-        BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier,
+        BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest,
+        ConfirmUpdatedRecipientRequest, CrossChainUpdateRequest, DeliveryNotifier,
     },
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
@@ -365,9 +366,9 @@ where
     /// The cache of running [`ChainWorkerActor`]s.
     chain_workers: Arc<Mutex<BTreeMap<ChainId, ChainActorEndpoint<StorageClient>>>>,
     /// The cache of cross-chain update endpoints for [`ChainWorkerActor`]s.
-    cross_chain_workers: Arc<Mutex<BTreeMap<ChainId, CrossChainActorEndpoint<StorageClient>>>>,
+    cross_chain_workers: Arc<Mutex<BTreeMap<ChainId, CrossChainActorEndpoint>>>,
     /// The cache of confirmation endpoints for [`ChainWorkerActor`]s.
-    confirmation_workers: Arc<Mutex<BTreeMap<ChainId, ConfirmationActorEndpoint<StorageClient>>>>,
+    confirmation_workers: Arc<Mutex<BTreeMap<ChainId, ConfirmationActorEndpoint>>>,
 }
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
@@ -398,16 +399,11 @@ type ChainActorEndpoint<StorageClient> = mpsc::UnboundedSender<(
 )>;
 
 /// The sender endpoint for cross-chain update requests.
-type CrossChainActorEndpoint<StorageClient> = mpsc::UnboundedSender<(
-    ChainWorkerRequest<<StorageClient as Storage>::Context>,
-    tracing::Span,
-)>;
+type CrossChainActorEndpoint = mpsc::UnboundedSender<(CrossChainUpdateRequest, tracing::Span)>;
 
 /// The sender endpoint for confirmation requests.
-type ConfirmationActorEndpoint<StorageClient> = mpsc::UnboundedSender<(
-    ChainWorkerRequest<<StorageClient as Storage>::Context>,
-    tracing::Span,
-)>;
+type ConfirmationActorEndpoint =
+    mpsc::UnboundedSender<(ConfirmUpdatedRecipientRequest, tracing::Span)>;
 
 pub(crate) type DeliveryNotifiers = HashMap<ChainId, DeliveryNotifier>;
 
@@ -820,51 +816,24 @@ where
         let (callback, response) = oneshot::channel();
         let request = request_builder(callback);
 
-        // Call the endpoint, possibly a new one.
-        let new_receivers = self.call_and_maybe_create_chain_worker_endpoint(chain_id, request)?;
+        // Ensure the worker exists and get the endpoint.
+        let (sender, _, _) = self.ensure_chain_worker_exists(chain_id);
 
-        // We just created an endpoint: spawn the actor.
-        if let Some((receiver, cross_chain_receiver, confirmation_receiver)) = new_receivers {
-            let delivery_notifier = self
-                .delivery_notifiers
-                .lock()
-                .unwrap()
-                .entry(chain_id)
-                .or_default()
-                .clone();
+        // Send the request.
+        sender
+            .send((request, tracing::Span::current()))
+            .map_err(|e| {
+                self.remove_chain_worker_endpoints(chain_id);
+                WorkerError::ChainActorSendError {
+                    chain_id,
+                    error: Box::new(e),
+                }
+            })?;
 
-            let is_tracked = self
-                .tracked_chains
-                .as_ref()
-                .is_some_and(|tracked_chains| tracked_chains.read().unwrap().contains(&chain_id));
-
-            let actor_task = ChainWorkerActor::run(
-                self.chain_worker_config.clone(),
-                self.storage.clone(),
-                self.block_cache.clone(),
-                self.execution_state_cache.clone(),
-                self.tracked_chains.clone(),
-                delivery_notifier,
-                chain_id,
-                receiver,
-                cross_chain_receiver,
-                confirmation_receiver,
-                is_tracked,
-            );
-
-            self.chain_worker_tasks
-                .lock()
-                .unwrap()
-                .spawn_task(actor_task);
-        }
-
-        // Finally, wait a response.
+        // Wait for the response.
         match response.await {
             Err(e) => {
-                // Remove the endpoints from cache.
-                self.chain_workers.lock().unwrap().remove(&chain_id);
-                self.cross_chain_workers.lock().unwrap().remove(&chain_id);
-                self.confirmation_workers.lock().unwrap().remove(&chain_id);
+                self.remove_chain_worker_endpoints(chain_id);
                 Err(WorkerError::ChainActorRecvError {
                     chain_id,
                     error: Box::new(e),
@@ -874,87 +843,163 @@ where
         }
     }
 
-    /// Find an endpoint and call it. Create the endpoint if necessary.
+    /// Ensures the chain worker exists, creating it if necessary. Returns the endpoints.
     #[instrument(level = "trace", skip(self), fields(
         nickname = %self.nickname,
         chain_id = %chain_id
     ))]
-    #[expect(clippy::type_complexity)]
-    fn call_and_maybe_create_chain_worker_endpoint(
+    fn ensure_chain_worker_exists(
         &self,
         chain_id: ChainId,
-        request: ChainWorkerRequest<StorageClient::Context>,
-    ) -> Result<
-        Option<(
-            mpsc::UnboundedReceiver<(ChainWorkerRequest<StorageClient::Context>, tracing::Span)>,
-            mpsc::UnboundedReceiver<(ChainWorkerRequest<StorageClient::Context>, tracing::Span)>,
-            mpsc::UnboundedReceiver<(ChainWorkerRequest<StorageClient::Context>, tracing::Span)>,
-        )>,
-        WorkerError,
-    > {
+    ) -> (
+        ChainActorEndpoint<StorageClient>,
+        CrossChainActorEndpoint,
+        ConfirmationActorEndpoint,
+    ) {
         let mut chain_workers = self.chain_workers.lock().unwrap();
         let mut cross_chain_workers = self.cross_chain_workers.lock().unwrap();
         let mut confirmation_workers = self.confirmation_workers.lock().unwrap();
 
-        // Determine which queue to use based on request type.
-        let is_cross_chain_update =
-            matches!(request, ChainWorkerRequest::ProcessCrossChainUpdate { .. });
-        let is_confirmation = matches!(request, ChainWorkerRequest::ConfirmUpdatedRecipient { .. });
+        if let Some(endpoint) = chain_workers.get(&chain_id) {
+            let cross_chain_endpoint = cross_chain_workers
+                .get(&chain_id)
+                .expect("Cross-chain endpoint must exist if regular endpoint exists");
+            let confirmation_endpoint = confirmation_workers
+                .get(&chain_id)
+                .expect("Confirmation endpoint must exist if regular endpoint exists");
+            return (
+                endpoint.clone(),
+                cross_chain_endpoint.clone(),
+                confirmation_endpoint.clone(),
+            );
+        }
 
-        let (sender, cross_chain_sender, confirmation_sender, new_receivers) =
-            if let Some(endpoint) = chain_workers.get(&chain_id) {
-                let cross_chain_endpoint = cross_chain_workers
-                    .get(&chain_id)
-                    .expect("Cross-chain endpoint must exist if regular endpoint exists");
-                let confirmation_endpoint = confirmation_workers
-                    .get(&chain_id)
-                    .expect("Confirmation endpoint must exist if regular endpoint exists");
-                (
-                    endpoint.clone(),
-                    cross_chain_endpoint.clone(),
-                    confirmation_endpoint.clone(),
-                    None,
-                )
-            } else {
-                let (sender, receiver) = mpsc::unbounded_channel();
-                let (cross_chain_sender, cross_chain_receiver) = mpsc::unbounded_channel();
-                let (confirmation_sender, confirmation_receiver) = mpsc::unbounded_channel();
-                (
-                    sender.clone(),
-                    cross_chain_sender.clone(),
-                    confirmation_sender.clone(),
-                    Some((receiver, cross_chain_receiver, confirmation_receiver)),
-                )
-            };
+        // Create new channels and spawn the actor.
+        let (sender, receiver) = mpsc::unbounded_channel();
+        let (cross_chain_sender, cross_chain_receiver) = mpsc::unbounded_channel();
+        let (confirmation_sender, confirmation_receiver) = mpsc::unbounded_channel();
 
-        // Send to the appropriate queue.
-        let send_result = if is_confirmation {
-            confirmation_sender.send((request, tracing::Span::current()))
-        } else if is_cross_chain_update {
-            cross_chain_sender.send((request, tracing::Span::current()))
-        } else {
-            sender.send((request, tracing::Span::current()))
+        chain_workers.insert(chain_id, sender.clone());
+        cross_chain_workers.insert(chain_id, cross_chain_sender.clone());
+        confirmation_workers.insert(chain_id, confirmation_sender.clone());
+
+        // Release the locks before spawning the actor.
+        drop(chain_workers);
+        drop(cross_chain_workers);
+        drop(confirmation_workers);
+
+        let delivery_notifier = self
+            .delivery_notifiers
+            .lock()
+            .unwrap()
+            .entry(chain_id)
+            .or_default()
+            .clone();
+
+        let is_tracked = self
+            .tracked_chains
+            .as_ref()
+            .is_some_and(|tracked_chains| tracked_chains.read().unwrap().contains(&chain_id));
+
+        let actor_task = ChainWorkerActor::run(
+            self.chain_worker_config.clone(),
+            self.storage.clone(),
+            self.block_cache.clone(),
+            self.execution_state_cache.clone(),
+            self.tracked_chains.clone(),
+            delivery_notifier,
+            chain_id,
+            receiver,
+            cross_chain_receiver,
+            confirmation_receiver,
+            is_tracked,
+        );
+
+        self.chain_worker_tasks
+            .lock()
+            .unwrap()
+            .spawn_task(actor_task);
+
+        (sender, cross_chain_sender, confirmation_sender)
+    }
+
+    /// Removes all endpoints for a chain from the caches.
+    fn remove_chain_worker_endpoints(&self, chain_id: ChainId) {
+        self.chain_workers.lock().unwrap().remove(&chain_id);
+        self.cross_chain_workers.lock().unwrap().remove(&chain_id);
+        self.confirmation_workers.lock().unwrap().remove(&chain_id);
+    }
+
+    /// Sends a cross-chain update request to the appropriate worker queue.
+    async fn send_cross_chain_update(
+        &self,
+        chain_id: ChainId,
+        request: CrossChainUpdateRequest,
+    ) -> Result<Option<BlockHeight>, WorkerError> {
+        let (callback, response) = oneshot::channel();
+        let request = CrossChainUpdateRequest {
+            callback,
+            ..request
         };
 
-        if let Err(e) = send_result {
-            // The actor was dropped. Remove endpoints from cache.
-            chain_workers.remove(&chain_id);
-            cross_chain_workers.remove(&chain_id);
-            confirmation_workers.remove(&chain_id);
-            return Err(WorkerError::ChainActorSendError {
-                chain_id,
-                error: Box::new(e),
-            });
-        }
+        let (_, cross_chain_sender, _) = self.ensure_chain_worker_exists(chain_id);
 
-        // Put back the senders in the cache for next time.
-        if new_receivers.is_some() {
-            chain_workers.insert(chain_id, sender);
-            cross_chain_workers.insert(chain_id, cross_chain_sender);
-            confirmation_workers.insert(chain_id, confirmation_sender);
-        }
+        cross_chain_sender
+            .send((request, tracing::Span::current()))
+            .map_err(|e| {
+                self.remove_chain_worker_endpoints(chain_id);
+                WorkerError::ChainActorSendError {
+                    chain_id,
+                    error: Box::new(e),
+                }
+            })?;
 
-        Ok(new_receivers)
+        match response.await {
+            Err(e) => {
+                self.remove_chain_worker_endpoints(chain_id);
+                Err(WorkerError::ChainActorRecvError {
+                    chain_id,
+                    error: Box::new(e),
+                })
+            }
+            Ok(result) => result,
+        }
+    }
+
+    /// Sends a confirmation request to the appropriate worker queue.
+    async fn send_confirmation(
+        &self,
+        chain_id: ChainId,
+        request: ConfirmUpdatedRecipientRequest,
+    ) -> Result<(), WorkerError> {
+        let (callback, response) = oneshot::channel();
+        let request = ConfirmUpdatedRecipientRequest {
+            callback,
+            ..request
+        };
+
+        let (_, _, confirmation_sender) = self.ensure_chain_worker_exists(chain_id);
+
+        confirmation_sender
+            .send((request, tracing::Span::current()))
+            .map_err(|e| {
+                self.remove_chain_worker_endpoints(chain_id);
+                WorkerError::ChainActorSendError {
+                    chain_id,
+                    error: Box::new(e),
+                }
+            })?;
+
+        match response.await {
+            Err(e) => {
+                self.remove_chain_worker_endpoints(chain_id);
+                Err(WorkerError::ChainActorRecvError {
+                    chain_id,
+                    error: Box::new(e),
+                })
+            }
+            Ok(result) => result,
+        }
     }
 
     #[instrument(skip_all, fields(
@@ -1213,16 +1258,14 @@ where
             } => {
                 let mut actions = NetworkActions::default();
                 let origin = sender;
-                let Some(height) = self
-                    .query_chain_worker(recipient, move |callback| {
-                        ChainWorkerRequest::ProcessCrossChainUpdate {
-                            origin,
-                            bundles,
-                            callback,
-                        }
-                    })
-                    .await?
-                else {
+                // Create a placeholder callback that will be replaced in send_cross_chain_update.
+                let (callback, _) = oneshot::channel();
+                let request = CrossChainUpdateRequest {
+                    origin,
+                    bundles,
+                    callback,
+                };
+                let Some(height) = self.send_cross_chain_update(recipient, request).await? else {
                     return Ok(actions);
                 };
                 actions.notifications.push(Notification {
@@ -1243,14 +1286,14 @@ where
                 recipient,
                 latest_height,
             } => {
-                self.query_chain_worker(sender, move |callback| {
-                    ChainWorkerRequest::ConfirmUpdatedRecipient {
-                        recipient,
-                        latest_height,
-                        callback,
-                    }
-                })
-                .await?;
+                // Create a placeholder callback that will be replaced in send_confirmation.
+                let (callback, _) = oneshot::channel();
+                let request = ConfirmUpdatedRecipientRequest {
+                    recipient,
+                    latest_height,
+                    callback,
+                };
+                self.send_confirmation(sender, request).await?;
                 Ok(NetworkActions::default())
             }
         }

@@ -116,22 +116,6 @@ where
             oneshot::Sender<Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError>>,
     },
 
-    /// Process a cross-chain update.
-    ProcessCrossChainUpdate {
-        origin: ChainId,
-        bundles: Vec<(Epoch, MessageBundle)>,
-        #[debug(skip)]
-        callback: oneshot::Sender<Result<Option<BlockHeight>, WorkerError>>,
-    },
-
-    /// Handle cross-chain request to confirm that the recipient was updated.
-    ConfirmUpdatedRecipient {
-        recipient: ChainId,
-        latest_height: BlockHeight,
-        #[debug(skip)]
-        callback: oneshot::Sender<Result<(), WorkerError>>,
-    },
-
     /// Handle a [`ChainInfoQuery`].
     HandleChainInfoQuery {
         query: ChainInfoQuery,
@@ -188,6 +172,24 @@ where
         #[debug(skip)]
         callback: oneshot::Sender<Result<Vec<CryptoHash>, WorkerError>>,
     },
+}
+
+/// A request to process a cross-chain update.
+#[derive(Debug)]
+pub(crate) struct CrossChainUpdateRequest {
+    pub origin: ChainId,
+    pub bundles: Vec<(Epoch, MessageBundle)>,
+    #[debug(skip)]
+    pub callback: oneshot::Sender<Result<Option<BlockHeight>, WorkerError>>,
+}
+
+/// A request to confirm that a recipient was updated.
+#[derive(Debug)]
+pub(crate) struct ConfirmUpdatedRecipientRequest {
+    pub recipient: ChainId,
+    pub latest_height: BlockHeight,
+    #[debug(skip)]
+    pub callback: oneshot::Sender<Result<(), WorkerError>>,
 }
 
 /// The actor worker type.
@@ -263,11 +265,11 @@ where
             tracing::Span,
         )>,
         incoming_cross_chain_updates: mpsc::UnboundedReceiver<(
-            ChainWorkerRequest<StorageClient::Context>,
+            CrossChainUpdateRequest,
             tracing::Span,
         )>,
         incoming_confirmations: mpsc::UnboundedReceiver<(
-            ChainWorkerRequest<StorageClient::Context>,
+            ConfirmUpdatedRecipientRequest,
             tracing::Span,
         )>,
         is_tracked: bool,
@@ -319,396 +321,292 @@ where
             tracing::Span,
         )>,
         mut incoming_cross_chain_updates: mpsc::UnboundedReceiver<(
-            ChainWorkerRequest<StorageClient::Context>,
+            CrossChainUpdateRequest,
             tracing::Span,
         )>,
         mut incoming_confirmations: mpsc::UnboundedReceiver<(
-            ChainWorkerRequest<StorageClient::Context>,
+            ConfirmUpdatedRecipientRequest,
             tracing::Span,
         )>,
     ) -> Result<(), WorkerError> {
         trace!("Starting `ChainWorkerActor`");
 
-        // Counter for anti-starvation: every Nth request should be from cross-chain queue.
-        let mut regular_requests_processed = 0u32;
-        let anti_starvation_ratio = self.config.cross_chain_update_anti_starvation_ratio;
+        // Counters for priority scheduling: track regular vs total requests.
+        // Reset when regular queue is empty OR both cross-chain queues are empty.
+        let mut regular_count = 0u64;
+        let mut total_count = 0u64;
+        let min_regular_percentage = self.config.min_regular_request_percentage as u64;
+        let batch_size = self.config.cross_chain_update_batch_size;
 
-        // Helper to decide which queue to use.
-        let should_process_cross_chain_update =
-            |regular_count: u32, cross_chain_pending: usize, regular_pending: usize| -> bool {
-                // If cross-chain queue is empty, use regular.
-                if cross_chain_pending == 0 {
-                    return false;
-                }
+        // Which type of request to handle next.
+        const CROSS_CHAIN_UPDATE: u8 = 0;
+        const CONFIRMATION: u8 = 1;
+        const REGULAR: u8 = 2;
 
-                // If regular queue is empty, use cross-chain.
-                if regular_pending == 0 {
-                    return true;
-                }
+        // The first iteration waits indefinitely; subsequent iterations have a timeout.
+        let mut first_iteration = true;
 
-                // Anti-starvation: every Nth request should be cross-chain.
-                if anti_starvation_ratio > 0 && regular_count % anti_starvation_ratio == 0 {
-                    return true;
-                }
-
-                // If there are many cross-chain updates queued (more than 10), prioritize them.
-                if cross_chain_pending > 10 {
-                    return true;
-                }
-
-                false
-            };
-
-        // Similar helper for confirmations.
-        let should_process_confirmation =
-            |regular_count: u32, confirmation_pending: usize, regular_pending: usize| -> bool {
-                // If confirmation queue is empty, use regular.
-                if confirmation_pending == 0 {
-                    return false;
-                }
-
-                // If regular queue is empty, use confirmation.
-                if regular_pending == 0 {
-                    return true;
-                }
-
-                // Anti-starvation: every Nth request should be confirmation.
-                if anti_starvation_ratio > 0 && regular_count % anti_starvation_ratio == 0 {
-                    return true;
-                }
-
-                // If there are many confirmations queued (more than 10), prioritize them.
-                if confirmation_pending > 10 {
-                    return true;
-                }
-
-                false
-            };
+        // The chain worker state, loaded lazily.
+        let mut worker: Option<ChainWorkerState<StorageClient>> = None;
+        let mut service_runtime_task = None;
+        #[allow(unused)]
+        let mut service_runtime_thread = None;
 
         loop {
-            // Check all queues and decide which to process.
             let regular_pending = incoming_requests.len();
             let cross_chain_pending = incoming_cross_chain_updates.len();
             let confirmation_pending = incoming_confirmations.len();
 
-            // Determine priority: check batch-able queues first.
-            let from_cross_chain = should_process_cross_chain_update(
-                regular_requests_processed,
-                cross_chain_pending,
-                regular_pending,
-            );
-            let from_confirmation = !from_cross_chain
-                && should_process_confirmation(
-                    regular_requests_processed,
-                    confirmation_pending,
-                    regular_pending,
-                );
+            // Reset counters when regular queue is empty OR both cross-chain queues are empty.
+            if regular_pending == 0 || (cross_chain_pending == 0 && confirmation_pending == 0) {
+                regular_count = 0;
+                total_count = 0;
+            }
 
-            // Try to receive from the prioritized queue first without blocking.
-            let maybe_request = if from_cross_chain {
-                match incoming_cross_chain_updates.try_recv() {
-                    Ok(request) => Some(request),
-                    Err(_) => {
-                        // Cross-chain queue is empty, wait on all queues.
-                        futures::select! {
-                            request = incoming_cross_chain_updates.recv().fuse() => request,
-                            request = incoming_confirmations.recv().fuse() => request,
-                            request = incoming_requests.recv().fuse() => {
-                                regular_requests_processed = regular_requests_processed.wrapping_add(1);
-                                request
-                            },
-                        }
-                    }
+            // Decide which queue to handle based on priority.
+            // Priority: cross-chain/confirmations first, unless regular requests are starving.
+            // If we await on a channel, store the first received request.
+            let mut first_cross_chain_update = None;
+            let mut first_confirmation = None;
+            let mut first_regular = None;
+            let request_type = if regular_pending > 0
+                && (total_count == 0 || regular_count * 100 / total_count < min_regular_percentage)
+            {
+                Some(REGULAR)
+            } else if confirmation_pending > 0 || cross_chain_pending > 0 {
+                // Handle whichever cross-chain queue has more; confirmations win ties.
+                if confirmation_pending >= cross_chain_pending {
+                    Some(CONFIRMATION)
+                } else {
+                    Some(CROSS_CHAIN_UPDATE)
                 }
-            } else if from_confirmation {
-                match incoming_confirmations.try_recv() {
-                    Ok(request) => Some(request),
-                    Err(_) => {
-                        // Confirmation queue is empty, wait on all queues.
-                        futures::select! {
-                            request = incoming_cross_chain_updates.recv().fuse() => request,
-                            request = incoming_confirmations.recv().fuse() => request,
-                            request = incoming_requests.recv().fuse() => {
-                                regular_requests_processed = regular_requests_processed.wrapping_add(1);
-                                request
-                            },
-                        }
-                    }
-                }
+            } else if regular_pending > 0 {
+                Some(REGULAR)
             } else {
-                match incoming_requests.try_recv() {
-                    Ok(request) => {
-                        regular_requests_processed = regular_requests_processed.wrapping_add(1);
-                        Some(request)
-                    }
-                    Err(_) => {
-                        // Regular queue is empty, wait on all queues.
+                None
+            };
+
+            // If no request was available, wait on all queues.
+            let request_type = match request_type {
+                Some(rt) => rt,
+                None => {
+                    if first_iteration {
+                        // Wait indefinitely for the first request.
                         futures::select! {
-                            request = incoming_cross_chain_updates.recv().fuse() => request,
-                            request = incoming_confirmations.recv().fuse() => request,
-                            request = incoming_requests.recv().fuse() => {
-                                regular_requests_processed = regular_requests_processed.wrapping_add(1);
-                                request
+                            req = incoming_cross_chain_updates.recv().fuse() => {
+                                let Some(req) = req else { break };
+                                first_cross_chain_update = Some(req);
+                                CROSS_CHAIN_UPDATE
+                            },
+                            req = incoming_confirmations.recv().fuse() => {
+                                let Some(req) = req else { break };
+                                first_confirmation = Some(req);
+                                CONFIRMATION
+                            },
+                            req = incoming_requests.recv().fuse() => {
+                                let Some(req) = req else { break };
+                                first_regular = Some(req);
+                                REGULAR
+                            },
+                        }
+                    } else {
+                        // Wait with timeout for subsequent requests.
+                        futures::select! {
+                            () = self.sleep_until_timeout().fuse() => {
+                                // Timeout: unload chain state.
+                                if let Some(mut w) = worker.take() {
+                                    trace!("Unloading chain state of {} ...", self.chain_id);
+                                    w.clear_shared_chain_view().await;
+                                    drop(w);
+                                    if let Some(task) = service_runtime_task.take() {
+                                        task.await?;
+                                    }
+                                    service_runtime_thread = None;
+                                    trace!("Done unloading chain state of {}", self.chain_id);
+                                }
+                                first_iteration = true;
+                                continue;
+                            },
+                            req = incoming_cross_chain_updates.recv().fuse() => {
+                                let Some(req) = req else { break };
+                                first_cross_chain_update = Some(req);
+                                CROSS_CHAIN_UPDATE
+                            },
+                            req = incoming_confirmations.recv().fuse() => {
+                                let Some(req) = req else { break };
+                                first_confirmation = Some(req);
+                                CONFIRMATION
+                            },
+                            req = incoming_requests.recv().fuse() => {
+                                let Some(req) = req else { break };
+                                first_regular = Some(req);
+                                REGULAR
                             },
                         }
                     }
                 }
             };
 
-            let Some((request, span)) = maybe_request else {
-                // All senders were dropped.
-                break;
+            first_iteration = false;
+
+            // Load chain state if not already loaded.
+            let worker = match &mut worker {
+                Some(w) => w,
+                None => {
+                    let service_runtime_endpoint = if self.config.long_lived_services {
+                        let actor = ServiceRuntimeActor::spawn(self.chain_id).await;
+                        service_runtime_thread = Some(actor.thread);
+                        service_runtime_task = Some(actor.task);
+                        Some(actor.endpoint)
+                    } else {
+                        None
+                    };
+
+                    trace!("Loading chain state of {}", self.chain_id);
+                    worker = Some(
+                        ChainWorkerState::load(
+                            self.config.clone(),
+                            self.storage.clone(),
+                            self.block_values.clone(),
+                            self.execution_state_cache.clone(),
+                            self.tracked_chains.clone(),
+                            self.delivery_notifier.clone(),
+                            self.chain_id,
+                            service_runtime_endpoint,
+                        )
+                        .await?,
+                    );
+                    worker.as_mut().unwrap()
+                }
             };
 
-            // Check if we should batch cross-chain updates or confirmations.
-            let (requests_to_process, batched_span) =
-                if matches!(request, ChainWorkerRequest::ProcessCrossChainUpdate { .. }) {
-                    // Drain additional cross-chain updates for batching.
-                    let batch_size = self.config.cross_chain_update_batch_size;
-                    let mut batch = vec![(request, span)];
-
-                    // Try to drain up to batch_size - 1 more cross-chain updates.
-                    while batch.len() < batch_size {
+            // Process the request based on type.
+            match request_type {
+                CROSS_CHAIN_UPDATE => {
+                    // Drain up to batch_size requests, starting with the first if provided.
+                    let mut updates = Vec::new();
+                    let mut callbacks = Vec::new();
+                    if let Some((req, _span)) = first_cross_chain_update {
+                        total_count += 1;
+                        updates.push((req.origin, req.bundles));
+                        callbacks.push(req.callback);
+                    }
+                    while updates.len() < batch_size {
                         match incoming_cross_chain_updates.try_recv() {
-                            Ok((req, req_span)) => batch.push((req, req_span)),
-                            Err(_) => break, // Queue is empty.
+                            Ok((req, _span)) => {
+                                total_count += 1;
+                                updates.push((req.origin, req.bundles));
+                                callbacks.push(req.callback);
+                            }
+                            Err(_) => break,
                         }
                     }
 
-                    if batch.len() > 1 {
-                        trace!("Batching {} cross-chain updates", batch.len());
+                    if updates.is_empty() {
+                        continue; // Queue was empty after all.
                     }
 
-                    (batch, tracing::Span::current())
-                } else if matches!(request, ChainWorkerRequest::ConfirmUpdatedRecipient { .. }) {
-                    // Drain additional confirmations for batching.
-                    let batch_size = self.config.cross_chain_update_batch_size;
-                    let mut batch = vec![(request, span)];
+                    if updates.len() > 1 {
+                        trace!("Batching {} cross-chain updates", updates.len());
+                    }
 
-                    // Try to drain up to batch_size - 1 more confirmations.
-                    while batch.len() < batch_size {
+                    let results = Box::pin(worker.process_cross_chain_update(updates)).await;
+                    match results {
+                        Ok(heights) => {
+                            for (callback, height) in callbacks.into_iter().zip(heights) {
+                                let _ = callback.send(Ok(height));
+                            }
+                        }
+                        Err(err) => {
+                            let mut iter = callbacks.into_iter();
+                            if let Some(first) = iter.next() {
+                                let _ = first.send(Err(err));
+                            }
+                            for callback in iter {
+                                let _ = callback.send(Err(WorkerError::ChainError(Box::new(
+                                    ChainError::InternalError(
+                                        "Batch processing failed".to_string(),
+                                    ),
+                                ))));
+                            }
+                        }
+                    }
+                }
+                CONFIRMATION => {
+                    // Drain up to batch_size requests, starting with the first if provided.
+                    let mut confirmations = Vec::new();
+                    let mut callbacks = Vec::new();
+                    if let Some((req, _span)) = first_confirmation {
+                        total_count += 1;
+                        confirmations.push((req.recipient, req.latest_height));
+                        callbacks.push(req.callback);
+                    }
+                    while confirmations.len() < batch_size {
                         match incoming_confirmations.try_recv() {
-                            Ok((req, req_span)) => batch.push((req, req_span)),
-                            Err(_) => break, // Queue is empty.
+                            Ok((req, _span)) => {
+                                total_count += 1;
+                                confirmations.push((req.recipient, req.latest_height));
+                                callbacks.push(req.callback);
+                            }
+                            Err(_) => break,
                         }
                     }
 
-                    if batch.len() > 1 {
-                        trace!("Batching {} confirmations", batch.len());
+                    if confirmations.is_empty() {
+                        continue; // Queue was empty after all.
                     }
 
-                    (batch, tracing::Span::current())
-                } else {
-                    (vec![(request, span.clone())], span)
-                };
-
-            let (_service_runtime_thread, service_runtime_task, service_runtime_endpoint) =
-                if self.config.long_lived_services {
-                    let actor = ServiceRuntimeActor::spawn(self.chain_id).await;
-                    (Some(actor.thread), Some(actor.task), Some(actor.endpoint))
-                } else {
-                    (None, None, None)
-                };
-
-            trace!("Loading chain state of {}", self.chain_id);
-            let mut worker = ChainWorkerState::load(
-                self.config.clone(),
-                self.storage.clone(),
-                self.block_values.clone(),
-                self.execution_state_cache.clone(),
-                self.tracked_chains.clone(),
-                self.delivery_notifier.clone(),
-                self.chain_id,
-                service_runtime_endpoint,
-            )
-            .instrument(batched_span.clone())
-            .await?;
-
-            // Process all requests (either a single request or a batch).
-            // Check if we're processing cross-chain updates (which should use batch processing).
-            let is_cross_chain_batch = requests_to_process.first().is_some_and(|(req, _)| {
-                matches!(req, ChainWorkerRequest::ProcessCrossChainUpdate { .. })
-            });
-            let is_confirmation_batch = requests_to_process.first().is_some_and(|(req, _)| {
-                matches!(req, ChainWorkerRequest::ConfirmUpdatedRecipient { .. })
-            });
-
-            if is_cross_chain_batch {
-                // Process batch of cross-chain updates (works for single items too).
-                let mut updates = Vec::new();
-                let mut callbacks = Vec::new();
-
-                for (request, _span) in requests_to_process {
-                    if let ChainWorkerRequest::ProcessCrossChainUpdate {
-                        origin,
-                        bundles,
-                        callback,
-                    } = request
-                    {
-                        updates.push((origin, bundles));
-                        callbacks.push(callback);
+                    if confirmations.len() > 1 {
+                        trace!("Batching {} confirmations", confirmations.len());
                     }
-                }
 
-                let results = Box::pin(worker.process_cross_chain_update(updates))
-                    .instrument(batched_span)
-                    .await;
-
-                // Send responses to all callbacks.
-                match results {
-                    Ok(heights) => {
-                        for (callback, height) in callbacks.into_iter().zip(heights) {
-                            let _ = callback.send(Ok(height));
+                    let results = Box::pin(worker.confirm_updated_recipient(confirmations)).await;
+                    match results {
+                        Ok(results) => {
+                            for (callback, result) in callbacks.into_iter().zip(results) {
+                                let _ = callback.send(result);
+                            }
                         }
-                    }
-                    Err(err) => {
-                        // Send the error to the first callback, and a generic error to the rest.
-                        let mut callbacks_iter = callbacks.into_iter();
-                        if let Some(first_callback) = callbacks_iter.next() {
-                            let _ = first_callback.send(Err(err));
-                        }
-                        for callback in callbacks_iter {
-                            let _ = callback.send(Err(WorkerError::ChainError(Box::new(
-                                ChainError::InternalError("Batch processing failed".to_string()),
-                            ))));
+                        Err(err) => {
+                            let mut iter = callbacks.into_iter();
+                            if let Some(first) = iter.next() {
+                                let _ = first.send(Err(err));
+                            }
+                            for callback in iter {
+                                let _ = callback.send(Err(WorkerError::ChainError(Box::new(
+                                    ChainError::InternalError(
+                                        "Batch processing failed".to_string(),
+                                    ),
+                                ))));
+                            }
                         }
                     }
                 }
-            } else if is_confirmation_batch {
-                // Process batch of confirmations (works for single items too).
-                let mut confirmations = Vec::new();
-                let mut callbacks = Vec::new();
-
-                for (request, _span) in requests_to_process {
-                    if let ChainWorkerRequest::ConfirmUpdatedRecipient {
-                        recipient,
-                        latest_height,
-                        callback,
-                    } = request
-                    {
-                        confirmations.push((recipient, latest_height));
-                        callbacks.push(callback);
-                    }
+                REGULAR => {
+                    let Some((request, span)) =
+                        first_regular.or_else(|| incoming_requests.try_recv().ok())
+                    else {
+                        continue; // Queue was empty after all.
+                    };
+                    regular_count += 1;
+                    total_count += 1;
+                    Box::pin(worker.handle_request(request))
+                        .instrument(span)
+                        .await;
                 }
-
-                let results = Box::pin(worker.confirm_updated_recipient(confirmations))
-                    .instrument(batched_span)
-                    .await;
-
-                // Send responses to all callbacks.
-                match results {
-                    Ok(results) => {
-                        for (callback, result) in callbacks.into_iter().zip(results) {
-                            let _ = callback.send(result);
-                        }
-                    }
-                    Err(err) => {
-                        // Send the error to the first callback, and a generic error to the rest.
-                        let mut callbacks_iter = callbacks.into_iter();
-                        if let Some(first_callback) = callbacks_iter.next() {
-                            let _ = first_callback.send(Err(err));
-                        }
-                        for callback in callbacks_iter {
-                            let _ = callback.send(Err(WorkerError::ChainError(Box::new(
-                                ChainError::InternalError("Batch processing failed".to_string()),
-                            ))));
-                        }
-                    }
-                }
-            } else if requests_to_process.len() == 1 {
-                // Handle single non-batch request.
-                let (request, span) = requests_to_process.into_iter().next().unwrap();
-                Box::pin(worker.handle_request(request))
-                    .instrument(span)
-                    .await;
+                _ => unreachable!(),
             }
+        }
 
-            loop {
-                // Check all queues and decide which to process.
-                let regular_pending = incoming_requests.len();
-                let cross_chain_pending = incoming_cross_chain_updates.len();
-                let confirmation_pending = incoming_confirmations.len();
-
-                let from_cross_chain = should_process_cross_chain_update(
-                    regular_requests_processed,
-                    cross_chain_pending,
-                    regular_pending,
-                );
-                let from_confirmation = !from_cross_chain
-                    && should_process_confirmation(
-                        regular_requests_processed,
-                        confirmation_pending,
-                        regular_pending,
-                    );
-
-                // Try to receive from the prioritized queue first without blocking.
-                let maybe_request = if from_cross_chain {
-                    match incoming_cross_chain_updates.try_recv() {
-                        Ok(request) => Some(request),
-                        Err(_) => {
-                            // Cross-chain queue is empty, wait on all queues plus timeout.
-                            futures::select! {
-                                () = self.sleep_until_timeout().fuse() => break,
-                                request = incoming_cross_chain_updates.recv().fuse() => request,
-                                request = incoming_confirmations.recv().fuse() => request,
-                                request = incoming_requests.recv().fuse() => {
-                                    regular_requests_processed = regular_requests_processed.wrapping_add(1);
-                                    request
-                                },
-                            }
-                        }
-                    }
-                } else if from_confirmation {
-                    match incoming_confirmations.try_recv() {
-                        Ok(request) => Some(request),
-                        Err(_) => {
-                            // Confirmation queue is empty, wait on all queues plus timeout.
-                            futures::select! {
-                                () = self.sleep_until_timeout().fuse() => break,
-                                request = incoming_cross_chain_updates.recv().fuse() => request,
-                                request = incoming_confirmations.recv().fuse() => request,
-                                request = incoming_requests.recv().fuse() => {
-                                    regular_requests_processed = regular_requests_processed.wrapping_add(1);
-                                    request
-                                },
-                            }
-                        }
-                    }
-                } else {
-                    match incoming_requests.try_recv() {
-                        Ok(request) => {
-                            regular_requests_processed = regular_requests_processed.wrapping_add(1);
-                            Some(request)
-                        }
-                        Err(_) => {
-                            // Regular queue is empty, wait on all queues plus timeout.
-                            futures::select! {
-                                () = self.sleep_until_timeout().fuse() => break,
-                                request = incoming_cross_chain_updates.recv().fuse() => request,
-                                request = incoming_confirmations.recv().fuse() => request,
-                                request = incoming_requests.recv().fuse() => {
-                                    regular_requests_processed = regular_requests_processed.wrapping_add(1);
-                                    request
-                                },
-                            }
-                        }
-                    }
-                };
-
-                let Some((request, span)) = maybe_request else {
-                    break; // Request sender was dropped.
-                };
-                Box::pin(worker.handle_request(request))
-                    .instrument(span)
-                    .await;
-            }
-
+        // Clean up on exit.
+        if let Some(mut w) = worker.take() {
             trace!("Unloading chain state of {} ...", self.chain_id);
-            worker.clear_shared_chain_view().await;
-            drop(worker);
-            if let Some(task) = service_runtime_task {
+            w.clear_shared_chain_view().await;
+            drop(w);
+            if let Some(task) = service_runtime_task.take() {
                 task.await?;
             }
+            drop(service_runtime_thread);
             trace!("Done unloading chain state of {}", self.chain_id);
         }
 

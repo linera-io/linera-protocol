@@ -31,9 +31,10 @@ pub struct ChainWorkerConfig {
     pub sender_chain_ttl: Duration,
     /// The size to truncate receive log entries in chain info responses.
     pub chain_info_max_received_log_entries: usize,
-    /// Process one cross-chain update request every N regular requests for anti-starvation.
-    /// A value of 0 disables anti-starvation (cross-chain updates only processed when regular queue is empty).
-    pub cross_chain_update_anti_starvation_ratio: u32,
+    /// Minimum percentage of requests that should be regular (non-cross-chain) requests.
+    /// Cross-chain updates and confirmations are prioritized, but at least this percentage
+    /// of requests will be regular requests to prevent starvation. Default is 25%.
+    pub min_regular_request_percentage: u32,
     /// Maximum number of cross-chain updates to batch together in a single processing round.
     /// Higher values improve throughput but increase latency for individual updates.
     pub cross_chain_update_batch_size: usize,
@@ -70,7 +71,7 @@ impl Default for ChainWorkerConfig {
             ttl: Default::default(),
             sender_chain_ttl: Duration::from_secs(1),
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
-            cross_chain_update_anti_starvation_ratio: 10,
+            min_regular_request_percentage: 25,
             cross_chain_update_batch_size: 1000,
         }
     }

@@ -177,34 +177,6 @@ where
                         .await,
                 )
                 .is_ok(),
-            ChainWorkerRequest::ProcessCrossChainUpdate {
-                origin,
-                bundles,
-                callback,
-            } => {
-                // Forward to batch processing path (works for single items).
-                let results = self
-                    .process_cross_chain_update(vec![(origin, bundles)])
-                    .await;
-                match results {
-                    Ok(mut heights) => callback.send(Ok(heights.pop().flatten())).is_ok(),
-                    Err(err) => callback.send(Err(err)).is_ok(),
-                }
-            }
-            ChainWorkerRequest::ConfirmUpdatedRecipient {
-                recipient,
-                latest_height,
-                callback,
-            } => {
-                // Forward to batch processing path (works for single items).
-                let results = self
-                    .confirm_updated_recipient(vec![(recipient, latest_height)])
-                    .await;
-                match results {
-                    Ok(mut results) => callback.send(results.pop().unwrap_or(Ok(()))).is_ok(),
-                    Err(err) => callback.send(Err(err)).is_ok(),
-                }
-            }
             ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
                 .send(self.handle_chain_info_query(query).await)
                 .is_ok(),
