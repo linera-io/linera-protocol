@@ -363,12 +363,8 @@ where
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     /// The set of spawned [`ChainWorkerActor`] tasks.
     chain_worker_tasks: Arc<Mutex<JoinSet>>,
-    /// The cache of running [`ChainWorkerActor`]s.
+    /// The cache of running [`ChainWorkerActor`] endpoints.
     chain_workers: Arc<Mutex<BTreeMap<ChainId, ChainActorEndpoint<StorageClient>>>>,
-    /// The cache of cross-chain update endpoints for [`ChainWorkerActor`]s.
-    cross_chain_workers: Arc<Mutex<BTreeMap<ChainId, CrossChainActorEndpoint>>>,
-    /// The cache of confirmation endpoints for [`ChainWorkerActor`]s.
-    confirmation_workers: Arc<Mutex<BTreeMap<ChainId, ConfirmationActorEndpoint>>>,
 }
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
@@ -386,24 +382,38 @@ where
             delivery_notifiers: self.delivery_notifiers.clone(),
             chain_worker_tasks: self.chain_worker_tasks.clone(),
             chain_workers: self.chain_workers.clone(),
-            cross_chain_workers: self.cross_chain_workers.clone(),
-            confirmation_workers: self.confirmation_workers.clone(),
         }
     }
 }
 
-/// The sender endpoint for [`ChainWorkerRequest`]s.
-type ChainActorEndpoint<StorageClient> = mpsc::UnboundedSender<(
-    ChainWorkerRequest<<StorageClient as Storage>::Context>,
-    tracing::Span,
-)>;
+/// The sender endpoints for communicating with a [`ChainWorkerActor`].
+struct ChainActorEndpoint<StorageClient>
+where
+    StorageClient: Storage,
+{
+    /// Endpoint for regular chain worker requests.
+    requests: mpsc::UnboundedSender<(
+        ChainWorkerRequest<<StorageClient as Storage>::Context>,
+        tracing::Span,
+    )>,
+    /// Endpoint for cross-chain update requests.
+    cross_chain_updates: mpsc::UnboundedSender<(CrossChainUpdateRequest, tracing::Span)>,
+    /// Endpoint for confirmation requests.
+    confirmations: mpsc::UnboundedSender<(ConfirmUpdatedRecipientRequest, tracing::Span)>,
+}
 
-/// The sender endpoint for cross-chain update requests.
-type CrossChainActorEndpoint = mpsc::UnboundedSender<(CrossChainUpdateRequest, tracing::Span)>;
-
-/// The sender endpoint for confirmation requests.
-type ConfirmationActorEndpoint =
-    mpsc::UnboundedSender<(ConfirmUpdatedRecipientRequest, tracing::Span)>;
+impl<StorageClient> Clone for ChainActorEndpoint<StorageClient>
+where
+    StorageClient: Storage,
+{
+    fn clone(&self) -> Self {
+        Self {
+            requests: self.requests.clone(),
+            cross_chain_updates: self.cross_chain_updates.clone(),
+            confirmations: self.confirmations.clone(),
+        }
+    }
+}
 
 pub(crate) type DeliveryNotifiers = HashMap<ChainId, DeliveryNotifier>;
 
@@ -429,8 +439,6 @@ where
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
             chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
-            cross_chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
-            confirmation_workers: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
@@ -452,8 +460,6 @@ where
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
             chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
-            cross_chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
-            confirmation_workers: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
@@ -817,13 +823,14 @@ where
         let request = request_builder(callback);
 
         // Ensure the worker exists and get the endpoint.
-        let (sender, _, _) = self.ensure_chain_worker_exists(chain_id);
+        let endpoint = self.ensure_chain_worker_exists(chain_id);
 
         // Send the request.
-        sender
+        endpoint
+            .requests
             .send((request, tracing::Span::current()))
             .map_err(|e| {
-                self.remove_chain_worker_endpoints(chain_id);
+                self.remove_chain_worker_endpoint(chain_id);
                 WorkerError::ChainActorSendError {
                     chain_id,
                     error: Box::new(e),
@@ -833,7 +840,7 @@ where
         // Wait for the response.
         match response.await {
             Err(e) => {
-                self.remove_chain_worker_endpoints(chain_id);
+                self.remove_chain_worker_endpoint(chain_id);
                 Err(WorkerError::ChainActorRecvError {
                     chain_id,
                     error: Box::new(e),
@@ -843,50 +850,32 @@ where
         }
     }
 
-    /// Ensures the chain worker exists, creating it if necessary. Returns the endpoints.
+    /// Ensures the chain worker exists, creating it if necessary. Returns the endpoint.
     #[instrument(level = "trace", skip(self), fields(
         nickname = %self.nickname,
         chain_id = %chain_id
     ))]
-    fn ensure_chain_worker_exists(
-        &self,
-        chain_id: ChainId,
-    ) -> (
-        ChainActorEndpoint<StorageClient>,
-        CrossChainActorEndpoint,
-        ConfirmationActorEndpoint,
-    ) {
+    fn ensure_chain_worker_exists(&self, chain_id: ChainId) -> ChainActorEndpoint<StorageClient> {
         let mut chain_workers = self.chain_workers.lock().unwrap();
-        let mut cross_chain_workers = self.cross_chain_workers.lock().unwrap();
-        let mut confirmation_workers = self.confirmation_workers.lock().unwrap();
 
         if let Some(endpoint) = chain_workers.get(&chain_id) {
-            let cross_chain_endpoint = cross_chain_workers
-                .get(&chain_id)
-                .expect("Cross-chain endpoint must exist if regular endpoint exists");
-            let confirmation_endpoint = confirmation_workers
-                .get(&chain_id)
-                .expect("Confirmation endpoint must exist if regular endpoint exists");
-            return (
-                endpoint.clone(),
-                cross_chain_endpoint.clone(),
-                confirmation_endpoint.clone(),
-            );
+            return endpoint.clone();
         }
 
         // Create new channels and spawn the actor.
-        let (sender, receiver) = mpsc::unbounded_channel();
+        let (requests_sender, requests_receiver) = mpsc::unbounded_channel();
         let (cross_chain_sender, cross_chain_receiver) = mpsc::unbounded_channel();
-        let (confirmation_sender, confirmation_receiver) = mpsc::unbounded_channel();
+        let (confirmations_sender, confirmations_receiver) = mpsc::unbounded_channel();
 
-        chain_workers.insert(chain_id, sender.clone());
-        cross_chain_workers.insert(chain_id, cross_chain_sender.clone());
-        confirmation_workers.insert(chain_id, confirmation_sender.clone());
+        let endpoint = ChainActorEndpoint {
+            requests: requests_sender,
+            cross_chain_updates: cross_chain_sender,
+            confirmations: confirmations_sender,
+        };
+        chain_workers.insert(chain_id, endpoint.clone());
 
-        // Release the locks before spawning the actor.
+        // Release the lock before spawning the actor.
         drop(chain_workers);
-        drop(cross_chain_workers);
-        drop(confirmation_workers);
 
         let delivery_notifier = self
             .delivery_notifiers
@@ -909,9 +898,9 @@ where
             self.tracked_chains.clone(),
             delivery_notifier,
             chain_id,
-            receiver,
+            requests_receiver,
             cross_chain_receiver,
-            confirmation_receiver,
+            confirmations_receiver,
             is_tracked,
         );
 
@@ -920,14 +909,12 @@ where
             .unwrap()
             .spawn_task(actor_task);
 
-        (sender, cross_chain_sender, confirmation_sender)
+        endpoint
     }
 
-    /// Removes all endpoints for a chain from the caches.
-    fn remove_chain_worker_endpoints(&self, chain_id: ChainId) {
+    /// Removes the endpoint for a chain from the cache.
+    fn remove_chain_worker_endpoint(&self, chain_id: ChainId) {
         self.chain_workers.lock().unwrap().remove(&chain_id);
-        self.cross_chain_workers.lock().unwrap().remove(&chain_id);
-        self.confirmation_workers.lock().unwrap().remove(&chain_id);
     }
 
     /// Sends a cross-chain update request to the appropriate worker queue.
@@ -944,12 +931,13 @@ where
             callback,
         };
 
-        let (_, cross_chain_sender, _) = self.ensure_chain_worker_exists(recipient);
+        let endpoint = self.ensure_chain_worker_exists(recipient);
 
-        cross_chain_sender
+        endpoint
+            .cross_chain_updates
             .send((request, tracing::Span::current()))
             .map_err(|e| {
-                self.remove_chain_worker_endpoints(recipient);
+                self.remove_chain_worker_endpoint(recipient);
                 WorkerError::ChainActorSendError {
                     chain_id: recipient,
                     error: Box::new(e),
@@ -958,7 +946,7 @@ where
 
         match response.await {
             Err(e) => {
-                self.remove_chain_worker_endpoints(recipient);
+                self.remove_chain_worker_endpoint(recipient);
                 Err(WorkerError::ChainActorRecvError {
                     chain_id: recipient,
                     error: Box::new(e),
@@ -982,12 +970,13 @@ where
             callback,
         };
 
-        let (_, _, confirmation_sender) = self.ensure_chain_worker_exists(sender);
+        let endpoint = self.ensure_chain_worker_exists(sender);
 
-        confirmation_sender
+        endpoint
+            .confirmations
             .send((request, tracing::Span::current()))
             .map_err(|e| {
-                self.remove_chain_worker_endpoints(sender);
+                self.remove_chain_worker_endpoint(sender);
                 WorkerError::ChainActorSendError {
                     chain_id: sender,
                     error: Box::new(e),
@@ -996,7 +985,7 @@ where
 
         match response.await {
             Err(e) => {
-                self.remove_chain_worker_endpoints(sender);
+                self.remove_chain_worker_endpoint(sender);
                 Err(WorkerError::ChainActorRecvError {
                     chain_id: sender,
                     error: Box::new(e),
