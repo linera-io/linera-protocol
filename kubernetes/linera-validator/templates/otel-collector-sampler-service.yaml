@@ -1,0 +1,27 @@
+{{- if .Values.otelCollector.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector-sampler-headless
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: otel-collector-sampler
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+    - name: health
+      port: 13133
+      targetPort: 13133
+      protocol: TCP
+  selector:
+    app: otel-collector-sampler
+{{- end }}

@@ -7,7 +7,10 @@ use opentelemetry::{global, trace::TracerProvider};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
 #[cfg(with_testing)]
 use opentelemetry_sdk::trace::InMemorySpanExporter;
-use opentelemetry_sdk::{trace::SdkTracerProvider, Resource};
+use opentelemetry_sdk::{
+    trace::{BatchSpanProcessor, SdkTracerProvider},
+    Resource,
+};
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{
     filter::{filter_fn, FilterFn},
@@ -132,9 +135,20 @@ pub fn init(log_name: &str, otlp_endpoint: Option<&str>) {
         .build()
         .expect("Failed to create OTLP exporter");
 
+    // Configure batch processor for high-throughput scenarios
+    // Larger queue (16k instead of 2k default) to handle benchmark load
+    // Faster export (100ms instead of 5s default) to prevent queue buildup
+    let batch_config = opentelemetry_sdk::trace::BatchConfigBuilder::default()
+        .with_max_queue_size(16384) // 8x default, enough for 8 shards under load
+        .with_max_export_batch_size(2048) // Larger batches for efficiency
+        .with_scheduled_delay(std::time::Duration::from_millis(100)) // Fast export to prevent queue buildup
+        .build();
+
+    let batch_processor = BatchSpanProcessor::new(exporter, batch_config);
+
     let tracer_provider = SdkTracerProvider::builder()
         .with_resource(resource)
-        .with_batch_exporter(exporter)
+        .with_span_processor(batch_processor)
         .with_sampler(opentelemetry_sdk::trace::Sampler::AlwaysOn)
         .build();
 
