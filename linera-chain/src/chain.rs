@@ -581,16 +581,13 @@ where
     /// # Arguments
     /// * `updates` - Vec of `(origin_chain_id, bundle, add_to_received_log)`
     /// * `local_time` - The current timestamp for tracking when bundles are seen
-    ///
-    /// # Returns
-    /// * `Vec<Result<(), ChainError>>` - One result per update, in the same order
-    pub async fn receive_message_bundles_batch(
+    pub async fn receive_message_bundles(
         &mut self,
         updates: Vec<(ChainId, MessageBundle, bool)>,
         local_time: Timestamp,
-    ) -> Result<Vec<Result<(), ChainError>>, ChainError> {
+    ) -> Result<(), ChainError> {
         if updates.is_empty() {
-            return Ok(Vec::new());
+            return Ok(());
         }
 
         let chain_id = self.chain_id();
@@ -607,13 +604,12 @@ where
         }
 
         // Group bundles by origin to deduplicate inbox loading.
-        let mut bundles_by_origin: BTreeMap<ChainId, Vec<(usize, MessageBundle, bool)>> =
-            BTreeMap::new();
-        for (idx, (origin, bundle, add_to_log)) in updates.into_iter().enumerate() {
-            bundles_by_origin
-                .entry(origin)
-                .or_default()
-                .push((idx, bundle, add_to_log));
+        let mut bundles_by_origin: BTreeMap<ChainId, BTreeMap<_, _>> = BTreeMap::new();
+        for (origin, bundle, add_to_log) in updates {
+            bundles_by_origin.entry(origin).or_default().insert(
+                (bundle.height, bundle.transaction_index),
+                (bundle, add_to_log),
+            );
         }
 
         // Load all unique inboxes at once.
@@ -630,21 +626,10 @@ where
                 let bundles = bundles_by_origin.remove(&origin)?;
 
                 Some(async move {
-                    let mut results = Vec::with_capacity(bundles.len());
                     let mut unskippable_effects = Vec::new();
                     let mut received_log_effects = Vec::new();
 
-                    for (idx, bundle, add_to_log) in bundles {
-                        if bundle.messages.is_empty() {
-                            results.push((
-                                idx,
-                                Err(ChainError::InternalError(
-                                    "Message bundle cannot be empty".to_string(),
-                                )),
-                            ));
-                            continue;
-                        }
-
+                    for (bundle, add_to_log) in bundles.into_values() {
                         let chain_and_height = ChainAndHeight {
                             chain_id: origin,
                             height: bundle.height,
@@ -653,23 +638,16 @@ where
                         let skippable = bundle.is_skippable();
 
                         // Add bundle to the inbox.
-                        let newly_added = match inbox.add_bundle(bundle).await {
-                            Ok(added) => added,
-                            Err(error) => {
-                                results.push((
-                                    idx,
-                                    Err(match error {
-                                        InboxError::ViewError(error) => {
-                                            ChainError::ViewError(error)
-                                        }
-                                        error => ChainError::InternalError(format!(
-                                            "while processing messages in certified block: {error}"
-                                        )),
-                                    }),
-                                ));
-                                continue;
-                            }
-                        };
+                        let newly_added =
+                            inbox
+                                .add_bundle(bundle)
+                                .await
+                                .map_err(|error| match error {
+                                    InboxError::ViewError(error) => ChainError::ViewError(error),
+                                    error => ChainError::InternalError(format!(
+                                        "while processing messages in certified block: {error}"
+                                    )),
+                                })?;
 
                         // Collect side effects for later application.
                         if newly_added && !skippable {
@@ -678,16 +656,9 @@ where
                         if add_to_log {
                             received_log_effects.push(chain_and_height);
                         }
-
-                        results.push((idx, Ok(())));
                     }
 
-                    Ok::<_, ChainError>((
-                        origin,
-                        results,
-                        unskippable_effects,
-                        received_log_effects,
-                    ))
+                    Ok::<_, ChainError>((unskippable_effects, received_log_effects))
                 })
             })
             .collect();
@@ -696,33 +667,17 @@ where
         let processing_results = futures::future::try_join_all(processing_futures).await?;
 
         // Apply side effects to shared state sequentially.
-        for (_origin, _results, unskippable_effects, received_log_effects) in &processing_results {
+        for (unskippable_effects, received_log_effects) in processing_results {
             for (entry, seen) in unskippable_effects {
                 self.unskippable_bundles
-                    .push_back(TimestampedBundleInInbox {
-                        entry: entry.clone(),
-                        seen: *seen,
-                    });
+                    .push_back(TimestampedBundleInInbox { entry, seen });
             }
             for chain_and_height in received_log_effects {
-                self.received_log.push(*chain_and_height);
+                self.received_log.push(chain_and_height);
             }
         }
 
-        // Reconstruct results in original order.
-        let total_updates = processing_results
-            .iter()
-            .map(|(_, results, _, _)| results.len())
-            .sum();
-        let mut final_results: Vec<Result<(), ChainError>> = Vec::with_capacity(total_updates);
-        final_results.resize_with(total_updates, || Ok(()));
-        for (_origin, results, _, _) in processing_results {
-            for (idx, result) in results {
-                final_results[idx] = result;
-            }
-        }
-
-        Ok(final_results)
+        Ok(())
     }
 
     /// Updates the `received_log` trackers.

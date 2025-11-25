@@ -1026,7 +1026,7 @@ where
         // Process all bundles via ChainStateView's batch method.
         let local_time = self.storage.clock().current_time();
         self.chain
-            .receive_message_bundles_batch(batch_updates, local_time)
+            .receive_message_bundles(batch_updates, local_time)
             .await?;
 
         // Save the chain once for all updates.

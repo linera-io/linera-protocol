@@ -811,6 +811,11 @@ where
         .await
     }
 
+    /// Sends a request to the [`ChainWorker`] for a [`ChainId`] and waits for the `Response`.
+    #[instrument(level = "trace", skip(self, request_builder), fields(
+        nickname = %self.nickname,
+        chain_id = %chain_id
+    ))]
     async fn query_chain_worker<Response>(
         &self,
         chain_id: ChainId,
