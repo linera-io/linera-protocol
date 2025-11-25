@@ -1,0 +1,71 @@
+{{- if .Values.otelCollector.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector-router
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: otel-collector-router
+spec:
+  replicas: {{ .Values.otelCollector.router.replicas }}
+  selector:
+    matchLabels:
+      app: otel-collector-router
+  template:
+    metadata:
+      labels:
+        app: otel-collector-router
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/otel-collector-router-config.yaml") . | sha256sum }}
+    spec:
+      {{- if .Values.otelCollector.router.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.otelCollector.router.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.otelCollector.router.tolerations }}
+      tolerations:
+        {{- toYaml .Values.otelCollector.router.tolerations | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: otel-collector-router
+          image: {{ .Values.otelCollector.router.image }}:{{ .Values.otelCollector.router.imageTag }}
+          imagePullPolicy: {{ .Values.otelCollector.router.imagePullPolicy | default "IfNotPresent" }}
+          args:
+            - "--config=/conf/otel-collector-config.yaml"
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+          resources:
+            requests:
+              memory: {{ .Values.otelCollector.router.resources.requests.memory }}
+              cpu: {{ .Values.otelCollector.router.resources.requests.cpu }}
+            limits:
+              memory: {{ .Values.otelCollector.router.resources.limits.memory }}
+              cpu: {{ .Values.otelCollector.router.resources.limits.cpu }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-router-config
+{{- end }}

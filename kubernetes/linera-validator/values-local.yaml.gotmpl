@@ -191,3 +191,20 @@ environment: "kind"
 validator:
   serverConfig: {{ env "LINERA_HELMFILE_SET_SERVER_CONFIG" | default "working/server_1.json" }}
   genesisConfig: {{ env "LINERA_HELMFILE_SET_GENESIS_CONFIG" | default "working/genesis.json" }}
+
+# OpenTelemetry Collector - Tail-Based Sampling
+otelCollector:
+  enabled: {{ env "LINERA_HELMFILE_SET_OTEL_COLLECTOR_ENABLED" | default (env "LINERA_HELMFILE_SET_TEMPO_ENABLED" | default "false") }}
+  tempoEndpoint: {{ env "LINERA_HELMFILE_SET_TEMPO_ENDPOINT" | default "tempo.tempo.svc.cluster.local:4317" }}
+  latencyThresholdMs: {{ env "LINERA_HELMFILE_SET_OTEL_LATENCY_THRESHOLD" | default "500" }}
+  baselineSamplingPercent: {{ env "LINERA_HELMFILE_SET_OTEL_BASELINE_SAMPLING" | default "5.0" }}
+  decisionWait: {{ env "LINERA_HELMFILE_SET_OTEL_DECISION_WAIT" | default "200ms" }}
+  numTraces: {{ env "LINERA_HELMFILE_SET_OTEL_NUM_TRACES" | default "10000" }}
+  expectedTracesPerSec: {{ env "LINERA_HELMFILE_SET_OTEL_EXPECTED_TRACES_PER_SEC" | default "500" }}
+  resources:
+    requests:
+      memory: {{ env "LINERA_HELMFILE_SET_OTEL_MEMORY_REQUEST" | default "512Mi" }}
+      cpu: {{ env "LINERA_HELMFILE_SET_OTEL_CPU_REQUEST" | default "500m" }}
+    limits:
+      memory: {{ env "LINERA_HELMFILE_SET_OTEL_MEMORY_LIMIT" | default "4Gi" }}
+      cpu: {{ env "LINERA_HELMFILE_SET_OTEL_CPU_LIMIT" | default "4000m" }}
