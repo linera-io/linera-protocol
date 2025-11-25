@@ -25,6 +25,11 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 
+/// Type alias for the complex ClientContext type used throughout validator operations.
+/// This alias helps avoid clippy's type_complexity warnings while maintaining type safety.
+type MutexedContext<S, W, Si> =
+    Arc<Mutex<ClientContext<linera_core::environment::Impl<S, NodeProvider, Si>, W>>>;
+
 /// Specification for a validator to add or modify.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -559,7 +564,7 @@ where
 
 /// Handle add command: add a new validator to the committee.
 async fn handle_add<S, W, Si>(
-    context: Arc<Mutex<ClientContext<linera_core::environment::Impl<S, NodeProvider, Si>, W>>>,
+    context: MutexedContext<S, W, Si>,
     public_key: ValidatorPublicKey,
     account_key: AccountPublicKey,
     address: String,
@@ -647,7 +652,7 @@ where
 
 /// Handle remove command: remove a validator from the committee.
 async fn handle_remove<S, W, Si>(
-    context: Arc<Mutex<ClientContext<linera_core::environment::Impl<S, NodeProvider, Si>, W>>>,
+    context: MutexedContext<S, W, Si>,
     public_key: ValidatorPublicKey,
 ) -> Result<()>
 where
@@ -702,7 +707,7 @@ where
 
 /// Handle batch-update command: apply a batch file with add/modify/remove operations.
 async fn handle_batch_update<S, W, Si>(
-    context: Arc<Mutex<ClientContext<linera_core::environment::Impl<S, NodeProvider, Si>, W>>>,
+    context: MutexedContext<S, W, Si>,
     input: Input,
     dry_run: bool,
     yes: bool,
@@ -933,7 +938,7 @@ where
 
 /// Handle sync command: sync validator(s) to specific chains.
 async fn handle_sync<S, W, Si>(
-    context: Arc<Mutex<ClientContext<linera_core::environment::Impl<S, NodeProvider, Si>, W>>>,
+    context: MutexedContext<S, W, Si>,
     address: String,
     chains: Vec<linera_base::identifiers::ChainId>,
     check_online: bool,
