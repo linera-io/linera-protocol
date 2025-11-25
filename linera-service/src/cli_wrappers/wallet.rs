@@ -501,10 +501,10 @@ impl ClientWrapper {
         bail!("Failed to start node service");
     }
 
-    /// Runs `linera query-validator`
+    /// Runs `linera validator query`
     pub async fn query_validator(&self, address: &str) -> Result<CryptoHash> {
         let mut command = self.command().await?;
-        command.arg("query-validator").arg(address);
+        command.arg("validator").arg("query").arg(address);
         let stdout = command.spawn_and_wait_for_stdout().await?;
 
         // Parse the genesis config hash from the output.
@@ -515,16 +515,16 @@ impl ClientWrapper {
                 line.strip_prefix("Genesis config hash: ")
                     .and_then(|hash_str| hash_str.trim().parse().ok())
             })
-            .context("error while parsing the result of `linera query-validator`")?;
+            .context("error while parsing the result of `linera validator query`")?;
         Ok(hash)
     }
 
-    /// Runs `linera query-validators`.
+    /// Runs `linera validator list`.
     pub async fn query_validators(&self, chain_id: Option<ChainId>) -> Result<()> {
         let mut command = self.command().await?;
-        command.arg("query-validators");
+        command.arg("validator").arg("list");
         if let Some(chain_id) = chain_id {
-            command.arg(chain_id.to_string());
+            command.args(["--chain-id", &chain_id.to_string()]);
         }
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
@@ -537,7 +537,10 @@ impl ClientWrapper {
         validator_address: impl Into<String>,
     ) -> Result<()> {
         let mut command = self.command().await?;
-        command.arg("sync-validator").arg(validator_address.into());
+        command
+            .arg("validator")
+            .arg("sync")
+            .arg(validator_address.into());
         let mut chain_ids = chain_ids.into_iter().peekable();
         if chain_ids.peek().is_some() {
             command
@@ -1027,7 +1030,8 @@ impl ClientWrapper {
         let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
         self.command()
             .await?
-            .arg("set-validator")
+            .arg("validator")
+            .arg("add")
             .args(["--public-key", &validator_key.0])
             .args(["--account-key", &validator_key.1])
             .args(["--address", &address])
@@ -1040,7 +1044,8 @@ impl ClientWrapper {
     pub async fn remove_validator(&self, validator_key: &str) -> Result<()> {
         self.command()
             .await?
-            .arg("remove-validator")
+            .arg("validator")
+            .arg("remove")
             .args(["--public-key", validator_key])
             .spawn_and_wait_for_stdout()
             .await?;
@@ -1053,26 +1058,59 @@ impl ClientWrapper {
         modify_validators: &[(String, String, usize, usize)], // (public_key, account_key, port, votes)
         remove_validators: &[String],
     ) -> Result<()> {
-        let mut command = self.command().await?;
-        command.arg("change-validators");
+        use std::str::FromStr;
 
-        for (public_key, account_key, port, votes) in add_validators {
+        use linera_base::crypto::{AccountPublicKey, ValidatorPublicKey};
+
+        // Build a map that will be serialized to JSON
+        // Use the exact types that deserialization expects
+        let mut changes = std::collections::HashMap::new();
+
+        // Add/modify validators
+        for (public_key_str, account_key_str, port, votes) in
+            add_validators.iter().chain(modify_validators.iter())
+        {
+            let public_key = ValidatorPublicKey::from_str(public_key_str)
+                .with_context(|| format!("Invalid validator public key: {}", public_key_str))?;
+
+            let account_key = AccountPublicKey::from_str(account_key_str)
+                .with_context(|| format!("Invalid account public key: {}", account_key_str))?;
+
             let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
-            let validator_spec = format!("{public_key},{account_key},{address},{votes}");
-            command.args(["--add", &validator_spec]);
+
+            // Create ValidatorChange struct
+            let change = crate::cli::validator::ValidatorChange {
+                account_key,
+                network_address: address,
+                votes: std::num::NonZero::new(*votes as u64).context("Votes must be non-zero")?,
+            };
+
+            changes.insert(public_key, Some(change));
         }
 
-        for (public_key, account_key, port, votes) in modify_validators {
-            let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
-            let validator_spec = format!("{public_key},{account_key},{address},{votes}");
-            command.args(["--modify", &validator_spec]);
+        // Remove validators (set to None)
+        for validator_key_str in remove_validators {
+            let public_key = ValidatorPublicKey::from_str(validator_key_str)
+                .with_context(|| format!("Invalid validator public key: {}", validator_key_str))?;
+            changes.insert(public_key, None);
         }
 
-        for validator_key in remove_validators {
-            command.args(["--remove", validator_key]);
-        }
+        // Create temporary file with JSON
+        let temp_file = tempfile::NamedTempFile::new()
+            .context("Failed to create temporary file for validator changes")?;
+        serde_json::to_writer(&temp_file, &changes)
+            .context("Failed to write validator changes to file")?;
+        let temp_path = temp_file.path();
 
-        command.spawn_and_wait_for_stdout().await?;
+        self.command()
+            .await?
+            .arg("validator")
+            .arg("update")
+            .arg(temp_path)
+            .arg("--yes") // Skip confirmation prompt
+            .spawn_and_wait_for_stdout()
+            .await?;
+
         Ok(())
     }
 
