@@ -184,7 +184,7 @@ where
             } => {
                 // Forward to batch processing path (works for single items).
                 let results = self
-                    .process_cross_chain_update_batch(vec![(origin, bundles)])
+                    .process_cross_chain_update(vec![(origin, bundles)])
                     .await;
                 match results {
                     Ok(mut heights) => callback.send(Ok(heights.pop().flatten())).is_ok(),
@@ -198,7 +198,7 @@ where
             } => {
                 // Forward to batch processing path (works for single items).
                 let results = self
-                    .confirm_updated_recipient_batch(vec![(recipient, latest_height)])
+                    .confirm_updated_recipient(vec![(recipient, latest_height)])
                     .await;
                 match results {
                     Ok(mut results) => callback.send(results.pop().unwrap_or(Ok(()))).is_ok(),
@@ -980,7 +980,7 @@ where
     /// Processes a batch of cross-chain updates efficiently with a single save operation.
     /// Pre-loads all affected inboxes at once for better performance.
     #[instrument(level = "trace", skip(self, updates))]
-    pub(super) async fn process_cross_chain_update_batch(
+    pub(super) async fn process_cross_chain_update(
         &mut self,
         updates: Vec<(ChainId, Vec<(Epoch, MessageBundle)>)>,
     ) -> Result<Vec<Option<BlockHeight>>, WorkerError> {
@@ -1108,13 +1108,13 @@ where
     /// Handles a batch of cross-chain confirmation requests efficiently with a single save operation.
     /// Pre-loads all affected outboxes at once for better performance.
     #[instrument(level = "trace", skip(self, confirmations))]
-    pub(super) async fn confirm_updated_recipient_batch(
+    pub(super) async fn confirm_updated_recipient(
         &mut self,
         confirmations: Vec<(ChainId, BlockHeight)>,
     ) -> Result<Vec<Result<(), WorkerError>>, WorkerError> {
         let results = self
             .chain
-            .mark_messages_as_received_batch(confirmations.clone())
+            .mark_messages_as_received(confirmations.clone())
             .await?;
 
         // Check for each confirmation if messages were fully delivered.

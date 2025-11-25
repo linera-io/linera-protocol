@@ -426,49 +426,6 @@ where
             .with_execution_context(ChainExecutionContext::DescribeApplication)
     }
 
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        target = %target,
-        height = %height
-    ))]
-    pub async fn mark_messages_as_received(
-        &mut self,
-        target: &ChainId,
-        height: BlockHeight,
-    ) -> Result<bool, ChainError> {
-        let mut outbox = self.outboxes.try_load_entry_mut(target).await?;
-        let updates = outbox.mark_messages_as_received(height).await?;
-        if updates.is_empty() {
-            return Ok(false);
-        }
-        for update in updates {
-            let counter = self
-                .outbox_counters
-                .get_mut()
-                .get_mut(&update)
-                .ok_or_else(|| {
-                    ChainError::InternalError("message counter should be present".into())
-                })?;
-            *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
-            if *counter == 0 {
-                // Important for the test in `all_messages_delivered_up_to`.
-                self.outbox_counters.get_mut().remove(&update);
-            }
-        }
-        if outbox.queue.count() == 0 {
-            self.nonempty_outboxes.get_mut().remove(target);
-            // If the outbox is empty and not ahead of the executed blocks, remove it.
-            if *outbox.next_height_to_schedule.get() <= self.tip_state.get().next_block_height {
-                self.outboxes.remove_entry(target)?;
-            }
-        }
-        #[cfg(with_metrics)]
-        metrics::NUM_OUTBOXES
-            .with_label_values(&[])
-            .observe(self.outboxes.count().await? as f64);
-        Ok(true)
-    }
-
     /// Marks messages as received for multiple recipients concurrently.
     /// Each outbox is loaded once and all its confirmations are processed together.
     /// Counter updates to shared state are collected during concurrent processing
@@ -479,7 +436,7 @@ where
     ///
     /// # Returns
     /// * `Vec<bool>` - One result per confirmation, indicating if any messages were marked
-    pub async fn mark_messages_as_received_batch(
+    pub async fn mark_messages_as_received(
         &mut self,
         confirmations: Vec<(ChainId, BlockHeight)>,
     ) -> Result<Vec<bool>, ChainError> {

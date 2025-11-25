@@ -550,7 +550,7 @@ where
                     }
                 }
 
-                let results = Box::pin(worker.process_cross_chain_update_batch(updates))
+                let results = Box::pin(worker.process_cross_chain_update(updates))
                     .instrument(batched_span)
                     .await;
 
@@ -591,7 +591,7 @@ where
                     }
                 }
 
-                let results = Box::pin(worker.confirm_updated_recipient_batch(confirmations))
+                let results = Box::pin(worker.confirm_updated_recipient(confirmations))
                     .instrument(batched_span)
                     .await;
 
