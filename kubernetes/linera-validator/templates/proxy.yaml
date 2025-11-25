@@ -91,8 +91,10 @@ spec:
               value: {{ .Values.logLevel }}
             - name: RUST_BACKTRACE
               value: "1"
+            {{- if .Values.otlpExporterEndpoint }}
             - name: LINERA_OTLP_EXPORTER_ENDPOINT
               value: {{ .Values.otlpExporterEndpoint }}
+            {{- end }}
       containers:
         - name: linera-proxy
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
@@ -119,8 +121,10 @@ spec:
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
+            {{- if .Values.otlpExporterEndpoint }}
             - name: LINERA_OTLP_EXPORTER_ENDPOINT
               value: {{ .Values.otlpExporterEndpoint }}
+            {{- end }}
           livenessProbe:
             tcpSocket:
               port: {{ .Values.proxyPort }}
