@@ -501,10 +501,10 @@ impl ClientWrapper {
         bail!("Failed to start node service");
     }
 
-    /// Runs `linera query-validator`
+    /// Runs `linera validator query`
     pub async fn query_validator(&self, address: &str) -> Result<CryptoHash> {
         let mut command = self.command().await?;
-        command.arg("query-validator").arg(address);
+        command.arg("validator").arg("query").arg(address);
         let stdout = command.spawn_and_wait_for_stdout().await?;
 
         // Parse the genesis config hash from the output.
@@ -515,16 +515,16 @@ impl ClientWrapper {
                 line.strip_prefix("Genesis config hash: ")
                     .and_then(|hash_str| hash_str.trim().parse().ok())
             })
-            .context("error while parsing the result of `linera query-validator`")?;
+            .context("error while parsing the result of `linera validator query`")?;
         Ok(hash)
     }
 
-    /// Runs `linera query-validators`.
+    /// Runs `linera validator list`.
     pub async fn query_validators(&self, chain_id: Option<ChainId>) -> Result<()> {
         let mut command = self.command().await?;
-        command.arg("query-validators");
+        command.arg("validator").arg("list");
         if let Some(chain_id) = chain_id {
-            command.arg(chain_id.to_string());
+            command.args(["--chain-id", &chain_id.to_string()]);
         }
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
