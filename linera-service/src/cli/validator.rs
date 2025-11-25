@@ -48,58 +48,58 @@ impl ValidatorSpec {
     }
 }
 
-/// Specification for validator changes in batch operations.
-/// When all fields are None, this represents a removal operation.
+/// Specification for adding or modifying a validator in batch operations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ValidatorChangeSpec {
-    pub account_key: Option<AccountPublicKey>,
+pub struct ValidatorUpdate {
+    pub account_key: AccountPublicKey,
     #[serde(rename = "address")]
-    pub network_address: Option<String>,
-    pub votes: Option<u64>,
+    pub network_address: String,
+    #[serde(default = "default_votes")]
+    pub votes: u64,
 }
 
-impl ValidatorChangeSpec {
-    /// Check if this spec represents an empty/remove operation.
-    fn is_empty(&self) -> bool {
-        self.account_key.is_none() && self.network_address.is_none() && self.votes.is_none()
-    }
+/// Default value for votes field (1).
+fn default_votes() -> u64 {
+    1
+}
 
-    /// Validate that all required fields are present for add/modify operations.
+impl ValidatorUpdate {
+    /// Validate the validator update specification.
     fn validate(&self) -> Result<()> {
-        if self.is_empty() {
-            return Ok(()); // Empty is valid (represents removal)
-        }
-
-        if self.account_key.is_none() {
-            bail!("account_key is required for add/modify operations");
-        }
-        if self.network_address.is_none() {
-            bail!("address is required for add/modify operations");
-        }
-        let address = self.network_address.as_ref().unwrap();
-        if address.is_empty() {
+        if self.network_address.is_empty() {
             bail!("Validator network address cannot be empty");
         }
-        let votes = self.votes.unwrap_or(1);
-        if votes == 0 {
+        if self.votes == 0 {
             bail!("Validator votes must be greater than 0");
         }
-
         Ok(())
     }
+}
 
-    /// Get the votes value, defaulting to 1 if not specified.
-    fn votes(&self) -> u64 {
-        self.votes.unwrap_or(1)
+/// Represents a change to a validator - either removal or update.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ValidatorChange {
+    /// Update with full validator specification
+    Update(ValidatorUpdate),
+    /// Empty object {} representing removal
+    Remove {},
+}
+
+impl ValidatorChange {
+    /// Check if this change represents a removal operation.
+    fn is_remove(&self) -> bool {
+        matches!(self, ValidatorChange::Remove {})
     }
 }
 
 /// Structure for batch validator operations from JSON file.
 /// Maps validator public keys to their desired state:
-/// - `None` or empty spec (all fields None) means remove the validator
-/// - `Some(spec)` with values means add or modify the validator
-pub type ValidatorBatchFile = HashMap<ValidatorPublicKey, Option<ValidatorChangeSpec>>;
+/// - `null` or `{}` means remove the validator
+/// - `{accountKey, address, votes}` means add or modify the validator
+/// - Keys not present in the map are left unchanged
+pub type ValidatorBatchFile = HashMap<ValidatorPublicKey, Option<ValidatorChange>>;
 
 /// Structure for batch validator queries from JSON file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -244,9 +244,9 @@ fn parse_batch_file(path: Option<&str>) -> Result<ValidatorBatchFile> {
     let batch: ValidatorBatchFile =
         serde_json::from_str(&contents).context("Failed to parse batch JSON")?;
 
-    // Validate all specs
-    for (public_key, spec_opt) in &batch {
-        if let Some(spec) = spec_opt {
+    // Validate all update specs
+    for (public_key, change_opt) in &batch {
+        if let Some(ValidatorChange::Update(spec)) = change_opt {
             spec.validate()
                 .with_context(|| format!("Invalid validator spec for {}", public_key))?;
         }
@@ -746,15 +746,17 @@ where
     let current_validators = current_committee.validators();
     drop(context_guard);
 
-    for (public_key, spec_opt) in &batch {
-        match spec_opt {
+    for (public_key, change_opt) in &batch {
+        match change_opt {
             None => {
+                // null = removal
                 removes.push(*public_key);
             }
-            Some(spec) if spec.is_empty() => {
+            Some(ValidatorChange::Remove {}) => {
+                // {} = removal
                 removes.push(*public_key);
             }
-            Some(spec) => {
+            Some(ValidatorChange::Update(spec)) => {
                 if current_validators.contains_key(public_key) {
                     modifies.push((public_key, spec));
                 } else {
@@ -779,12 +781,9 @@ where
         println!("Validators to ADD:");
         for (pk, spec) in &adds {
             println!("  + {}", pk);
-            println!(
-                "    Address:     {}",
-                spec.network_address.as_ref().unwrap()
-            );
-            println!("    Account Key: {}", spec.account_key.unwrap());
-            println!("    Votes:       {}", spec.votes());
+            println!("    Address:     {}", spec.network_address);
+            println!("    Account Key: {}", spec.account_key);
+            println!("    Votes:       {}", spec.votes);
         }
         println!();
     }
@@ -793,12 +792,9 @@ where
         println!("Validators to MODIFY:");
         for (pk, spec) in &modifies {
             println!("  * {}", pk);
-            println!(
-                "    New Address:     {}",
-                spec.network_address.as_ref().unwrap()
-            );
-            println!("    New Account Key: {}", spec.account_key.unwrap());
-            println!("    New Votes:       {}", spec.votes());
+            println!("    New Address:     {}", spec.network_address);
+            println!("    New Account Key: {}", spec.account_key);
+            println!("    New Votes:       {}", spec.votes);
         }
         println!();
     }
@@ -849,7 +845,7 @@ where
 
         info!("Checking validators are online...");
         for (_, spec) in adds.iter().chain(modifies.iter()) {
-            let address = spec.network_address.as_ref().unwrap();
+            let address = &spec.network_address;
             let node = node_provider.make_node(address)?;
             context_guard
                 .check_compatible_version_info(address, &node)
@@ -880,29 +876,21 @@ where
                 let mut validators = committee.validators().clone();
 
                 // Apply operations based on the batch specification
-                for (public_key, spec_opt) in &batch {
-                    match spec_opt {
-                        None => {
-                            // Explicit null - remove
+                for (public_key, change_opt) in &batch {
+                    match change_opt {
+                        None | Some(ValidatorChange::Remove {}) => {
+                            // null or {} - remove validator
                             if validators.remove(public_key).is_none() {
                                 warn!("Validator {} does not exist; skipping remove", public_key);
                             } else {
                                 info!("Removed validator {}", public_key);
                             }
                         }
-                        Some(spec) if spec.is_empty() => {
-                            // Empty object - remove
-                            if validators.remove(public_key).is_none() {
-                                warn!("Validator {} does not exist; skipping remove", public_key);
-                            } else {
-                                info!("Removed validator {}", public_key);
-                            }
-                        }
-                        Some(spec) => {
-                            // Has values - add or modify
-                            let address = spec.network_address.as_ref().unwrap().clone();
-                            let votes = spec.votes();
-                            let account_key = spec.account_key.unwrap();
+                        Some(ValidatorChange::Update(spec)) => {
+                            // Update object - add or modify validator
+                            let address = &spec.network_address;
+                            let votes = spec.votes;
+                            let account_key = spec.account_key;
 
                             let exists = validators.contains_key(public_key);
                             validators.insert(
@@ -1019,22 +1007,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_validate_validator_change_spec_valid() {
-        let spec = ValidatorChangeSpec {
-            account_key: Some(AccountPublicKey::test_key(0)),
-            network_address: Some("grpcs://validator.example.com:443".to_string()),
-            votes: Some(100),
+    fn test_validate_validator_update_valid() {
+        let spec = ValidatorUpdate {
+            account_key: AccountPublicKey::test_key(0),
+            network_address: "grpcs://validator.example.com:443".to_string(),
+            votes: 100,
         };
 
         assert!(spec.validate().is_ok());
     }
 
     #[test]
-    fn test_validate_validator_change_spec_zero_votes() {
-        let spec = ValidatorChangeSpec {
-            account_key: Some(AccountPublicKey::test_key(0)),
-            network_address: Some("grpcs://validator.example.com:443".to_string()),
-            votes: Some(0),
+    fn test_validate_validator_update_zero_votes() {
+        let spec = ValidatorUpdate {
+            account_key: AccountPublicKey::test_key(0),
+            network_address: "grpcs://validator.example.com:443".to_string(),
+            votes: 0,
         };
 
         let result = spec.validate();
@@ -1046,11 +1034,11 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_validator_change_spec_empty_address() {
-        let spec = ValidatorChangeSpec {
-            account_key: Some(AccountPublicKey::test_key(0)),
-            network_address: Some(String::new()),
-            votes: Some(100),
+    fn test_validate_validator_update_empty_address() {
+        let spec = ValidatorUpdate {
+            account_key: AccountPublicKey::test_key(0),
+            network_address: String::new(),
+            votes: 100,
         };
 
         let result = spec.validate();
@@ -1059,18 +1047,6 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("network address cannot be empty"));
-    }
-
-    #[test]
-    fn test_validate_validator_change_spec_empty() {
-        let spec = ValidatorChangeSpec {
-            account_key: None,
-            network_address: None,
-            votes: None,
-        };
-
-        assert!(spec.is_empty());
-        assert!(spec.validate().is_ok()); // Empty is valid (represents removal)
     }
 
     #[test]
@@ -1085,21 +1061,21 @@ mod tests {
         // Add operation - validator with full spec
         batch.insert(
             pk0,
-            Some(ValidatorChangeSpec {
-                account_key: Some(AccountPublicKey::test_key(0)),
-                network_address: Some("grpcs://validator1.example.com:443".to_string()),
-                votes: Some(100),
-            }),
+            Some(ValidatorChange::Update(ValidatorUpdate {
+                account_key: AccountPublicKey::test_key(0),
+                network_address: "grpcs://validator1.example.com:443".to_string(),
+                votes: 100,
+            })),
         );
 
         // Modify operation - validator with full spec (would be modify if validator exists)
         batch.insert(
             pk1,
-            Some(ValidatorChangeSpec {
-                account_key: Some(AccountPublicKey::test_key(1)),
-                network_address: Some("grpcs://validator2.example.com:443".to_string()),
-                votes: Some(150),
-            }),
+            Some(ValidatorChange::Update(ValidatorUpdate {
+                account_key: AccountPublicKey::test_key(1),
+                network_address: "grpcs://validator2.example.com:443".to_string(),
+                votes: 150,
+            })),
         );
 
         // Remove operation - null
@@ -1123,15 +1099,23 @@ mod tests {
 
         // Check pk0 (add)
         assert!(parsed_batch.contains_key(&pk0));
-        let spec0 = parsed_batch.get(&pk0).unwrap().as_ref().unwrap();
-        assert_eq!(spec0.votes, Some(100));
+        let change0 = parsed_batch.get(&pk0).unwrap().as_ref().unwrap();
+        if let ValidatorChange::Update(spec) = change0 {
+            assert_eq!(spec.votes, 100);
+        } else {
+            panic!("Expected Update variant");
+        }
 
         // Check pk1 (modify)
         assert!(parsed_batch.contains_key(&pk1));
-        let spec1 = parsed_batch.get(&pk1).unwrap().as_ref().unwrap();
-        assert_eq!(spec1.votes, Some(150));
+        let change1 = parsed_batch.get(&pk1).unwrap().as_ref().unwrap();
+        if let ValidatorChange::Update(spec) = change1 {
+            assert_eq!(spec.votes, 150);
+        } else {
+            panic!("Expected Update variant");
+        }
 
-        // Check pk2 (remove)
+        // Check pk2 (remove with null)
         assert!(parsed_batch.contains_key(&pk2));
         assert!(parsed_batch.get(&pk2).unwrap().is_none());
     }
@@ -1170,18 +1154,11 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_batch_file_empty_spec_as_remove() {
+    fn test_parse_batch_file_empty_object_as_remove() {
         // Test that empty object {} is treated as removal
         let pk = ValidatorPublicKey::test_key(0);
         let mut batch = ValidatorBatchFile::new();
-        batch.insert(
-            pk,
-            Some(ValidatorChangeSpec {
-                account_key: None,
-                network_address: None,
-                votes: None,
-            }),
-        );
+        batch.insert(pk, Some(ValidatorChange::Remove {}));
 
         let json = serde_json::to_string(&batch).unwrap();
 
@@ -1193,8 +1170,8 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed_batch = result.unwrap();
-        let spec = parsed_batch.get(&pk).unwrap().as_ref().unwrap();
-        assert!(spec.is_empty());
+        let change = parsed_batch.get(&pk).unwrap().as_ref().unwrap();
+        assert!(change.is_remove());
     }
 
     #[test]
