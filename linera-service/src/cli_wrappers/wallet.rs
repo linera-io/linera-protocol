@@ -1096,7 +1096,6 @@ impl ClientWrapper {
             .await?
             .arg("validator")
             .arg("update")
-            .arg("--file")
             .arg(temp_path)
             .arg("--yes") // Skip confirmation prompt
             .spawn_and_wait_for_stdout()
