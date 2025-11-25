@@ -77,9 +77,9 @@ bincode.workspace = true
 cargo_toml.workspace = true
 cfg-if.workspace = true
 chrono = { workspace = true, features = ["clock"] }
-clio.workspace = true
 clap.workspace = true
 clap-markdown.workspace = true
+clio.workspace = true
 colored.workspace = true
 convert_case.workspace = true
 current_platform = "0.2.0"
