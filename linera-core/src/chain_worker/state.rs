@@ -22,8 +22,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, ChainAndHeight, IncomingBundle, MessageAction,
-        MessageBundle, OriginalProposal, ProposalContent, ProposedBlock,
+        BlockExecutionOutcome, BlockProposal, IncomingBundle, MessageAction, MessageBundle,
+        OriginalProposal, ProposalContent, ProposedBlock,
     },
     manager,
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
@@ -980,51 +980,34 @@ where
             let last_updated_height = filtered_bundles.last().map(|bundle| bundle.height);
             last_height_by_origin.insert(origin, last_updated_height);
 
-            // Add filtered bundles to batch with add_to_received_log flags.
-            let mut previous_height = None;
             for bundle in filtered_bundles {
-                let add_to_received_log = previous_height != Some(bundle.height);
-                previous_height = Some(bundle.height);
-                batch_updates.push((origin, bundle, add_to_received_log));
+                batch_updates.push((origin, bundle));
             }
         }
 
-        // Check for inactive chains before processing.
-        let is_active = self.chain.is_active();
-        let allow_inactive = self.config.allow_inactive_chains;
+        if batch_updates.is_empty() {
+            return Ok(last_height_by_origin);
+        }
 
-        if !batch_updates.is_empty() && !allow_inactive && !is_active {
-            // Refuse to process messages if the chain is still inactive.
-            // However, still update the received_log so validators can track pending messages.
-            for (origin, bundle, add_to_log) in &batch_updates {
-                if *add_to_log {
-                    self.chain.received_log.push(ChainAndHeight {
-                        chain_id: *origin,
-                        height: bundle.height,
-                    });
-                }
-            }
+        // Try to initialize the chain (may read chain description blob).
+        let local_time = self.storage.clock().current_time();
+        self.chain.initialize_if_needed(local_time).await.ok();
 
+        // Check if the chain is still inactive.
+        if !self.config.allow_inactive_chains && !self.chain.is_active() {
             for origin in last_height_by_origin.keys() {
                 warn!(
                     "Refusing to deliver messages to {recipient:?} from {origin:?} \
                     because the recipient is still inactive",
                 );
             }
-
-            // Return None for all origins since messages weren't processed.
-            let results = last_height_by_origin
+            return Ok(last_height_by_origin
                 .keys()
                 .map(|origin| (*origin, None))
-                .collect();
-
-            // Save the chain to persist the received_log updates.
-            self.save().await?;
-            return Ok(results);
+                .collect());
         }
 
         // Process all bundles via ChainStateView's batch method.
-        let local_time = self.storage.clock().current_time();
         self.chain
             .receive_message_bundles(batch_updates, local_time)
             .await?;

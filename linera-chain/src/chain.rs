@@ -14,7 +14,7 @@ use linera_base::{
         OracleResponse, Timestamp,
     },
     ensure,
-    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, StreamId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -46,7 +46,7 @@ use crate::{
     manager::ChainManager,
     outbox::OutboxStateView,
     pending_blobs::PendingBlobsView,
-    ChainError, ChainExecutionContext, ExecutionError, ExecutionResultExt,
+    ChainError, ChainExecutionContext, ExecutionResultExt,
 };
 
 #[cfg(test)]
@@ -578,38 +578,23 @@ where
     /// Side effects to shared state (`unskippable_bundles`, `received_log`) are collected
     /// during concurrent processing and applied sequentially at the end.
     ///
-    /// # Arguments
-    /// * `updates` - Vec of `(origin_chain_id, bundle, add_to_received_log)`
-    /// * `local_time` - The current timestamp for tracking when bundles are seen
+    /// Note: The caller should call `initialize_if_needed` before this method if needed.
     pub async fn receive_message_bundles(
         &mut self,
-        updates: Vec<(ChainId, MessageBundle, bool)>,
+        updates: Vec<(ChainId, MessageBundle)>,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
         if updates.is_empty() {
             return Ok(());
         }
 
-        let chain_id = self.chain_id();
-
-        // Initialize chain once upfront.
-        match self.initialize_if_needed(local_time).await {
-            Ok(_) => (),
-            Err(ChainError::ExecutionError(exec_err, _))
-                if matches!(*exec_err, ExecutionError::BlobsNotFound(ref blobs)
-                if blobs.iter().all(|blob_id| {
-                    blob_id.blob_type == BlobType::ChainDescription && blob_id.hash == chain_id.0
-                })) => {}
-            Err(err) => return Err(err),
-        }
-
         // Group bundles by origin to deduplicate inbox loading.
         let mut bundles_by_origin: BTreeMap<ChainId, BTreeMap<_, _>> = BTreeMap::new();
-        for (origin, bundle, add_to_log) in updates {
-            bundles_by_origin.entry(origin).or_default().insert(
-                (bundle.height, bundle.transaction_index),
-                (bundle, add_to_log),
-            );
+        for (origin, bundle) in updates {
+            bundles_by_origin
+                .entry(origin)
+                .or_default()
+                .insert((bundle.height, bundle.transaction_index), bundle);
         }
 
         // Load all unique inboxes at once.
@@ -627,13 +612,10 @@ where
 
                 Some(async move {
                     let mut unskippable_effects = Vec::new();
-                    let mut received_log_effects = Vec::new();
+                    let mut received_log_heights = BTreeSet::new();
 
-                    for (bundle, add_to_log) in bundles.into_values() {
-                        let chain_and_height = ChainAndHeight {
-                            chain_id: origin,
-                            height: bundle.height,
-                        };
+                    for bundle in bundles.into_values() {
+                        let height = bundle.height;
                         let entry = BundleInInbox::new(origin, &bundle);
                         let skippable = bundle.is_skippable();
 
@@ -653,12 +635,10 @@ where
                         if newly_added && !skippable {
                             unskippable_effects.push((entry, local_time));
                         }
-                        if add_to_log {
-                            received_log_effects.push(chain_and_height);
-                        }
+                        received_log_heights.insert(height);
                     }
 
-                    Ok::<_, ChainError>((unskippable_effects, received_log_effects))
+                    Ok::<_, ChainError>((origin, unskippable_effects, received_log_heights))
                 })
             })
             .collect();
@@ -667,13 +647,16 @@ where
         let processing_results = futures::future::try_join_all(processing_futures).await?;
 
         // Apply side effects to shared state sequentially.
-        for (unskippable_effects, received_log_effects) in processing_results {
+        for (origin, unskippable_effects, received_log_heights) in processing_results {
             for (entry, seen) in unskippable_effects {
                 self.unskippable_bundles
                     .push_back(TimestampedBundleInInbox { entry, seen });
             }
-            for chain_and_height in received_log_effects {
-                self.received_log.push(chain_and_height);
+            for height in received_log_heights {
+                self.received_log.push(ChainAndHeight {
+                    chain_id: origin,
+                    height,
+                });
             }
         }
 
