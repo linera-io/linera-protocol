@@ -960,8 +960,9 @@ where
         let recipient = self.chain_id();
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
 
-        // Filter bundles and prepare for batch processing.
-        let mut batch_updates = Vec::new();
+        // Filter bundles and prepare for batch processing, grouped by origin.
+        let mut bundles_by_origin: BTreeMap<ChainId, BTreeMap<(BlockHeight, u32), MessageBundle>> =
+            BTreeMap::new();
         let mut last_height_by_origin: BTreeMap<ChainId, Option<BlockHeight>> = BTreeMap::new();
 
         for (origin, bundles) in updates {
@@ -980,12 +981,15 @@ where
             let last_updated_height = filtered_bundles.last().map(|bundle| bundle.height);
             last_height_by_origin.insert(origin, last_updated_height);
 
-            for bundle in filtered_bundles {
-                batch_updates.push((origin, bundle));
+            if !filtered_bundles.is_empty() {
+                let origin_bundles = bundles_by_origin.entry(origin).or_default();
+                for bundle in filtered_bundles {
+                    origin_bundles.insert((bundle.height, bundle.transaction_index), bundle);
+                }
             }
         }
 
-        if batch_updates.is_empty() {
+        if bundles_by_origin.is_empty() {
             return Ok(last_height_by_origin);
         }
 
@@ -1009,7 +1013,7 @@ where
 
         // Process all bundles via ChainStateView's batch method.
         self.chain
-            .receive_message_bundles(batch_updates, local_time)
+            .receive_message_bundles(bundles_by_origin, local_time)
             .await?;
 
         // Save the chain once for all updates.

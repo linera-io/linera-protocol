@@ -578,23 +578,17 @@ where
     /// Side effects to shared state (`unskippable_bundles`, `received_log`) are collected
     /// during concurrent processing and applied sequentially at the end.
     ///
+    /// The bundles are provided as a map from origin chain to a map of bundles keyed by
+    /// `(height, transaction_index)`. This ensures proper ordering and deduplication.
+    ///
     /// Note: The caller should call `initialize_if_needed` before this method if needed.
     pub async fn receive_message_bundles(
         &mut self,
-        updates: Vec<(ChainId, MessageBundle)>,
+        mut bundles_by_origin: BTreeMap<ChainId, BTreeMap<(BlockHeight, u32), MessageBundle>>,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        if updates.is_empty() {
+        if bundles_by_origin.is_empty() {
             return Ok(());
-        }
-
-        // Group bundles by origin to deduplicate inbox loading.
-        let mut bundles_by_origin: BTreeMap<ChainId, BTreeMap<_, _>> = BTreeMap::new();
-        for (origin, bundle) in updates {
-            bundles_by_origin
-                .entry(origin)
-                .or_default()
-                .insert((bundle.height, bundle.transaction_index), bundle);
         }
 
         // Load all unique inboxes at once.
