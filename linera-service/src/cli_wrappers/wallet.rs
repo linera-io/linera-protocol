@@ -1073,7 +1073,9 @@ impl ClientWrapper {
             changes.insert(
                 public_key.clone(),
                 serde_json::json!({
-                    "accountKey": account_key,
+                    "accountKey": {
+                        "Secp256k1": account_key
+                    },
                     "address": address,
                     "votes": votes,
                 }),
