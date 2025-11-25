@@ -57,12 +57,12 @@ This document contains the help content for the `linera` command-line program.
 * [`linera net up`↴](#linera-net-up)
 * [`linera net helper`↴](#linera-net-helper)
 * [`linera validator`↴](#linera-validator)
-* [`linera validator query`↴](#linera-validator-query)
-* [`linera validator query-batch`↴](#linera-validator-query-batch)
-* [`linera validator list`↴](#linera-validator-list)
 * [`linera validator add`↴](#linera-validator-add)
-* [`linera validator remove`↴](#linera-validator-remove)
+* [`linera validator batch-query`↴](#linera-validator-batch-query)
 * [`linera validator batch-update`↴](#linera-validator-batch-update)
+* [`linera validator list`↴](#linera-validator-list)
+* [`linera validator query`↴](#linera-validator-query)
+* [`linera validator remove`↴](#linera-validator-remove)
 * [`linera validator sync`↴](#linera-validator-sync)
 * [`linera storage`↴](#linera-storage)
 * [`linera storage delete-all`↴](#linera-storage-delete-all)
@@ -1242,123 +1242,140 @@ Manage validators in the committee
 
 ###### **Subcommands:**
 
-* `query` — Query a single validator's state
-* `query-batch` — Query multiple validators from a JSON file
+* `add` — Add a validator to the committee
+* `batch-query` — Query multiple validators using a JSON specification file
+* `batch-update` — Apply multiple validator changes from JSON input
 * `list` — List all validators in the committee
-* `add` — Add a new validator to the committee
+* `query` — Query a single validator's state and connectivity
 * `remove` — Remove a validator from the committee
-* `batch-update` — Batch update validators from a JSON file
-* `sync` — Synchronize validator configuration from network address
-
-
-
-## `linera validator query`
-
-Query a single validator's state
-
-**Usage:** `linera validator query [OPTIONS] <ADDRESS>`
-
-###### **Arguments:**
-
-* `<ADDRESS>` — Network address of the validator to query
-
-###### **Options:**
-
-* `--chain-id <CHAIN_ID>` — Optional chain ID to query about (defaults to default chain)
-* `--public-key <PUBLIC_KEY>` — Optional validator public key to query about
-
-
-
-## `linera validator query-batch`
-
-Query multiple validators from a JSON file
-
-**Usage:** `linera validator query-batch [OPTIONS] <FILE>`
-
-###### **Arguments:**
-
-* `<FILE>` — Path to JSON file with validator query specifications
-
-###### **Options:**
-
-* `--chain-id <CHAIN_ID>` — Optional chain ID to query about (defaults to default chain)
-
-
-
-## `linera validator list`
-
-List all validators in the committee
-
-**Usage:** `linera validator list [OPTIONS]`
-
-###### **Options:**
-
-* `--chain-id <CHAIN_ID>` — Optional chain ID (defaults to default chain)
-* `--min-votes <MIN_VOTES>` — Optional minimum votes threshold to filter validators
+* `sync` — Synchronize chain state to a validator
 
 
 
 ## `linera validator add`
 
-Add a new validator to the committee
+Add a validator to the committee.
+
+Adds a new validator with the specified public key, account key, network address, and voting weight. The validator must not already exist in the committee.
 
 **Usage:** `linera validator add [OPTIONS] --public-key <PUBLIC_KEY> --account-key <ACCOUNT_KEY> --address <ADDRESS>`
 
 ###### **Options:**
 
-* `--public-key <PUBLIC_KEY>` — Validator public key
-* `--account-key <ACCOUNT_KEY>` — Account public key for the validator
-* `--address <ADDRESS>` — Network address of the validator
-* `--votes <VOTES>` — Voting weight for the validator
+* `--public-key <PUBLIC_KEY>` — Public key of the validator to add
+* `--account-key <ACCOUNT_KEY>` — Account public key for receiving payments and rewards
+* `--address <ADDRESS>` — Network address where the validator can be reached (e.g., grpcs://host:port)
+* `--votes <VOTES>` — Voting weight for consensus (default: 1)
 
   Default value: `1`
-* `--skip-online-check` — Skip online connectivity check
+* `--skip-online-check` — Skip online connectivity verification before adding
 
 
 
-## `linera validator remove`
+## `linera validator batch-query`
 
-Remove a validator from the committee
+Query multiple validators using a JSON specification file.
 
-**Usage:** `linera validator remove --public-key <PUBLIC_KEY>`
+Reads validator specifications from a JSON file and queries their state. The JSON should contain an array of validator objects with publicKey and networkAddress.
+
+**Usage:** `linera validator batch-query [OPTIONS] <FILE>`
+
+###### **Arguments:**
+
+* `<FILE>` — Path to JSON file containing validator query specifications
 
 ###### **Options:**
 
-* `--public-key <PUBLIC_KEY>` — Public key of validator to remove
+* `--chain-id <CHAIN_ID>` — Chain ID to query (defaults to default chain)
 
 
 
 ## `linera validator batch-update`
 
-Batch update validators from a JSON file
+Apply multiple validator changes from JSON input.
 
-**Usage:** `linera validator batch-update [OPTIONS] <FILE>`
+Reads a JSON object mapping validator public keys to their desired state: - Key with state object (address, votes, accountKey): add or modify validator - Key with null or {}: remove validator - Keys not present: unchanged
+
+Input can be provided via file path, stdin pipe, or shell redirect.
+
+**Usage:** `linera validator batch-update [OPTIONS] [FILE]`
 
 ###### **Arguments:**
 
-* `<FILE>` — Path to JSON file with batch operations
+* `<FILE>` — Path to JSON file with validator changes (omit or use "-" for stdin)
 
 ###### **Options:**
 
-* `--dry-run` — Perform validation only without executing operations
-* `--skip-online-check` — Skip online connectivity checks for new validators
+* `--dry-run` — Preview changes without applying them
+* `-y`, `--yes` — Skip confirmation prompt (use with caution)
+* `--skip-online-check` — Skip online connectivity checks for validators being added or modified
+
+
+
+## `linera validator list`
+
+List all validators in the committee.
+
+Displays the current validator set with their network addresses, voting weights, and connection status. Optionally filter by minimum voting weight.
+
+**Usage:** `linera validator list [OPTIONS]`
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — Chain ID to query (defaults to default chain)
+* `--min-votes <MIN_VOTES>` — Only show validators with at least this many votes
+
+
+
+## `linera validator query`
+
+Query a single validator's state and connectivity.
+
+Connects to a validator at the specified network address and queries its view of the blockchain state, including block height and committee information.
+
+**Usage:** `linera validator query [OPTIONS] <ADDRESS>`
+
+###### **Arguments:**
+
+* `<ADDRESS>` — Network address of the validator (e.g., grpcs://host:port)
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — Chain ID to query about (defaults to default chain)
+* `--public-key <PUBLIC_KEY>` — Expected public key of the validator (for verification)
+
+
+
+## `linera validator remove`
+
+Remove a validator from the committee.
+
+Removes the validator with the specified public key from the committee. The validator will no longer participate in consensus.
+
+**Usage:** `linera validator remove --public-key <PUBLIC_KEY>`
+
+###### **Options:**
+
+* `--public-key <PUBLIC_KEY>` — Public key of the validator to remove
 
 
 
 ## `linera validator sync`
 
-Synchronize validator configuration from network address
+Synchronize chain state to a validator.
+
+Pushes the current chain state from local storage to a validator node, ensuring the validator has up-to-date information about specified chains.
 
 **Usage:** `linera validator sync [OPTIONS] <ADDRESS>`
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the validator to sync with
+* `<ADDRESS>` — Network address of the validator to sync (e.g., grpcs://host:port)
 
 ###### **Options:**
 
-* `--chains <CHAINS>` — Optional list of chain IDs to sync (defaults to default chain)
-* `--check-online` — Check that validator is online before syncing (default: false)
+* `--chains <CHAINS>` — Chain IDs to synchronize (defaults to all chains in wallet)
+* `--check-online` — Verify validator is online before syncing
 
 
 
