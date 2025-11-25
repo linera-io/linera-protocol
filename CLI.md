@@ -59,7 +59,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera validator`↴](#linera-validator)
 * [`linera validator add`↴](#linera-validator-add)
 * [`linera validator batch-query`↴](#linera-validator-batch-query)
-* [`linera validator batch-update`↴](#linera-validator-batch-update)
+* [`linera validator update`↴](#linera-validator-update)
 * [`linera validator list`↴](#linera-validator-list)
 * [`linera validator query`↴](#linera-validator-query)
 * [`linera validator remove`↴](#linera-validator-remove)
@@ -1244,7 +1244,7 @@ Manage validators in the committee
 
 * `add` — Add a validator to the committee
 * `batch-query` — Query multiple validators using a JSON specification file
-* `batch-update` — Apply multiple validator changes from JSON input
+* `update` — Apply multiple validator changes from JSON input
 * `list` — List all validators in the committee
 * `query` — Query a single validator's state and connectivity
 * `remove` — Remove a validator from the committee
@@ -1290,7 +1290,7 @@ Reads validator specifications from a JSON file and queries their state. The JSO
 
 
 
-## `linera validator batch-update`
+## `linera validator update`
 
 Apply multiple validator changes from JSON input.
 
@@ -1298,7 +1298,7 @@ Reads a JSON object mapping validator public keys to their desired state: - Key 
 
 Input can be provided via file path, stdin pipe, or shell redirect.
 
-**Usage:** `linera validator batch-update [OPTIONS] [FILE]`
+**Usage:** `linera validator update [OPTIONS] [FILE]`
 
 ###### **Arguments:**
 
