@@ -1294,7 +1294,7 @@ Reads validator specifications from a JSON file and queries their state. The JSO
 
 Apply multiple validator changes from JSON input.
 
-Reads a JSON object mapping validator public keys to their desired state: - Key with state object (address, votes, accountKey): add or modify validator - Key with null or {}: remove validator - Keys not present: unchanged
+Reads a JSON object mapping validator public keys to their desired state: - Key with state object (address, votes, accountKey): add or modify validator - Key with null: remove validator - Keys not present: unchanged
 
 Input can be provided via file path, stdin pipe, or shell redirect.
 

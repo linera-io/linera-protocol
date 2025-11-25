@@ -27,8 +27,8 @@ use tracing::{error, info, warn};
 
 /// Type alias for the complex ClientContext type used throughout validator operations.
 /// This alias helps avoid clippy's type_complexity warnings while maintaining type safety.
-type MutexedContext<S, W, Si> =
-    Arc<Mutex<ClientContext<linera_core::environment::Impl<S, NodeProvider, Si>, W>>>;
+/// Uses generic Environment trait to avoid coupling to implementation details.
+type MutexedContext<E, W> = Arc<Mutex<ClientContext<E, W>>>;
 
 /// Specification for a validator to add or modify.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,10 +51,15 @@ impl ValidatorSpec {
     }
 }
 
-/// Specification for adding or modifying a validator in batch operations.
+/// Default value for votes field (1).
+fn default_votes() -> NonZero<u64> {
+    NonZero::new(1).unwrap()
+}
+
+/// Represents an update to a validator's configuration in batch operations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ValidatorUpdate {
+pub struct ValidatorChange {
     pub account_key: AccountPublicKey,
     #[serde(rename = "address")]
     pub network_address: String,
@@ -62,13 +67,8 @@ pub struct ValidatorUpdate {
     pub votes: NonZero<u64>,
 }
 
-/// Default value for votes field (1).
-fn default_votes() -> NonZero<u64> {
-    NonZero::new(1).unwrap()
-}
-
-impl ValidatorUpdate {
-    /// Validate the validator update specification.
+impl ValidatorChange {
+    /// Validate the validator change specification.
     fn validate(&self) -> Result<()> {
         if self.network_address.is_empty() {
             bail!("Validator network address cannot be empty");
@@ -77,27 +77,9 @@ impl ValidatorUpdate {
     }
 }
 
-/// Represents a change to a validator - either removal or update.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum ValidatorChange {
-    /// Update with full validator specification
-    Update(ValidatorUpdate),
-    /// Empty object {} representing removal
-    Remove {},
-}
-
-impl ValidatorChange {
-    /// Check if this change represents a removal operation.
-    #[cfg(test)]
-    fn is_remove(&self) -> bool {
-        matches!(self, ValidatorChange::Remove {})
-    }
-}
-
 /// Structure for batch validator operations from JSON file.
 /// Maps validator public keys to their desired state:
-/// - `null` or `{}` means remove the validator
+/// - `null` means remove the validator
 /// - `{accountKey, address, votes}` means add or modify the validator
 /// - Keys not present in the map are left unchanged
 pub type ValidatorBatchFile = HashMap<ValidatorPublicKey, Option<ValidatorChange>>;
@@ -149,7 +131,7 @@ pub enum ValidatorCommand {
     ///
     /// Reads a JSON object mapping validator public keys to their desired state:
     /// - Key with state object (address, votes, accountKey): add or modify validator
-    /// - Key with null or {}: remove validator
+    /// - Key with null: remove validator
     /// - Keys not present: unchanged
     ///
     /// Input can be provided via file path, stdin pipe, or shell redirect.
@@ -236,7 +218,7 @@ fn parse_batch_file(mut input: Input) -> Result<ValidatorBatchFile> {
 
     // Validate all update specs
     for (public_key, change_opt) in &batch {
-        if let Some(ValidatorChange::Update(spec)) = change_opt {
+        if let Some(spec) = change_opt {
             spec.validate()
                 .with_context(|| format!("Invalid validator spec for {}", public_key))?;
         }
@@ -563,8 +545,8 @@ where
 }
 
 /// Handle add command: add a new validator to the committee.
-async fn handle_add<S, W, Si>(
-    context: MutexedContext<S, W, Si>,
+async fn handle_add<E, W>(
+    context: MutexedContext<E, W>,
     public_key: ValidatorPublicKey,
     account_key: AccountPublicKey,
     address: String,
@@ -572,9 +554,8 @@ async fn handle_add<S, W, Si>(
     skip_online_check: bool,
 ) -> Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
+    E: linera_core::Environment + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
-    Si: Signer + Send + Sync + 'static,
 {
     info!("Starting operation to add validator");
     let time_start = std::time::Instant::now();
@@ -651,14 +632,13 @@ where
 }
 
 /// Handle remove command: remove a validator from the committee.
-async fn handle_remove<S, W, Si>(
-    context: MutexedContext<S, W, Si>,
+async fn handle_remove<E, W>(
+    context: MutexedContext<E, W>,
     public_key: ValidatorPublicKey,
 ) -> Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
+    E: linera_core::Environment + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
-    Si: Signer + Send + Sync + 'static,
 {
     info!("Starting operation to remove validator");
     let time_start = std::time::Instant::now();
@@ -706,17 +686,16 @@ where
 }
 
 /// Handle batch-update command: apply a batch file with add/modify/remove operations.
-async fn handle_batch_update<S, W, Si>(
-    context: MutexedContext<S, W, Si>,
+async fn handle_batch_update<E, W>(
+    context: MutexedContext<E, W>,
     input: Input,
     dry_run: bool,
     yes: bool,
     skip_online_check: bool,
 ) -> Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
+    E: linera_core::Environment + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
-    Si: Signer + Send + Sync + 'static,
 {
     info!("Starting batch update operation");
     let time_start = std::time::Instant::now();
@@ -748,11 +727,7 @@ where
                 // null = removal
                 removes.push(*public_key);
             }
-            Some(ValidatorChange::Remove {}) => {
-                // {} = removal
-                removes.push(*public_key);
-            }
-            Some(ValidatorChange::Update(spec)) => {
+            Some(spec) => {
                 if current_validators.contains_key(public_key) {
                     modifies.push((public_key, spec));
                 } else {
@@ -874,15 +849,15 @@ where
                 // Apply operations based on the batch specification
                 for (public_key, change_opt) in &batch {
                     match change_opt {
-                        None | Some(ValidatorChange::Remove {}) => {
-                            // null or {} - remove validator
+                        None => {
+                            // null - remove validator
                             if validators.remove(public_key).is_none() {
                                 warn!("Validator {} does not exist; skipping remove", public_key);
                             } else {
                                 info!("Removed validator {}", public_key);
                             }
                         }
-                        Some(ValidatorChange::Update(spec)) => {
+                        Some(spec) => {
                             // Update object - add or modify validator
                             let address = &spec.network_address;
                             let votes = spec.votes.get();
@@ -938,7 +913,7 @@ where
 
 /// Handle sync command: sync validator(s) to specific chains.
 async fn handle_sync<S, W, Si>(
-    context: MutexedContext<S, W, Si>,
+    context: MutexedContext<linera_core::environment::Impl<S, NodeProvider, Si>, W>,
     address: String,
     chains: Vec<linera_base::identifiers::ChainId>,
     check_online: bool,
@@ -1003,8 +978,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_validate_validator_update_valid() {
-        let spec = ValidatorUpdate {
+    fn test_validate_validator_change_valid() {
+        let spec = ValidatorChange {
             account_key: AccountPublicKey::test_key(0),
             network_address: "grpcs://validator.example.com:443".to_string(),
             votes: NonZero::new(100).unwrap(),
@@ -1014,8 +989,8 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_validator_update_empty_address() {
-        let spec = ValidatorUpdate {
+    fn test_validate_validator_change_empty_address() {
+        let spec = ValidatorChange {
             account_key: AccountPublicKey::test_key(0),
             network_address: String::new(),
             votes: NonZero::new(100).unwrap(),
@@ -1041,21 +1016,21 @@ mod tests {
         // Add operation - validator with full spec
         batch.insert(
             pk0,
-            Some(ValidatorChange::Update(ValidatorUpdate {
+            Some(ValidatorChange {
                 account_key: AccountPublicKey::test_key(0),
                 network_address: "grpcs://validator1.example.com:443".to_string(),
                 votes: NonZero::new(100).unwrap(),
-            })),
+            }),
         );
 
         // Modify operation - validator with full spec (would be modify if validator exists)
         batch.insert(
             pk1,
-            Some(ValidatorChange::Update(ValidatorUpdate {
+            Some(ValidatorChange {
                 account_key: AccountPublicKey::test_key(1),
                 network_address: "grpcs://validator2.example.com:443".to_string(),
                 votes: NonZero::new(150).unwrap(),
-            })),
+            }),
         );
 
         // Remove operation - null
@@ -1080,21 +1055,13 @@ mod tests {
 
         // Check pk0 (add)
         assert!(parsed_batch.contains_key(&pk0));
-        let change0 = parsed_batch.get(&pk0).unwrap().as_ref().unwrap();
-        if let ValidatorChange::Update(spec) = change0 {
-            assert_eq!(spec.votes.get(), 100);
-        } else {
-            panic!("Expected Update variant");
-        }
+        let spec0 = parsed_batch.get(&pk0).unwrap().as_ref().unwrap();
+        assert_eq!(spec0.votes.get(), 100);
 
         // Check pk1 (modify)
         assert!(parsed_batch.contains_key(&pk1));
-        let change1 = parsed_batch.get(&pk1).unwrap().as_ref().unwrap();
-        if let ValidatorChange::Update(spec) = change1 {
-            assert_eq!(spec.votes.get(), 150);
-        } else {
-            panic!("Expected Update variant");
-        }
+        let spec1 = parsed_batch.get(&pk1).unwrap().as_ref().unwrap();
+        assert_eq!(spec1.votes.get(), 150);
 
         // Check pk2 (remove with null)
         assert!(parsed_batch.contains_key(&pk2));
@@ -1135,28 +1102,6 @@ mod tests {
         // With clio, Input::new itself will fail for nonexistent files
         let result = Input::new("/nonexistent/file.json");
         assert!(result.is_err(), "Expected error for nonexistent file");
-    }
-
-    #[test]
-    fn test_parse_batch_file_empty_object_as_remove() {
-        // Test that empty object {} is treated as removal
-        let pk = ValidatorPublicKey::test_key(0);
-        let mut batch = ValidatorBatchFile::new();
-        batch.insert(pk, Some(ValidatorChange::Remove {}));
-
-        let json = serde_json::to_string(&batch).unwrap();
-
-        let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write_all(json.as_bytes()).unwrap();
-        temp_file.flush().unwrap();
-
-        let input = Input::new(temp_file.path().to_str().unwrap()).unwrap();
-        let result = parse_batch_file(input);
-        assert!(result.is_ok());
-
-        let parsed_batch = result.unwrap();
-        let change = parsed_batch.get(&pk).unwrap().as_ref().unwrap();
-        assert!(change.is_remove());
     }
 
     #[test]
