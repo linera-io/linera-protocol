@@ -849,57 +849,75 @@ where
             oneshot::Sender<Result<Response, WorkerError>>,
         ) -> ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<Response, WorkerError> {
-        // Build the request.
         let (callback, response) = oneshot::channel();
         let request = request_builder(callback);
 
-        // Ensure the worker exists and get the endpoint.
-        let endpoint = self.ensure_chain_worker_exists(chain_id);
+        self.send_chain_worker_request(chain_id, |endpoint| {
+            endpoint.requests.send((request, tracing::Span::current()))
+        })?;
 
-        // Send the request.
-        endpoint
-            .requests
-            .send((request, tracing::Span::current()))
-            .map_err(|e| {
-                self.remove_chain_worker_endpoint(chain_id);
-                WorkerError::ChainActorSendError {
-                    chain_id,
-                    error: Box::new(e),
-                }
-            })?;
-
-        // Wait for the response.
-        match response.await {
-            Err(e) => {
-                self.remove_chain_worker_endpoint(chain_id);
-                Err(WorkerError::ChainActorRecvError {
-                    chain_id,
-                    error: Box::new(e),
-                })
-            }
-            Ok(result) => result,
-        }
+        response
+            .await
+            .map_err(|e| WorkerError::ChainActorRecvError {
+                chain_id,
+                error: Box::new(e),
+            })?
     }
 
-    /// Ensures the chain worker exists, creating it if necessary. Returns the endpoint.
-    #[instrument(level = "trace", skip(self), fields(
+    /// Sends a request to a chain worker, creating the worker if necessary.
+    ///
+    /// This method holds the lock on the chain workers map while sending to ensure that
+    /// if the send fails (because the actor was dropped), no other thread can get a stale
+    /// endpoint. The endpoint is removed before sending and only re-inserted on success.
+    #[instrument(level = "trace", skip(self, send_fn), fields(
         nickname = %self.nickname,
         chain_id = %chain_id
     ))]
-    fn ensure_chain_worker_exists(&self, chain_id: ChainId) -> ChainActorEndpoint<StorageClient> {
+    fn send_chain_worker_request<T: Send + Sync + 'static>(
+        &self,
+        chain_id: ChainId,
+        send_fn: impl FnOnce(
+            &ChainActorEndpoint<StorageClient>,
+        ) -> Result<(), mpsc::error::SendError<T>>,
+    ) -> Result<(), WorkerError> {
         let mut chain_workers = self.chain_workers.lock().unwrap();
 
-        if let Some(endpoint) = chain_workers.get(&chain_id) {
-            return endpoint.clone();
+        // Remove the endpoint from the map. If the send fails, we don't want other threads
+        // to get a stale endpoint.
+        let (endpoint, receivers) = if let Some(endpoint) = chain_workers.remove(&chain_id) {
+            (endpoint, None)
+        } else {
+            let (endpoint, receivers) = ChainActorEndpoint::new();
+            (endpoint, Some(receivers))
+        };
+
+        // Try to send the request.
+        if let Err(e) = send_fn(&endpoint) {
+            // The actor was dropped. Don't re-insert the endpoint.
+            return Err(WorkerError::ChainActorSendError {
+                chain_id,
+                error: Box::new(e),
+            });
         }
 
-        // Create new channels and spawn the actor.
-        let (endpoint, receivers) = ChainActorEndpoint::new();
-        chain_workers.insert(chain_id, endpoint.clone());
+        // Send succeeded. Re-insert the endpoint.
+        chain_workers.insert(chain_id, endpoint);
 
-        // Release the lock before spawning the actor.
-        drop(chain_workers);
+        // If this is a new worker, spawn the actor (after releasing the lock).
+        if let Some(receivers) = receivers {
+            drop(chain_workers);
+            self.spawn_chain_worker_actor(chain_id, receivers);
+        }
 
+        Ok(())
+    }
+
+    /// Spawns a new chain worker actor.
+    fn spawn_chain_worker_actor(
+        &self,
+        chain_id: ChainId,
+        receivers: ChainActorReceivers<StorageClient::Context>,
+    ) {
         let delivery_notifier = self
             .delivery_notifiers
             .lock()
@@ -929,13 +947,6 @@ where
             .lock()
             .unwrap()
             .spawn_task(actor_task);
-
-        endpoint
-    }
-
-    /// Removes the endpoint for a chain from the cache.
-    fn remove_chain_worker_endpoint(&self, chain_id: ChainId) {
-        self.chain_workers.lock().unwrap().remove(&chain_id);
     }
 
     /// Processes a cross-chain update.
@@ -952,29 +963,18 @@ where
             callback,
         };
 
-        let endpoint = self.ensure_chain_worker_exists(recipient);
+        self.send_chain_worker_request(recipient, |endpoint| {
+            endpoint
+                .cross_chain_updates
+                .send((request, tracing::Span::current()))
+        })?;
 
-        endpoint
-            .cross_chain_updates
-            .send((request, tracing::Span::current()))
-            .map_err(|e| {
-                self.remove_chain_worker_endpoint(recipient);
-                WorkerError::ChainActorSendError {
-                    chain_id: recipient,
-                    error: Box::new(e),
-                }
-            })?;
-
-        match response.await {
-            Err(e) => {
-                self.remove_chain_worker_endpoint(recipient);
-                Err(WorkerError::ChainActorRecvError {
-                    chain_id: recipient,
-                    error: Box::new(e),
-                })
-            }
-            Ok(result) => result,
-        }
+        response
+            .await
+            .map_err(|e| WorkerError::ChainActorRecvError {
+                chain_id: recipient,
+                error: Box::new(e),
+            })?
     }
 
     /// Processes a cross-chain update confirmation.
@@ -991,29 +991,18 @@ where
             callback,
         };
 
-        let endpoint = self.ensure_chain_worker_exists(sender);
+        self.send_chain_worker_request(sender, |endpoint| {
+            endpoint
+                .confirmations
+                .send((request, tracing::Span::current()))
+        })?;
 
-        endpoint
-            .confirmations
-            .send((request, tracing::Span::current()))
-            .map_err(|e| {
-                self.remove_chain_worker_endpoint(sender);
-                WorkerError::ChainActorSendError {
-                    chain_id: sender,
-                    error: Box::new(e),
-                }
-            })?;
-
-        match response.await {
-            Err(e) => {
-                self.remove_chain_worker_endpoint(sender);
-                Err(WorkerError::ChainActorRecvError {
-                    chain_id: sender,
-                    error: Box::new(e),
-                })
-            }
-            Ok(result) => result,
-        }
+        response
+            .await
+            .map_err(|e| WorkerError::ChainActorRecvError {
+                chain_id: sender,
+                error: Box::new(e),
+            })?
     }
 
     #[instrument(skip_all, fields(
