@@ -382,59 +382,44 @@ where
             let request_type = match request_type {
                 Some(rt) => rt,
                 None => {
-                    if first_iteration {
-                        // Wait indefinitely for the first request.
-                        futures::select! {
-                            req = receivers.cross_chain_updates.recv().fuse() => {
-                                let Some(req) = req else { break };
-                                first_cross_chain_update = Some(req);
-                                RequestType::CrossChainUpdate
-                            },
-                            req = receivers.confirmations.recv().fuse() => {
-                                let Some(req) = req else { break };
-                                first_confirmation = Some(req);
-                                RequestType::Confirmation
-                            },
-                            req = receivers.requests.recv().fuse() => {
-                                let Some(req) = req else { break };
-                                first_regular = Some(req);
-                                RequestType::Regular
-                            },
-                        }
+                    // On the first iteration, wait indefinitely. Otherwise, use a timeout.
+                    let timeout_future = if first_iteration {
+                        futures::future::pending().left_future()
                     } else {
-                        // Wait with timeout for subsequent requests.
-                        futures::select! {
-                            () = self.sleep_until_timeout().fuse() => {
-                                // Timeout: unload chain state.
-                                if let Some(mut w) = worker.take() {
-                                    trace!("Unloading chain state of {} ...", self.chain_id);
-                                    w.clear_shared_chain_view().await;
-                                    drop(w);
-                                    if let Some(task) = service_runtime_task.take() {
-                                        task.await?;
-                                    }
-                                    service_runtime_thread = None;
-                                    trace!("Done unloading chain state of {}", self.chain_id);
+                        self.sleep_until_timeout().right_future()
+                    };
+
+                    futures::select! {
+                        () = timeout_future.fuse() => {
+                            // Timeout: unload chain state.
+                            if let Some(mut w) = worker.take() {
+                                trace!("Unloading chain state of {} ...", self.chain_id);
+                                w.clear_shared_chain_view().await;
+                                drop(w);
+                                if let Some(task) = service_runtime_task.take() {
+                                    task.await?;
                                 }
-                                first_iteration = true;
-                                continue;
-                            },
-                            req = receivers.cross_chain_updates.recv().fuse() => {
-                                let Some(req) = req else { break };
-                                first_cross_chain_update = Some(req);
-                                RequestType::CrossChainUpdate
-                            },
-                            req = receivers.confirmations.recv().fuse() => {
-                                let Some(req) = req else { break };
-                                first_confirmation = Some(req);
-                                RequestType::Confirmation
-                            },
-                            req = receivers.requests.recv().fuse() => {
-                                let Some(req) = req else { break };
-                                first_regular = Some(req);
-                                RequestType::Regular
-                            },
-                        }
+                                service_runtime_thread = None;
+                                trace!("Done unloading chain state of {}", self.chain_id);
+                            }
+                            first_iteration = true;
+                            continue;
+                        },
+                        req = receivers.cross_chain_updates.recv().fuse() => {
+                            let Some(req) = req else { break };
+                            first_cross_chain_update = Some(req);
+                            RequestType::CrossChainUpdate
+                        },
+                        req = receivers.confirmations.recv().fuse() => {
+                            let Some(req) = req else { break };
+                            first_confirmation = Some(req);
+                            RequestType::Confirmation
+                        },
+                        req = receivers.requests.recv().fuse() => {
+                            let Some(req) = req else { break };
+                            first_regular = Some(req);
+                            RequestType::Regular
+                        },
                     }
                 }
             };
