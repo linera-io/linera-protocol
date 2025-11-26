@@ -1,0 +1,91 @@
+{{- if .Values.nodeLocalDns.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-local-dns
+  namespace: kube-system
+  labels:
+    app: node-local-dns
+spec:
+  selector:
+    matchLabels:
+      app: node-local-dns
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 10%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: node-local-dns
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9253"
+        # Trigger pod restart when ConfigMap changes (includes upstream IP)
+        checksum/config: {{ include (print $.Template.BasePath "/node-local-dns-config.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: node-local-dns
+      priorityClassName: system-node-critical
+      hostNetwork: true
+      dnsPolicy: Default
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - operator: Exists
+          effect: NoSchedule
+        - operator: Exists
+          effect: NoExecute
+      containers:
+        - name: node-cache
+          image: "{{ .Values.nodeLocalDns.image }}:{{ .Values.nodeLocalDns.imageTag }}"
+          imagePullPolicy: {{ .Values.nodeLocalDns.imagePullPolicy }}
+          args:
+            - "-localip"
+            - "{{ .Values.nodeLocalDns.localDnsIp }}"
+            - "-conf"
+            - "/etc/Corefile"
+            - "-upstreamsvc"
+            - "kube-dns"
+            - "-skipteardown=true"
+            - "-setupinterface=true"
+            - "-setupiptables=true"
+          securityContext:
+            privileged: true
+          ports:
+            - name: dns
+              containerPort: 53
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: 53
+              protocol: TCP
+            - name: metrics
+              containerPort: 9253
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              host: {{ .Values.nodeLocalDns.localDnsIp }}
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.nodeLocalDns.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/Corefile
+              subPath: Corefile
+            - name: xtables-lock
+              mountPath: /run/xtables.lock
+              readOnly: false
+      volumes:
+        - name: config
+          configMap:
+            name: node-local-dns
+            items:
+              - key: Corefile
+                path: Corefile
+        - name: xtables-lock
+          hostPath:
+            path: /run/xtables.lock
+            type: FileOrCreate
+{{- end }}
