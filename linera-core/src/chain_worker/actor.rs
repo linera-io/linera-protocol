@@ -358,12 +358,11 @@ where
 
             // Decide which queue to handle based on priority.
             // Priority: cross-chain/confirmations first, unless regular requests are starving.
-            // If we await on a channel, store the first received request.
             let mut first_cross_chain_update = None;
             let mut first_confirmation = None;
             let mut first_regular = None;
             let request_type = if regular_pending > 0
-                && (total_count == 0 || regular_count * 100 / total_count < min_regular_percentage)
+                && regular_count * 100 < total_count * min_regular_percentage
             {
                 Some(RequestType::Regular)
             } else if confirmation_pending > 0 || cross_chain_pending > 0 {
