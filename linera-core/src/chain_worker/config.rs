@@ -71,7 +71,7 @@ impl Default for ChainWorkerConfig {
             ttl: Default::default(),
             sender_chain_ttl: Duration::from_secs(1),
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
-            regular_request_batch_size: 10,
+            regular_request_batch_size: 1,
             cross_chain_update_batch_size: 1000,
         }
     }
