@@ -259,12 +259,8 @@ where
             votes,
             skip_online_check,
         } => {
-            let context = ClientContext::new(
-                storage.clone(),
-                context_options.clone(),
-                wallet,
-                signer,
-            );
+            let context =
+                ClientContext::new(storage.clone(), context_options.clone(), wallet, signer);
             let context = Arc::new(Mutex::new(context));
             handle_add(
                 context,
@@ -278,12 +274,8 @@ where
         }
 
         BatchQuery { file, chain_id } => {
-            let context = ClientContext::new(
-                storage.clone(),
-                context_options.clone(),
-                wallet,
-                signer,
-            );
+            let context =
+                ClientContext::new(storage.clone(), context_options.clone(), wallet, signer);
             handle_query_batch(context, file, chain_id).await
         }
 
@@ -293,12 +285,8 @@ where
             yes,
             skip_online_check,
         } => {
-            let context = ClientContext::new(
-                storage.clone(),
-                context_options.clone(),
-                wallet,
-                signer,
-            );
+            let context =
+                ClientContext::new(storage.clone(), context_options.clone(), wallet, signer);
             let context = Arc::new(Mutex::new(context));
             // Convert file path to clio::Input (handles stdin via "-" or None)
             let input = Input::new(file.as_deref().unwrap_or("-"))?;
@@ -309,12 +297,7 @@ where
             chain_id,
             min_votes,
         } => {
-            let context = ClientContext::new(
-                storage,
-                context_options,
-                wallet,
-                signer,
-            );
+            let context = ClientContext::new(storage, context_options, wallet, signer);
             handle_list(context, chain_id, min_votes).await
         }
 
@@ -323,22 +306,14 @@ where
             chain_id,
             public_key,
         } => {
-            let context = ClientContext::new(
-                storage.clone(),
-                context_options.clone(),
-                wallet,
-                signer,
-            );
+            let context =
+                ClientContext::new(storage.clone(), context_options.clone(), wallet, signer);
             handle_query(context, address, chain_id, public_key).await
         }
 
         Remove { public_key } => {
-            let context = ClientContext::new(
-                storage.clone(),
-                context_options.clone(),
-                wallet,
-                signer,
-            );
+            let context =
+                ClientContext::new(storage.clone(), context_options.clone(), wallet, signer);
             let context = Arc::new(Mutex::new(context));
             handle_remove(context, public_key).await
         }
@@ -348,12 +323,8 @@ where
             chains,
             check_online,
         } => {
-            let context = ClientContext::new(
-                storage.clone(),
-                context_options.clone(),
-                wallet,
-                signer,
-            );
+            let context =
+                ClientContext::new(storage.clone(), context_options.clone(), wallet, signer);
             let context = Arc::new(Mutex::new(context));
             handle_sync(context, address, chains, check_online).await
         }
