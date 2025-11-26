@@ -30,11 +30,12 @@ use linera_views::{
 };
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
+use std::collections::BTreeMap;
 #[cfg(with_testing)]
 use {
     futures::channel::oneshot::{self, Receiver},
     linera_views::{random::generate_test_namespace, store::TestKeyValueDatabase},
-    std::{cmp::Reverse, collections::BTreeMap},
+    std::cmp::Reverse,
 };
 
 use crate::{ChainRuntimeContext, Clock, Storage};
@@ -348,9 +349,9 @@ enum RootKey {
     Event(ChainId),
 }
 
-const CHAIN_ID_TAG: u8 = 0;
-const BLOB_ID_TAG: u8 = 2;
-const EVENT_ID_TAG: u8 = 3;
+const CHAIN_ID_TAG: u8 = 2;
+const BLOB_ID_TAG: u8 = 4;
+const EVENT_ID_TAG: u8 = 5;
 
 impl RootKey {
     fn bytes(&self) -> Vec<u8> {
@@ -377,75 +378,6 @@ fn is_chain_state(root_key: &[u8]) -> bool {
         return false;
     }
     root_key[0] == CHAIN_ID_TAG
-}
-
-#[cfg(test)]
-mod tests {
-    use linera_base::{
-        crypto::CryptoHash,
-        identifiers::{
-            ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId,
-            StreamName,
-        },
-    };
-
-    use crate::db_storage::{to_event_key, RootKey, BLOB_ID_TAG, CHAIN_ID_TAG};
-
-    // Several functionalities of the storage rely on the way that the serialization
-    // is done. Thus we need to check that the serialization works in the way that
-    // we expect.
-
-    // The listing of the blobs in `list_blob_ids` depends on the serialization
-    // of `RootKey::Blob`.
-    #[test]
-    fn test_root_key_blob_serialization() {
-        let hash = CryptoHash::default();
-        let blob_type = BlobType::default();
-        let blob_id = BlobId::new(hash, blob_type);
-        let root_key = RootKey::BlobId(blob_id).bytes();
-        assert_eq!(root_key[0], BLOB_ID_TAG);
-        assert_eq!(bcs::from_bytes::<BlobId>(&root_key[1..]).unwrap(), blob_id);
-    }
-
-    // The listing of the chains in `list_chain_ids` depends on the serialization
-    // of `RootKey::ChainState`.
-    #[test]
-    fn test_root_key_chainstate_serialization() {
-        let hash = CryptoHash::default();
-        let chain_id = ChainId(hash);
-        let root_key = RootKey::ChainState(chain_id).bytes();
-        assert_eq!(root_key[0], CHAIN_ID_TAG);
-        assert_eq!(
-            bcs::from_bytes::<ChainId>(&root_key[1..]).unwrap(),
-            chain_id
-        );
-    }
-
-    // The listing of the events in `read_events_from_index` depends on the
-    // serialization of `RootKey::Event`.
-    #[test]
-    fn test_root_key_event_serialization() {
-        let hash = CryptoHash::test_hash("49");
-        let chain_id = ChainId(hash);
-        let application_description_hash = CryptoHash::test_hash("42");
-        let application_id = ApplicationId::new(application_description_hash);
-        let application_id = GenericApplicationId::User(application_id);
-        let stream_name = StreamName(bcs::to_bytes("linera_stream").unwrap());
-        let stream_id = StreamId {
-            application_id,
-            stream_name,
-        };
-        let prefix = bcs::to_bytes(&stream_id).unwrap();
-
-        let index = 1567;
-        let event_id = EventId {
-            chain_id,
-            stream_id,
-            index,
-        };
-        let key = to_event_key(&event_id);
-        assert!(key.starts_with(&prefix));
-    }
 }
 
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the
@@ -1183,5 +1115,74 @@ where
     ) -> Result<Self, Database::Error> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
         Ok(Self::new(database, wasm_runtime, clock))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_base::{
+        crypto::CryptoHash,
+        identifiers::{
+            ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId,
+            StreamName,
+        },
+    };
+
+    use crate::db_storage::{to_event_key, RootKey, BLOB_ID_TAG, CHAIN_ID_TAG};
+
+    // Several functionalities of the storage rely on the way that the serialization
+    // is done. Thus we need to check that the serialization works in the way that
+    // we expect.
+
+    // The listing of the blobs in `list_blob_ids` depends on the serialization
+    // of `RootKey::Blob`.
+    #[test]
+    fn test_root_key_blob_serialization() {
+        let hash = CryptoHash::default();
+        let blob_type = BlobType::default();
+        let blob_id = BlobId::new(hash, blob_type);
+        let root_key = RootKey::BlobId(blob_id).bytes();
+        assert_eq!(root_key[0], BLOB_ID_TAG);
+        assert_eq!(bcs::from_bytes::<BlobId>(&root_key[1..]).unwrap(), blob_id);
+    }
+
+    // The listing of the chains in `list_chain_ids` depends on the serialization
+    // of `RootKey::ChainState`.
+    #[test]
+    fn test_root_key_chainstate_serialization() {
+        let hash = CryptoHash::default();
+        let chain_id = ChainId(hash);
+        let root_key = RootKey::ChainState(chain_id).bytes();
+        assert_eq!(root_key[0], CHAIN_ID_TAG);
+        assert_eq!(
+            bcs::from_bytes::<ChainId>(&root_key[1..]).unwrap(),
+            chain_id
+        );
+    }
+
+    // The listing of the events in `read_events_from_index` depends on the
+    // serialization of `RootKey::Event`.
+    #[test]
+    fn test_root_key_event_serialization() {
+        let hash = CryptoHash::test_hash("49");
+        let chain_id = ChainId(hash);
+        let application_description_hash = CryptoHash::test_hash("42");
+        let application_id = ApplicationId::new(application_description_hash);
+        let application_id = GenericApplicationId::User(application_id);
+        let stream_name = StreamName(bcs::to_bytes("linera_stream").unwrap());
+        let stream_id = StreamId {
+            application_id,
+            stream_name,
+        };
+        let prefix = bcs::to_bytes(&stream_id).unwrap();
+
+        let index = 1567;
+        let event_id = EventId {
+            chain_id,
+            stream_id,
+            index,
+        };
+        let key = to_event_key(&event_id);
+        assert!(key.starts_with(&prefix));
     }
 }
