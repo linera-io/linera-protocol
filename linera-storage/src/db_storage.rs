@@ -1127,7 +1127,7 @@ mod tests {
         },
     };
 
-    use crate::db_storage::{to_event_key, RootKey, BLOB_ID_TAG, CHAIN_ID_TAG};
+    use crate::db_storage::{to_event_key, RootKey, BLOB_ID_TAG, CHAIN_ID_TAG, EVENT_ID_TAG};
 
     // Several functionalities of the storage rely on the way that the serialization
     // is done. Thus we need to check that the serialization works in the way that
@@ -1181,6 +1181,8 @@ mod tests {
             stream_id,
             index,
         };
+        let root_key = RootKey::Event(chain_id).bytes();
+        assert_eq!(root_key[0], EVENT_ID_TAG);
         let key = to_event_key(&event_id);
         assert!(key.starts_with(&prefix));
     }
