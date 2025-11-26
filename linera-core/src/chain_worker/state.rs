@@ -1486,7 +1486,7 @@ where
         } = content;
 
         ensure!(
-            block.timestamp.duration_since(local_time) <= self.config.grace_period,
+            block.timestamp.duration_since(local_time) <= self.config.block_time_grace_period,
             WorkerError::InvalidTimestamp {
                 local_time,
                 block_timestamp: block.timestamp,

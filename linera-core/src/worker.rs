@@ -470,8 +470,8 @@ where
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
     #[instrument(level = "trace", skip(self))]
-    pub fn with_grace_period(mut self, grace_period: Duration) -> Self {
-        self.chain_worker_config.grace_period = grace_period;
+    pub fn with_block_time_grace_period(mut self, grace_period: Duration) -> Self {
+        self.chain_worker_config.block_time_grace_period = grace_period;
         self
     }
 
