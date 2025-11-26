@@ -1466,10 +1466,14 @@ where
             outcome,
         } = content;
 
-        ensure!(
-            block.timestamp.duration_since(local_time) <= self.config.grace_period,
-            WorkerError::InvalidTimestamp
-        );
+        if block.timestamp.duration_since(local_time) > self.config.grace_period {
+            return Err(WorkerError::InvalidTimestamp {
+                local_time,
+                block_timestamp: block.timestamp,
+                grace_period: self.config.grace_period,
+            });
+        }
+
         self.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.storage.clock().current_time();
 
