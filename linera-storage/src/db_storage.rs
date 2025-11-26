@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Debug, sync::Arc};
+use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 #[cfg(with_metrics)]
@@ -30,7 +30,6 @@ use linera_views::{
 };
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
-use std::collections::BTreeMap;
 #[cfg(with_testing)]
 use {
     futures::channel::oneshot::{self, Receiver},
