@@ -961,9 +961,8 @@ where
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
 
         // Filter bundles and prepare for batch processing, grouped by origin.
-        let mut bundles_by_origin: BTreeMap<ChainId, BTreeMap<(BlockHeight, u32), MessageBundle>> =
-            BTreeMap::new();
-        let mut last_height_by_origin: BTreeMap<ChainId, Option<BlockHeight>> = BTreeMap::new();
+        let mut bundles_by_origin = BTreeMap::<ChainId, BTreeMap<_, _>>::new();
+        let mut last_height_by_origin = BTreeMap::new();
 
         for (origin, bundles) in updates {
             let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
