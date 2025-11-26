@@ -960,14 +960,21 @@ where
         let recipient = self.chain_id();
         let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
 
+        // Load all inbox metadata concurrently.
+        let inbox_info = self
+            .chain
+            .inbox_info_for_origins(updates.keys().copied())
+            .await?;
+
         // Filter bundles and prepare for batch processing, grouped by origin.
         let mut bundles_by_origin = BTreeMap::<ChainId, BTreeMap<_, _>>::new();
         let mut last_height_by_origin = BTreeMap::new();
 
         for (origin, bundles) in updates {
-            let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
-            let last_anticipated_block_height =
-                self.chain.last_anticipated_block_height(&origin).await?;
+            let (next_height_to_receive, last_anticipated_block_height) = inbox_info
+                .get(&origin)
+                .copied()
+                .unwrap_or((BlockHeight::ZERO, None));
 
             let filtered_bundles = helper.select_message_bundles(
                 &origin,

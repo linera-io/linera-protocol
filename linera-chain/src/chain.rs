@@ -541,17 +541,6 @@ where
         Ok(())
     }
 
-    pub async fn next_block_height_to_receive(
-        &self,
-        origin: &ChainId,
-    ) -> Result<BlockHeight, ChainError> {
-        let inbox = self.inboxes.try_load_entry(origin).await?;
-        match inbox {
-            Some(inbox) => inbox.next_block_height_to_receive(),
-            None => Ok(BlockHeight::ZERO),
-        }
-    }
-
     /// Returns the height of the highest block we have, plus one. Includes preprocessed blocks.
     ///
     /// The "+ 1" is so that it can be used in the same places as `next_block_height`.
@@ -562,18 +551,39 @@ where
         Ok(self.tip_state.get().next_block_height)
     }
 
-    pub async fn last_anticipated_block_height(
+    /// Returns inbox metadata for multiple origins, loading all inboxes concurrently.
+    ///
+    /// For each origin, returns a tuple of:
+    /// - `next_block_height_to_receive`: The next block height expected from this origin.
+    /// - `last_anticipated_block_height`: The height of the last removed bundle, if any.
+    pub async fn inbox_info_for_origins(
         &self,
-        origin: &ChainId,
-    ) -> Result<Option<BlockHeight>, ChainError> {
-        let inbox = self.inboxes.try_load_entry(origin).await?;
-        match inbox {
-            Some(inbox) => match inbox.removed_bundles.back().await? {
-                Some(bundle) => Ok(Some(bundle.height)),
-                None => Ok(None),
-            },
-            None => Ok(None),
-        }
+        origins: impl IntoIterator<Item = ChainId>,
+    ) -> Result<BTreeMap<ChainId, (BlockHeight, Option<BlockHeight>)>, ChainError> {
+        let origins: Vec<_> = origins.into_iter().collect();
+        let loaded_inboxes = self.inboxes.try_load_entries_pairs(origins).await?;
+
+        let futures: Vec<_> = loaded_inboxes
+            .into_iter()
+            .map(|(origin, inbox)| async move {
+                let (next_height, last_anticipated) = match inbox {
+                    Some(inbox) => {
+                        let next = inbox.next_block_height_to_receive()?;
+                        let last = match inbox.removed_bundles.back().await? {
+                            Some(bundle) => Some(bundle.height),
+                            None => None,
+                        };
+                        (next, last)
+                    }
+                    None => (BlockHeight::ZERO, None),
+                };
+                Ok::<_, ChainError>((origin, (next_height, last_anticipated)))
+            })
+            .collect();
+
+        futures::future::try_join_all(futures)
+            .await
+            .map(|results| results.into_iter().collect())
     }
 
     /// Processes multiple message bundles from different origins concurrently.
