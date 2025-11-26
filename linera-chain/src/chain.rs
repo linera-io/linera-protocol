@@ -494,26 +494,19 @@ where
         Ok(any_updates)
     }
 
-    /// Returns the highest block height for which all outgoing messages have been delivered.
-    ///
-    /// Returns `None` if there are pending messages starting from height 0, meaning no
-    /// height is fully delivered yet.
-    pub fn max_height_with_all_messages_delivered(&self) -> Option<BlockHeight> {
+    /// Returns the lowest block height for which we don't know that all outgoing messages have
+    /// been delivered.
+    pub fn min_height_with_undelivered_messages(&self) -> BlockHeight {
+        let next_height = self.tip_state.get().next_block_height;
+        let counters = self.outbox_counters.get();
         tracing::debug!(
             "Messages left in {:.8}'s outbox: {:?}",
             self.chain_id(),
-            self.outbox_counters.get()
+            counters
         );
-        match self.outbox_counters.get().first_key_value() {
-            Some((first_pending_height, _)) => {
-                // The height before the first pending one is fully delivered.
-                first_pending_height.try_sub_one().ok()
-            }
-            None => {
-                // All messages delivered. Return the tip height (minus 1 since tip is next).
-                self.tip_state.get().next_block_height.try_sub_one().ok()
-            }
-        }
+        counters
+            .first_key_value()
+            .map_or(next_height, |(height, _)| (*height).min(next_height))
     }
 
     /// Invariant for the states of active chains.
