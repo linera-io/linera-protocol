@@ -6,11 +6,12 @@
 use std::{
     collections::{BTreeMap, HashSet},
     fmt,
+    pin::Pin,
     sync::{self, Arc, RwLock},
 };
 
 use custom_debug_derive::Debug;
-use futures::FutureExt;
+use futures::{stream::Peekable, FutureExt as _, StreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
@@ -29,6 +30,7 @@ use linera_execution::{
 use linera_storage::{Clock as _, Storage};
 use linera_views::context::InactiveContext;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, instrument, trace, Instrument as _};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
@@ -328,8 +330,6 @@ where
         self,
         receivers: ChainActorReceivers<StorageClient::Context>,
     ) -> Result<(), WorkerError> {
-        use futures::stream::StreamExt as _;
-
         trace!("Starting `ChainWorkerActor`");
 
         let regular_batch_size = self.config.regular_request_batch_size;
@@ -345,108 +345,81 @@ where
         let mut service_runtime_thread = None;
 
         // Convert receivers to peekable streams so we can wait without consuming.
-        let mut requests = tokio_stream::wrappers::UnboundedReceiverStream::new(receivers.requests)
-            .peekable();
+        let mut requests = UnboundedReceiverStream::new(receivers.requests).peekable();
         let mut cross_chain_updates =
-            tokio_stream::wrappers::UnboundedReceiverStream::new(receivers.cross_chain_updates)
-                .peekable();
-        let mut confirmations =
-            tokio_stream::wrappers::UnboundedReceiverStream::new(receivers.confirmations)
-                .peekable();
+            UnboundedReceiverStream::new(receivers.cross_chain_updates).peekable();
+        let mut confirmations = UnboundedReceiverStream::new(receivers.confirmations).peekable();
 
         // Rotate through request types: Regular -> CrossChainUpdate -> Confirmation -> ...
-        let mut next_type = RequestType::Regular;
+        let mut next_type_idx = 0;
+
+        fn is_ready<T>(stream: &mut Peekable<UnboundedReceiverStream<T>>) -> bool {
+            Pin::new(stream).peek().now_or_never().is_some()
+        }
 
         loop {
             // Check which streams have data ready.
-            let regular_ready =
-                std::pin::Pin::new(&mut requests).peek().now_or_never().is_some();
-            let cross_chain_ready = std::pin::Pin::new(&mut cross_chain_updates)
-                .peek()
-                .now_or_never()
-                .is_some();
-            let confirmation_ready = std::pin::Pin::new(&mut confirmations)
-                .peek()
-                .now_or_never()
-                .is_some();
+            let types = [
+                (RequestType::Confirmation, is_ready(&mut confirmations)),
+                (
+                    RequestType::CrossChainUpdate,
+                    is_ready(&mut cross_chain_updates),
+                ),
+                (RequestType::Regular, is_ready(&mut requests)),
+            ];
 
             // Find the next ready queue in rotation order.
-            let request_type = {
-                let types = [
-                    RequestType::Regular,
-                    RequestType::CrossChainUpdate,
-                    RequestType::Confirmation,
-                ];
-                let start_idx = types.iter().position(|t| *t == next_type).unwrap_or(0);
+            let Some((type_idx, request_type)) = types
+                .iter()
+                .enumerate()
+                .cycle()
+                .skip(next_type_idx)
+                .take(types.len())
+                .find_map(|(idx, (request_type, is_ready))| {
+                    is_ready.then_some((idx, request_type))
+                })
+            else {
+                // No requests available, wait on all queues.
+                // On the first iteration, wait indefinitely. Otherwise, use a timeout.
+                let timeout_future = if first_iteration {
+                    futures::future::pending().left_future()
+                } else {
+                    self.sleep_until_timeout().right_future()
+                };
 
-                let mut found = None;
-                for i in 0..3 {
-                    let idx = (start_idx + i) % 3;
-                    let ready = match types[idx] {
-                        RequestType::Regular => regular_ready,
-                        RequestType::CrossChainUpdate => cross_chain_ready,
-                        RequestType::Confirmation => confirmation_ready,
-                    };
-                    if ready {
-                        found = Some(types[idx]);
-                        break;
-                    }
-                }
-                found
-            };
-
-            let request_type = match request_type {
-                Some(rt) => rt,
-                None => {
-                    // No requests available, wait on all queues.
-                    // On the first iteration, wait indefinitely. Otherwise, use a timeout.
-                    let timeout_future = if first_iteration {
-                        futures::future::pending().left_future()
-                    } else {
-                        self.sleep_until_timeout().right_future()
-                    };
-
-                    // Wait for any stream to have data or timeout.
-                    futures::select! {
-                        () = timeout_future.fuse() => {
-                            // Timeout: unload chain state.
-                            if let Some(mut w) = worker.take() {
-                                trace!("Unloading chain state of {} ...", self.chain_id);
-                                w.clear_shared_chain_view().await;
-                                drop(w);
-                                if let Some(task) = service_runtime_task.take() {
-                                    task.await?;
-                                }
-                                service_runtime_thread = None;
-                                trace!("Done unloading chain state of {}", self.chain_id);
+                // Wait for any stream to have data or timeout.
+                let dropped = futures::select! {
+                    () = timeout_future.fuse() => {
+                        // Timeout: unload chain state.
+                        if let Some(mut w) = worker.take() {
+                            trace!("Unloading chain state of {} ...", self.chain_id);
+                            w.clear_shared_chain_view().await;
+                            drop(w);
+                            if let Some(task) = service_runtime_task.take() {
+                                task.await?;
                             }
-                            first_iteration = true;
-                            continue;
-                        },
-                        result = std::pin::Pin::new(&mut cross_chain_updates).peek().fuse() => {
-                            if result.is_none() { break; }
-                        },
-                        result = std::pin::Pin::new(&mut confirmations).peek().fuse() => {
-                            if result.is_none() { break; }
-                        },
-                        result = std::pin::Pin::new(&mut requests).peek().fuse() => {
-                            if result.is_none() { break; }
-                        },
-                    }
+                            service_runtime_thread = None;
+                            trace!("Done unloading chain state of {}", self.chain_id);
+                        }
+                        first_iteration = true;
+                        continue;
+                    },
+                    result = Pin::new(&mut cross_chain_updates).peek().fuse() => result.is_none(),
+                    result = Pin::new(&mut confirmations).peek().fuse() => result.is_none(),
+                    result = Pin::new(&mut requests).peek().fuse() => result.is_none(),
+                };
 
-                    // After waking, re-evaluate at top of loop.
-                    continue;
+                if dropped {
+                    break;
                 }
+                // After waking, re-evaluate at top of loop.
+                continue;
             };
 
             first_iteration = false;
 
             // Advance rotation to next type.
-            next_type = match request_type {
-                RequestType::Regular => RequestType::CrossChainUpdate,
-                RequestType::CrossChainUpdate => RequestType::Confirmation,
-                RequestType::Confirmation => RequestType::Regular,
-            };
+            next_type_idx = (type_idx + 1) % types.len();
 
             // Load chain state if not already loaded.
             let worker = match &mut worker {
@@ -489,12 +462,8 @@ where
                     let mut count = 0;
 
                     while count < cross_chain_batch_size {
-                        match std::pin::Pin::new(&mut cross_chain_updates)
-                            .next()
-                            .now_or_never()
-                            .flatten()
-                        {
-                            Some((req, _span)) => {
+                        match Pin::new(&mut cross_chain_updates).next().now_or_never() {
+                            Some(Some((req, _span))) => {
                                 updates.entry(req.origin).or_default().extend(req.bundles);
                                 callbacks_by_origin
                                     .entry(req.origin)
@@ -502,17 +471,15 @@ where
                                     .push(req.callback);
                                 count += 1;
                             }
-                            None => break,
+                            None | Some(None) => break,
                         }
                     }
 
                     if updates.is_empty() {
+                        tracing::error!("cross-chain update queue empty; this is a bug!");
                         continue; // Queue was empty after all.
                     }
-
-                    if count > 1 {
-                        trace!("Batching {count} cross-chain updates");
-                    }
+                    trace!("batching {count} cross-chain updates");
 
                     // Sort and deduplicate bundles for each origin.
                     for bundles in updates.values_mut() {
@@ -553,12 +520,8 @@ where
                     let mut count = 0;
 
                     while count < cross_chain_batch_size {
-                        match std::pin::Pin::new(&mut confirmations)
-                            .next()
-                            .now_or_never()
-                            .flatten()
-                        {
-                            Some((req, _span)) => {
+                        match Pin::new(&mut confirmations).next().now_or_never() {
+                            Some(Some((req, _span))) => {
                                 confirmations_map
                                     .entry(req.recipient)
                                     .and_modify(|h| *h = (*h).max(req.latest_height))
@@ -566,17 +529,15 @@ where
                                 callbacks.push(req.callback);
                                 count += 1;
                             }
-                            None => break,
+                            None | Some(None) => break,
                         }
                     }
 
                     if confirmations_map.is_empty() {
+                        tracing::error!("cross-chain confirmation queue empty; this is a bug!");
                         continue; // Queue was empty after all.
                     }
-
-                    if count > 1 {
-                        trace!("Batching {count} confirmations");
-                    }
+                    trace!("batching {count} confirmations");
 
                     match Box::pin(worker.confirm_updated_recipient(confirmations_map)).await {
                         Ok(()) => {
@@ -588,16 +549,12 @@ where
                     }
                 }
                 RequestType::Regular => {
-                    let mut count = 0;
-                    while count < regular_batch_size {
-                        let Some((request, span)) = std::pin::Pin::new(&mut requests)
-                            .next()
-                            .now_or_never()
-                            .flatten()
+                    for _ in 0..regular_batch_size {
+                        let Some(Some((request, span))) =
+                            Pin::new(&mut requests).next().now_or_never()
                         else {
                             break;
                         };
-                        count += 1;
                         Box::pin(worker.handle_request(request))
                             .instrument(span)
                             .await;
