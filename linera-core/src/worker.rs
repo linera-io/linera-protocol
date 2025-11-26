@@ -558,6 +558,30 @@ where
         self
     }
 
+    /// Returns an instance with the specified regular request batch size.
+    ///
+    /// Maximum number of regular requests to handle per round in the rotation.
+    /// The worker rotates between regular requests, cross-chain updates, and confirmations,
+    /// processing up to this many regular requests per turn.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_regular_request_batch_size(mut self, regular_request_batch_size: usize) -> Self {
+        self.chain_worker_config.regular_request_batch_size = regular_request_batch_size;
+        self
+    }
+
+    /// Returns an instance with the specified cross-chain update batch size.
+    ///
+    /// Maximum number of cross-chain updates to batch together in a single processing round.
+    /// Higher values improve throughput but increase latency for individual updates.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_cross_chain_update_batch_size(
+        mut self,
+        cross_chain_update_batch_size: usize,
+    ) -> Self {
+        self.chain_worker_config.cross_chain_update_batch_size = cross_chain_update_batch_size;
+        self
+    }
+
     #[instrument(level = "trace", skip(self))]
     pub fn nickname(&self) -> &str {
         &self.nickname
