@@ -363,7 +363,7 @@ where
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
     /// The set of spawned [`ChainWorkerActor`] tasks.
     chain_worker_tasks: Arc<Mutex<JoinSet>>,
-    /// The cache of running [`ChainWorkerActor`] endpoints.
+    /// The cache of running [`ChainWorkerActor`]s.
     chain_workers: Arc<Mutex<BTreeMap<ChainId, ChainActorEndpoint<StorageClient>>>>,
 }
 
@@ -926,8 +926,8 @@ where
         self.chain_workers.lock().unwrap().remove(&chain_id);
     }
 
-    /// Sends a cross-chain update request to the appropriate worker queue.
-    async fn send_cross_chain_update(
+    /// Processes a cross-chain update.
+    async fn process_cross_chain_update(
         &self,
         recipient: ChainId,
         origin: ChainId,
@@ -965,8 +965,8 @@ where
         }
     }
 
-    /// Sends a confirmation request to the appropriate worker queue.
-    async fn send_confirmation(
+    /// Processes a cross-chain update confirmation.
+    async fn process_cross_chain_confirmation(
         &self,
         sender: ChainId,
         recipient: ChainId,
@@ -1261,7 +1261,7 @@ where
                 let mut actions = NetworkActions::default();
                 let origin = sender;
                 let Some(height) = self
-                    .send_cross_chain_update(recipient, origin, bundles)
+                    .process_cross_chain_update(recipient, origin, bundles)
                     .await?
                 else {
                     return Ok(actions);
@@ -1284,7 +1284,7 @@ where
                 recipient,
                 latest_height,
             } => {
-                self.send_confirmation(sender, recipient, latest_height)
+                self.process_cross_chain_confirmation(sender, recipient, latest_height)
                     .await?;
                 Ok(NetworkActions::default())
             }
