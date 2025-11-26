@@ -226,19 +226,19 @@ pub mod metrics {
 }
 
 /// The key used for blobs. The Blob ID itself is contained in the root key.
-const BLOB_KEY: &[u8] = &[42];
+const BLOB_KEY: &[u8] = &[0];
 
 /// The key used for blob states. The Blob ID itself is contained in the root key.
-const BLOB_STATE_KEY: &[u8] = &[49];
+const BLOB_STATE_KEY: &[u8] = &[1];
 
 /// The key used for lite certificates. The cryptohash itself is contained in the root key.
-const LITE_CERTIFICATE_KEY: &[u8] = &[91];
+const LITE_CERTIFICATE_KEY: &[u8] = &[2];
 
 /// The key used for confirmed blocks. The cryptohash itself is contained in the root key.
-const BLOCK_KEY: &[u8] = &[221];
+const BLOCK_KEY: &[u8] = &[3];
 
 /// The key used for the network description.
-const NETWORK_DESCRIPTION_KEY: &[u8] = &[119];
+const NETWORK_DESCRIPTION_KEY: &[u8] = &[4];
 
 fn get_block_keys() -> Vec<Vec<u8>> {
     vec![LITE_CERTIFICATE_KEY.to_vec(), BLOCK_KEY.to_vec()]
@@ -247,7 +247,7 @@ fn get_block_keys() -> Vec<Vec<u8>> {
 #[derive(Default)]
 #[allow(clippy::type_complexity)]
 struct MultiPartitionBatch {
-    keys_value_bytes: Vec<(Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>)>,
+    keys_value_bytes: BTreeMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>,
 }
 
 impl MultiPartitionBatch {
@@ -256,7 +256,8 @@ impl MultiPartitionBatch {
     }
 
     fn put_key_values(&mut self, root_key: Vec<u8>, key_values: Vec<(Vec<u8>, Vec<u8>)>) {
-        self.keys_value_bytes.push((root_key, key_values));
+        let entry = self.keys_value_bytes.entry(root_key).or_default();
+        entry.extend(key_values);
     }
 
     fn put_key_value(&mut self, root_key: Vec<u8>, key: Vec<u8>, value: Vec<u8>) {
@@ -266,14 +267,14 @@ impl MultiPartitionBatch {
     fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
-        let root_key = RootKey::Blob(blob.id()).bytes();
+        let root_key = RootKey::BlobId(blob.id()).bytes();
         let key = BLOB_KEY.to_vec();
         self.put_key_value(root_key, key, blob.bytes().to_vec());
         Ok(())
     }
 
     fn add_blob_state(&mut self, blob_id: BlobId, blob_state: &BlobState) -> Result<(), ViewError> {
-        let root_key = RootKey::Blob(blob_id).bytes();
+        let root_key = RootKey::BlobId(blob_id).bytes();
         let key = BLOB_STATE_KEY.to_vec();
         let value = bcs::to_bytes(blob_state)?;
         self.put_key_value(root_key, key, value);
@@ -289,7 +290,7 @@ impl MultiPartitionBatch {
             .with_label_values(&[])
             .inc();
         let hash = certificate.hash();
-        let root_key = RootKey::ConfirmedBlock(hash).bytes();
+        let root_key = RootKey::BlockHash(hash).bytes();
         let mut key_values = Vec::new();
         let key = LITE_CERTIFICATE_KEY.to_vec();
         let value = bcs::to_bytes(&certificate.lite_certificate())?;
@@ -339,13 +340,12 @@ pub struct DbStorage<Database, Clock = WallClock> {
 
 #[derive(Debug, Serialize, Deserialize)]
 enum RootKey {
-    ChainState(ChainId),
-    ConfirmedBlock(CryptoHash),
-    Blob(BlobId),
-    Event(ChainId),
-    Placeholder,
     NetworkDescription,
     BlockExporterState(u32),
+    ChainState(ChainId),
+    BlockHash(CryptoHash),
+    BlobId(BlobId),
+    Event(ChainId),
 }
 
 const CHAIN_ID_TAG: u8 = 0;
@@ -402,7 +402,7 @@ mod tests {
         let hash = CryptoHash::default();
         let blob_type = BlobType::default();
         let blob_id = BlobId::new(hash, blob_type);
-        let root_key = RootKey::Blob(blob_id).bytes();
+        let root_key = RootKey::BlobId(blob_id).bytes();
         assert_eq!(root_key[0], BLOB_ID_TAG);
         assert_eq!(bcs::from_bytes::<BlobId>(&root_key[1..]).unwrap(), blob_id);
     }
@@ -617,7 +617,7 @@ where
 
     #[instrument(level = "trace", skip_all, fields(%blob_id))]
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let root_key = RootKey::Blob(blob_id).bytes();
+        let root_key = RootKey::BlobId(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let test = store.contains_key(BLOB_KEY).await?;
         #[cfg(with_metrics)]
@@ -629,7 +629,7 @@ where
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
         let mut missing_blobs = Vec::new();
         for blob_id in blob_ids {
-            let root_key = RootKey::Blob(*blob_id).bytes();
+            let root_key = RootKey::BlobId(*blob_id).bytes();
             let store = self.database.open_shared(&root_key)?;
             if !store.contains_key(BLOB_KEY).await? {
                 missing_blobs.push(*blob_id);
@@ -642,7 +642,7 @@ where
 
     #[instrument(skip_all, fields(%blob_id))]
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let root_key = RootKey::Blob(blob_id).bytes();
+        let root_key = RootKey::BlobId(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let test = store.contains_key(BLOB_STATE_KEY).await?;
         #[cfg(with_metrics)]
@@ -657,7 +657,7 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlock>, ViewError> {
-        let root_key = RootKey::ConfirmedBlock(hash).bytes();
+        let root_key = RootKey::BlockHash(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
         let value = store.read_value(BLOCK_KEY).await?;
         #[cfg(with_metrics)]
@@ -669,7 +669,7 @@ where
 
     #[instrument(skip_all, fields(%blob_id))]
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
-        let root_key = RootKey::Blob(blob_id).bytes();
+        let root_key = RootKey::BlobId(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let maybe_blob_bytes = store.read_value_bytes(BLOB_KEY).await?;
         #[cfg(with_metrics)]
@@ -695,7 +695,7 @@ where
 
     #[instrument(skip_all, fields(%blob_id))]
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError> {
-        let root_key = RootKey::Blob(blob_id).bytes();
+        let root_key = RootKey::BlobId(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let blob_state = store.read_value::<BlobState>(BLOB_STATE_KEY).await?;
         #[cfg(with_metrics)]
@@ -743,7 +743,7 @@ where
         }
         let mut maybe_blob_states = Vec::new();
         for blob_id in blob_ids {
-            let root_key = RootKey::Blob(*blob_id).bytes();
+            let root_key = RootKey::BlobId(*blob_id).bytes();
             let store = self.database.open_shared(&root_key)?;
             let maybe_blob_state = store.read_value::<BlobState>(BLOB_STATE_KEY).await?;
             maybe_blob_states.push(maybe_blob_state);
@@ -776,7 +776,7 @@ where
         let mut batch = MultiPartitionBatch::new();
         let mut blob_states = Vec::new();
         for blob in blobs {
-            let root_key = RootKey::Blob(blob.id()).bytes();
+            let root_key = RootKey::BlobId(blob.id()).bytes();
             let store = self.database.open_shared(&root_key)?;
             let has_state = store.contains_key(BLOB_STATE_KEY).await?;
             blob_states.push(has_state);
@@ -816,7 +816,7 @@ where
 
     #[instrument(skip_all, fields(%hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
-        let root_key = RootKey::ConfirmedBlock(hash).bytes();
+        let root_key = RootKey::BlockHash(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
         let results = store.contains_keys(&get_block_keys()).await?;
         #[cfg(with_metrics)]
@@ -831,7 +831,7 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
-        let root_key = RootKey::ConfirmedBlock(hash).bytes();
+        let root_key = RootKey::BlockHash(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
         let values = store.read_multi_values_bytes(&get_block_keys()).await?;
         #[cfg(with_metrics)]
@@ -1065,7 +1065,7 @@ where
     fn get_root_keys_for_certificates(hashes: &[CryptoHash]) -> Vec<Vec<u8>> {
         hashes
             .iter()
-            .map(|hash| RootKey::ConfirmedBlock(*hash).bytes())
+            .map(|hash| RootKey::BlockHash(*hash).bytes())
             .collect()
     }
 
