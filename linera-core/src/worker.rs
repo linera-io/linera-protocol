@@ -11,7 +11,9 @@ use std::{
 use futures::future::Either;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
-    data_types::{ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round},
+    data_types::{
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
+    },
     doc_scalar,
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
@@ -222,8 +224,11 @@ pub enum WorkerError {
         computed: Box<BlockExecutionOutcome>,
         submitted: Box<BlockExecutionOutcome>,
     },
-    #[error("The block timestamp is in the future.")]
-    InvalidTimestamp,
+    #[error("The block timestamp {block_timestamp} is in the future. Local time: {local_time}")]
+    InvalidTimestamp {
+        local_time: Timestamp,
+        block_timestamp: Timestamp,
+    },
     #[error("We don't have the value for the certificate.")]
     MissingCertificateValue,
     #[error("The hash certificate doesn't match its value.")]
@@ -280,7 +285,7 @@ impl WorkerError {
             | WorkerError::EventsNotFound(_)
             | WorkerError::InvalidBlockChaining
             | WorkerError::IncorrectOutcome { .. }
-            | WorkerError::InvalidTimestamp
+            | WorkerError::InvalidTimestamp { .. }
             | WorkerError::MissingCertificateValue
             | WorkerError::InvalidLiteCertificate
             | WorkerError::FastBlockUsingOracles
