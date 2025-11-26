@@ -1,0 +1,79 @@
+{{- if .Values.nodeLocalDns.enabled }}
+{{- if not .Values.nodeLocalDns.kubeDnsIp }}
+{{- fail "nodeLocalDns.kubeDnsIp is required when nodeLocalDns is enabled. Get it with: kubectl get svc kube-dns -n kube-system -o jsonpath='{.spec.clusterIP}'" }}
+{{- end }}
+{{- /* Get the kube-dns-upstream service IP. If it doesn't exist yet, use kubeDnsUpstreamIp from values or fall back to kubeDnsIp */ -}}
+{{- $upstreamSvc := lookup "v1" "Service" "kube-system" "kube-dns-upstream" }}
+{{- $upstreamIp := "" }}
+{{- if $upstreamSvc }}
+{{- $upstreamIp = $upstreamSvc.spec.clusterIP }}
+{{- else if .Values.nodeLocalDns.kubeDnsUpstreamIp }}
+{{- $upstreamIp = .Values.nodeLocalDns.kubeDnsUpstreamIp }}
+{{- else }}
+{{- /* First deploy: upstream service doesn't exist yet, will be created by this release */ -}}
+{{- /* Use kubeDnsIp as fallback - the DaemonSet will need to be restarted after service is created */ -}}
+{{- $upstreamIp = .Values.nodeLocalDns.kubeDnsIp }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-local-dns
+  namespace: kube-system
+  labels:
+    app: node-local-dns
+  annotations:
+    # Force ConfigMap update when upstream IP changes
+    nodelocaldns.kubernetes.io/upstream-ip: {{ $upstreamIp | quote }}
+data:
+  Corefile: |
+    {{ .Values.nodeLocalDns.clusterDomain }}:53 {
+        errors
+        cache {
+            success {{ .Values.nodeLocalDns.successTtl }}
+            denial {{ .Values.nodeLocalDns.denialTtl }}
+        }
+        reload
+        loop
+        bind {{ .Values.nodeLocalDns.localDnsIp }}
+        forward . {{ $upstreamIp }} {
+            force_tcp
+        }
+        prometheus :9253
+        health {{ .Values.nodeLocalDns.localDnsIp }}:8080
+    }
+    in-addr.arpa:53 {
+        errors
+        cache 30
+        reload
+        loop
+        bind {{ .Values.nodeLocalDns.localDnsIp }}
+        forward . {{ $upstreamIp }} {
+            force_tcp
+        }
+        prometheus :9253
+    }
+    ip6.arpa:53 {
+        errors
+        cache 30
+        reload
+        loop
+        bind {{ .Values.nodeLocalDns.localDnsIp }}
+        forward . {{ $upstreamIp }} {
+            force_tcp
+        }
+        prometheus :9253
+    }
+    .:53 {
+        errors
+        cache 30
+        reload
+        loop
+        bind {{ .Values.nodeLocalDns.localDnsIp }}
+        {{- if .Values.nodeLocalDns.upstreamServers }}
+        forward . {{ .Values.nodeLocalDns.upstreamServers }}
+        {{- else }}
+        forward . /etc/resolv.conf
+        {{- end }}
+        prometheus :9253
+    }
+{{- end }}
