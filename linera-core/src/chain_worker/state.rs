@@ -11,6 +11,8 @@ use std::{
 };
 
 use futures::future::Either;
+#[cfg(with_metrics)]
+use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
@@ -48,6 +50,22 @@ use crate::{
     value_cache::ValueCache,
     worker::{NetworkActions, Notification, Reason, WorkerError},
 };
+
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram};
+    use prometheus::Histogram;
+
+    pub static CREATE_NETWORK_ACTIONS_LATENCY: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "create_network_actions_latency",
+            "Time (ms) to create network actions",
+            exponential_bucket_latencies(10_000.0),
+        )
+    });
+}
 
 /// The state of the chain worker.
 pub struct ChainWorkerState<StorageClient>
@@ -409,6 +427,8 @@ where
         &self,
         old_round: Option<Round>,
     ) -> Result<NetworkActions, WorkerError> {
+        #[cfg(with_metrics)]
+        let _latency = metrics::CREATE_NETWORK_ACTIONS_LATENCY.measure_latency();
         let mut heights_by_recipient = BTreeMap::<_, Vec<_>>::new();
         let mut targets = self.chain.nonempty_outbox_chain_ids();
         if let Some(chain_modes) = self.chain_modes.as_ref() {
