@@ -415,6 +415,32 @@ where
     }
 }
 
+impl<StorageClient> ChainActorEndpoint<StorageClient>
+where
+    StorageClient: Storage,
+{
+    /// Creates a new pair of endpoint (senders) and receivers for a chain worker actor.
+    fn new() -> (Self, ChainActorReceivers<StorageClient::Context>) {
+        let (requests_sender, requests_receiver) = mpsc::unbounded_channel();
+        let (cross_chain_sender, cross_chain_receiver) = mpsc::unbounded_channel();
+        let (confirmations_sender, confirmations_receiver) = mpsc::unbounded_channel();
+
+        let endpoint = Self {
+            requests: requests_sender,
+            cross_chain_updates: cross_chain_sender,
+            confirmations: confirmations_sender,
+        };
+
+        let receivers = ChainActorReceivers {
+            requests: requests_receiver,
+            cross_chain_updates: cross_chain_receiver,
+            confirmations: confirmations_receiver,
+        };
+
+        (endpoint, receivers)
+    }
+}
+
 pub(crate) type DeliveryNotifiers = HashMap<ChainId, DeliveryNotifier>;
 
 impl<StorageClient> WorkerState<StorageClient>
@@ -868,15 +894,7 @@ where
         }
 
         // Create new channels and spawn the actor.
-        let (requests_sender, requests_receiver) = mpsc::unbounded_channel();
-        let (cross_chain_sender, cross_chain_receiver) = mpsc::unbounded_channel();
-        let (confirmations_sender, confirmations_receiver) = mpsc::unbounded_channel();
-
-        let endpoint = ChainActorEndpoint {
-            requests: requests_sender,
-            cross_chain_updates: cross_chain_sender,
-            confirmations: confirmations_sender,
-        };
+        let (endpoint, receivers) = ChainActorEndpoint::new();
         chain_workers.insert(chain_id, endpoint.clone());
 
         // Release the lock before spawning the actor.
@@ -894,12 +912,6 @@ where
             .tracked_chains
             .as_ref()
             .is_some_and(|tracked_chains| tracked_chains.read().unwrap().contains(&chain_id));
-
-        let receivers = ChainActorReceivers {
-            requests: requests_receiver,
-            cross_chain_updates: cross_chain_receiver,
-            confirmations: confirmations_receiver,
-        };
 
         let actor_task = ChainWorkerActor::run(
             self.chain_worker_config.clone(),
