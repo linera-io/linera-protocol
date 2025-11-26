@@ -1,0 +1,35 @@
+# Cold DB Migration Override
+# Usage: docker compose -f docker-compose.yml -f docker-compose.migration.yml up -d
+#
+# This runs migration via shard-init, then starts a single shard.
+# Web (Caddy), proxy (linera-proxy), and watchtower are disabled to prevent
+# traffic and auto-updates during migration.
+
+services:
+  # Disable Caddy reverse proxy
+  web:
+    profiles: ["disabled"]
+
+  # Disable linera-proxy
+  proxy:
+    profiles: ["disabled"]
+
+  # Override shard-init to always run initialize (which runs migration first)
+  shard-init:
+    command:
+      - sh
+      - -c
+      - |
+        echo "Running storage migration..."
+        until ./linera storage initialize --storage scylladb:tcp:scylla:9042 --genesis /config/genesis.json; do
+          echo "Migration/initialization failed, retrying in 5 seconds..."
+          sleep 5
+        done
+        echo "Migration complete!"
+
+  shard:
+    deploy:
+      replicas: 1
+
+  watchtower:
+    profiles: ["disabled"]
