@@ -473,7 +473,7 @@ where
                     })?;
                 *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
                 if *counter == 0 {
-                    // Important for the test in `all_messages_delivered_up_to`.
+                    // Important for the test in `max_height_with_all_messages_delivered`.
                     self.outbox_counters.get_mut().remove(update);
                 }
             }
@@ -494,18 +494,25 @@ where
         Ok(any_updates)
     }
 
-    /// Returns true if there are no more outgoing messages in flight up to the given
-    /// block height.
-    pub fn all_messages_delivered_up_to(&self, height: BlockHeight) -> bool {
+    /// Returns the highest block height for which all outgoing messages have been delivered.
+    ///
+    /// Returns `None` if there are pending messages starting from height 0, meaning no
+    /// height is fully delivered yet.
+    pub fn max_height_with_all_messages_delivered(&self) -> Option<BlockHeight> {
         tracing::debug!(
             "Messages left in {:.8}'s outbox: {:?}",
             self.chain_id(),
             self.outbox_counters.get()
         );
-        if let Some((key, _)) = self.outbox_counters.get().first_key_value() {
-            key > &height
-        } else {
-            true
+        match self.outbox_counters.get().first_key_value() {
+            Some((first_pending_height, _)) => {
+                // The height before the first pending one is fully delivered.
+                first_pending_height.try_sub_one().ok()
+            }
+            None => {
+                // All messages delivered. Return the tip height (minus 1 since tip is next).
+                self.tip_state.get().next_block_height.try_sub_one().ok()
+            }
         }
     }
 
