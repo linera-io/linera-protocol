@@ -197,6 +197,7 @@ type CrossChainUpdateCallbacks =
     BTreeMap<ChainId, Vec<oneshot::Sender<Result<Option<BlockHeight>, WorkerError>>>>;
 
 /// The type of request to process next in the actor loop.
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum RequestType {
     /// A cross-chain update request.
     CrossChainUpdate,
@@ -325,16 +326,14 @@ where
     )]
     async fn handle_requests(
         self,
-        mut receivers: ChainActorReceivers<StorageClient::Context>,
+        receivers: ChainActorReceivers<StorageClient::Context>,
     ) -> Result<(), WorkerError> {
+        use futures::stream::StreamExt as _;
+
         trace!("Starting `ChainWorkerActor`");
 
-        // Counters for priority scheduling: track regular vs total requests.
-        // Reset when regular queue is empty OR both cross-chain queues are empty.
-        let mut regular_count = 0u64;
-        let mut total_count = 0u64;
-        let min_regular_percentage = self.config.min_regular_request_percentage as u64;
-        let batch_size = self.config.cross_chain_update_batch_size;
+        let regular_batch_size = self.config.regular_request_batch_size;
+        let cross_chain_batch_size = self.config.cross_chain_update_batch_size;
 
         // The first iteration waits indefinitely; subsequent iterations have a timeout.
         let mut first_iteration = true;
@@ -345,43 +344,61 @@ where
         #[allow(unused)]
         let mut service_runtime_thread = None;
 
+        // Convert receivers to peekable streams so we can wait without consuming.
+        let mut requests = tokio_stream::wrappers::UnboundedReceiverStream::new(receivers.requests)
+            .peekable();
+        let mut cross_chain_updates =
+            tokio_stream::wrappers::UnboundedReceiverStream::new(receivers.cross_chain_updates)
+                .peekable();
+        let mut confirmations =
+            tokio_stream::wrappers::UnboundedReceiverStream::new(receivers.confirmations)
+                .peekable();
+
+        // Rotate through request types: Regular -> CrossChainUpdate -> Confirmation -> ...
+        let mut next_type = RequestType::Regular;
+
         loop {
-            let regular_pending = receivers.requests.len();
-            let cross_chain_pending = receivers.cross_chain_updates.len();
-            let confirmation_pending = receivers.confirmations.len();
+            // Check which streams have data ready.
+            let regular_ready =
+                std::pin::Pin::new(&mut requests).peek().now_or_never().is_some();
+            let cross_chain_ready = std::pin::Pin::new(&mut cross_chain_updates)
+                .peek()
+                .now_or_never()
+                .is_some();
+            let confirmation_ready = std::pin::Pin::new(&mut confirmations)
+                .peek()
+                .now_or_never()
+                .is_some();
 
-            // Reset counters when regular queue is empty OR both cross-chain queues are empty.
-            if regular_pending == 0 || (cross_chain_pending == 0 && confirmation_pending == 0) {
-                regular_count = 0;
-                total_count = 0;
-            }
+            // Find the next ready queue in rotation order.
+            let request_type = {
+                let types = [
+                    RequestType::Regular,
+                    RequestType::CrossChainUpdate,
+                    RequestType::Confirmation,
+                ];
+                let start_idx = types.iter().position(|t| *t == next_type).unwrap_or(0);
 
-            // Decide which queue to handle based on priority.
-            // Priority: cross-chain/confirmations first, unless regular requests are starving.
-            let mut first_cross_chain_update = None;
-            let mut first_confirmation = None;
-            let mut first_regular = None;
-            let request_type = if regular_pending > 0
-                && regular_count * 100 < total_count * min_regular_percentage
-            {
-                Some(RequestType::Regular)
-            } else if confirmation_pending > 0 || cross_chain_pending > 0 {
-                // Handle whichever cross-chain queue has more; confirmations win ties.
-                if confirmation_pending >= cross_chain_pending {
-                    Some(RequestType::Confirmation)
-                } else {
-                    Some(RequestType::CrossChainUpdate)
+                let mut found = None;
+                for i in 0..3 {
+                    let idx = (start_idx + i) % 3;
+                    let ready = match types[idx] {
+                        RequestType::Regular => regular_ready,
+                        RequestType::CrossChainUpdate => cross_chain_ready,
+                        RequestType::Confirmation => confirmation_ready,
+                    };
+                    if ready {
+                        found = Some(types[idx]);
+                        break;
+                    }
                 }
-            } else if regular_pending > 0 {
-                Some(RequestType::Regular)
-            } else {
-                None
+                found
             };
 
-            // If no request was available, wait on all queues.
             let request_type = match request_type {
                 Some(rt) => rt,
                 None => {
+                    // No requests available, wait on all queues.
                     // On the first iteration, wait indefinitely. Otherwise, use a timeout.
                     let timeout_future = if first_iteration {
                         futures::future::pending().left_future()
@@ -389,6 +406,7 @@ where
                         self.sleep_until_timeout().right_future()
                     };
 
+                    // Wait for any stream to have data or timeout.
                     futures::select! {
                         () = timeout_future.fuse() => {
                             // Timeout: unload chain state.
@@ -405,26 +423,30 @@ where
                             first_iteration = true;
                             continue;
                         },
-                        req = receivers.cross_chain_updates.recv().fuse() => {
-                            let Some(req) = req else { break };
-                            first_cross_chain_update = Some(req);
-                            RequestType::CrossChainUpdate
+                        result = std::pin::Pin::new(&mut cross_chain_updates).peek().fuse() => {
+                            if result.is_none() { break; }
                         },
-                        req = receivers.confirmations.recv().fuse() => {
-                            let Some(req) = req else { break };
-                            first_confirmation = Some(req);
-                            RequestType::Confirmation
+                        result = std::pin::Pin::new(&mut confirmations).peek().fuse() => {
+                            if result.is_none() { break; }
                         },
-                        req = receivers.requests.recv().fuse() => {
-                            let Some(req) = req else { break };
-                            first_regular = Some(req);
-                            RequestType::Regular
+                        result = std::pin::Pin::new(&mut requests).peek().fuse() => {
+                            if result.is_none() { break; }
                         },
                     }
+
+                    // After waking, re-evaluate at top of loop.
+                    continue;
                 }
             };
 
             first_iteration = false;
+
+            // Advance rotation to next type.
+            next_type = match request_type {
+                RequestType::Regular => RequestType::CrossChainUpdate,
+                RequestType::CrossChainUpdate => RequestType::Confirmation,
+                RequestType::Confirmation => RequestType::Regular,
+            };
 
             // Load chain state if not already loaded.
             let worker = match &mut worker {
@@ -466,17 +488,13 @@ where
                     let mut callbacks_by_origin: CrossChainUpdateCallbacks = BTreeMap::new();
                     let mut count = 0;
 
-                    if let Some((req, _span)) = first_cross_chain_update {
-                        updates.entry(req.origin).or_default().extend(req.bundles);
-                        callbacks_by_origin
-                            .entry(req.origin)
-                            .or_default()
-                            .push(req.callback);
-                        count += 1;
-                    }
-                    while count < batch_size {
-                        match receivers.cross_chain_updates.try_recv() {
-                            Ok((req, _span)) => {
+                    while count < cross_chain_batch_size {
+                        match std::pin::Pin::new(&mut cross_chain_updates)
+                            .next()
+                            .now_or_never()
+                            .flatten()
+                        {
+                            Some((req, _span)) => {
                                 updates.entry(req.origin).or_default().extend(req.bundles);
                                 callbacks_by_origin
                                     .entry(req.origin)
@@ -484,15 +502,13 @@ where
                                     .push(req.callback);
                                 count += 1;
                             }
-                            Err(_) => break,
+                            None => break,
                         }
                     }
 
                     if updates.is_empty() {
                         continue; // Queue was empty after all.
                     }
-
-                    total_count += 1; // Count the batch as one request.
 
                     if count > 1 {
                         trace!("Batching {count} cross-chain updates");
@@ -532,43 +548,37 @@ where
                 }
                 RequestType::Confirmation => {
                     // Drain requests and group by recipient, keeping max height.
-                    let mut confirmations: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
+                    let mut confirmations_map: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
                     let mut callbacks = Vec::new();
                     let mut count = 0;
 
-                    if let Some((req, _span)) = first_confirmation {
-                        confirmations
-                            .entry(req.recipient)
-                            .and_modify(|h| *h = (*h).max(req.latest_height))
-                            .or_insert(req.latest_height);
-                        callbacks.push(req.callback);
-                        count += 1;
-                    }
-                    while count < batch_size {
-                        match receivers.confirmations.try_recv() {
-                            Ok((req, _span)) => {
-                                confirmations
+                    while count < cross_chain_batch_size {
+                        match std::pin::Pin::new(&mut confirmations)
+                            .next()
+                            .now_or_never()
+                            .flatten()
+                        {
+                            Some((req, _span)) => {
+                                confirmations_map
                                     .entry(req.recipient)
                                     .and_modify(|h| *h = (*h).max(req.latest_height))
                                     .or_insert(req.latest_height);
                                 callbacks.push(req.callback);
                                 count += 1;
                             }
-                            Err(_) => break,
+                            None => break,
                         }
                     }
 
-                    if confirmations.is_empty() {
+                    if confirmations_map.is_empty() {
                         continue; // Queue was empty after all.
                     }
-
-                    total_count += 1; // Count the batch as one request.
 
                     if count > 1 {
                         trace!("Batching {count} confirmations");
                     }
 
-                    match Box::pin(worker.confirm_updated_recipient(confirmations)).await {
+                    match Box::pin(worker.confirm_updated_recipient(confirmations_map)).await {
                         Ok(()) => {
                             for callback in callbacks {
                                 let _ = callback.send(Ok(()));
@@ -578,16 +588,20 @@ where
                     }
                 }
                 RequestType::Regular => {
-                    let Some((request, span)) =
-                        first_regular.or_else(|| receivers.requests.try_recv().ok())
-                    else {
-                        continue; // Queue was empty after all.
-                    };
-                    regular_count += 1;
-                    total_count += 1;
-                    Box::pin(worker.handle_request(request))
-                        .instrument(span)
-                        .await;
+                    let mut count = 0;
+                    while count < regular_batch_size {
+                        let Some((request, span)) = std::pin::Pin::new(&mut requests)
+                            .next()
+                            .now_or_never()
+                            .flatten()
+                        else {
+                            break;
+                        };
+                        count += 1;
+                        Box::pin(worker.handle_request(request))
+                            .instrument(span)
+                            .await;
+                    }
                 }
             }
         }
