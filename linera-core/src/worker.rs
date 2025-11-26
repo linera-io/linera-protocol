@@ -36,7 +36,7 @@ use tracing::{error, instrument, trace, warn};
 
 use crate::{
     chain_worker::{
-        BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest,
+        BlockOutcome, ChainActorReceivers, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest,
         ConfirmUpdatedRecipientRequest, CrossChainUpdateRequest, DeliveryNotifier,
     },
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -895,6 +895,12 @@ where
             .as_ref()
             .is_some_and(|tracked_chains| tracked_chains.read().unwrap().contains(&chain_id));
 
+        let receivers = ChainActorReceivers {
+            requests: requests_receiver,
+            cross_chain_updates: cross_chain_receiver,
+            confirmations: confirmations_receiver,
+        };
+
         let actor_task = ChainWorkerActor::run(
             self.chain_worker_config.clone(),
             self.storage.clone(),
@@ -903,9 +909,7 @@ where
             self.tracked_chains.clone(),
             delivery_notifier,
             chain_id,
-            requests_receiver,
-            cross_chain_receiver,
-            confirmations_receiver,
+            receivers,
             is_tracked,
         );
 

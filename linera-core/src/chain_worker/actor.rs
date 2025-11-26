@@ -206,6 +206,19 @@ enum RequestType {
     Regular,
 }
 
+/// The receiver endpoints for a [`ChainWorkerActor`].
+pub(crate) struct ChainActorReceivers<Context>
+where
+    Context: linera_views::context::Context + Clone + Send + Sync + 'static,
+{
+    /// Receiver for regular chain worker requests.
+    pub requests: mpsc::UnboundedReceiver<(ChainWorkerRequest<Context>, tracing::Span)>,
+    /// Receiver for cross-chain update requests.
+    pub cross_chain_updates: mpsc::UnboundedReceiver<(CrossChainUpdateRequest, tracing::Span)>,
+    /// Receiver for confirmation requests.
+    pub confirmations: mpsc::UnboundedReceiver<(ConfirmUpdatedRecipientRequest, tracing::Span)>,
+}
+
 /// The actor worker type.
 pub(crate) struct ChainWorkerActor<StorageClient>
 where
@@ -274,18 +287,7 @@ where
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
-        incoming_requests: mpsc::UnboundedReceiver<(
-            ChainWorkerRequest<StorageClient::Context>,
-            tracing::Span,
-        )>,
-        incoming_cross_chain_updates: mpsc::UnboundedReceiver<(
-            CrossChainUpdateRequest,
-            tracing::Span,
-        )>,
-        incoming_confirmations: mpsc::UnboundedReceiver<(
-            ConfirmUpdatedRecipientRequest,
-            tracing::Span,
-        )>,
+        receivers: ChainActorReceivers<StorageClient::Context>,
         is_tracked: bool,
     ) {
         let actor = ChainWorkerActor {
@@ -298,14 +300,7 @@ where
             chain_id,
             is_tracked,
         };
-        if let Err(err) = actor
-            .handle_requests(
-                incoming_requests,
-                incoming_cross_chain_updates,
-                incoming_confirmations,
-            )
-            .await
-        {
+        if let Err(err) = actor.handle_requests(receivers).await {
             tracing::error!("Chain actor error: {err}");
         }
     }
@@ -330,18 +325,7 @@ where
     )]
     async fn handle_requests(
         self,
-        mut incoming_requests: mpsc::UnboundedReceiver<(
-            ChainWorkerRequest<StorageClient::Context>,
-            tracing::Span,
-        )>,
-        mut incoming_cross_chain_updates: mpsc::UnboundedReceiver<(
-            CrossChainUpdateRequest,
-            tracing::Span,
-        )>,
-        mut incoming_confirmations: mpsc::UnboundedReceiver<(
-            ConfirmUpdatedRecipientRequest,
-            tracing::Span,
-        )>,
+        mut receivers: ChainActorReceivers<StorageClient::Context>,
     ) -> Result<(), WorkerError> {
         trace!("Starting `ChainWorkerActor`");
 
@@ -362,9 +346,9 @@ where
         let mut service_runtime_thread = None;
 
         loop {
-            let regular_pending = incoming_requests.len();
-            let cross_chain_pending = incoming_cross_chain_updates.len();
-            let confirmation_pending = incoming_confirmations.len();
+            let regular_pending = receivers.requests.len();
+            let cross_chain_pending = receivers.cross_chain_updates.len();
+            let confirmation_pending = receivers.confirmations.len();
 
             // Reset counters when regular queue is empty OR both cross-chain queues are empty.
             if regular_pending == 0 || (cross_chain_pending == 0 && confirmation_pending == 0) {
@@ -402,17 +386,17 @@ where
                     if first_iteration {
                         // Wait indefinitely for the first request.
                         futures::select! {
-                            req = incoming_cross_chain_updates.recv().fuse() => {
+                            req = receivers.cross_chain_updates.recv().fuse() => {
                                 let Some(req) = req else { break };
                                 first_cross_chain_update = Some(req);
                                 RequestType::CrossChainUpdate
                             },
-                            req = incoming_confirmations.recv().fuse() => {
+                            req = receivers.confirmations.recv().fuse() => {
                                 let Some(req) = req else { break };
                                 first_confirmation = Some(req);
                                 RequestType::Confirmation
                             },
-                            req = incoming_requests.recv().fuse() => {
+                            req = receivers.requests.recv().fuse() => {
                                 let Some(req) = req else { break };
                                 first_regular = Some(req);
                                 RequestType::Regular
@@ -436,17 +420,17 @@ where
                                 first_iteration = true;
                                 continue;
                             },
-                            req = incoming_cross_chain_updates.recv().fuse() => {
+                            req = receivers.cross_chain_updates.recv().fuse() => {
                                 let Some(req) = req else { break };
                                 first_cross_chain_update = Some(req);
                                 RequestType::CrossChainUpdate
                             },
-                            req = incoming_confirmations.recv().fuse() => {
+                            req = receivers.confirmations.recv().fuse() => {
                                 let Some(req) = req else { break };
                                 first_confirmation = Some(req);
                                 RequestType::Confirmation
                             },
-                            req = incoming_requests.recv().fuse() => {
+                            req = receivers.requests.recv().fuse() => {
                                 let Some(req) = req else { break };
                                 first_regular = Some(req);
                                 RequestType::Regular
@@ -507,7 +491,7 @@ where
                         count += 1;
                     }
                     while count < batch_size {
-                        match incoming_cross_chain_updates.try_recv() {
+                        match receivers.cross_chain_updates.try_recv() {
                             Ok((req, _span)) => {
                                 updates.entry(req.origin).or_default().extend(req.bundles);
                                 callbacks_by_origin
@@ -577,7 +561,7 @@ where
                         count += 1;
                     }
                     while count < batch_size {
-                        match incoming_confirmations.try_recv() {
+                        match receivers.confirmations.try_recv() {
                             Ok((req, _span)) => {
                                 confirmations
                                     .entry(req.recipient)
@@ -611,7 +595,7 @@ where
                 }
                 RequestType::Regular => {
                     let Some((request, span)) =
-                        first_regular.or_else(|| incoming_requests.try_recv().ok())
+                        first_regular.or_else(|| receivers.requests.try_recv().ok())
                     else {
                         continue; // Queue was empty after all.
                     };

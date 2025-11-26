@@ -13,7 +13,7 @@ pub(super) use self::delivery_notifier::DeliveryNotifier;
 pub(crate) use self::state::CrossChainUpdateHelper;
 pub(crate) use self::{
     actor::{
-        ChainWorkerActor, ChainWorkerRequest, ConfirmUpdatedRecipientRequest,
+        ChainActorReceivers, ChainWorkerActor, ChainWorkerRequest, ConfirmUpdatedRecipientRequest,
         CrossChainUpdateRequest,
     },
     config::ChainWorkerConfig,
