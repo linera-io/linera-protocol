@@ -8,7 +8,7 @@
 mod wasm;
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     iter,
     sync::{Arc, Mutex},
     time::Duration,
@@ -27,8 +27,8 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, ChainAndHeight, IncomingBundle, LiteValue, LiteVote,
-        MessageAction, MessageBundle, OperationResult, PostedMessage, SignatureAggregator,
-        Transaction,
+        MessageAction, MessageBundle, OperationResult, PostedMessage, ProposedBlock,
+        SignatureAggregator, Transaction,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -325,59 +325,49 @@ where
             .unwrap()
             .unwrap()
     }
-    #[expect(clippy::too_many_arguments)]
+
     async fn make_simple_transfer_certificate(
-        &self,
-        chain_description: ChainDescription,
+        &mut self,
+        chain_id: ChainId,
         chain_owner_pubkey: AccountPublicKey,
         target_id: ChainId,
         amount: Amount,
         incoming_bundles: Vec<IncomingBundle>,
-        balance: Amount,
-        previous_confirmed_blocks: Vec<&ConfirmedBlockCertificate>,
+        previous_confirmed_block: Option<&ConfirmedBlockCertificate>,
     ) -> ConfirmedBlockCertificate {
         self.make_transfer_certificate_for_epoch(
-            chain_description,
-            chain_owner_pubkey,
+            chain_id,
             chain_owner_pubkey.into(),
             AccountOwner::CHAIN,
             Account::chain(target_id),
             amount,
             incoming_bundles,
             Epoch::ZERO,
-            balance,
-            BTreeMap::new(),
-            previous_confirmed_blocks,
+            previous_confirmed_block,
         )
         .await
     }
 
     #[expect(clippy::too_many_arguments)]
     async fn make_transfer_certificate(
-        &self,
-        chain_description: ChainDescription,
-        chain_owner_pubkey: AccountPublicKey,
+        &mut self,
+        chain_id: ChainId,
         authenticated_owner: AccountOwner,
         source: AccountOwner,
         recipient: Account,
         amount: Amount,
         incoming_bundles: Vec<IncomingBundle>,
-        balance: Amount,
-        balances: BTreeMap<AccountOwner, Amount>,
-        previous_confirmed_blocks: Vec<&ConfirmedBlockCertificate>,
+        previous_confirmed_block: Option<&ConfirmedBlockCertificate>,
     ) -> ConfirmedBlockCertificate {
         self.make_transfer_certificate_for_epoch(
-            chain_description,
-            chain_owner_pubkey,
+            chain_id,
             authenticated_owner,
             source,
             recipient,
             amount,
             incoming_bundles,
             Epoch::ZERO,
-            balance,
-            balances,
-            previous_confirmed_blocks,
+            previous_confirmed_block,
         )
         .await
     }
@@ -388,6 +378,37 @@ where
     /// the `previous_confirmed_block` also did.
     #[expect(clippy::too_many_arguments)]
     async fn make_transfer_certificate_for_epoch(
+        &mut self,
+        chain_id: ChainId,
+        authenticated_owner: AccountOwner,
+        source: AccountOwner,
+        recipient: Account,
+        amount: Amount,
+        incoming_bundles: Vec<IncomingBundle>,
+        epoch: Epoch,
+        previous_confirmed_block: Option<&ConfirmedBlockCertificate>,
+    ) -> ConfirmedBlockCertificate {
+        let block = match previous_confirmed_block {
+            None => make_first_block(chain_id),
+            Some(cert) => make_child_block(cert.value()),
+        }
+        .with_incoming_bundles(incoming_bundles)
+        .with_transfer(source, recipient, amount)
+        .with_epoch(epoch)
+        .with_authenticated_owner(Some(authenticated_owner));
+
+        self.execute_proposal(block, vec![]).await.unwrap()
+    }
+
+    /// Creates a certificate with a transfer.
+    ///
+    /// This does not work for blocks with ancestors that sent a message to the same recipient, unless
+    /// the `previous_confirmed_block` also did.
+    /// It also does not work as a certificate that can be processed - it doesn't do
+    /// proper hashing of the execution state, so such a certificate will be rejected by
+    /// the worker.
+    #[expect(clippy::too_many_arguments)]
+    async fn make_transfer_certificate_for_epoch_unprocessable(
         &self,
         chain_description: ChainDescription,
         chain_owner_pubkey: AccountPublicKey,
@@ -527,6 +548,22 @@ where
                 .collect(),
             ..SystemExecutionState::new(description.clone())
         }
+    }
+
+    async fn execute_proposal(
+        &mut self,
+        proposal: ProposedBlock,
+        blobs: Vec<Blob>,
+    ) -> Result<ConfirmedBlockCertificate, anyhow::Error> {
+        let (block, _) = self
+            .executing_worker
+            .stage_block_execution(proposal, None, blobs)
+            .await?;
+        let certificate = self.make_certificate(ConfirmedBlock::new(block));
+        self.executing_worker
+            .fully_handle_certificate_with_notifications(certificate.clone(), &())
+            .await?;
+        Ok(certificate)
     }
 }
 
@@ -741,41 +778,28 @@ where
     }
 
     let block_0_time = Timestamp::from(TEST_GRACE_PERIOD_MICROS);
+    let block = make_first_block(chain_1)
+        .with_timestamp(block_0_time)
+        .with_simple_transfer(chain_2, small_transfer)
+        .with_authenticated_owner(Some(owner));
     let certificate = {
-        let block = make_first_block(chain_1)
-            .with_timestamp(block_0_time)
-            .with_simple_transfer(chain_2, small_transfer)
-            .with_authenticated_owner(Some(owner));
-        let block_proposal = block
-            .clone()
-            .into_first_proposal(owner, &signer)
-            .await
-            .unwrap();
-        let future = env.executing_worker().handle_block_proposal(block_proposal);
+        let future = env.execute_proposal(block.clone(), vec![]);
         clock.set(block_0_time);
-        future.await?;
-
-        let system_state = SystemExecutionState {
-            balance: balance - small_transfer,
-            timestamp: block_0_time,
-            ..env.system_execution_state(&chain_1_desc.id())
-        };
-        let state_hash = system_state.into_hash().await;
-        let value = ConfirmedBlock::new(
-            BlockExecutionOutcome {
-                state_hash,
-                messages: vec![vec![direct_credit_message(chain_2, small_transfer)]],
-                oracle_responses: vec![vec![]],
-                events: vec![vec![]],
-                blobs: vec![vec![]],
-                operation_results: vec![OperationResult::default()],
-                ..BlockExecutionOutcome::default()
-            }
-            .with(block),
-        );
-        env.make_certificate(value)
+        future.await?
     };
-    env.executing_worker()
+
+    assert!(certificate.value().matches_proposed_block(&block));
+    assert!(certificate.block().outcome_matches(
+        vec![vec![direct_credit_message(chain_2, small_transfer)]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![OperationResult::default()],
+    ));
+
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
@@ -862,13 +886,12 @@ where
         .unwrap();
     let certificate0 = env
         .make_simple_transfer_certificate(
-            chain_desc.clone(),
+            chain_1,
             sender_public_key,
             chain_2,
             Amount::ONE,
-            Vec::new(),
-            Amount::from_tokens(4),
             vec![],
+            None,
         )
         .await;
     let block_proposal1 = make_child_block(certificate0.value())
@@ -878,7 +901,7 @@ where
         .unwrap();
 
     assert_matches!(
-        env.executing_worker().handle_block_proposal(block_proposal1.clone()).await,
+        env.worker().handle_block_proposal(block_proposal1.clone()).await,
         Err(WorkerError::ChainError(error)) if matches!(
             *error,
             ChainError::UnexpectedBlockHeight {
@@ -886,16 +909,16 @@ where
                 found_block_height: BlockHeight(1)
             })
     );
-    let chain = env.executing_worker().chain_state_view(chain_1).await?;
+    let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
 
     drop(chain);
-    env.executing_worker()
+    env.worker()
         .handle_block_proposal(block_proposal0.clone())
         .await?;
-    let chain = env.executing_worker().chain_state_view(chain_1).await?;
+    let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     let block = chain.manager.validated_vote().unwrap().value().block();
     // Multi-leader round - it's not confirmed yet.
@@ -904,10 +927,10 @@ where
     let block_certificate0 =
         env.make_certificate(chain.manager.validated_vote().unwrap().value().clone());
     drop(chain);
-    env.executing_worker()
+    env.worker()
         .handle_validated_certificate(block_certificate0)
         .await?;
-    let chain = env.executing_worker().chain_state_view(chain_1).await?;
+    let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     let block = chain.manager.confirmed_vote().unwrap().value().block();
     // Should be confirmed after handling the certificate.
@@ -915,23 +938,23 @@ where
     assert!(chain.manager.validated_vote().is_none());
     drop(chain);
 
-    env.executing_worker()
+    env.worker()
         .handle_confirmed_certificate(certificate0, None)
         .await?;
-    let chain = env.executing_worker().chain_state_view(chain_1).await?;
+    let chain = env.worker().chain_state_view(chain_1).await?;
     drop(chain);
-    env.executing_worker()
+    env.worker()
         .handle_block_proposal(block_proposal1.clone())
         .await?;
 
-    let chain = env.executing_worker().chain_state_view(chain_1).await?;
+    let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     let block = chain.manager.validated_vote().unwrap().value().block();
     assert!(block.matches_proposed_block(&block_proposal1.content.block));
     assert!(chain.manager.confirmed_vote().is_none());
     drop(chain);
     assert_matches!(
-        env.executing_worker().handle_block_proposal(block_proposal0).await,
+        env.worker().handle_block_proposal(block_proposal0).await,
         Err(WorkerError::ChainError(error)) if matches!(
             *error,
             ChainError::UnexpectedBlockHeight {
@@ -966,37 +989,34 @@ where
 
     let certificate0 = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             sender_public_key,
             chain_2,
             Amount::ONE,
             Vec::new(),
-            Amount::from_tokens(4),
-            vec![],
+            None,
         )
         .await;
 
     let certificate1 = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             sender_public_key,
             chain_3,
             Amount::ONE,
             Vec::new(),
-            Amount::from_tokens(3),
-            vec![&certificate0],
+            Some(&certificate0),
         )
         .await;
 
     let certificate2 = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             sender_public_key,
             chain_2,
             Amount::ONE,
             Vec::new(),
-            Amount::from_tokens(2),
-            vec![&certificate1, &certificate0],
+            Some(&certificate1),
         )
         .await;
 
@@ -1008,16 +1028,16 @@ where
 
     // The worker handles certificates 0 and 2 - this should succeed, and the worker
     // should now have block 0 fully processed, and block 2 preprocessed.
-    env.executing_worker()
+    env.worker()
         .handle_confirmed_certificate(certificate0, None)
         .await?;
 
-    env.executing_worker()
+    env.worker()
         .handle_confirmed_certificate(certificate2.clone(), None)
         .await?;
 
     {
-        let chain = env.executing_worker().chain_state_view(chain_1).await?;
+        let chain = env.worker().chain_state_view(chain_1).await?;
         assert!(chain.is_active());
         assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(1));
     }
@@ -1025,7 +1045,7 @@ where
     // The proposal is at height 3 - it should fail until the chain is fully processed up
     // to height 2.
     let proposal_result = env
-        .executing_worker()
+        .worker()
         .handle_block_proposal(block_proposal1.clone())
         .await;
     assert_matches!(
@@ -1037,31 +1057,31 @@ where
     );
 
     // Handle the certificate in the gap.
-    env.executing_worker()
+    env.worker()
         .handle_confirmed_certificate(certificate1, None)
         .await?;
 
     {
-        let chain = env.executing_worker().chain_state_view(chain_1).await?;
+        let chain = env.worker().chain_state_view(chain_1).await?;
         assert!(chain.is_active());
         assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(2));
     }
 
     // ...and the one that has been preprocessed before, again, as it is not automatically
     // re-processed.
-    env.executing_worker()
+    env.worker()
         .handle_confirmed_certificate(certificate2, None)
         .await?;
 
     {
-        let chain = env.executing_worker().chain_state_view(chain_1).await?;
+        let chain = env.worker().chain_state_view(chain_1).await?;
         assert!(chain.is_active());
         assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(3));
     }
 
     // The proposal should now succeed.
     let proposal_result = env
-        .executing_worker()
+        .worker()
         .handle_block_proposal(block_proposal1.clone())
         .await;
     assert_matches!(proposal_result, Ok(_));
@@ -1094,61 +1114,45 @@ where
     let chain_1 = chain_1_desc.id();
     let chain_2 = chain_2_desc.id();
     let chain_3 = chain_3_desc.id();
-    let certificate0 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![
-                vec![direct_credit_message(chain_2, Amount::ONE)],
-                vec![direct_credit_message(chain_2, Amount::from_tokens(2))],
-            ],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new(); 2],
-            blobs: vec![Vec::new(); 2],
-            state_hash: SystemExecutionState {
-                balance: Amount::from_tokens(3),
-                ..env.system_execution_state(&chain_1_desc.id())
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new(); 2],
-            operation_results: vec![OperationResult::default(); 2],
-        }
-        .with(
-            make_first_block(chain_1)
-                .with_simple_transfer(chain_2, Amount::ONE)
-                .with_simple_transfer(chain_2, Amount::from_tokens(2))
-                .with_authenticated_owner(Some(sender_owner)),
-        ),
+    let proposal0 = make_first_block(chain_1)
+        .with_simple_transfer(chain_2, Amount::ONE)
+        .with_simple_transfer(chain_2, Amount::from_tokens(2))
+        .with_authenticated_owner(Some(sender_owner));
+    let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
+
+    assert!(certificate0.value().matches_proposed_block(&proposal0));
+    assert!(certificate0.block().outcome_matches(
+        vec![
+            vec![direct_credit_message(chain_2, Amount::ONE)],
+            vec![direct_credit_message(chain_2, Amount::from_tokens(2))],
+        ],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]; 2],
+        vec![vec![]; 2],
+        vec![vec![]; 2],
+        vec![OperationResult::default(); 2],
     ));
 
-    let certificate1 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![direct_credit_message(chain_2, Amount::from_tokens(3))]],
-            previous_message_blocks: BTreeMap::from([(
-                chain_2,
-                (certificate0.hash(), BlockHeight(0)),
-            )]),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                balance: Amount::ZERO,
-                ..env.system_execution_state(&chain_1_desc.id())
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_child_block(&certificate0.clone().into_value())
-                .with_simple_transfer(chain_2, Amount::from_tokens(3))
-                .with_authenticated_owner(Some(sender_owner)),
-        ),
+    let proposal1 = make_child_block(&certificate0.clone().into_value())
+        .with_simple_transfer(chain_2, Amount::from_tokens(3))
+        .with_authenticated_owner(Some(sender_owner));
+    let certificate1 = env.execute_proposal(proposal1.clone(), vec![]).await?;
+
+    assert!(certificate1.value().matches_proposed_block(&proposal1));
+    assert!(certificate1.block().outcome_matches(
+        vec![vec![direct_credit_message(chain_2, Amount::from_tokens(3))]],
+        BTreeMap::from([(chain_2, (certificate0.hash(), BlockHeight(0)),)]),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![OperationResult::default()],
     ));
+
     // Missing earlier blocks, but the certificate will be preprocessed.
     assert_matches!(
-        env.executing_worker()
+        env.worker()
             .handle_confirmed_certificate(certificate1.clone(), None)
             .await,
         Ok(_)
@@ -1156,10 +1160,10 @@ where
 
     // Run transfers
     let notifications = Arc::new(Mutex::new(Vec::new()));
-    env.executing_worker()
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &notifications)
         .await?;
-    env.executing_worker()
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &notifications)
         .await?;
     assert_eq!(
@@ -1204,7 +1208,7 @@ where
             .unwrap();
         // Insufficient funding
         assert_matches!(
-                env.executing_worker().handle_block_proposal(block_proposal).await,
+                env.worker().handle_block_proposal(block_proposal).await,
                 Err(
                     WorkerError::ChainError(error)
                 ) if matches!(&*error, ChainError::ExecutionError(
@@ -1260,7 +1264,7 @@ where
             .unwrap();
         // Inconsistent received messages.
         assert_matches!(
-            env.executing_worker().handle_block_proposal(block_proposal).await,
+            env.worker().handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::UnexpectedMessage { .. })
         );
@@ -1286,7 +1290,7 @@ where
             .unwrap();
         // Skipped message.
         assert_matches!(
-            env.executing_worker().handle_block_proposal(block_proposal).await,
+            env.worker().handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         );
@@ -1337,13 +1341,13 @@ where
             .unwrap();
         // Inconsistent order in received messages (heights).
         assert_matches!(
-            env.executing_worker().handle_block_proposal(block_proposal).await,
+            env.worker().handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         );
     }
     {
-        let block_proposal = make_first_block(chain_2)
+        let proposed_block = make_first_block(chain_2)
             .with_incoming_bundle(IncomingBundle {
                 origin: chain_1,
                 bundle: MessageBundle {
@@ -1358,34 +1362,32 @@ where
                 action: MessageAction::Accept,
             })
             .with_simple_transfer(chain_3, Amount::ONE)
-            .with_authenticated_owner(Some(recipient_owner))
+            .with_authenticated_owner(Some(recipient_owner));
+        let block_proposal = proposed_block
+            .clone()
             .into_first_proposal(recipient_owner, &signer)
             .await
             .unwrap();
         // Taking the first message only is ok.
-        env.executing_worker()
+        env.worker()
             .handle_block_proposal(block_proposal.clone())
             .await?;
-        let certificate: ConfirmedBlockCertificate = env.make_certificate(ConfirmedBlock::new(
-            BlockExecutionOutcome {
-                messages: vec![
-                    Vec::new(),
-                    vec![direct_credit_message(chain_3, Amount::ONE)],
-                ],
-                previous_message_blocks: BTreeMap::new(),
-                previous_event_blocks: BTreeMap::new(),
-                events: vec![Vec::new(); 2],
-                blobs: vec![Vec::new(); 2],
-                state_hash: env
-                    .system_execution_state(&chain_2_desc.id())
-                    .into_hash()
-                    .await,
-                oracle_responses: vec![Vec::new(); 2],
-                operation_results: vec![OperationResult::default()],
-            }
-            .with(block_proposal.content.block),
+        let certificate = env
+            .execute_proposal(block_proposal.content.block, vec![])
+            .await?;
+
+        assert!(certificate.value().matches_proposed_block(&proposed_block));
+        assert!(certificate.block().outcome_matches(
+            vec![vec![], vec![direct_credit_message(chain_3, Amount::ONE)],],
+            BTreeMap::new(),
+            BTreeMap::new(),
+            vec![vec![]; 2],
+            vec![vec![]; 2],
+            vec![vec![]; 2],
+            vec![OperationResult::default()],
         ));
-        env.executing_worker()
+
+        env.worker()
             .handle_confirmed_certificate(certificate.clone(), None)
             .await?;
 
@@ -1419,7 +1421,7 @@ where
             .into_first_proposal(recipient_owner, &signer)
             .await
             .unwrap();
-        env.executing_worker()
+        env.worker()
             .handle_block_proposal(block_proposal.clone())
             .await?;
     }
@@ -1586,98 +1588,11 @@ where
     let chain_2 = chain_2_desc.id();
     let chain_1_desc = dummy_chain_description(1);
     let certificate = env
-        .make_simple_transfer_certificate(
+        .make_transfer_certificate_for_epoch_unprocessable(
             chain_1_desc.clone(),
             sender_pubkey,
-            chain_2,
-            Amount::from_tokens(5),
-            Vec::new(),
-            Amount::from_tokens(5),
-            vec![],
-        )
-        .await;
-    assert_matches!(
-        env.executing_worker()
-            .fully_handle_certificate_with_notifications(certificate, &())
-            .await,
-        Err(WorkerError::BlobsNotFound(error))
-            if error == vec![Blob::new_chain_description(&chain_1_desc).id()]
-    );
-    Ok(())
-}
-
-#[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
-#[test_log::test(tokio::test)]
-async fn test_handle_certificate_with_open_chain<B>(mut storage_builder: B) -> anyhow::Result<()>
-where
-    B: StorageBuilder,
-{
-    let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
-    let chain_2_desc = env
-        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ZERO)
-        .await;
-    let balance = Amount::from_tokens(42);
-    let small_transfer = Amount::from_tokens(1);
-    let description = env
-        .add_child_chain(chain_2_desc.id(), sender_key_pair.public().into(), balance)
-        .await;
-    let chain_id = description.id();
-    let mut state = env.system_execution_state(&description.id());
-    // Account for transferred tokens.
-    state.balance = balance;
-    let block = make_first_block(chain_id)
-        .with_simple_transfer(chain_id, small_transfer)
-        .with_authenticated_owner(Some(sender_key_pair.public().into()));
-
-    let value = ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![]],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![vec![]],
-            blobs: vec![vec![]],
-            state_hash: state.into_hash().await,
-            oracle_responses: vec![vec![]],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(block),
-    );
-    let certificate = env.make_certificate(value);
-    let info = env
-        .executing_worker()
-        .fully_handle_certificate_with_notifications(certificate, &())
-        .await?
-        .info;
-    assert_eq!(info.next_block_height, BlockHeight::from(1));
-    Ok(())
-}
-
-#[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
-#[test_log::test(tokio::test)]
-async fn test_handle_certificate_wrong_owner<B>(mut storage_builder: B) -> anyhow::Result<()>
-where
-    B: StorageBuilder,
-{
-    let sender_key_pair = AccountSecretKey::generate();
-    let chain_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
-    let chain_2_desc = env
-        .add_root_chain(2, chain_key_pair.public().into(), Amount::from_tokens(5))
-        .await;
-    let chain_2 = chain_2_desc.id();
-    let certificate = env
-        .make_transfer_certificate_for_epoch(
-            chain_2_desc.clone(),
-            sender_key_pair.public(),
-            chain_key_pair.public().into(),
-            AccountOwner::CHAIN,
+            sender_pubkey.into(),
+            test_pubkey.into(),
             Account::chain(chain_2),
             Amount::from_tokens(5),
             Vec::new(),
@@ -1687,13 +1602,12 @@ where
             vec![],
         )
         .await;
-    // This fails because `make_simple_transfer_certificate` uses `sender_key_pair.public()` to
-    // compute the hash of the execution state.
     assert_matches!(
         env.executing_worker()
             .fully_handle_certificate_with_notifications(certificate, &())
             .await,
-        Err(WorkerError::IncorrectOutcome { .. })
+        Err(WorkerError::BlobsNotFound(error))
+            if error == vec![Blob::new_chain_description(&chain_1_desc).id()]
     );
     Ok(())
 }
@@ -1718,13 +1632,12 @@ where
     let chain_2 = chain_2_desc.id();
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1_desc.id(),
             sender_key_pair.public(),
             chain_2,
             Amount::from_tokens(5),
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
     // Replays are ignored.
@@ -1757,22 +1670,33 @@ where
         .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ZERO)
         .await;
     let chain_3_desc = env
-        .add_root_chain(3, AccountPublicKey::test_key(3).into(), Amount::ZERO)
+        .add_root_chain(3, key_pair.public().into(), Amount::from_tokens(995))
         .await;
     let chain_1 = chain_1_desc.id();
     let chain_2 = chain_2_desc.id();
     let chain_3 = chain_3_desc.id();
 
+    let transfer_proposal = make_first_block(chain_3)
+        .with_simple_transfer(chain_1, Amount::from_tokens(995))
+        .with_authenticated_owner(Some(key_pair.public().into()));
+    let transfer_certificate = env
+        .execute_proposal(transfer_proposal.clone(), vec![])
+        .await?;
+
+    assert!(transfer_certificate
+        .value()
+        .matches_proposed_block(&transfer_proposal));
+
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             key_pair.public(),
             chain_2,
             Amount::from_tokens(1000),
             vec![IncomingBundle {
                 origin: chain_3,
                 bundle: MessageBundle {
-                    certificate_hash: CryptoHash::test_hash("certificate"),
+                    certificate_hash: transfer_certificate.hash(),
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
@@ -1781,14 +1705,13 @@ where
                 },
                 action: MessageAction::Accept,
             }],
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
-    env.executing_worker()
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
-    let chain = env.executing_worker().chain_state_view(chain_1).await?;
+    let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get());
     assert_eq!(
@@ -1814,7 +1737,7 @@ where
             timestamp,
             transaction_index: 0,
             messages,
-        } if certificate_hash == CryptoHash::test_hash("certificate")
+        } if certificate_hash == transfer_certificate.hash()
             && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
             && matches!(messages[..], [PostedMessage {
@@ -1829,7 +1752,7 @@ where
     );
     assert_eq!(chain.confirmed_log.count(), 1);
     assert_eq!(Some(certificate.hash()), chain.tip_state.get().block_hash);
-    let chain = env.executing_worker().chain_state_view(chain_2).await?;
+    let chain = env.worker().chain_state_view(chain_2).await?;
     assert!(chain.is_active());
     Ok(())
 }
@@ -1858,13 +1781,12 @@ where
 
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             sender_key_pair.public(),
             chain_2,
             Amount::ONE,
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
     env.executing_worker()
@@ -1913,13 +1835,12 @@ where
 
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             key_pair.public(),
             chain_1,
             Amount::ONE,
             Vec::new(),
-            Amount::ONE,
-            vec![],
+            None,
         )
         .await;
     env.executing_worker()
@@ -1963,13 +1884,12 @@ where
 
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             key_pair.public(),
             chain_2,
             Amount::ONE,
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
     env.executing_worker()
@@ -2036,28 +1956,30 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = AccountSecretKey::generate();
+    let sender_public_key = sender_key_pair.public();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let chain_1_desc = env
+        .add_root_chain(1, sender_public_key.into(), Amount::from_tokens(20))
+        .await;
+    let chain_1 = chain_1_desc.id();
     let chain_2_desc = env
         .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
         .await;
     let chain_2 = chain_2_desc.id();
-    let chain_1_desc = dummy_chain_description(1);
-    let chain_1 = chain_1_desc.id();
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc,
-            sender_key_pair.public(),
+            chain_1,
+            sender_public_key,
             chain_2,
             Amount::from_tokens(10),
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
-    env.executing_worker()
+    env.worker()
         .handle_cross_chain_request(update_recipient_direct(chain_2, &certificate.clone()))
         .await?;
-    let chain = env.executing_worker().chain_state_view(chain_2).await?;
+    let chain = env.worker().chain_state_view(chain_2).await?;
     assert!(chain.is_active());
     assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
     assert_eq!(BlockHeight::ZERO, chain.tip_state.get().next_block_height);
@@ -2117,13 +2039,12 @@ where
     let chain_2 = dummy_chain_description(2).id();
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc,
+            chain_1_desc.id(),
             sender_key_pair.public(),
             chain_2,
             Amount::from_tokens(10),
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
     assert!(env
@@ -2158,18 +2079,17 @@ where
     let chain_2 = dummy_chain_description(2).id();
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc,
+            chain_1,
             sender_key_pair.public(),
             chain_2,
             Amount::from_tokens(10),
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
     // An inactive target chain is created and it acknowledges the message.
     let actions = env
-        .executing_worker()
+        .worker()
         .handle_cross_chain_request(update_recipient_direct(chain_2, &certificate))
         .await?;
     assert_matches!(
@@ -2186,7 +2106,7 @@ where
             }
         }]
     );
-    let chain = env.executing_worker().chain_state_view(chain_2).await?;
+    let chain = env.worker().chain_state_view(chain_2).await?;
     assert!(!chain.inboxes.indices().await?.is_empty());
     Ok(())
 }
@@ -2244,13 +2164,12 @@ where
 
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             sender_key_pair.public(),
             chain_2,
             Amount::from_tokens(5),
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
 
@@ -2280,7 +2199,7 @@ where
     // Try to use the money. This requires selecting the incoming message in a next block.
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_2_desc.clone(),
+            chain_2,
             recipient_key_pair.public(),
             chain_3,
             Amount::ONE,
@@ -2296,8 +2215,7 @@ where
                 },
                 action: MessageAction::Accept,
             }],
-            Amount::from_tokens(4),
-            vec![],
+            None,
         )
         .await;
     env.executing_worker()
@@ -2375,13 +2293,12 @@ where
     let chain_2 = dummy_chain_description(2).id();
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             sender_key_pair.public(),
             chain_2, // the recipient chain does not exist
             Amount::from_tokens(5),
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
 
@@ -2439,16 +2356,13 @@ where
     // Transfer money from the CHAIN account to the sender's account.
     let certificate0 = env
         .make_transfer_certificate(
-            chain_1_desc.clone(),
-            sender_pubkey,
+            chain_1,
             sender,
             AccountOwner::CHAIN,
             sender_account,
             Amount::from_tokens(5),
             Vec::new(),
-            Amount::ONE,
-            BTreeMap::from_iter([(sender, Amount::from_tokens(5))]),
-            vec![],
+            None,
         )
         .await;
 
@@ -2459,16 +2373,13 @@ where
     // Then, make two transfers to the recipient.
     let certificate1 = env
         .make_transfer_certificate(
-            chain_1_desc.clone(),
-            sender_pubkey,
+            chain_1,
             sender,
             sender,
             recipient_account,
             Amount::from_tokens(3),
             Vec::new(),
-            Amount::ONE,
-            BTreeMap::from_iter([(sender, Amount::from_tokens(2))]),
-            vec![&certificate0],
+            Some(&certificate0),
         )
         .await;
 
@@ -2478,16 +2389,13 @@ where
 
     let certificate2 = env
         .make_transfer_certificate(
-            chain_1_desc.clone(),
-            sender_pubkey,
+            chain_1,
             sender,
             sender,
             recipient_account,
             Amount::from_tokens(2),
             Vec::new(),
-            Amount::ONE,
-            BTreeMap::new(),
-            vec![&certificate1, &certificate0],
+            Some(&certificate1),
         )
         .await;
 
@@ -2498,8 +2406,7 @@ where
     // Reject the first transfer and try to use the money of the second one.
     let certificate = env
         .make_transfer_certificate(
-            chain_2_desc.clone(),
-            recipient_pubkey,
+            chain_2,
             recipient,
             recipient,
             Account::chain(chain_2_desc.id()),
@@ -2538,9 +2445,7 @@ where
                     action: MessageAction::Accept,
                 },
             ],
-            Amount::ONE,
-            BTreeMap::from_iter([(recipient, Amount::from_tokens(1))]),
-            vec![],
+            None,
         )
         .await;
 
@@ -2557,8 +2462,7 @@ where
     // Process the bounced message and try to use the refund.
     let certificate3 = env
         .make_transfer_certificate(
-            chain_1_desc.clone(),
-            sender_pubkey,
+            chain_1,
             sender,
             sender,
             Account::chain(chain_2_desc.id()),
@@ -2579,9 +2483,7 @@ where
                 },
                 action: MessageAction::Accept,
             }],
-            Amount::ONE,
-            BTreeMap::new(),
-            vec![&certificate2, &certificate1, &certificate0],
+            Some(&certificate2),
         )
         .await;
 
@@ -2624,32 +2526,31 @@ where
         .add_child_chain(admin_id, env.admin_public_key().into(), Amount::ZERO)
         .await;
     let user_id = user_description.id();
-    let certificate0 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![]],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![vec![Blob::new_chain_description(&user_description)]],
-            state_hash: env.system_execution_state(&admin_id).into_hash().await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_first_block(admin_id)
-                .with_operation(SystemOperation::OpenChain(OpenChainConfig {
-                    ownership: ChainOwnership::single(env.admin_public_key().into()),
-                    balance: Amount::ZERO,
-                    application_permissions: Default::default(),
-                }))
-                .with_authenticated_owner(Some(env.admin_public_key().into())),
-        ),
+    let proposal0 = make_first_block(admin_id)
+        .with_operation(SystemOperation::OpenChain(OpenChainConfig {
+            ownership: ChainOwnership::single(env.admin_public_key().into()),
+            balance: Amount::ZERO,
+            application_permissions: Default::default(),
+        }))
+        .with_authenticated_owner(Some(env.admin_public_key().into()));
+    let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
+
+    assert!(certificate0.value().matches_proposed_block(&proposal0));
+    assert!(certificate0.block().outcome_matches(
+        vec![vec![]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![Vec::new()],
+        vec![Vec::new()],
+        vec![vec![Blob::new_chain_description(&user_description)]],
+        vec![OperationResult::default()],
     ));
-    env.executing_worker()
+
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
     {
-        let admin_chain = env.executing_worker().chain_state_view(admin_id).await?;
+        let admin_chain = env.worker().chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
         assert_no_removed_bundles(&admin_chain).await;
         assert_eq!(
@@ -2664,65 +2565,52 @@ where
     }
 
     // Create a new committee and transfer money before accepting the subscription.
-    let committees2 = BTreeMap::from_iter([
-        (Epoch::ZERO, committee.clone()),
-        (Epoch::from(1), committee.clone()),
-    ]);
-    let event_id = EventId {
-        chain_id: admin_id,
-        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-        index: 1,
-    };
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     // `PublishCommitteeBlob` is tested e.g. in `client_tests::test_change_voting_rights`, so we
     // just write it directly to storage here for simplicity.
     env.write_blobs(&[committee_blob.clone()]).await?;
     let blob_hash = committee_blob.id().hash;
-    let certificate1 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![
-                vec![],
-                vec![direct_credit_message(user_id, Amount::from_tokens(2))],
-            ],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![
-                vec![Event {
-                    stream_id: event_id.stream_id.clone(),
-                    index: event_id.index,
-                    value: bcs::to_bytes(&blob_hash).unwrap(),
-                }],
-                Vec::new(),
-            ],
-            blobs: vec![Vec::new(); 2],
-            state_hash: SystemExecutionState {
-                // The root chain knows both committees at the end.
-                committees: committees2.clone(),
-                used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Epoch::from(1),
-                balance: Amount::ZERO,
-                ..env.system_execution_state(&admin_id)
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
-            operation_results: vec![OperationResult::default(); 2],
-        }
-        .with(
-            make_child_block(&certificate0.clone().into_value())
-                .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
-                    epoch: Epoch::from(1),
-                    blob_hash,
-                }))
-                .with_simple_transfer(user_id, Amount::from_tokens(2)),
-        ),
+    let proposal1 = make_child_block(&certificate0.clone().into_value())
+        .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+            epoch: Epoch::from(1),
+            blob_hash,
+        }))
+        .with_simple_transfer(user_id, Amount::from_tokens(2));
+    let certificate1 = env.execute_proposal(proposal1.clone(), vec![]).await?;
+
+    let event_id = EventId {
+        chain_id: admin_id,
+        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+        index: 1,
+    };
+
+    assert!(certificate1.value().matches_proposed_block(&proposal1));
+    assert!(certificate1.block().outcome_matches(
+        vec![
+            vec![],
+            vec![direct_credit_message(user_id, Amount::from_tokens(2))],
+        ],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
+        vec![
+            vec![Event {
+                stream_id: event_id.stream_id.clone(),
+                index: event_id.index,
+                value: bcs::to_bytes(&blob_hash).unwrap(),
+            }],
+            vec![],
+        ],
+        vec![vec![]; 2],
+        vec![OperationResult::default(); 2],
     ));
-    env.executing_worker()
+
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
     {
         // The child is active and has not migrated yet.
-        let user_chain = env.executing_worker().chain_state_view(user_id).await?;
+        let user_chain = env.worker().chain_state_view(user_id).await?;
         assert!(user_chain.is_active());
         assert_eq!(
             BlockHeight::ZERO,
@@ -2749,62 +2637,52 @@ where
         );
         assert_eq!(user_chain.execution_state.system.committees.get().len(), 1);
     }
+    let proposal3 = make_first_block(user_id)
+        .with_incoming_bundle(IncomingBundle {
+            origin: admin_id,
+            bundle: MessageBundle {
+                certificate_hash: certificate1.hash(),
+                height: BlockHeight::from(1),
+                timestamp: Timestamp::from(0),
+                transaction_index: 1,
+                messages: vec![system_credit_message(Amount::from_tokens(2))
+                    .to_posted(0, MessageKind::Tracked)],
+            },
+            action: MessageAction::Accept,
+        })
+        .with_operation(SystemOperation::ProcessNewEpoch(Epoch::from(1)));
     // Make the child receive the pending messages.
-    let certificate3 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![Vec::new(); 2],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new(); 2],
-            blobs: vec![Vec::new(); 2],
-            state_hash: SystemExecutionState {
-                // Finally the child knows about both committees and has the money.
-                committees: committees2.clone(),
-                balance: Amount::from_tokens(2),
-                used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Epoch::from(1),
-                ..env.system_execution_state(&user_description.id())
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![
-                vec![],
-                vec![
-                    OracleResponse::Event(
-                        EventId {
-                            chain_id: admin_id,
-                            stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                            index: 1,
-                        },
-                        bcs::to_bytes(&blob_hash).unwrap(),
-                    ),
-                    OracleResponse::Blob(committee_blob.id()),
-                ],
-            ],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_first_block(user_id)
-                .with_incoming_bundle(IncomingBundle {
-                    origin: admin_id,
-                    bundle: MessageBundle {
-                        certificate_hash: certificate1.hash(),
-                        height: BlockHeight::from(1),
-                        timestamp: Timestamp::from(0),
-                        transaction_index: 1,
-                        messages: vec![system_credit_message(Amount::from_tokens(2))
-                            .to_posted(0, MessageKind::Tracked)],
+    let certificate3 = env.execute_proposal(proposal3.clone(), vec![]).await?;
+
+    assert!(certificate3.value().matches_proposed_block(&proposal3));
+    assert!(certificate3.block().outcome_matches(
+        vec![vec![]; 2],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![
+            vec![],
+            vec![
+                OracleResponse::Event(
+                    EventId {
+                        chain_id: admin_id,
+                        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                        index: 1,
                     },
-                    action: MessageAction::Accept,
-                })
-                .with_operation(SystemOperation::ProcessNewEpoch(Epoch::from(1))),
-        ),
+                    bcs::to_bytes(&blob_hash).unwrap(),
+                ),
+                OracleResponse::Blob(committee_blob.id()),
+            ],
+        ],
+        vec![vec![]; 2],
+        vec![vec![]; 2],
+        vec![OperationResult::default()],
     ));
-    env.executing_worker()
+
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate3, &())
         .await?;
     {
-        let user_chain = env.executing_worker().chain_state_view(user_id).await?;
+        let user_chain = env.worker().chain_state_view(user_id).await?;
         assert!(user_chain.is_active());
         assert_eq!(
             BlockHeight::from(1),
@@ -2839,78 +2717,60 @@ where
     let user_id = chain_1_desc.id();
 
     // Have the user chain start a transfer to the admin chain.
-    let certificate0 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                balance: Amount::from_tokens(2),
-                ..env.system_execution_state(&chain_1_desc.id())
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_first_block(user_id)
-                .with_simple_transfer(admin_id, Amount::ONE)
-                .with_authenticated_owner(Some(owner1)),
-        ),
+    let proposal0 = make_first_block(user_id)
+        .with_simple_transfer(admin_id, Amount::ONE)
+        .with_authenticated_owner(Some(owner1));
+    let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
+
+    assert!(certificate0.value().matches_proposed_block(&proposal0));
+    assert!(certificate0.block().outcome_matches(
+        vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![OperationResult::default()],
     ));
+
     // Have the admin chain create a new epoch without retiring the old one.
-    let committees2 = BTreeMap::from_iter([
-        (Epoch::ZERO, committee.clone()),
-        (Epoch::from(1), committee.clone()),
-    ]);
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     let blob_hash = committee_blob.id().hash;
     env.write_blobs(&[committee_blob.clone()]).await?;
-    let certificate1 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![]],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![vec![Event {
-                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                index: 1,
-                value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
-            }]],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                committees: committees2.clone(),
-                used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Epoch::from(1),
-                ..env.system_execution_state(&admin_id)
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())]],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_first_block(admin_id).with_operation(SystemOperation::Admin(
-                AdminOperation::CreateCommittee {
-                    epoch: Epoch::from(1),
-                    blob_hash,
-                },
-            )),
-        ),
+    let proposal1 = make_first_block(admin_id).with_operation(SystemOperation::Admin(
+        AdminOperation::CreateCommittee {
+            epoch: Epoch::from(1),
+            blob_hash,
+        },
     ));
-    env.executing_worker()
+    let certificate1 = env.execute_proposal(proposal1.clone(), vec![]).await?;
+
+    assert!(certificate1.value().matches_proposed_block(&proposal1));
+    assert!(certificate1.block().outcome_matches(
+        vec![vec![]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![OracleResponse::Blob(committee_blob.id())]],
+        vec![vec![Event {
+            stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+            index: 1,
+            value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+        }]],
+        vec![vec![]],
+        vec![OperationResult::default()],
+    ));
+
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
 
     // Try to execute the transfer.
-    env.executing_worker()
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
 
     // The transfer was started..
-    let user_chain = env.executing_worker().chain_state_view(user_id).await?;
+    let user_chain = env.worker().chain_state_view(user_id).await?;
     assert!(user_chain.is_active());
     assert_eq!(
         BlockHeight::from(1),
@@ -2923,7 +2783,7 @@ where
     assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
     // .. and the message has gone through.
-    let admin_chain = env.executing_worker().chain_state_view(admin_id).await?;
+    let admin_chain = env.worker().chain_state_view(admin_id).await?;
     assert!(admin_chain.is_active());
     assert_eq!(admin_chain.inboxes.indices().await?.len(), 1);
     matches!(
@@ -2963,87 +2823,72 @@ where
     let user_id = chain_1_desc.id();
 
     // Have the user chain start a transfer to the admin chain.
-    let certificate0 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                balance: Amount::from_tokens(2),
-                ..env.system_execution_state(&chain_1_desc.id())
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_first_block(user_id)
-                .with_simple_transfer(admin_id, Amount::ONE)
-                .with_authenticated_owner(Some(owner1)),
-        ),
+    let proposal0 = make_first_block(user_id)
+        .with_simple_transfer(admin_id, Amount::ONE)
+        .with_authenticated_owner(Some(owner1));
+    let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
+
+    assert!(certificate0.value().matches_proposed_block(&proposal0));
+    assert!(certificate0.block().outcome_matches(
+        vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![Vec::new()],
+        vec![Vec::new()],
+        vec![Vec::new()],
+        vec![OperationResult::default()]
     ));
+
     // Have the admin chain create a new epoch and retire the old one immediately.
-    let committees1 = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     let blob_hash = committee_blob.id().hash;
     env.write_blobs(&[committee_blob.clone()]).await?;
 
-    let certificate1 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![]; 2],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![
-                vec![Event {
-                    stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                    index: 1,
-                    value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
-                }],
-                vec![Event {
-                    stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
-                    index: 0,
-                    value: Vec::new(),
-                }],
-            ],
-            blobs: vec![Vec::new(); 2],
-            state_hash: SystemExecutionState {
-                committees: committees1.clone(),
-                used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Epoch::from(1),
-                ..env.system_execution_state(&admin_id)
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
-            operation_results: vec![OperationResult::default(); 2],
-        }
-        .with(
-            make_first_block(admin_id)
-                .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
-                    epoch: Epoch::from(1),
-                    blob_hash,
-                }))
-                .with_operation(SystemOperation::Admin(AdminOperation::RemoveCommittee {
-                    epoch: Epoch::ZERO,
-                })),
-        ),
+    let proposal1 = make_first_block(admin_id)
+        .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+            epoch: Epoch::from(1),
+            blob_hash,
+        }))
+        .with_operation(SystemOperation::Admin(AdminOperation::RemoveCommittee {
+            epoch: Epoch::ZERO,
+        }));
+
+    let certificate1 = env.execute_proposal(proposal1.clone(), vec![]).await?;
+
+    assert!(certificate1.value().matches_proposed_block(&proposal1));
+    assert!(certificate1.block().outcome_matches(
+        vec![vec![]; 2],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
+        vec![
+            vec![Event {
+                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                index: 1,
+                value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+            }],
+            vec![Event {
+                stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
+                index: 0,
+                value: Vec::new(),
+            }],
+        ],
+        vec![vec![]; 2],
+        vec![OperationResult::default(); 2],
     ));
 
-    env.executing_worker()
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
 
     // Try to execute the transfer from the user chain to the admin chain.
-    env.executing_worker()
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
 
     {
         // The transfer was started..
-        let user_chain = env.executing_worker().chain_state_view(user_id).await?;
+        let user_chain = env.worker().chain_state_view(user_id).await?;
         assert!(user_chain.is_active());
         assert_eq!(
             BlockHeight::from(1),
@@ -3056,56 +2901,47 @@ where
         assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
         // .. but the message hasn't gone through.
-        let admin_chain = env.executing_worker().chain_state_view(admin_id).await?;
+        let admin_chain = env.worker().chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
         assert!(admin_chain.inboxes.indices().await?.is_empty());
     }
 
     // Force the admin chain to receive the money nonetheless by anticipation.
-    let certificate2 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![Vec::new()],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                committees: committees1.clone(),
-                balance: Amount::ONE,
-                used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Epoch::from(1),
-                ..env.system_execution_state(&admin_id)
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![],
-        }
-        .with(
-            make_child_block(&certificate1.clone().into_value())
-                .with_epoch(1)
-                .with_incoming_bundle(IncomingBundle {
-                    origin: user_id,
-                    bundle: MessageBundle {
-                        certificate_hash: certificate0.hash(),
-                        height: BlockHeight::ZERO,
-                        timestamp: Timestamp::from(0),
-                        transaction_index: 0,
-                        messages: vec![
-                            system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
-                        ],
-                    },
-                    action: MessageAction::Accept,
-                }),
-        ),
+    let proposal2 = make_child_block(&certificate1.clone().into_value())
+        .with_epoch(1)
+        .with_incoming_bundle(IncomingBundle {
+            origin: user_id,
+            bundle: MessageBundle {
+                certificate_hash: certificate0.hash(),
+                height: BlockHeight::ZERO,
+                timestamp: Timestamp::from(0),
+                transaction_index: 0,
+                messages: vec![
+                    system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                ],
+            },
+            action: MessageAction::Accept,
+        });
+    let certificate2 = env.execute_proposal(proposal2.clone(), vec![]).await?;
+
+    assert!(certificate2.value().matches_proposed_block(&proposal2));
+    assert!(certificate2.block().outcome_matches(
+        vec![vec![]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![],
     ));
-    env.executing_worker()
+
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate2.clone(), &())
         .await?;
 
     {
         // The admin chain has an anticipated message.
-        let admin_chain = env.executing_worker().chain_state_view(admin_id).await?;
+        let admin_chain = env.worker().chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
         assert!(admin_chain
             .inboxes
@@ -3120,60 +2956,46 @@ where
 
     // Try again to execute the transfer from the user chain to the admin chain.
     // This time, the epoch verification should be overruled.
-    env.executing_worker()
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
 
     {
         // The admin chain has no more anticipated messages.
-        let admin_chain = env.executing_worker().chain_state_view(admin_id).await?;
+        let admin_chain = env.worker().chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
         assert_no_removed_bundles(&admin_chain).await;
     }
 
     // Let's make a certificate for a block creating another epoch.
     // This one should contain previous_event_blocks.
-    let committees3 = BTreeMap::from_iter([
-        (Epoch::from(1), committee.clone()),
-        (Epoch::from(2), committee.clone()),
-    ]);
-    let certificate3 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![Vec::new()],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::from([(
-                StreamId::system(NEW_EPOCH_STREAM_NAME),
-                (certificate1.hash(), BlockHeight(0)),
-            )]),
-            events: vec![vec![Event {
-                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                index: 2,
-                value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
-            }]],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                committees: committees3.clone(),
-                balance: Amount::ONE,
-                used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Epoch::from(2),
-                ..env.system_execution_state(&admin_id)
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_child_block(&certificate2.into_value())
-                .with_epoch(1)
-                .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
-                    epoch: Epoch::from(2),
-                    blob_hash,
-                })),
-        ),
+    let proposal3 = make_child_block(&certificate2.into_value())
+        .with_epoch(1)
+        .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+            epoch: Epoch::from(2),
+            blob_hash,
+        }));
+    let certificate3 = env.execute_proposal(proposal3.clone(), vec![]).await?;
+
+    assert!(certificate3.value().matches_proposed_block(&proposal3));
+    assert!(certificate3.block().outcome_matches(
+        vec![vec![]],
+        BTreeMap::new(),
+        BTreeMap::from([(
+            StreamId::system(NEW_EPOCH_STREAM_NAME),
+            (certificate1.hash(), BlockHeight(0)),
+        )]),
+        vec![vec![]],
+        vec![vec![Event {
+            stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+            index: 2,
+            value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+        }]],
+        vec![vec![]],
+        vec![OperationResult::default()],
     ));
 
-    env.executing_worker()
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate3, &())
         .await?;
 
@@ -3194,7 +3016,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let id1 = chain_1.id();
 
     let certificate0 = env
-        .make_transfer_certificate_for_epoch(
+        .make_transfer_certificate_for_epoch_unprocessable(
             chain_0.clone(),
             key_pair0.public(),
             key_pair0.public().into(),
@@ -3209,7 +3031,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         )
         .await;
     let certificate1 = env
-        .make_transfer_certificate_for_epoch(
+        .make_transfer_certificate_for_epoch_unprocessable(
             chain_0.clone(),
             key_pair0.public(),
             key_pair0.public().into(),
@@ -3224,7 +3046,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         )
         .await;
     let certificate2 = env
-        .make_transfer_certificate_for_epoch(
+        .make_transfer_certificate_for_epoch_unprocessable(
             chain_0.clone(),
             key_pair0.public(),
             key_pair0.public().into(),
@@ -3240,7 +3062,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         .await;
     // Weird case: epoch going backward.
     let certificate3 = env
-        .make_transfer_certificate_for_epoch(
+        .make_transfer_certificate_for_epoch_unprocessable(
             chain_0.clone(),
             key_pair0.public(),
             key_pair0.public().into(),
@@ -4281,23 +4103,18 @@ where
     .await;
     let _ = state.register_mock_application(0).await?;
 
-    let value = ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![direct_credit_message(chain_2, small_transfer)]],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![vec![]],
-            blobs: vec![vec![]],
-            state_hash: state.crypto_hash_mut().await?,
-            oracle_responses: vec![vec![]],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(block),
-    );
-    let certificate = env.make_certificate(value);
-    env.executing_worker()
-        .handle_confirmed_certificate(certificate, None)
-        .await?;
+    let certificate = env.execute_proposal(block.clone(), vec![]).await?;
+
+    assert!(certificate.value().matches_proposed_block(&block));
+    assert!(certificate.block().outcome_matches(
+        vec![vec![direct_credit_message(chain_2, small_transfer)]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![OperationResult::default()],
+    ));
 
     for _ in query_contexts_after_new_block.clone() {
         application.expect_call(ExpectedCall::handle_query(move |_runtime, query| {
@@ -4347,50 +4164,91 @@ where
     let chain_1 = chain_1_desc.id();
     let chain_2 = chain_2_desc.id();
 
+    // Transfer some funds to `owner` on chain 2, so that we can claim it later.
+    let transfer_cert = env
+        .execute_proposal(
+            make_first_block(chain_1)
+                .with_transfer(
+                    AccountOwner::CHAIN,
+                    Account::new(chain_2, owner),
+                    Amount::from_tokens(2),
+                )
+                .with_authenticated_owner(Some(owner)),
+            vec![],
+        )
+        .await?;
+
+    // Accept the transfer on chain 2.
+    let chain_2_first_block = env
+        .execute_proposal(
+            make_first_block(chain_2).with_incoming_bundle(IncomingBundle {
+                origin: chain_1,
+                bundle: MessageBundle {
+                    certificate_hash: transfer_cert.hash(),
+                    height: BlockHeight::ZERO,
+                    timestamp: Timestamp::from(0),
+                    transaction_index: 0,
+                    messages: vec![Message::System(SystemMessage::Credit {
+                        source: AccountOwner::CHAIN,
+                        target: owner,
+                        amount: Amount::from_tokens(2),
+                    })
+                    .to_posted(0, MessageKind::Tracked)],
+                },
+                action: MessageAction::Accept,
+            }),
+            vec![],
+        )
+        .await?;
+
     // Simulate a certificate sending two messages from chain_1 to chain_2.
-    let sender_hash = CryptoHash::test_hash("sender block");
+    // The first message is a skippable `Withdraw` message, which makes it possible to receive only
+    // the second one.
+    let sender_cert = env
+        .execute_proposal(
+            make_child_block(transfer_cert.value())
+                .with_operation(SystemOperation::Claim {
+                    owner,
+                    target_id: chain_2,
+                    recipient: Account::chain(chain_1),
+                    amount: Amount::from_tokens(2),
+                })
+                .with_simple_transfer(chain_2, Amount::from_tokens(2))
+                .with_authenticated_owner(Some(owner)),
+            vec![],
+        )
+        .await?;
 
     // Process the second message bundle on chain_2. This advances next_cursor_to_remove
     // to height=0, index=1.
-    let block_proposal = make_first_block(chain_2)
-        .with_incoming_bundle(IncomingBundle {
+    let block_proposal =
+        make_child_block(chain_2_first_block.value()).with_incoming_bundle(IncomingBundle {
             origin: chain_1,
             bundle: MessageBundle {
-                certificate_hash: sender_hash,
-                height: BlockHeight::ZERO,
+                certificate_hash: sender_cert.hash(),
+                height: BlockHeight::from(1),
                 timestamp: Timestamp::from(0),
                 transaction_index: 1,
                 messages: vec![system_credit_message(Amount::from_tokens(2))
-                    .to_posted(0, MessageKind::Tracked)],
+                    .to_posted(1, MessageKind::Tracked)],
             },
             action: MessageAction::Accept,
-        })
-        .into_first_proposal(owner, &signer)
-        .await
-        .unwrap();
+        });
 
-    let certificate_chain_2 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![Vec::new()],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                balance: Amount::from_tokens(2),
-                ..env.system_execution_state(&chain_2_desc.id())
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![],
-        }
-        .with(block_proposal.content.block),
+    let certificate_chain_2 = env.execute_proposal(block_proposal.clone(), vec![]).await?;
+
+    assert!(certificate_chain_2
+        .value()
+        .matches_proposed_block(&block_proposal));
+    assert!(certificate_chain_2.block().outcome_matches(
+        vec![vec![]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![],
     ));
-
-    env.executing_worker()
-        .handle_confirmed_certificate(certificate_chain_2.clone(), None)
-        .await?;
 
     // Now try to stage a block with the earlier message (transaction_index: 0).
     // This should fail with IncorrectMessageOrder because next_cursor_to_remove
@@ -4399,13 +4257,16 @@ where
         .with_incoming_bundle(IncomingBundle {
             origin: chain_1,
             bundle: MessageBundle {
-                certificate_hash: sender_hash,
-                height: BlockHeight::ZERO,
+                certificate_hash: sender_cert.hash(),
+                height: BlockHeight::from(1),
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
-                messages: vec![
-                    system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
-                ],
+                messages: vec![Message::System(SystemMessage::Withdraw {
+                    owner,
+                    recipient: Account::chain(chain_2),
+                    amount: Amount::from_tokens(2),
+                })
+                .to_posted(0, MessageKind::Simple)],
             },
             action: MessageAction::Accept,
         });

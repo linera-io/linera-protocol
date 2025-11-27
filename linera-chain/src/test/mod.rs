@@ -70,6 +70,12 @@ pub trait BlockTestExt: Sized {
     /// Returns the block with the given message appended at the end.
     fn with_incoming_bundle(self, incoming_bundle: IncomingBundle) -> Self;
 
+    /// Returns the block with the given messages appended at the end.
+    fn with_incoming_bundles(
+        self,
+        incoming_bundles: impl IntoIterator<Item = IncomingBundle>,
+    ) -> Self;
+
     /// Returns the block with the specified timestamp.
     fn with_timestamp(self, timestamp: impl Into<Timestamp>) -> Self;
 
@@ -135,6 +141,18 @@ impl BlockTestExt for ProposedBlock {
     fn with_incoming_bundle(mut self, incoming_bundle: IncomingBundle) -> Self {
         self.transactions
             .push(Transaction::ReceiveMessages(incoming_bundle));
+        self
+    }
+
+    fn with_incoming_bundles(
+        mut self,
+        incoming_bundles: impl IntoIterator<Item = IncomingBundle>,
+    ) -> Self {
+        self.transactions.extend(
+            incoming_bundles
+                .into_iter()
+                .map(Transaction::ReceiveMessages),
+        );
         self
     }
 

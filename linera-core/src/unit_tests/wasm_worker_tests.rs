@@ -10,7 +10,7 @@
 #![allow(clippy::large_futures)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use assert_matches::assert_matches;
 use linera_base::{
@@ -22,16 +22,11 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, OperationResult},
+    data_types::OperationResult,
     test::{make_child_block, make_first_block, BlockTestExt},
-    types::ConfirmedBlock,
 };
-use linera_execution::{
-    system::SystemOperation, test_utils::SystemExecutionState, ExecutionRuntimeContext,
-    ExecutionStateActor, Operation, OperationContext, ResourceController, TransactionTracker,
-    WasmContractModule, WasmRuntime,
-};
-use linera_views::{context::Context, views::View};
+use linera_execution::{system::SystemOperation, Operation, WasmRuntime};
+use linera_storage::Storage;
 use test_case::test_case;
 
 use super::TestEnvironment;
@@ -53,7 +48,7 @@ async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
     let builder = MemoryStorageBuilder::with_wasm_runtime(Some(wasm_runtime));
-    run_test_handle_certificates_to_create_application(builder, wasm_runtime).await
+    run_test_handle_certificates_to_create_application(builder).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -64,7 +59,7 @@ async fn test_rocks_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
     let builder = RocksDbStorageBuilder::with_wasm_runtime(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(builder, wasm_runtime).await
+    run_test_handle_certificates_to_create_application(builder).await
 }
 
 #[cfg(feature = "dynamodb")]
@@ -75,7 +70,7 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
     let builder = DynamoDbStorageBuilder::with_wasm_runtime(Some(wasm_runtime));
-    run_test_handle_certificates_to_create_application(builder, wasm_runtime).await
+    run_test_handle_certificates_to_create_application(builder).await
 }
 
 #[cfg(feature = "scylladb")]
@@ -86,12 +81,11 @@ async fn test_scylla_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
     let builder = ScyllaDbStorageBuilder::with_wasm_runtime(Some(wasm_runtime));
-    run_test_handle_certificates_to_create_application(builder, wasm_runtime).await
+    run_test_handle_certificates_to_create_application(builder).await
 }
 
 async fn run_test_handle_certificates_to_create_application<B>(
     mut storage_builder: B,
-    wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
@@ -119,33 +113,35 @@ where
     let service_blob_hash = service_blob_id.hash;
 
     let module_id = ModuleId::new(contract_blob_hash, service_blob_hash, vm_runtime);
-    let contract = WasmContractModule::new(contract_bytecode, wasm_runtime).await?;
 
     // Publish the module.
     let publish_operation = SystemOperation::PublishModule { module_id };
     let publish_block = make_first_block(publisher_chain.id())
         .with_timestamp(1)
         .with_operation(publish_operation);
-    let publisher_system_state = SystemExecutionState {
-        timestamp: Timestamp::from(1),
-        used_blobs: BTreeSet::from([contract_blob_id, service_blob_id]),
-        ..env.system_execution_state(&publisher_chain.id())
-    };
-    let publisher_state_hash = publisher_system_state.clone().into_hash().await;
-    let publish_block_proposal = ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![Vec::new()],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![Vec::new()],
-            state_hash: publisher_state_hash,
-            oracle_responses: vec![vec![]],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(publish_block),
-    );
-    let publish_certificate = env.make_certificate(publish_block_proposal);
+    env.executing_worker()
+        .storage
+        .write_blobs(&[contract_blob.clone(), service_blob.clone()])
+        .await?;
+    let publish_certificate = env
+        .execute_proposal(
+            publish_block.clone(),
+            vec![contract_blob.clone(), service_blob.clone()],
+        )
+        .await?;
+
+    assert!(publish_certificate
+        .value()
+        .matches_proposed_block(&publish_block));
+    assert!(publish_certificate.block().outcome_matches(
+        vec![vec![]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![OperationResult::default()]
+    ));
 
     assert_matches!(
         env.worker()
@@ -168,11 +164,6 @@ where
     assert_eq!(Some(publish_certificate.hash()), info.block_hash);
     assert!(info.manager.pending.is_none());
 
-    let mut creator_system_state = SystemExecutionState {
-        timestamp: Timestamp::from(1),
-        ..env.system_execution_state(&creator_chain.id())
-    };
-
     // Create an application.
     let initial_value = 10_u64;
     let initial_value_bytes = serde_json::to_vec(&initial_value)?;
@@ -192,47 +183,29 @@ where
         parameters: parameters_bytes,
     };
     let application_description_blob = Blob::new_application_description(&application_description);
-    let application_description_blob_id = application_description_blob.id();
     let application_id = From::from(&application_description);
     let create_block = make_first_block(creator_chain.id())
         .with_timestamp(2)
         .with_operation(create_operation);
-    creator_system_state.timestamp = Timestamp::from(2);
-    let mut creator_state = creator_system_state.into_view().await;
-    creator_state
-        .simulate_instantiation(
-            contract.into(),
-            Timestamp::from(2),
-            application_description.clone(),
-            initial_value_bytes.clone(),
-            contract_blob,
-            service_blob,
-        )
-        .await?;
-    let create_block_proposal = ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![]],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            state_hash: creator_state.crypto_hash_mut().await?,
-            oracle_responses: vec![vec![
-                OracleResponse::Blob(contract_blob_id),
-                OracleResponse::Blob(service_blob_id),
-            ]],
-            blobs: vec![vec![application_description_blob.clone()]],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(create_block),
-    );
-    let create_certificate = env.make_certificate(create_block_proposal);
+    let create_certificate = env.execute_proposal(create_block.clone(), vec![]).await?;
+
+    assert!(create_certificate
+        .value()
+        .matches_proposed_block(&create_block));
+    assert!(create_certificate.block().outcome_matches(
+        vec![vec![]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![
+            OracleResponse::Blob(contract_blob_id),
+            OracleResponse::Blob(service_blob_id),
+        ]],
+        vec![vec![]],
+        vec![vec![application_description_blob.clone()]],
+        vec![OperationResult::default()],
+    ));
 
     env.write_blobs(&[application_description_blob.clone()])
-        .await?;
-    creator_state
-        .context()
-        .extra()
-        .add_blobs([application_description_blob])
         .await?;
     let info = env
         .worker()
@@ -257,50 +230,18 @@ where
             application_id,
             bytes: user_operation.clone(),
         });
-    let operation_context = OperationContext {
-        chain_id: creator_chain.id(),
-        authenticated_owner: None,
-        height: run_block.height,
-        round: Some(0),
-        timestamp: Timestamp::from(3),
-    };
-    let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(
-        Timestamp::from(3),
-        0,
-        0,
-        0,
-        Some(vec![OracleResponse::Blob(application_description_blob_id)]),
-        &[],
-    );
-    ExecutionStateActor::new(&mut creator_state, &mut txn_tracker, &mut controller)
-        .execute_operation(
-            operation_context,
-            Operation::User {
-                application_id,
-                bytes: user_operation,
-            },
-        )
-        .await?;
-    creator_state.system.timestamp.set(Timestamp::from(3));
-    creator_state
-        .system
-        .used_blobs
-        .insert(&application_description_blob_id)?;
-    let run_block_proposal = ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![Vec::new()],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![Vec::new()],
-            state_hash: creator_state.crypto_hash_mut().await?,
-            oracle_responses: vec![vec![]],
-            operation_results: vec![OperationResult(bcs::to_bytes(&15u64)?)],
-        }
-        .with(run_block),
-    );
-    let run_certificate = env.make_certificate(run_block_proposal);
+    let run_certificate = env.execute_proposal(run_block.clone(), vec![]).await?;
+
+    assert!(run_certificate.value().matches_proposed_block(&run_block));
+    assert!(run_certificate.block().outcome_matches(
+        vec![vec![]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![OperationResult(bcs::to_bytes(&15u64)?)],
+    ));
 
     let info = env
         .worker()
