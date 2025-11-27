@@ -675,7 +675,7 @@ where
         // Timestamp too far in the future
         assert_matches!(
             env.worker().handle_block_proposal(block_proposal).await,
-            Err(WorkerError::InvalidTimestamp)
+            Err(WorkerError::InvalidTimestamp { .. })
         );
     }
 
