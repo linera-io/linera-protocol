@@ -34,9 +34,9 @@ use super::{execution_state_actor::ExecutionRequest, runtime::ServiceRuntimeRequ
 use crate::{
     execution_state_actor::ExecutionStateActor, resources::ResourceController,
     system::SystemExecutionStateView, ApplicationDescription, ApplicationId, BcsHashable,
-    Deserialize, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageContext,
-    OperationContext, ProcessStreamsContext, Query, QueryContext, QueryOutcome, Serialize,
-    ServiceSyncRuntime, Timestamp, TransactionTracker, FLAG_ZERO_HASH,
+    Deserialize, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, JsVec,
+    MessageContext, OperationContext, ProcessStreamsContext, Query, QueryContext, QueryOutcome,
+    Serialize, ServiceSyncRuntime, Timestamp, TransactionTracker, FLAG_ZERO_HASH,
 };
 
 /// A view accessing the execution state of a chain.
@@ -292,13 +292,18 @@ where
         let mut txn_tracker = TransactionTracker::default().with_blobs(created_blobs);
         let mut resource_controller = ResourceController::default();
         let mut actor = ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller);
-        let (code, description) = actor.load_service(application_id).await?;
+
+        let (codes, descriptions) = actor.service_and_dependencies(application_id).await?;
 
         let thread = web_thread::Thread::new();
-        let service_runtime_task = thread.run_send(code, move |code| async move {
+        let service_runtime_task = thread.run_send(JsVec(codes), move |codes| async move {
             let mut runtime =
                 ServiceSyncRuntime::new_with_deadline(execution_state_sender, context, deadline);
-            runtime.preload_service(application_id, code, description)?;
+
+            for (code, description) in codes.0.into_iter().zip(descriptions) {
+                runtime.preload_service(ApplicationId::from(&description), code, description)?;
+            }
+
             runtime.run_query(application_id, query)
         });
 
