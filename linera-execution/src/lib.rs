@@ -958,7 +958,7 @@ pub trait ContractRuntime: BaseRuntime {
         vm_runtime: VmRuntime,
     ) -> Result<ModuleId, ExecutionError>;
 
-    /// Returns the round in which this block was validated.
+    /// Returns the multi-leader round in which this block was validated.
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;
 
     /// Writes a batch of changes.

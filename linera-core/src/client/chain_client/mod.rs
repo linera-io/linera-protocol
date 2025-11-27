@@ -628,21 +628,26 @@ impl<Env: Environment> ChainClient<Env> {
             manager.ownership.is_active(),
             LocalNodeError::InactiveChain(self.chain_id)
         );
+        let fallback_owners = if manager.ownership.has_fallback() {
+            self.local_committee()
+                .await?
+                .account_keys_and_weights()
+                .map(|(key, _)| AccountOwner::from(key))
+                .collect()
+        } else {
+            BTreeSet::new()
+        };
 
-        let is_owner = manager
-            .ownership
-            .all_owners()
-            .chain(&manager.leader)
-            .any(|owner| *owner == preferred_owner);
+        let is_owner = manager.ownership.is_owner(&preferred_owner)
+            || fallback_owners.contains(&preferred_owner);
 
         if !is_owner {
-            let accepted_owners = manager
-                .ownership
-                .all_owners()
-                .chain(&manager.leader)
-                .collect::<Vec<_>>();
-            warn!(%self.chain_id, ?accepted_owners, ?preferred_owner,
-                "Chain has multiple owners configured but none is preferred owner",
+            warn!(
+                chain_id = %self.chain_id,
+                ownership = ?manager.ownership,
+                ?fallback_owners,
+                ?preferred_owner,
+                "The preferred owner is not configured as an owner of this chain",
             );
             return Err(Error::NotAnOwner(self.chain_id));
         }
@@ -1352,14 +1357,7 @@ impl<Env: Environment> ChainClient<Env> {
             timestamp,
         };
 
-        // Use the round number assuming there are oracle responses.
-        // Using the round number during execution counts as an oracle.
-        // Accessing the round number in single-leader rounds where we are not the leader
-        // is not currently supported.
-        let round = match self.round_for_new_proposal(&info, &identity, true).await? {
-            Either::Left(round) => round.multi_leader(),
-            Either::Right(_) => None,
-        };
+        let round = self.round_for_oracle(&info, &identity).await?;
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
         let (block, _) = self
@@ -1709,13 +1707,8 @@ impl<Env: Environment> ChainClient<Env> {
             }
         } else if let Some(pending_proposal) = pending_proposal {
             // Otherwise we are free to propose our own pending block.
-            // Use the round number assuming there are oracle responses.
-            // Using the round number during execution counts as an oracle.
             let proposed_block = pending_proposal.block;
-            let round = match self.round_for_new_proposal(&info, &owner, true).await? {
-                Either::Left(round) => round.multi_leader(),
-                Either::Right(_) => None,
-            };
+            let round = self.round_for_oracle(&info, &owner).await?;
             let (block, _) = self
                 .client
                 .stage_block_execution(proposed_block, round, pending_proposal.blobs.clone())
@@ -1854,6 +1847,24 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
+    /// Returns the number for the round number oracle to use when staging a block proposal.
+    async fn round_for_oracle(
+        &self,
+        info: &ChainInfo,
+        identity: &AccountOwner,
+    ) -> Result<Option<u32>, Error> {
+        // Pretend we do use oracles: If we don't, the round number is never read anyway.
+        match self.round_for_new_proposal(info, identity, true).await {
+            // If it is a multi-leader round, use its number for the oracle.
+            Ok(Either::Left(round)) => Ok(round.multi_leader()),
+            // If there is no suitable round with oracles, use None: If it works without oracles,
+            // the block won't read the value. If it returns a timeout, it will be a single-leader
+            // round, in which the oracle returns None.
+            Err(Error::BlockProposalError(_)) | Ok(Either::Right(_)) => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
+
     /// Returns a round in which we can propose a new block or the given one, if possible.
     async fn round_for_new_proposal(
         &self,
@@ -1894,7 +1905,7 @@ impl<Env: Environment> ChainClient<Env> {
             .values()
             .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
             .collect();
-        if manager.can_propose(identity, round, seed, &current_committee) {
+        if manager.should_propose(identity, round, seed, &current_committee) {
             return Ok(Either::Left(round));
         }
         if let Some(timeout) = info.round_timeout() {

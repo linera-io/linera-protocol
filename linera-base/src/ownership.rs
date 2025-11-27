@@ -156,8 +156,17 @@ impl ChainOwnership {
     }
 
     /// Returns `true` if this is an owner or super owner.
-    pub fn verify_owner(&self, owner: &AccountOwner) -> bool {
-        self.super_owners.contains(owner) || self.owners.contains_key(owner)
+    pub fn is_owner(&self, owner: &AccountOwner) -> bool {
+        self.super_owners.contains(owner)
+            || self.owners.contains_key(owner)
+            || self.first_leader.as_ref().is_some_and(|fl| fl == owner)
+    }
+
+    /// Returns `true` if this is an owner or if `open_multi_leader_rounds`.
+    pub fn is_multi_leader_owner(&self, owner: &AccountOwner) -> bool {
+        self.open_multi_leader_rounds
+            || self.owners.contains_key(owner)
+            || self.super_owners.contains(owner)
     }
 
     /// Returns the duration of the given round.
@@ -195,6 +204,12 @@ impl ChainOwnership {
     /// Returns an iterator over all super owners, followed by all owners.
     pub fn all_owners(&self) -> impl Iterator<Item = &AccountOwner> {
         self.super_owners.iter().chain(self.owners.keys())
+    }
+
+    /// Returns whether fallback mode is enabled on this chain, i.e. the fallback duration
+    /// is less than `TimeDelta::MAX`.
+    pub fn has_fallback(&self) -> bool {
+        self.timeout_config.fallback_duration < TimeDelta::MAX
     }
 
     /// Returns the round following the specified one, if any.

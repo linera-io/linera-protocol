@@ -74,7 +74,7 @@ use allocative::Allocative;
 use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoError, ValidatorSecretKey},
+    crypto::{AccountPublicKey, ValidatorSecretKey},
     data_types::{Blob, BlockHeight, Epoch, Round, Timestamp},
     ensure,
     identifiers::{AccountOwner, BlobId, ChainId},
@@ -623,28 +623,20 @@ where
 
     /// Returns whether the signer is a valid owner and allowed to propose a block in the
     /// proposal's round.
-    pub fn verify_owner(
-        &self,
-        proposal_owner: &AccountOwner,
-        proposal_round: Round,
-    ) -> Result<bool, CryptoError> {
+    ///
+    /// Super owners can always propose, except in `Validator` rounds, but it is recommended that
+    /// they only propose in `Fast` rounds. In multi-leader rounds, any regular owner can propose
+    /// (or anyone, if `open_multi_leader_rounds`) and in other rounds there is only one leader.
+    pub fn can_propose(&self, owner: &AccountOwner, round: Round) -> bool {
         let ownership = self.ownership.get();
-        if ownership.super_owners.contains(proposal_owner) {
-            return Ok(true);
+        if ownership.super_owners.contains(owner) {
+            return !round.is_validator();
         }
-
-        Ok(match proposal_round {
-            Round::Fast => {
-                false // Only super owners can propose in the first round.
-            }
-            Round::MultiLeader(_) => {
-                // Not in leader rotation mode; any owner is allowed to propose.
-                ownership.open_multi_leader_rounds || ownership.owners.contains_key(proposal_owner)
-            }
-            Round::SingleLeader(_) | Round::Validator(_) => {
-                self.round_leader(proposal_round) == Some(proposal_owner)
-            }
-        })
+        match round {
+            Round::Fast => false,
+            Round::MultiLeader(_) => ownership.is_multi_leader_owner(owner),
+            Round::SingleLeader(_) | Round::Validator(_) => self.round_leader(round) == Some(owner),
+        }
     }
 
     /// Returns the leader who is allowed to propose a block in the given round, or `None` if every
@@ -850,9 +842,9 @@ impl ChainManagerInfo {
             .map(|vote| Box::new(vote.value.clone()));
     }
 
-    /// Returns whether the `identity` is allowed to propose a block in `round`.
-    /// This is dependent on the type of round and whether `identity` is a validator or (super)owner.
-    pub fn can_propose(
+    /// Returns whether the `identity` is allowed to propose a block in `round`, except that it
+    /// returns `false` for super owners in single-leader rounds unless they are the leader.
+    pub fn should_propose(
         &self,
         identity: &AccountOwner,
         round: Round,
@@ -861,7 +853,7 @@ impl ChainManagerInfo {
     ) -> bool {
         match round {
             Round::Fast => self.ownership.super_owners.contains(identity),
-            Round::MultiLeader(_) => true,
+            Round::MultiLeader(_) => self.ownership.is_multi_leader_owner(identity),
             Round::SingleLeader(_) | Round::Validator(_) => {
                 let distribution = calculate_distribution(self.ownership.owners.iter());
                 let fallback_distribution = calculate_distribution(current_committee.iter());
