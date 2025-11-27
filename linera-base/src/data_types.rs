@@ -558,10 +558,11 @@ impl Display for Amount {
         // For now, we never trim non-zero digits so we don't lose any precision.
         let precision = f.precision().unwrap_or(0).max(fractional_part.len());
         let sign = if f.sign_plus() && self.0 > 0 { "+" } else { "" };
+        let dot = if precision == 0 { "" } else { "." };
         // The amount of padding: desired width minus sign, point and number of digits.
         let pad_width = f.width().map_or(0, |w| {
             w.saturating_sub(precision)
-                .saturating_sub(sign.len() + integer_part.len() + 1)
+                .saturating_sub(sign.len() + integer_part.len() + dot.len())
         });
         let left_pad = match f.align() {
             None | Some(fmt::Alignment::Right) => pad_width,
@@ -572,7 +573,7 @@ impl Display for Amount {
         for _ in 0..left_pad {
             write!(f, "{}", f.fill())?;
         }
-        write!(f, "{sign}{integer_part}.{fractional_part:0<precision$}")?;
+        write!(f, "{sign}{integer_part}{dot}{fractional_part:0<precision$}")?;
         for _ in left_pad..pad_width {
             write!(f, "{}", f.fill())?;
         }
@@ -1650,13 +1651,13 @@ mod tests {
 
     #[test]
     fn display_amount() {
-        assert_eq!("1.", Amount::ONE.to_string());
-        assert_eq!("1.", Amount::from_str("1.").unwrap().to_string());
+        assert_eq!("1", Amount::ONE.to_string());
+        assert_eq!("1", Amount::from_str("1.").unwrap().to_string());
         assert_eq!(
             Amount(10_000_000_000_000_000_000),
             Amount::from_str("10").unwrap()
         );
-        assert_eq!("10.", Amount(10_000_000_000_000_000_000).to_string());
+        assert_eq!("10", Amount(10_000_000_000_000_000_000).to_string());
         assert_eq!(
             "1001.3",
             (Amount::from_str("1.1")
