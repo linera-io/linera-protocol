@@ -79,6 +79,7 @@ const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;
 struct TestEnvironment<S: Storage> {
     committee: Committee,
     worker: WorkerState<S>,
+    executing_worker: WorkerState<S>,
     admin_keypair: AccountSecretKey,
     admin_description: ChainDescription,
     other_chains: BTreeMap<ChainId, ChainDescription>,
@@ -108,7 +109,6 @@ where
         has_long_lived_services: bool,
         amount: Amount,
     ) -> Result<Self, anyhow::Error> {
-        let storage = builder.build().await?;
         let validator_keypair = ValidatorKeypair::generate();
         let account_secret = AccountSecretKey::generate();
         let committee = Committee::make_simple(vec![(
@@ -127,39 +127,51 @@ where
         };
         let admin_description = ChainDescription::new(origin, config, Timestamp::from(0));
         let committee_blob = Blob::new_committee(bcs::to_bytes(&committee).unwrap());
-        storage
-            .write_blob(&Blob::new_chain_description(&admin_description))
-            .await
-            .expect("writing a blob should not fail");
-        storage
-            .write_blob(&committee_blob)
-            .await
-            .expect("writing a blob should succeed");
-        storage
-            .write_network_description(&NetworkDescription {
-                admin_chain_id: admin_description.id(),
-                genesis_config_hash: CryptoHash::test_hash("genesis config"),
-                genesis_timestamp: Timestamp::from(0),
-                genesis_committee_blob_hash: committee_blob.id().hash,
-                name: "test network".to_string(),
-            })
-            .await
-            .expect("writing a network description should not fail");
 
-        let worker = WorkerState::new(
-            "Single validator node".to_string(),
-            Some(validator_keypair.secret_key),
-            storage,
-            5_000,
-            10_000,
-        )
-        .with_allow_inactive_chains(is_client)
-        .with_allow_messages_from_deprecated_epochs(is_client)
-        .with_long_lived_services(has_long_lived_services)
-        .with_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
+        let mut make_worker = async |keypair: ValidatorKeypair| {
+            let storage = builder
+                .build()
+                .await
+                .expect("building storage should not fail");
+            storage
+                .write_blob(&Blob::new_chain_description(&admin_description))
+                .await
+                .expect("writing a blob should not fail");
+            storage
+                .write_blob(&committee_blob)
+                .await
+                .expect("writing a blob should succeed");
+            storage
+                .write_network_description(&NetworkDescription {
+                    admin_chain_id: admin_description.id(),
+                    genesis_config_hash: CryptoHash::test_hash("genesis config"),
+                    genesis_timestamp: Timestamp::from(0),
+                    genesis_committee_blob_hash: committee_blob.id().hash,
+                    name: "test network".to_string(),
+                })
+                .await
+                .expect("writing a network description should not fail");
+
+            WorkerState::new(
+                "Single validator node".to_string(),
+                Some(keypair.secret_key),
+                storage,
+                5_000,
+                10_000,
+            )
+            .with_allow_inactive_chains(is_client)
+            .with_allow_messages_from_deprecated_epochs(is_client)
+            .with_long_lived_services(has_long_lived_services)
+            .with_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS))
+        };
+
+        let worker = make_worker(ValidatorKeypair::generate()).await;
+        let executing_worker = make_worker(validator_keypair).await;
+
         Ok(Self {
             committee,
             worker,
+            executing_worker,
             admin_description,
             admin_keypair: account_secret,
             other_chains: BTreeMap::new(),
@@ -178,12 +190,18 @@ where
         &self.worker
     }
 
+    fn executing_worker(&self) -> &WorkerState<S> {
+        &self.executing_worker
+    }
+
     fn admin_public_key(&self) -> AccountPublicKey {
         self.admin_keypair.public()
     }
 
     pub async fn write_blobs(&mut self, blobs: &[Blob]) -> Result<(), linera_views::ViewError> {
-        self.worker.storage.write_blobs(blobs).await
+        self.worker.storage.write_blobs(blobs).await?;
+        self.executing_worker.storage.write_blobs(blobs).await?;
+        Ok(())
     }
 
     pub async fn register_mock_application(
@@ -192,6 +210,12 @@ where
         index: u32,
     ) -> Result<(ApplicationId, MockApplication), anyhow::Error> {
         let mut chain = self.worker.storage.load_chain(chain_id).await?;
+        let _ = chain
+            .execution_state
+            .register_mock_application(index)
+            .await?;
+        chain.save().await?;
+        let mut chain = self.executing_worker.storage.load_chain(chain_id).await?;
         let (application_id, application, _) = chain
             .execution_state
             .register_mock_application(index)
@@ -233,6 +257,11 @@ where
             .create_chain(description.clone())
             .await
             .unwrap();
+        self.executing_worker
+            .storage
+            .create_chain(description.clone())
+            .await
+            .unwrap();
         description
     }
 
@@ -263,6 +292,11 @@ where
             .create_chain(description.clone())
             .await
             .unwrap();
+        self.executing_worker
+            .storage
+            .create_chain(description.clone())
+            .await
+            .unwrap();
         description
     }
 
@@ -280,11 +314,14 @@ where
         let vote = LiteVote::new(
             LiteValue::new(&value),
             round,
-            self.worker.chain_worker_config.key_pair().unwrap(),
+            self.executing_worker
+                .chain_worker_config
+                .key_pair()
+                .unwrap(),
         );
         let mut builder = SignatureAggregator::new(value, round, &self.committee);
         builder
-            .append(self.worker.public_key(), vote.signature)
+            .append(self.executing_worker.public_key(), vote.signature)
             .unwrap()
             .unwrap()
     }
@@ -606,13 +643,13 @@ where
     };
     bad_signature_block_proposal.signature = bad_signature;
     assert_matches!(
-        env.worker()
+        env.executing_worker()
             .handle_block_proposal(bad_signature_block_proposal)
             .await,
             Err(WorkerError::CryptoError(error))
                 if matches!(error, linera_base::crypto::CryptoError::InvalidSignature {..})
     );
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
@@ -647,7 +684,7 @@ where
         .await
         .unwrap();
     assert_matches!(
-    env.worker()
+    env.executing_worker()
         .handle_block_proposal(zero_amount_block_proposal)
         .await,
         Err(
@@ -656,7 +693,7 @@ where
             execution_error, ChainExecutionContext::Operation(_)
         ) if matches!(**execution_error, ExecutionError::IncorrectTransferAmount))
     );
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
@@ -696,7 +733,9 @@ where
             .unwrap();
         // Timestamp too far in the future
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await,
+            env.executing_worker()
+                .handle_block_proposal(block_proposal)
+                .await,
             Err(WorkerError::InvalidTimestamp { .. })
         );
     }
@@ -712,7 +751,7 @@ where
             .into_first_proposal(owner, &signer)
             .await
             .unwrap();
-        let future = env.worker().handle_block_proposal(block_proposal);
+        let future = env.executing_worker().handle_block_proposal(block_proposal);
         clock.set(block_0_time);
         future.await?;
 
@@ -736,7 +775,7 @@ where
         );
         env.make_certificate(value)
     };
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
@@ -748,7 +787,7 @@ where
             .unwrap();
         // Timestamp older than previous one
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await,
+            env.executing_worker().handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(error))
                 if matches!(*error, ChainError::InvalidBlockTimestamp { .. })
         );
@@ -785,12 +824,12 @@ where
         .await
         .unwrap();
     assert_matches!(
-        env.worker()
+        env.executing_worker()
             .handle_block_proposal(unknown_sender_block_proposal)
             .await,
         Err(WorkerError::InvalidOwner)
     );
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
@@ -839,7 +878,7 @@ where
         .unwrap();
 
     assert_matches!(
-        env.worker().handle_block_proposal(block_proposal1.clone()).await,
+        env.executing_worker().handle_block_proposal(block_proposal1.clone()).await,
         Err(WorkerError::ChainError(error)) if matches!(
             *error,
             ChainError::UnexpectedBlockHeight {
@@ -847,16 +886,16 @@ where
                 found_block_height: BlockHeight(1)
             })
     );
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
 
     drop(chain);
-    env.worker()
+    env.executing_worker()
         .handle_block_proposal(block_proposal0.clone())
         .await?;
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     let block = chain.manager.validated_vote().unwrap().value().block();
     // Multi-leader round - it's not confirmed yet.
@@ -865,10 +904,10 @@ where
     let block_certificate0 =
         env.make_certificate(chain.manager.validated_vote().unwrap().value().clone());
     drop(chain);
-    env.worker()
+    env.executing_worker()
         .handle_validated_certificate(block_certificate0)
         .await?;
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     let block = chain.manager.confirmed_vote().unwrap().value().block();
     // Should be confirmed after handling the certificate.
@@ -876,23 +915,23 @@ where
     assert!(chain.manager.validated_vote().is_none());
     drop(chain);
 
-    env.worker()
+    env.executing_worker()
         .handle_confirmed_certificate(certificate0, None)
         .await?;
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     drop(chain);
-    env.worker()
+    env.executing_worker()
         .handle_block_proposal(block_proposal1.clone())
         .await?;
 
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     let block = chain.manager.validated_vote().unwrap().value().block();
     assert!(block.matches_proposed_block(&block_proposal1.content.block));
     assert!(chain.manager.confirmed_vote().is_none());
     drop(chain);
     assert_matches!(
-        env.worker().handle_block_proposal(block_proposal0).await,
+        env.executing_worker().handle_block_proposal(block_proposal0).await,
         Err(WorkerError::ChainError(error)) if matches!(
             *error,
             ChainError::UnexpectedBlockHeight {
@@ -969,16 +1008,16 @@ where
 
     // The worker handles certificates 0 and 2 - this should succeed, and the worker
     // should now have block 0 fully processed, and block 2 preprocessed.
-    env.worker()
+    env.executing_worker()
         .handle_confirmed_certificate(certificate0, None)
         .await?;
 
-    env.worker()
+    env.executing_worker()
         .handle_confirmed_certificate(certificate2.clone(), None)
         .await?;
 
     {
-        let chain = env.worker().chain_state_view(chain_1).await?;
+        let chain = env.executing_worker().chain_state_view(chain_1).await?;
         assert!(chain.is_active());
         assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(1));
     }
@@ -986,7 +1025,7 @@ where
     // The proposal is at height 3 - it should fail until the chain is fully processed up
     // to height 2.
     let proposal_result = env
-        .worker()
+        .executing_worker()
         .handle_block_proposal(block_proposal1.clone())
         .await;
     assert_matches!(
@@ -998,31 +1037,31 @@ where
     );
 
     // Handle the certificate in the gap.
-    env.worker()
+    env.executing_worker()
         .handle_confirmed_certificate(certificate1, None)
         .await?;
 
     {
-        let chain = env.worker().chain_state_view(chain_1).await?;
+        let chain = env.executing_worker().chain_state_view(chain_1).await?;
         assert!(chain.is_active());
         assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(2));
     }
 
     // ...and the one that has been preprocessed before, again, as it is not automatically
     // re-processed.
-    env.worker()
+    env.executing_worker()
         .handle_confirmed_certificate(certificate2, None)
         .await?;
 
     {
-        let chain = env.worker().chain_state_view(chain_1).await?;
+        let chain = env.executing_worker().chain_state_view(chain_1).await?;
         assert!(chain.is_active());
         assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(3));
     }
 
     // The proposal should now succeed.
     let proposal_result = env
-        .worker()
+        .executing_worker()
         .handle_block_proposal(block_proposal1.clone())
         .await;
     assert_matches!(proposal_result, Ok(_));
@@ -1109,7 +1148,7 @@ where
     ));
     // Missing earlier blocks, but the certificate will be preprocessed.
     assert_matches!(
-        env.worker()
+        env.executing_worker()
             .handle_confirmed_certificate(certificate1.clone(), None)
             .await,
         Ok(_)
@@ -1117,10 +1156,10 @@ where
 
     // Run transfers
     let notifications = Arc::new(Mutex::new(Vec::new()));
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &notifications)
         .await?;
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &notifications)
         .await?;
     assert_eq!(
@@ -1165,7 +1204,7 @@ where
             .unwrap();
         // Insufficient funding
         assert_matches!(
-                env.worker().handle_block_proposal(block_proposal).await,
+                env.executing_worker().handle_block_proposal(block_proposal).await,
                 Err(
                     WorkerError::ChainError(error)
                 ) if matches!(&*error, ChainError::ExecutionError(
@@ -1221,7 +1260,7 @@ where
             .unwrap();
         // Inconsistent received messages.
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await,
+            env.executing_worker().handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::UnexpectedMessage { .. })
         );
@@ -1247,7 +1286,7 @@ where
             .unwrap();
         // Skipped message.
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await,
+            env.executing_worker().handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         );
@@ -1298,7 +1337,7 @@ where
             .unwrap();
         // Inconsistent order in received messages (heights).
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await,
+            env.executing_worker().handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         );
@@ -1324,7 +1363,7 @@ where
             .await
             .unwrap();
         // Taking the first message only is ok.
-        env.worker()
+        env.executing_worker()
             .handle_block_proposal(block_proposal.clone())
             .await?;
         let certificate: ConfirmedBlockCertificate = env.make_certificate(ConfirmedBlock::new(
@@ -1346,7 +1385,7 @@ where
             }
             .with(block_proposal.content.block),
         ));
-        env.worker()
+        env.executing_worker()
             .handle_confirmed_certificate(certificate.clone(), None)
             .await?;
 
@@ -1380,7 +1419,7 @@ where
             .into_first_proposal(recipient_owner, &signer)
             .await
             .unwrap();
-        env.worker()
+        env.executing_worker()
             .handle_block_proposal(block_proposal.clone())
             .await?;
     }
@@ -1414,14 +1453,14 @@ where
         .await
         .unwrap();
     assert_matches!(
-        env.worker().handle_block_proposal(block_proposal).await,
+        env.executing_worker().handle_block_proposal(block_proposal).await,
         Err(
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
                 execution_error, ChainExecutionContext::Operation(_)
         ) if matches!(**execution_error, ExecutionError::InsufficientBalance { .. }))
     );
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
@@ -1455,10 +1494,12 @@ where
         .await
         .unwrap();
 
-    let (chain_info_response, _actions) =
-        env.worker().handle_block_proposal(block_proposal).await?;
-    chain_info_response.check(env.worker().public_key())?;
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let (chain_info_response, _actions) = env
+        .executing_worker()
+        .handle_block_proposal(block_proposal)
+        .await?;
+    chain_info_response.check(env.executing_worker().public_key())?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none()); // It was a multi-leader
                                                        // round.
@@ -1467,11 +1508,11 @@ where
     drop(chain);
 
     let (chain_info_response, _actions) = env
-        .worker()
+        .executing_worker()
         .handle_validated_certificate(validated_certificate)
         .await?;
-    chain_info_response.check(env.worker().public_key())?;
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    chain_info_response.check(env.executing_worker().public_key())?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.validated_vote().is_none()); // Should be confirmed by now.
     let pending_vote = chain.manager.confirmed_vote().unwrap().lite();
@@ -1510,11 +1551,14 @@ where
         .unwrap();
 
     let (response, _actions) = env
-        .worker()
+        .executing_worker()
         .handle_block_proposal(block_proposal.clone())
         .await?;
-    response.check(env.worker().public_key())?;
-    let (replay_response, _actions) = env.worker().handle_block_proposal(block_proposal).await?;
+    response.check(env.executing_worker().public_key())?;
+    let (replay_response, _actions) = env
+        .executing_worker()
+        .handle_block_proposal(block_proposal)
+        .await?;
     // Workaround lack of equality.
     assert_eq!(
         CryptoHash::new(&*response.info),
@@ -1553,7 +1597,7 @@ where
         )
         .await;
     assert_matches!(
-        env.worker()
+        env.executing_worker()
             .fully_handle_certificate_with_notifications(certificate, &())
             .await,
         Err(WorkerError::BlobsNotFound(error))
@@ -1604,7 +1648,7 @@ where
     );
     let certificate = env.make_certificate(value);
     let info = env
-        .worker()
+        .executing_worker()
         .fully_handle_certificate_with_notifications(certificate, &())
         .await?
         .info;
@@ -1646,7 +1690,7 @@ where
     // This fails because `make_simple_transfer_certificate` uses `sender_key_pair.public()` to
     // compute the hash of the execution state.
     assert_matches!(
-        env.worker()
+        env.executing_worker()
             .fully_handle_certificate_with_notifications(certificate, &())
             .await,
         Err(WorkerError::IncorrectOutcome { .. })
@@ -1684,10 +1728,10 @@ where
         )
         .await;
     // Replays are ignored.
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate, &())
         .await?;
     Ok(())
@@ -1741,10 +1785,10 @@ where
             vec![],
         )
         .await;
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get());
     assert_eq!(
@@ -1785,7 +1829,7 @@ where
     );
     assert_eq!(chain.confirmed_log.count(), 1);
     assert_eq!(Some(certificate.hash()), chain.tip_state.get().block_hash);
-    let chain = env.worker().chain_state_view(chain_2).await?;
+    let chain = env.executing_worker().chain_state_view(chain_2).await?;
     assert!(chain.is_active());
     Ok(())
 }
@@ -1823,10 +1867,10 @@ where
             vec![],
         )
         .await;
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
-    let new_sender_chain = env.worker().chain_state_view(chain_1).await?;
+    let new_sender_chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(new_sender_chain.is_active());
     assert_eq!(
         Amount::ZERO,
@@ -1841,7 +1885,7 @@ where
         Some(certificate.hash()),
         new_sender_chain.tip_state.get().block_hash
     );
-    let new_recipient_chain = env.worker().chain_state_view(chain_2).await?;
+    let new_recipient_chain = env.executing_worker().chain_state_view(chain_2).await?;
     assert!(new_recipient_chain.is_active());
     assert_eq!(
         Amount::MAX,
@@ -1878,10 +1922,10 @@ where
             vec![],
         )
         .await;
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
 
@@ -1928,12 +1972,12 @@ where
             vec![],
         )
         .await;
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
     // Check the sender chain
-    let chain_1_state = env.worker().chain_state_view(chain_1).await?;
+    let chain_1_state = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain_1_state.is_active());
     assert_eq!(
         Amount::ZERO,
@@ -1941,7 +1985,7 @@ where
     );
 
     // Check the receiver chain has the inbox with the expected message
-    let chain_2_state = env.worker().chain_state_view(chain_2).await?;
+    let chain_2_state = env.executing_worker().chain_state_view(chain_2).await?;
     let inbox = chain_2_state
         .inboxes
         .try_load_entry(&chain_1)
@@ -2010,10 +2054,10 @@ where
             vec![],
         )
         .await;
-    env.worker()
+    env.executing_worker()
         .handle_cross_chain_request(update_recipient_direct(chain_2, &certificate.clone()))
         .await?;
-    let chain = env.worker().chain_state_view(chain_2).await?;
+    let chain = env.executing_worker().chain_state_view(chain_2).await?;
     assert!(chain.is_active());
     assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
     assert_eq!(BlockHeight::ZERO, chain.tip_state.get().next_block_height);
@@ -2083,12 +2127,12 @@ where
         )
         .await;
     assert!(env
-        .worker()
+        .executing_worker()
         .handle_cross_chain_request(update_recipient_direct(chain_2, &certificate))
         .await?
         .cross_chain_requests
         .is_empty());
-    let chain = env.worker().chain_state_view(chain_2).await?;
+    let chain = env.executing_worker().chain_state_view(chain_2).await?;
     // The target chain did not receive the message
     assert!(chain.inboxes.indices().await?.is_empty());
     Ok(())
@@ -2125,7 +2169,7 @@ where
         .await;
     // An inactive target chain is created and it acknowledges the message.
     let actions = env
-        .worker()
+        .executing_worker()
         .handle_cross_chain_request(update_recipient_direct(chain_2, &certificate))
         .await?;
     assert_matches!(
@@ -2142,7 +2186,7 @@ where
             }
         }]
     );
-    let chain = env.worker().chain_state_view(chain_2).await?;
+    let chain = env.executing_worker().chain_state_view(chain_2).await?;
     assert!(!chain.inboxes.indices().await?.is_empty());
     Ok(())
 }
@@ -2174,7 +2218,7 @@ where
     let chain_2 = chain_2_desc.id();
     let chain_3 = chain_3_desc.id();
     assert_eq!(
-        env.worker()
+        env.executing_worker()
             .query_application(chain_1, Query::System(SystemQuery), None)
             .await?,
         QueryOutcome {
@@ -2186,7 +2230,7 @@ where
         }
     );
     assert_eq!(
-        env.worker()
+        env.executing_worker()
             .query_application(chain_2, Query::System(SystemQuery), None)
             .await?,
         QueryOutcome {
@@ -2211,7 +2255,7 @@ where
         .await;
 
     let info = env
-        .worker()
+        .executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?
         .info;
@@ -2221,7 +2265,7 @@ where
     assert_eq!(Some(certificate.hash()), info.block_hash);
     assert!(info.manager.pending.is_none());
     assert_eq!(
-        env.worker()
+        env.executing_worker()
             .query_application(chain_1, Query::System(SystemQuery), None)
             .await?,
         QueryOutcome {
@@ -2256,12 +2300,12 @@ where
             vec![],
         )
         .await;
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
     assert_eq!(
-        env.worker()
+        env.executing_worker()
             .query_application(chain_2, Query::System(SystemQuery), None)
             .await?,
         QueryOutcome {
@@ -2274,7 +2318,7 @@ where
     );
 
     {
-        let recipient_chain = env.worker().chain_state_view(chain_2).await?;
+        let recipient_chain = env.executing_worker().chain_state_view(chain_2).await?;
         assert!(recipient_chain.is_active());
         assert_eq!(
             *recipient_chain.execution_state.system.balance.get(),
@@ -2296,7 +2340,10 @@ where
         assert_eq!(recipient_chain.received_log.count(), 1);
     }
     let query = ChainInfoQuery::new(chain_2).with_received_log_excluding_first_n(0);
-    let (response, _actions) = env.worker().handle_chain_info_query(query).await?;
+    let (response, _actions) = env
+        .executing_worker()
+        .handle_chain_info_query(query)
+        .await?;
     assert_eq!(response.info.requested_received_log.len(), 1);
     assert_eq!(
         response.info.requested_received_log[0],
@@ -2339,7 +2386,7 @@ where
         .await;
 
     let info = env
-        .worker()
+        .executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?
         .info;
@@ -2405,7 +2452,7 @@ where
         )
         .await;
 
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
 
@@ -2425,7 +2472,7 @@ where
         )
         .await;
 
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
 
@@ -2444,7 +2491,7 @@ where
         )
         .await;
 
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate2.clone(), &())
         .await?;
 
@@ -2497,12 +2544,12 @@ where
         )
         .await;
 
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
     {
-        let chain = env.worker().chain_state_view(chain_2).await?;
+        let chain = env.executing_worker().chain_state_view(chain_2).await?;
         assert!(chain.is_active());
         assert_no_removed_bundles(&chain).await;
     }
@@ -2538,7 +2585,7 @@ where
         )
         .await;
 
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate3.clone(), &())
         .await?;
 
@@ -2598,11 +2645,11 @@ where
                 .with_authenticated_owner(Some(env.admin_public_key().into())),
         ),
     ));
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
     {
-        let admin_chain = env.worker().chain_state_view(admin_id).await?;
+        let admin_chain = env.executing_worker().chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
         assert_no_removed_bundles(&admin_chain).await;
         assert_eq!(
@@ -2670,12 +2717,12 @@ where
                 .with_simple_transfer(user_id, Amount::from_tokens(2)),
         ),
     ));
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
     {
         // The child is active and has not migrated yet.
-        let user_chain = env.worker().chain_state_view(user_id).await?;
+        let user_chain = env.executing_worker().chain_state_view(user_id).await?;
         assert!(user_chain.is_active());
         assert_eq!(
             BlockHeight::ZERO,
@@ -2753,11 +2800,11 @@ where
                 .with_operation(SystemOperation::ProcessNewEpoch(Epoch::from(1))),
         ),
     ));
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate3, &())
         .await?;
     {
-        let user_chain = env.worker().chain_state_view(user_id).await?;
+        let user_chain = env.executing_worker().chain_state_view(user_id).await?;
         assert!(user_chain.is_active());
         assert_eq!(
             BlockHeight::from(1),
@@ -2853,17 +2900,17 @@ where
             )),
         ),
     ));
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
 
     // Try to execute the transfer.
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
 
     // The transfer was started..
-    let user_chain = env.worker().chain_state_view(user_id).await?;
+    let user_chain = env.executing_worker().chain_state_view(user_id).await?;
     assert!(user_chain.is_active());
     assert_eq!(
         BlockHeight::from(1),
@@ -2876,7 +2923,7 @@ where
     assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
     // .. and the message has gone through.
-    let admin_chain = env.worker().chain_state_view(admin_id).await?;
+    let admin_chain = env.executing_worker().chain_state_view(admin_id).await?;
     assert!(admin_chain.is_active());
     assert_eq!(admin_chain.inboxes.indices().await?.len(), 1);
     matches!(
@@ -2985,18 +3032,18 @@ where
         ),
     ));
 
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
 
     // Try to execute the transfer from the user chain to the admin chain.
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
 
     {
         // The transfer was started..
-        let user_chain = env.worker().chain_state_view(user_id).await?;
+        let user_chain = env.executing_worker().chain_state_view(user_id).await?;
         assert!(user_chain.is_active());
         assert_eq!(
             BlockHeight::from(1),
@@ -3009,7 +3056,7 @@ where
         assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
         // .. but the message hasn't gone through.
-        let admin_chain = env.worker().chain_state_view(admin_id).await?;
+        let admin_chain = env.executing_worker().chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
         assert!(admin_chain.inboxes.indices().await?.is_empty());
     }
@@ -3052,13 +3099,13 @@ where
                 }),
         ),
     ));
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate2.clone(), &())
         .await?;
 
     {
         // The admin chain has an anticipated message.
-        let admin_chain = env.worker().chain_state_view(admin_id).await?;
+        let admin_chain = env.executing_worker().chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
         assert!(admin_chain
             .inboxes
@@ -3073,13 +3120,13 @@ where
 
     // Try again to execute the transfer from the user chain to the admin chain.
     // This time, the epoch verification should be overruled.
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
 
     {
         // The admin chain has no more anticipated messages.
-        let admin_chain = env.worker().chain_state_view(admin_id).await?;
+        let admin_chain = env.executing_worker().chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
         assert_no_removed_bundles(&admin_chain).await;
     }
@@ -3126,7 +3173,7 @@ where
         ),
     ));
 
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate3, &())
         .await?;
 
@@ -3331,13 +3378,13 @@ where
         })
         .with_authenticated_owner(Some(owner0));
     let (block0, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block0, None, vec![])
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
     let response = env
-        .worker()
+        .executing_worker()
         .fully_handle_certificate_with_notifications(certificate0, &())
         .await?;
 
@@ -3351,14 +3398,14 @@ where
         .into_proposal_with_round(owner1, &signer, Round::SingleLeader(0))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0)
         .with_simple_transfer(chain_1, small_transfer)
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
 
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::SingleLeader(0)))
@@ -3366,7 +3413,10 @@ where
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
     let query = ChainInfoQuery::new(chain_1).with_timeout(BlockHeight(1), Round::SingleLeader(0));
-    let result = env.worker().handle_chain_info_query(query.clone()).await;
+    let result = env
+        .executing_worker()
+        .handle_chain_info_query(query.clone())
+        .await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::NotTimedOutYet(_))
     );
@@ -3375,7 +3425,10 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let (response, _) = env.worker().handle_chain_info_query(query).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_chain_info_query(query)
+        .await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout = Timeout::new(chain_1, BlockHeight::from(1), Epoch::from(0));
 
@@ -3384,9 +3437,9 @@ where
     let certificate_timeout = vote
         .with_value(value_timeout.clone())
         .unwrap()
-        .into_certificate(env.worker().public_key());
+        .into_certificate(env.executing_worker().public_key());
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_timeout_certificate(certificate_timeout)
         .await?;
     assert_eq!(response.info.manager.leader, Some(owner0));
@@ -3394,7 +3447,7 @@ where
     // Now owner 0 can propose a block, but owner 1 can't.
     let proposed_block1 = make_child_block(&value0).with_simple_transfer(chain_1, small_transfer);
     let (block1, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block1.clone(), None, vec![])
         .await?;
     let proposal1_wrong_owner = proposed_block1
@@ -3404,7 +3457,7 @@ where
         .await
         .unwrap();
     let result = env
-        .worker()
+        .executing_worker()
         .handle_block_proposal(proposal1_wrong_owner)
         .await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
@@ -3413,7 +3466,10 @@ where
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
         .await
         .unwrap();
-    let (response, _) = env.worker().handle_block_proposal(proposal1).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_block_proposal(proposal1)
+        .await?;
     let value1 = ValidatedBlock::new(block1.clone());
 
     // If we send the validated block certificate to the worker, it votes to confirm.
@@ -3421,9 +3477,9 @@ where
     let certificate1 = vote
         .with_value(value1.clone())
         .unwrap()
-        .into_certificate(env.worker().public_key());
+        .into_certificate(env.executing_worker().public_key());
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_validated_certificate(certificate1.clone())
         .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
@@ -3434,7 +3490,7 @@ where
     let certificate_timeout =
         env.make_certificate_with_round(value_timeout.clone(), Round::SingleLeader(4));
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_timeout_certificate(certificate_timeout)
         .await?;
     assert_eq!(response.info.manager.leader, Some(owner1));
@@ -3444,19 +3500,19 @@ where
     let amount = Amount::from_tokens(1);
     let proposed_block2 = make_child_block(&value0.clone()).with_simple_transfer(chain_1, amount);
     let (block2, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block2.clone(), None, vec![])
         .await?;
 
     // Since round 3 is already over, the validator won't vote for a validated block from round 3.
     let value2 = ValidatedBlock::new(block2.clone());
     let certificate = env.make_certificate_with_round(value2.clone(), Round::SingleLeader(2));
-    env.worker()
+    env.executing_worker()
         .handle_validated_certificate(certificate)
         .await?;
     let query_values = ChainInfoQuery::new(chain_1).with_manager_values();
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_chain_info_query(query_values.clone())
         .await?;
     let manager = response.info.manager;
@@ -3472,7 +3528,10 @@ where
         .into_proposal_with_round(owner1, &signer, Round::SingleLeader(5))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal.clone()).await;
+    let result = env
+        .executing_worker()
+        .handle_block_proposal(proposal.clone())
+        .await;
     assert_matches!(result, Err(WorkerError::ChainError(error))
          if matches!(*error, ChainError::HasIncompatibleConfirmedVote(_, _))
     );
@@ -3489,9 +3548,12 @@ where
     .await
     .unwrap();
     let lite_value2 = LiteValue::new(&value2);
-    let (_, _) = env.worker().handle_block_proposal(proposal).await?;
+    let (_, _) = env
+        .executing_worker()
+        .handle_block_proposal(proposal)
+        .await?;
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_chain_info_query(query_values.clone())
         .await?;
     assert_eq!(
@@ -3506,7 +3568,7 @@ where
     let certificate_timeout =
         env.make_certificate_with_round(value_timeout.clone(), Round::SingleLeader(5));
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_timeout_certificate(certificate_timeout)
         .await?;
     assert_eq!(response.info.manager.leader, Some(owner0));
@@ -3517,7 +3579,10 @@ where
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(6))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal.clone()).await;
+    let result = env
+        .executing_worker()
+        .handle_block_proposal(proposal.clone())
+        .await;
     assert_matches!(result, Err(WorkerError::ChainError(error))
          if matches!(*error, ChainError::HasIncompatibleConfirmedVote(_, _))
     );
@@ -3526,7 +3591,7 @@ where
     let certificate_timeout =
         env.make_certificate_with_round(value_timeout, Round::SingleLeader(7));
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_timeout_certificate(certificate_timeout)
         .await?;
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(8));
@@ -3534,7 +3599,7 @@ where
     // The worker updates its locking block even if it's from a past round and it doesn't sign
     // to confirm.
     let certificate = env.make_certificate_with_round(value1, Round::SingleLeader(7));
-    let worker = env.worker().clone();
+    let worker = env.executing_worker().clone();
     worker
         .handle_validated_certificate(certificate.clone())
         .await?;
@@ -3583,13 +3648,13 @@ where
             },
         });
     let (block0, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block0, None, vec![])
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
     let response = env
-        .worker()
+        .executing_worker()
         .fully_handle_certificate_with_notifications(certificate0, &())
         .await?;
 
@@ -3603,20 +3668,23 @@ where
         .into_proposal_with_round(owner1, &signer, Round::Fast)
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0)
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::Fast))
     );
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
     let query = ChainInfoQuery::new(chain_id).with_timeout(BlockHeight(1), Round::Fast);
-    let result = env.worker().handle_chain_info_query(query.clone()).await;
+    let result = env
+        .executing_worker()
+        .handle_chain_info_query(query.clone())
+        .await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::NotTimedOutYet(_))
     );
@@ -3625,7 +3693,10 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let (response, _) = env.worker().handle_chain_info_query(query).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_chain_info_query(query)
+        .await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout = Timeout::new(chain_id, BlockHeight::from(1), Epoch::from(0));
 
@@ -3633,9 +3704,9 @@ where
     let certificate_timeout = vote
         .with_value(value_timeout)
         .unwrap()
-        .into_certificate(env.worker().public_key());
+        .into_certificate(env.executing_worker().public_key());
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_timeout_certificate(certificate_timeout)
         .await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
@@ -3649,10 +3720,16 @@ where
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(1))
         .await
         .unwrap();
-    let (_, actions) = env.worker().handle_block_proposal(proposal1).await?;
+    let (_, actions) = env
+        .executing_worker()
+        .handle_block_proposal(proposal1)
+        .await?;
     assert_matches!(actions.notifications[0].reason, Reason::NewRound { .. });
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = env.worker().handle_chain_info_query(query_values).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_chain_info_query(query_values)
+        .await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(1));
     Ok(())
 }
@@ -3688,12 +3765,12 @@ where
             },
         });
     let (change_ownership_block, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(change_ownership_block, None, vec![])
         .await?;
     let change_ownership_value = ConfirmedBlock::new(change_ownership_block);
     let change_ownership_certificate = env.make_certificate(change_ownership_value.clone());
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(change_ownership_certificate, &())
         .await?;
 
@@ -3704,7 +3781,7 @@ where
         .into_proposal_with_round(owner, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(error)) if matches!(&*error,
         ChainError::ExecutionError(error, _) if matches!(&**error,
         ExecutionError::UnauthenticatedTransferOwner
@@ -3718,11 +3795,14 @@ where
         .await
         .unwrap();
     let (block, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposal.content.block.clone(), None, vec![])
         .await?;
     let value = ConfirmedBlock::new(block);
-    let (response, _) = env.worker().handle_block_proposal(proposal).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_block_proposal(proposal)
+        .await?;
     let vote = response.info.manager.pending.unwrap();
     assert_eq!(vote.round, Round::MultiLeader(0));
     assert_eq!(vote.value.value_hash, value.hash());
@@ -3767,13 +3847,13 @@ where
             },
         });
     let (block0, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block0, None, vec![])
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
     let response = env
-        .worker()
+        .executing_worker()
         .fully_handle_certificate_with_notifications(certificate0, &())
         .await?;
 
@@ -3795,12 +3875,12 @@ where
         .await
         .unwrap();
     let (block1, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block1.clone(), None, vec![])
         .await?;
     let value1 = ConfirmedBlock::new(block1);
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_block_proposal(proposal1.clone())
         .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
@@ -3814,7 +3894,7 @@ where
     let value_timeout = Timeout::new(chain_id, BlockHeight::from(1), Epoch::from(0));
     let certificate_timeout = env.make_certificate_with_round(value_timeout.clone(), Round::Fast);
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_timeout_certificate(certificate_timeout)
         .await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
@@ -3825,7 +3905,10 @@ where
         BlockProposal::new_retry_fast(owner1, Round::MultiLeader(0), proposal1.clone(), &signer)
             .await
             .unwrap();
-    let (response, _) = env.worker().handle_block_proposal(proposal1b).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_block_proposal(proposal1b)
+        .await?;
 
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.round, Round::MultiLeader(0));
@@ -3840,7 +3923,10 @@ where
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(1))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal2).await;
+    let result = env
+        .executing_worker()
+        .handle_block_proposal(proposal2)
+        .await;
     assert_matches!(result, Err(WorkerError::ChainError(err))
         if matches!(*err, ChainError::HasIncompatibleConfirmedVote(_, Round::Fast))
     );
@@ -3848,11 +3934,13 @@ where
         BlockProposal::new_retry_fast(owner0, Round::MultiLeader(2), proposal1.clone(), &signer)
             .await
             .unwrap();
-    env.worker().handle_block_proposal(proposal3).await?;
+    env.executing_worker()
+        .handle_block_proposal(proposal3)
+        .await?;
 
     // A validated block certificate from a later round can override the locked fast block.
     let (block2, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block2.clone(), None, vec![])
         .await?;
     let value2 = ValidatedBlock::new(block2.clone());
@@ -3866,9 +3954,15 @@ where
     .await
     .unwrap();
     let lite_value2 = LiteValue::new(&value2);
-    let (_, _) = env.worker().handle_block_proposal(proposal).await?;
+    let (_, _) = env
+        .executing_worker()
+        .handle_block_proposal(proposal)
+        .await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = env.worker().handle_chain_info_query(query_values).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_chain_info_query(query_values)
+        .await?;
     assert_eq!(
         response.info.manager.requested_locking,
         Some(Box::new(LockingBlock::Regular(certificate2)))
@@ -3913,7 +4007,10 @@ where
     let query = ChainInfoQuery::new(chain_1)
         .with_fallback()
         .with_committees();
-    let (response, _) = env.worker().handle_chain_info_query(query.clone()).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_chain_info_query(query.clone())
+        .await?;
     let manager = response.info.manager;
     assert!(manager.fallback_vote.is_none());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
@@ -3922,7 +4019,10 @@ where
 
     // Even if a long time passes: Without an incoming message there's no fallback mode.
     clock.add(fallback_duration);
-    let (response, _) = env.worker().handle_chain_info_query(query.clone()).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_chain_info_query(query.clone())
+        .await?;
     assert!(response.info.manager.fallback_vote.is_none());
 
     // Make a tracked message between chains. This will create a cross-chain message.
@@ -3930,12 +4030,12 @@ where
         .with_simple_transfer(chain_2, Amount::ONE)
         .with_authenticated_owner(Some(public_key.into()));
     let (block, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block, None, vec![])
         .await?;
     let value = ConfirmedBlock::new(block);
     let certificate = env.make_certificate(value);
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate, &())
         .await?;
 
@@ -3946,7 +4046,7 @@ where
 
     // The message only just arrived: No fallback mode.
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_chain_info_query(query_chain_2.clone())
         .await?;
     assert!(response.info.manager.fallback_vote.is_none());
@@ -3954,7 +4054,7 @@ where
     // If for a long time the message isn't handled, we vote for fallback mode.
     clock.add(fallback_duration);
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_chain_info_query(query_chain_2.clone())
         .await?;
     let vote = response.info.manager.fallback_vote.unwrap();
@@ -3963,11 +4063,13 @@ where
     assert_eq!(vote.value.value_hash, value.hash());
     assert_eq!(vote.round, round);
     let certificate = env.make_certificate_with_round(value, round);
-    env.worker().handle_timeout_certificate(certificate).await?;
+    env.executing_worker()
+        .handle_timeout_certificate(certificate)
+        .await?;
 
     // Now we are in fallback mode, and the validator is the leader.
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_chain_info_query(query_chain_2.clone())
         .await?;
     let manager = response.info.manager;
@@ -3978,7 +4080,7 @@ where
         .get(&response.info.epoch)
         .unwrap()
         .validators
-        .get(&env.worker().public_key())
+        .get(&env.executing_worker().public_key())
         .unwrap()
         .account_public_key;
     assert_eq!(manager.current_round, Round::Validator(0));
@@ -4014,13 +4116,7 @@ where
         .await;
     let chain_id = chain_description.id();
 
-    let (application_id, application);
-    {
-        let mut chain = env.worker().storage.load_chain(chain_id).await?;
-        (application_id, application, _) =
-            chain.execution_state.register_mock_application(0).await?;
-        chain.save().await?;
-    }
+    let (application_id, application) = env.register_mock_application(chain_id, 0).await?;
 
     let query_times = (0..NUM_QUERIES as u64).map(Timestamp::from);
     let query_contexts = query_times.clone().map(|local_time| QueryContext {
@@ -4044,7 +4140,7 @@ where
         clock.set(query_time);
 
         assert_eq!(
-            env.worker()
+            env.executing_worker()
                 .query_application(chain_id, query.clone(), None)
                 .await?,
             QueryOutcome {
@@ -4136,7 +4232,7 @@ where
         clock.set(local_time);
 
         assert_eq!(
-            env.worker()
+            env.executing_worker()
                 .query_application(chain_1, query.clone(), None)
                 .await?,
             QueryOutcome {
@@ -4157,13 +4253,16 @@ where
         .into_first_proposal(owner, &signer)
         .await
         .unwrap();
-    let _ = env.worker().handle_block_proposal(block_proposal).await?;
+    let _ = env
+        .executing_worker()
+        .handle_block_proposal(block_proposal)
+        .await?;
 
     for local_time in queries_before_confirmation {
         clock.set(local_time);
 
         assert_eq!(
-            env.worker()
+            env.executing_worker()
                 .query_application(chain_1, query.clone(), None)
                 .await?,
             QueryOutcome {
@@ -4196,7 +4295,7 @@ where
         .with(block),
     );
     let certificate = env.make_certificate(value);
-    env.worker()
+    env.executing_worker()
         .handle_confirmed_certificate(certificate, None)
         .await?;
 
@@ -4211,7 +4310,7 @@ where
         clock.set(local_time);
 
         assert_eq!(
-            env.worker()
+            env.executing_worker()
                 .query_application(chain_1, query.clone(), None)
                 .await?,
             QueryOutcome {
@@ -4289,7 +4388,7 @@ where
         .with(block_proposal.content.block),
     ));
 
-    env.worker()
+    env.executing_worker()
         .handle_confirmed_certificate(certificate_chain_2.clone(), None)
         .await?;
 
@@ -4313,7 +4412,7 @@ where
 
     // Test stage_block_execution directly - this should fail with IncorrectMessageOrder.
     assert_matches!(
-        env.worker()
+        env.executing_worker()
             .stage_block_execution(bad_proposed_block.clone(), None, vec![])
             .await,
         Err(WorkerError::ChainError(chain_error))
@@ -4327,7 +4426,7 @@ where
         .unwrap();
 
     assert_matches!(
-        env.worker().handle_block_proposal(bad_proposal).await,
+        env.executing_worker().handle_block_proposal(bad_proposal).await,
         Err(WorkerError::ChainError(chain_error))
             if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. })
     );
