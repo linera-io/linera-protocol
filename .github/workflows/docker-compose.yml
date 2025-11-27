@@ -23,6 +23,7 @@ env:
   RUSTUP_MAX_RETRIES: 10
   RUST_LOG: warn
   DOCKER_COMPOSE_WAIT: "true"
+  LINERA_IMAGE: linera
 
 permissions:
   contents: read
