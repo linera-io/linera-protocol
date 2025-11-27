@@ -511,6 +511,46 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
+/// Regression test: A super owner should be able to propose even without multi-leader rounds.
+async fn test_super_owner_in_single_leader_round<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let regular_owner = signer.generate_new().into();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let super_owner = sender.identity().await?;
+
+    // Configure chain with one super owner and one regular owner, no multi-leader rounds.
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
+        super_owners: vec![super_owner],
+        owners: vec![(regular_owner, 100)],
+        first_leader: None,
+        multi_leader_rounds: 0,
+        open_multi_leader_rounds: false,
+        timeout_config: TimeoutConfig::default(),
+    });
+    sender.execute_operation(owner_change_op).await.unwrap();
+
+    // The super owner can still burn tokens since that doesn't use the validation round oracle.
+    sender
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
+        .await
+        .unwrap();
+    assert_eq!(
+        sender.local_balance().await.unwrap(),
+        Amount::from_tokens(2)
+    );
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
 async fn test_open_chain_then_close_it<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
