@@ -31,22 +31,20 @@ use linera_execution::{
     ExecutionStateActor, Operation, OperationContext, ResourceController, TransactionTracker,
     WasmContractModule, WasmRuntime,
 };
-use linera_storage::{DbStorage, Storage};
-#[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::DynamoDbDatabase;
-#[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::RocksDbDatabase;
-#[cfg(feature = "scylladb")]
-use linera_views::scylla_db::ScyllaDbDatabase;
-use linera_views::{
-    context::Context,
-    memory::MemoryDatabase,
-    views::{CryptoHashView, View},
-};
+use linera_views::{context::Context, views::View};
 use test_case::test_case;
 
 use super::TestEnvironment;
-use crate::worker::WorkerError;
+#[cfg(feature = "dynamodb")]
+use crate::test_utils::DynamoDbStorageBuilder;
+#[cfg(feature = "rocksdb")]
+use crate::test_utils::RocksDbStorageBuilder;
+#[cfg(feature = "scylladb")]
+use crate::test_utils::ScyllaDbStorageBuilder;
+use crate::{
+    test_utils::{MemoryStorageBuilder, StorageBuilder},
+    worker::WorkerError,
+};
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -54,8 +52,8 @@ use crate::worker::WorkerError;
 async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
+    let builder = MemoryStorageBuilder::with_wasm_runtime(Some(wasm_runtime));
+    run_test_handle_certificates_to_create_application(builder, wasm_runtime).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -65,8 +63,8 @@ async fn test_memory_handle_certificates_to_create_application(
 async fn test_rocks_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let storage = DbStorage::<RocksDbDatabase, _>::make_test_storage(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
+    let builder = RocksDbStorageBuilder::with_wasm_runtime(Some(wasm_runtime)).await;
+    run_test_handle_certificates_to_create_application(builder, wasm_runtime).await
 }
 
 #[cfg(feature = "dynamodb")]
@@ -76,8 +74,8 @@ async fn test_rocks_db_handle_certificates_to_create_application(
 async fn test_dynamo_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let storage = DbStorage::<DynamoDbDatabase, _>::make_test_storage(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
+    let builder = DynamoDbStorageBuilder::with_wasm_runtime(Some(wasm_runtime));
+    run_test_handle_certificates_to_create_application(builder, wasm_runtime).await
 }
 
 #[cfg(feature = "scylladb")]
@@ -87,21 +85,21 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
 async fn test_scylla_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let storage = DbStorage::<ScyllaDbDatabase, _>::make_test_storage(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
+    let builder = ScyllaDbStorageBuilder::with_wasm_runtime(Some(wasm_runtime));
+    run_test_handle_certificates_to_create_application(builder, wasm_runtime).await
 }
 
-async fn run_test_handle_certificates_to_create_application<S>(
-    storage: S,
+async fn run_test_handle_certificates_to_create_application<B>(
+    mut storage_builder: B,
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()>
 where
-    S: Storage + Clone + Send + Sync + 'static,
+    B: StorageBuilder,
 {
     let vm_runtime = VmRuntime::Wasm;
     let publisher_owner = AccountSecretKey::generate().public().into();
     let creator_owner = AccountSecretKey::generate().public().into();
-    let mut env = TestEnvironment::new(storage.clone(), false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let publisher_chain = env.add_root_chain(1, publisher_owner, Amount::ZERO).await;
     let creator_chain = env.add_root_chain(2, creator_owner, Amount::ZERO).await;
 
@@ -155,8 +153,7 @@ where
             .await,
         Err(WorkerError::BlobsNotFound(_))
     );
-    storage
-        .write_blobs(&[contract_blob.clone(), service_blob.clone()])
+    env.write_blobs(&[contract_blob.clone(), service_blob.clone()])
         .await?;
     let info = env
         .worker()
@@ -230,8 +227,7 @@ where
     );
     let create_certificate = env.make_certificate(create_block_proposal);
 
-    storage
-        .write_blobs(&[application_description_blob.clone()])
+    env.write_blobs(&[application_description_blob.clone()])
         .await?;
     creator_state
         .context()

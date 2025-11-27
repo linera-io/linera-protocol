@@ -21,7 +21,7 @@ use linera_base::{
         ValidatorKeypair,
     },
     data_types::*,
-    identifiers::{Account, AccountOwner, ChainId, EventId, StreamId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, EventId, StreamId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -45,19 +45,14 @@ use linera_execution::{
         EPOCH_STREAM_NAME as NEW_EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
     },
     test_utils::{
-        dummy_chain_description, ExpectedCall, RegisterMockApplication, SystemExecutionState,
+        dummy_chain_description, ExpectedCall, MockApplication, RegisterMockApplication,
+        SystemExecutionState,
     },
     ExecutionError, ExecutionRuntimeContext, Message, MessageKind, OutgoingMessage, Query,
     QueryContext, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
-use linera_storage::{DbStorage, Storage, TestClock};
-use linera_views::{
-    context::Context,
-    memory::MemoryDatabase,
-    random::generate_test_namespace,
-    store::TestKeyValueDatabase as _,
-    views::{CryptoHashView, RootView},
-};
+use linera_storage::Storage;
+use linera_views::{context::Context, views::RootView};
 use test_case::test_case;
 use test_log::test;
 
@@ -93,9 +88,13 @@ impl<S> TestEnvironment<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    async fn new(storage: S, is_client: bool, has_long_lived_services: bool) -> Self {
+    async fn new<B: StorageBuilder<Storage = S>>(
+        builder: &mut B,
+        is_client: bool,
+        has_long_lived_services: bool,
+    ) -> Result<Self, anyhow::Error> {
         Self::new_with_amount(
-            storage,
+            builder,
             is_client,
             has_long_lived_services,
             Amount::from_tokens(1_000_000),
@@ -103,12 +102,13 @@ where
         .await
     }
 
-    async fn new_with_amount(
-        storage: S,
+    async fn new_with_amount<B: StorageBuilder<Storage = S>>(
+        builder: &mut B,
         is_client: bool,
         has_long_lived_services: bool,
         amount: Amount,
-    ) -> Self {
+    ) -> Result<Self, anyhow::Error> {
+        let storage = builder.build().await?;
         let validator_keypair = ValidatorKeypair::generate();
         let account_secret = AccountSecretKey::generate();
         let committee = Committee::make_simple(vec![(
@@ -157,13 +157,13 @@ where
         .with_allow_messages_from_deprecated_epochs(is_client)
         .with_long_lived_services(has_long_lived_services)
         .with_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
-        Self {
+        Ok(Self {
             committee,
             worker,
             admin_description,
             admin_keypair: account_secret,
             other_chains: BTreeMap::new(),
-        }
+        })
     }
 
     fn admin_id(&self) -> ChainId {
@@ -180,6 +180,24 @@ where
 
     fn admin_public_key(&self) -> AccountPublicKey {
         self.admin_keypair.public()
+    }
+
+    pub async fn write_blobs(&mut self, blobs: &[Blob]) -> Result<(), linera_views::ViewError> {
+        self.worker.storage.write_blobs(blobs).await
+    }
+
+    pub async fn register_mock_application(
+        &mut self,
+        chain_id: ChainId,
+        index: u32,
+    ) -> Result<(ApplicationId, MockApplication), anyhow::Error> {
+        let mut chain = self.worker.storage.load_chain(chain_id).await?;
+        let (application_id, application, _) = chain
+            .execution_state
+            .register_mock_application(index)
+            .await?;
+        chain.save().await?;
+        Ok((application_id, application))
     }
 
     async fn add_root_chain(
@@ -554,7 +572,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let sender_public_key = signer.generate_new();
     let sender_owner = sender_public_key.into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -612,7 +630,7 @@ where
 {
     let mut signer = InMemorySigner::new(None);
     let sender_owner = signer.generate_new().into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -657,13 +675,12 @@ where
     B: StorageBuilder,
 {
     let mut signer = InMemorySigner::new(None);
-    let storage = storage_builder.build().await?;
-    let clock = storage_builder.clock();
     let public_key = signer.generate_new();
     let owner = public_key.into();
     let balance = Amount::from_tokens(5);
     let small_transfer = Amount::from_micros(1);
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner, balance).await;
     let chain_2_desc = env.add_root_chain(2, owner, balance).await;
     let chain_1 = chain_1_desc.id();
@@ -750,7 +767,7 @@ where
 {
     let mut signer = InMemorySigner::new(None);
     let sender_public_key = signer.generate_new();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_public_key.into(), Amount::from_tokens(5))
         .await;
@@ -792,7 +809,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let sender_public_key = signer.generate_new();
     let sender_owner = sender_public_key.into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -898,7 +915,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let sender_public_key = signer.generate_new();
     let sender_owner = sender_public_key.into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -1029,7 +1046,7 @@ where
     let sender_owner = sender_public_key.into();
     let recipient_public_key = signer.generate_new();
     let recipient_owner = recipient_public_key.into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(6))
         .await;
@@ -1381,7 +1398,7 @@ where
 {
     let mut signer = InMemorySigner::new(None);
     let sender_owner = signer.generate_new().into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -1422,7 +1439,7 @@ where
 {
     let mut signer = InMemorySigner::new(None);
     let sender_owner = signer.generate_new().into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -1476,7 +1493,7 @@ where
 {
     let mut signer = InMemorySigner::new(None);
     let sender_owner = signer.generate_new().into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -1518,7 +1535,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let sender_pubkey = signer.generate_new();
     let test_pubkey = signer.generate_new();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_2_desc = env
         .add_root_chain(2, test_pubkey.into(), Amount::ZERO)
         .await;
@@ -1555,7 +1572,7 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_2_desc = env
         .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ZERO)
         .await;
@@ -1606,7 +1623,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let chain_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_2_desc = env
         .add_root_chain(2, chain_key_pair.public().into(), Amount::from_tokens(5))
         .await;
@@ -1647,7 +1664,7 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(5))
         .await;
@@ -1688,7 +1705,7 @@ where
     B: StorageBuilder,
 {
     let key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, key_pair.public().into(), Amount::from_tokens(5))
         .await;
@@ -1785,7 +1802,7 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::ONE)
         .await;
@@ -1844,10 +1861,9 @@ async fn test_handle_certificate_same_chain_same_owner_no_messages<B>(
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let key_pair = AccountSecretKey::generate();
     let owner = key_pair.public().into();
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env.add_root_chain(1, owner, Amount::ONE).await;
     let chain_1 = chain_1_desc.id();
 
@@ -1893,10 +1909,9 @@ async fn test_handle_certificate_different_chain_with_messages<B>(
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let key_pair = AccountSecretKey::generate();
     let owner = key_pair.public().into();
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env.add_root_chain(1, owner, Amount::ONE).await;
     let chain_1 = chain_1_desc.id();
     let chain_2_desc = env.add_root_chain(2, owner, Amount::ZERO).await;
@@ -1977,7 +1992,7 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_2_desc = env
         .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
         .await;
@@ -2050,9 +2065,8 @@ async fn test_handle_cross_chain_request_no_recipient_chain<B>(
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(10))
         .await;
@@ -2091,9 +2105,8 @@ async fn test_handle_cross_chain_request_no_recipient_chain_on_client<B>(
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage, true, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(10))
         .await;
@@ -2147,7 +2160,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let recipient_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(5))
         .await;
@@ -2307,7 +2320,7 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(5))
         .await;
@@ -2357,7 +2370,7 @@ where
     let recipient_pubkey = recipient_key_pair.public();
     let recipient = AccountOwner::from(recipient_pubkey);
 
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(6))
         .await;
@@ -2548,10 +2561,13 @@ async fn run_test_chain_creation_with_committee_creation<B>(
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
-    let mut env =
-        TestEnvironment::new_with_amount(storage.clone(), false, false, Amount::from_tokens(2))
-            .await;
+    let mut env = TestEnvironment::new_with_amount(
+        &mut storage_builder,
+        false,
+        false,
+        Amount::from_tokens(2),
+    )
+    .await?;
     let mut committees = BTreeMap::new();
     let committee = env.committee().clone();
     committees.insert(Epoch::ZERO, committee.clone());
@@ -2613,7 +2629,7 @@ where
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     // `PublishCommitteeBlob` is tested e.g. in `client_tests::test_change_voting_rights`, so we
     // just write it directly to storage here for simplicity.
-    storage.write_blob(&committee_blob).await?;
+    env.write_blobs(&[committee_blob.clone()]).await?;
     let blob_hash = committee_blob.id().hash;
     let certificate1 = env.make_certificate(ConfirmedBlock::new(
         BlockExecutionOutcome {
@@ -2767,8 +2783,7 @@ where
     B: StorageBuilder,
 {
     let owner1 = AccountSecretKey::generate().public().into();
-    let storage = storage_builder.build().await?;
-    let mut env = TestEnvironment::new(storage.clone(), false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env.add_root_chain(1, owner1, Amount::from_tokens(3)).await;
     let mut committees = BTreeMap::new();
     let committee = env.committee().clone();
@@ -2806,7 +2821,7 @@ where
     ]);
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     let blob_hash = committee_blob.id().hash;
-    storage.write_blob(&committee_blob).await?;
+    env.write_blobs(&[committee_blob.clone()]).await?;
     let certificate1 = env.make_certificate(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![vec![]],
@@ -2890,9 +2905,8 @@ async fn test_transfers_and_committee_removal<B>(mut storage_builder: B) -> anyh
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let mut env =
-        TestEnvironment::new_with_amount(storage.clone(), false, false, Amount::ZERO).await;
+        TestEnvironment::new_with_amount(&mut storage_builder, false, false, Amount::ZERO).await?;
     let owner1 = AccountSecretKey::generate().public().into();
     let chain_1_desc = env.add_root_chain(1, owner1, Amount::from_tokens(3)).await;
     let mut committees = BTreeMap::new();
@@ -2928,7 +2942,7 @@ where
     let committees1 = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     let blob_hash = committee_blob.id().hash;
-    storage.write_blob(&committee_blob).await?;
+    env.write_blobs(&[committee_blob.clone()]).await?;
 
     let certificate1 = env.make_certificate(ConfirmedBlock::new(
         BlockExecutionOutcome {
@@ -3121,16 +3135,8 @@ where
 
 #[test(tokio::test)]
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
-    let store_config = MemoryDatabase::new_test_config().await?;
-    let namespace = generate_test_namespace();
-    let store = DbStorage::<MemoryDatabase, _>::new_for_testing(
-        store_config,
-        &namespace,
-        None,
-        TestClock::new(),
-    )
-    .await?;
-    let env = TestEnvironment::new(store, true, false).await;
+    let mut storage_builder = MemoryStorageBuilder::default();
+    let env = TestEnvironment::new(&mut storage_builder, true, false).await?;
     let committees = BTreeMap::from([(Epoch::from(1), env.committee().clone())]);
 
     let chain_0 = env.admin_description.clone();
@@ -3302,13 +3308,12 @@ async fn test_timeouts<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let mut signer = InMemorySigner::new(None);
-    let clock = storage_builder.clock();
     let key_pairs = generate_key_pairs(&mut signer, 2);
     let owner0 = AccountOwner::from(key_pairs[0]);
     let owner1 = AccountOwner::from(key_pairs[1]);
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
     let small_transfer = Amount::from_micros(1);
     let chain_1 = chain_1_desc.id();
@@ -3554,13 +3559,12 @@ async fn test_round_types<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let mut signer = InMemorySigner::new(None);
-    let clock = storage_builder.clock();
     let key_pairs = generate_key_pairs(&mut signer, 2);
     let owner0 = AccountOwner::from(key_pairs[0]);
     let owner1 = AccountOwner::from(key_pairs[1]);
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
     let small_transfer = Amount::from_micros(1);
     let chain_id = chain_1_desc.id();
@@ -3662,11 +3666,10 @@ async fn test_open_multi_leader_rounds<B>(mut storage_builder: B) -> anyhow::Res
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let mut signer = InMemorySigner::new(None);
     let public_key = signer.generate_new();
     let owner = public_key.into();
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env.add_root_chain(1, owner, Amount::from_tokens(2)).await;
     let small_transfer = Amount::from_micros(1);
     let chain_id = chain_1_desc.id();
@@ -3735,13 +3738,12 @@ async fn test_fast_proposal_is_locked<B>(mut storage_builder: B) -> anyhow::Resu
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
-    let clock = storage_builder.clock();
     let mut signer = InMemorySigner::new(None);
     let key_pairs = generate_key_pairs(&mut signer, 2);
     let owner0 = AccountOwner::from(key_pairs[0]);
     let owner1 = AccountOwner::from(key_pairs[1]);
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
     let chain_id = chain_1_desc.id();
 
@@ -3886,11 +3888,10 @@ async fn test_fallback<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
-    let clock = storage_builder.clock();
     let mut signer = InMemorySigner::new(None);
     let public_key = signer.generate_new();
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let clock = storage_builder.clock();
     let balance = Amount::from_tokens(5);
     let mut ownership = ChainOwnership::single(public_key.into());
     // Configure a fallback duration. (The default is `MAX`, i.e. never.)
@@ -4001,9 +4002,8 @@ where
 {
     const NUM_QUERIES: usize = 5;
 
-    let storage = storage_builder.build().await?;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, true).await?;
     let clock = storage_builder.clock();
-    let mut env = TestEnvironment::new(storage, false, true).await;
 
     let chain_description = env
         .add_root_chain(
@@ -4078,27 +4078,20 @@ where
     const NUM_QUERIES: usize = 2;
     const BLOCK_TIMESTAMP: u64 = 10;
 
-    let storage = storage_builder.build().await?;
-    let clock = storage_builder.clock();
     let mut signer = InMemorySigner::new(None);
     let public_key = signer.generate_new();
     let owner = public_key.into();
     let balance = Amount::from_tokens(1);
     let small_transfer = Amount::from_micros(1);
 
-    let mut env = TestEnvironment::new(storage.clone(), false, true).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, true).await?;
+    let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner, balance).await;
     let chain_2_desc = env.add_root_chain(2, owner, balance).await;
     let chain_1 = chain_1_desc.id();
     let chain_2 = chain_2_desc.id();
 
-    let (application_id, application);
-    {
-        let mut chain = storage.load_chain(chain_1).await?;
-        (application_id, application, _) =
-            chain.execution_state.register_mock_application(0).await?;
-        chain.save().await?;
-    }
+    let (application_id, application) = env.register_mock_application(chain_1, 0).await?;
 
     let queries_before_proposal = (0..NUM_QUERIES as u64).map(Timestamp::from);
     let queries_before_confirmation =
@@ -4249,7 +4242,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let receiver_public_key = signer.generate_new();
     let owner = receiver_public_key.into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env.add_root_chain(1, owner, Amount::from_tokens(10)).await;
     let chain_2_desc = env.add_root_chain(2, owner, Amount::ZERO).await;
     let chain_1 = chain_1_desc.id();
