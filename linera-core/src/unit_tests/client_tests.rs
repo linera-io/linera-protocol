@@ -1635,6 +1635,7 @@ where
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner2_a, 50), (owner2_b, 50)],
+        first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
@@ -1758,6 +1759,7 @@ where
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner1, 50), (owner2, 50)],
+        first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
@@ -1845,6 +1847,7 @@ where
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner3_a, 50), (owner3_b, 50), (owner3_c, 50)],
+        first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
@@ -2585,6 +2588,7 @@ where
     let ownership = ChainOwnership {
         super_owners: BTreeSet::from_iter([owner0]),
         owners: BTreeMap::from_iter([(owner1, 100)]),
+        first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
         timeout_config,

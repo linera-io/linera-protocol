@@ -83,6 +83,8 @@ pub struct ChainOwnership {
     /// The regular owners, with their weights that determine how often they are round leader.
     #[debug(skip_if = BTreeMap::is_empty)]
     pub owners: BTreeMap<AccountOwner, u64>,
+    /// The leader of the first single-leader round. If not set, this is random like other rounds.
+    pub first_leader: Option<AccountOwner>,
     /// The number of rounds in which all owners are allowed to propose blocks.
     pub multi_leader_rounds: u32,
     /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
@@ -99,6 +101,7 @@ impl ChainOwnership {
         ChainOwnership {
             super_owners: iter::once(owner).collect(),
             owners: BTreeMap::new(),
+            first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
@@ -110,6 +113,7 @@ impl ChainOwnership {
         ChainOwnership {
             super_owners: BTreeSet::new(),
             owners: iter::once((owner, 100)).collect(),
+            first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
@@ -125,6 +129,7 @@ impl ChainOwnership {
         ChainOwnership {
             super_owners: BTreeSet::new(),
             owners: owners_and_weights.into_iter().collect(),
+            first_leader: None,
             multi_leader_rounds,
             open_multi_leader_rounds: false,
             timeout_config,
@@ -134,6 +139,12 @@ impl ChainOwnership {
     /// Adds a regular owner.
     pub fn with_regular_owner(mut self, owner: AccountOwner, weight: u64) -> Self {
         self.owners.insert(owner, weight);
+        self
+    }
+
+    /// Fixes the given owner as the leader of the first single-leader round on all heights.
+    pub fn with_first_leader(mut self, owner: AccountOwner) -> Self {
+        self.first_leader = Some(owner);
         self
     }
 
@@ -249,6 +260,7 @@ mod tests {
         let ownership = ChainOwnership {
             super_owners: BTreeSet::from_iter([super_owner]),
             owners: BTreeMap::from_iter([(owner, 100)]),
+            first_leader: Some(owner),
             multi_leader_rounds: 10,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig {

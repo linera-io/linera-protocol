@@ -1932,6 +1932,7 @@ impl<Env: Environment> ChainClient<Env> {
         self.execute_operation(SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
             owners: Vec::new(),
+            first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
@@ -1958,6 +1959,7 @@ impl<Env: Environment> ChainClient<Env> {
             let operations = vec![Operation::system(SystemOperation::ChangeOwnership {
                 super_owners: Vec::new(),
                 owners,
+                first_leader: ownership.first_leader,
                 multi_leader_rounds: ownership.multi_leader_rounds,
                 open_multi_leader_rounds: ownership.open_multi_leader_rounds,
                 timeout_config: ownership.timeout_config,
@@ -1989,6 +1991,7 @@ impl<Env: Environment> ChainClient<Env> {
         self.execute_operation(SystemOperation::ChangeOwnership {
             super_owners: ownership.super_owners.into_iter().collect(),
             owners: ownership.owners.into_iter().collect(),
+            first_leader: ownership.first_leader,
             multi_leader_rounds: ownership.multi_leader_rounds,
             open_multi_leader_rounds: ownership.open_multi_leader_rounds,
             timeout_config: ownership.timeout_config.clone(),

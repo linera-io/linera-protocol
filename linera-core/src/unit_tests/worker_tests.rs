@@ -3314,10 +3314,12 @@ where
     let chain_1 = chain_1_desc.id();
 
     // Add another owner and use the leader-based protocol in all rounds.
+    // Set owner0 as the first leader to test the first_leader configuration.
     let proposed_block0 = make_first_block(chain_1)
         .with_operation(SystemOperation::ChangeOwnership {
             super_owners: Vec::new(),
             owners: vec![(owner0, 100), (owner1, 100)],
+            first_leader: Some(owner0),
             multi_leader_rounds: 0,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
@@ -3334,13 +3336,14 @@ where
         .fully_handle_certificate_with_notifications(certificate0, &())
         .await?;
 
-    // The leader sequence is pseudorandom but deterministic. The first leader is owner 1.
-    assert_eq!(response.info.manager.leader, Some(owner1));
+    // We explicitly configured owner0 as the first leader.
+    assert_eq!(response.info.manager.leader, Some(owner0));
 
-    // So owner 0 cannot propose a block in this round. And the next round hasn't started yet.
+    // So owner 1 cannot propose a block in this round. And the next round hasn't started yet.
     let proposal = make_child_block(&value0)
         .with_simple_transfer(chain_1, small_transfer)
-        .into_proposal_with_round(owner0, &signer, Round::SingleLeader(0))
+        .with_authenticated_owner(Some(owner1))
+        .into_proposal_with_round(owner1, &signer, Round::SingleLeader(0))
         .await
         .unwrap();
     let result = env.worker().handle_block_proposal(proposal).await;
@@ -3371,8 +3374,8 @@ where
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout = Timeout::new(chain_1, BlockHeight::from(1), Epoch::from(0));
 
-    // Once we provide the validator with a timeout certificate, the next round starts, where owner
-    // 0 happens to be the leader.
+    // Once we provide the validator with a timeout certificate, the next round starts. The leader
+    // for round 1 is determined by the pseudorandom selection (not first_leader).
     let certificate_timeout = vote
         .with_value(value_timeout.clone())
         .unwrap()
@@ -3567,6 +3570,7 @@ where
         make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
             super_owners: vec![owner0],
             owners: vec![(owner0, 100), (owner1, 100)],
+            first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig {
@@ -3672,6 +3676,7 @@ where
         make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
             super_owners: vec![],
             owners: vec![(owner, 100)],
+            first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: true,
             timeout_config: TimeoutConfig {
@@ -3751,6 +3756,7 @@ where
         .with_operation(SystemOperation::ChangeOwnership {
             super_owners: vec![owner0],
             owners: vec![(owner0, 100), (owner1, 100)],
+            first_leader: None,
             multi_leader_rounds: 3,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig {

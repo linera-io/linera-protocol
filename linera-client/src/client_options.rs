@@ -310,6 +310,10 @@ pub struct ChainOwnershipConfig {
     #[arg(long, num_args(0..))]
     pub owners: Vec<AccountOwner>,
 
+    /// The leader of the first single-leader round. If not set, this is random like other rounds.
+    #[arg(long)]
+    pub first_leader: Option<AccountOwner>,
+
     /// Weights for the new owners.
     ///
     /// If they are specified there must be exactly one weight for each owner.
@@ -366,6 +370,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
         let ChainOwnershipConfig {
             super_owners,
             owners,
+            first_leader,
             owner_weights,
             multi_leader_rounds,
             fast_round_duration,
@@ -395,6 +400,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
         Ok(ChainOwnership {
             super_owners,
             owners,
+            first_leader,
             multi_leader_rounds,
             open_multi_leader_rounds,
             timeout_config,
