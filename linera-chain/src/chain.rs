@@ -460,9 +460,10 @@ where
         // Apply counter updates to shared state sequentially.
         let mut any_updates = false;
         for (recipient, updates, outbox) in &processing_results {
-            if !updates.is_empty() {
-                any_updates = true;
+            if updates.is_empty() {
+                continue;
             }
+            any_updates = true;
             for update in updates {
                 let counter = self
                     .outbox_counters
