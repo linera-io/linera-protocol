@@ -79,16 +79,19 @@ where
 
     pub async fn index_block(&mut self, block: BlockId) -> Result<bool, ExporterError> {
         if let Some(last_processed) = self.chain_states.get_mut(&block.chain_id).await? {
-            if block.height
-                == last_processed
-                    .height
-                    .try_add_one()
-                    .map_err(|e| ExporterError::GenericError(e.into()))?
-            {
+            let expected_block_height = last_processed
+                .height
+                .try_add_one()
+                .map_err(|e| ExporterError::GenericError(e.into()))?;
+            if block.height == expected_block_height {
                 *last_processed = block.into();
                 return Ok(true);
             }
-
+            tracing::warn!(
+                ?expected_block_height,
+                ?block,
+                "attempted to index a block out of order",
+            );
             Ok(false)
         } else {
             Err(ExporterError::UnprocessedChain)
