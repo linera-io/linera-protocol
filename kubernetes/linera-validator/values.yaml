@@ -54,6 +54,14 @@ proxyResources: {}
 # Set to empty string to use default Tokio thread count
 serverTokioThreads: ""
 
+# Cross-chain message queue size (default in binary is 1000)
+# Set to empty string to use default
+crossChainQueueSize: ""
+
+# Notification queue size for proxy notifications (default in binary is 1000)
+# Set to empty string to use default
+notificationQueueSize: ""
+
 # ============================================================================
 # Storage Configuration
 # ============================================================================
