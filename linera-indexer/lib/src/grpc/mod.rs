@@ -56,7 +56,7 @@ impl<D> IndexerGrpcServer<D> {
 
 impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D>
 where
-    D::Error: Into<ProcessingError>,
+    D::Error: Into<ProcessingError> + From<bincode::Error>,
 {
     /// Start the gRPC indexer server
     pub async fn serve(self, port: u16) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -78,7 +78,7 @@ where
         stream: BoxStream<'static, Result<Element, Status>>,
     ) -> impl Stream<Item = Result<(), Status>>
     where
-        D::Error: Into<ProcessingError>,
+        D::Error: Into<ProcessingError> + From<bincode::Error>,
     {
         futures::stream::unfold(
             (stream, database, HashMap::<BlobId, Vec<u8>>::new()),
@@ -132,7 +132,7 @@ where
         element: Element,
     ) -> Result<Option<()>, ProcessingError>
     where
-        D::Error: Into<ProcessingError>,
+        D::Error: Into<ProcessingError> + From<bincode::Error>,
     {
         match element.payload {
             Some(Payload::Blob(proto_blob)) => {
@@ -143,45 +143,26 @@ where
                     bincode::serialize(&blob).map_err(ProcessingError::BlobSerialization)?;
 
                 info!("Received blob: {}", blob_id);
+                // Standalone blobs don't have a transaction index
                 pending_blobs.insert(blob_id, blob_data);
                 Ok(None) // No response for blobs, just store them
             }
             Some(Payload::Block(proto_block)) => {
-                // Convert protobuf block to linera block first
+                // Convert protobuf block to linera block certificate
                 let block_cert = ConfirmedBlockCertificate::try_from(proto_block)
                     .map_err(|e| ProcessingError::BlockDeserialization(e.to_string()))?;
 
-                // Extract block metadata
                 let block_hash = block_cert.hash();
                 let chain_id = block_cert.inner().chain_id();
                 let height = block_cert.inner().height();
-                let timestamp = block_cert.inner().timestamp();
 
                 info!(
                     "Received block: {} for chain: {} at height: {}",
                     block_hash, chain_id, height
                 );
 
-                // Serialize block BEFORE taking any database locks
-                let block_data =
-                    bincode::serialize(&block_cert).map_err(ProcessingError::BlockSerialization)?;
-
-                // Convert pending blobs to the format expected by the high-level API
-                let blobs: Vec<(BlobId, Vec<u8>)> = pending_blobs
-                    .iter()
-                    .map(|(blob_id, blob_data)| (*blob_id, blob_data.clone()))
-                    .collect();
-
-                // Use the high-level atomic API - this manages all locking internally
                 database
-                    .store_block_with_blobs(
-                        &block_hash,
-                        &chain_id,
-                        height,
-                        timestamp,
-                        &block_data,
-                        &blobs,
-                    )
+                    .store_block_with_blobs(&block_cert, pending_blobs)
                     .await
                     .map_err(Into::into)?;
 
@@ -204,7 +185,7 @@ where
 #[async_trait]
 impl<D: IndexerDatabase + 'static> Indexer for IndexerGrpcServer<D>
 where
-    D::Error: Into<ProcessingError>,
+    D::Error: Into<ProcessingError> + From<bincode::Error>,
 {
     type IndexBatchStream = Pin<Box<dyn Stream<Item = Result<(), Status>> + Send + 'static>>;
 
