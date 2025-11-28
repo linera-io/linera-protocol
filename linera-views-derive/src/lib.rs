@@ -246,7 +246,7 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
     } = Constraints::get(&input);
     let struct_name = &input.ident;
 
-    let increment_counter = if cfg!(feature = "metrics") {
+    let metrics_code = if cfg!(feature = "metrics") {
         quote! {
             #[cfg(not(target_arch = "wasm32"))]
             linera_views::metrics::increment_counter(
@@ -259,6 +259,29 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
         quote! {}
     };
 
+    let write_batch_with_metrics = if cfg!(feature = "metrics") {
+        quote! {
+            if !batch.is_empty() {
+                #[cfg(not(target_arch = "wasm32"))]
+                let start = std::time::Instant::now();
+                self.context().store().write_batch(batch).await?;
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
+                    linera_views::metrics::SAVE_VIEW_LATENCY
+                        .with_label_values(&[stringify!(#struct_name)])
+                        .observe(latency_ms);
+                }
+            }
+        }
+    } else {
+        quote! {
+            if !batch.is_empty() {
+                self.context().store().write_batch(batch).await?;
+            }
+        }
+    };
+
     quote! {
         impl #impl_generics linera_views::views::RootView for #struct_name #type_generics
         where
@@ -267,12 +290,10 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
         {
             async fn save(&mut self) -> Result<(), linera_views::ViewError> {
                 use linera_views::{context::Context as _, batch::Batch, store::WritableKeyValueStore as _, views::View as _};
-                #increment_counter
+                #metrics_code
                 let mut batch = Batch::new();
                 self.pre_save(&mut batch)?;
-                if !batch.is_empty() {
-                    self.context().store().write_batch(batch).await?;
-                }
+                #write_batch_with_metrics
                 self.post_save();
                 Ok(())
             }
