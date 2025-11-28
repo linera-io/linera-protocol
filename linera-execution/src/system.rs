@@ -644,10 +644,7 @@ where
         if source == AccountOwner::CHAIN {
             ensure!(
                 authenticated_owner.is_some()
-                    && self
-                        .ownership
-                        .get()
-                        .verify_owner(&authenticated_owner.unwrap()),
+                    && self.ownership.get().is_owner(&authenticated_owner.unwrap()),
                 ExecutionError::UnauthenticatedTransferOwner
             );
         } else {

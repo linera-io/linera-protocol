@@ -664,6 +664,11 @@ impl Round {
         }
     }
 
+    /// Returns whether this is a validator round.
+    pub fn is_validator(&self) -> bool {
+        matches!(self, Round::Validator(_))
+    }
+
     /// Whether the round is the fast round.
     pub fn is_fast(&self) -> bool {
         matches!(self, Round::Fast)

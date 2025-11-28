@@ -545,7 +545,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         let chain_description = client.get_chain_description().await?;
         let config = chain_description.config();
 
-        if !config.ownership.verify_owner(&owner) {
+        if !config.ownership.is_owner(&owner) {
             tracing::error!(
                 "The chain with the ID returned by the faucet is not owned by you. \
                 Please make sure you are connecting to a genuine faucet."
