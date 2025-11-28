@@ -94,9 +94,9 @@ where
                                     Ok(blob) => blob,
                                     Err(error) => {
                                         tracing::error!(
-                                            ?new_committee_blob,
+                                            blob_id=?new_committee_blob,
                                             ?error,
-                                            "failed to serialize the committee blob"
+                                            "failed to read the committee blob from storage"
                                         );
                                         return Err(error);
                                     },
@@ -106,9 +106,9 @@ where
                                     Ok(committee) => committee,
                                     Err(error) => {
                                         tracing::error!(
-                                            ?new_committee_blob,
+                                            blob_id=?new_committee_blob,
                                             ?error,
-                                            "failed to serialize the committee blob"
+                                            "failed to deserialize the committee blob"
                                         );
                                         continue;
                                     }
@@ -161,16 +161,20 @@ where
                             }
                         },
 
-                        Err(e @ (ExporterError::UnprocessedChain
+                        Err(error @ (ExporterError::UnprocessedChain
                                 | ExporterError::BadInitialization
                                 | ExporterError::ChainAlreadyExists(_))
                             ) => {
-                            tracing::error!("error {:?} when resolving block with hash: {}", e, next_block_notification.hash)
+                            tracing::error!(
+                                ?error,
+                                block_hash=?next_block_notification.hash,
+                                "error when resolving block with hash"
+                            );
                         },
 
-                        Err(e) => {
-                            tracing::error!("unexpected error: {:?}", e);
-                            return Err(e);
+                        Err(error) => {
+                            tracing::error!(?error, "unexpected error");
+                            return Err(error);
                         }
                     }
                 },
