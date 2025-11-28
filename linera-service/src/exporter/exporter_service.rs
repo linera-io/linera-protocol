@@ -38,6 +38,8 @@ impl NotifierService for ExporterService {
                 }
             };
 
+        #[cfg(with_metrics)]
+        crate::metrics::EXPORTER_NOTIFICATION_QUEUE_LENGTH.inc();
         self.block_processor_sender
             .send(block_id)
             .expect("sender should never fail");

@@ -5,8 +5,9 @@
 
 use prometheus::{
     exponential_buckets, histogram_opts, linear_buckets, register_histogram,
-    register_histogram_vec, register_int_counter, register_int_counter_vec, register_int_gauge_vec,
-    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGaugeVec, Opts,
+    register_histogram_vec, register_int_counter, register_int_counter_vec, register_int_gauge,
+    register_int_gauge_vec, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge,
+    IntGaugeVec, Opts,
 };
 
 use crate::time::Instant;
@@ -60,6 +61,12 @@ pub fn register_histogram(name: &str, description: &str, buckets: Option<Vec<f64
 pub fn register_int_gauge_vec(name: &str, description: &str, label_names: &[&str]) -> IntGaugeVec {
     let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
     register_int_gauge_vec!(gauge_opts, label_names).expect("IntGauge can be created")
+}
+
+/// Wrapper around Prometheus `register_int_gauge!` macro which also sets the `linera` namespace
+pub fn register_int_gauge(name: &str, description: &str) -> IntGauge {
+    let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
+    register_int_gauge!(gauge_opts).expect("IntGauge can be created")
 }
 
 /// Construct the bucket interval exponentially starting from a value and an ending value.
