@@ -4,6 +4,7 @@
 use std::{
     collections::HashMap,
     future::{Future, IntoFuture},
+    str::FromStr,
     time::{Duration, Instant},
 };
 
@@ -33,6 +34,7 @@ where
     // Tracks certificates that failed to be read from storage
     // along with the time of the failure to avoid retrying for too long.
     retried_certs: HashMap<CryptoHash, (u8, Instant)>,
+    known_missing_certs: Vec<CryptoHash>,
 }
 
 impl<S, T> BlockProcessor<S, T>
@@ -47,12 +49,19 @@ where
         new_block_queue: NewBlockQueue,
         committee_destination_update: bool,
     ) -> Self {
+        let known_missing_certs = std::env::var("LINERA_KNOWN_MISSING_CERTS")
+            .unwrap_or_default()
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .filter_map(|s| CryptoHash::from_str(s.trim()).ok())
+            .collect();
         Self {
             storage,
             exporters_tracker,
             committee_destination_update,
             new_block_queue,
             retried_certs: HashMap::new(),
+            known_missing_certs,
         }
     }
 
@@ -138,6 +147,10 @@ where
                         },
 
                         Err(ExporterError::ReadCertificateError(hash)) => {
+                            if self.known_missing_certs.contains(&hash) {
+                                tracing::debug!(?hash, "certificate known to be missing, skipping retry");
+                                continue;
+                            }
                             match self.retried_certs.remove(&hash) {
                                 // We retry only if the time elapsed since the first attempt is
                                 // less than 1 second. The assumption is that Scylla cannot
