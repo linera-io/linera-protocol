@@ -42,15 +42,6 @@ impl IndexerDatabase for MockFailingDatabase {
         ))
     }
 
-    async fn insert_blob_tx(
-        &self,
-        _tx: &mut DatabaseTransaction<'_>,
-        _blob_id: &BlobId,
-        _data: &[u8],
-    ) -> Result<(), SqliteError> {
-        Ok(())
-    }
-
     async fn insert_block_tx(
         &self,
         _tx: &mut DatabaseTransaction<'_>,
@@ -198,15 +189,6 @@ impl IndexerDatabase for MockSuccessDatabase {
         Err(SqliteError::Serialization(
             "Mock: Cannot create real transaction".to_string(),
         ))
-    }
-
-    async fn insert_blob_tx(
-        &self,
-        _tx: &mut DatabaseTransaction<'_>,
-        _blob_id: &BlobId,
-        _data: &[u8],
-    ) -> Result<(), SqliteError> {
-        Ok(())
     }
 
     async fn insert_block_tx(

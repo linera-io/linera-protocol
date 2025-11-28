@@ -332,6 +332,7 @@ where
             };
 
             let reason = &notification.reason;
+            let chain_id = notification.chain_id;
             let notification: api::Notification = match notification.clone().try_into() {
                 Ok(notification) => notification,
                 Err(error) => {
@@ -344,7 +345,8 @@ where
                 error!(
                     %error,
                     nickname,
-                    ?notification,
+                    ?chain_id,
+                    ?reason,
                     "proxy: could not send notification",
                 )
             }
@@ -361,7 +363,8 @@ where
                         error!(
                             %error,
                             nickname,
-                            ?notification,
+                            ?chain_id,
+                            ?reason,
                             "block exporter: could not send notification",
                         )
                     }

@@ -118,7 +118,17 @@ where
                 .with_label_values(&[self.node.address()])
                 .set(receiver.len() as i64);
             match self.dispatch_block((*block).clone()).await {
-                Ok(_) => {}
+                Ok(_) => {
+                    if let Err(error) = self.upload_blobs(blobs_ids).await {
+                        tracing::error!(
+                            %error,
+                            block=?block.hash(),
+                            chain_id=?block.inner().chain_id(),
+                            "error when uploading blobs after dispatching block"
+                        );
+                        // We ignore the error and continue to the next block.
+                    }
+                }
 
                 Err(NodeError::BlobsNotFound(blobs_to_maybe_send)) => {
                     let blobs = blobs_ids
@@ -152,8 +162,8 @@ where
                 Err(e) => Err(e),
                 Ok(blob) => {
                     tracing::info!(
-                        "dispatching blob with id: {:#?} from linera exporter",
-                        blob.id()
+                        blob_id=?blob.id(),
+                        "dispatching blob",
                     );
                     #[cfg(with_metrics)]
                     let start = linera_base::time::Instant::now();

@@ -6,6 +6,8 @@
 #[cfg(test)]
 pub(crate) mod tests;
 
+pub mod common;
+pub mod postgres;
 pub mod sqlite;
 
 use async_trait::async_trait;
@@ -15,15 +17,13 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_service_graphql_client::MessageAction;
-use sqlx::{Sqlite, Transaction};
-
-/// Transaction type for database operations
-pub type DatabaseTransaction<'a> = Transaction<'a, Sqlite>;
 
 /// Trait defining the database operations for the indexer
 #[async_trait]
 pub trait IndexerDatabase: Send + Sync {
     type Error;
+
+    type Transaction<'a>: Send + Sync;
 
     /// Atomically store a block with its required blobs
     /// This is the high-level API that can be implemented in terms of the other methods
@@ -55,12 +55,12 @@ pub trait IndexerDatabase: Send + Sync {
     }
 
     /// Start a new transaction
-    async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, Self::Error>;
+    async fn begin_transaction(&self) -> Result<Self::Transaction<'_>, Self::Error>;
 
     /// Insert a blob within a transaction
     async fn insert_blob_tx(
         &self,
-        tx: &mut DatabaseTransaction<'_>,
+        tx: &mut Self::Transaction<'_>,
         blob_id: &BlobId,
         data: &[u8],
     ) -> Result<(), Self::Error>;
@@ -68,7 +68,7 @@ pub trait IndexerDatabase: Send + Sync {
     /// Insert a block within a transaction
     async fn insert_block_tx(
         &self,
-        tx: &mut DatabaseTransaction<'_>,
+        tx: &mut Self::Transaction<'_>,
         hash: &CryptoHash,
         chain_id: &ChainId,
         height: BlockHeight,
@@ -77,7 +77,7 @@ pub trait IndexerDatabase: Send + Sync {
     ) -> Result<(), Self::Error>;
 
     /// Commit a transaction
-    async fn commit_transaction(&self, tx: DatabaseTransaction<'_>) -> Result<(), Self::Error>;
+    async fn commit_transaction(&self, tx: Self::Transaction<'_>) -> Result<(), Self::Error>;
 
     /// Get a block by hash
     async fn get_block(&self, hash: &CryptoHash) -> Result<Vec<u8>, Self::Error>;
