@@ -625,8 +625,9 @@ where
     /// proposal's round.
     ///
     /// Super owners can always propose, except in `Validator` rounds, but it is recommended that
-    /// they only propose in `Fast` rounds. In multi-leader rounds, any regular owner can propose
-    /// (or anyone, if `open_multi_leader_rounds`) and in other rounds there is only one leader.
+    /// they don't interfere with single-leader rounds. In multi-leader rounds, any owner can
+    /// propose (or anyone, if `open_multi_leader_rounds`) and in other rounds there is only
+    /// one leader.
     pub fn can_propose(&self, owner: &AccountOwner, round: Round) -> bool {
         let ownership = self.ownership.get();
         if ownership.super_owners.contains(owner) {
@@ -842,8 +843,10 @@ impl ChainManagerInfo {
             .map(|vote| Box::new(vote.value.clone()));
     }
 
-    /// Returns whether the `identity` is allowed to propose a block in `round`, except that it
-    /// returns `false` for super owners in single-leader rounds unless they are the leader.
+    /// Returns whether the `identity` is allowed to propose a block in `round`.
+    ///
+    /// **Exception:** In single-leader rounds, a **super owner** should only propose
+    /// if they are the designated **leader** for that round.
     pub fn should_propose(
         &self,
         identity: &AccountOwner,
@@ -898,8 +901,8 @@ fn calculate_distribution<'a, T: 'a>(
     }
 }
 
-/// Returns the leader for single-leader or validator rounds, or `None` if there is no designated
-/// leader (i.e. in fast or multi-leader rounds).
+/// Returns the designated leader for single-leader or validator rounds.
+/// Returns `None` for fast or multi-leader rounds.
 fn compute_round_leader<'a>(
     round: Round,
     seed: u64,
