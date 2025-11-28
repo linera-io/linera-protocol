@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["builders"],"struct":["ExpiredTokenException","IdpCommunicationErrorException","IdpRejectedClaimException","InvalidAuthorizationMessageException","InvalidIdentityTokenException","MalformedPolicyDocumentException","PackedPolicyTooLargeException","RegionDisabledException"]};

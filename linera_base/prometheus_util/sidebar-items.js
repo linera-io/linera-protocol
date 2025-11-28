@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["exponential_bucket_interval","exponential_bucket_latencies","linear_bucket_interval","register_histogram","register_histogram_vec","register_int_counter","register_int_counter_vec","register_int_gauge","register_int_gauge_vec"],"struct":["ActiveMeasurementGuard"],"trait":["MeasureLatency"]};

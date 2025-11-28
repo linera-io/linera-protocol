@@ -1,0 +1,624 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flate2-1.1.2/src/gz/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="flate2" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">flate2/gz/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>std::ffi::CString;
+<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>std::io::{BufRead, Error, ErrorKind, Read, <span class="prelude-ty">Result</span>, Write};
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>std::time;
+<a href=#4 id=4 data-nosnippet>4</a>
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span><span class="kw">crate</span>::bufreader::BufReader;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use crate</span>::{Compression, Crc};
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">pub static </span>FHCRC: u8 = <span class="number">1 </span>&lt;&lt; <span class="number">1</span>;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">pub static </span>FEXTRA: u8 = <span class="number">1 </span>&lt;&lt; <span class="number">2</span>;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">pub static </span>FNAME: u8 = <span class="number">1 </span>&lt;&lt; <span class="number">3</span>;
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">pub static </span>FCOMMENT: u8 = <span class="number">1 </span>&lt;&lt; <span class="number">4</span>;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">pub static </span>FRESERVED: u8 = <span class="number">1 </span>&lt;&lt; <span class="number">5 </span>| <span class="number">1 </span>&lt;&lt; <span class="number">6 </span>| <span class="number">1 </span>&lt;&lt; <span class="number">7</span>;
+<a href=#13 id=13 data-nosnippet>13</a>
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">pub mod </span>bufread;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">pub mod </span>read;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">pub mod </span>write;
+<a href=#17 id=17 data-nosnippet>17</a>
+<a href=#18 id=18 data-nosnippet>18</a><span class="comment">// The maximum length of the header filename and comment fields. More than
+<a href=#19 id=19 data-nosnippet>19</a>// enough for these fields in reasonable use, but prevents possible attacks.
+<a href=#20 id=20 data-nosnippet>20</a></span><span class="kw">const </span>MAX_HEADER_BUF: usize = <span class="number">65535</span>;
+<a href=#21 id=21 data-nosnippet>21</a>
+<a href=#22 id=22 data-nosnippet>22</a><span class="doccomment">/// A structure representing the header of a gzip stream.
+<a href=#23 id=23 data-nosnippet>23</a>///
+<a href=#24 id=24 data-nosnippet>24</a>/// The header can contain metadata about the file that was compressed, if
+<a href=#25 id=25 data-nosnippet>25</a>/// present.
+<a href=#26 id=26 data-nosnippet>26</a></span><span class="attr">#[derive(PartialEq, Clone, Debug, Default)]
+<a href=#27 id=27 data-nosnippet>27</a></span><span class="kw">pub struct </span>GzHeader {
+<a href=#28 id=28 data-nosnippet>28</a>    extra: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;,
+<a href=#29 id=29 data-nosnippet>29</a>    filename: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;,
+<a href=#30 id=30 data-nosnippet>30</a>    comment: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;,
+<a href=#31 id=31 data-nosnippet>31</a>    operating_system: u8,
+<a href=#32 id=32 data-nosnippet>32</a>    mtime: u32,
+<a href=#33 id=33 data-nosnippet>33</a>}
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">impl </span>GzHeader {
+<a href=#36 id=36 data-nosnippet>36</a>    <span class="doccomment">/// Returns the `filename` field of this gzip stream's header, if present.
+<a href=#37 id=37 data-nosnippet>37</a>    </span><span class="kw">pub fn </span>filename(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt; {
+<a href=#38 id=38 data-nosnippet>38</a>        <span class="self">self</span>.filename.as_ref().map(|s| <span class="kw-2">&amp;</span>s[..])
+<a href=#39 id=39 data-nosnippet>39</a>    }
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a>    <span class="doccomment">/// Returns the `extra` field of this gzip stream's header, if present.
+<a href=#42 id=42 data-nosnippet>42</a>    </span><span class="kw">pub fn </span>extra(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt; {
+<a href=#43 id=43 data-nosnippet>43</a>        <span class="self">self</span>.extra.as_ref().map(|s| <span class="kw-2">&amp;</span>s[..])
+<a href=#44 id=44 data-nosnippet>44</a>    }
+<a href=#45 id=45 data-nosnippet>45</a>
+<a href=#46 id=46 data-nosnippet>46</a>    <span class="doccomment">/// Returns the `comment` field of this gzip stream's header, if present.
+<a href=#47 id=47 data-nosnippet>47</a>    </span><span class="kw">pub fn </span>comment(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt; {
+<a href=#48 id=48 data-nosnippet>48</a>        <span class="self">self</span>.comment.as_ref().map(|s| <span class="kw-2">&amp;</span>s[..])
+<a href=#49 id=49 data-nosnippet>49</a>    }
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a>    <span class="doccomment">/// Returns the `operating_system` field of this gzip stream's header.
+<a href=#52 id=52 data-nosnippet>52</a>    ///
+<a href=#53 id=53 data-nosnippet>53</a>    /// There are predefined values for various operating systems.
+<a href=#54 id=54 data-nosnippet>54</a>    /// 255 means that the value is unknown.
+<a href=#55 id=55 data-nosnippet>55</a>    </span><span class="kw">pub fn </span>operating_system(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u8 {
+<a href=#56 id=56 data-nosnippet>56</a>        <span class="self">self</span>.operating_system
+<a href=#57 id=57 data-nosnippet>57</a>    }
+<a href=#58 id=58 data-nosnippet>58</a>
+<a href=#59 id=59 data-nosnippet>59</a>    <span class="doccomment">/// This gives the most recent modification time of the original file being compressed.
+<a href=#60 id=60 data-nosnippet>60</a>    ///
+<a href=#61 id=61 data-nosnippet>61</a>    /// The time is in Unix format, i.e., seconds since 00:00:00 GMT, Jan. 1, 1970.
+<a href=#62 id=62 data-nosnippet>62</a>    /// (Note that this may cause problems for MS-DOS and other systems that use local
+<a href=#63 id=63 data-nosnippet>63</a>    /// rather than Universal time.) If the compressed data did not come from a file,
+<a href=#64 id=64 data-nosnippet>64</a>    /// `mtime` is set to the time at which compression started.
+<a href=#65 id=65 data-nosnippet>65</a>    /// `mtime` = 0 means no time stamp is available.
+<a href=#66 id=66 data-nosnippet>66</a>    ///
+<a href=#67 id=67 data-nosnippet>67</a>    /// The usage of `mtime` is discouraged because of Year 2038 problem.
+<a href=#68 id=68 data-nosnippet>68</a>    </span><span class="kw">pub fn </span>mtime(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
+<a href=#69 id=69 data-nosnippet>69</a>        <span class="self">self</span>.mtime
+<a href=#70 id=70 data-nosnippet>70</a>    }
+<a href=#71 id=71 data-nosnippet>71</a>
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="doccomment">/// Returns the most recent modification time represented by a date-time type.
+<a href=#73 id=73 data-nosnippet>73</a>    /// Returns `None` if the value of the underlying counter is 0,
+<a href=#74 id=74 data-nosnippet>74</a>    /// indicating no time stamp is available.
+<a href=#75 id=75 data-nosnippet>75</a>    ///
+<a href=#76 id=76 data-nosnippet>76</a>    ///
+<a href=#77 id=77 data-nosnippet>77</a>    /// The time is measured as seconds since 00:00:00 GMT, Jan. 1 1970.
+<a href=#78 id=78 data-nosnippet>78</a>    /// See [`mtime`](#method.mtime) for more detail.
+<a href=#79 id=79 data-nosnippet>79</a>    </span><span class="kw">pub fn </span>mtime_as_datetime(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;time::SystemTime&gt; {
+<a href=#80 id=80 data-nosnippet>80</a>        <span class="kw">if </span><span class="self">self</span>.mtime == <span class="number">0 </span>{
+<a href=#81 id=81 data-nosnippet>81</a>            <span class="prelude-val">None
+<a href=#82 id=82 data-nosnippet>82</a>        </span>} <span class="kw">else </span>{
+<a href=#83 id=83 data-nosnippet>83</a>            <span class="kw">let </span>duration = time::Duration::new(u64::from(<span class="self">self</span>.mtime), <span class="number">0</span>);
+<a href=#84 id=84 data-nosnippet>84</a>            <span class="kw">let </span>datetime = time::UNIX_EPOCH + duration;
+<a href=#85 id=85 data-nosnippet>85</a>            <span class="prelude-val">Some</span>(datetime)
+<a href=#86 id=86 data-nosnippet>86</a>        }
+<a href=#87 id=87 data-nosnippet>87</a>    }
+<a href=#88 id=88 data-nosnippet>88</a>}
+<a href=#89 id=89 data-nosnippet>89</a>
+<a href=#90 id=90 data-nosnippet>90</a><span class="attr">#[derive(Debug, Default)]
+<a href=#91 id=91 data-nosnippet>91</a></span><span class="kw">pub enum </span>GzHeaderState {
+<a href=#92 id=92 data-nosnippet>92</a>    Start(u8, [u8; <span class="number">10</span>]),
+<a href=#93 id=93 data-nosnippet>93</a>    Xlen(<span class="prelude-ty">Option</span>&lt;Box&lt;Crc&gt;&gt;, u8, [u8; <span class="number">2</span>]),
+<a href=#94 id=94 data-nosnippet>94</a>    Extra(<span class="prelude-ty">Option</span>&lt;Box&lt;Crc&gt;&gt;, u16),
+<a href=#95 id=95 data-nosnippet>95</a>    Filename(<span class="prelude-ty">Option</span>&lt;Box&lt;Crc&gt;&gt;),
+<a href=#96 id=96 data-nosnippet>96</a>    Comment(<span class="prelude-ty">Option</span>&lt;Box&lt;Crc&gt;&gt;),
+<a href=#97 id=97 data-nosnippet>97</a>    Crc(<span class="prelude-ty">Option</span>&lt;Box&lt;Crc&gt;&gt;, u8, [u8; <span class="number">2</span>]),
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="attr">#[default]
+<a href=#99 id=99 data-nosnippet>99</a>    </span>Complete,
+<a href=#100 id=100 data-nosnippet>100</a>}
+<a href=#101 id=101 data-nosnippet>101</a>
+<a href=#102 id=102 data-nosnippet>102</a><span class="attr">#[derive(Debug, Default)]
+<a href=#103 id=103 data-nosnippet>103</a></span><span class="kw">pub struct </span>GzHeaderParser {
+<a href=#104 id=104 data-nosnippet>104</a>    state: GzHeaderState,
+<a href=#105 id=105 data-nosnippet>105</a>    flags: u8,
+<a href=#106 id=106 data-nosnippet>106</a>    header: GzHeader,
+<a href=#107 id=107 data-nosnippet>107</a>}
+<a href=#108 id=108 data-nosnippet>108</a>
+<a href=#109 id=109 data-nosnippet>109</a><span class="kw">impl </span>GzHeaderParser {
+<a href=#110 id=110 data-nosnippet>110</a>    <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#111 id=111 data-nosnippet>111</a>        GzHeaderParser {
+<a href=#112 id=112 data-nosnippet>112</a>            state: GzHeaderState::Start(<span class="number">0</span>, [<span class="number">0</span>; <span class="number">10</span>]),
+<a href=#113 id=113 data-nosnippet>113</a>            flags: <span class="number">0</span>,
+<a href=#114 id=114 data-nosnippet>114</a>            header: GzHeader::default(),
+<a href=#115 id=115 data-nosnippet>115</a>        }
+<a href=#116 id=116 data-nosnippet>116</a>    }
+<a href=#117 id=117 data-nosnippet>117</a>
+<a href=#118 id=118 data-nosnippet>118</a>    <span class="kw">fn </span>parse&lt;R: BufRead&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span>R) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#119 id=119 data-nosnippet>119</a>        <span class="kw">loop </span>{
+<a href=#120 id=120 data-nosnippet>120</a>            <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.state {
+<a href=#121 id=121 data-nosnippet>121</a>                GzHeaderState::Start(count, buffer) =&gt; {
+<a href=#122 id=122 data-nosnippet>122</a>                    <span class="kw">while </span>(<span class="kw-2">*</span>count <span class="kw">as </span>usize) &lt; buffer.len() {
+<a href=#123 id=123 data-nosnippet>123</a>                        <span class="kw-2">*</span>count += read_into(r, <span class="kw-2">&amp;mut </span>buffer[<span class="kw-2">*</span>count <span class="kw">as </span>usize..])<span class="question-mark">? </span><span class="kw">as </span>u8;
+<a href=#124 id=124 data-nosnippet>124</a>                    }
+<a href=#125 id=125 data-nosnippet>125</a>                    <span class="comment">// Gzip identification bytes
+<a href=#126 id=126 data-nosnippet>126</a>                    </span><span class="kw">if </span>buffer[<span class="number">0</span>] != <span class="number">0x1f </span>|| buffer[<span class="number">1</span>] != <span class="number">0x8b </span>{
+<a href=#127 id=127 data-nosnippet>127</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(bad_header());
+<a href=#128 id=128 data-nosnippet>128</a>                    }
+<a href=#129 id=129 data-nosnippet>129</a>                    <span class="comment">// Gzip compression method (8 = deflate)
+<a href=#130 id=130 data-nosnippet>130</a>                    </span><span class="kw">if </span>buffer[<span class="number">2</span>] != <span class="number">8 </span>{
+<a href=#131 id=131 data-nosnippet>131</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(bad_header());
+<a href=#132 id=132 data-nosnippet>132</a>                    }
+<a href=#133 id=133 data-nosnippet>133</a>                    <span class="self">self</span>.flags = buffer[<span class="number">3</span>];
+<a href=#134 id=134 data-nosnippet>134</a>                    <span class="comment">// RFC1952: "must give an error indication if any reserved bit is non-zero"
+<a href=#135 id=135 data-nosnippet>135</a>                    </span><span class="kw">if </span><span class="self">self</span>.flags &amp; FRESERVED != <span class="number">0 </span>{
+<a href=#136 id=136 data-nosnippet>136</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(bad_header());
+<a href=#137 id=137 data-nosnippet>137</a>                    }
+<a href=#138 id=138 data-nosnippet>138</a>                    <span class="self">self</span>.header.mtime = (buffer[<span class="number">4</span>] <span class="kw">as </span>u32)
+<a href=#139 id=139 data-nosnippet>139</a>                        | ((buffer[<span class="number">5</span>] <span class="kw">as </span>u32) &lt;&lt; <span class="number">8</span>)
+<a href=#140 id=140 data-nosnippet>140</a>                        | ((buffer[<span class="number">6</span>] <span class="kw">as </span>u32) &lt;&lt; <span class="number">16</span>)
+<a href=#141 id=141 data-nosnippet>141</a>                        | ((buffer[<span class="number">7</span>] <span class="kw">as </span>u32) &lt;&lt; <span class="number">24</span>);
+<a href=#142 id=142 data-nosnippet>142</a>                    <span class="kw">let </span>_xfl = buffer[<span class="number">8</span>];
+<a href=#143 id=143 data-nosnippet>143</a>                    <span class="self">self</span>.header.operating_system = buffer[<span class="number">9</span>];
+<a href=#144 id=144 data-nosnippet>144</a>                    <span class="kw">let </span>crc = <span class="kw">if </span><span class="self">self</span>.flags &amp; FHCRC != <span class="number">0 </span>{
+<a href=#145 id=145 data-nosnippet>145</a>                        <span class="kw">let </span><span class="kw-2">mut </span>crc = Box::new(Crc::new());
+<a href=#146 id=146 data-nosnippet>146</a>                        crc.update(buffer);
+<a href=#147 id=147 data-nosnippet>147</a>                        <span class="prelude-val">Some</span>(crc)
+<a href=#148 id=148 data-nosnippet>148</a>                    } <span class="kw">else </span>{
+<a href=#149 id=149 data-nosnippet>149</a>                        <span class="prelude-val">None
+<a href=#150 id=150 data-nosnippet>150</a>                    </span>};
+<a href=#151 id=151 data-nosnippet>151</a>                    <span class="self">self</span>.state = GzHeaderState::Xlen(crc, <span class="number">0</span>, [<span class="number">0</span>; <span class="number">2</span>]);
+<a href=#152 id=152 data-nosnippet>152</a>                }
+<a href=#153 id=153 data-nosnippet>153</a>                GzHeaderState::Xlen(crc, count, buffer) =&gt; {
+<a href=#154 id=154 data-nosnippet>154</a>                    <span class="kw">if </span><span class="self">self</span>.flags &amp; FEXTRA != <span class="number">0 </span>{
+<a href=#155 id=155 data-nosnippet>155</a>                        <span class="kw">while </span>(<span class="kw-2">*</span>count <span class="kw">as </span>usize) &lt; buffer.len() {
+<a href=#156 id=156 data-nosnippet>156</a>                            <span class="kw-2">*</span>count += read_into(r, <span class="kw-2">&amp;mut </span>buffer[<span class="kw-2">*</span>count <span class="kw">as </span>usize..])<span class="question-mark">? </span><span class="kw">as </span>u8;
+<a href=#157 id=157 data-nosnippet>157</a>                        }
+<a href=#158 id=158 data-nosnippet>158</a>                        <span class="kw">if let </span><span class="prelude-val">Some</span>(crc) = crc {
+<a href=#159 id=159 data-nosnippet>159</a>                            crc.update(buffer);
+<a href=#160 id=160 data-nosnippet>160</a>                        }
+<a href=#161 id=161 data-nosnippet>161</a>                        <span class="kw">let </span>xlen = parse_le_u16(buffer);
+<a href=#162 id=162 data-nosnippet>162</a>                        <span class="self">self</span>.header.extra = <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="number">0</span>; xlen <span class="kw">as </span>usize]);
+<a href=#163 id=163 data-nosnippet>163</a>                        <span class="self">self</span>.state = GzHeaderState::Extra(crc.take(), <span class="number">0</span>);
+<a href=#164 id=164 data-nosnippet>164</a>                    } <span class="kw">else </span>{
+<a href=#165 id=165 data-nosnippet>165</a>                        <span class="self">self</span>.state = GzHeaderState::Filename(crc.take());
+<a href=#166 id=166 data-nosnippet>166</a>                    }
+<a href=#167 id=167 data-nosnippet>167</a>                }
+<a href=#168 id=168 data-nosnippet>168</a>                GzHeaderState::Extra(crc, count) =&gt; {
+<a href=#169 id=169 data-nosnippet>169</a>                    <span class="macro">debug_assert!</span>(<span class="self">self</span>.header.extra.is_some());
+<a href=#170 id=170 data-nosnippet>170</a>                    <span class="kw">let </span>extra = <span class="self">self</span>.header.extra.as_mut().unwrap();
+<a href=#171 id=171 data-nosnippet>171</a>                    <span class="kw">while </span>(<span class="kw-2">*</span>count <span class="kw">as </span>usize) &lt; extra.len() {
+<a href=#172 id=172 data-nosnippet>172</a>                        <span class="kw-2">*</span>count += read_into(r, <span class="kw-2">&amp;mut </span>extra[<span class="kw-2">*</span>count <span class="kw">as </span>usize..])<span class="question-mark">? </span><span class="kw">as </span>u16;
+<a href=#173 id=173 data-nosnippet>173</a>                    }
+<a href=#174 id=174 data-nosnippet>174</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(crc) = crc {
+<a href=#175 id=175 data-nosnippet>175</a>                        crc.update(extra);
+<a href=#176 id=176 data-nosnippet>176</a>                    }
+<a href=#177 id=177 data-nosnippet>177</a>                    <span class="self">self</span>.state = GzHeaderState::Filename(crc.take());
+<a href=#178 id=178 data-nosnippet>178</a>                }
+<a href=#179 id=179 data-nosnippet>179</a>                GzHeaderState::Filename(crc) =&gt; {
+<a href=#180 id=180 data-nosnippet>180</a>                    <span class="kw">if </span><span class="self">self</span>.flags &amp; FNAME != <span class="number">0 </span>{
+<a href=#181 id=181 data-nosnippet>181</a>                        <span class="kw">let </span>filename = <span class="self">self</span>.header.filename.get_or_insert_with(Vec::new);
+<a href=#182 id=182 data-nosnippet>182</a>                        read_to_nul(r, filename)<span class="question-mark">?</span>;
+<a href=#183 id=183 data-nosnippet>183</a>                        <span class="kw">if let </span><span class="prelude-val">Some</span>(crc) = crc {
+<a href=#184 id=184 data-nosnippet>184</a>                            crc.update(filename);
+<a href=#185 id=185 data-nosnippet>185</a>                            crc.update(<span class="string">b"\0"</span>);
+<a href=#186 id=186 data-nosnippet>186</a>                        }
+<a href=#187 id=187 data-nosnippet>187</a>                    }
+<a href=#188 id=188 data-nosnippet>188</a>                    <span class="self">self</span>.state = GzHeaderState::Comment(crc.take());
+<a href=#189 id=189 data-nosnippet>189</a>                }
+<a href=#190 id=190 data-nosnippet>190</a>                GzHeaderState::Comment(crc) =&gt; {
+<a href=#191 id=191 data-nosnippet>191</a>                    <span class="kw">if </span><span class="self">self</span>.flags &amp; FCOMMENT != <span class="number">0 </span>{
+<a href=#192 id=192 data-nosnippet>192</a>                        <span class="kw">let </span>comment = <span class="self">self</span>.header.comment.get_or_insert_with(Vec::new);
+<a href=#193 id=193 data-nosnippet>193</a>                        read_to_nul(r, comment)<span class="question-mark">?</span>;
+<a href=#194 id=194 data-nosnippet>194</a>                        <span class="kw">if let </span><span class="prelude-val">Some</span>(crc) = crc {
+<a href=#195 id=195 data-nosnippet>195</a>                            crc.update(comment);
+<a href=#196 id=196 data-nosnippet>196</a>                            crc.update(<span class="string">b"\0"</span>);
+<a href=#197 id=197 data-nosnippet>197</a>                        }
+<a href=#198 id=198 data-nosnippet>198</a>                    }
+<a href=#199 id=199 data-nosnippet>199</a>                    <span class="self">self</span>.state = GzHeaderState::Crc(crc.take(), <span class="number">0</span>, [<span class="number">0</span>; <span class="number">2</span>]);
+<a href=#200 id=200 data-nosnippet>200</a>                }
+<a href=#201 id=201 data-nosnippet>201</a>                GzHeaderState::Crc(crc, count, buffer) =&gt; {
+<a href=#202 id=202 data-nosnippet>202</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(crc) = crc {
+<a href=#203 id=203 data-nosnippet>203</a>                        <span class="macro">debug_assert!</span>(<span class="self">self</span>.flags &amp; FHCRC != <span class="number">0</span>);
+<a href=#204 id=204 data-nosnippet>204</a>                        <span class="kw">while </span>(<span class="kw-2">*</span>count <span class="kw">as </span>usize) &lt; buffer.len() {
+<a href=#205 id=205 data-nosnippet>205</a>                            <span class="kw-2">*</span>count += read_into(r, <span class="kw-2">&amp;mut </span>buffer[<span class="kw-2">*</span>count <span class="kw">as </span>usize..])<span class="question-mark">? </span><span class="kw">as </span>u8;
+<a href=#206 id=206 data-nosnippet>206</a>                        }
+<a href=#207 id=207 data-nosnippet>207</a>                        <span class="kw">let </span>stored_crc = parse_le_u16(buffer);
+<a href=#208 id=208 data-nosnippet>208</a>                        <span class="kw">let </span>calced_crc = crc.sum() <span class="kw">as </span>u16;
+<a href=#209 id=209 data-nosnippet>209</a>                        <span class="kw">if </span>stored_crc != calced_crc {
+<a href=#210 id=210 data-nosnippet>210</a>                            <span class="kw">return </span><span class="prelude-val">Err</span>(corrupt());
+<a href=#211 id=211 data-nosnippet>211</a>                        }
+<a href=#212 id=212 data-nosnippet>212</a>                    }
+<a href=#213 id=213 data-nosnippet>213</a>                    <span class="self">self</span>.state = GzHeaderState::Complete;
+<a href=#214 id=214 data-nosnippet>214</a>                }
+<a href=#215 id=215 data-nosnippet>215</a>                GzHeaderState::Complete =&gt; {
+<a href=#216 id=216 data-nosnippet>216</a>                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#217 id=217 data-nosnippet>217</a>                }
+<a href=#218 id=218 data-nosnippet>218</a>            }
+<a href=#219 id=219 data-nosnippet>219</a>        }
+<a href=#220 id=220 data-nosnippet>220</a>    }
+<a href=#221 id=221 data-nosnippet>221</a>
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="kw">fn </span>header(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>GzHeader&gt; {
+<a href=#223 id=223 data-nosnippet>223</a>        <span class="kw">match </span><span class="self">self</span>.state {
+<a href=#224 id=224 data-nosnippet>224</a>            GzHeaderState::Complete =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.header),
+<a href=#225 id=225 data-nosnippet>225</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#226 id=226 data-nosnippet>226</a>        }
+<a href=#227 id=227 data-nosnippet>227</a>    }
+<a href=#228 id=228 data-nosnippet>228</a>}
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a><span class="kw">impl </span>From&lt;GzHeaderParser&gt; <span class="kw">for </span>GzHeader {
+<a href=#231 id=231 data-nosnippet>231</a>    <span class="kw">fn </span>from(parser: GzHeaderParser) -&gt; <span class="self">Self </span>{
+<a href=#232 id=232 data-nosnippet>232</a>        <span class="macro">debug_assert!</span>(<span class="macro">matches!</span>(parser.state, GzHeaderState::Complete));
+<a href=#233 id=233 data-nosnippet>233</a>        parser.header
+<a href=#234 id=234 data-nosnippet>234</a>    }
+<a href=#235 id=235 data-nosnippet>235</a>}
+<a href=#236 id=236 data-nosnippet>236</a>
+<a href=#237 id=237 data-nosnippet>237</a><span class="comment">// Attempt to fill the `buffer` from `r`. Return the number of bytes read.
+<a href=#238 id=238 data-nosnippet>238</a>// Return an error if EOF is read before the buffer is full.  This differs
+<a href=#239 id=239 data-nosnippet>239</a>// from `read` in that Ok(0) means that more data may be available.
+<a href=#240 id=240 data-nosnippet>240</a></span><span class="kw">fn </span>read_into&lt;R: Read&gt;(r: <span class="kw-2">&amp;mut </span>R, buffer: <span class="kw-2">&amp;mut </span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;usize&gt; {
+<a href=#241 id=241 data-nosnippet>241</a>    <span class="macro">debug_assert!</span>(!buffer.is_empty());
+<a href=#242 id=242 data-nosnippet>242</a>    <span class="kw">match </span>r.read(buffer) {
+<a href=#243 id=243 data-nosnippet>243</a>        <span class="prelude-val">Ok</span>(<span class="number">0</span>) =&gt; <span class="prelude-val">Err</span>(ErrorKind::UnexpectedEof.into()),
+<a href=#244 id=244 data-nosnippet>244</a>        <span class="prelude-val">Ok</span>(n) =&gt; <span class="prelude-val">Ok</span>(n),
+<a href=#245 id=245 data-nosnippet>245</a>        <span class="prelude-val">Err</span>(<span class="kw-2">ref </span>e) <span class="kw">if </span>e.kind() == ErrorKind::Interrupted =&gt; <span class="prelude-val">Ok</span>(<span class="number">0</span>),
+<a href=#246 id=246 data-nosnippet>246</a>        <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e),
+<a href=#247 id=247 data-nosnippet>247</a>    }
+<a href=#248 id=248 data-nosnippet>248</a>}
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a><span class="comment">// Read `r` up to the first nul byte, pushing non-nul bytes to `buffer`.
+<a href=#251 id=251 data-nosnippet>251</a></span><span class="kw">fn </span>read_to_nul&lt;R: BufRead&gt;(r: <span class="kw-2">&amp;mut </span>R, buffer: <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#252 id=252 data-nosnippet>252</a>    <span class="kw">let </span><span class="kw-2">mut </span>bytes = r.bytes();
+<a href=#253 id=253 data-nosnippet>253</a>    <span class="kw">loop </span>{
+<a href=#254 id=254 data-nosnippet>254</a>        <span class="kw">match </span>bytes.next().transpose()<span class="question-mark">? </span>{
+<a href=#255 id=255 data-nosnippet>255</a>            <span class="prelude-val">Some</span>(<span class="number">0</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(()),
+<a href=#256 id=256 data-nosnippet>256</a>            <span class="prelude-val">Some</span>(<span class="kw">_</span>) <span class="kw">if </span>buffer.len() == MAX_HEADER_BUF =&gt; {
+<a href=#257 id=257 data-nosnippet>257</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(Error::new(
+<a href=#258 id=258 data-nosnippet>258</a>                    ErrorKind::InvalidInput,
+<a href=#259 id=259 data-nosnippet>259</a>                    <span class="string">"gzip header field too long"</span>,
+<a href=#260 id=260 data-nosnippet>260</a>                ));
+<a href=#261 id=261 data-nosnippet>261</a>            }
+<a href=#262 id=262 data-nosnippet>262</a>            <span class="prelude-val">Some</span>(byte) =&gt; {
+<a href=#263 id=263 data-nosnippet>263</a>                buffer.push(byte);
+<a href=#264 id=264 data-nosnippet>264</a>            }
+<a href=#265 id=265 data-nosnippet>265</a>            <span class="prelude-val">None </span>=&gt; {
+<a href=#266 id=266 data-nosnippet>266</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(ErrorKind::UnexpectedEof.into());
+<a href=#267 id=267 data-nosnippet>267</a>            }
+<a href=#268 id=268 data-nosnippet>268</a>        }
+<a href=#269 id=269 data-nosnippet>269</a>    }
+<a href=#270 id=270 data-nosnippet>270</a>}
+<a href=#271 id=271 data-nosnippet>271</a>
+<a href=#272 id=272 data-nosnippet>272</a><span class="kw">fn </span>parse_le_u16(buffer: <span class="kw-2">&amp;</span>[u8; <span class="number">2</span>]) -&gt; u16 {
+<a href=#273 id=273 data-nosnippet>273</a>    u16::from_le_bytes(<span class="kw-2">*</span>buffer)
+<a href=#274 id=274 data-nosnippet>274</a>}
+<a href=#275 id=275 data-nosnippet>275</a>
+<a href=#276 id=276 data-nosnippet>276</a><span class="kw">fn </span>bad_header() -&gt; Error {
+<a href=#277 id=277 data-nosnippet>277</a>    Error::new(ErrorKind::InvalidInput, <span class="string">"invalid gzip header"</span>)
+<a href=#278 id=278 data-nosnippet>278</a>}
+<a href=#279 id=279 data-nosnippet>279</a>
+<a href=#280 id=280 data-nosnippet>280</a><span class="kw">fn </span>corrupt() -&gt; Error {
+<a href=#281 id=281 data-nosnippet>281</a>    Error::new(
+<a href=#282 id=282 data-nosnippet>282</a>        ErrorKind::InvalidInput,
+<a href=#283 id=283 data-nosnippet>283</a>        <span class="string">"corrupt gzip stream does not have a matching checksum"</span>,
+<a href=#284 id=284 data-nosnippet>284</a>    )
+<a href=#285 id=285 data-nosnippet>285</a>}
+<a href=#286 id=286 data-nosnippet>286</a>
+<a href=#287 id=287 data-nosnippet>287</a><span class="doccomment">/// A builder structure to create a new gzip Encoder.
+<a href=#288 id=288 data-nosnippet>288</a>///
+<a href=#289 id=289 data-nosnippet>289</a>/// This structure controls header configuration options such as the filename.
+<a href=#290 id=290 data-nosnippet>290</a>///
+<a href=#291 id=291 data-nosnippet>291</a>/// # Examples
+<a href=#292 id=292 data-nosnippet>292</a>///
+<a href=#293 id=293 data-nosnippet>293</a>/// ```
+<a href=#294 id=294 data-nosnippet>294</a>/// use std::io::prelude::*;
+<a href=#295 id=295 data-nosnippet>295</a>/// # use std::io;
+<a href=#296 id=296 data-nosnippet>296</a>/// use std::fs::File;
+<a href=#297 id=297 data-nosnippet>297</a>/// use flate2::GzBuilder;
+<a href=#298 id=298 data-nosnippet>298</a>/// use flate2::Compression;
+<a href=#299 id=299 data-nosnippet>299</a>///
+<a href=#300 id=300 data-nosnippet>300</a>/// // GzBuilder opens a file and writes a sample string using GzBuilder pattern
+<a href=#301 id=301 data-nosnippet>301</a>///
+<a href=#302 id=302 data-nosnippet>302</a>/// # fn sample_builder() -&gt; Result&lt;(), io::Error&gt; {
+<a href=#303 id=303 data-nosnippet>303</a>/// let f = File::create("examples/hello_world.gz")?;
+<a href=#304 id=304 data-nosnippet>304</a>/// let mut gz = GzBuilder::new()
+<a href=#305 id=305 data-nosnippet>305</a>///                 .filename("hello_world.txt")
+<a href=#306 id=306 data-nosnippet>306</a>///                 .comment("test file, please delete")
+<a href=#307 id=307 data-nosnippet>307</a>///                 .write(f, Compression::default());
+<a href=#308 id=308 data-nosnippet>308</a>/// gz.write_all(b"hello world")?;
+<a href=#309 id=309 data-nosnippet>309</a>/// gz.finish()?;
+<a href=#310 id=310 data-nosnippet>310</a>/// # Ok(())
+<a href=#311 id=311 data-nosnippet>311</a>/// # }
+<a href=#312 id=312 data-nosnippet>312</a>/// ```
+<a href=#313 id=313 data-nosnippet>313</a></span><span class="attr">#[derive(Debug, Default)]
+<a href=#314 id=314 data-nosnippet>314</a></span><span class="kw">pub struct </span>GzBuilder {
+<a href=#315 id=315 data-nosnippet>315</a>    extra: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;,
+<a href=#316 id=316 data-nosnippet>316</a>    filename: <span class="prelude-ty">Option</span>&lt;CString&gt;,
+<a href=#317 id=317 data-nosnippet>317</a>    comment: <span class="prelude-ty">Option</span>&lt;CString&gt;,
+<a href=#318 id=318 data-nosnippet>318</a>    operating_system: <span class="prelude-ty">Option</span>&lt;u8&gt;,
+<a href=#319 id=319 data-nosnippet>319</a>    mtime: u32,
+<a href=#320 id=320 data-nosnippet>320</a>}
+<a href=#321 id=321 data-nosnippet>321</a>
+<a href=#322 id=322 data-nosnippet>322</a><span class="kw">impl </span>GzBuilder {
+<a href=#323 id=323 data-nosnippet>323</a>    <span class="doccomment">/// Create a new blank builder with no header by default.
+<a href=#324 id=324 data-nosnippet>324</a>    </span><span class="kw">pub fn </span>new() -&gt; GzBuilder {
+<a href=#325 id=325 data-nosnippet>325</a>        <span class="self">Self</span>::default()
+<a href=#326 id=326 data-nosnippet>326</a>    }
+<a href=#327 id=327 data-nosnippet>327</a>
+<a href=#328 id=328 data-nosnippet>328</a>    <span class="doccomment">/// Configure the `mtime` field in the gzip header.
+<a href=#329 id=329 data-nosnippet>329</a>    </span><span class="kw">pub fn </span>mtime(<span class="kw-2">mut </span><span class="self">self</span>, mtime: u32) -&gt; GzBuilder {
+<a href=#330 id=330 data-nosnippet>330</a>        <span class="self">self</span>.mtime = mtime;
+<a href=#331 id=331 data-nosnippet>331</a>        <span class="self">self
+<a href=#332 id=332 data-nosnippet>332</a>    </span>}
+<a href=#333 id=333 data-nosnippet>333</a>
+<a href=#334 id=334 data-nosnippet>334</a>    <span class="doccomment">/// Configure the `operating_system` field in the gzip header.
+<a href=#335 id=335 data-nosnippet>335</a>    </span><span class="kw">pub fn </span>operating_system(<span class="kw-2">mut </span><span class="self">self</span>, os: u8) -&gt; GzBuilder {
+<a href=#336 id=336 data-nosnippet>336</a>        <span class="self">self</span>.operating_system = <span class="prelude-val">Some</span>(os);
+<a href=#337 id=337 data-nosnippet>337</a>        <span class="self">self
+<a href=#338 id=338 data-nosnippet>338</a>    </span>}
+<a href=#339 id=339 data-nosnippet>339</a>
+<a href=#340 id=340 data-nosnippet>340</a>    <span class="doccomment">/// Configure the `extra` field in the gzip header.
+<a href=#341 id=341 data-nosnippet>341</a>    </span><span class="kw">pub fn </span>extra&lt;T: Into&lt;Vec&lt;u8&gt;&gt;&gt;(<span class="kw-2">mut </span><span class="self">self</span>, extra: T) -&gt; GzBuilder {
+<a href=#342 id=342 data-nosnippet>342</a>        <span class="self">self</span>.extra = <span class="prelude-val">Some</span>(extra.into());
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="self">self
+<a href=#344 id=344 data-nosnippet>344</a>    </span>}
+<a href=#345 id=345 data-nosnippet>345</a>
+<a href=#346 id=346 data-nosnippet>346</a>    <span class="doccomment">/// Configure the `filename` field in the gzip header.
+<a href=#347 id=347 data-nosnippet>347</a>    ///
+<a href=#348 id=348 data-nosnippet>348</a>    /// # Panics
+<a href=#349 id=349 data-nosnippet>349</a>    ///
+<a href=#350 id=350 data-nosnippet>350</a>    /// Panics if the `filename` slice contains a zero.
+<a href=#351 id=351 data-nosnippet>351</a>    </span><span class="kw">pub fn </span>filename&lt;T: Into&lt;Vec&lt;u8&gt;&gt;&gt;(<span class="kw-2">mut </span><span class="self">self</span>, filename: T) -&gt; GzBuilder {
+<a href=#352 id=352 data-nosnippet>352</a>        <span class="self">self</span>.filename = <span class="prelude-val">Some</span>(CString::new(filename.into()).unwrap());
+<a href=#353 id=353 data-nosnippet>353</a>        <span class="self">self
+<a href=#354 id=354 data-nosnippet>354</a>    </span>}
+<a href=#355 id=355 data-nosnippet>355</a>
+<a href=#356 id=356 data-nosnippet>356</a>    <span class="doccomment">/// Configure the `comment` field in the gzip header.
+<a href=#357 id=357 data-nosnippet>357</a>    ///
+<a href=#358 id=358 data-nosnippet>358</a>    /// # Panics
+<a href=#359 id=359 data-nosnippet>359</a>    ///
+<a href=#360 id=360 data-nosnippet>360</a>    /// Panics if the `comment` slice contains a zero.
+<a href=#361 id=361 data-nosnippet>361</a>    </span><span class="kw">pub fn </span>comment&lt;T: Into&lt;Vec&lt;u8&gt;&gt;&gt;(<span class="kw-2">mut </span><span class="self">self</span>, comment: T) -&gt; GzBuilder {
+<a href=#362 id=362 data-nosnippet>362</a>        <span class="self">self</span>.comment = <span class="prelude-val">Some</span>(CString::new(comment.into()).unwrap());
+<a href=#363 id=363 data-nosnippet>363</a>        <span class="self">self
+<a href=#364 id=364 data-nosnippet>364</a>    </span>}
+<a href=#365 id=365 data-nosnippet>365</a>
+<a href=#366 id=366 data-nosnippet>366</a>    <span class="doccomment">/// Consume this builder, creating a writer encoder in the process.
+<a href=#367 id=367 data-nosnippet>367</a>    ///
+<a href=#368 id=368 data-nosnippet>368</a>    /// The data written to the returned encoder will be compressed and then
+<a href=#369 id=369 data-nosnippet>369</a>    /// written out to the supplied parameter `w`.
+<a href=#370 id=370 data-nosnippet>370</a>    </span><span class="kw">pub fn </span>write&lt;W: Write&gt;(<span class="self">self</span>, w: W, lvl: Compression) -&gt; write::GzEncoder&lt;W&gt; {
+<a href=#371 id=371 data-nosnippet>371</a>        write::gz_encoder(<span class="self">self</span>.into_header(lvl), w, lvl)
+<a href=#372 id=372 data-nosnippet>372</a>    }
+<a href=#373 id=373 data-nosnippet>373</a>
+<a href=#374 id=374 data-nosnippet>374</a>    <span class="doccomment">/// Consume this builder, creating a reader encoder in the process.
+<a href=#375 id=375 data-nosnippet>375</a>    ///
+<a href=#376 id=376 data-nosnippet>376</a>    /// Data read from the returned encoder will be the compressed version of
+<a href=#377 id=377 data-nosnippet>377</a>    /// the data read from the given reader.
+<a href=#378 id=378 data-nosnippet>378</a>    </span><span class="kw">pub fn </span>read&lt;R: Read&gt;(<span class="self">self</span>, r: R, lvl: Compression) -&gt; read::GzEncoder&lt;R&gt; {
+<a href=#379 id=379 data-nosnippet>379</a>        read::gz_encoder(<span class="self">self</span>.buf_read(BufReader::new(r), lvl))
+<a href=#380 id=380 data-nosnippet>380</a>    }
+<a href=#381 id=381 data-nosnippet>381</a>
+<a href=#382 id=382 data-nosnippet>382</a>    <span class="doccomment">/// Consume this builder, creating a reader encoder in the process.
+<a href=#383 id=383 data-nosnippet>383</a>    ///
+<a href=#384 id=384 data-nosnippet>384</a>    /// Data read from the returned encoder will be the compressed version of
+<a href=#385 id=385 data-nosnippet>385</a>    /// the data read from the given reader.
+<a href=#386 id=386 data-nosnippet>386</a>    </span><span class="kw">pub fn </span>buf_read&lt;R&gt;(<span class="self">self</span>, r: R, lvl: Compression) -&gt; bufread::GzEncoder&lt;R&gt;
+<a href=#387 id=387 data-nosnippet>387</a>    <span class="kw">where
+<a href=#388 id=388 data-nosnippet>388</a>        </span>R: BufRead,
+<a href=#389 id=389 data-nosnippet>389</a>    {
+<a href=#390 id=390 data-nosnippet>390</a>        bufread::gz_encoder(<span class="self">self</span>.into_header(lvl), r, lvl)
+<a href=#391 id=391 data-nosnippet>391</a>    }
+<a href=#392 id=392 data-nosnippet>392</a>
+<a href=#393 id=393 data-nosnippet>393</a>    <span class="kw">fn </span>into_header(<span class="self">self</span>, lvl: Compression) -&gt; Vec&lt;u8&gt; {
+<a href=#394 id=394 data-nosnippet>394</a>        <span class="kw">let </span>GzBuilder {
+<a href=#395 id=395 data-nosnippet>395</a>            extra,
+<a href=#396 id=396 data-nosnippet>396</a>            filename,
+<a href=#397 id=397 data-nosnippet>397</a>            comment,
+<a href=#398 id=398 data-nosnippet>398</a>            operating_system,
+<a href=#399 id=399 data-nosnippet>399</a>            mtime,
+<a href=#400 id=400 data-nosnippet>400</a>        } = <span class="self">self</span>;
+<a href=#401 id=401 data-nosnippet>401</a>        <span class="kw">let </span><span class="kw-2">mut </span>flg = <span class="number">0</span>;
+<a href=#402 id=402 data-nosnippet>402</a>        <span class="kw">let </span><span class="kw-2">mut </span>header = <span class="macro">vec!</span>[<span class="number">0u8</span>; <span class="number">10</span>];
+<a href=#403 id=403 data-nosnippet>403</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = extra {
+<a href=#404 id=404 data-nosnippet>404</a>            flg |= FEXTRA;
+<a href=#405 id=405 data-nosnippet>405</a>            header.extend((v.len() <span class="kw">as </span>u16).to_le_bytes());
+<a href=#406 id=406 data-nosnippet>406</a>            header.extend(v);
+<a href=#407 id=407 data-nosnippet>407</a>        }
+<a href=#408 id=408 data-nosnippet>408</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(filename) = filename {
+<a href=#409 id=409 data-nosnippet>409</a>            flg |= FNAME;
+<a href=#410 id=410 data-nosnippet>410</a>            header.extend(filename.as_bytes_with_nul().iter().copied());
+<a href=#411 id=411 data-nosnippet>411</a>        }
+<a href=#412 id=412 data-nosnippet>412</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(comment) = comment {
+<a href=#413 id=413 data-nosnippet>413</a>            flg |= FCOMMENT;
+<a href=#414 id=414 data-nosnippet>414</a>            header.extend(comment.as_bytes_with_nul().iter().copied());
+<a href=#415 id=415 data-nosnippet>415</a>        }
+<a href=#416 id=416 data-nosnippet>416</a>        header[<span class="number">0</span>] = <span class="number">0x1f</span>;
+<a href=#417 id=417 data-nosnippet>417</a>        header[<span class="number">1</span>] = <span class="number">0x8b</span>;
+<a href=#418 id=418 data-nosnippet>418</a>        header[<span class="number">2</span>] = <span class="number">8</span>;
+<a href=#419 id=419 data-nosnippet>419</a>        header[<span class="number">3</span>] = flg;
+<a href=#420 id=420 data-nosnippet>420</a>        header[<span class="number">4</span>] = mtime <span class="kw">as </span>u8;
+<a href=#421 id=421 data-nosnippet>421</a>        header[<span class="number">5</span>] = (mtime &gt;&gt; <span class="number">8</span>) <span class="kw">as </span>u8;
+<a href=#422 id=422 data-nosnippet>422</a>        header[<span class="number">6</span>] = (mtime &gt;&gt; <span class="number">16</span>) <span class="kw">as </span>u8;
+<a href=#423 id=423 data-nosnippet>423</a>        header[<span class="number">7</span>] = (mtime &gt;&gt; <span class="number">24</span>) <span class="kw">as </span>u8;
+<a href=#424 id=424 data-nosnippet>424</a>        header[<span class="number">8</span>] = <span class="kw">if </span>lvl.<span class="number">0 </span>&gt;= Compression::best().<span class="number">0 </span>{
+<a href=#425 id=425 data-nosnippet>425</a>            <span class="number">2
+<a href=#426 id=426 data-nosnippet>426</a>        </span>} <span class="kw">else if </span>lvl.<span class="number">0 </span>&lt;= Compression::fast().<span class="number">0 </span>{
+<a href=#427 id=427 data-nosnippet>427</a>            <span class="number">4
+<a href=#428 id=428 data-nosnippet>428</a>        </span>} <span class="kw">else </span>{
+<a href=#429 id=429 data-nosnippet>429</a>            <span class="number">0
+<a href=#430 id=430 data-nosnippet>430</a>        </span>};
+<a href=#431 id=431 data-nosnippet>431</a>
+<a href=#432 id=432 data-nosnippet>432</a>        <span class="comment">// Typically this byte indicates what OS the gz stream was created on,
+<a href=#433 id=433 data-nosnippet>433</a>        // but in an effort to have cross-platform reproducible streams just
+<a href=#434 id=434 data-nosnippet>434</a>        // default this value to 255. I'm not sure that if we "correctly" set
+<a href=#435 id=435 data-nosnippet>435</a>        // this it'd do anything anyway...
+<a href=#436 id=436 data-nosnippet>436</a>        </span>header[<span class="number">9</span>] = operating_system.unwrap_or(<span class="number">255</span>);
+<a href=#437 id=437 data-nosnippet>437</a>        header
+<a href=#438 id=438 data-nosnippet>438</a>    }
+<a href=#439 id=439 data-nosnippet>439</a>}
+<a href=#440 id=440 data-nosnippet>440</a>
+<a href=#441 id=441 data-nosnippet>441</a><span class="attr">#[cfg(test)]
+<a href=#442 id=442 data-nosnippet>442</a></span><span class="kw">mod </span>tests {
+<a href=#443 id=443 data-nosnippet>443</a>    <span class="kw">use </span>std::io::prelude::<span class="kw-2">*</span>;
+<a href=#444 id=444 data-nosnippet>444</a>
+<a href=#445 id=445 data-nosnippet>445</a>    <span class="kw">use super</span>::{read, write, GzBuilder, GzHeaderParser};
+<a href=#446 id=446 data-nosnippet>446</a>    <span class="kw">use crate</span>::{Compression, GzHeader};
+<a href=#447 id=447 data-nosnippet>447</a>    <span class="kw">use </span>rand::{rng, Rng};
+<a href=#448 id=448 data-nosnippet>448</a>
+<a href=#449 id=449 data-nosnippet>449</a>    <span class="attr">#[test]
+<a href=#450 id=450 data-nosnippet>450</a>    </span><span class="kw">fn </span>roundtrip() {
+<a href=#451 id=451 data-nosnippet>451</a>        <span class="kw">let </span><span class="kw-2">mut </span>e = write::GzEncoder::new(Vec::new(), Compression::default());
+<a href=#452 id=452 data-nosnippet>452</a>        e.write_all(<span class="string">b"foo bar baz"</span>).unwrap();
+<a href=#453 id=453 data-nosnippet>453</a>        <span class="kw">let </span>inner = e.finish().unwrap();
+<a href=#454 id=454 data-nosnippet>454</a>        <span class="kw">let </span><span class="kw-2">mut </span>d = read::GzDecoder::new(<span class="kw-2">&amp;</span>inner[..]);
+<a href=#455 id=455 data-nosnippet>455</a>        <span class="kw">let </span><span class="kw-2">mut </span>s = String::new();
+<a href=#456 id=456 data-nosnippet>456</a>        d.read_to_string(<span class="kw-2">&amp;mut </span>s).unwrap();
+<a href=#457 id=457 data-nosnippet>457</a>        <span class="macro">assert_eq!</span>(s, <span class="string">"foo bar baz"</span>);
+<a href=#458 id=458 data-nosnippet>458</a>    }
+<a href=#459 id=459 data-nosnippet>459</a>
+<a href=#460 id=460 data-nosnippet>460</a>    <span class="attr">#[test]
+<a href=#461 id=461 data-nosnippet>461</a>    </span><span class="kw">fn </span>roundtrip_zero() {
+<a href=#462 id=462 data-nosnippet>462</a>        <span class="kw">let </span>e = write::GzEncoder::new(Vec::new(), Compression::default());
+<a href=#463 id=463 data-nosnippet>463</a>        <span class="kw">let </span>inner = e.finish().unwrap();
+<a href=#464 id=464 data-nosnippet>464</a>        <span class="kw">let </span><span class="kw-2">mut </span>d = read::GzDecoder::new(<span class="kw-2">&amp;</span>inner[..]);
+<a href=#465 id=465 data-nosnippet>465</a>        <span class="kw">let </span><span class="kw-2">mut </span>s = String::new();
+<a href=#466 id=466 data-nosnippet>466</a>        d.read_to_string(<span class="kw-2">&amp;mut </span>s).unwrap();
+<a href=#467 id=467 data-nosnippet>467</a>        <span class="macro">assert_eq!</span>(s, <span class="string">""</span>);
+<a href=#468 id=468 data-nosnippet>468</a>    }
+<a href=#469 id=469 data-nosnippet>469</a>
+<a href=#470 id=470 data-nosnippet>470</a>    <span class="attr">#[test]
+<a href=#471 id=471 data-nosnippet>471</a>    </span><span class="kw">fn </span>roundtrip_big() {
+<a href=#472 id=472 data-nosnippet>472</a>        <span class="kw">let </span><span class="kw-2">mut </span>real = Vec::new();
+<a href=#473 id=473 data-nosnippet>473</a>        <span class="kw">let </span><span class="kw-2">mut </span>w = write::GzEncoder::new(Vec::new(), Compression::default());
+<a href=#474 id=474 data-nosnippet>474</a>        <span class="kw">let </span>v = <span class="kw">crate</span>::random_bytes().take(<span class="number">1024</span>).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#475 id=475 data-nosnippet>475</a>        <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">200 </span>{
+<a href=#476 id=476 data-nosnippet>476</a>            <span class="kw">let </span>to_write = <span class="kw-2">&amp;</span>v[..rng().random_range(<span class="number">0</span>..v.len())];
+<a href=#477 id=477 data-nosnippet>477</a>            real.extend(to_write.iter().copied());
+<a href=#478 id=478 data-nosnippet>478</a>            w.write_all(to_write).unwrap();
+<a href=#479 id=479 data-nosnippet>479</a>        }
+<a href=#480 id=480 data-nosnippet>480</a>        <span class="kw">let </span>result = w.finish().unwrap();
+<a href=#481 id=481 data-nosnippet>481</a>        <span class="kw">let </span><span class="kw-2">mut </span>r = read::GzDecoder::new(<span class="kw-2">&amp;</span>result[..]);
+<a href=#482 id=482 data-nosnippet>482</a>        <span class="kw">let </span><span class="kw-2">mut </span>v = Vec::new();
+<a href=#483 id=483 data-nosnippet>483</a>        r.read_to_end(<span class="kw-2">&amp;mut </span>v).unwrap();
+<a href=#484 id=484 data-nosnippet>484</a>        <span class="macro">assert_eq!</span>(v, real);
+<a href=#485 id=485 data-nosnippet>485</a>    }
+<a href=#486 id=486 data-nosnippet>486</a>
+<a href=#487 id=487 data-nosnippet>487</a>    <span class="attr">#[test]
+<a href=#488 id=488 data-nosnippet>488</a>    </span><span class="kw">fn </span>roundtrip_big2() {
+<a href=#489 id=489 data-nosnippet>489</a>        <span class="kw">let </span>v = <span class="kw">crate</span>::random_bytes().take(<span class="number">1024 </span>* <span class="number">1024</span>).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#490 id=490 data-nosnippet>490</a>        <span class="kw">let </span><span class="kw-2">mut </span>r = read::GzDecoder::new(read::GzEncoder::new(<span class="kw-2">&amp;</span>v[..], Compression::default()));
+<a href=#491 id=491 data-nosnippet>491</a>        <span class="kw">let </span><span class="kw-2">mut </span>res = Vec::new();
+<a href=#492 id=492 data-nosnippet>492</a>        r.read_to_end(<span class="kw-2">&amp;mut </span>res).unwrap();
+<a href=#493 id=493 data-nosnippet>493</a>        <span class="macro">assert_eq!</span>(res, v);
+<a href=#494 id=494 data-nosnippet>494</a>    }
+<a href=#495 id=495 data-nosnippet>495</a>
+<a href=#496 id=496 data-nosnippet>496</a>    <span class="comment">// A Rust implementation of CRC that closely matches the C code in RFC1952.
+<a href=#497 id=497 data-nosnippet>497</a>    // Only use this to create CRCs for tests.
+<a href=#498 id=498 data-nosnippet>498</a>    </span><span class="kw">struct </span>Rfc1952Crc {
+<a href=#499 id=499 data-nosnippet>499</a>        <span class="comment">/* Table of CRCs of all 8-bit messages. */
+<a href=#500 id=500 data-nosnippet>500</a>        </span>crc_table: [u32; <span class="number">256</span>],
+<a href=#501 id=501 data-nosnippet>501</a>    }
+<a href=#502 id=502 data-nosnippet>502</a>
+<a href=#503 id=503 data-nosnippet>503</a>    <span class="kw">impl </span>Rfc1952Crc {
+<a href=#504 id=504 data-nosnippet>504</a>        <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#505 id=505 data-nosnippet>505</a>            <span class="kw">let </span><span class="kw-2">mut </span>crc = Rfc1952Crc {
+<a href=#506 id=506 data-nosnippet>506</a>                crc_table: [<span class="number">0</span>; <span class="number">256</span>],
+<a href=#507 id=507 data-nosnippet>507</a>            };
+<a href=#508 id=508 data-nosnippet>508</a>            <span class="comment">/* Make the table for a fast CRC. */
+<a href=#509 id=509 data-nosnippet>509</a>            </span><span class="kw">for </span>n <span class="kw">in </span><span class="number">0usize</span>..<span class="number">256 </span>{
+<a href=#510 id=510 data-nosnippet>510</a>                <span class="kw">let </span><span class="kw-2">mut </span>c = n <span class="kw">as </span>u32;
+<a href=#511 id=511 data-nosnippet>511</a>                <span class="kw">for </span>_k <span class="kw">in </span><span class="number">0</span>..<span class="number">8 </span>{
+<a href=#512 id=512 data-nosnippet>512</a>                    <span class="kw">if </span>c &amp; <span class="number">1 </span>!= <span class="number">0 </span>{
+<a href=#513 id=513 data-nosnippet>513</a>                        c = <span class="number">0xedb88320 </span>^ (c &gt;&gt; <span class="number">1</span>);
+<a href=#514 id=514 data-nosnippet>514</a>                    } <span class="kw">else </span>{
+<a href=#515 id=515 data-nosnippet>515</a>                        c = c &gt;&gt; <span class="number">1</span>;
+<a href=#516 id=516 data-nosnippet>516</a>                    }
+<a href=#517 id=517 data-nosnippet>517</a>                }
+<a href=#518 id=518 data-nosnippet>518</a>                crc.crc_table[n] = c;
+<a href=#519 id=519 data-nosnippet>519</a>            }
+<a href=#520 id=520 data-nosnippet>520</a>            crc
+<a href=#521 id=521 data-nosnippet>521</a>        }
+<a href=#522 id=522 data-nosnippet>522</a>
+<a href=#523 id=523 data-nosnippet>523</a>        <span class="comment">/*
+<a href=#524 id=524 data-nosnippet>524</a>         Update a running crc with the bytes buf and return
+<a href=#525 id=525 data-nosnippet>525</a>         the updated crc. The crc should be initialized to zero. Pre- and
+<a href=#526 id=526 data-nosnippet>526</a>         post-conditioning (one's complement) is performed within this
+<a href=#527 id=527 data-nosnippet>527</a>         function so it shouldn't be done by the caller.
+<a href=#528 id=528 data-nosnippet>528</a>        */
+<a href=#529 id=529 data-nosnippet>529</a>        </span><span class="kw">fn </span>update_crc(<span class="kw-2">&amp;</span><span class="self">self</span>, crc: u32, buf: <span class="kw-2">&amp;</span>[u8]) -&gt; u32 {
+<a href=#530 id=530 data-nosnippet>530</a>            <span class="kw">let </span><span class="kw-2">mut </span>c = crc ^ <span class="number">0xffffffff</span>;
+<a href=#531 id=531 data-nosnippet>531</a>
+<a href=#532 id=532 data-nosnippet>532</a>            <span class="kw">for </span>b <span class="kw">in </span>buf {
+<a href=#533 id=533 data-nosnippet>533</a>                c = <span class="self">self</span>.crc_table[(c <span class="kw">as </span>u8 ^ <span class="kw-2">*</span>b) <span class="kw">as </span>usize] ^ (c &gt;&gt; <span class="number">8</span>);
+<a href=#534 id=534 data-nosnippet>534</a>            }
+<a href=#535 id=535 data-nosnippet>535</a>            c ^ <span class="number">0xffffffff
+<a href=#536 id=536 data-nosnippet>536</a>        </span>}
+<a href=#537 id=537 data-nosnippet>537</a>
+<a href=#538 id=538 data-nosnippet>538</a>        <span class="comment">/* Return the CRC of the bytes buf. */
+<a href=#539 id=539 data-nosnippet>539</a>        </span><span class="kw">fn </span>crc(<span class="kw-2">&amp;</span><span class="self">self</span>, buf: <span class="kw-2">&amp;</span>[u8]) -&gt; u32 {
+<a href=#540 id=540 data-nosnippet>540</a>            <span class="self">self</span>.update_crc(<span class="number">0</span>, buf)
+<a href=#541 id=541 data-nosnippet>541</a>        }
+<a href=#542 id=542 data-nosnippet>542</a>    }
+<a href=#543 id=543 data-nosnippet>543</a>
+<a href=#544 id=544 data-nosnippet>544</a>    <span class="attr">#[test]
+<a href=#545 id=545 data-nosnippet>545</a>    </span><span class="kw">fn </span>roundtrip_header() {
+<a href=#546 id=546 data-nosnippet>546</a>        <span class="kw">let </span><span class="kw-2">mut </span>header = GzBuilder::new()
+<a href=#547 id=547 data-nosnippet>547</a>            .mtime(<span class="number">1234</span>)
+<a href=#548 id=548 data-nosnippet>548</a>            .operating_system(<span class="number">57</span>)
+<a href=#549 id=549 data-nosnippet>549</a>            .filename(<span class="string">"filename"</span>)
+<a href=#550 id=550 data-nosnippet>550</a>            .comment(<span class="string">"comment"</span>)
+<a href=#551 id=551 data-nosnippet>551</a>            .into_header(Compression::fast());
+<a href=#552 id=552 data-nosnippet>552</a>
+<a href=#553 id=553 data-nosnippet>553</a>        <span class="comment">// Add a CRC to the header
+<a href=#554 id=554 data-nosnippet>554</a>        </span>header[<span class="number">3</span>] = header[<span class="number">3</span>] ^ <span class="kw">super</span>::FHCRC;
+<a href=#555 id=555 data-nosnippet>555</a>        <span class="kw">let </span>rfc1952_crc = Rfc1952Crc::new();
+<a href=#556 id=556 data-nosnippet>556</a>        <span class="kw">let </span>crc32 = rfc1952_crc.crc(<span class="kw-2">&amp;</span>header);
+<a href=#557 id=557 data-nosnippet>557</a>        <span class="kw">let </span>crc16 = crc32 <span class="kw">as </span>u16;
+<a href=#558 id=558 data-nosnippet>558</a>        header.extend(<span class="kw-2">&amp;</span>crc16.to_le_bytes());
+<a href=#559 id=559 data-nosnippet>559</a>
+<a href=#560 id=560 data-nosnippet>560</a>        <span class="kw">let </span><span class="kw-2">mut </span>parser = GzHeaderParser::new();
+<a href=#561 id=561 data-nosnippet>561</a>        parser.parse(<span class="kw-2">&amp;mut </span>header.as_slice()).unwrap();
+<a href=#562 id=562 data-nosnippet>562</a>        <span class="kw">let </span>actual = parser.header().unwrap();
+<a href=#563 id=563 data-nosnippet>563</a>        <span class="macro">assert_eq!</span>(
+<a href=#564 id=564 data-nosnippet>564</a>            actual,
+<a href=#565 id=565 data-nosnippet>565</a>            <span class="kw-2">&amp;</span>GzHeader {
+<a href=#566 id=566 data-nosnippet>566</a>                extra: <span class="prelude-val">None</span>,
+<a href=#567 id=567 data-nosnippet>567</a>                filename: <span class="prelude-val">Some</span>(<span class="string">"filename"</span>.as_bytes().to_vec()),
+<a href=#568 id=568 data-nosnippet>568</a>                comment: <span class="prelude-val">Some</span>(<span class="string">"comment"</span>.as_bytes().to_vec()),
+<a href=#569 id=569 data-nosnippet>569</a>                operating_system: <span class="number">57</span>,
+<a href=#570 id=570 data-nosnippet>570</a>                mtime: <span class="number">1234
+<a href=#571 id=571 data-nosnippet>571</a>            </span>}
+<a href=#572 id=572 data-nosnippet>572</a>        )
+<a href=#573 id=573 data-nosnippet>573</a>    }
+<a href=#574 id=574 data-nosnippet>574</a>
+<a href=#575 id=575 data-nosnippet>575</a>    <span class="attr">#[test]
+<a href=#576 id=576 data-nosnippet>576</a>    </span><span class="kw">fn </span>fields() {
+<a href=#577 id=577 data-nosnippet>577</a>        <span class="kw">let </span>r = <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">6</span>];
+<a href=#578 id=578 data-nosnippet>578</a>        <span class="kw">let </span>e = GzBuilder::new()
+<a href=#579 id=579 data-nosnippet>579</a>            .filename(<span class="string">"foo.rs"</span>)
+<a href=#580 id=580 data-nosnippet>580</a>            .comment(<span class="string">"bar"</span>)
+<a href=#581 id=581 data-nosnippet>581</a>            .extra(<span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>])
+<a href=#582 id=582 data-nosnippet>582</a>            .read(<span class="kw-2">&amp;</span>r[..], Compression::default());
+<a href=#583 id=583 data-nosnippet>583</a>        <span class="kw">let </span><span class="kw-2">mut </span>d = read::GzDecoder::new(e);
+<a href=#584 id=584 data-nosnippet>584</a>        <span class="macro">assert_eq!</span>(d.header().unwrap().filename(), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">b"foo.rs"</span>[..]));
+<a href=#585 id=585 data-nosnippet>585</a>        <span class="macro">assert_eq!</span>(d.header().unwrap().comment(), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">b"bar"</span>[..]));
+<a href=#586 id=586 data-nosnippet>586</a>        <span class="macro">assert_eq!</span>(d.header().unwrap().extra(), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">b"\x00\x01\x02\x03"</span>[..]));
+<a href=#587 id=587 data-nosnippet>587</a>        <span class="kw">let </span><span class="kw-2">mut </span>res = Vec::new();
+<a href=#588 id=588 data-nosnippet>588</a>        d.read_to_end(<span class="kw-2">&amp;mut </span>res).unwrap();
+<a href=#589 id=589 data-nosnippet>589</a>        <span class="macro">assert_eq!</span>(res, <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">6</span>]);
+<a href=#590 id=590 data-nosnippet>590</a>    }
+<a href=#591 id=591 data-nosnippet>591</a>
+<a href=#592 id=592 data-nosnippet>592</a>    <span class="attr">#[test]
+<a href=#593 id=593 data-nosnippet>593</a>    </span><span class="kw">fn </span>keep_reading_after_end() {
+<a href=#594 id=594 data-nosnippet>594</a>        <span class="kw">let </span><span class="kw-2">mut </span>e = write::GzEncoder::new(Vec::new(), Compression::default());
+<a href=#595 id=595 data-nosnippet>595</a>        e.write_all(<span class="string">b"foo bar baz"</span>).unwrap();
+<a href=#596 id=596 data-nosnippet>596</a>        <span class="kw">let </span>inner = e.finish().unwrap();
+<a href=#597 id=597 data-nosnippet>597</a>        <span class="kw">let </span><span class="kw-2">mut </span>d = read::GzDecoder::new(<span class="kw-2">&amp;</span>inner[..]);
+<a href=#598 id=598 data-nosnippet>598</a>        <span class="kw">let </span><span class="kw-2">mut </span>s = String::new();
+<a href=#599 id=599 data-nosnippet>599</a>        d.read_to_string(<span class="kw-2">&amp;mut </span>s).unwrap();
+<a href=#600 id=600 data-nosnippet>600</a>        <span class="macro">assert_eq!</span>(s, <span class="string">"foo bar baz"</span>);
+<a href=#601 id=601 data-nosnippet>601</a>        d.read_to_string(<span class="kw-2">&amp;mut </span>s).unwrap();
+<a href=#602 id=602 data-nosnippet>602</a>        <span class="macro">assert_eq!</span>(s, <span class="string">"foo bar baz"</span>);
+<a href=#603 id=603 data-nosnippet>603</a>    }
+<a href=#604 id=604 data-nosnippet>604</a>
+<a href=#605 id=605 data-nosnippet>605</a>    <span class="attr">#[test]
+<a href=#606 id=606 data-nosnippet>606</a>    </span><span class="kw">fn </span>qc_reader() {
+<a href=#607 id=607 data-nosnippet>607</a>        ::quickcheck::quickcheck(test <span class="kw">as fn</span>(<span class="kw">_</span>) -&gt; <span class="kw">_</span>);
+<a href=#608 id=608 data-nosnippet>608</a>
+<a href=#609 id=609 data-nosnippet>609</a>        <span class="kw">fn </span>test(v: Vec&lt;u8&gt;) -&gt; bool {
+<a href=#610 id=610 data-nosnippet>610</a>            <span class="kw">let </span>r = read::GzEncoder::new(<span class="kw-2">&amp;</span>v[..], Compression::default());
+<a href=#611 id=611 data-nosnippet>611</a>            <span class="kw">let </span><span class="kw-2">mut </span>r = read::GzDecoder::new(r);
+<a href=#612 id=612 data-nosnippet>612</a>            <span class="kw">let </span><span class="kw-2">mut </span>v2 = Vec::new();
+<a href=#613 id=613 data-nosnippet>613</a>            r.read_to_end(<span class="kw-2">&amp;mut </span>v2).unwrap();
+<a href=#614 id=614 data-nosnippet>614</a>            v == v2
+<a href=#615 id=615 data-nosnippet>615</a>        }
+<a href=#616 id=616 data-nosnippet>616</a>    }
+<a href=#617 id=617 data-nosnippet>617</a>
+<a href=#618 id=618 data-nosnippet>618</a>    <span class="attr">#[test]
+<a href=#619 id=619 data-nosnippet>619</a>    </span><span class="kw">fn </span>flush_after_write() {
+<a href=#620 id=620 data-nosnippet>620</a>        <span class="kw">let </span><span class="kw-2">mut </span>f = write::GzEncoder::new(Vec::new(), Compression::default());
+<a href=#621 id=621 data-nosnippet>621</a>        <span class="macro">write!</span>(f, <span class="string">"Hello world"</span>).unwrap();
+<a href=#622 id=622 data-nosnippet>622</a>        f.flush().unwrap();
+<a href=#623 id=623 data-nosnippet>623</a>    }
+<a href=#624 id=624 data-nosnippet>624</a>}</code></pre></div></section></main></body></html>

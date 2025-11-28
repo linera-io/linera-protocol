@@ -1,0 +1,477 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-0.12.23/src/retry.rs`."><title>retry.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="reqwest" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">reqwest/</div>retry.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Retry requests
+<a href=#2 id=2 data-nosnippet>2</a>//!
+<a href=#3 id=3 data-nosnippet>3</a>//! A `Client` has the ability to retry requests, by sending additional copies
+<a href=#4 id=4 data-nosnippet>4</a>//! to the server if a response is considered retryable.
+<a href=#5 id=5 data-nosnippet>5</a>//!
+<a href=#6 id=6 data-nosnippet>6</a>//! The [`Builder`] makes it easier to configure what requests to retry, along
+<a href=#7 id=7 data-nosnippet>7</a>//! with including best practices by default, such as a retry budget.
+<a href=#8 id=8 data-nosnippet>8</a>//!
+<a href=#9 id=9 data-nosnippet>9</a>//! # Defaults
+<a href=#10 id=10 data-nosnippet>10</a>//!
+<a href=#11 id=11 data-nosnippet>11</a>//! The default retry behavior of a `Client` is to only retry requests where an
+<a href=#12 id=12 data-nosnippet>12</a>//! error or low-level protocol NACK is encountered that is known to be safe to
+<a href=#13 id=13 data-nosnippet>13</a>//! retry. Note however that providing a specific retry policy will override
+<a href=#14 id=14 data-nosnippet>14</a>//! the default, and you will need to explicitly include that behavior.
+<a href=#15 id=15 data-nosnippet>15</a>//!
+<a href=#16 id=16 data-nosnippet>16</a>//! All policies default to including a retry budget that permits 20% extra
+<a href=#17 id=17 data-nosnippet>17</a>//! requests to be sent.
+<a href=#18 id=18 data-nosnippet>18</a>//!
+<a href=#19 id=19 data-nosnippet>19</a>//! # Scoped
+<a href=#20 id=20 data-nosnippet>20</a>//!
+<a href=#21 id=21 data-nosnippet>21</a>//! A client's retry policy is scoped. That means that the policy doesn't
+<a href=#22 id=22 data-nosnippet>22</a>//! apply to all requests, but only those within a user-defined scope.
+<a href=#23 id=23 data-nosnippet>23</a>//!
+<a href=#24 id=24 data-nosnippet>24</a>//! Since all policies include a budget by default, it doesn't make sense to
+<a href=#25 id=25 data-nosnippet>25</a>//! apply it on _all_ requests. Rather, the retry history applied by a budget
+<a href=#26 id=26 data-nosnippet>26</a>//! should likely only be applied to the same host.
+<a href=#27 id=27 data-nosnippet>27</a>//!
+<a href=#28 id=28 data-nosnippet>28</a>//! # Classifiers
+<a href=#29 id=29 data-nosnippet>29</a>//!
+<a href=#30 id=30 data-nosnippet>30</a>//! A retry policy needs to be configured with a classifier that determines
+<a href=#31 id=31 data-nosnippet>31</a>//! if a request should be retried. Knowledge of the destination server's
+<a href=#32 id=32 data-nosnippet>32</a>//! behavior is required to make a safe classifier. **Requests should not be
+<a href=#33 id=33 data-nosnippet>33</a>//! retried** if the server cannot safely handle the same request twice, or if
+<a href=#34 id=34 data-nosnippet>34</a>//! it causes side effects.
+<a href=#35 id=35 data-nosnippet>35</a>//!
+<a href=#36 id=36 data-nosnippet>36</a>//! Some common properties to check include if the request method is
+<a href=#37 id=37 data-nosnippet>37</a>//! idempotent, or if the response status code indicates a transient error.
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a></span><span class="kw">use </span>std::sync::Arc;
+<a href=#40 id=40 data-nosnippet>40</a><span class="kw">use </span>std::time::Duration;
+<a href=#41 id=41 data-nosnippet>41</a>
+<a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span>tower::retry::budget::{Budget <span class="kw">as _</span>, TpsBudget <span class="kw">as </span>Budget};
+<a href=#43 id=43 data-nosnippet>43</a>
+<a href=#44 id=44 data-nosnippet>44</a><span class="doccomment">/// Builder to configure retries
+<a href=#45 id=45 data-nosnippet>45</a>///
+<a href=#46 id=46 data-nosnippet>46</a>/// Construct with [`for_host()`].
+<a href=#47 id=47 data-nosnippet>47</a></span><span class="attr">#[derive(Debug)]
+<a href=#48 id=48 data-nosnippet>48</a></span><span class="kw">pub struct </span>Builder {
+<a href=#49 id=49 data-nosnippet>49</a>    <span class="comment">//backoff: Backoff,
+<a href=#50 id=50 data-nosnippet>50</a>    </span>budget: <span class="prelude-ty">Option</span>&lt;f32&gt;,
+<a href=#51 id=51 data-nosnippet>51</a>    classifier: classify::Classifier,
+<a href=#52 id=52 data-nosnippet>52</a>    max_retries_per_request: u32,
+<a href=#53 id=53 data-nosnippet>53</a>    scope: scope::Scoped,
+<a href=#54 id=54 data-nosnippet>54</a>}
+<a href=#55 id=55 data-nosnippet>55</a>
+<a href=#56 id=56 data-nosnippet>56</a><span class="doccomment">/// The internal type that we convert the builder into, that implements
+<a href=#57 id=57 data-nosnippet>57</a>/// tower::retry::Policy privately.
+<a href=#58 id=58 data-nosnippet>58</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#59 id=59 data-nosnippet>59</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Policy {
+<a href=#60 id=60 data-nosnippet>60</a>    budget: <span class="prelude-ty">Option</span>&lt;Arc&lt;Budget&gt;&gt;,
+<a href=#61 id=61 data-nosnippet>61</a>    classifier: classify::Classifier,
+<a href=#62 id=62 data-nosnippet>62</a>    max_retries_per_request: u32,
+<a href=#63 id=63 data-nosnippet>63</a>    retry_cnt: u32,
+<a href=#64 id=64 data-nosnippet>64</a>    scope: scope::Scoped,
+<a href=#65 id=65 data-nosnippet>65</a>}
+<a href=#66 id=66 data-nosnippet>66</a>
+<a href=#67 id=67 data-nosnippet>67</a><span class="comment">//#[derive(Debug)]
+<a href=#68 id=68 data-nosnippet>68</a>//struct Backoff;
+<a href=#69 id=69 data-nosnippet>69</a>
+<a href=#70 id=70 data-nosnippet>70</a></span><span class="doccomment">/// Create a retry builder with a request scope.
+<a href=#71 id=71 data-nosnippet>71</a>///
+<a href=#72 id=72 data-nosnippet>72</a>/// To provide a scope that isn't a closure, use the more general
+<a href=#73 id=73 data-nosnippet>73</a>/// [`Builder::scoped()`].
+<a href=#74 id=74 data-nosnippet>74</a></span><span class="kw">pub fn </span>for_host&lt;S&gt;(host: S) -&gt; Builder
+<a href=#75 id=75 data-nosnippet>75</a><span class="kw">where
+<a href=#76 id=76 data-nosnippet>76</a>    </span>S: <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; PartialEq&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>str&gt; + Send + Sync + <span class="lifetime">'static</span>,
+<a href=#77 id=77 data-nosnippet>77</a>{
+<a href=#78 id=78 data-nosnippet>78</a>    scoped(<span class="kw">move </span>|req| host == req.uri().host().unwrap_or(<span class="string">""</span>))
+<a href=#79 id=79 data-nosnippet>79</a>}
+<a href=#80 id=80 data-nosnippet>80</a>
+<a href=#81 id=81 data-nosnippet>81</a><span class="doccomment">/// Create a retry policy that will never retry any request.
+<a href=#82 id=82 data-nosnippet>82</a>///
+<a href=#83 id=83 data-nosnippet>83</a>/// This is useful for disabling the `Client`s default behavior of retrying
+<a href=#84 id=84 data-nosnippet>84</a>/// protocol nacks.
+<a href=#85 id=85 data-nosnippet>85</a></span><span class="kw">pub fn </span>never() -&gt; Builder {
+<a href=#86 id=86 data-nosnippet>86</a>    scoped(|<span class="kw">_</span>| <span class="bool-val">false</span>).no_budget()
+<a href=#87 id=87 data-nosnippet>87</a>}
+<a href=#88 id=88 data-nosnippet>88</a>
+<a href=#89 id=89 data-nosnippet>89</a><span class="kw">fn </span>scoped&lt;F&gt;(func: F) -&gt; Builder
+<a href=#90 id=90 data-nosnippet>90</a><span class="kw">where
+<a href=#91 id=91 data-nosnippet>91</a>    </span>F: Fn(<span class="kw-2">&amp;</span>Req) -&gt; bool + Send + Sync + <span class="lifetime">'static</span>,
+<a href=#92 id=92 data-nosnippet>92</a>{
+<a href=#93 id=93 data-nosnippet>93</a>    Builder::scoped(scope::ScopeFn(func))
+<a href=#94 id=94 data-nosnippet>94</a>}
+<a href=#95 id=95 data-nosnippet>95</a>
+<a href=#96 id=96 data-nosnippet>96</a><span class="comment">// ===== impl Builder =====
+<a href=#97 id=97 data-nosnippet>97</a>
+<a href=#98 id=98 data-nosnippet>98</a></span><span class="kw">impl </span>Builder {
+<a href=#99 id=99 data-nosnippet>99</a>    <span class="doccomment">/// Create a scoped retry policy.
+<a href=#100 id=100 data-nosnippet>100</a>    ///
+<a href=#101 id=101 data-nosnippet>101</a>    /// For a more convenient constructor, see [`for_host()`].
+<a href=#102 id=102 data-nosnippet>102</a>    </span><span class="kw">pub fn </span>scoped(scope: <span class="kw">impl </span>scope::Scope) -&gt; <span class="self">Self </span>{
+<a href=#103 id=103 data-nosnippet>103</a>        <span class="self">Self </span>{
+<a href=#104 id=104 data-nosnippet>104</a>            budget: <span class="prelude-val">Some</span>(<span class="number">0.2</span>),
+<a href=#105 id=105 data-nosnippet>105</a>            classifier: classify::Classifier::Never,
+<a href=#106 id=106 data-nosnippet>106</a>            max_retries_per_request: <span class="number">2</span>, <span class="comment">// on top of the original
+<a href=#107 id=107 data-nosnippet>107</a>            </span>scope: scope::Scoped::Dyn(Arc::new(scope)),
+<a href=#108 id=108 data-nosnippet>108</a>        }
+<a href=#109 id=109 data-nosnippet>109</a>    }
+<a href=#110 id=110 data-nosnippet>110</a>
+<a href=#111 id=111 data-nosnippet>111</a>    <span class="doccomment">/// Set no retry budget.
+<a href=#112 id=112 data-nosnippet>112</a>    ///
+<a href=#113 id=113 data-nosnippet>113</a>    /// Sets that no budget will be enforced. This could also be considered
+<a href=#114 id=114 data-nosnippet>114</a>    /// to be an infinite budget.
+<a href=#115 id=115 data-nosnippet>115</a>    ///
+<a href=#116 id=116 data-nosnippet>116</a>    /// This is NOT recommended. Disabling the budget can make your system more
+<a href=#117 id=117 data-nosnippet>117</a>    /// susceptible to retry storms.
+<a href=#118 id=118 data-nosnippet>118</a>    </span><span class="kw">pub fn </span>no_budget(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+<a href=#119 id=119 data-nosnippet>119</a>        <span class="self">self</span>.budget = <span class="prelude-val">None</span>;
+<a href=#120 id=120 data-nosnippet>120</a>        <span class="self">self
+<a href=#121 id=121 data-nosnippet>121</a>    </span>}
+<a href=#122 id=122 data-nosnippet>122</a>
+<a href=#123 id=123 data-nosnippet>123</a>    <span class="doccomment">/// Sets the max extra load the budget will allow.
+<a href=#124 id=124 data-nosnippet>124</a>    ///
+<a href=#125 id=125 data-nosnippet>125</a>    /// Think of the amount of requests your client generates, and how much
+<a href=#126 id=126 data-nosnippet>126</a>    /// load that puts on the server. This option configures as a percentage
+<a href=#127 id=127 data-nosnippet>127</a>    /// how much extra load is allowed via retries.
+<a href=#128 id=128 data-nosnippet>128</a>    ///
+<a href=#129 id=129 data-nosnippet>129</a>    /// For example, if you send 1,000 requests per second, setting a maximum
+<a href=#130 id=130 data-nosnippet>130</a>    /// extra load value of `0.3` would allow 300 more requests per second
+<a href=#131 id=131 data-nosnippet>131</a>    /// in retries. A value of `2.5` would allow 2,500 more requests.
+<a href=#132 id=132 data-nosnippet>132</a>    ///
+<a href=#133 id=133 data-nosnippet>133</a>    /// # Panics
+<a href=#134 id=134 data-nosnippet>134</a>    ///
+<a href=#135 id=135 data-nosnippet>135</a>    /// The `extra_percent` value must be within reasonable values for a
+<a href=#136 id=136 data-nosnippet>136</a>    /// percentage. This method will panic if it is less than `0.0`, or greater
+<a href=#137 id=137 data-nosnippet>137</a>    /// than `1000.0`.
+<a href=#138 id=138 data-nosnippet>138</a>    </span><span class="kw">pub fn </span>max_extra_load(<span class="kw-2">mut </span><span class="self">self</span>, extra_percent: f32) -&gt; <span class="self">Self </span>{
+<a href=#139 id=139 data-nosnippet>139</a>        <span class="macro">assert!</span>(extra_percent &gt;= <span class="number">0.0</span>);
+<a href=#140 id=140 data-nosnippet>140</a>        <span class="macro">assert!</span>(extra_percent &lt;= <span class="number">1000.0</span>);
+<a href=#141 id=141 data-nosnippet>141</a>        <span class="self">self</span>.budget = <span class="prelude-val">Some</span>(extra_percent);
+<a href=#142 id=142 data-nosnippet>142</a>        <span class="self">self
+<a href=#143 id=143 data-nosnippet>143</a>    </span>}
+<a href=#144 id=144 data-nosnippet>144</a>
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="comment">// pub fn max_replay_body
+<a href=#146 id=146 data-nosnippet>146</a>
+<a href=#147 id=147 data-nosnippet>147</a>    </span><span class="doccomment">/// Set the max retries allowed per request.
+<a href=#148 id=148 data-nosnippet>148</a>    ///
+<a href=#149 id=149 data-nosnippet>149</a>    /// For each logical (initial) request, only retry up to `max` times.
+<a href=#150 id=150 data-nosnippet>150</a>    ///
+<a href=#151 id=151 data-nosnippet>151</a>    /// This value is used in combination with a token budget that is applied
+<a href=#152 id=152 data-nosnippet>152</a>    /// to all requests. Even if the budget would allow more requests, this
+<a href=#153 id=153 data-nosnippet>153</a>    /// limit will prevent. Likewise, the budget may prevent retying up to
+<a href=#154 id=154 data-nosnippet>154</a>    /// `max` times. This setting prevents a single request from consuming
+<a href=#155 id=155 data-nosnippet>155</a>    /// the entire budget.
+<a href=#156 id=156 data-nosnippet>156</a>    ///
+<a href=#157 id=157 data-nosnippet>157</a>    /// Default is currently 2 retries.
+<a href=#158 id=158 data-nosnippet>158</a>    </span><span class="kw">pub fn </span>max_retries_per_request(<span class="kw-2">mut </span><span class="self">self</span>, max: u32) -&gt; <span class="self">Self </span>{
+<a href=#159 id=159 data-nosnippet>159</a>        <span class="self">self</span>.max_retries_per_request = max;
+<a href=#160 id=160 data-nosnippet>160</a>        <span class="self">self
+<a href=#161 id=161 data-nosnippet>161</a>    </span>}
+<a href=#162 id=162 data-nosnippet>162</a>
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="doccomment">/// Provide a classifier to determine if a request should be retried.
+<a href=#164 id=164 data-nosnippet>164</a>    ///
+<a href=#165 id=165 data-nosnippet>165</a>    /// # Example
+<a href=#166 id=166 data-nosnippet>166</a>    ///
+<a href=#167 id=167 data-nosnippet>167</a>    /// ```rust
+<a href=#168 id=168 data-nosnippet>168</a>    /// # fn with_builder(builder: reqwest::retry::Builder) -&gt; reqwest::retry::Builder {
+<a href=#169 id=169 data-nosnippet>169</a>    /// builder.classify_fn(|req_rep| {
+<a href=#170 id=170 data-nosnippet>170</a>    ///     match (req_rep.method(), req_rep.status()) {
+<a href=#171 id=171 data-nosnippet>171</a>    ///         (&amp;http::Method::GET, Some(http::StatusCode::SERVICE_UNAVAILABLE)) =&gt; {
+<a href=#172 id=172 data-nosnippet>172</a>    ///             req_rep.retryable()
+<a href=#173 id=173 data-nosnippet>173</a>    ///         },
+<a href=#174 id=174 data-nosnippet>174</a>    ///         _ =&gt; req_rep.success()
+<a href=#175 id=175 data-nosnippet>175</a>    ///     }
+<a href=#176 id=176 data-nosnippet>176</a>    /// })
+<a href=#177 id=177 data-nosnippet>177</a>    /// # }
+<a href=#178 id=178 data-nosnippet>178</a>    /// ```
+<a href=#179 id=179 data-nosnippet>179</a>    </span><span class="kw">pub fn </span>classify_fn&lt;F&gt;(<span class="self">self</span>, func: F) -&gt; <span class="self">Self
+<a href=#180 id=180 data-nosnippet>180</a>    </span><span class="kw">where
+<a href=#181 id=181 data-nosnippet>181</a>        </span>F: Fn(classify::ReqRep&lt;<span class="lifetime">'_</span>&gt;) -&gt; classify::Action + Send + Sync + <span class="lifetime">'static</span>,
+<a href=#182 id=182 data-nosnippet>182</a>    {
+<a href=#183 id=183 data-nosnippet>183</a>        <span class="self">self</span>.classify(classify::ClassifyFn(func))
+<a href=#184 id=184 data-nosnippet>184</a>    }
+<a href=#185 id=185 data-nosnippet>185</a>
+<a href=#186 id=186 data-nosnippet>186</a>    <span class="doccomment">/// Provide a classifier to determine if a request should be retried.
+<a href=#187 id=187 data-nosnippet>187</a>    </span><span class="kw">pub fn </span>classify(<span class="kw-2">mut </span><span class="self">self</span>, classifier: <span class="kw">impl </span>classify::Classify) -&gt; <span class="self">Self </span>{
+<a href=#188 id=188 data-nosnippet>188</a>        <span class="self">self</span>.classifier = classify::Classifier::Dyn(Arc::new(classifier));
+<a href=#189 id=189 data-nosnippet>189</a>        <span class="self">self
+<a href=#190 id=190 data-nosnippet>190</a>    </span>}
+<a href=#191 id=191 data-nosnippet>191</a>
+<a href=#192 id=192 data-nosnippet>192</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>default() -&gt; Builder {
+<a href=#193 id=193 data-nosnippet>193</a>        <span class="self">Self </span>{
+<a href=#194 id=194 data-nosnippet>194</a>            <span class="comment">// unscoped protocols nacks doesn't need a budget
+<a href=#195 id=195 data-nosnippet>195</a>            </span>budget: <span class="prelude-val">None</span>,
+<a href=#196 id=196 data-nosnippet>196</a>            classifier: classify::Classifier::ProtocolNacks,
+<a href=#197 id=197 data-nosnippet>197</a>            max_retries_per_request: <span class="number">2</span>, <span class="comment">// on top of the original
+<a href=#198 id=198 data-nosnippet>198</a>            </span>scope: scope::Scoped::Unscoped,
+<a href=#199 id=199 data-nosnippet>199</a>        }
+<a href=#200 id=200 data-nosnippet>200</a>    }
+<a href=#201 id=201 data-nosnippet>201</a>
+<a href=#202 id=202 data-nosnippet>202</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>into_policy(<span class="self">self</span>) -&gt; Policy {
+<a href=#203 id=203 data-nosnippet>203</a>        <span class="kw">let </span>budget = <span class="self">self
+<a href=#204 id=204 data-nosnippet>204</a>            </span>.budget
+<a href=#205 id=205 data-nosnippet>205</a>            .map(|p| Arc::new(Budget::new(Duration::from_secs(<span class="number">10</span>), <span class="number">10</span>, p)));
+<a href=#206 id=206 data-nosnippet>206</a>        Policy {
+<a href=#207 id=207 data-nosnippet>207</a>            budget,
+<a href=#208 id=208 data-nosnippet>208</a>            classifier: <span class="self">self</span>.classifier,
+<a href=#209 id=209 data-nosnippet>209</a>            max_retries_per_request: <span class="self">self</span>.max_retries_per_request,
+<a href=#210 id=210 data-nosnippet>210</a>            retry_cnt: <span class="number">0</span>,
+<a href=#211 id=211 data-nosnippet>211</a>            scope: <span class="self">self</span>.scope,
+<a href=#212 id=212 data-nosnippet>212</a>        }
+<a href=#213 id=213 data-nosnippet>213</a>    }
+<a href=#214 id=214 data-nosnippet>214</a>}
+<a href=#215 id=215 data-nosnippet>215</a>
+<a href=#216 id=216 data-nosnippet>216</a><span class="comment">// ===== internal ======
+<a href=#217 id=217 data-nosnippet>217</a>
+<a href=#218 id=218 data-nosnippet>218</a></span><span class="kw">type </span>Req = http::Request&lt;<span class="kw">crate</span>::async_impl::body::Body&gt;;
+<a href=#219 id=219 data-nosnippet>219</a>
+<a href=#220 id=220 data-nosnippet>220</a><span class="kw">impl</span>&lt;B&gt; tower::retry::Policy&lt;Req, http::Response&lt;B&gt;, <span class="kw">crate</span>::Error&gt; <span class="kw">for </span>Policy {
+<a href=#221 id=221 data-nosnippet>221</a>    <span class="comment">// TODO? backoff futures...
+<a href=#222 id=222 data-nosnippet>222</a>    </span><span class="kw">type </span>Future = std::future::Ready&lt;()&gt;;
+<a href=#223 id=223 data-nosnippet>223</a>
+<a href=#224 id=224 data-nosnippet>224</a>    <span class="kw">fn </span>retry(
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#226 id=226 data-nosnippet>226</a>        req: <span class="kw-2">&amp;mut </span>Req,
+<a href=#227 id=227 data-nosnippet>227</a>        result: <span class="kw-2">&amp;mut </span><span class="kw">crate</span>::Result&lt;http::Response&lt;B&gt;&gt;,
+<a href=#228 id=228 data-nosnippet>228</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Future&gt; {
+<a href=#229 id=229 data-nosnippet>229</a>        <span class="kw">match </span><span class="self">self</span>.classifier.classify(req, result) {
+<a href=#230 id=230 data-nosnippet>230</a>            classify::Action::Success =&gt; {
+<a href=#231 id=231 data-nosnippet>231</a>                <span class="macro">log::trace!</span>(<span class="string">"shouldn't retry!"</span>);
+<a href=#232 id=232 data-nosnippet>232</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>budget) = <span class="self">self</span>.budget {
+<a href=#233 id=233 data-nosnippet>233</a>                    budget.deposit();
+<a href=#234 id=234 data-nosnippet>234</a>                }
+<a href=#235 id=235 data-nosnippet>235</a>                <span class="prelude-val">None
+<a href=#236 id=236 data-nosnippet>236</a>            </span>}
+<a href=#237 id=237 data-nosnippet>237</a>            classify::Action::Retryable =&gt; {
+<a href=#238 id=238 data-nosnippet>238</a>                <span class="macro">log::trace!</span>(<span class="string">"could retry!"</span>);
+<a href=#239 id=239 data-nosnippet>239</a>                <span class="kw">if </span><span class="self">self</span>.budget.as_ref().map(|b| b.withdraw()).unwrap_or(<span class="bool-val">true</span>) {
+<a href=#240 id=240 data-nosnippet>240</a>                    <span class="self">self</span>.retry_cnt += <span class="number">1</span>;
+<a href=#241 id=241 data-nosnippet>241</a>                    <span class="prelude-val">Some</span>(std::future::ready(()))
+<a href=#242 id=242 data-nosnippet>242</a>                } <span class="kw">else </span>{
+<a href=#243 id=243 data-nosnippet>243</a>                    <span class="macro">log::debug!</span>(<span class="string">"retryable but could not withdraw from budget"</span>);
+<a href=#244 id=244 data-nosnippet>244</a>                    <span class="prelude-val">None
+<a href=#245 id=245 data-nosnippet>245</a>                </span>}
+<a href=#246 id=246 data-nosnippet>246</a>            }
+<a href=#247 id=247 data-nosnippet>247</a>        }
+<a href=#248 id=248 data-nosnippet>248</a>    }
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a>    <span class="kw">fn </span>clone_request(<span class="kw-2">&amp;mut </span><span class="self">self</span>, req: <span class="kw-2">&amp;</span>Req) -&gt; <span class="prelude-ty">Option</span>&lt;Req&gt; {
+<a href=#251 id=251 data-nosnippet>251</a>        <span class="kw">if </span><span class="self">self</span>.retry_cnt &gt; <span class="number">0 </span>&amp;&amp; !<span class="self">self</span>.scope.applies_to(req) {
+<a href=#252 id=252 data-nosnippet>252</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#253 id=253 data-nosnippet>253</a>        }
+<a href=#254 id=254 data-nosnippet>254</a>        <span class="kw">if </span><span class="self">self</span>.retry_cnt &gt;= <span class="self">self</span>.max_retries_per_request {
+<a href=#255 id=255 data-nosnippet>255</a>            <span class="macro">log::trace!</span>(<span class="string">"max_retries_per_request hit"</span>);
+<a href=#256 id=256 data-nosnippet>256</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#257 id=257 data-nosnippet>257</a>        }
+<a href=#258 id=258 data-nosnippet>258</a>        <span class="kw">let </span>body = req.body().try_clone()<span class="question-mark">?</span>;
+<a href=#259 id=259 data-nosnippet>259</a>        <span class="kw">let </span><span class="kw-2">mut </span>new = http::Request::new(body);
+<a href=#260 id=260 data-nosnippet>260</a>        <span class="kw-2">*</span>new.method_mut() = req.method().clone();
+<a href=#261 id=261 data-nosnippet>261</a>        <span class="kw-2">*</span>new.uri_mut() = req.uri().clone();
+<a href=#262 id=262 data-nosnippet>262</a>        <span class="kw-2">*</span>new.version_mut() = req.version();
+<a href=#263 id=263 data-nosnippet>263</a>        <span class="kw-2">*</span>new.headers_mut() = req.headers().clone();
+<a href=#264 id=264 data-nosnippet>264</a>        <span class="kw-2">*</span>new.extensions_mut() = req.extensions().clone();
+<a href=#265 id=265 data-nosnippet>265</a>
+<a href=#266 id=266 data-nosnippet>266</a>        <span class="prelude-val">Some</span>(new)
+<a href=#267 id=267 data-nosnippet>267</a>    }
+<a href=#268 id=268 data-nosnippet>268</a>}
+<a href=#269 id=269 data-nosnippet>269</a>
+<a href=#270 id=270 data-nosnippet>270</a><span class="kw">fn </span>is_retryable_error(err: <span class="kw-2">&amp;</span><span class="kw">crate</span>::Error) -&gt; bool {
+<a href=#271 id=271 data-nosnippet>271</a>    <span class="kw">use </span>std::error::Error <span class="kw">as _</span>;
+<a href=#272 id=272 data-nosnippet>272</a>
+<a href=#273 id=273 data-nosnippet>273</a>    <span class="comment">// pop the reqwest::Error
+<a href=#274 id=274 data-nosnippet>274</a>    </span><span class="kw">let </span>err = <span class="kw">if let </span><span class="prelude-val">Some</span>(err) = err.source() {
+<a href=#275 id=275 data-nosnippet>275</a>        err
+<a href=#276 id=276 data-nosnippet>276</a>    } <span class="kw">else </span>{
+<a href=#277 id=277 data-nosnippet>277</a>        <span class="kw">return </span><span class="bool-val">false</span>;
+<a href=#278 id=278 data-nosnippet>278</a>    };
+<a href=#279 id=279 data-nosnippet>279</a>    <span class="comment">// pop the legacy::Error
+<a href=#280 id=280 data-nosnippet>280</a>    </span><span class="kw">let </span>err = <span class="kw">if let </span><span class="prelude-val">Some</span>(err) = err.source() {
+<a href=#281 id=281 data-nosnippet>281</a>        err
+<a href=#282 id=282 data-nosnippet>282</a>    } <span class="kw">else </span>{
+<a href=#283 id=283 data-nosnippet>283</a>        <span class="kw">return </span><span class="bool-val">false</span>;
+<a href=#284 id=284 data-nosnippet>284</a>    };
+<a href=#285 id=285 data-nosnippet>285</a>
+<a href=#286 id=286 data-nosnippet>286</a>    <span class="attr">#[cfg(not(any(feature = <span class="string">"http3"</span>, feature = <span class="string">"http2"</span>)))]
+<a href=#287 id=287 data-nosnippet>287</a>    </span><span class="kw">let </span>_err = err;
+<a href=#288 id=288 data-nosnippet>288</a>
+<a href=#289 id=289 data-nosnippet>289</a>    <span class="attr">#[cfg(feature = <span class="string">"http3"</span>)]
+<a href=#290 id=290 data-nosnippet>290</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(cause) = err.source() {
+<a href=#291 id=291 data-nosnippet>291</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(err) = cause.downcast_ref::&lt;h3::error::ConnectionError&gt;() {
+<a href=#292 id=292 data-nosnippet>292</a>            <span class="macro">log::trace!</span>(<span class="string">"determining if HTTP/3 error {err} can be retried"</span>);
+<a href=#293 id=293 data-nosnippet>293</a>            <span class="comment">// TODO: Does h3 provide an API for checking the error?
+<a href=#294 id=294 data-nosnippet>294</a>            </span><span class="kw">return </span>err.to_string().as_str() == <span class="string">"timeout"</span>;
+<a href=#295 id=295 data-nosnippet>295</a>        }
+<a href=#296 id=296 data-nosnippet>296</a>    }
+<a href=#297 id=297 data-nosnippet>297</a>
+<a href=#298 id=298 data-nosnippet>298</a>    <span class="attr">#[cfg(feature = <span class="string">"http2"</span>)]
+<a href=#299 id=299 data-nosnippet>299</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(cause) = err.source() {
+<a href=#300 id=300 data-nosnippet>300</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(err) = cause.downcast_ref::&lt;h2::Error&gt;() {
+<a href=#301 id=301 data-nosnippet>301</a>            <span class="comment">// They sent us a graceful shutdown, try with a new connection!
+<a href=#302 id=302 data-nosnippet>302</a>            </span><span class="kw">if </span>err.is_go_away() &amp;&amp; err.is_remote() &amp;&amp; err.reason() == <span class="prelude-val">Some</span>(h2::Reason::NO_ERROR) {
+<a href=#303 id=303 data-nosnippet>303</a>                <span class="kw">return </span><span class="bool-val">true</span>;
+<a href=#304 id=304 data-nosnippet>304</a>            }
+<a href=#305 id=305 data-nosnippet>305</a>
+<a href=#306 id=306 data-nosnippet>306</a>            <span class="comment">// REFUSED_STREAM was sent from the server, which is safe to retry.
+<a href=#307 id=307 data-nosnippet>307</a>            // https://www.rfc-editor.org/rfc/rfc9113.html#section-8.7-3.2
+<a href=#308 id=308 data-nosnippet>308</a>            </span><span class="kw">if </span>err.is_reset() &amp;&amp; err.is_remote() &amp;&amp; err.reason() == <span class="prelude-val">Some</span>(h2::Reason::REFUSED_STREAM)
+<a href=#309 id=309 data-nosnippet>309</a>            {
+<a href=#310 id=310 data-nosnippet>310</a>                <span class="kw">return </span><span class="bool-val">true</span>;
+<a href=#311 id=311 data-nosnippet>311</a>            }
+<a href=#312 id=312 data-nosnippet>312</a>        }
+<a href=#313 id=313 data-nosnippet>313</a>    }
+<a href=#314 id=314 data-nosnippet>314</a>    <span class="bool-val">false
+<a href=#315 id=315 data-nosnippet>315</a></span>}
+<a href=#316 id=316 data-nosnippet>316</a>
+<a href=#317 id=317 data-nosnippet>317</a><span class="comment">// sealed types and traits on purpose while exploring design space
+<a href=#318 id=318 data-nosnippet>318</a></span><span class="kw">mod </span>scope {
+<a href=#319 id=319 data-nosnippet>319</a>    <span class="kw">pub trait </span>Scope: Send + Sync + <span class="lifetime">'static </span>{
+<a href=#320 id=320 data-nosnippet>320</a>        <span class="kw">fn </span>applies_to(<span class="kw-2">&amp;</span><span class="self">self</span>, req: <span class="kw-2">&amp;</span><span class="kw">super</span>::Req) -&gt; bool;
+<a href=#321 id=321 data-nosnippet>321</a>    }
+<a href=#322 id=322 data-nosnippet>322</a>
+<a href=#323 id=323 data-nosnippet>323</a>    <span class="comment">// I think scopes likely make the most sense being to hosts.
+<a href=#324 id=324 data-nosnippet>324</a>    // If that's the case, then it should probably be easiest to check for
+<a href=#325 id=325 data-nosnippet>325</a>    // the host. Perhaps also considering the ability to add more things
+<a href=#326 id=326 data-nosnippet>326</a>    // to scope off in the future...
+<a href=#327 id=327 data-nosnippet>327</a>
+<a href=#328 id=328 data-nosnippet>328</a>    // For Future Whoever: making a blanket impl for any closure sounds nice,
+<a href=#329 id=329 data-nosnippet>329</a>    // but it causes inference issues at the call site. Every closure would
+<a href=#330 id=330 data-nosnippet>330</a>    // need to include `: ReqRep` in the arguments.
+<a href=#331 id=331 data-nosnippet>331</a>    //
+<a href=#332 id=332 data-nosnippet>332</a>    // An alternative is to make things like `ScopeFn`. Slightly more annoying,
+<a href=#333 id=333 data-nosnippet>333</a>    // but also more forwards-compatible. :shrug:
+<a href=#334 id=334 data-nosnippet>334</a>
+<a href=#335 id=335 data-nosnippet>335</a>    </span><span class="kw">pub struct </span>ScopeFn&lt;F&gt;(<span class="kw">pub</span>(<span class="kw">super</span>) F);
+<a href=#336 id=336 data-nosnippet>336</a>
+<a href=#337 id=337 data-nosnippet>337</a>    <span class="kw">impl</span>&lt;F&gt; Scope <span class="kw">for </span>ScopeFn&lt;F&gt;
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="kw">where
+<a href=#339 id=339 data-nosnippet>339</a>        </span>F: Fn(<span class="kw-2">&amp;</span><span class="kw">super</span>::Req) -&gt; bool + Send + Sync + <span class="lifetime">'static</span>,
+<a href=#340 id=340 data-nosnippet>340</a>    {
+<a href=#341 id=341 data-nosnippet>341</a>        <span class="kw">fn </span>applies_to(<span class="kw-2">&amp;</span><span class="self">self</span>, req: <span class="kw-2">&amp;</span><span class="kw">super</span>::Req) -&gt; bool {
+<a href=#342 id=342 data-nosnippet>342</a>            (<span class="self">self</span>.<span class="number">0</span>)(req)
+<a href=#343 id=343 data-nosnippet>343</a>        }
+<a href=#344 id=344 data-nosnippet>344</a>    }
+<a href=#345 id=345 data-nosnippet>345</a>
+<a href=#346 id=346 data-nosnippet>346</a>    <span class="attr">#[derive(Clone)]
+<a href=#347 id=347 data-nosnippet>347</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">enum </span>Scoped {
+<a href=#348 id=348 data-nosnippet>348</a>        Unscoped,
+<a href=#349 id=349 data-nosnippet>349</a>        Dyn(std::sync::Arc&lt;<span class="kw">dyn </span>Scope&gt;),
+<a href=#350 id=350 data-nosnippet>350</a>    }
+<a href=#351 id=351 data-nosnippet>351</a>
+<a href=#352 id=352 data-nosnippet>352</a>    <span class="kw">impl </span>Scoped {
+<a href=#353 id=353 data-nosnippet>353</a>        <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>applies_to(<span class="kw-2">&amp;</span><span class="self">self</span>, req: <span class="kw-2">&amp;</span><span class="kw">super</span>::Req) -&gt; bool {
+<a href=#354 id=354 data-nosnippet>354</a>            <span class="kw">let </span>ret = <span class="kw">match </span><span class="self">self </span>{
+<a href=#355 id=355 data-nosnippet>355</a>                <span class="self">Self</span>::Unscoped =&gt; <span class="bool-val">true</span>,
+<a href=#356 id=356 data-nosnippet>356</a>                <span class="self">Self</span>::Dyn(s) =&gt; s.applies_to(req),
+<a href=#357 id=357 data-nosnippet>357</a>            };
+<a href=#358 id=358 data-nosnippet>358</a>            <span class="macro">log::trace!</span>(<span class="string">"retry in scope: {ret}"</span>);
+<a href=#359 id=359 data-nosnippet>359</a>            ret
+<a href=#360 id=360 data-nosnippet>360</a>        }
+<a href=#361 id=361 data-nosnippet>361</a>    }
+<a href=#362 id=362 data-nosnippet>362</a>
+<a href=#363 id=363 data-nosnippet>363</a>    <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>Scoped {
+<a href=#364 id=364 data-nosnippet>364</a>        <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+<a href=#365 id=365 data-nosnippet>365</a>            <span class="kw">match </span><span class="self">self </span>{
+<a href=#366 id=366 data-nosnippet>366</a>                <span class="self">Self</span>::Unscoped =&gt; f.write_str(<span class="string">"Unscoped"</span>),
+<a href=#367 id=367 data-nosnippet>367</a>                <span class="self">Self</span>::Dyn(<span class="kw">_</span>) =&gt; f.write_str(<span class="string">"Scoped"</span>),
+<a href=#368 id=368 data-nosnippet>368</a>            }
+<a href=#369 id=369 data-nosnippet>369</a>        }
+<a href=#370 id=370 data-nosnippet>370</a>    }
+<a href=#371 id=371 data-nosnippet>371</a>}
+<a href=#372 id=372 data-nosnippet>372</a>
+<a href=#373 id=373 data-nosnippet>373</a><span class="comment">// sealed types and traits on purpose while exploring design space
+<a href=#374 id=374 data-nosnippet>374</a></span><span class="kw">mod </span>classify {
+<a href=#375 id=375 data-nosnippet>375</a>    <span class="kw">pub trait </span>Classify: Send + Sync + <span class="lifetime">'static </span>{
+<a href=#376 id=376 data-nosnippet>376</a>        <span class="kw">fn </span>classify(<span class="kw-2">&amp;</span><span class="self">self</span>, req_rep: ReqRep&lt;<span class="lifetime">'_</span>&gt;) -&gt; Action;
+<a href=#377 id=377 data-nosnippet>377</a>    }
+<a href=#378 id=378 data-nosnippet>378</a>
+<a href=#379 id=379 data-nosnippet>379</a>    <span class="comment">// For Future Whoever: making a blanket impl for any closure sounds nice,
+<a href=#380 id=380 data-nosnippet>380</a>    // but it causes inference issues at the call site. Every closure would
+<a href=#381 id=381 data-nosnippet>381</a>    // need to include `: ReqRep` in the arguments.
+<a href=#382 id=382 data-nosnippet>382</a>    //
+<a href=#383 id=383 data-nosnippet>383</a>    // An alternative is to make things like `ClassifyFn`. Slightly more
+<a href=#384 id=384 data-nosnippet>384</a>    // annoying, but also more forwards-compatible. :shrug:
+<a href=#385 id=385 data-nosnippet>385</a>    </span><span class="kw">pub struct </span>ClassifyFn&lt;F&gt;(<span class="kw">pub</span>(<span class="kw">super</span>) F);
+<a href=#386 id=386 data-nosnippet>386</a>
+<a href=#387 id=387 data-nosnippet>387</a>    <span class="kw">impl</span>&lt;F&gt; Classify <span class="kw">for </span>ClassifyFn&lt;F&gt;
+<a href=#388 id=388 data-nosnippet>388</a>    <span class="kw">where
+<a href=#389 id=389 data-nosnippet>389</a>        </span>F: Fn(ReqRep&lt;<span class="lifetime">'_</span>&gt;) -&gt; Action + Send + Sync + <span class="lifetime">'static</span>,
+<a href=#390 id=390 data-nosnippet>390</a>    {
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="kw">fn </span>classify(<span class="kw-2">&amp;</span><span class="self">self</span>, req_rep: ReqRep&lt;<span class="lifetime">'_</span>&gt;) -&gt; Action {
+<a href=#392 id=392 data-nosnippet>392</a>            (<span class="self">self</span>.<span class="number">0</span>)(req_rep)
+<a href=#393 id=393 data-nosnippet>393</a>        }
+<a href=#394 id=394 data-nosnippet>394</a>    }
+<a href=#395 id=395 data-nosnippet>395</a>
+<a href=#396 id=396 data-nosnippet>396</a>    <span class="attr">#[derive(Debug)]
+<a href=#397 id=397 data-nosnippet>397</a>    </span><span class="kw">pub struct </span>ReqRep&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw">super</span>::Req, <span class="prelude-ty">Result</span>&lt;http::StatusCode, <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw">crate</span>::Error&gt;);
+<a href=#398 id=398 data-nosnippet>398</a>
+<a href=#399 id=399 data-nosnippet>399</a>    <span class="kw">impl </span>ReqRep&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#400 id=400 data-nosnippet>400</a>        <span class="kw">pub fn </span>method(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>http::Method {
+<a href=#401 id=401 data-nosnippet>401</a>            <span class="self">self</span>.<span class="number">0</span>.method()
+<a href=#402 id=402 data-nosnippet>402</a>        }
+<a href=#403 id=403 data-nosnippet>403</a>
+<a href=#404 id=404 data-nosnippet>404</a>        <span class="kw">pub fn </span>uri(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>http::Uri {
+<a href=#405 id=405 data-nosnippet>405</a>            <span class="self">self</span>.<span class="number">0</span>.uri()
+<a href=#406 id=406 data-nosnippet>406</a>        }
+<a href=#407 id=407 data-nosnippet>407</a>
+<a href=#408 id=408 data-nosnippet>408</a>        <span class="kw">pub fn </span>status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;http::StatusCode&gt; {
+<a href=#409 id=409 data-nosnippet>409</a>            <span class="self">self</span>.<span class="number">1</span>.ok()
+<a href=#410 id=410 data-nosnippet>410</a>        }
+<a href=#411 id=411 data-nosnippet>411</a>
+<a href=#412 id=412 data-nosnippet>412</a>        <span class="kw">pub fn </span>error(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>(<span class="kw">dyn </span>std::error::Error + <span class="lifetime">'static</span>)&gt; {
+<a href=#413 id=413 data-nosnippet>413</a>            <span class="self">self</span>.<span class="number">1</span>.as_ref().err().map(|e| <span class="kw-2">&amp;**</span>e <span class="kw">as _</span>)
+<a href=#414 id=414 data-nosnippet>414</a>        }
+<a href=#415 id=415 data-nosnippet>415</a>
+<a href=#416 id=416 data-nosnippet>416</a>        <span class="kw">pub fn </span>retryable(<span class="self">self</span>) -&gt; Action {
+<a href=#417 id=417 data-nosnippet>417</a>            Action::Retryable
+<a href=#418 id=418 data-nosnippet>418</a>        }
+<a href=#419 id=419 data-nosnippet>419</a>
+<a href=#420 id=420 data-nosnippet>420</a>        <span class="kw">pub fn </span>success(<span class="self">self</span>) -&gt; Action {
+<a href=#421 id=421 data-nosnippet>421</a>            Action::Success
+<a href=#422 id=422 data-nosnippet>422</a>        }
+<a href=#423 id=423 data-nosnippet>423</a>
+<a href=#424 id=424 data-nosnippet>424</a>        <span class="kw">fn </span>is_protocol_nack(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#425 id=425 data-nosnippet>425</a>            <span class="self">self</span>.<span class="number">1
+<a href=#426 id=426 data-nosnippet>426</a>                </span>.as_ref()
+<a href=#427 id=427 data-nosnippet>427</a>                .err()
+<a href=#428 id=428 data-nosnippet>428</a>                .map(|<span class="kw-2">&amp;</span>e| <span class="kw">super</span>::is_retryable_error(e))
+<a href=#429 id=429 data-nosnippet>429</a>                .unwrap_or(<span class="bool-val">false</span>)
+<a href=#430 id=430 data-nosnippet>430</a>        }
+<a href=#431 id=431 data-nosnippet>431</a>    }
+<a href=#432 id=432 data-nosnippet>432</a>
+<a href=#433 id=433 data-nosnippet>433</a>    <span class="attr">#[must_use]
+<a href=#434 id=434 data-nosnippet>434</a>    #[derive(Debug)]
+<a href=#435 id=435 data-nosnippet>435</a>    </span><span class="kw">pub enum </span>Action {
+<a href=#436 id=436 data-nosnippet>436</a>        Success,
+<a href=#437 id=437 data-nosnippet>437</a>        Retryable,
+<a href=#438 id=438 data-nosnippet>438</a>    }
+<a href=#439 id=439 data-nosnippet>439</a>
+<a href=#440 id=440 data-nosnippet>440</a>    <span class="attr">#[derive(Clone)]
+<a href=#441 id=441 data-nosnippet>441</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">enum </span>Classifier {
+<a href=#442 id=442 data-nosnippet>442</a>        Never,
+<a href=#443 id=443 data-nosnippet>443</a>        ProtocolNacks,
+<a href=#444 id=444 data-nosnippet>444</a>        Dyn(std::sync::Arc&lt;<span class="kw">dyn </span>Classify&gt;),
+<a href=#445 id=445 data-nosnippet>445</a>    }
+<a href=#446 id=446 data-nosnippet>446</a>
+<a href=#447 id=447 data-nosnippet>447</a>    <span class="kw">impl </span>Classifier {
+<a href=#448 id=448 data-nosnippet>448</a>        <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>classify&lt;B&gt;(
+<a href=#449 id=449 data-nosnippet>449</a>            <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#450 id=450 data-nosnippet>450</a>            req: <span class="kw-2">&amp;</span><span class="kw">super</span>::Req,
+<a href=#451 id=451 data-nosnippet>451</a>            res: <span class="kw-2">&amp;</span><span class="prelude-ty">Result</span>&lt;http::Response&lt;B&gt;, <span class="kw">crate</span>::Error&gt;,
+<a href=#452 id=452 data-nosnippet>452</a>        ) -&gt; Action {
+<a href=#453 id=453 data-nosnippet>453</a>            <span class="kw">let </span>req_rep = ReqRep(req, res.as_ref().map(|r| r.status()));
+<a href=#454 id=454 data-nosnippet>454</a>            <span class="kw">match </span><span class="self">self </span>{
+<a href=#455 id=455 data-nosnippet>455</a>                <span class="self">Self</span>::Never =&gt; Action::Success,
+<a href=#456 id=456 data-nosnippet>456</a>                <span class="self">Self</span>::ProtocolNacks =&gt; {
+<a href=#457 id=457 data-nosnippet>457</a>                    <span class="kw">if </span>req_rep.is_protocol_nack() {
+<a href=#458 id=458 data-nosnippet>458</a>                        Action::Retryable
+<a href=#459 id=459 data-nosnippet>459</a>                    } <span class="kw">else </span>{
+<a href=#460 id=460 data-nosnippet>460</a>                        Action::Success
+<a href=#461 id=461 data-nosnippet>461</a>                    }
+<a href=#462 id=462 data-nosnippet>462</a>                }
+<a href=#463 id=463 data-nosnippet>463</a>                <span class="self">Self</span>::Dyn(c) =&gt; c.classify(req_rep),
+<a href=#464 id=464 data-nosnippet>464</a>            }
+<a href=#465 id=465 data-nosnippet>465</a>        }
+<a href=#466 id=466 data-nosnippet>466</a>    }
+<a href=#467 id=467 data-nosnippet>467</a>
+<a href=#468 id=468 data-nosnippet>468</a>    <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>Classifier {
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+<a href=#470 id=470 data-nosnippet>470</a>            <span class="kw">match </span><span class="self">self </span>{
+<a href=#471 id=471 data-nosnippet>471</a>                <span class="self">Self</span>::Never =&gt; f.write_str(<span class="string">"Never"</span>),
+<a href=#472 id=472 data-nosnippet>472</a>                <span class="self">Self</span>::ProtocolNacks =&gt; f.write_str(<span class="string">"ProtocolNacks"</span>),
+<a href=#473 id=473 data-nosnippet>473</a>                <span class="self">Self</span>::Dyn(<span class="kw">_</span>) =&gt; f.write_str(<span class="string">"Classifier"</span>),
+<a href=#474 id=474 data-nosnippet>474</a>            }
+<a href=#475 id=475 data-nosnippet>475</a>        }
+<a href=#476 id=476 data-nosnippet>476</a>    }
+<a href=#477 id=477 data-nosnippet>477</a>}</code></pre></div></section></main></body></html>

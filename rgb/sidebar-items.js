@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["alt","prelude"],"struct":["Abgr","Argb","Bgr","Bgra","Gray","GrayAlpha","Grb","Rgb","Rgba"],"trait":["AsPixels","ColorComponentMap","ComponentBytes","ComponentMap","ComponentSlice","FromSlice","Pod","Zeroable"],"type":["RGB16","RGB8","RGBA16","RGBA8"]};

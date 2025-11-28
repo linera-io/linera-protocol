@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ValidatorCommand"],"fn":["handle_command"],"struct":["ValidatorChange","ValidatorQueryBatch","ValidatorSpec"],"type":["ValidatorBatchFile"]};

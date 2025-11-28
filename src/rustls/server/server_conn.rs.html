@@ -1,0 +1,1288 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-0.23.31/src/server/server_conn.rs`."><title>server_conn.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="rustls" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">rustls/server/</div>server_conn.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>alloc::boxed::Box;
+<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>alloc::vec::Vec;
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>core::fmt;
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>core::fmt::{Debug, Formatter};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>core::marker::PhantomData;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>core::ops::{Deref, DerefMut};
+<a href=#7 id=7 data-nosnippet>7</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#8 id=8 data-nosnippet>8</a></span><span class="kw">use </span>std::io;
+<a href=#9 id=9 data-nosnippet>9</a>
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>pki_types::{DnsName, UnixTime};
+<a href=#11 id=11 data-nosnippet>11</a>
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span><span class="kw">super</span>::hs;
+<a href=#13 id=13 data-nosnippet>13</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#14 id=14 data-nosnippet>14</a></span><span class="kw">use </span><span class="kw">crate</span>::WantsVerifier;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span><span class="kw">crate</span>::builder::ConfigBuilder;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span><span class="kw">crate</span>::common_state::{CommonState, Side};
+<a href=#17 id=17 data-nosnippet>17</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#18 id=18 data-nosnippet>18</a></span><span class="kw">use </span><span class="kw">crate</span>::common_state::{Protocol, State};
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span><span class="kw">crate</span>::conn::{ConnectionCommon, ConnectionCore, UnbufferedConnectionCommon};
+<a href=#20 id=20 data-nosnippet>20</a><span class="attr">#[cfg(doc)]
+<a href=#21 id=21 data-nosnippet>21</a></span><span class="kw">use </span><span class="kw">crate</span>::crypto;
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span><span class="kw">crate</span>::crypto::CryptoProvider;
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span><span class="kw">crate</span>::enums::{CertificateType, CipherSuite, ProtocolVersion, SignatureScheme};
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span><span class="kw">crate</span>::error::Error;
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span><span class="kw">crate</span>::kernel::KernelConnection;
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span><span class="kw">crate</span>::log::trace;
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span><span class="kw">crate</span>::msgs::base::Payload;
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span><span class="kw">crate</span>::msgs::handshake::{ClientHelloPayload, ProtocolName, ServerExtensionsInput};
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span><span class="kw">crate</span>::msgs::message::Message;
+<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span><span class="kw">crate</span>::suites::ExtractedSecrets;
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span><span class="kw">crate</span>::sync::Arc;
+<a href=#32 id=32 data-nosnippet>32</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#33 id=33 data-nosnippet>33</a></span><span class="kw">use </span><span class="kw">crate</span>::time_provider::DefaultTimeProvider;
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span><span class="kw">crate</span>::time_provider::TimeProvider;
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">use </span><span class="kw">crate</span>::vecbuf::ChunkVecBuffer;
+<a href=#36 id=36 data-nosnippet>36</a><span class="kw">use crate</span>::{
+<a href=#37 id=37 data-nosnippet>37</a>    DistinguishedName, KeyLog, NamedGroup, WantsVersions, compress, sign, verify, versions,
+<a href=#38 id=38 data-nosnippet>38</a>};
+<a href=#39 id=39 data-nosnippet>39</a>
+<a href=#40 id=40 data-nosnippet>40</a><span class="doccomment">/// A trait for the ability to store server session data.
+<a href=#41 id=41 data-nosnippet>41</a>///
+<a href=#42 id=42 data-nosnippet>42</a>/// The keys and values are opaque.
+<a href=#43 id=43 data-nosnippet>43</a>///
+<a href=#44 id=44 data-nosnippet>44</a>/// Inserted keys are randomly chosen by the library and have
+<a href=#45 id=45 data-nosnippet>45</a>/// no internal structure (in other words, you may rely on all
+<a href=#46 id=46 data-nosnippet>46</a>/// bits being uniformly random).  Queried keys are untrusted data.
+<a href=#47 id=47 data-nosnippet>47</a>///
+<a href=#48 id=48 data-nosnippet>48</a>/// Both the keys and values should be treated as
+<a href=#49 id=49 data-nosnippet>49</a>/// **highly sensitive data**, containing enough key material
+<a href=#50 id=50 data-nosnippet>50</a>/// to break all security of the corresponding sessions.
+<a href=#51 id=51 data-nosnippet>51</a>///
+<a href=#52 id=52 data-nosnippet>52</a>/// Implementations can be lossy (in other words, forgetting
+<a href=#53 id=53 data-nosnippet>53</a>/// key/value pairs) without any negative security consequences.
+<a href=#54 id=54 data-nosnippet>54</a>///
+<a href=#55 id=55 data-nosnippet>55</a>/// However, note that `take` **must** reliably delete a returned
+<a href=#56 id=56 data-nosnippet>56</a>/// value.  If it does not, there may be security consequences.
+<a href=#57 id=57 data-nosnippet>57</a>///
+<a href=#58 id=58 data-nosnippet>58</a>/// `put` and `take` are mutating operations; this isn't expressed
+<a href=#59 id=59 data-nosnippet>59</a>/// in the type system to allow implementations freedom in
+<a href=#60 id=60 data-nosnippet>60</a>/// how to achieve interior mutability.  `Mutex` is a common
+<a href=#61 id=61 data-nosnippet>61</a>/// choice.
+<a href=#62 id=62 data-nosnippet>62</a></span><span class="kw">pub trait </span>StoresServerSessions: Debug + Send + Sync {
+<a href=#63 id=63 data-nosnippet>63</a>    <span class="doccomment">/// Store session secrets encoded in `value` against `key`,
+<a href=#64 id=64 data-nosnippet>64</a>    /// overwrites any existing value against `key`.  Returns `true`
+<a href=#65 id=65 data-nosnippet>65</a>    /// if the value was stored.
+<a href=#66 id=66 data-nosnippet>66</a>    </span><span class="kw">fn </span>put(<span class="kw-2">&amp;</span><span class="self">self</span>, key: Vec&lt;u8&gt;, value: Vec&lt;u8&gt;) -&gt; bool;
+<a href=#67 id=67 data-nosnippet>67</a>
+<a href=#68 id=68 data-nosnippet>68</a>    <span class="doccomment">/// Find a value with the given `key`.  Return it, or None
+<a href=#69 id=69 data-nosnippet>69</a>    /// if it doesn't exist.
+<a href=#70 id=70 data-nosnippet>70</a>    </span><span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;;
+<a href=#71 id=71 data-nosnippet>71</a>
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="doccomment">/// Find a value with the given `key`.  Return it and delete it;
+<a href=#73 id=73 data-nosnippet>73</a>    /// or None if it doesn't exist.
+<a href=#74 id=74 data-nosnippet>74</a>    </span><span class="kw">fn </span>take(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;;
+<a href=#75 id=75 data-nosnippet>75</a>
+<a href=#76 id=76 data-nosnippet>76</a>    <span class="doccomment">/// Whether the store can cache another session. This is used to indicate to clients
+<a href=#77 id=77 data-nosnippet>77</a>    /// whether their session can be resumed; the implementation is not required to remember
+<a href=#78 id=78 data-nosnippet>78</a>    /// a session even if it returns `true` here.
+<a href=#79 id=79 data-nosnippet>79</a>    </span><span class="kw">fn </span>can_cache(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
+<a href=#80 id=80 data-nosnippet>80</a>}
+<a href=#81 id=81 data-nosnippet>81</a>
+<a href=#82 id=82 data-nosnippet>82</a><span class="doccomment">/// A trait for the ability to encrypt and decrypt tickets.
+<a href=#83 id=83 data-nosnippet>83</a></span><span class="kw">pub trait </span>ProducesTickets: Debug + Send + Sync {
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="doccomment">/// Returns true if this implementation will encrypt/decrypt
+<a href=#85 id=85 data-nosnippet>85</a>    /// tickets.  Should return false if this is a dummy
+<a href=#86 id=86 data-nosnippet>86</a>    /// implementation: the server will not send the SessionTicket
+<a href=#87 id=87 data-nosnippet>87</a>    /// extension and will not call the other functions.
+<a href=#88 id=88 data-nosnippet>88</a>    </span><span class="kw">fn </span>enabled(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
+<a href=#89 id=89 data-nosnippet>89</a>
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="doccomment">/// Returns the lifetime in seconds of tickets produced now.
+<a href=#91 id=91 data-nosnippet>91</a>    /// The lifetime is provided as a hint to clients that the
+<a href=#92 id=92 data-nosnippet>92</a>    /// ticket will not be useful after the given time.
+<a href=#93 id=93 data-nosnippet>93</a>    ///
+<a href=#94 id=94 data-nosnippet>94</a>    /// This lifetime must be implemented by key rolling and
+<a href=#95 id=95 data-nosnippet>95</a>    /// erasure, *not* by storing a lifetime in the ticket.
+<a href=#96 id=96 data-nosnippet>96</a>    ///
+<a href=#97 id=97 data-nosnippet>97</a>    /// The objective is to limit damage to forward secrecy caused
+<a href=#98 id=98 data-nosnippet>98</a>    /// by tickets, not just limiting their lifetime.
+<a href=#99 id=99 data-nosnippet>99</a>    </span><span class="kw">fn </span>lifetime(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32;
+<a href=#100 id=100 data-nosnippet>100</a>
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="doccomment">/// Encrypt and authenticate `plain`, returning the resulting
+<a href=#102 id=102 data-nosnippet>102</a>    /// ticket.  Return None if `plain` cannot be encrypted for
+<a href=#103 id=103 data-nosnippet>103</a>    /// some reason: an empty ticket will be sent and the connection
+<a href=#104 id=104 data-nosnippet>104</a>    /// will continue.
+<a href=#105 id=105 data-nosnippet>105</a>    </span><span class="kw">fn </span>encrypt(<span class="kw-2">&amp;</span><span class="self">self</span>, plain: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;;
+<a href=#106 id=106 data-nosnippet>106</a>
+<a href=#107 id=107 data-nosnippet>107</a>    <span class="doccomment">/// Decrypt `cipher`, validating its authenticity protection
+<a href=#108 id=108 data-nosnippet>108</a>    /// and recovering the plaintext.  `cipher` is fully attacker
+<a href=#109 id=109 data-nosnippet>109</a>    /// controlled, so this decryption must be side-channel free,
+<a href=#110 id=110 data-nosnippet>110</a>    /// panic-proof, and otherwise bullet-proof.  If the decryption
+<a href=#111 id=111 data-nosnippet>111</a>    /// fails, return None.
+<a href=#112 id=112 data-nosnippet>112</a>    </span><span class="kw">fn </span>decrypt(<span class="kw-2">&amp;</span><span class="self">self</span>, cipher: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;;
+<a href=#113 id=113 data-nosnippet>113</a>}
+<a href=#114 id=114 data-nosnippet>114</a>
+<a href=#115 id=115 data-nosnippet>115</a><span class="doccomment">/// How to choose a certificate chain and signing key for use
+<a href=#116 id=116 data-nosnippet>116</a>/// in server authentication.
+<a href=#117 id=117 data-nosnippet>117</a>///
+<a href=#118 id=118 data-nosnippet>118</a>/// This is suitable when selecting a certificate does not require
+<a href=#119 id=119 data-nosnippet>119</a>/// I/O or when the application is using blocking I/O anyhow.
+<a href=#120 id=120 data-nosnippet>120</a>///
+<a href=#121 id=121 data-nosnippet>121</a>/// For applications that use async I/O and need to do I/O to choose
+<a href=#122 id=122 data-nosnippet>122</a>/// a certificate (for instance, fetching a certificate from a data store),
+<a href=#123 id=123 data-nosnippet>123</a>/// the [`Acceptor`] interface is more suitable.
+<a href=#124 id=124 data-nosnippet>124</a></span><span class="kw">pub trait </span>ResolvesServerCert: Debug + Send + Sync {
+<a href=#125 id=125 data-nosnippet>125</a>    <span class="doccomment">/// Choose a certificate chain and matching key given simplified
+<a href=#126 id=126 data-nosnippet>126</a>    /// ClientHello information.
+<a href=#127 id=127 data-nosnippet>127</a>    ///
+<a href=#128 id=128 data-nosnippet>128</a>    /// Return `None` to abort the handshake.
+<a href=#129 id=129 data-nosnippet>129</a>    </span><span class="kw">fn </span>resolve(<span class="kw-2">&amp;</span><span class="self">self</span>, client_hello: ClientHello&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;Arc&lt;sign::CertifiedKey&gt;&gt;;
+<a href=#130 id=130 data-nosnippet>130</a>
+<a href=#131 id=131 data-nosnippet>131</a>    <span class="doccomment">/// Return true when the server only supports raw public keys.
+<a href=#132 id=132 data-nosnippet>132</a>    </span><span class="kw">fn </span>only_raw_public_keys(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#133 id=133 data-nosnippet>133</a>        <span class="bool-val">false
+<a href=#134 id=134 data-nosnippet>134</a>    </span>}
+<a href=#135 id=135 data-nosnippet>135</a>}
+<a href=#136 id=136 data-nosnippet>136</a>
+<a href=#137 id=137 data-nosnippet>137</a><span class="doccomment">/// A struct representing the received Client Hello
+<a href=#138 id=138 data-nosnippet>138</a></span><span class="attr">#[derive(Debug)]
+<a href=#139 id=139 data-nosnippet>139</a></span><span class="kw">pub struct </span>ClientHello&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#140 id=140 data-nosnippet>140</a>    <span class="kw">pub</span>(<span class="kw">super</span>) server_name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="prelude-ty">Option</span>&lt;DnsName&lt;<span class="lifetime">'a</span>&gt;&gt;,
+<a href=#141 id=141 data-nosnippet>141</a>    <span class="kw">pub</span>(<span class="kw">super</span>) signature_schemes: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[SignatureScheme],
+<a href=#142 id=142 data-nosnippet>142</a>    <span class="kw">pub</span>(<span class="kw">super</span>) alpn: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Vec&lt;ProtocolName&gt;&gt;,
+<a href=#143 id=143 data-nosnippet>143</a>    <span class="kw">pub</span>(<span class="kw">super</span>) server_cert_types: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[CertificateType]&gt;,
+<a href=#144 id=144 data-nosnippet>144</a>    <span class="kw">pub</span>(<span class="kw">super</span>) client_cert_types: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[CertificateType]&gt;,
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="kw">pub</span>(<span class="kw">super</span>) cipher_suites: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[CipherSuite],
+<a href=#146 id=146 data-nosnippet>146</a>    <span class="doccomment">/// The [certificate_authorities] extension, if it was sent by the client.
+<a href=#147 id=147 data-nosnippet>147</a>    ///
+<a href=#148 id=148 data-nosnippet>148</a>    /// [certificate_authorities]: https://datatracker.ietf.org/doc/html/rfc8446#section-4.2.4
+<a href=#149 id=149 data-nosnippet>149</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) certificate_authorities: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[DistinguishedName]&gt;,
+<a href=#150 id=150 data-nosnippet>150</a>    <span class="kw">pub</span>(<span class="kw">super</span>) named_groups: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[NamedGroup]&gt;,
+<a href=#151 id=151 data-nosnippet>151</a>}
+<a href=#152 id=152 data-nosnippet>152</a>
+<a href=#153 id=153 data-nosnippet>153</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; ClientHello&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#154 id=154 data-nosnippet>154</a>    <span class="doccomment">/// Get the server name indicator.
+<a href=#155 id=155 data-nosnippet>155</a>    ///
+<a href=#156 id=156 data-nosnippet>156</a>    /// Returns `None` if the client did not supply a SNI.
+<a href=#157 id=157 data-nosnippet>157</a>    </span><span class="kw">pub fn </span>server_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+<a href=#158 id=158 data-nosnippet>158</a>        <span class="self">self</span>.server_name
+<a href=#159 id=159 data-nosnippet>159</a>            .as_ref()
+<a href=#160 id=160 data-nosnippet>160</a>            .map(&lt;DnsName&lt;<span class="lifetime">'_</span>&gt; <span class="kw">as </span>AsRef&lt;str&gt;&gt;::as_ref)
+<a href=#161 id=161 data-nosnippet>161</a>    }
+<a href=#162 id=162 data-nosnippet>162</a>
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="doccomment">/// Get the compatible signature schemes.
+<a href=#164 id=164 data-nosnippet>164</a>    ///
+<a href=#165 id=165 data-nosnippet>165</a>    /// Returns standard-specified default if the client omitted this extension.
+<a href=#166 id=166 data-nosnippet>166</a>    </span><span class="kw">pub fn </span>signature_schemes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[SignatureScheme] {
+<a href=#167 id=167 data-nosnippet>167</a>        <span class="self">self</span>.signature_schemes
+<a href=#168 id=168 data-nosnippet>168</a>    }
+<a href=#169 id=169 data-nosnippet>169</a>
+<a href=#170 id=170 data-nosnippet>170</a>    <span class="doccomment">/// Get the ALPN protocol identifiers submitted by the client.
+<a href=#171 id=171 data-nosnippet>171</a>    ///
+<a href=#172 id=172 data-nosnippet>172</a>    /// Returns `None` if the client did not include an ALPN extension.
+<a href=#173 id=173 data-nosnippet>173</a>    ///
+<a href=#174 id=174 data-nosnippet>174</a>    /// Application Layer Protocol Negotiation (ALPN) is a TLS extension that lets a client
+<a href=#175 id=175 data-nosnippet>175</a>    /// submit a set of identifiers that each a represent an application-layer protocol.
+<a href=#176 id=176 data-nosnippet>176</a>    /// The server will then pick its preferred protocol from the set submitted by the client.
+<a href=#177 id=177 data-nosnippet>177</a>    /// Each identifier is represented as a byte array, although common values are often ASCII-encoded.
+<a href=#178 id=178 data-nosnippet>178</a>    /// See the official RFC-7301 specifications at &lt;https://datatracker.ietf.org/doc/html/rfc7301&gt;
+<a href=#179 id=179 data-nosnippet>179</a>    /// for more information on ALPN.
+<a href=#180 id=180 data-nosnippet>180</a>    ///
+<a href=#181 id=181 data-nosnippet>181</a>    /// For example, a HTTP client might specify "http/1.1" and/or "h2". Other well-known values
+<a href=#182 id=182 data-nosnippet>182</a>    /// are listed in the at IANA registry at
+<a href=#183 id=183 data-nosnippet>183</a>    /// &lt;https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids&gt;.
+<a href=#184 id=184 data-nosnippet>184</a>    ///
+<a href=#185 id=185 data-nosnippet>185</a>    /// The server can specify supported ALPN protocols by setting [`ServerConfig::alpn_protocols`].
+<a href=#186 id=186 data-nosnippet>186</a>    /// During the handshake, the server will select the first protocol configured that the client supports.
+<a href=#187 id=187 data-nosnippet>187</a>    </span><span class="kw">pub fn </span>alpn(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u8]&gt;&gt; {
+<a href=#188 id=188 data-nosnippet>188</a>        <span class="self">self</span>.alpn.map(|protocols| {
+<a href=#189 id=189 data-nosnippet>189</a>            protocols
+<a href=#190 id=190 data-nosnippet>190</a>                .iter()
+<a href=#191 id=191 data-nosnippet>191</a>                .map(|proto| proto.as_ref())
+<a href=#192 id=192 data-nosnippet>192</a>        })
+<a href=#193 id=193 data-nosnippet>193</a>    }
+<a href=#194 id=194 data-nosnippet>194</a>
+<a href=#195 id=195 data-nosnippet>195</a>    <span class="doccomment">/// Get cipher suites.
+<a href=#196 id=196 data-nosnippet>196</a>    </span><span class="kw">pub fn </span>cipher_suites(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[CipherSuite] {
+<a href=#197 id=197 data-nosnippet>197</a>        <span class="self">self</span>.cipher_suites
+<a href=#198 id=198 data-nosnippet>198</a>    }
+<a href=#199 id=199 data-nosnippet>199</a>
+<a href=#200 id=200 data-nosnippet>200</a>    <span class="doccomment">/// Get the server certificate types offered in the ClientHello.
+<a href=#201 id=201 data-nosnippet>201</a>    ///
+<a href=#202 id=202 data-nosnippet>202</a>    /// Returns `None` if the client did not include a certificate type extension.
+<a href=#203 id=203 data-nosnippet>203</a>    </span><span class="kw">pub fn </span>server_cert_types(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[CertificateType]&gt; {
+<a href=#204 id=204 data-nosnippet>204</a>        <span class="self">self</span>.server_cert_types
+<a href=#205 id=205 data-nosnippet>205</a>    }
+<a href=#206 id=206 data-nosnippet>206</a>
+<a href=#207 id=207 data-nosnippet>207</a>    <span class="doccomment">/// Get the client certificate types offered in the ClientHello.
+<a href=#208 id=208 data-nosnippet>208</a>    ///
+<a href=#209 id=209 data-nosnippet>209</a>    /// Returns `None` if the client did not include a certificate type extension.
+<a href=#210 id=210 data-nosnippet>210</a>    </span><span class="kw">pub fn </span>client_cert_types(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[CertificateType]&gt; {
+<a href=#211 id=211 data-nosnippet>211</a>        <span class="self">self</span>.client_cert_types
+<a href=#212 id=212 data-nosnippet>212</a>    }
+<a href=#213 id=213 data-nosnippet>213</a>
+<a href=#214 id=214 data-nosnippet>214</a>    <span class="doccomment">/// Get the [certificate_authorities] extension sent by the client.
+<a href=#215 id=215 data-nosnippet>215</a>    ///
+<a href=#216 id=216 data-nosnippet>216</a>    /// Returns `None` if the client did not send this extension.
+<a href=#217 id=217 data-nosnippet>217</a>    ///
+<a href=#218 id=218 data-nosnippet>218</a>    /// [certificate_authorities]: https://datatracker.ietf.org/doc/html/rfc8446#section-4.2.4
+<a href=#219 id=219 data-nosnippet>219</a>    </span><span class="kw">pub fn </span>certificate_authorities(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[DistinguishedName]&gt; {
+<a href=#220 id=220 data-nosnippet>220</a>        <span class="self">self</span>.certificate_authorities
+<a href=#221 id=221 data-nosnippet>221</a>    }
+<a href=#222 id=222 data-nosnippet>222</a>
+<a href=#223 id=223 data-nosnippet>223</a>    <span class="doccomment">/// Get the [`named_groups`] extension sent by the client.
+<a href=#224 id=224 data-nosnippet>224</a>    ///
+<a href=#225 id=225 data-nosnippet>225</a>    /// This means different things in different versions of TLS:
+<a href=#226 id=226 data-nosnippet>226</a>    ///
+<a href=#227 id=227 data-nosnippet>227</a>    /// Originally it was introduced as the "[`elliptic_curves`]" extension for TLS1.2.
+<a href=#228 id=228 data-nosnippet>228</a>    /// It described the elliptic curves supported by a client for all purposes: key
+<a href=#229 id=229 data-nosnippet>229</a>    /// exchange, signature verification (for server authentication), and signing (for
+<a href=#230 id=230 data-nosnippet>230</a>    /// client auth).  Later [RFC7919] extended this to include FFDHE "named groups",
+<a href=#231 id=231 data-nosnippet>231</a>    /// but FFDHE groups in this context only relate to key exchange.
+<a href=#232 id=232 data-nosnippet>232</a>    ///
+<a href=#233 id=233 data-nosnippet>233</a>    /// In TLS1.3 it was renamed to "[`named_groups`]" and now describes all types
+<a href=#234 id=234 data-nosnippet>234</a>    /// of key exchange mechanisms, and does not relate at all to elliptic curves
+<a href=#235 id=235 data-nosnippet>235</a>    /// used for signatures.
+<a href=#236 id=236 data-nosnippet>236</a>    ///
+<a href=#237 id=237 data-nosnippet>237</a>    /// [`elliptic_curves`]: https://datatracker.ietf.org/doc/html/rfc4492#section-5.1.1
+<a href=#238 id=238 data-nosnippet>238</a>    /// [RFC7919]: https://datatracker.ietf.org/doc/html/rfc7919#section-2
+<a href=#239 id=239 data-nosnippet>239</a>    /// [`named_groups`]:https://datatracker.ietf.org/doc/html/rfc8446#section-4.2.7
+<a href=#240 id=240 data-nosnippet>240</a>    </span><span class="kw">pub fn </span>named_groups(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[NamedGroup]&gt; {
+<a href=#241 id=241 data-nosnippet>241</a>        <span class="self">self</span>.named_groups
+<a href=#242 id=242 data-nosnippet>242</a>    }
+<a href=#243 id=243 data-nosnippet>243</a>}
+<a href=#244 id=244 data-nosnippet>244</a>
+<a href=#245 id=245 data-nosnippet>245</a><span class="doccomment">/// Common configuration for a set of server sessions.
+<a href=#246 id=246 data-nosnippet>246</a>///
+<a href=#247 id=247 data-nosnippet>247</a>/// Making one of these is cheap, though one of the inputs may be expensive: gathering trust roots
+<a href=#248 id=248 data-nosnippet>248</a>/// from the operating system to add to the [`RootCertStore`] passed to a `ClientCertVerifier`
+<a href=#249 id=249 data-nosnippet>249</a>/// builder may take on the order of a few hundred milliseconds.
+<a href=#250 id=250 data-nosnippet>250</a>///
+<a href=#251 id=251 data-nosnippet>251</a>/// These must be created via the [`ServerConfig::builder()`] or [`ServerConfig::builder_with_provider()`]
+<a href=#252 id=252 data-nosnippet>252</a>/// function.
+<a href=#253 id=253 data-nosnippet>253</a>///
+<a href=#254 id=254 data-nosnippet>254</a>/// # Defaults
+<a href=#255 id=255 data-nosnippet>255</a>///
+<a href=#256 id=256 data-nosnippet>256</a>/// * [`ServerConfig::max_fragment_size`]: the default is `None` (meaning 16kB).
+<a href=#257 id=257 data-nosnippet>257</a>/// * [`ServerConfig::session_storage`]: if the `std` feature is enabled, the default stores 256
+<a href=#258 id=258 data-nosnippet>258</a>///   sessions in memory. If the `std` feature is not enabled, the default is to not store any
+<a href=#259 id=259 data-nosnippet>259</a>///   sessions. In a no-std context, by enabling the `hashbrown` feature you may provide your
+<a href=#260 id=260 data-nosnippet>260</a>///   own `session_storage` using [`ServerSessionMemoryCache`] and a `crate::lock::MakeMutex`
+<a href=#261 id=261 data-nosnippet>261</a>///   implementation.
+<a href=#262 id=262 data-nosnippet>262</a>/// * [`ServerConfig::alpn_protocols`]: the default is empty -- no ALPN protocol is negotiated.
+<a href=#263 id=263 data-nosnippet>263</a>/// * [`ServerConfig::key_log`]: key material is not logged.
+<a href=#264 id=264 data-nosnippet>264</a>/// * [`ServerConfig::send_tls13_tickets`]: 2 tickets are sent.
+<a href=#265 id=265 data-nosnippet>265</a>/// * [`ServerConfig::cert_compressors`]: depends on the crate features, see [`compress::default_cert_compressors()`].
+<a href=#266 id=266 data-nosnippet>266</a>/// * [`ServerConfig::cert_compression_cache`]: caches the most recently used 4 compressions
+<a href=#267 id=267 data-nosnippet>267</a>/// * [`ServerConfig::cert_decompressors`]: depends on the crate features, see [`compress::default_cert_decompressors()`].
+<a href=#268 id=268 data-nosnippet>268</a>///
+<a href=#269 id=269 data-nosnippet>269</a>/// # Sharing resumption storage between `ServerConfig`s
+<a href=#270 id=270 data-nosnippet>270</a>///
+<a href=#271 id=271 data-nosnippet>271</a>/// In a program using many `ServerConfig`s it may improve resumption rates
+<a href=#272 id=272 data-nosnippet>272</a>/// (which has a significant impact on connection performance) if those
+<a href=#273 id=273 data-nosnippet>273</a>/// configs share [`ServerConfig::session_storage`] or [`ServerConfig::ticketer`].
+<a href=#274 id=274 data-nosnippet>274</a>///
+<a href=#275 id=275 data-nosnippet>275</a>/// However, caution is needed: other fields influence the security of a session
+<a href=#276 id=276 data-nosnippet>276</a>/// and resumption between them can be surprising.  If sharing
+<a href=#277 id=277 data-nosnippet>277</a>/// [`ServerConfig::session_storage`] or [`ServerConfig::ticketer`] between two
+<a href=#278 id=278 data-nosnippet>278</a>/// `ServerConfig`s, you should also evaluate the following fields and ensure
+<a href=#279 id=279 data-nosnippet>279</a>/// they are equivalent:
+<a href=#280 id=280 data-nosnippet>280</a>///
+<a href=#281 id=281 data-nosnippet>281</a>/// * `ServerConfig::verifier` -- client authentication requirements,
+<a href=#282 id=282 data-nosnippet>282</a>/// * [`ServerConfig::cert_resolver`] -- server identities.
+<a href=#283 id=283 data-nosnippet>283</a>///
+<a href=#284 id=284 data-nosnippet>284</a>/// To illustrate, imagine two `ServerConfig`s `A` and `B`.  `A` requires
+<a href=#285 id=285 data-nosnippet>285</a>/// client authentication, `B` does not.  If `A` and `B` shared a resumption store,
+<a href=#286 id=286 data-nosnippet>286</a>/// it would be possible for a session originated by `B` (that is, an unauthenticated client)
+<a href=#287 id=287 data-nosnippet>287</a>/// to be inserted into the store, and then resumed by `A`.  This would give a false
+<a href=#288 id=288 data-nosnippet>288</a>/// impression to the user of `A` that the client was authenticated.  This is possible
+<a href=#289 id=289 data-nosnippet>289</a>/// whether the resumption is performed statefully (via [`ServerConfig::session_storage`])
+<a href=#290 id=290 data-nosnippet>290</a>/// or statelessly (via [`ServerConfig::ticketer`]).
+<a href=#291 id=291 data-nosnippet>291</a>///
+<a href=#292 id=292 data-nosnippet>292</a>/// _Unlike_ `ClientConfig`, rustls does not enforce any policy here.
+<a href=#293 id=293 data-nosnippet>293</a>///
+<a href=#294 id=294 data-nosnippet>294</a>/// [`RootCertStore`]: crate::RootCertStore
+<a href=#295 id=295 data-nosnippet>295</a>/// [`ServerSessionMemoryCache`]: crate::server::handy::ServerSessionMemoryCache
+<a href=#296 id=296 data-nosnippet>296</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#297 id=297 data-nosnippet>297</a></span><span class="kw">pub struct </span>ServerConfig {
+<a href=#298 id=298 data-nosnippet>298</a>    <span class="doccomment">/// Source of randomness and other crypto.
+<a href=#299 id=299 data-nosnippet>299</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) provider: Arc&lt;CryptoProvider&gt;,
+<a href=#300 id=300 data-nosnippet>300</a>
+<a href=#301 id=301 data-nosnippet>301</a>    <span class="doccomment">/// Ignore the client's ciphersuite order. Instead,
+<a href=#302 id=302 data-nosnippet>302</a>    /// choose the top ciphersuite in the server list
+<a href=#303 id=303 data-nosnippet>303</a>    /// which is supported by the client.
+<a href=#304 id=304 data-nosnippet>304</a>    </span><span class="kw">pub </span>ignore_client_order: bool,
+<a href=#305 id=305 data-nosnippet>305</a>
+<a href=#306 id=306 data-nosnippet>306</a>    <span class="doccomment">/// The maximum size of plaintext input to be emitted in a single TLS record.
+<a href=#307 id=307 data-nosnippet>307</a>    /// A value of None is equivalent to the [TLS maximum] of 16 kB.
+<a href=#308 id=308 data-nosnippet>308</a>    ///
+<a href=#309 id=309 data-nosnippet>309</a>    /// rustls enforces an arbitrary minimum of 32 bytes for this field.
+<a href=#310 id=310 data-nosnippet>310</a>    /// Out of range values are reported as errors from [ServerConnection::new].
+<a href=#311 id=311 data-nosnippet>311</a>    ///
+<a href=#312 id=312 data-nosnippet>312</a>    /// Setting this value to a little less than the TCP MSS may improve latency
+<a href=#313 id=313 data-nosnippet>313</a>    /// for stream-y workloads.
+<a href=#314 id=314 data-nosnippet>314</a>    ///
+<a href=#315 id=315 data-nosnippet>315</a>    /// [TLS maximum]: https://datatracker.ietf.org/doc/html/rfc8446#section-5.1
+<a href=#316 id=316 data-nosnippet>316</a>    /// [ServerConnection::new]: crate::server::ServerConnection::new
+<a href=#317 id=317 data-nosnippet>317</a>    </span><span class="kw">pub </span>max_fragment_size: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+<a href=#318 id=318 data-nosnippet>318</a>
+<a href=#319 id=319 data-nosnippet>319</a>    <span class="doccomment">/// How to store client sessions.
+<a href=#320 id=320 data-nosnippet>320</a>    ///
+<a href=#321 id=321 data-nosnippet>321</a>    /// See [ServerConfig#sharing-resumption-storage-between-serverconfigs]
+<a href=#322 id=322 data-nosnippet>322</a>    /// for a warning related to this field.
+<a href=#323 id=323 data-nosnippet>323</a>    </span><span class="kw">pub </span>session_storage: Arc&lt;<span class="kw">dyn </span>StoresServerSessions&gt;,
+<a href=#324 id=324 data-nosnippet>324</a>
+<a href=#325 id=325 data-nosnippet>325</a>    <span class="doccomment">/// How to produce tickets.
+<a href=#326 id=326 data-nosnippet>326</a>    ///
+<a href=#327 id=327 data-nosnippet>327</a>    /// See [ServerConfig#sharing-resumption-storage-between-serverconfigs]
+<a href=#328 id=328 data-nosnippet>328</a>    /// for a warning related to this field.
+<a href=#329 id=329 data-nosnippet>329</a>    </span><span class="kw">pub </span>ticketer: Arc&lt;<span class="kw">dyn </span>ProducesTickets&gt;,
+<a href=#330 id=330 data-nosnippet>330</a>
+<a href=#331 id=331 data-nosnippet>331</a>    <span class="doccomment">/// How to choose a server cert and key. This is usually set by
+<a href=#332 id=332 data-nosnippet>332</a>    /// [ConfigBuilder::with_single_cert] or [ConfigBuilder::with_cert_resolver].
+<a href=#333 id=333 data-nosnippet>333</a>    /// For async applications, see also [Acceptor].
+<a href=#334 id=334 data-nosnippet>334</a>    </span><span class="kw">pub </span>cert_resolver: Arc&lt;<span class="kw">dyn </span>ResolvesServerCert&gt;,
+<a href=#335 id=335 data-nosnippet>335</a>
+<a href=#336 id=336 data-nosnippet>336</a>    <span class="doccomment">/// Protocol names we support, most preferred first.
+<a href=#337 id=337 data-nosnippet>337</a>    /// If empty we don't do ALPN at all.
+<a href=#338 id=338 data-nosnippet>338</a>    </span><span class="kw">pub </span>alpn_protocols: Vec&lt;Vec&lt;u8&gt;&gt;,
+<a href=#339 id=339 data-nosnippet>339</a>
+<a href=#340 id=340 data-nosnippet>340</a>    <span class="doccomment">/// Supported protocol versions, in no particular order.
+<a href=#341 id=341 data-nosnippet>341</a>    /// The default is all supported versions.
+<a href=#342 id=342 data-nosnippet>342</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) versions: versions::EnabledVersions,
+<a href=#343 id=343 data-nosnippet>343</a>
+<a href=#344 id=344 data-nosnippet>344</a>    <span class="doccomment">/// How to verify client certificates.
+<a href=#345 id=345 data-nosnippet>345</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) verifier: Arc&lt;<span class="kw">dyn </span>verify::ClientCertVerifier&gt;,
+<a href=#346 id=346 data-nosnippet>346</a>
+<a href=#347 id=347 data-nosnippet>347</a>    <span class="doccomment">/// How to output key material for debugging.  The default
+<a href=#348 id=348 data-nosnippet>348</a>    /// does nothing.
+<a href=#349 id=349 data-nosnippet>349</a>    </span><span class="kw">pub </span>key_log: Arc&lt;<span class="kw">dyn </span>KeyLog&gt;,
+<a href=#350 id=350 data-nosnippet>350</a>
+<a href=#351 id=351 data-nosnippet>351</a>    <span class="doccomment">/// Allows traffic secrets to be extracted after the handshake,
+<a href=#352 id=352 data-nosnippet>352</a>    /// e.g. for kTLS setup.
+<a href=#353 id=353 data-nosnippet>353</a>    </span><span class="kw">pub </span>enable_secret_extraction: bool,
+<a href=#354 id=354 data-nosnippet>354</a>
+<a href=#355 id=355 data-nosnippet>355</a>    <span class="doccomment">/// Amount of early data to accept for sessions created by
+<a href=#356 id=356 data-nosnippet>356</a>    /// this config.  Specify 0 to disable early data.  The
+<a href=#357 id=357 data-nosnippet>357</a>    /// default is 0.
+<a href=#358 id=358 data-nosnippet>358</a>    ///
+<a href=#359 id=359 data-nosnippet>359</a>    /// Read the early data via [`ServerConnection::early_data`].
+<a href=#360 id=360 data-nosnippet>360</a>    ///
+<a href=#361 id=361 data-nosnippet>361</a>    /// The units for this are _both_ plaintext bytes, _and_ ciphertext
+<a href=#362 id=362 data-nosnippet>362</a>    /// bytes, depending on whether the server accepts a client's early_data
+<a href=#363 id=363 data-nosnippet>363</a>    /// or not.  It is therefore recommended to include some slop in
+<a href=#364 id=364 data-nosnippet>364</a>    /// this value to account for the unknown amount of ciphertext
+<a href=#365 id=365 data-nosnippet>365</a>    /// expansion in the latter case.
+<a href=#366 id=366 data-nosnippet>366</a>    </span><span class="kw">pub </span>max_early_data_size: u32,
+<a href=#367 id=367 data-nosnippet>367</a>
+<a href=#368 id=368 data-nosnippet>368</a>    <span class="doccomment">/// Whether the server should send "0.5RTT" data.  This means the server
+<a href=#369 id=369 data-nosnippet>369</a>    /// sends data after its first flight of handshake messages, without
+<a href=#370 id=370 data-nosnippet>370</a>    /// waiting for the client to complete the handshake.
+<a href=#371 id=371 data-nosnippet>371</a>    ///
+<a href=#372 id=372 data-nosnippet>372</a>    /// This can improve TTFB latency for either server-speaks-first protocols,
+<a href=#373 id=373 data-nosnippet>373</a>    /// or client-speaks-first protocols when paired with "0RTT" data.  This
+<a href=#374 id=374 data-nosnippet>374</a>    /// comes at the cost of a subtle weakening of the normal handshake
+<a href=#375 id=375 data-nosnippet>375</a>    /// integrity guarantees that TLS provides.  Note that the initial
+<a href=#376 id=376 data-nosnippet>376</a>    /// `ClientHello` is indirectly authenticated because it is included
+<a href=#377 id=377 data-nosnippet>377</a>    /// in the transcript used to derive the keys used to encrypt the data.
+<a href=#378 id=378 data-nosnippet>378</a>    ///
+<a href=#379 id=379 data-nosnippet>379</a>    /// This only applies to TLS1.3 connections.  TLS1.2 connections cannot
+<a href=#380 id=380 data-nosnippet>380</a>    /// do this optimisation and this setting is ignored for them.  It is
+<a href=#381 id=381 data-nosnippet>381</a>    /// also ignored for TLS1.3 connections that even attempt client
+<a href=#382 id=382 data-nosnippet>382</a>    /// authentication.
+<a href=#383 id=383 data-nosnippet>383</a>    ///
+<a href=#384 id=384 data-nosnippet>384</a>    /// This defaults to false.  This means the first application data
+<a href=#385 id=385 data-nosnippet>385</a>    /// sent by the server comes after receiving and validating the client's
+<a href=#386 id=386 data-nosnippet>386</a>    /// handshake up to the `Finished` message.  This is the safest option.
+<a href=#387 id=387 data-nosnippet>387</a>    </span><span class="kw">pub </span>send_half_rtt_data: bool,
+<a href=#388 id=388 data-nosnippet>388</a>
+<a href=#389 id=389 data-nosnippet>389</a>    <span class="doccomment">/// How many TLS1.3 tickets to send immediately after a successful
+<a href=#390 id=390 data-nosnippet>390</a>    /// handshake.
+<a href=#391 id=391 data-nosnippet>391</a>    ///
+<a href=#392 id=392 data-nosnippet>392</a>    /// Because TLS1.3 tickets are single-use, this allows
+<a href=#393 id=393 data-nosnippet>393</a>    /// a client to perform multiple resumptions.
+<a href=#394 id=394 data-nosnippet>394</a>    ///
+<a href=#395 id=395 data-nosnippet>395</a>    /// The default is 2.
+<a href=#396 id=396 data-nosnippet>396</a>    ///
+<a href=#397 id=397 data-nosnippet>397</a>    /// If this is 0, no tickets are sent and clients will not be able to
+<a href=#398 id=398 data-nosnippet>398</a>    /// do any resumption.
+<a href=#399 id=399 data-nosnippet>399</a>    </span><span class="kw">pub </span>send_tls13_tickets: usize,
+<a href=#400 id=400 data-nosnippet>400</a>
+<a href=#401 id=401 data-nosnippet>401</a>    <span class="doccomment">/// If set to `true`, requires the client to support the extended
+<a href=#402 id=402 data-nosnippet>402</a>    /// master secret extraction method defined in [RFC 7627].
+<a href=#403 id=403 data-nosnippet>403</a>    ///
+<a href=#404 id=404 data-nosnippet>404</a>    /// The default is `true` if the "fips" crate feature is enabled,
+<a href=#405 id=405 data-nosnippet>405</a>    /// `false` otherwise.
+<a href=#406 id=406 data-nosnippet>406</a>    ///
+<a href=#407 id=407 data-nosnippet>407</a>    /// It must be set to `true` to meet FIPS requirement mentioned in section
+<a href=#408 id=408 data-nosnippet>408</a>    /// **D.Q Transition of the TLS 1.2 KDF to Support the Extended Master
+<a href=#409 id=409 data-nosnippet>409</a>    /// Secret** from [FIPS 140-3 IG.pdf].
+<a href=#410 id=410 data-nosnippet>410</a>    ///
+<a href=#411 id=411 data-nosnippet>411</a>    /// [RFC 7627]: https://datatracker.ietf.org/doc/html/rfc7627
+<a href=#412 id=412 data-nosnippet>412</a>    /// [FIPS 140-3 IG.pdf]: https://csrc.nist.gov/csrc/media/Projects/cryptographic-module-validation-program/documents/fips%20140-3/FIPS%20140-3%20IG.pdf
+<a href=#413 id=413 data-nosnippet>413</a>    </span><span class="attr">#[cfg(feature = <span class="string">"tls12"</span>)]
+<a href=#414 id=414 data-nosnippet>414</a>    </span><span class="kw">pub </span>require_ems: bool,
+<a href=#415 id=415 data-nosnippet>415</a>
+<a href=#416 id=416 data-nosnippet>416</a>    <span class="doccomment">/// Provides the current system time
+<a href=#417 id=417 data-nosnippet>417</a>    </span><span class="kw">pub </span>time_provider: Arc&lt;<span class="kw">dyn </span>TimeProvider&gt;,
+<a href=#418 id=418 data-nosnippet>418</a>
+<a href=#419 id=419 data-nosnippet>419</a>    <span class="doccomment">/// How to compress the server's certificate chain.
+<a href=#420 id=420 data-nosnippet>420</a>    ///
+<a href=#421 id=421 data-nosnippet>421</a>    /// If a client supports this extension, and advertises support
+<a href=#422 id=422 data-nosnippet>422</a>    /// for one of the compression algorithms included here, the
+<a href=#423 id=423 data-nosnippet>423</a>    /// server certificate will be compressed according to [RFC8779].
+<a href=#424 id=424 data-nosnippet>424</a>    ///
+<a href=#425 id=425 data-nosnippet>425</a>    /// This only applies to TLS1.3 connections.  It is ignored for
+<a href=#426 id=426 data-nosnippet>426</a>    /// TLS1.2 connections.
+<a href=#427 id=427 data-nosnippet>427</a>    ///
+<a href=#428 id=428 data-nosnippet>428</a>    /// [RFC8779]: https://datatracker.ietf.org/doc/rfc8879/
+<a href=#429 id=429 data-nosnippet>429</a>    </span><span class="kw">pub </span>cert_compressors: Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">dyn </span>compress::CertCompressor&gt;,
+<a href=#430 id=430 data-nosnippet>430</a>
+<a href=#431 id=431 data-nosnippet>431</a>    <span class="doccomment">/// Caching for compressed certificates.
+<a href=#432 id=432 data-nosnippet>432</a>    ///
+<a href=#433 id=433 data-nosnippet>433</a>    /// This is optional: [`compress::CompressionCache::Disabled`] gives
+<a href=#434 id=434 data-nosnippet>434</a>    /// a cache that does no caching.
+<a href=#435 id=435 data-nosnippet>435</a>    </span><span class="kw">pub </span>cert_compression_cache: Arc&lt;compress::CompressionCache&gt;,
+<a href=#436 id=436 data-nosnippet>436</a>
+<a href=#437 id=437 data-nosnippet>437</a>    <span class="doccomment">/// How to decompress the clients's certificate chain.
+<a href=#438 id=438 data-nosnippet>438</a>    ///
+<a href=#439 id=439 data-nosnippet>439</a>    /// If this is non-empty, the [RFC8779] certificate compression
+<a href=#440 id=440 data-nosnippet>440</a>    /// extension is offered when requesting client authentication,
+<a href=#441 id=441 data-nosnippet>441</a>    /// and any compressed certificates are transparently decompressed
+<a href=#442 id=442 data-nosnippet>442</a>    /// during the handshake.
+<a href=#443 id=443 data-nosnippet>443</a>    ///
+<a href=#444 id=444 data-nosnippet>444</a>    /// This only applies to TLS1.3 connections.  It is ignored for
+<a href=#445 id=445 data-nosnippet>445</a>    /// TLS1.2 connections.
+<a href=#446 id=446 data-nosnippet>446</a>    ///
+<a href=#447 id=447 data-nosnippet>447</a>    /// [RFC8779]: https://datatracker.ietf.org/doc/rfc8879/
+<a href=#448 id=448 data-nosnippet>448</a>    </span><span class="kw">pub </span>cert_decompressors: Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">dyn </span>compress::CertDecompressor&gt;,
+<a href=#449 id=449 data-nosnippet>449</a>}
+<a href=#450 id=450 data-nosnippet>450</a>
+<a href=#451 id=451 data-nosnippet>451</a><span class="kw">impl </span>ServerConfig {
+<a href=#452 id=452 data-nosnippet>452</a>    <span class="doccomment">/// Create a builder for a server configuration with
+<a href=#453 id=453 data-nosnippet>453</a>    /// [the process-default `CryptoProvider`][CryptoProvider#using-the-per-process-default-cryptoprovider]
+<a href=#454 id=454 data-nosnippet>454</a>    /// and safe protocol version defaults.
+<a href=#455 id=455 data-nosnippet>455</a>    ///
+<a href=#456 id=456 data-nosnippet>456</a>    /// For more information, see the [`ConfigBuilder`] documentation.
+<a href=#457 id=457 data-nosnippet>457</a>    </span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#458 id=458 data-nosnippet>458</a>    </span><span class="kw">pub fn </span>builder() -&gt; ConfigBuilder&lt;<span class="self">Self</span>, WantsVerifier&gt; {
+<a href=#459 id=459 data-nosnippet>459</a>        <span class="self">Self</span>::builder_with_protocol_versions(versions::DEFAULT_VERSIONS)
+<a href=#460 id=460 data-nosnippet>460</a>    }
+<a href=#461 id=461 data-nosnippet>461</a>
+<a href=#462 id=462 data-nosnippet>462</a>    <span class="doccomment">/// Create a builder for a server configuration with
+<a href=#463 id=463 data-nosnippet>463</a>    /// [the process-default `CryptoProvider`][CryptoProvider#using-the-per-process-default-cryptoprovider]
+<a href=#464 id=464 data-nosnippet>464</a>    /// and the provided protocol versions.
+<a href=#465 id=465 data-nosnippet>465</a>    ///
+<a href=#466 id=466 data-nosnippet>466</a>    /// Panics if
+<a href=#467 id=467 data-nosnippet>467</a>    /// - the supported versions are not compatible with the provider (eg.
+<a href=#468 id=468 data-nosnippet>468</a>    ///   the combination of ciphersuites supported by the provider and supported
+<a href=#469 id=469 data-nosnippet>469</a>    ///   versions lead to zero cipher suites being usable),
+<a href=#470 id=470 data-nosnippet>470</a>    /// - if a `CryptoProvider` cannot be resolved using a combination of
+<a href=#471 id=471 data-nosnippet>471</a>    ///   the crate features and process default.
+<a href=#472 id=472 data-nosnippet>472</a>    ///
+<a href=#473 id=473 data-nosnippet>473</a>    /// For more information, see the [`ConfigBuilder`] documentation.
+<a href=#474 id=474 data-nosnippet>474</a>    </span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#475 id=475 data-nosnippet>475</a>    </span><span class="kw">pub fn </span>builder_with_protocol_versions(
+<a href=#476 id=476 data-nosnippet>476</a>        versions: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="lifetime">'static </span>versions::SupportedProtocolVersion],
+<a href=#477 id=477 data-nosnippet>477</a>    ) -&gt; ConfigBuilder&lt;<span class="self">Self</span>, WantsVerifier&gt; {
+<a href=#478 id=478 data-nosnippet>478</a>        <span class="comment">// Safety assumptions:
+<a href=#479 id=479 data-nosnippet>479</a>        // 1. that the provider has been installed (explicitly or implicitly)
+<a href=#480 id=480 data-nosnippet>480</a>        // 2. that the process-level default provider is usable with the supplied protocol versions.
+<a href=#481 id=481 data-nosnippet>481</a>        </span><span class="self">Self</span>::builder_with_provider(
+<a href=#482 id=482 data-nosnippet>482</a>            CryptoProvider::get_default_or_install_from_crate_features().clone(),
+<a href=#483 id=483 data-nosnippet>483</a>        )
+<a href=#484 id=484 data-nosnippet>484</a>        .with_protocol_versions(versions)
+<a href=#485 id=485 data-nosnippet>485</a>        .unwrap()
+<a href=#486 id=486 data-nosnippet>486</a>    }
+<a href=#487 id=487 data-nosnippet>487</a>
+<a href=#488 id=488 data-nosnippet>488</a>    <span class="doccomment">/// Create a builder for a server configuration with a specific [`CryptoProvider`].
+<a href=#489 id=489 data-nosnippet>489</a>    ///
+<a href=#490 id=490 data-nosnippet>490</a>    /// This will use the provider's configured ciphersuites. You must additionally choose
+<a href=#491 id=491 data-nosnippet>491</a>    /// which protocol versions to enable, using `with_protocol_versions` or
+<a href=#492 id=492 data-nosnippet>492</a>    /// `with_safe_default_protocol_versions` and handling the `Result` in case a protocol
+<a href=#493 id=493 data-nosnippet>493</a>    /// version is not supported by the provider's ciphersuites.
+<a href=#494 id=494 data-nosnippet>494</a>    ///
+<a href=#495 id=495 data-nosnippet>495</a>    /// For more information, see the [`ConfigBuilder`] documentation.
+<a href=#496 id=496 data-nosnippet>496</a>    </span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#497 id=497 data-nosnippet>497</a>    </span><span class="kw">pub fn </span>builder_with_provider(
+<a href=#498 id=498 data-nosnippet>498</a>        provider: Arc&lt;CryptoProvider&gt;,
+<a href=#499 id=499 data-nosnippet>499</a>    ) -&gt; ConfigBuilder&lt;<span class="self">Self</span>, WantsVersions&gt; {
+<a href=#500 id=500 data-nosnippet>500</a>        ConfigBuilder {
+<a href=#501 id=501 data-nosnippet>501</a>            state: WantsVersions {},
+<a href=#502 id=502 data-nosnippet>502</a>            provider,
+<a href=#503 id=503 data-nosnippet>503</a>            time_provider: Arc::new(DefaultTimeProvider),
+<a href=#504 id=504 data-nosnippet>504</a>            side: PhantomData,
+<a href=#505 id=505 data-nosnippet>505</a>        }
+<a href=#506 id=506 data-nosnippet>506</a>    }
+<a href=#507 id=507 data-nosnippet>507</a>
+<a href=#508 id=508 data-nosnippet>508</a>    <span class="doccomment">/// Create a builder for a server configuration with no default implementation details.
+<a href=#509 id=509 data-nosnippet>509</a>    ///
+<a href=#510 id=510 data-nosnippet>510</a>    /// This API must be used by `no_std` users.
+<a href=#511 id=511 data-nosnippet>511</a>    ///
+<a href=#512 id=512 data-nosnippet>512</a>    /// You must provide a specific [`TimeProvider`].
+<a href=#513 id=513 data-nosnippet>513</a>    ///
+<a href=#514 id=514 data-nosnippet>514</a>    /// You must provide a specific [`CryptoProvider`].
+<a href=#515 id=515 data-nosnippet>515</a>    ///
+<a href=#516 id=516 data-nosnippet>516</a>    /// This will use the provider's configured ciphersuites. You must additionally choose
+<a href=#517 id=517 data-nosnippet>517</a>    /// which protocol versions to enable, using `with_protocol_versions` or
+<a href=#518 id=518 data-nosnippet>518</a>    /// `with_safe_default_protocol_versions` and handling the `Result` in case a protocol
+<a href=#519 id=519 data-nosnippet>519</a>    /// version is not supported by the provider's ciphersuites.
+<a href=#520 id=520 data-nosnippet>520</a>    ///
+<a href=#521 id=521 data-nosnippet>521</a>    /// For more information, see the [`ConfigBuilder`] documentation.
+<a href=#522 id=522 data-nosnippet>522</a>    </span><span class="kw">pub fn </span>builder_with_details(
+<a href=#523 id=523 data-nosnippet>523</a>        provider: Arc&lt;CryptoProvider&gt;,
+<a href=#524 id=524 data-nosnippet>524</a>        time_provider: Arc&lt;<span class="kw">dyn </span>TimeProvider&gt;,
+<a href=#525 id=525 data-nosnippet>525</a>    ) -&gt; ConfigBuilder&lt;<span class="self">Self</span>, WantsVersions&gt; {
+<a href=#526 id=526 data-nosnippet>526</a>        ConfigBuilder {
+<a href=#527 id=527 data-nosnippet>527</a>            state: WantsVersions {},
+<a href=#528 id=528 data-nosnippet>528</a>            provider,
+<a href=#529 id=529 data-nosnippet>529</a>            time_provider,
+<a href=#530 id=530 data-nosnippet>530</a>            side: PhantomData,
+<a href=#531 id=531 data-nosnippet>531</a>        }
+<a href=#532 id=532 data-nosnippet>532</a>    }
+<a href=#533 id=533 data-nosnippet>533</a>
+<a href=#534 id=534 data-nosnippet>534</a>    <span class="doccomment">/// Return `true` if connections made with this `ServerConfig` will
+<a href=#535 id=535 data-nosnippet>535</a>    /// operate in FIPS mode.
+<a href=#536 id=536 data-nosnippet>536</a>    ///
+<a href=#537 id=537 data-nosnippet>537</a>    /// This is different from [`CryptoProvider::fips()`]: [`CryptoProvider::fips()`]
+<a href=#538 id=538 data-nosnippet>538</a>    /// is concerned only with cryptography, whereas this _also_ covers TLS-level
+<a href=#539 id=539 data-nosnippet>539</a>    /// configuration that NIST recommends.
+<a href=#540 id=540 data-nosnippet>540</a>    </span><span class="kw">pub fn </span>fips(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#541 id=541 data-nosnippet>541</a>        <span class="attr">#[cfg(feature = <span class="string">"tls12"</span>)]
+<a href=#542 id=542 data-nosnippet>542</a>        </span>{
+<a href=#543 id=543 data-nosnippet>543</a>            <span class="self">self</span>.provider.fips() &amp;&amp; <span class="self">self</span>.require_ems
+<a href=#544 id=544 data-nosnippet>544</a>        }
+<a href=#545 id=545 data-nosnippet>545</a>
+<a href=#546 id=546 data-nosnippet>546</a>        <span class="attr">#[cfg(not(feature = <span class="string">"tls12"</span>))]
+<a href=#547 id=547 data-nosnippet>547</a>        </span>{
+<a href=#548 id=548 data-nosnippet>548</a>            <span class="self">self</span>.provider.fips()
+<a href=#549 id=549 data-nosnippet>549</a>        }
+<a href=#550 id=550 data-nosnippet>550</a>    }
+<a href=#551 id=551 data-nosnippet>551</a>
+<a href=#552 id=552 data-nosnippet>552</a>    <span class="doccomment">/// Return the crypto provider used to construct this client configuration.
+<a href=#553 id=553 data-nosnippet>553</a>    </span><span class="kw">pub fn </span>crypto_provider(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Arc&lt;CryptoProvider&gt; {
+<a href=#554 id=554 data-nosnippet>554</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.provider
+<a href=#555 id=555 data-nosnippet>555</a>    }
+<a href=#556 id=556 data-nosnippet>556</a>
+<a href=#557 id=557 data-nosnippet>557</a>    <span class="doccomment">/// We support a given TLS version if it's quoted in the configured
+<a href=#558 id=558 data-nosnippet>558</a>    /// versions *and* at least one ciphersuite for this version is
+<a href=#559 id=559 data-nosnippet>559</a>    /// also configured.
+<a href=#560 id=560 data-nosnippet>560</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>supports_version(<span class="kw-2">&amp;</span><span class="self">self</span>, v: ProtocolVersion) -&gt; bool {
+<a href=#561 id=561 data-nosnippet>561</a>        <span class="self">self</span>.versions.contains(v)
+<a href=#562 id=562 data-nosnippet>562</a>            &amp;&amp; <span class="self">self
+<a href=#563 id=563 data-nosnippet>563</a>                </span>.provider
+<a href=#564 id=564 data-nosnippet>564</a>                .cipher_suites
+<a href=#565 id=565 data-nosnippet>565</a>                .iter()
+<a href=#566 id=566 data-nosnippet>566</a>                .any(|cs| cs.version().version == v)
+<a href=#567 id=567 data-nosnippet>567</a>    }
+<a href=#568 id=568 data-nosnippet>568</a>
+<a href=#569 id=569 data-nosnippet>569</a>    <span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#570 id=570 data-nosnippet>570</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>supports_protocol(<span class="kw-2">&amp;</span><span class="self">self</span>, proto: Protocol) -&gt; bool {
+<a href=#571 id=571 data-nosnippet>571</a>        <span class="self">self</span>.provider
+<a href=#572 id=572 data-nosnippet>572</a>            .cipher_suites
+<a href=#573 id=573 data-nosnippet>573</a>            .iter()
+<a href=#574 id=574 data-nosnippet>574</a>            .any(|cs| cs.usable_for_protocol(proto))
+<a href=#575 id=575 data-nosnippet>575</a>    }
+<a href=#576 id=576 data-nosnippet>576</a>
+<a href=#577 id=577 data-nosnippet>577</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>current_time(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;UnixTime, Error&gt; {
+<a href=#578 id=578 data-nosnippet>578</a>        <span class="self">self</span>.time_provider
+<a href=#579 id=579 data-nosnippet>579</a>            .current_time()
+<a href=#580 id=580 data-nosnippet>580</a>            .ok_or(Error::FailedToGetCurrentTime)
+<a href=#581 id=581 data-nosnippet>581</a>    }
+<a href=#582 id=582 data-nosnippet>582</a>}
+<a href=#583 id=583 data-nosnippet>583</a>
+<a href=#584 id=584 data-nosnippet>584</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#585 id=585 data-nosnippet>585</a></span><span class="kw">mod </span>connection {
+<a href=#586 id=586 data-nosnippet>586</a>    <span class="kw">use </span>alloc::boxed::Box;
+<a href=#587 id=587 data-nosnippet>587</a>    <span class="kw">use </span>core::fmt;
+<a href=#588 id=588 data-nosnippet>588</a>    <span class="kw">use </span>core::fmt::{Debug, Formatter};
+<a href=#589 id=589 data-nosnippet>589</a>    <span class="kw">use </span>core::ops::{Deref, DerefMut};
+<a href=#590 id=590 data-nosnippet>590</a>    <span class="kw">use </span>std::io;
+<a href=#591 id=591 data-nosnippet>591</a>
+<a href=#592 id=592 data-nosnippet>592</a>    <span class="kw">use super</span>::{
+<a href=#593 id=593 data-nosnippet>593</a>        Accepted, Accepting, EarlyDataState, ServerConfig, ServerConnectionData,
+<a href=#594 id=594 data-nosnippet>594</a>        ServerExtensionsInput,
+<a href=#595 id=595 data-nosnippet>595</a>    };
+<a href=#596 id=596 data-nosnippet>596</a>    <span class="kw">use </span><span class="kw">crate</span>::common_state::{CommonState, Context, Side};
+<a href=#597 id=597 data-nosnippet>597</a>    <span class="kw">use </span><span class="kw">crate</span>::conn::{ConnectionCommon, ConnectionCore};
+<a href=#598 id=598 data-nosnippet>598</a>    <span class="kw">use </span><span class="kw">crate</span>::error::Error;
+<a href=#599 id=599 data-nosnippet>599</a>    <span class="kw">use </span><span class="kw">crate</span>::server::hs;
+<a href=#600 id=600 data-nosnippet>600</a>    <span class="kw">use </span><span class="kw">crate</span>::suites::ExtractedSecrets;
+<a href=#601 id=601 data-nosnippet>601</a>    <span class="kw">use </span><span class="kw">crate</span>::sync::Arc;
+<a href=#602 id=602 data-nosnippet>602</a>    <span class="kw">use </span><span class="kw">crate</span>::vecbuf::ChunkVecBuffer;
+<a href=#603 id=603 data-nosnippet>603</a>
+<a href=#604 id=604 data-nosnippet>604</a>    <span class="doccomment">/// Allows reading of early data in resumed TLS1.3 connections.
+<a href=#605 id=605 data-nosnippet>605</a>    ///
+<a href=#606 id=606 data-nosnippet>606</a>    /// "Early data" is also known as "0-RTT data".
+<a href=#607 id=607 data-nosnippet>607</a>    ///
+<a href=#608 id=608 data-nosnippet>608</a>    /// This structure implements [`std::io::Read`].
+<a href=#609 id=609 data-nosnippet>609</a>    </span><span class="kw">pub struct </span>ReadEarlyData&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#610 id=610 data-nosnippet>610</a>        early_data: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>EarlyDataState,
+<a href=#611 id=611 data-nosnippet>611</a>    }
+<a href=#612 id=612 data-nosnippet>612</a>
+<a href=#613 id=613 data-nosnippet>613</a>    <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; ReadEarlyData&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#614 id=614 data-nosnippet>614</a>        <span class="kw">fn </span>new(early_data: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>EarlyDataState) -&gt; <span class="self">Self </span>{
+<a href=#615 id=615 data-nosnippet>615</a>            ReadEarlyData { early_data }
+<a href=#616 id=616 data-nosnippet>616</a>        }
+<a href=#617 id=617 data-nosnippet>617</a>    }
+<a href=#618 id=618 data-nosnippet>618</a>
+<a href=#619 id=619 data-nosnippet>619</a>    <span class="kw">impl </span>io::Read <span class="kw">for </span>ReadEarlyData&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#620 id=620 data-nosnippet>620</a>        <span class="kw">fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; io::Result&lt;usize&gt; {
+<a href=#621 id=621 data-nosnippet>621</a>            <span class="self">self</span>.early_data.read(buf)
+<a href=#622 id=622 data-nosnippet>622</a>        }
+<a href=#623 id=623 data-nosnippet>623</a>
+<a href=#624 id=624 data-nosnippet>624</a>        <span class="attr">#[cfg(read_buf)]
+<a href=#625 id=625 data-nosnippet>625</a>        </span><span class="kw">fn </span>read_buf(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cursor: core::io::BorrowedCursor&lt;<span class="lifetime">'_</span>&gt;) -&gt; io::Result&lt;()&gt; {
+<a href=#626 id=626 data-nosnippet>626</a>            <span class="self">self</span>.early_data.read_buf(cursor)
+<a href=#627 id=627 data-nosnippet>627</a>        }
+<a href=#628 id=628 data-nosnippet>628</a>    }
+<a href=#629 id=629 data-nosnippet>629</a>
+<a href=#630 id=630 data-nosnippet>630</a>    <span class="doccomment">/// This represents a single TLS server connection.
+<a href=#631 id=631 data-nosnippet>631</a>    ///
+<a href=#632 id=632 data-nosnippet>632</a>    /// Send TLS-protected data to the peer using the `io::Write` trait implementation.
+<a href=#633 id=633 data-nosnippet>633</a>    /// Read data from the peer using the `io::Read` trait implementation.
+<a href=#634 id=634 data-nosnippet>634</a>    </span><span class="kw">pub struct </span>ServerConnection {
+<a href=#635 id=635 data-nosnippet>635</a>        <span class="kw">pub</span>(<span class="kw">super</span>) inner: ConnectionCommon&lt;ServerConnectionData&gt;,
+<a href=#636 id=636 data-nosnippet>636</a>    }
+<a href=#637 id=637 data-nosnippet>637</a>
+<a href=#638 id=638 data-nosnippet>638</a>    <span class="kw">impl </span>ServerConnection {
+<a href=#639 id=639 data-nosnippet>639</a>        <span class="doccomment">/// Make a new ServerConnection.  `config` controls how
+<a href=#640 id=640 data-nosnippet>640</a>        /// we behave in the TLS protocol.
+<a href=#641 id=641 data-nosnippet>641</a>        </span><span class="kw">pub fn </span>new(config: Arc&lt;ServerConfig&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, Error&gt; {
+<a href=#642 id=642 data-nosnippet>642</a>            <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#643 id=643 data-nosnippet>643</a>                inner: ConnectionCommon::from(ConnectionCore::for_server(
+<a href=#644 id=644 data-nosnippet>644</a>                    config,
+<a href=#645 id=645 data-nosnippet>645</a>                    ServerExtensionsInput::default(),
+<a href=#646 id=646 data-nosnippet>646</a>                )<span class="question-mark">?</span>),
+<a href=#647 id=647 data-nosnippet>647</a>            })
+<a href=#648 id=648 data-nosnippet>648</a>        }
+<a href=#649 id=649 data-nosnippet>649</a>
+<a href=#650 id=650 data-nosnippet>650</a>        <span class="doccomment">/// Retrieves the server name, if any, used to select the certificate and
+<a href=#651 id=651 data-nosnippet>651</a>        /// private key.
+<a href=#652 id=652 data-nosnippet>652</a>        ///
+<a href=#653 id=653 data-nosnippet>653</a>        /// This returns `None` until some time after the client's server name indication
+<a href=#654 id=654 data-nosnippet>654</a>        /// (SNI) extension value is processed during the handshake. It will never be
+<a href=#655 id=655 data-nosnippet>655</a>        /// `None` when the connection is ready to send or process application data,
+<a href=#656 id=656 data-nosnippet>656</a>        /// unless the client does not support SNI.
+<a href=#657 id=657 data-nosnippet>657</a>        ///
+<a href=#658 id=658 data-nosnippet>658</a>        /// This is useful for application protocols that need to enforce that the
+<a href=#659 id=659 data-nosnippet>659</a>        /// server name matches an application layer protocol hostname. For
+<a href=#660 id=660 data-nosnippet>660</a>        /// example, HTTP/1.1 servers commonly expect the `Host:` header field of
+<a href=#661 id=661 data-nosnippet>661</a>        /// every request on a connection to match the hostname in the SNI extension
+<a href=#662 id=662 data-nosnippet>662</a>        /// when the client provides the SNI extension.
+<a href=#663 id=663 data-nosnippet>663</a>        ///
+<a href=#664 id=664 data-nosnippet>664</a>        /// The server name is also used to match sessions during session resumption.
+<a href=#665 id=665 data-nosnippet>665</a>        </span><span class="kw">pub fn </span>server_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+<a href=#666 id=666 data-nosnippet>666</a>            <span class="self">self</span>.inner.core.get_sni_str()
+<a href=#667 id=667 data-nosnippet>667</a>        }
+<a href=#668 id=668 data-nosnippet>668</a>
+<a href=#669 id=669 data-nosnippet>669</a>        <span class="doccomment">/// Application-controlled portion of the resumption ticket supplied by the client, if any.
+<a href=#670 id=670 data-nosnippet>670</a>        ///
+<a href=#671 id=671 data-nosnippet>671</a>        /// Recovered from the prior session's `set_resumption_data`. Integrity is guaranteed by rustls.
+<a href=#672 id=672 data-nosnippet>672</a>        ///
+<a href=#673 id=673 data-nosnippet>673</a>        /// Returns `Some` if and only if a valid resumption ticket has been received from the client.
+<a href=#674 id=674 data-nosnippet>674</a>        </span><span class="kw">pub fn </span>received_resumption_data(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt; {
+<a href=#675 id=675 data-nosnippet>675</a>            <span class="self">self</span>.inner
+<a href=#676 id=676 data-nosnippet>676</a>                .core
+<a href=#677 id=677 data-nosnippet>677</a>                .data
+<a href=#678 id=678 data-nosnippet>678</a>                .received_resumption_data
+<a href=#679 id=679 data-nosnippet>679</a>                .as_ref()
+<a href=#680 id=680 data-nosnippet>680</a>                .map(|x| <span class="kw-2">&amp;</span>x[..])
+<a href=#681 id=681 data-nosnippet>681</a>        }
+<a href=#682 id=682 data-nosnippet>682</a>
+<a href=#683 id=683 data-nosnippet>683</a>        <span class="doccomment">/// Set the resumption data to embed in future resumption tickets supplied to the client.
+<a href=#684 id=684 data-nosnippet>684</a>        ///
+<a href=#685 id=685 data-nosnippet>685</a>        /// Defaults to the empty byte string. Must be less than 2^15 bytes to allow room for other
+<a href=#686 id=686 data-nosnippet>686</a>        /// data. Should be called while `is_handshaking` returns true to ensure all transmitted
+<a href=#687 id=687 data-nosnippet>687</a>        /// resumption tickets are affected.
+<a href=#688 id=688 data-nosnippet>688</a>        ///
+<a href=#689 id=689 data-nosnippet>689</a>        /// Integrity will be assured by rustls, but the data will be visible to the client. If secrecy
+<a href=#690 id=690 data-nosnippet>690</a>        /// from the client is desired, encrypt the data separately.
+<a href=#691 id=691 data-nosnippet>691</a>        </span><span class="kw">pub fn </span>set_resumption_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>, data: <span class="kw-2">&amp;</span>[u8]) {
+<a href=#692 id=692 data-nosnippet>692</a>            <span class="macro">assert!</span>(data.len() &lt; <span class="number">2usize</span>.pow(<span class="number">15</span>));
+<a href=#693 id=693 data-nosnippet>693</a>            <span class="self">self</span>.inner.core.data.resumption_data = data.into();
+<a href=#694 id=694 data-nosnippet>694</a>        }
+<a href=#695 id=695 data-nosnippet>695</a>
+<a href=#696 id=696 data-nosnippet>696</a>        <span class="doccomment">/// Explicitly discard early data, notifying the client
+<a href=#697 id=697 data-nosnippet>697</a>        ///
+<a href=#698 id=698 data-nosnippet>698</a>        /// Useful if invariants encoded in `received_resumption_data()` cannot be respected.
+<a href=#699 id=699 data-nosnippet>699</a>        ///
+<a href=#700 id=700 data-nosnippet>700</a>        /// Must be called while `is_handshaking` is true.
+<a href=#701 id=701 data-nosnippet>701</a>        </span><span class="kw">pub fn </span>reject_early_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#702 id=702 data-nosnippet>702</a>            <span class="self">self</span>.inner.core.reject_early_data()
+<a href=#703 id=703 data-nosnippet>703</a>        }
+<a href=#704 id=704 data-nosnippet>704</a>
+<a href=#705 id=705 data-nosnippet>705</a>        <span class="doccomment">/// Returns an `io::Read` implementer you can read bytes from that are
+<a href=#706 id=706 data-nosnippet>706</a>        /// received from a client as TLS1.3 0RTT/"early" data, during the handshake.
+<a href=#707 id=707 data-nosnippet>707</a>        ///
+<a href=#708 id=708 data-nosnippet>708</a>        /// This returns `None` in many circumstances, such as :
+<a href=#709 id=709 data-nosnippet>709</a>        ///
+<a href=#710 id=710 data-nosnippet>710</a>        /// - Early data is disabled if [`ServerConfig::max_early_data_size`] is zero (the default).
+<a href=#711 id=711 data-nosnippet>711</a>        /// - The session negotiated with the client is not TLS1.3.
+<a href=#712 id=712 data-nosnippet>712</a>        /// - The client just doesn't support early data.
+<a href=#713 id=713 data-nosnippet>713</a>        /// - The connection doesn't resume an existing session.
+<a href=#714 id=714 data-nosnippet>714</a>        /// - The client hasn't sent a full ClientHello yet.
+<a href=#715 id=715 data-nosnippet>715</a>        </span><span class="kw">pub fn </span>early_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ReadEarlyData&lt;<span class="lifetime">'_</span>&gt;&gt; {
+<a href=#716 id=716 data-nosnippet>716</a>            <span class="kw">let </span>data = <span class="kw-2">&amp;mut </span><span class="self">self</span>.inner.core.data;
+<a href=#717 id=717 data-nosnippet>717</a>            <span class="kw">if </span>data.early_data.was_accepted() {
+<a href=#718 id=718 data-nosnippet>718</a>                <span class="prelude-val">Some</span>(ReadEarlyData::new(<span class="kw-2">&amp;mut </span>data.early_data))
+<a href=#719 id=719 data-nosnippet>719</a>            } <span class="kw">else </span>{
+<a href=#720 id=720 data-nosnippet>720</a>                <span class="prelude-val">None
+<a href=#721 id=721 data-nosnippet>721</a>            </span>}
+<a href=#722 id=722 data-nosnippet>722</a>        }
+<a href=#723 id=723 data-nosnippet>723</a>
+<a href=#724 id=724 data-nosnippet>724</a>        <span class="doccomment">/// Return true if the connection was made with a `ServerConfig` that is FIPS compatible.
+<a href=#725 id=725 data-nosnippet>725</a>        ///
+<a href=#726 id=726 data-nosnippet>726</a>        /// This is different from [`crate::crypto::CryptoProvider::fips()`]:
+<a href=#727 id=727 data-nosnippet>727</a>        /// it is concerned only with cryptography, whereas this _also_ covers TLS-level
+<a href=#728 id=728 data-nosnippet>728</a>        /// configuration that NIST recommends, as well as ECH HPKE suites if applicable.
+<a href=#729 id=729 data-nosnippet>729</a>        </span><span class="kw">pub fn </span>fips(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#730 id=730 data-nosnippet>730</a>            <span class="self">self</span>.inner.core.common_state.fips
+<a href=#731 id=731 data-nosnippet>731</a>        }
+<a href=#732 id=732 data-nosnippet>732</a>
+<a href=#733 id=733 data-nosnippet>733</a>        <span class="doccomment">/// Extract secrets, so they can be used when configuring kTLS, for example.
+<a href=#734 id=734 data-nosnippet>734</a>        /// Should be used with care as it exposes secret key material.
+<a href=#735 id=735 data-nosnippet>735</a>        </span><span class="kw">pub fn </span>dangerous_extract_secrets(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ExtractedSecrets, Error&gt; {
+<a href=#736 id=736 data-nosnippet>736</a>            <span class="self">self</span>.inner.dangerous_extract_secrets()
+<a href=#737 id=737 data-nosnippet>737</a>        }
+<a href=#738 id=738 data-nosnippet>738</a>    }
+<a href=#739 id=739 data-nosnippet>739</a>
+<a href=#740 id=740 data-nosnippet>740</a>    <span class="kw">impl </span>Debug <span class="kw">for </span>ServerConnection {
+<a href=#741 id=741 data-nosnippet>741</a>        <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#742 id=742 data-nosnippet>742</a>            f.debug_struct(<span class="string">"ServerConnection"</span>)
+<a href=#743 id=743 data-nosnippet>743</a>                .finish()
+<a href=#744 id=744 data-nosnippet>744</a>        }
+<a href=#745 id=745 data-nosnippet>745</a>    }
+<a href=#746 id=746 data-nosnippet>746</a>
+<a href=#747 id=747 data-nosnippet>747</a>    <span class="kw">impl </span>Deref <span class="kw">for </span>ServerConnection {
+<a href=#748 id=748 data-nosnippet>748</a>        <span class="kw">type </span>Target = ConnectionCommon&lt;ServerConnectionData&gt;;
+<a href=#749 id=749 data-nosnippet>749</a>
+<a href=#750 id=750 data-nosnippet>750</a>        <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+<a href=#751 id=751 data-nosnippet>751</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.inner
+<a href=#752 id=752 data-nosnippet>752</a>        }
+<a href=#753 id=753 data-nosnippet>753</a>    }
+<a href=#754 id=754 data-nosnippet>754</a>
+<a href=#755 id=755 data-nosnippet>755</a>    <span class="kw">impl </span>DerefMut <span class="kw">for </span>ServerConnection {
+<a href=#756 id=756 data-nosnippet>756</a>        <span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self</span>::Target {
+<a href=#757 id=757 data-nosnippet>757</a>            <span class="kw-2">&amp;mut </span><span class="self">self</span>.inner
+<a href=#758 id=758 data-nosnippet>758</a>        }
+<a href=#759 id=759 data-nosnippet>759</a>    }
+<a href=#760 id=760 data-nosnippet>760</a>
+<a href=#761 id=761 data-nosnippet>761</a>    <span class="kw">impl </span>From&lt;ServerConnection&gt; <span class="kw">for </span><span class="kw">crate</span>::Connection {
+<a href=#762 id=762 data-nosnippet>762</a>        <span class="kw">fn </span>from(conn: ServerConnection) -&gt; <span class="self">Self </span>{
+<a href=#763 id=763 data-nosnippet>763</a>            <span class="self">Self</span>::Server(conn)
+<a href=#764 id=764 data-nosnippet>764</a>        }
+<a href=#765 id=765 data-nosnippet>765</a>    }
+<a href=#766 id=766 data-nosnippet>766</a>
+<a href=#767 id=767 data-nosnippet>767</a>    <span class="doccomment">/// Handle a server-side connection before configuration is available.
+<a href=#768 id=768 data-nosnippet>768</a>    ///
+<a href=#769 id=769 data-nosnippet>769</a>    /// `Acceptor` allows the caller to choose a [`ServerConfig`] after reading
+<a href=#770 id=770 data-nosnippet>770</a>    /// the [`super::ClientHello`] of an incoming connection. This is useful for servers
+<a href=#771 id=771 data-nosnippet>771</a>    /// that choose different certificates or cipher suites based on the
+<a href=#772 id=772 data-nosnippet>772</a>    /// characteristics of the `ClientHello`. In particular it is useful for
+<a href=#773 id=773 data-nosnippet>773</a>    /// servers that need to do some I/O to load a certificate and its private key
+<a href=#774 id=774 data-nosnippet>774</a>    /// and don't want to use the blocking interface provided by
+<a href=#775 id=775 data-nosnippet>775</a>    /// [`super::ResolvesServerCert`].
+<a href=#776 id=776 data-nosnippet>776</a>    ///
+<a href=#777 id=777 data-nosnippet>777</a>    /// Create an Acceptor with [`Acceptor::default()`].
+<a href=#778 id=778 data-nosnippet>778</a>    ///
+<a href=#779 id=779 data-nosnippet>779</a>    /// # Example
+<a href=#780 id=780 data-nosnippet>780</a>    ///
+<a href=#781 id=781 data-nosnippet>781</a>    /// ```no_run
+<a href=#782 id=782 data-nosnippet>782</a>    /// # #[cfg(feature = "aws_lc_rs")] {
+<a href=#783 id=783 data-nosnippet>783</a>    /// # fn choose_server_config(
+<a href=#784 id=784 data-nosnippet>784</a>    /// #     _: rustls::server::ClientHello,
+<a href=#785 id=785 data-nosnippet>785</a>    /// # ) -&gt; std::sync::Arc&lt;rustls::ServerConfig&gt; {
+<a href=#786 id=786 data-nosnippet>786</a>    /// #     unimplemented!();
+<a href=#787 id=787 data-nosnippet>787</a>    /// # }
+<a href=#788 id=788 data-nosnippet>788</a>    /// # #[allow(unused_variables)]
+<a href=#789 id=789 data-nosnippet>789</a>    /// # fn main() {
+<a href=#790 id=790 data-nosnippet>790</a>    /// use rustls::server::{Acceptor, ServerConfig};
+<a href=#791 id=791 data-nosnippet>791</a>    /// let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+<a href=#792 id=792 data-nosnippet>792</a>    /// for stream in listener.incoming() {
+<a href=#793 id=793 data-nosnippet>793</a>    ///     let mut stream = stream.unwrap();
+<a href=#794 id=794 data-nosnippet>794</a>    ///     let mut acceptor = Acceptor::default();
+<a href=#795 id=795 data-nosnippet>795</a>    ///     let accepted = loop {
+<a href=#796 id=796 data-nosnippet>796</a>    ///         acceptor.read_tls(&amp;mut stream).unwrap();
+<a href=#797 id=797 data-nosnippet>797</a>    ///         if let Some(accepted) = acceptor.accept().unwrap() {
+<a href=#798 id=798 data-nosnippet>798</a>    ///             break accepted;
+<a href=#799 id=799 data-nosnippet>799</a>    ///         }
+<a href=#800 id=800 data-nosnippet>800</a>    ///     };
+<a href=#801 id=801 data-nosnippet>801</a>    ///
+<a href=#802 id=802 data-nosnippet>802</a>    ///     // For some user-defined choose_server_config:
+<a href=#803 id=803 data-nosnippet>803</a>    ///     let config = choose_server_config(accepted.client_hello());
+<a href=#804 id=804 data-nosnippet>804</a>    ///     let conn = accepted
+<a href=#805 id=805 data-nosnippet>805</a>    ///         .into_connection(config)
+<a href=#806 id=806 data-nosnippet>806</a>    ///         .unwrap();
+<a href=#807 id=807 data-nosnippet>807</a>    ///
+<a href=#808 id=808 data-nosnippet>808</a>    ///     // Proceed with handling the ServerConnection.
+<a href=#809 id=809 data-nosnippet>809</a>    /// }
+<a href=#810 id=810 data-nosnippet>810</a>    /// # }
+<a href=#811 id=811 data-nosnippet>811</a>    /// # }
+<a href=#812 id=812 data-nosnippet>812</a>    /// ```
+<a href=#813 id=813 data-nosnippet>813</a>    </span><span class="kw">pub struct </span>Acceptor {
+<a href=#814 id=814 data-nosnippet>814</a>        inner: <span class="prelude-ty">Option</span>&lt;ConnectionCommon&lt;ServerConnectionData&gt;&gt;,
+<a href=#815 id=815 data-nosnippet>815</a>    }
+<a href=#816 id=816 data-nosnippet>816</a>
+<a href=#817 id=817 data-nosnippet>817</a>    <span class="kw">impl </span>Default <span class="kw">for </span>Acceptor {
+<a href=#818 id=818 data-nosnippet>818</a>        <span class="doccomment">/// Return an empty Acceptor, ready to receive bytes from a new client connection.
+<a href=#819 id=819 data-nosnippet>819</a>        </span><span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+<a href=#820 id=820 data-nosnippet>820</a>            <span class="self">Self </span>{
+<a href=#821 id=821 data-nosnippet>821</a>                inner: <span class="prelude-val">Some</span>(
+<a href=#822 id=822 data-nosnippet>822</a>                    ConnectionCore::new(
+<a href=#823 id=823 data-nosnippet>823</a>                        Box::new(Accepting),
+<a href=#824 id=824 data-nosnippet>824</a>                        ServerConnectionData::default(),
+<a href=#825 id=825 data-nosnippet>825</a>                        CommonState::new(Side::Server),
+<a href=#826 id=826 data-nosnippet>826</a>                    )
+<a href=#827 id=827 data-nosnippet>827</a>                    .into(),
+<a href=#828 id=828 data-nosnippet>828</a>                ),
+<a href=#829 id=829 data-nosnippet>829</a>            }
+<a href=#830 id=830 data-nosnippet>830</a>        }
+<a href=#831 id=831 data-nosnippet>831</a>    }
+<a href=#832 id=832 data-nosnippet>832</a>
+<a href=#833 id=833 data-nosnippet>833</a>    <span class="kw">impl </span>Acceptor {
+<a href=#834 id=834 data-nosnippet>834</a>        <span class="doccomment">/// Read TLS content from `rd`.
+<a href=#835 id=835 data-nosnippet>835</a>        ///
+<a href=#836 id=836 data-nosnippet>836</a>        /// Returns an error if this `Acceptor` has already yielded an [`Accepted`]. For more details,
+<a href=#837 id=837 data-nosnippet>837</a>        /// refer to [`Connection::read_tls()`].
+<a href=#838 id=838 data-nosnippet>838</a>        ///
+<a href=#839 id=839 data-nosnippet>839</a>        /// [`Connection::read_tls()`]: crate::Connection::read_tls
+<a href=#840 id=840 data-nosnippet>840</a>        </span><span class="kw">pub fn </span>read_tls(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rd: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;usize, io::Error&gt; {
+<a href=#841 id=841 data-nosnippet>841</a>            <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.inner {
+<a href=#842 id=842 data-nosnippet>842</a>                <span class="prelude-val">Some</span>(conn) =&gt; conn.read_tls(rd),
+<a href=#843 id=843 data-nosnippet>843</a>                <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(io::Error::new(
+<a href=#844 id=844 data-nosnippet>844</a>                    io::ErrorKind::Other,
+<a href=#845 id=845 data-nosnippet>845</a>                    <span class="string">"acceptor cannot read after successful acceptance"</span>,
+<a href=#846 id=846 data-nosnippet>846</a>                )),
+<a href=#847 id=847 data-nosnippet>847</a>            }
+<a href=#848 id=848 data-nosnippet>848</a>        }
+<a href=#849 id=849 data-nosnippet>849</a>
+<a href=#850 id=850 data-nosnippet>850</a>        <span class="doccomment">/// Check if a `ClientHello` message has been received.
+<a href=#851 id=851 data-nosnippet>851</a>        ///
+<a href=#852 id=852 data-nosnippet>852</a>        /// Returns `Ok(None)` if the complete `ClientHello` has not yet been received.
+<a href=#853 id=853 data-nosnippet>853</a>        /// Do more I/O and then call this function again.
+<a href=#854 id=854 data-nosnippet>854</a>        ///
+<a href=#855 id=855 data-nosnippet>855</a>        /// Returns `Ok(Some(accepted))` if the connection has been accepted. Call
+<a href=#856 id=856 data-nosnippet>856</a>        /// `accepted.into_connection()` to continue. Do not call this function again.
+<a href=#857 id=857 data-nosnippet>857</a>        ///
+<a href=#858 id=858 data-nosnippet>858</a>        /// Returns `Err((err, alert))` if an error occurred. If an alert is returned, the
+<a href=#859 id=859 data-nosnippet>859</a>        /// application should call `alert.write()` to send the alert to the client. It should
+<a href=#860 id=860 data-nosnippet>860</a>        /// not call `accept()` again.
+<a href=#861 id=861 data-nosnippet>861</a>        </span><span class="kw">pub fn </span>accept(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Accepted&gt;, (Error, AcceptedAlert)&gt; {
+<a href=#862 id=862 data-nosnippet>862</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>connection) = <span class="self">self</span>.inner.take() <span class="kw">else </span>{
+<a href=#863 id=863 data-nosnippet>863</a>                <span class="kw">return </span><span class="prelude-val">Err</span>((
+<a href=#864 id=864 data-nosnippet>864</a>                    Error::General(<span class="string">"Acceptor polled after completion"</span>.into()),
+<a href=#865 id=865 data-nosnippet>865</a>                    AcceptedAlert::empty(),
+<a href=#866 id=866 data-nosnippet>866</a>                ));
+<a href=#867 id=867 data-nosnippet>867</a>            };
+<a href=#868 id=868 data-nosnippet>868</a>
+<a href=#869 id=869 data-nosnippet>869</a>            <span class="kw">let </span>message = <span class="kw">match </span>connection.first_handshake_message() {
+<a href=#870 id=870 data-nosnippet>870</a>                <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(msg)) =&gt; msg,
+<a href=#871 id=871 data-nosnippet>871</a>                <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {
+<a href=#872 id=872 data-nosnippet>872</a>                    <span class="self">self</span>.inner = <span class="prelude-val">Some</span>(connection);
+<a href=#873 id=873 data-nosnippet>873</a>                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+<a href=#874 id=874 data-nosnippet>874</a>                }
+<a href=#875 id=875 data-nosnippet>875</a>                <span class="prelude-val">Err</span>(err) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>((err, AcceptedAlert::from(connection))),
+<a href=#876 id=876 data-nosnippet>876</a>            };
+<a href=#877 id=877 data-nosnippet>877</a>
+<a href=#878 id=878 data-nosnippet>878</a>            <span class="kw">let </span><span class="kw-2">mut </span>cx = Context::from(<span class="kw-2">&amp;mut </span>connection);
+<a href=#879 id=879 data-nosnippet>879</a>            <span class="kw">let </span>sig_schemes = <span class="kw">match </span>hs::process_client_hello(<span class="kw-2">&amp;</span>message, <span class="bool-val">false</span>, <span class="kw-2">&amp;mut </span>cx) {
+<a href=#880 id=880 data-nosnippet>880</a>                <span class="prelude-val">Ok</span>((<span class="kw">_</span>, sig_schemes)) =&gt; sig_schemes,
+<a href=#881 id=881 data-nosnippet>881</a>                <span class="prelude-val">Err</span>(err) =&gt; {
+<a href=#882 id=882 data-nosnippet>882</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>((err, AcceptedAlert::from(connection)));
+<a href=#883 id=883 data-nosnippet>883</a>                }
+<a href=#884 id=884 data-nosnippet>884</a>            };
+<a href=#885 id=885 data-nosnippet>885</a>
+<a href=#886 id=886 data-nosnippet>886</a>            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(Accepted {
+<a href=#887 id=887 data-nosnippet>887</a>                connection,
+<a href=#888 id=888 data-nosnippet>888</a>                message,
+<a href=#889 id=889 data-nosnippet>889</a>                sig_schemes,
+<a href=#890 id=890 data-nosnippet>890</a>            }))
+<a href=#891 id=891 data-nosnippet>891</a>        }
+<a href=#892 id=892 data-nosnippet>892</a>    }
+<a href=#893 id=893 data-nosnippet>893</a>
+<a href=#894 id=894 data-nosnippet>894</a>    <span class="doccomment">/// Represents a TLS alert resulting from handling the client's `ClientHello` message.
+<a href=#895 id=895 data-nosnippet>895</a>    ///
+<a href=#896 id=896 data-nosnippet>896</a>    /// When [`Acceptor::accept()`] returns an error, it yields an `AcceptedAlert` such that the
+<a href=#897 id=897 data-nosnippet>897</a>    /// application can communicate failure to the client via [`AcceptedAlert::write()`].
+<a href=#898 id=898 data-nosnippet>898</a>    </span><span class="kw">pub struct </span>AcceptedAlert(ChunkVecBuffer);
+<a href=#899 id=899 data-nosnippet>899</a>
+<a href=#900 id=900 data-nosnippet>900</a>    <span class="kw">impl </span>AcceptedAlert {
+<a href=#901 id=901 data-nosnippet>901</a>        <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>empty() -&gt; <span class="self">Self </span>{
+<a href=#902 id=902 data-nosnippet>902</a>            <span class="self">Self</span>(ChunkVecBuffer::new(<span class="prelude-val">None</span>))
+<a href=#903 id=903 data-nosnippet>903</a>        }
+<a href=#904 id=904 data-nosnippet>904</a>
+<a href=#905 id=905 data-nosnippet>905</a>        <span class="doccomment">/// Send the alert to the client.
+<a href=#906 id=906 data-nosnippet>906</a>        ///
+<a href=#907 id=907 data-nosnippet>907</a>        /// To account for short writes this function should be called repeatedly until it
+<a href=#908 id=908 data-nosnippet>908</a>        /// returns `Ok(0)` or an error.
+<a href=#909 id=909 data-nosnippet>909</a>        </span><span class="kw">pub fn </span>write(<span class="kw-2">&amp;mut </span><span class="self">self</span>, wr: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Write) -&gt; <span class="prelude-ty">Result</span>&lt;usize, io::Error&gt; {
+<a href=#910 id=910 data-nosnippet>910</a>            <span class="self">self</span>.<span class="number">0</span>.write_to(wr)
+<a href=#911 id=911 data-nosnippet>911</a>        }
+<a href=#912 id=912 data-nosnippet>912</a>
+<a href=#913 id=913 data-nosnippet>913</a>        <span class="doccomment">/// Send the alert to the client.
+<a href=#914 id=914 data-nosnippet>914</a>        ///
+<a href=#915 id=915 data-nosnippet>915</a>        /// This function will invoke the writer until the buffer is empty.
+<a href=#916 id=916 data-nosnippet>916</a>        </span><span class="kw">pub fn </span>write_all(<span class="kw-2">&amp;mut </span><span class="self">self</span>, wr: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Write) -&gt; <span class="prelude-ty">Result</span>&lt;(), io::Error&gt; {
+<a href=#917 id=917 data-nosnippet>917</a>            <span class="kw">while </span><span class="self">self</span>.write(wr)<span class="question-mark">? </span>!= <span class="number">0 </span>{}
+<a href=#918 id=918 data-nosnippet>918</a>            <span class="prelude-val">Ok</span>(())
+<a href=#919 id=919 data-nosnippet>919</a>        }
+<a href=#920 id=920 data-nosnippet>920</a>    }
+<a href=#921 id=921 data-nosnippet>921</a>
+<a href=#922 id=922 data-nosnippet>922</a>    <span class="kw">impl </span>From&lt;ConnectionCommon&lt;ServerConnectionData&gt;&gt; <span class="kw">for </span>AcceptedAlert {
+<a href=#923 id=923 data-nosnippet>923</a>        <span class="kw">fn </span>from(conn: ConnectionCommon&lt;ServerConnectionData&gt;) -&gt; <span class="self">Self </span>{
+<a href=#924 id=924 data-nosnippet>924</a>            <span class="self">Self</span>(conn.core.common_state.sendable_tls)
+<a href=#925 id=925 data-nosnippet>925</a>        }
+<a href=#926 id=926 data-nosnippet>926</a>    }
+<a href=#927 id=927 data-nosnippet>927</a>
+<a href=#928 id=928 data-nosnippet>928</a>    <span class="kw">impl </span>Debug <span class="kw">for </span>AcceptedAlert {
+<a href=#929 id=929 data-nosnippet>929</a>        <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#930 id=930 data-nosnippet>930</a>            f.debug_struct(<span class="string">"AcceptedAlert"</span>).finish()
+<a href=#931 id=931 data-nosnippet>931</a>        }
+<a href=#932 id=932 data-nosnippet>932</a>    }
+<a href=#933 id=933 data-nosnippet>933</a>}
+<a href=#934 id=934 data-nosnippet>934</a>
+<a href=#935 id=935 data-nosnippet>935</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#936 id=936 data-nosnippet>936</a></span><span class="kw">pub use </span>connection::{AcceptedAlert, Acceptor, ReadEarlyData, ServerConnection};
+<a href=#937 id=937 data-nosnippet>937</a>
+<a href=#938 id=938 data-nosnippet>938</a><span class="doccomment">/// Unbuffered version of `ServerConnection`
+<a href=#939 id=939 data-nosnippet>939</a>///
+<a href=#940 id=940 data-nosnippet>940</a>/// See the [`crate::unbuffered`] module docs for more details
+<a href=#941 id=941 data-nosnippet>941</a></span><span class="kw">pub struct </span>UnbufferedServerConnection {
+<a href=#942 id=942 data-nosnippet>942</a>    inner: UnbufferedConnectionCommon&lt;ServerConnectionData&gt;,
+<a href=#943 id=943 data-nosnippet>943</a>}
+<a href=#944 id=944 data-nosnippet>944</a>
+<a href=#945 id=945 data-nosnippet>945</a><span class="kw">impl </span>UnbufferedServerConnection {
+<a href=#946 id=946 data-nosnippet>946</a>    <span class="doccomment">/// Make a new ServerConnection. `config` controls how we behave in the TLS protocol.
+<a href=#947 id=947 data-nosnippet>947</a>    </span><span class="kw">pub fn </span>new(config: Arc&lt;ServerConfig&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, Error&gt; {
+<a href=#948 id=948 data-nosnippet>948</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#949 id=949 data-nosnippet>949</a>            inner: UnbufferedConnectionCommon::from(ConnectionCore::for_server(
+<a href=#950 id=950 data-nosnippet>950</a>                config,
+<a href=#951 id=951 data-nosnippet>951</a>                ServerExtensionsInput::default(),
+<a href=#952 id=952 data-nosnippet>952</a>            )<span class="question-mark">?</span>),
+<a href=#953 id=953 data-nosnippet>953</a>        })
+<a href=#954 id=954 data-nosnippet>954</a>    }
+<a href=#955 id=955 data-nosnippet>955</a>
+<a href=#956 id=956 data-nosnippet>956</a>    <span class="doccomment">/// Extract secrets, so they can be used when configuring kTLS, for example.
+<a href=#957 id=957 data-nosnippet>957</a>    /// Should be used with care as it exposes secret key material.
+<a href=#958 id=958 data-nosnippet>958</a>    </span><span class="attr">#[deprecated = <span class="string">"dangerous_extract_secrets() does not support session tickets or \
+<a href=#959 id=959 data-nosnippet>959</a>                    key updates, use dangerous_into_kernel_connection() instead"</span>]
+<a href=#960 id=960 data-nosnippet>960</a>    </span><span class="kw">pub fn </span>dangerous_extract_secrets(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ExtractedSecrets, Error&gt; {
+<a href=#961 id=961 data-nosnippet>961</a>        <span class="self">self</span>.inner.dangerous_extract_secrets()
+<a href=#962 id=962 data-nosnippet>962</a>    }
+<a href=#963 id=963 data-nosnippet>963</a>
+<a href=#964 id=964 data-nosnippet>964</a>    <span class="doccomment">/// Extract secrets and an [`KernelConnection`] object.
+<a href=#965 id=965 data-nosnippet>965</a>    ///
+<a href=#966 id=966 data-nosnippet>966</a>    /// This allows you use rustls to manage keys and then manage encryption and
+<a href=#967 id=967 data-nosnippet>967</a>    /// decryption yourself (e.g. for kTLS).
+<a href=#968 id=968 data-nosnippet>968</a>    ///
+<a href=#969 id=969 data-nosnippet>969</a>    /// Should be used with care as it exposes secret key material.
+<a href=#970 id=970 data-nosnippet>970</a>    ///
+<a href=#971 id=971 data-nosnippet>971</a>    /// See the [`crate::kernel`] documentations for details on prerequisites
+<a href=#972 id=972 data-nosnippet>972</a>    /// for calling this method.
+<a href=#973 id=973 data-nosnippet>973</a>    </span><span class="kw">pub fn </span>dangerous_into_kernel_connection(
+<a href=#974 id=974 data-nosnippet>974</a>        <span class="self">self</span>,
+<a href=#975 id=975 data-nosnippet>975</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(ExtractedSecrets, KernelConnection&lt;ServerConnectionData&gt;), Error&gt; {
+<a href=#976 id=976 data-nosnippet>976</a>        <span class="self">self</span>.inner
+<a href=#977 id=977 data-nosnippet>977</a>            .core
+<a href=#978 id=978 data-nosnippet>978</a>            .dangerous_into_kernel_connection()
+<a href=#979 id=979 data-nosnippet>979</a>    }
+<a href=#980 id=980 data-nosnippet>980</a>}
+<a href=#981 id=981 data-nosnippet>981</a>
+<a href=#982 id=982 data-nosnippet>982</a><span class="kw">impl </span>Deref <span class="kw">for </span>UnbufferedServerConnection {
+<a href=#983 id=983 data-nosnippet>983</a>    <span class="kw">type </span>Target = UnbufferedConnectionCommon&lt;ServerConnectionData&gt;;
+<a href=#984 id=984 data-nosnippet>984</a>
+<a href=#985 id=985 data-nosnippet>985</a>    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+<a href=#986 id=986 data-nosnippet>986</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.inner
+<a href=#987 id=987 data-nosnippet>987</a>    }
+<a href=#988 id=988 data-nosnippet>988</a>}
+<a href=#989 id=989 data-nosnippet>989</a>
+<a href=#990 id=990 data-nosnippet>990</a><span class="kw">impl </span>DerefMut <span class="kw">for </span>UnbufferedServerConnection {
+<a href=#991 id=991 data-nosnippet>991</a>    <span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self</span>::Target {
+<a href=#992 id=992 data-nosnippet>992</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>.inner
+<a href=#993 id=993 data-nosnippet>993</a>    }
+<a href=#994 id=994 data-nosnippet>994</a>}
+<a href=#995 id=995 data-nosnippet>995</a>
+<a href=#996 id=996 data-nosnippet>996</a><span class="kw">impl </span>UnbufferedConnectionCommon&lt;ServerConnectionData&gt; {
+<a href=#997 id=997 data-nosnippet>997</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>pop_early_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt; {
+<a href=#998 id=998 data-nosnippet>998</a>        <span class="self">self</span>.core.data.early_data.pop()
+<a href=#999 id=999 data-nosnippet>999</a>    }
+<a href=#1000 id=1000 data-nosnippet>1000</a>
+<a href=#1001 id=1001 data-nosnippet>1001</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>peek_early_data(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt; {
+<a href=#1002 id=1002 data-nosnippet>1002</a>        <span class="self">self</span>.core.data.early_data.peek()
+<a href=#1003 id=1003 data-nosnippet>1003</a>    }
+<a href=#1004 id=1004 data-nosnippet>1004</a>}
+<a href=#1005 id=1005 data-nosnippet>1005</a>
+<a href=#1006 id=1006 data-nosnippet>1006</a><span class="doccomment">/// Represents a `ClientHello` message received through the [`Acceptor`].
+<a href=#1007 id=1007 data-nosnippet>1007</a>///
+<a href=#1008 id=1008 data-nosnippet>1008</a>/// Contains the state required to resume the connection through [`Accepted::into_connection()`].
+<a href=#1009 id=1009 data-nosnippet>1009</a></span><span class="kw">pub struct </span>Accepted {
+<a href=#1010 id=1010 data-nosnippet>1010</a>    connection: ConnectionCommon&lt;ServerConnectionData&gt;,
+<a href=#1011 id=1011 data-nosnippet>1011</a>    message: Message&lt;<span class="lifetime">'static</span>&gt;,
+<a href=#1012 id=1012 data-nosnippet>1012</a>    sig_schemes: Vec&lt;SignatureScheme&gt;,
+<a href=#1013 id=1013 data-nosnippet>1013</a>}
+<a href=#1014 id=1014 data-nosnippet>1014</a>
+<a href=#1015 id=1015 data-nosnippet>1015</a><span class="kw">impl </span>Accepted {
+<a href=#1016 id=1016 data-nosnippet>1016</a>    <span class="doccomment">/// Get the [`ClientHello`] for this connection.
+<a href=#1017 id=1017 data-nosnippet>1017</a>    </span><span class="kw">pub fn </span>client_hello(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientHello&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#1018 id=1018 data-nosnippet>1018</a>        <span class="kw">let </span>payload = <span class="self">Self</span>::client_hello_payload(<span class="kw-2">&amp;</span><span class="self">self</span>.message);
+<a href=#1019 id=1019 data-nosnippet>1019</a>        <span class="kw">let </span>ch = ClientHello {
+<a href=#1020 id=1020 data-nosnippet>1020</a>            server_name: <span class="kw-2">&amp;</span><span class="self">self</span>.connection.core.data.sni,
+<a href=#1021 id=1021 data-nosnippet>1021</a>            signature_schemes: <span class="kw-2">&amp;</span><span class="self">self</span>.sig_schemes,
+<a href=#1022 id=1022 data-nosnippet>1022</a>            alpn: payload.protocols.as_ref(),
+<a href=#1023 id=1023 data-nosnippet>1023</a>            server_cert_types: payload
+<a href=#1024 id=1024 data-nosnippet>1024</a>                .server_certificate_types
+<a href=#1025 id=1025 data-nosnippet>1025</a>                .as_deref(),
+<a href=#1026 id=1026 data-nosnippet>1026</a>            client_cert_types: payload
+<a href=#1027 id=1027 data-nosnippet>1027</a>                .client_certificate_types
+<a href=#1028 id=1028 data-nosnippet>1028</a>                .as_deref(),
+<a href=#1029 id=1029 data-nosnippet>1029</a>            cipher_suites: <span class="kw-2">&amp;</span>payload.cipher_suites,
+<a href=#1030 id=1030 data-nosnippet>1030</a>            certificate_authorities: payload
+<a href=#1031 id=1031 data-nosnippet>1031</a>                .certificate_authority_names
+<a href=#1032 id=1032 data-nosnippet>1032</a>                .as_deref(),
+<a href=#1033 id=1033 data-nosnippet>1033</a>            named_groups: payload.named_groups.as_deref(),
+<a href=#1034 id=1034 data-nosnippet>1034</a>        };
+<a href=#1035 id=1035 data-nosnippet>1035</a>
+<a href=#1036 id=1036 data-nosnippet>1036</a>        <span class="macro">trace!</span>(<span class="string">"Accepted::client_hello(): {ch:#?}"</span>);
+<a href=#1037 id=1037 data-nosnippet>1037</a>        ch
+<a href=#1038 id=1038 data-nosnippet>1038</a>    }
+<a href=#1039 id=1039 data-nosnippet>1039</a>
+<a href=#1040 id=1040 data-nosnippet>1040</a>    <span class="doccomment">/// Convert the [`Accepted`] into a [`ServerConnection`].
+<a href=#1041 id=1041 data-nosnippet>1041</a>    ///
+<a href=#1042 id=1042 data-nosnippet>1042</a>    /// Takes the state returned from [`Acceptor::accept()`] as well as the [`ServerConfig`] and
+<a href=#1043 id=1043 data-nosnippet>1043</a>    /// [`sign::CertifiedKey`] that should be used for the session. Returns an error if
+<a href=#1044 id=1044 data-nosnippet>1044</a>    /// configuration-dependent validation of the received `ClientHello` message fails.
+<a href=#1045 id=1045 data-nosnippet>1045</a>    </span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#1046 id=1046 data-nosnippet>1046</a>    </span><span class="kw">pub fn </span>into_connection(
+<a href=#1047 id=1047 data-nosnippet>1047</a>        <span class="kw-2">mut </span><span class="self">self</span>,
+<a href=#1048 id=1048 data-nosnippet>1048</a>        config: Arc&lt;ServerConfig&gt;,
+<a href=#1049 id=1049 data-nosnippet>1049</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ServerConnection, (Error, AcceptedAlert)&gt; {
+<a href=#1050 id=1050 data-nosnippet>1050</a>        <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self
+<a href=#1051 id=1051 data-nosnippet>1051</a>            </span>.connection
+<a href=#1052 id=1052 data-nosnippet>1052</a>            .set_max_fragment_size(config.max_fragment_size)
+<a href=#1053 id=1053 data-nosnippet>1053</a>        {
+<a href=#1054 id=1054 data-nosnippet>1054</a>            <span class="comment">// We have a connection here, but it won't contain an alert since the error
+<a href=#1055 id=1055 data-nosnippet>1055</a>            // is with the fragment size configured in the `ServerConfig`.
+<a href=#1056 id=1056 data-nosnippet>1056</a>            </span><span class="kw">return </span><span class="prelude-val">Err</span>((err, AcceptedAlert::empty()));
+<a href=#1057 id=1057 data-nosnippet>1057</a>        }
+<a href=#1058 id=1058 data-nosnippet>1058</a>
+<a href=#1059 id=1059 data-nosnippet>1059</a>        <span class="self">self</span>.connection.enable_secret_extraction = config.enable_secret_extraction;
+<a href=#1060 id=1060 data-nosnippet>1060</a>
+<a href=#1061 id=1061 data-nosnippet>1061</a>        <span class="kw">let </span>state = hs::ExpectClientHello::new(config, ServerExtensionsInput::default());
+<a href=#1062 id=1062 data-nosnippet>1062</a>        <span class="kw">let </span><span class="kw-2">mut </span>cx = hs::ServerContext::from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.connection);
+<a href=#1063 id=1063 data-nosnippet>1063</a>
+<a href=#1064 id=1064 data-nosnippet>1064</a>        <span class="kw">let </span>ch = <span class="self">Self</span>::client_hello_payload(<span class="kw-2">&amp;</span><span class="self">self</span>.message);
+<a href=#1065 id=1065 data-nosnippet>1065</a>        <span class="kw">let </span>new = <span class="kw">match </span>state.with_certified_key(<span class="self">self</span>.sig_schemes, ch, <span class="kw-2">&amp;</span><span class="self">self</span>.message, <span class="kw-2">&amp;mut </span>cx) {
+<a href=#1066 id=1066 data-nosnippet>1066</a>            <span class="prelude-val">Ok</span>(new) =&gt; new,
+<a href=#1067 id=1067 data-nosnippet>1067</a>            <span class="prelude-val">Err</span>(err) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>((err, AcceptedAlert::from(<span class="self">self</span>.connection))),
+<a href=#1068 id=1068 data-nosnippet>1068</a>        };
+<a href=#1069 id=1069 data-nosnippet>1069</a>
+<a href=#1070 id=1070 data-nosnippet>1070</a>        <span class="self">self</span>.connection.replace_state(new);
+<a href=#1071 id=1071 data-nosnippet>1071</a>        <span class="prelude-val">Ok</span>(ServerConnection {
+<a href=#1072 id=1072 data-nosnippet>1072</a>            inner: <span class="self">self</span>.connection,
+<a href=#1073 id=1073 data-nosnippet>1073</a>        })
+<a href=#1074 id=1074 data-nosnippet>1074</a>    }
+<a href=#1075 id=1075 data-nosnippet>1075</a>
+<a href=#1076 id=1076 data-nosnippet>1076</a>    <span class="kw">fn </span>client_hello_payload&lt;<span class="lifetime">'a</span>&gt;(message: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Message&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ClientHelloPayload {
+<a href=#1077 id=1077 data-nosnippet>1077</a>        <span class="kw">match </span><span class="kw-2">&amp;</span>message.payload {
+<a href=#1078 id=1078 data-nosnippet>1078</a>            <span class="kw">crate</span>::msgs::message::MessagePayload::Handshake { parsed, .. } =&gt; <span class="kw">match </span><span class="kw-2">&amp;</span>parsed.<span class="number">0 </span>{
+<a href=#1079 id=1079 data-nosnippet>1079</a>                <span class="kw">crate</span>::msgs::handshake::HandshakePayload::ClientHello(ch) =&gt; ch,
+<a href=#1080 id=1080 data-nosnippet>1080</a>                <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+<a href=#1081 id=1081 data-nosnippet>1081</a>            },
+<a href=#1082 id=1082 data-nosnippet>1082</a>            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+<a href=#1083 id=1083 data-nosnippet>1083</a>        }
+<a href=#1084 id=1084 data-nosnippet>1084</a>    }
+<a href=#1085 id=1085 data-nosnippet>1085</a>}
+<a href=#1086 id=1086 data-nosnippet>1086</a>
+<a href=#1087 id=1087 data-nosnippet>1087</a><span class="kw">impl </span>Debug <span class="kw">for </span>Accepted {
+<a href=#1088 id=1088 data-nosnippet>1088</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#1089 id=1089 data-nosnippet>1089</a>        f.debug_struct(<span class="string">"Accepted"</span>).finish()
+<a href=#1090 id=1090 data-nosnippet>1090</a>    }
+<a href=#1091 id=1091 data-nosnippet>1091</a>}
+<a href=#1092 id=1092 data-nosnippet>1092</a>
+<a href=#1093 id=1093 data-nosnippet>1093</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#1094 id=1094 data-nosnippet>1094</a></span><span class="kw">struct </span>Accepting;
+<a href=#1095 id=1095 data-nosnippet>1095</a>
+<a href=#1096 id=1096 data-nosnippet>1096</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#1097 id=1097 data-nosnippet>1097</a></span><span class="kw">impl </span>State&lt;ServerConnectionData&gt; <span class="kw">for </span>Accepting {
+<a href=#1098 id=1098 data-nosnippet>1098</a>    <span class="kw">fn </span>handle&lt;<span class="lifetime">'m</span>&gt;(
+<a href=#1099 id=1099 data-nosnippet>1099</a>        <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
+<a href=#1100 id=1100 data-nosnippet>1100</a>        _cx: <span class="kw-2">&amp;mut </span>hs::ServerContext&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1101 id=1101 data-nosnippet>1101</a>        _m: Message&lt;<span class="lifetime">'m</span>&gt;,
+<a href=#1102 id=1102 data-nosnippet>1102</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Box&lt;<span class="kw">dyn </span>State&lt;ServerConnectionData&gt; + <span class="lifetime">'m</span>&gt;, Error&gt;
+<a href=#1103 id=1103 data-nosnippet>1103</a>    <span class="kw">where
+<a href=#1104 id=1104 data-nosnippet>1104</a>        </span><span class="self">Self</span>: <span class="lifetime">'m</span>,
+<a href=#1105 id=1105 data-nosnippet>1105</a>    {
+<a href=#1106 id=1106 data-nosnippet>1106</a>        <span class="prelude-val">Err</span>(Error::General(<span class="string">"unreachable state"</span>.into()))
+<a href=#1107 id=1107 data-nosnippet>1107</a>    }
+<a href=#1108 id=1108 data-nosnippet>1108</a>
+<a href=#1109 id=1109 data-nosnippet>1109</a>    <span class="kw">fn </span>into_owned(<span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;) -&gt; hs::NextState&lt;<span class="lifetime">'static</span>&gt; {
+<a href=#1110 id=1110 data-nosnippet>1110</a>        <span class="self">self
+<a href=#1111 id=1111 data-nosnippet>1111</a>    </span>}
+<a href=#1112 id=1112 data-nosnippet>1112</a>}
+<a href=#1113 id=1113 data-nosnippet>1113</a>
+<a href=#1114 id=1114 data-nosnippet>1114</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">enum </span>EarlyDataState {
+<a href=#1115 id=1115 data-nosnippet>1115</a>    New,
+<a href=#1116 id=1116 data-nosnippet>1116</a>    Accepted {
+<a href=#1117 id=1117 data-nosnippet>1117</a>        received: ChunkVecBuffer,
+<a href=#1118 id=1118 data-nosnippet>1118</a>        left: usize,
+<a href=#1119 id=1119 data-nosnippet>1119</a>    },
+<a href=#1120 id=1120 data-nosnippet>1120</a>    Rejected,
+<a href=#1121 id=1121 data-nosnippet>1121</a>}
+<a href=#1122 id=1122 data-nosnippet>1122</a>
+<a href=#1123 id=1123 data-nosnippet>1123</a><span class="kw">impl </span>Default <span class="kw">for </span>EarlyDataState {
+<a href=#1124 id=1124 data-nosnippet>1124</a>    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+<a href=#1125 id=1125 data-nosnippet>1125</a>        <span class="self">Self</span>::New
+<a href=#1126 id=1126 data-nosnippet>1126</a>    }
+<a href=#1127 id=1127 data-nosnippet>1127</a>}
+<a href=#1128 id=1128 data-nosnippet>1128</a>
+<a href=#1129 id=1129 data-nosnippet>1129</a><span class="kw">impl </span>EarlyDataState {
+<a href=#1130 id=1130 data-nosnippet>1130</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>reject(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#1131 id=1131 data-nosnippet>1131</a>        <span class="kw-2">*</span><span class="self">self </span>= <span class="self">Self</span>::Rejected;
+<a href=#1132 id=1132 data-nosnippet>1132</a>    }
+<a href=#1133 id=1133 data-nosnippet>1133</a>
+<a href=#1134 id=1134 data-nosnippet>1134</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>accept(<span class="kw-2">&amp;mut </span><span class="self">self</span>, max_size: usize) {
+<a href=#1135 id=1135 data-nosnippet>1135</a>        <span class="kw-2">*</span><span class="self">self </span>= <span class="self">Self</span>::Accepted {
+<a href=#1136 id=1136 data-nosnippet>1136</a>            received: ChunkVecBuffer::new(<span class="prelude-val">Some</span>(max_size)),
+<a href=#1137 id=1137 data-nosnippet>1137</a>            left: max_size,
+<a href=#1138 id=1138 data-nosnippet>1138</a>        };
+<a href=#1139 id=1139 data-nosnippet>1139</a>    }
+<a href=#1140 id=1140 data-nosnippet>1140</a>
+<a href=#1141 id=1141 data-nosnippet>1141</a>    <span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#1142 id=1142 data-nosnippet>1142</a>    </span><span class="kw">fn </span>was_accepted(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#1143 id=1143 data-nosnippet>1143</a>        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Accepted { .. })
+<a href=#1144 id=1144 data-nosnippet>1144</a>    }
+<a href=#1145 id=1145 data-nosnippet>1145</a>
+<a href=#1146 id=1146 data-nosnippet>1146</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>was_rejected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#1147 id=1147 data-nosnippet>1147</a>        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Rejected)
+<a href=#1148 id=1148 data-nosnippet>1148</a>    }
+<a href=#1149 id=1149 data-nosnippet>1149</a>
+<a href=#1150 id=1150 data-nosnippet>1150</a>    <span class="kw">fn </span>peek(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt; {
+<a href=#1151 id=1151 data-nosnippet>1151</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#1152 id=1152 data-nosnippet>1152</a>            <span class="self">Self</span>::Accepted { received, .. } =&gt; received.peek(),
+<a href=#1153 id=1153 data-nosnippet>1153</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#1154 id=1154 data-nosnippet>1154</a>        }
+<a href=#1155 id=1155 data-nosnippet>1155</a>    }
+<a href=#1156 id=1156 data-nosnippet>1156</a>
+<a href=#1157 id=1157 data-nosnippet>1157</a>    <span class="kw">fn </span>pop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt; {
+<a href=#1158 id=1158 data-nosnippet>1158</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#1159 id=1159 data-nosnippet>1159</a>            <span class="self">Self</span>::Accepted { received, .. } =&gt; received.pop(),
+<a href=#1160 id=1160 data-nosnippet>1160</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#1161 id=1161 data-nosnippet>1161</a>        }
+<a href=#1162 id=1162 data-nosnippet>1162</a>    }
+<a href=#1163 id=1163 data-nosnippet>1163</a>
+<a href=#1164 id=1164 data-nosnippet>1164</a>    <span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#1165 id=1165 data-nosnippet>1165</a>    </span><span class="kw">fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; io::Result&lt;usize&gt; {
+<a href=#1166 id=1166 data-nosnippet>1166</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#1167 id=1167 data-nosnippet>1167</a>            <span class="self">Self</span>::Accepted { received, .. } =&gt; received.read(buf),
+<a href=#1168 id=1168 data-nosnippet>1168</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(io::Error::from(io::ErrorKind::BrokenPipe)),
+<a href=#1169 id=1169 data-nosnippet>1169</a>        }
+<a href=#1170 id=1170 data-nosnippet>1170</a>    }
+<a href=#1171 id=1171 data-nosnippet>1171</a>
+<a href=#1172 id=1172 data-nosnippet>1172</a>    <span class="attr">#[cfg(read_buf)]
+<a href=#1173 id=1173 data-nosnippet>1173</a>    </span><span class="kw">fn </span>read_buf(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cursor: core::io::BorrowedCursor&lt;<span class="lifetime">'_</span>&gt;) -&gt; io::Result&lt;()&gt; {
+<a href=#1174 id=1174 data-nosnippet>1174</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#1175 id=1175 data-nosnippet>1175</a>            <span class="self">Self</span>::Accepted { received, .. } =&gt; received.read_buf(cursor),
+<a href=#1176 id=1176 data-nosnippet>1176</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(io::Error::from(io::ErrorKind::BrokenPipe)),
+<a href=#1177 id=1177 data-nosnippet>1177</a>        }
+<a href=#1178 id=1178 data-nosnippet>1178</a>    }
+<a href=#1179 id=1179 data-nosnippet>1179</a>
+<a href=#1180 id=1180 data-nosnippet>1180</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>take_received_plaintext(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bytes: Payload&lt;<span class="lifetime">'_</span>&gt;) -&gt; bool {
+<a href=#1181 id=1181 data-nosnippet>1181</a>        <span class="kw">let </span>available = bytes.bytes().len();
+<a href=#1182 id=1182 data-nosnippet>1182</a>        <span class="kw">let </span><span class="self">Self</span>::Accepted { received, left } = <span class="self">self </span><span class="kw">else </span>{
+<a href=#1183 id=1183 data-nosnippet>1183</a>            <span class="kw">return </span><span class="bool-val">false</span>;
+<a href=#1184 id=1184 data-nosnippet>1184</a>        };
+<a href=#1185 id=1185 data-nosnippet>1185</a>
+<a href=#1186 id=1186 data-nosnippet>1186</a>        <span class="kw">if </span>received.apply_limit(available) != available || available &gt; <span class="kw-2">*</span>left {
+<a href=#1187 id=1187 data-nosnippet>1187</a>            <span class="kw">return </span><span class="bool-val">false</span>;
+<a href=#1188 id=1188 data-nosnippet>1188</a>        }
+<a href=#1189 id=1189 data-nosnippet>1189</a>
+<a href=#1190 id=1190 data-nosnippet>1190</a>        received.append(bytes.into_vec());
+<a href=#1191 id=1191 data-nosnippet>1191</a>        <span class="kw-2">*</span>left -= available;
+<a href=#1192 id=1192 data-nosnippet>1192</a>        <span class="bool-val">true
+<a href=#1193 id=1193 data-nosnippet>1193</a>    </span>}
+<a href=#1194 id=1194 data-nosnippet>1194</a>}
+<a href=#1195 id=1195 data-nosnippet>1195</a>
+<a href=#1196 id=1196 data-nosnippet>1196</a><span class="kw">impl </span>Debug <span class="kw">for </span>EarlyDataState {
+<a href=#1197 id=1197 data-nosnippet>1197</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#1198 id=1198 data-nosnippet>1198</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#1199 id=1199 data-nosnippet>1199</a>            <span class="self">Self</span>::New =&gt; <span class="macro">write!</span>(f, <span class="string">"EarlyDataState::New"</span>),
+<a href=#1200 id=1200 data-nosnippet>1200</a>            <span class="self">Self</span>::Accepted { received, left } =&gt; <span class="macro">write!</span>(
+<a href=#1201 id=1201 data-nosnippet>1201</a>                f,
+<a href=#1202 id=1202 data-nosnippet>1202</a>                <span class="string">"EarlyDataState::Accepted {{ received: {}, left: {} }}"</span>,
+<a href=#1203 id=1203 data-nosnippet>1203</a>                received.len(),
+<a href=#1204 id=1204 data-nosnippet>1204</a>                left
+<a href=#1205 id=1205 data-nosnippet>1205</a>            ),
+<a href=#1206 id=1206 data-nosnippet>1206</a>            <span class="self">Self</span>::Rejected =&gt; <span class="macro">write!</span>(f, <span class="string">"EarlyDataState::Rejected"</span>),
+<a href=#1207 id=1207 data-nosnippet>1207</a>        }
+<a href=#1208 id=1208 data-nosnippet>1208</a>    }
+<a href=#1209 id=1209 data-nosnippet>1209</a>}
+<a href=#1210 id=1210 data-nosnippet>1210</a>
+<a href=#1211 id=1211 data-nosnippet>1211</a><span class="kw">impl </span>ConnectionCore&lt;ServerConnectionData&gt; {
+<a href=#1212 id=1212 data-nosnippet>1212</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>for_server(
+<a href=#1213 id=1213 data-nosnippet>1213</a>        config: Arc&lt;ServerConfig&gt;,
+<a href=#1214 id=1214 data-nosnippet>1214</a>        extra_exts: ServerExtensionsInput&lt;<span class="lifetime">'static</span>&gt;,
+<a href=#1215 id=1215 data-nosnippet>1215</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, Error&gt; {
+<a href=#1216 id=1216 data-nosnippet>1216</a>        <span class="kw">let </span><span class="kw-2">mut </span>common = CommonState::new(Side::Server);
+<a href=#1217 id=1217 data-nosnippet>1217</a>        common.set_max_fragment_size(config.max_fragment_size)<span class="question-mark">?</span>;
+<a href=#1218 id=1218 data-nosnippet>1218</a>        common.enable_secret_extraction = config.enable_secret_extraction;
+<a href=#1219 id=1219 data-nosnippet>1219</a>        common.fips = config.fips();
+<a href=#1220 id=1220 data-nosnippet>1220</a>        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new(
+<a href=#1221 id=1221 data-nosnippet>1221</a>            Box::new(hs::ExpectClientHello::new(config, extra_exts)),
+<a href=#1222 id=1222 data-nosnippet>1222</a>            ServerConnectionData::default(),
+<a href=#1223 id=1223 data-nosnippet>1223</a>            common,
+<a href=#1224 id=1224 data-nosnippet>1224</a>        ))
+<a href=#1225 id=1225 data-nosnippet>1225</a>    }
+<a href=#1226 id=1226 data-nosnippet>1226</a>
+<a href=#1227 id=1227 data-nosnippet>1227</a>    <span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#1228 id=1228 data-nosnippet>1228</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>reject_early_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#1229 id=1229 data-nosnippet>1229</a>        <span class="macro">assert!</span>(
+<a href=#1230 id=1230 data-nosnippet>1230</a>            <span class="self">self</span>.common_state.is_handshaking(),
+<a href=#1231 id=1231 data-nosnippet>1231</a>            <span class="string">"cannot retroactively reject early data"
+<a href=#1232 id=1232 data-nosnippet>1232</a>        </span>);
+<a href=#1233 id=1233 data-nosnippet>1233</a>        <span class="self">self</span>.data.early_data.reject();
+<a href=#1234 id=1234 data-nosnippet>1234</a>    }
+<a href=#1235 id=1235 data-nosnippet>1235</a>
+<a href=#1236 id=1236 data-nosnippet>1236</a>    <span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#1237 id=1237 data-nosnippet>1237</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_sni_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+<a href=#1238 id=1238 data-nosnippet>1238</a>        <span class="self">self</span>.data.get_sni_str()
+<a href=#1239 id=1239 data-nosnippet>1239</a>    }
+<a href=#1240 id=1240 data-nosnippet>1240</a>}
+<a href=#1241 id=1241 data-nosnippet>1241</a>
+<a href=#1242 id=1242 data-nosnippet>1242</a><span class="doccomment">/// State associated with a server connection.
+<a href=#1243 id=1243 data-nosnippet>1243</a></span><span class="attr">#[derive(Default, Debug)]
+<a href=#1244 id=1244 data-nosnippet>1244</a></span><span class="kw">pub struct </span>ServerConnectionData {
+<a href=#1245 id=1245 data-nosnippet>1245</a>    <span class="kw">pub</span>(<span class="kw">super</span>) sni: <span class="prelude-ty">Option</span>&lt;DnsName&lt;<span class="lifetime">'static</span>&gt;&gt;,
+<a href=#1246 id=1246 data-nosnippet>1246</a>    <span class="kw">pub</span>(<span class="kw">super</span>) received_resumption_data: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;,
+<a href=#1247 id=1247 data-nosnippet>1247</a>    <span class="kw">pub</span>(<span class="kw">super</span>) resumption_data: Vec&lt;u8&gt;,
+<a href=#1248 id=1248 data-nosnippet>1248</a>    <span class="kw">pub</span>(<span class="kw">super</span>) early_data: EarlyDataState,
+<a href=#1249 id=1249 data-nosnippet>1249</a>}
+<a href=#1250 id=1250 data-nosnippet>1250</a>
+<a href=#1251 id=1251 data-nosnippet>1251</a><span class="kw">impl </span>ServerConnectionData {
+<a href=#1252 id=1252 data-nosnippet>1252</a>    <span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#1253 id=1253 data-nosnippet>1253</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>get_sni_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+<a href=#1254 id=1254 data-nosnippet>1254</a>        <span class="self">self</span>.sni.as_ref().map(AsRef::as_ref)
+<a href=#1255 id=1255 data-nosnippet>1255</a>    }
+<a href=#1256 id=1256 data-nosnippet>1256</a>}
+<a href=#1257 id=1257 data-nosnippet>1257</a>
+<a href=#1258 id=1258 data-nosnippet>1258</a><span class="kw">impl </span><span class="kw">crate</span>::conn::SideData <span class="kw">for </span>ServerConnectionData {}
+<a href=#1259 id=1259 data-nosnippet>1259</a>
+<a href=#1260 id=1260 data-nosnippet>1260</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#1261 id=1261 data-nosnippet>1261</a>#[cfg(test)]
+<a href=#1262 id=1262 data-nosnippet>1262</a></span><span class="kw">mod </span>tests {
+<a href=#1263 id=1263 data-nosnippet>1263</a>    <span class="kw">use </span>std::format;
+<a href=#1264 id=1264 data-nosnippet>1264</a>
+<a href=#1265 id=1265 data-nosnippet>1265</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#1266 id=1266 data-nosnippet>1266</a>
+<a href=#1267 id=1267 data-nosnippet>1267</a>    <span class="comment">// these branches not reachable externally, unless something else goes wrong.
+<a href=#1268 id=1268 data-nosnippet>1268</a>    </span><span class="attr">#[test]
+<a href=#1269 id=1269 data-nosnippet>1269</a>    </span><span class="kw">fn </span>test_read_in_new_state() {
+<a href=#1270 id=1270 data-nosnippet>1270</a>        <span class="macro">assert_eq!</span>(
+<a href=#1271 id=1271 data-nosnippet>1271</a>            <span class="macro">format!</span>(<span class="string">"{:?}"</span>, EarlyDataState::default().read(<span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>; <span class="number">5</span>])),
+<a href=#1272 id=1272 data-nosnippet>1272</a>            <span class="string">"Err(Kind(BrokenPipe))"
+<a href=#1273 id=1273 data-nosnippet>1273</a>        </span>);
+<a href=#1274 id=1274 data-nosnippet>1274</a>    }
+<a href=#1275 id=1275 data-nosnippet>1275</a>
+<a href=#1276 id=1276 data-nosnippet>1276</a>    <span class="attr">#[cfg(read_buf)]
+<a href=#1277 id=1277 data-nosnippet>1277</a>    #[test]
+<a href=#1278 id=1278 data-nosnippet>1278</a>    </span><span class="kw">fn </span>test_read_buf_in_new_state() {
+<a href=#1279 id=1279 data-nosnippet>1279</a>        <span class="kw">use </span>core::io::BorrowedBuf;
+<a href=#1280 id=1280 data-nosnippet>1280</a>
+<a href=#1281 id=1281 data-nosnippet>1281</a>        <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">5</span>];
+<a href=#1282 id=1282 data-nosnippet>1282</a>        <span class="kw">let </span><span class="kw-2">mut </span>buf: BorrowedBuf&lt;<span class="lifetime">'_</span>&gt; = buf.as_mut_slice().into();
+<a href=#1283 id=1283 data-nosnippet>1283</a>        <span class="macro">assert_eq!</span>(
+<a href=#1284 id=1284 data-nosnippet>1284</a>            <span class="macro">format!</span>(<span class="string">"{:?}"</span>, EarlyDataState::default().read_buf(buf.unfilled())),
+<a href=#1285 id=1285 data-nosnippet>1285</a>            <span class="string">"Err(Kind(BrokenPipe))"
+<a href=#1286 id=1286 data-nosnippet>1286</a>        </span>);
+<a href=#1287 id=1287 data-nosnippet>1287</a>    }
+<a href=#1288 id=1288 data-nosnippet>1288</a>}</code></pre></div></section></main></body></html>

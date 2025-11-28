@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EMPTY_ERROR_METADATA"],"struct":["Builder","ErrorMetadata"],"trait":["ProvideErrorMetadata"]};

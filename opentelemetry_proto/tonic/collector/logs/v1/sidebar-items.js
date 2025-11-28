@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["logs_service_client","logs_service_server"],"struct":["ExportLogsPartialSuccess","ExportLogsServiceRequest","ExportLogsServiceResponse"]};

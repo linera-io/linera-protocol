@@ -1,0 +1,54 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Marks a function or static variable as a library/executable constructor. This uses OS-specific linker sections to call a specific function at load time."><title>ctor in ctor - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ctor" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ctor/index.html">ctor</a><span class="version">0.1.26</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">ctor</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li><li><a href="#details" title="Details">Details</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate ctor</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">ctor</a></div><h1>Attribute Macro <span class="attr">ctor</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/ctor/lib.rs.html#140-275">Source</a> </span></div><pre class="rust item-decl"><code>#[ctor]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Marks a function or static variable as a library/executable constructor.
+This uses OS-specific linker sections to call a specific function at
+load time.</p>
+<p>Multiple startup functions/statics are supported, but the invocation order is not
+guaranteed.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Print a startup message (using <code>libc_print</code> for safety):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>libc_print::std_name::println;
+
+<span class="attr">#[ctor]
+</span><span class="kw">fn </span>foo() {
+  <span class="macro">println!</span>(<span class="string">"Hello, world!"</span>);
+}
+
+<span class="macro">println!</span>(<span class="string">"main()"</span>);</code></pre></div>
+<p>Make changes to <code>static</code> variables:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">static </span>INITED: AtomicBool = AtomicBool::new(<span class="bool-val">false</span>);
+
+<span class="attr">#[ctor]
+</span><span class="kw">fn </span>foo() {
+  INITED.store(<span class="bool-val">true</span>, Ordering::SeqCst);
+}</code></pre></div>
+<p>Initialize a <code>HashMap</code> at startup time:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[ctor]
+</span><span class="kw">static </span>STATIC_CTOR: HashMap&lt;u32, String&gt; = {
+  <span class="kw">let </span><span class="kw-2">mut </span>m = HashMap::new();
+  <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">100 </span>{
+    m.insert(i, <span class="macro">format!</span>(<span class="string">"x*100={}"</span>, i<span class="kw-2">*</span><span class="number">100</span>));
+  }
+  m
+};
+</code></pre></div>
+<h2 id="details"><a class="doc-anchor" href="#details">§</a>Details</h2>
+<p>The <code>#[ctor]</code> macro makes use of linker sections to ensure that a
+function is run at startup time.</p>
+<p>The above example translates into the following Rust code (approximately):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code> <span class="attr">#[used]
+ #[cfg_attr(any(target_os = <span class="string">"linux"</span>, target_os = <span class="string">"android"</span>), link_section = <span class="string">".init_array"</span>)]
+ #[cfg_attr(target_os = <span class="string">"freebsd"</span>, link_section = <span class="string">".init_array"</span>)]
+ #[cfg_attr(target_os = <span class="string">"netbsd"</span>, link_section = <span class="string">".init_array"</span>)]
+ #[cfg_attr(target_os = <span class="string">"openbsd"</span>, link_section = <span class="string">".init_array"</span>)]
+ #[cfg_attr(target_os = <span class="string">"illumos"</span>, link_section = <span class="string">".init_array"</span>)]
+ #[cfg_attr(any(target_os = <span class="string">"macos"</span>, target_os = <span class="string">"ios"</span>), link_section = <span class="string">"__DATA,__mod_init_func"</span>)]
+ #[cfg_attr(target_os = <span class="string">"windows"</span>, link_section = <span class="string">".CRT$XCU"</span>)]
+ </span><span class="kw">static </span>FOO: <span class="kw">extern fn</span>() = {
+   <span class="attr">#[cfg_attr(any(target_os = <span class="string">"linux"</span>, target_os = <span class="string">"android"</span>), link_section = <span class="string">".text.startup"</span>)]
+   </span><span class="kw">extern fn </span>foo() { <span class="comment">/* ... */ </span>};
+   foo
+ };</code></pre></div>
+</div></details></section></div></main></body></html>
