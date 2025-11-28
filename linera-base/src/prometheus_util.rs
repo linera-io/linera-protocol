@@ -69,12 +69,6 @@ pub fn register_int_gauge_vec(name: &str, description: &str, label_names: &[&str
     register_int_gauge_vec!(gauge_opts, label_names).expect("IntGauge can be created")
 }
 
-/// Wrapper around Prometheus `register_int_gauge!` macro which also sets the `linera` namespace
-pub fn register_int_gauge(name: &str, description: &str) -> IntGauge {
-    let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
-    register_int_gauge!(gauge_opts).expect("IntGauge can be created")
-}
-
 /// Construct the bucket interval exponentially starting from a value and an ending value.
 pub fn exponential_bucket_interval(start_value: f64, end_value: f64) -> Option<Vec<f64>> {
     let quot = end_value / start_value;
