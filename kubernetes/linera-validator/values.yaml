@@ -335,7 +335,7 @@ otelCollector:
         effect: NoSchedule
 
   # Tempo endpoint (where Tier 2 exports to)
-  tempoEndpoint: "tempo.tempo.svc.cluster.local:4317"
+  tempoEndpoint: "linera-core-tempo.default.svc.cluster.local:4317"
   tempoInsecure: true
 
 # ============================================================================
