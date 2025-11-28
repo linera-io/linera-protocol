@@ -60,9 +60,9 @@ mod metrics {
 
     use linera_base::prometheus_util::{
         exponential_bucket_interval, register_histogram_vec, register_int_counter,
-        register_int_counter_vec,
+        register_int_counter_vec, register_int_gauge,
     };
-    use prometheus::{HistogramVec, IntCounter, IntCounterVec};
+    use prometheus::{HistogramVec, IntCounter, IntCounterVec, IntGauge};
 
     pub static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
@@ -88,6 +88,9 @@ mod metrics {
     pub static INCOMING_BUNDLE_COUNT: LazyLock<IntCounter> =
         LazyLock::new(|| register_int_counter("incoming_bundle_count", "Incoming bundle count"));
 
+    pub static INCOMING_MESSAGE_COUNT: LazyLock<IntCounter> =
+        LazyLock::new(|| register_int_counter("incoming_message_count", "Incoming message count"));
+
     pub static OPERATION_COUNT: LazyLock<IntCounter> =
         LazyLock::new(|| register_int_counter("operation_count", "Operation count"));
 
@@ -107,6 +110,14 @@ mod metrics {
         register_int_counter(
             "chain_info_queries",
             "Number of chain info queries processed",
+        )
+    });
+
+    /// Number of cached chain worker channel endpoints in the BTreeMap.
+    pub static CHAIN_WORKER_ENDPOINTS_CACHED: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
+            "chain_worker_endpoints_cached",
+            "Number of cached chain worker channel endpoints",
         )
     });
 }
@@ -926,6 +937,8 @@ where
 
         // Put back the sender in the cache for next time.
         chain_workers.insert(chain_id, sender);
+        #[cfg(with_metrics)]
+        metrics::CHAIN_WORKER_ENDPOINTS_CACHED.set(chain_workers.len() as i64);
 
         Ok(new_receiver)
     }
@@ -1003,6 +1016,12 @@ where
             certificate.round.number(),
             certificate.block().body.transactions.len() as u64,
             certificate.block().body.incoming_bundles().count() as u64,
+            certificate
+                .block()
+                .body
+                .incoming_bundles()
+                .map(|b| b.messages().count())
+                .sum::<usize>() as u64,
             certificate.block().body.operations().count() as u64,
             certificate
                 .signatures()
@@ -1024,6 +1043,7 @@ where
                     round_number,
                     confirmed_transactions,
                     confirmed_incoming_bundles,
+                    confirmed_incoming_messages,
                     confirmed_operations,
                     validators_with_signatures,
                 ) = metrics_data;
@@ -1037,6 +1057,9 @@ where
                         .inc_by(confirmed_transactions);
                     if confirmed_incoming_bundles > 0 {
                         metrics::INCOMING_BUNDLE_COUNT.inc_by(confirmed_incoming_bundles);
+                    }
+                    if confirmed_incoming_messages > 0 {
+                        metrics::INCOMING_MESSAGE_COUNT.inc_by(confirmed_incoming_messages);
                     }
                     if confirmed_operations > 0 {
                         metrics::OPERATION_COUNT.inc_by(confirmed_operations);
