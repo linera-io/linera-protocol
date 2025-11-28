@@ -11466,9 +11466,9 @@ dependencies = [
 
 [[package]]
 name = "web-thread"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "245e52bf989a62768130a869d12298265bdf7593de7d137dfdf65088122ac4a1"
+checksum = "060cfc12637ebaf48b344331cea64fe6d13fed9a1381fb6cce10c3c7495778b4"
 dependencies = [
  "futures",
  "pin-project-lite",
