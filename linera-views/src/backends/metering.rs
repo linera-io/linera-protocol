@@ -9,6 +9,7 @@ use std::{
 };
 
 use convert_case::{Case, Casing};
+use futures::stream::Stream;
 use linera_base::prometheus_util::{
     register_histogram_vec, register_int_counter_vec, MeasureLatency as _,
 };
@@ -379,6 +380,24 @@ where
             .with_label_values(&[])
             .observe(key_sizes as f64);
         self.store.read_multi_values_bytes(keys).await
+    }
+
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+        // Record metrics for the iterator creation
+        self.counter
+            .read_multi_values_num_entries
+            .with_label_values(&[])
+            .observe(keys.len() as f64);
+        let key_sizes = keys.iter().map(|k| k.len()).sum::<usize>();
+        self.counter
+            .read_multi_values_key_sizes
+            .with_label_values(&[])
+            .observe(key_sizes as f64);
+
+        self.store.read_multi_values_bytes_iter(keys)
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {

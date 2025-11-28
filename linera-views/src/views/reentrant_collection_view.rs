@@ -13,6 +13,7 @@ use std::{
 
 use allocative::{Allocative, Key, Visitor};
 use async_lock::{RwLock, RwLockReadGuardArc, RwLockWriteGuardArc};
+use futures::stream::StreamExt;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{de::DeserializeOwned, Serialize};
@@ -71,6 +72,127 @@ impl<T> std::ops::Deref for WriteGuardedView<T> {
 impl<T> std::ops::DerefMut for WriteGuardedView<T> {
     fn deref_mut(&mut self) -> &mut T {
         self.0.deref_mut()
+    }
+}
+
+enum LoadInfo<W> {
+    Loaded {
+        short_key: Vec<u8>,
+        view: Arc<RwLock<W>>,
+    },
+    NotLoaded {
+        short_key: Vec<u8>,
+    },
+}
+
+/// Iterator for try_load_all_entries on ReentrantByteCollectionView.
+pub struct ByteReentrantCollectionViewTryLoadAllEntries<C, W, S>
+where
+    C: Context,
+{
+    context: C,
+    load_infos: std::vec::IntoIter<LoadInfo<W>>,
+    store_iter: S,
+    current_loaded_values: Vec<Option<Vec<u8>>>,
+}
+
+impl<C, W, S> ByteReentrantCollectionViewTryLoadAllEntries<C, W, S>
+where
+    C: Context,
+    W: View<Context = C>,
+    S: futures::stream::Stream<
+            Item = Result<Option<Vec<u8>>, <C::Store as crate::store::WithError>::Error>,
+        > + Unpin,
+{
+    /// Returns the next entry, or None if iteration is complete.
+    pub async fn next(&mut self) -> Result<Option<(Vec<u8>, ReadGuardedView<W>)>, ViewError> {
+        let Some(load_info) = self.load_infos.next() else {
+            return Ok(None);
+        };
+
+        let (short_key, view) = match load_info {
+            LoadInfo::Loaded { short_key, view } => (short_key, view),
+            LoadInfo::NotLoaded { short_key } => {
+                self.current_loaded_values.clear();
+                for _ in 0..W::NUM_INIT_KEYS {
+                    let value = self.store_iter.next().await.transpose()?.unwrap();
+                    self.current_loaded_values.push(value);
+                }
+                let key = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                let context = self.context.clone_with_base_key(key);
+                let view = W::post_load(context, &self.current_loaded_values)?;
+                let wrapped_view = Arc::new(RwLock::new(view));
+                (short_key, wrapped_view)
+            }
+        };
+        let guard = ReadGuardedView(
+            view.try_read_arc()
+                .ok_or_else(|| ViewError::TryLockError(short_key.clone()))?,
+        );
+        Ok(Some((short_key, guard)))
+    }
+}
+
+/// Iterator for try_load_all_entries on ReentrantCollectionView.
+pub struct ReentrantCollectionViewTryLoadAllEntries<C, I, W, S>
+where
+    C: Context,
+{
+    inner: ByteReentrantCollectionViewTryLoadAllEntries<C, W, S>,
+    _phantom: PhantomData<I>,
+}
+
+impl<C, I, W, S> ReentrantCollectionViewTryLoadAllEntries<C, I, W, S>
+where
+    C: Context,
+    W: View<Context = C>,
+    I: Serialize + DeserializeOwned,
+    S: futures::stream::Stream<
+            Item = Result<Option<Vec<u8>>, <C::Store as crate::store::WithError>::Error>,
+        > + Unpin,
+{
+    /// Returns the next entry, or None if iteration is complete.
+    pub async fn next(&mut self) -> Result<Option<(I, ReadGuardedView<W>)>, ViewError> {
+        match self.inner.next().await? {
+            None => Ok(None),
+            Some((short_key, view)) => {
+                let index = BaseKey::deserialize_value(&short_key)?;
+                Ok(Some((index, view)))
+            }
+        }
+    }
+}
+
+/// Iterator for try_load_all_entries on ReentrantCustomCollectionView.
+pub struct ReentrantCustomCollectionViewTryLoadAllEntries<C, I, W, S>
+where
+    C: Context,
+{
+    inner: ByteReentrantCollectionViewTryLoadAllEntries<C, W, S>,
+    _phantom: PhantomData<I>,
+}
+
+impl<C, I, W, S> ReentrantCustomCollectionViewTryLoadAllEntries<C, I, W, S>
+where
+    C: Context,
+    W: View<Context = C>,
+    I: CustomSerialize,
+    S: futures::stream::Stream<
+            Item = Result<Option<Vec<u8>>, <C::Store as crate::store::WithError>::Error>,
+        > + Unpin,
+{
+    /// Returns the next entry, or None if iteration is complete.
+    pub async fn next(&mut self) -> Result<Option<(I, ReadGuardedView<W>)>, ViewError> {
+        match self.inner.next().await? {
+            None => Ok(None),
+            Some((short_key, view)) => {
+                let index = I::from_custom_bytes(&short_key)?;
+                Ok(Some((index, view)))
+            }
+        }
     }
 }
 
@@ -827,6 +949,72 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             .collect()
     }
 
+    /// Returns an iterator for loading all entries.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
+    ///     ReentrantByteCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.try_load_entry_mut(&[0, 1]).await.unwrap();
+    /// }
+    /// let mut iter = view.try_load_all_entries_iter().await.unwrap();
+    /// assert!(iter.next().await.unwrap().is_some());
+    /// assert!(iter.next().await.unwrap().is_none());
+    /// # })
+    /// ```
+    pub async fn try_load_all_entries_iter(
+        &self,
+    ) -> Result<
+        ByteReentrantCollectionViewTryLoadAllEntries<
+            W::Context,
+            W,
+            impl futures::stream::Stream<
+                    Item = Result<Option<Vec<u8>>, <W::Context as Context>::Error>,
+                > + Unpin
+                + '_,
+        >,
+        ViewError,
+    > {
+        // First determine the short_keys
+        let short_keys = self.keys().await?;
+
+        // Extract updates (only Set variants) into a map
+        let mut load_infos = Vec::new();
+        let mut keys = Vec::new();
+        for short_key in short_keys {
+            if let Some(Update::Set(view)) = self.updates.get(&short_key) {
+                load_infos.push(LoadInfo::Loaded {
+                    short_key,
+                    view: view.clone(),
+                });
+            } else if !self.delete_storage_first {
+                let key = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                let context = self.context.clone_with_base_key(key);
+                keys.extend(W::pre_load(&context)?);
+                load_infos.push(LoadInfo::NotLoaded { short_key });
+            }
+        }
+
+        // Third, create the iter from the "keys"
+        let store_iter = Box::pin(self.context.store().read_multi_values_bytes_iter(keys));
+
+        // Create the iterator struct with context
+        Ok(ByteReentrantCollectionViewTryLoadAllEntries {
+            context: self.context.clone(),
+            load_infos: load_infos.into_iter(),
+            store_iter,
+            current_loaded_values: Vec::with_capacity(W::NUM_INIT_KEYS),
+        })
+    }
+
     /// Loads all the entries for writing at once.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1558,6 +1746,45 @@ where
             })
             .collect()
     }
+
+    /// Returns an iterator over all the entries in the collection.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
+    ///     ReentrantCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    /// }
+    /// let mut iter = view.try_load_all_entries_iter().await.unwrap();
+    /// assert!(iter.next().await.unwrap().is_some());
+    /// assert!(iter.next().await.unwrap().is_none());
+    /// # })
+    /// ```
+    pub async fn try_load_all_entries_iter(
+        &self,
+    ) -> Result<
+        ReentrantCollectionViewTryLoadAllEntries<
+            W::Context,
+            I,
+            W,
+            impl futures::stream::Stream<
+                    Item = Result<Option<Vec<u8>>, <W::Context as Context>::Error>,
+                > + Unpin
+                + '_,
+        >,
+        ViewError,
+    > {
+        let inner = self.collection.try_load_all_entries_iter().await?;
+        Ok(ReentrantCollectionViewTryLoadAllEntries {
+            inner,
+            _phantom: PhantomData,
+        })
+    }
 }
 
 impl<I, W> ReentrantCollectionView<W::Context, I, W>
@@ -2120,6 +2347,45 @@ where
                 Ok((index, view))
             })
             .collect()
+    }
+
+    /// Returns an iterator over all the entries in the collection.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
+    ///     ReentrantCustomCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    /// }
+    /// let mut iter = view.try_load_all_entries_iter().await.unwrap();
+    /// assert!(iter.next().await.unwrap().is_some());
+    /// assert!(iter.next().await.unwrap().is_none());
+    /// # })
+    /// ```
+    pub async fn try_load_all_entries_iter(
+        &self,
+    ) -> Result<
+        ReentrantCustomCollectionViewTryLoadAllEntries<
+            W::Context,
+            I,
+            W,
+            impl futures::stream::Stream<
+                    Item = Result<Option<Vec<u8>>, <W::Context as Context>::Error>,
+                > + Unpin
+                + '_,
+        >,
+        ViewError,
+    > {
+        let inner = self.collection.try_load_all_entries_iter().await?;
+        Ok(ReentrantCustomCollectionViewTryLoadAllEntries {
+            inner,
+            _phantom: PhantomData,
+        })
     }
 }
 

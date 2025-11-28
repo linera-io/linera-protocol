@@ -10,7 +10,7 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use futures::future::join_all;
+use futures::{future::join_all, stream::Stream};
 use linera_base::ensure;
 #[cfg(with_metrics)]
 use linera_views::metering::MeteredDatabase;
@@ -45,6 +45,9 @@ use crate::{
 
 // The maximum key size is set to 1M rather arbitrarily.
 const MAX_KEY_SIZE: usize = 1000000;
+
+// The batch size in `read_multi_values_bytes_iter`.
+const BATCH_SIZE: usize = 50;
 
 // The shared store client.
 // * Interior mutability is required for the client because
@@ -206,6 +209,29 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
             Ok(values)
         } else {
             self.read_entries(message_index, num_chunks).await
+        }
+    }
+
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+        let store = self.clone();
+
+        async_stream::stream! {
+            let mut current_position = 0;
+            while current_position < keys.len() {
+                // Calculate the end position for this batch
+                let end_position = std::cmp::min(current_position + BATCH_SIZE, keys.len());
+
+                // Extract the next batch of keys
+                let batch_keys = &keys[current_position..end_position];
+                current_position = end_position;
+                let values = store.read_multi_values_bytes(batch_keys).await?;
+                for value in values {
+                    yield Ok(value);
+                }
+            }
         }
     }
 

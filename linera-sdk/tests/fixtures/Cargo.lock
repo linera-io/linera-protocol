@@ -2302,6 +2302,7 @@ version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-graphql",
+ "async-stream",
  "base64ct",
  "bcs",
  "cargo_toml",
@@ -2359,6 +2360,7 @@ version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-lock",
+ "async-stream",
  "bcs",
  "cfg_aliases",
  "clap",
@@ -2405,6 +2407,7 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "async-lock",
+ "async-stream",
  "bcs",
  "cfg_aliases",
  "convert_case",
