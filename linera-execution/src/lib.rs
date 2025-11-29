@@ -160,6 +160,20 @@ impl UserContractCode {
     }
 }
 
+pub struct JsVec<T>(pub Vec<T>);
+
+impl<T> From<Vec<T>> for JsVec<T> {
+    fn from(values: Vec<T>) -> Self {
+        Self(values)
+    }
+}
+
+impl<T> From<JsVec<T>> for Vec<T> {
+    fn from(values: JsVec<T>) -> Self {
+        values.0
+    }
+}
+
 #[cfg(web)]
 const _: () = {
     // TODO(#2775): add a vtable pointer into the JsValue rather than assuming the
@@ -200,6 +214,36 @@ const _: () = {
     impl web_thread::Post for UserServiceCode {
         fn transferables(&self) -> js_sys::Array {
             self.0.transferables()
+        }
+    }
+
+    impl<T: web_thread::AsJs> web_thread::AsJs for JsVec<T> {
+        fn to_js(&self) -> Result<JsValue, JsValue> {
+            let array = self
+                .0
+                .iter()
+                .map(T::to_js)
+                .collect::<Result<js_sys::Array, _>>()?;
+            Ok(array.into())
+        }
+
+        fn from_js(value: JsValue) -> Result<Self, JsValue> {
+            let array = js_sys::Array::from(&value);
+            let v = array
+                .into_iter()
+                .map(T::from_js)
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(JsVec(v))
+        }
+    }
+
+    impl<T: web_thread::Post> web_thread::Post for JsVec<T> {
+        fn transferables(&self) -> js_sys::Array {
+            let mut array = js_sys::Array::new();
+            for x in &self.0 {
+                array = array.concat(&x.transferables());
+            }
+            array
         }
     }
 };
