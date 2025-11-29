@@ -30,7 +30,7 @@ use linera_views::{
     reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
     register_view::RegisterView,
     set_view::SetView,
-    views::{ClonableView, CryptoHashView, RootView, View},
+    views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
@@ -491,11 +491,12 @@ where
 
     /// Initializes the chain if it is not active yet.
     pub async fn initialize_if_needed(&mut self, local_time: Timestamp) -> Result<(), ChainError> {
+        let chain_id = self.chain_id();
         // Initialize ourselves.
         if self
             .execution_state
             .system
-            .initialize_chain(self.chain_id())
+            .initialize_chain(chain_id)
             .await
             .with_execution_context(ChainExecutionContext::Block)?
         {
