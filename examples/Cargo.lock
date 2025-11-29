@@ -723,7 +723,6 @@ dependencies = [
  "async-graphql",
  "fungible",
  "linera-sdk",
- "matching-engine",
  "num-bigint",
  "num-traits",
  "serde",
