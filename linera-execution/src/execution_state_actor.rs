@@ -29,8 +29,8 @@ use crate::{
     system::{CreateApplicationResult, OpenChainConfig},
     util::{OracleResponseExt as _, RespondExt as _},
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, MessageKind, ModuleId,
-    Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext,
+    ExecutionRuntimeContext, ExecutionStateView, JsVec, Message, MessageContext, MessageKind,
+    ModuleId, Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext,
     QueryOutcome, ResourceController, SystemMessage, TransactionTracker, UserContractCode,
     UserServiceCode,
 };
@@ -800,7 +800,7 @@ where
             self.contract_and_dependencies(application_id).await?;
 
         let thread = web_thread::Thread::new();
-        let contract_runtime_task = thread.run_send(codes, move |codes| async move {
+        let contract_runtime_task = thread.run_send(JsVec::from(codes), move |codes| async move {
             let runtime = ContractSyncRuntime::new(
                 execution_state_sender,
                 chain_id,
@@ -809,7 +809,7 @@ where
                 &action,
             );
 
-            for (code, description) in codes.into_iter().zip(descriptions) {
+            for (code, description) in Vec::from(codes).into_iter().zip(descriptions) {
                 runtime.preload_contract(ApplicationId::from(&description), code, description)?;
             }
 
