@@ -43,7 +43,7 @@ macro_rules! contract {
             for $contract
         {
             fn instantiate(argument: Vec<u8>) {
-                use $crate::util::BlockingWait;
+                use $crate::util::BlockingWait as _;
                 $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
@@ -56,7 +56,7 @@ macro_rules! contract {
             }
 
             fn execute_operation(operation: Vec<u8>) -> Vec<u8> {
-                use $crate::util::BlockingWait;
+                use $crate::util::BlockingWait as _;
                 $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
@@ -72,7 +72,7 @@ macro_rules! contract {
             }
 
             fn execute_message(message: Vec<u8>) {
-                use $crate::util::BlockingWait;
+                use $crate::util::BlockingWait as _;
                 $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
@@ -88,7 +88,7 @@ macro_rules! contract {
             fn process_streams(updates: Vec<
                 $crate::contract::wit::exports::linera::app::contract_entrypoints::StreamUpdate,
             >) {
-                use $crate::util::BlockingWait;
+                use $crate::util::BlockingWait as _;
                 $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
@@ -99,7 +99,7 @@ macro_rules! contract {
             }
 
             fn finalize() {
-                use $crate::util::BlockingWait;
+                use $crate::util::BlockingWait as _;
 
                 if let Some(contract) = unsafe { CONTRACT.take() } {
                     contract.store().blocking_wait();
