@@ -31,7 +31,7 @@ use super::{execution_state_actor::ExecutionRequest, runtime::ServiceRuntimeRequ
 use crate::{
     execution_state_actor::ExecutionStateActor, resources::ResourceController,
     system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ExecutionError,
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageContext, OperationContext,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, JsVec, MessageContext, OperationContext,
     ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime, Timestamp,
     TransactionTracker,
 };
@@ -262,11 +262,11 @@ where
         let (codes, descriptions) = actor.service_and_dependencies(application_id).await?;
 
         let thread = web_thread::Thread::new();
-        let service_runtime_task = thread.run_send(codes, move |codes| async move {
+        let service_runtime_task = thread.run_send(JsVec::from(codes), move |codes| async move {
             let mut runtime =
                 ServiceSyncRuntime::new_with_deadline(execution_state_sender, context, deadline);
 
-            for (code, description) in codes.into_iter().zip(descriptions) {
+            for (code, description) in Vec::from(codes).into_iter().zip(descriptions) {
                 runtime.preload_service(ApplicationId::from(&description), code, description)?;
             }
 
