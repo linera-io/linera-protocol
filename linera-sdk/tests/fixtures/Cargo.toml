@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "contract-call",
     "create-and-call",
+    "graph-ql-queries",
     "meta-counter",
     "publish-read-data-blob",
     "time-expiry",
@@ -20,6 +21,7 @@ contract-call = { path = "./create-and-call" }
 counter = { path = "../../../examples/counter" }
 counter-no-graphql = { path = "../../../examples/counter-no-graphql" }
 create-and-call = { path = "./create-and-call" }
+graph-ql-queries = { path = "./graph-ql-queries" }
 meta-counter = { path = "./meta-counter" }
 publish-read-data-blob = { path = "./publish-read-data-blob" }
 time-expiry = { path = "./time-expiry" }
