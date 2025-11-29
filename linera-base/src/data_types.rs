@@ -27,7 +27,7 @@ use serde_with::{serde_as, Bytes};
 use thiserror::Error;
 
 #[cfg(with_metrics)]
-use crate::prometheus_util::MeasureLatency as _;
+use crate::prometheus_util::{MeasureLatency as _, MeasurementUnit};
 use crate::{
     crypto::{BcsHashable, CryptoError, CryptoHash},
     doc_scalar, hex_debug, http,
@@ -1166,7 +1166,8 @@ impl Bytecode {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn compress(&self) -> CompressedBytecode {
         #[cfg(with_metrics)]
-        let _compression_latency = metrics::BYTECODE_COMPRESSION_LATENCY.measure_latency();
+        let _compression_latency =
+            metrics::BYTECODE_COMPRESSION_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
         let compressed_bytes_vec = zstd::stream::encode_all(&*self.bytes, 19)
             .expect("Compressing bytes in memory should not fail");
 
@@ -1181,7 +1182,8 @@ impl Bytecode {
         use ruzstd::encoding::{CompressionLevel, FrameCompressor};
 
         #[cfg(with_metrics)]
-        let _compression_latency = metrics::BYTECODE_COMPRESSION_LATENCY.measure_latency();
+        let _compression_latency =
+            metrics::BYTECODE_COMPRESSION_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
 
         let mut compressed_bytes_vec = Vec::new();
         let mut compressor = FrameCompressor::new(CompressionLevel::Fastest);
@@ -1242,7 +1244,8 @@ impl CompressedBytecode {
     /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
     pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
         #[cfg(with_metrics)]
-        let _decompression_latency = metrics::BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
+        let _decompression_latency =
+            metrics::BYTECODE_DECOMPRESSION_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
         let bytes = zstd::stream::decode_all(&**self.compressed_bytes)?;
 
         Ok(Bytecode { bytes })
@@ -1276,7 +1279,8 @@ impl CompressedBytecode {
         use ruzstd::{decoding::StreamingDecoder, io::Read};
 
         #[cfg(with_metrics)]
-        let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
+        let _decompression_latency =
+            metrics::BYTECODE_DECOMPRESSION_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
 
         let compressed_bytes = &*self.compressed_bytes;
         let mut bytes = Vec::new();

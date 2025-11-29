@@ -12,7 +12,7 @@ use std::{
 
 use futures::future::Either;
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::prometheus_util::{MeasureLatency, MeasurementUnit};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
@@ -438,7 +438,8 @@ where
         old_round: Option<Round>,
     ) -> Result<NetworkActions, WorkerError> {
         #[cfg(with_metrics)]
-        let _latency = metrics::CREATE_NETWORK_ACTIONS_LATENCY.measure_latency();
+        let _latency =
+            metrics::CREATE_NETWORK_ACTIONS_LATENCY.measure_latency(MeasurementUnit::Milliseconds);
         let mut heights_by_recipient = BTreeMap::<_, Vec<_>>::new();
         let mut targets = self.chain.nonempty_outbox_chain_ids();
         if let Some(tracked_chains) = self.tracked_chains.as_ref() {
