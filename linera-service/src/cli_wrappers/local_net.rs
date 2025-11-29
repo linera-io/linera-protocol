@@ -49,8 +49,6 @@ use crate::{
 /// Maximum allowed number of shards over all validators.
 const MAX_NUMBER_SHARDS: usize = 1000;
 
-pub const FIRST_PUBLIC_PORT: usize = 13000;
-
 pub enum ProcessInbox {
     Skip,
     Automatic,
@@ -58,6 +56,14 @@ pub enum ProcessInbox {
 
 #[cfg(with_testing)]
 static PORT_PROVIDER: LazyLock<RwLock<u16>> = LazyLock::new(|| RwLock::new(7080));
+
+/// The offset of the port
+fn test_offset_port() -> usize {
+    std::env::var("TEST_OFFSET_PORT")
+        .ok()
+        .and_then(|port_str| port_str.parse::<usize>().ok())
+        .unwrap_or(9000)
+}
 
 /// Provides a port for the node service. Increment the port numbers.
 #[cfg(with_testing)]
@@ -467,35 +473,35 @@ impl LocalNet {
     }
 
     fn shard_port(&self, validator: usize, shard: usize) -> usize {
-        9000 + validator * self.num_shards + shard + 1
+        test_offset_port() + validator * self.num_shards + shard + 1
     }
 
     fn proxy_internal_port(&self, validator: usize, proxy_id: usize) -> usize {
-        10000 + validator * self.num_proxies + proxy_id + 1
+        test_offset_port() + 1000 + validator * self.num_proxies + proxy_id + 1
     }
 
     fn shard_metrics_port(&self, validator: usize, shard: usize) -> usize {
-        11000 + validator * self.num_shards + shard + 1
+        test_offset_port() + 2000 + validator * self.num_shards + shard + 1
     }
 
     fn proxy_metrics_port(&self, validator: usize, proxy_id: usize) -> usize {
-        12000 + validator * self.num_proxies + proxy_id + 1
+        test_offset_port() + 3000 + validator * self.num_proxies + proxy_id + 1
     }
 
     fn block_exporter_port(&self, validator: usize, exporter_id: usize) -> usize {
-        12000 + validator * self.num_shards + exporter_id + 1
+        test_offset_port() + 3000 + validator * self.num_shards + exporter_id + 1
     }
 
     pub fn proxy_public_port(&self, validator: usize, proxy_id: usize) -> usize {
-        FIRST_PUBLIC_PORT + validator * self.num_proxies + proxy_id + 1
+        test_offset_port() + 4000 + validator * self.num_proxies + proxy_id + 1
     }
 
     pub fn first_public_port() -> usize {
-        FIRST_PUBLIC_PORT + 1
+        test_offset_port() + 4000 + 1
     }
 
     fn block_exporter_metrics_port(exporter_id: usize) -> usize {
-        FIRST_PUBLIC_PORT + exporter_id + 1
+        test_offset_port() + 4000 + exporter_id + 1
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
