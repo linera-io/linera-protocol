@@ -101,8 +101,10 @@ macro_rules! contract {
             fn finalize() {
                 use $crate::util::BlockingWait as _;
 
-                let contract = unsafe { CONTRACT.take() }
-                    .expect("Calling `store` on a `Contract` instance that wasn't loaded");
+                let Some(contract) = (unsafe { CONTRACT.take() }) else {
+                    $crate::ContractLogger::install();
+                    panic!("Calling `store` on a `Contract` instance that wasn't loaded");
+                };
 
                 contract.store().blocking_wait();
             }
