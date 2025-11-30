@@ -296,11 +296,11 @@ where
         let (codes, descriptions) = actor.service_and_dependencies(application_id).await?;
 
         let thread = web_thread::Thread::new();
-        let service_runtime_task = thread.run_send(JsVec::from(codes), move |codes| async move {
+        let service_runtime_task = thread.run_send(JsVec(codes), move |codes| async move {
             let mut runtime =
                 ServiceSyncRuntime::new_with_deadline(execution_state_sender, context, deadline);
 
-            for (code, description) in Vec::from(codes).into_iter().zip(descriptions) {
+            for (code, description) in codes.0.into_iter().zip(descriptions) {
                 runtime.preload_service(ApplicationId::from(&description), code, description)?;
             }
 
