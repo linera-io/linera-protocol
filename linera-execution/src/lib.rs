@@ -152,18 +152,6 @@ impl UserContractCode {
 
 pub struct JsVec<T>(pub Vec<T>);
 
-impl<T> From<Vec<T>> for JsVec<T> {
-    fn from(values: Vec<T>) -> Self {
-        Self(values)
-    }
-}
-
-impl<T> From<JsVec<T>> for Vec<T> {
-    fn from(values: JsVec<T>) -> Self {
-        values.0
-    }
-}
-
 #[cfg(web)]
 const _: () = {
     // TODO(#2775): add a vtable pointer into the JsValue rather than assuming the
