@@ -29,8 +29,8 @@ use crate::{
     system::{CreateApplicationResult, OpenChainConfig},
     util::{OracleResponseExt as _, RespondExt as _},
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, MessageKind, ModuleId,
-    Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext,
+    ExecutionRuntimeContext, ExecutionStateView, JsVec, Message, MessageContext, MessageKind,
+    ModuleId, Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext,
     QueryOutcome, ResourceController, SystemMessage, TransactionTracker, UserContractCode,
     UserServiceCode,
 };
@@ -755,6 +755,54 @@ where
             .await
     }
 
+    // TODO(#5034): unify with `contract_and_dependencies`
+    pub(crate) async fn service_and_dependencies(
+        &mut self,
+        application: ApplicationId,
+    ) -> Result<(Vec<UserServiceCode>, Vec<ApplicationDescription>), ExecutionError> {
+        // cyclic futures are illegal so we need to either box the frames or keep our own
+        // stack
+        let mut stack = vec![application];
+        let mut codes = vec![];
+        let mut descriptions = vec![];
+
+        while let Some(id) = stack.pop() {
+            let (code, description) = self.load_service(id).await?;
+            stack.extend(description.required_application_ids.iter().rev().copied());
+            codes.push(code);
+            descriptions.push(description);
+        }
+
+        codes.reverse();
+        descriptions.reverse();
+
+        Ok((codes, descriptions))
+    }
+
+    // TODO(#5034): unify with `service_and_dependencies`
+    async fn contract_and_dependencies(
+        &mut self,
+        application: ApplicationId,
+    ) -> Result<(Vec<UserContractCode>, Vec<ApplicationDescription>), ExecutionError> {
+        // cyclic futures are illegal so we need to either box the frames or keep our own
+        // stack
+        let mut stack = vec![application];
+        let mut codes = vec![];
+        let mut descriptions = vec![];
+
+        while let Some(id) = stack.pop() {
+            let (code, description) = self.load_contract(id).await?;
+            stack.extend(description.required_application_ids.iter().rev().copied());
+            codes.push(code);
+            descriptions.push(description);
+        }
+
+        codes.reverse();
+        descriptions.reverse();
+
+        Ok((codes, descriptions))
+    }
+
     async fn run_user_action_with_runtime(
         &mut self,
         application_id: ApplicationId,
@@ -777,10 +825,11 @@ where
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
 
-        let (code, description) = self.load_contract(application_id).await?;
+        let (codes, descriptions): (Vec<_>, Vec<_>) =
+            self.contract_and_dependencies(application_id).await?;
 
         let thread = web_thread::Thread::new();
-        let contract_runtime_task = thread.run_send(code, move |code| async move {
+        let contract_runtime_task = thread.run_send(JsVec(codes), move |codes| async move {
             let runtime = ContractSyncRuntime::new(
                 execution_state_sender,
                 chain_id,
@@ -788,7 +837,11 @@ where
                 controller,
                 &action,
             );
-            runtime.preload_contract(application_id, code, description)?;
+
+            for (code, description) in codes.0.into_iter().zip(descriptions) {
+                runtime.preload_contract(ApplicationId::from(&description), code, description)?;
+            }
+
             runtime.run_action(application_id, chain_id, action)
         });
 
