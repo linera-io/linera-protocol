@@ -3,7 +3,7 @@
 
 //! Validator management commands.
 
-use std::{collections::HashMap, num::NonZero, path::Path, sync::Arc};
+use std::{collections::HashMap, num::NonZero, ops::AddAssign as _, path::Path, sync::Arc};
 
 use anyhow::{bail, Context, Result};
 use clap::Subcommand;
@@ -436,6 +436,11 @@ where
     println!("Querying validators about chain {chain_id}.\n");
 
     let local_results = context.query_local_node(chain_id).await;
+    // Print local node results first (everything)
+    println!("Local Node:");
+    local_results.print(None, None, None, None);
+    println!();
+
     let chain_client = context.make_chain_client(chain_id);
     info!("Querying validators about chain {}", chain_id);
     let result = chain_client.local_committee().await;
@@ -448,7 +453,7 @@ where
     );
 
     let node_provider = context.make_node_provider();
-    let mut validator_results = Vec::new();
+    let mut faulty_validators = std::collections::BTreeMap::<_, u32>::new();
 
     for (name, state) in committee.validators() {
         if min_votes.is_some_and(|votes| state.votes < votes) {
@@ -459,39 +464,26 @@ where
         let results = context
             .query_validator(address, &node, chain_id, Some(name))
             .await;
-        validator_results.push((name, address, state.votes, results));
-    }
-
-    let mut faulty_validators = std::collections::BTreeMap::<_, Vec<_>>::new();
-    for (name, address, _votes, results) in &validator_results {
-        for error in results.errors() {
-            error!("{}", error);
-            faulty_validators
-                .entry((*name, *address))
-                .or_default()
-                .push(error);
-        }
-    }
-
-    // Print local node results first (everything)
-    println!("Local Node:");
-    local_results.print(None, None, None, None);
-    println!();
-
-    // Print validator results (only differences from local node)
-    for (name, address, votes, results) in &validator_results {
         results.print(
             Some(name),
             Some(address),
-            Some(*votes),
+            Some(state.votes),
             Some(&local_results),
         );
+        for error in results.errors() {
+            error!("{}", error);
+            faulty_validators
+                .entry((*name, address.clone()))
+                .or_default()
+                .add_assign(1);
+        }
+        println!();
     }
 
     if !faulty_validators.is_empty() {
         println!("\nFaulty validators:");
         for ((name, address), errors) in faulty_validators {
-            println!("  {} at {}: {} error(s)", name, address, errors.len());
+            println!("  {} at {}: {} error(s)", name, address, errors);
         }
         bail!("Found faulty validators");
     }
