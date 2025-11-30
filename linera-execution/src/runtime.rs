@@ -43,19 +43,23 @@ mod tests;
 
 pub trait WithContext {
     type UserContext;
+    type Code;
 }
 
 impl WithContext for UserContractInstance {
     type UserContext = Timestamp;
+    type Code = UserContractCode;
 }
 
 impl WithContext for UserServiceInstance {
     type UserContext = ();
+    type Code = UserServiceCode;
 }
 
 #[cfg(test)]
 impl WithContext for Arc<dyn std::any::Any + Send + Sync> {
     type UserContext = ();
+    type Code = ();
 }
 
 #[derive(Debug)]
@@ -100,6 +104,8 @@ pub struct SyncRuntimeInternal<UserInstance: WithContext> {
     /// Applications that need to be finalized.
     applications_to_finalize: Vec<ApplicationId>,
 
+    /// Application instances loaded in this transaction.
+    preloaded_applications: HashMap<ApplicationId, (UserInstance::Code, ApplicationDescription)>,
     /// Application instances loaded in this transaction.
     loaded_applications: HashMap<ApplicationId, LoadedApplication<UserInstance>>,
     /// The current stack of application descriptions.
@@ -320,6 +326,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
             execution_state_sender,
             is_finalizing: false,
             applications_to_finalize: Vec::new(),
+            preloaded_applications: HashMap::new(),
             loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
@@ -392,21 +399,33 @@ impl SyncRuntimeInternal<UserContractInstance> {
         id: ApplicationId,
     ) -> Result<LoadedApplication<UserContractInstance>, ExecutionError> {
         match self.loaded_applications.entry(id) {
-            // TODO(#2927): support dynamic loading of modules on the Web
-            #[cfg(web)]
-            hash_map::Entry::Vacant(_) => {
-                drop(this);
-                Err(ExecutionError::UnsupportedDynamicApplicationLoad(Box::new(
-                    id,
-                )))
-            }
-            #[cfg(not(web))]
-            hash_map::Entry::Vacant(entry) => {
-                let (code, description) = self
-                    .execution_state_sender
-                    .send_request(move |callback| ExecutionRequest::LoadContract { id, callback })?
-                    .recv_response()?;
+            hash_map::Entry::Occupied(entry) => Ok(entry.get().clone()),
 
+            hash_map::Entry::Vacant(entry) => {
+                // First time actually using the application. Let's see if the code was
+                // pre-loaded.
+                let (code, description) = match self.preloaded_applications.entry(id) {
+                    // TODO(#2927): support dynamic loading of modules on the Web
+                    #[cfg(web)]
+                    hash_map::Entry::Vacant(_) => {
+                        drop(this);
+                        return Err(ExecutionError::UnsupportedDynamicApplicationLoad(Box::new(
+                            id,
+                        )));
+                    }
+                    #[cfg(not(web))]
+                    hash_map::Entry::Vacant(entry) => {
+                        let (code, description) = self
+                            .execution_state_sender
+                            .send_request(move |callback| ExecutionRequest::LoadContract {
+                                id,
+                                callback,
+                            })?
+                            .recv_response()?;
+                        entry.insert((code, description)).clone()
+                    }
+                    hash_map::Entry::Occupied(entry) => entry.get().clone(),
+                };
                 let instance = code.instantiate(this)?;
 
                 self.applications_to_finalize.push(id);
@@ -414,7 +433,6 @@ impl SyncRuntimeInternal<UserContractInstance> {
                     .insert(LoadedApplication::new(instance, description))
                     .clone())
             }
-            hash_map::Entry::Occupied(entry) => Ok(entry.get().clone()),
         }
     }
 
@@ -497,31 +515,44 @@ impl SyncRuntimeInternal<UserServiceInstance> {
     /// Initializes a service instance with this runtime.
     fn load_service_instance(
         &mut self,
-        this: ServiceSyncRuntimeHandle,
+        this: SyncRuntimeHandle<UserServiceInstance>,
         id: ApplicationId,
     ) -> Result<LoadedApplication<UserServiceInstance>, ExecutionError> {
         match self.loaded_applications.entry(id) {
-            // TODO(#2927): support dynamic loading of modules on the Web
-            #[cfg(web)]
-            hash_map::Entry::Vacant(_) => {
-                drop(this);
-                Err(ExecutionError::UnsupportedDynamicApplicationLoad(Box::new(
-                    id,
-                )))
-            }
-            #[cfg(not(web))]
-            hash_map::Entry::Vacant(entry) => {
-                let (code, description) = self
-                    .execution_state_sender
-                    .send_request(move |callback| ExecutionRequest::LoadService { id, callback })?
-                    .recv_response()?;
+            hash_map::Entry::Occupied(entry) => Ok(entry.get().clone()),
 
+            hash_map::Entry::Vacant(entry) => {
+                // First time actually using the application. Let's see if the code was
+                // pre-loaded.
+                let (code, description) = match self.preloaded_applications.entry(id) {
+                    // TODO(#2927): support dynamic loading of modules on the Web
+                    #[cfg(web)]
+                    hash_map::Entry::Vacant(_) => {
+                        drop(this);
+                        return Err(ExecutionError::UnsupportedDynamicApplicationLoad(Box::new(
+                            id,
+                        )));
+                    }
+                    #[cfg(not(web))]
+                    hash_map::Entry::Vacant(entry) => {
+                        let (code, description) = self
+                            .execution_state_sender
+                            .send_request(move |callback| ExecutionRequest::LoadService {
+                                id,
+                                callback,
+                            })?
+                            .recv_response()?;
+                        entry.insert((code, description)).clone()
+                    }
+                    hash_map::Entry::Occupied(entry) => entry.get().clone(),
+                };
                 let instance = code.instantiate(this)?;
+
+                self.applications_to_finalize.push(id);
                 Ok(entry
                     .insert(LoadedApplication::new(instance, description))
                     .clone())
             }
-            hash_map::Entry::Occupied(entry) => Ok(entry.get().clone()),
         }
     }
 }
@@ -963,6 +994,7 @@ impl ContractSyncRuntime {
         )))
     }
 
+    /// Preloads the code of a contract into the runtime's memory.
     pub(crate) fn preload_contract(
         &self,
         id: ApplicationId,
@@ -973,15 +1005,10 @@ impl ContractSyncRuntime {
             .0
             .as_ref()
             .expect("contracts shouldn't be preloaded while the runtime is being dropped");
-        let runtime_handle = this.clone();
         let mut this_guard = this.inner();
 
-        if let hash_map::Entry::Vacant(entry) = this_guard.loaded_applications.entry(id) {
-            entry.insert(LoadedApplication::new(
-                code.instantiate(runtime_handle)?,
-                description,
-            ));
-            this_guard.applications_to_finalize.push(id);
+        if let hash_map::Entry::Vacant(entry) = this_guard.preloaded_applications.entry(id) {
+            entry.insert((code, description));
         }
 
         Ok(())
@@ -1591,7 +1618,7 @@ impl ServiceSyncRuntime {
         }
     }
 
-    /// Loads a service into the runtime's memory.
+    /// Preloads the code of a service into the runtime's memory.
     pub(crate) fn preload_service(
         &self,
         id: ApplicationId,
@@ -1603,15 +1630,10 @@ impl ServiceSyncRuntime {
             .0
             .as_ref()
             .expect("services shouldn't be preloaded while the runtime is being dropped");
-        let runtime_handle = this.clone();
         let mut this_guard = this.inner();
 
-        if let hash_map::Entry::Vacant(entry) = this_guard.loaded_applications.entry(id) {
-            entry.insert(LoadedApplication::new(
-                code.instantiate(runtime_handle)?,
-                description,
-            ));
-            this_guard.applications_to_finalize.push(id);
+        if let hash_map::Entry::Vacant(entry) = this_guard.preloaded_applications.entry(id) {
+            entry.insert((code, description));
         }
 
         Ok(())
