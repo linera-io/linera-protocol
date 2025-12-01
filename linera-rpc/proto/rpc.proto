@@ -6,8 +6,8 @@ import "google/protobuf/empty.proto";
 // A service run by the Proxy which listens for incoming connections
 // from workers and then notifies clients.
 service NotifierService {
-  // Notify a client that there has been an update for a `ChainId`.
-  rpc Notify(Notification) returns (google.protobuf.Empty);
+  // Notify a client that there have been updates for chains.
+  rpc NotifyBatch(NotificationBatch) returns (google.protobuf.Empty);
 }
 
 // Interface provided by each physical shard (aka "worker") of a validator or a local node.
@@ -174,6 +174,11 @@ message SubscriptionRequest {
 message Notification {
   ChainId chain_id = 1;
   bytes reason = 2;
+}
+
+// A batch of notifications to be sent together.
+message NotificationBatch {
+  repeated Notification notifications = 1;
 }
 
 // A wrapper around ChainInfoResponse which contains a serialized error variant
