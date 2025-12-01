@@ -2755,14 +2755,7 @@ impl<Env: Environment> ChainClient<Env> {
             timestamp,
         };
 
-        // Use the round number assuming there are oracle responses.
-        // Using the round number during execution counts as an oracle.
-        // Accessing the round number in single-leader rounds where we are not the leader
-        // is not currently supported.
-        let round = match self.round_for_new_proposal(&info, &identity, true).await? {
-            Either::Left(round) => round.multi_leader(),
-            Either::Right(_) => None,
-        };
+        let round = self.round_for_oracle(&info, &identity).await?;
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
         let (block, _) = Box::pin(
@@ -3129,13 +3122,8 @@ impl<Env: Environment> ChainClient<Env> {
             }
         } else if let Some(pending_proposal) = pending_proposal {
             // Otherwise we are free to propose our own pending block.
-            // Use the round number assuming there are oracle responses.
-            // Using the round number during execution counts as an oracle.
             let proposed_block = pending_proposal.block;
-            let round = match self.round_for_new_proposal(&info, &owner, true).await? {
-                Either::Left(round) => round.multi_leader(),
-                Either::Right(_) => None,
-            };
+            let round = self.round_for_oracle(&info, &owner).await?;
             let (block, _) = self
                 .client
                 .stage_block_execution(proposed_block, round, pending_proposal.blobs.clone())
@@ -3278,6 +3266,24 @@ impl<Env: Environment> ChainClient<Env> {
             Box::pin(self.client.finalize_block(&committee, certificate.clone())).await?;
         Box::pin(self.update_validators(Some(&committee), Some(certificate.clone()))).await?;
         Ok(ClientOutcome::Committed(Some(certificate)))
+    }
+
+    /// Returns the number for the round number oracle to use when staging a block proposal.
+    async fn round_for_oracle(
+        &self,
+        info: &ChainInfo,
+        identity: &AccountOwner,
+    ) -> Result<Option<u32>, ChainClientError> {
+        // Pretend we do use oracles: If we don't, the round number is never read anyway.
+        match self.round_for_new_proposal(info, identity, true).await {
+            // If it is a multi-leader round, use its number for the oracle.
+            Ok(Either::Left(round)) => Ok(round.multi_leader()),
+            // If there is no suitable round with oracles, use None: If it works without oracles,
+            // the block won't read the value. If it returns a timeout, it will be a single-leader
+            // round, in which the oracle returns None.
+            Err(ChainClientError::BlockProposalError(_)) | Ok(Either::Right(_)) => Ok(None),
+            Err(err) => Err(err),
+        }
     }
 
     /// Returns a round in which we can propose a new block or the given one, if possible.
