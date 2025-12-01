@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! SQLite database module for storing blocks and blobs.
+//! PostgreSQL database module for storing blocks and blobs.
 
 mod consts;
 #[cfg(test)]
@@ -26,8 +26,8 @@ use linera_chain::{
 };
 use linera_execution::{Message, Operation, OutgoingMessage, SystemOperation};
 use sqlx::{
-    sqlite::{SqlitePool, SqlitePoolOptions},
-    Row, Sqlite, Transaction,
+    postgres::{PgPool, PgPoolOptions},
+    Postgres, Row, Transaction,
 };
 use thiserror::Error;
 
@@ -37,7 +37,7 @@ use crate::db::{
 };
 
 #[derive(Error, Debug)]
-pub enum SqliteError {
+pub enum PostgresError {
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
     #[error("Serialization error: {0}")]
@@ -48,98 +48,79 @@ pub enum SqliteError {
     BlobNotFound(BlobId),
 }
 
-pub struct SqliteDatabase {
-    pool: SqlitePool,
+pub struct PostgresDatabase {
+    pool: PgPool,
 }
 
-impl SqliteDatabase {
-    /// Create a new SQLite database connection
-    pub async fn new(database_url: &str) -> Result<Self, SqliteError> {
-        if !database_url.contains("memory") {
-            match std::fs::exists(database_url) {
-                Ok(true) => {
-                    tracing::info!(?database_url, "opening existing SQLite database");
-                }
-                Ok(false) => {
-                    tracing::info!(?database_url, "creating new SQLite database");
-                    // Create the database file if it doesn't exist
-                    std::fs::File::create(database_url).unwrap_or_else(|e| {
-                        panic!(
-                            "failed to create SQLite database file: {}, error: {}",
-                            database_url, e
-                        )
-                    });
-                }
-                Err(e) => {
-                    panic!(
-                        "failed to check SQLite database existence. file: {}, error: {}",
-                        database_url, e
-                    )
-                }
-            }
-        }
-        let pool = SqlitePoolOptions::new()
+impl PostgresDatabase {
+    /// Create a new PostgreSQL database connection
+    pub async fn new(database_url: &str) -> Result<Self, PostgresError> {
+        tracing::info!(?database_url, "connecting to PostgreSQL database");
+
+        let pool = PgPoolOptions::new()
             .max_connections(5)
             .connect(database_url)
             .await
-            .map_err(SqliteError::Database)?;
+            .map_err(PostgresError::Database)?;
+
         let db = Self { pool };
         db.initialize_schema().await?;
         Ok(db)
     }
 
     /// Initialize the database schema
-    async fn initialize_schema(&self) -> Result<(), SqliteError> {
+    async fn initialize_schema(&self) -> Result<(), PostgresError> {
+        // Helper to execute multi-statement SQL by splitting on semicolons
+        async fn execute_multi(pool: &PgPool, sql: &str) -> Result<(), PostgresError> {
+            for statement in sql.split(';') {
+                let trimmed = statement.trim();
+                if !trimmed.is_empty() {
+                    sqlx::query(trimmed).execute(pool).await?;
+                }
+            }
+            Ok(())
+        }
+
         // Create core tables
-        sqlx::query(CREATE_BLOCKS_TABLE).execute(&self.pool).await?;
-        sqlx::query(CREATE_BLOBS_TABLE).execute(&self.pool).await?;
+        execute_multi(&self.pool, CREATE_BLOCKS_TABLE).await?;
+        execute_multi(&self.pool, CREATE_BLOBS_TABLE).await?;
 
         // Create denormalized tables for block data
-        sqlx::query(CREATE_OPERATIONS_TABLE)
-            .execute(&self.pool)
-            .await?;
-        sqlx::query(CREATE_OUTGOING_MESSAGES_TABLE)
-            .execute(&self.pool)
-            .await?;
-        sqlx::query(CREATE_EVENTS_TABLE).execute(&self.pool).await?;
-        sqlx::query(CREATE_ORACLE_RESPONSES_TABLE)
-            .execute(&self.pool)
-            .await?;
+        execute_multi(&self.pool, CREATE_OPERATIONS_TABLE).await?;
+        execute_multi(&self.pool, CREATE_OUTGOING_MESSAGES_TABLE).await?;
+        execute_multi(&self.pool, CREATE_EVENTS_TABLE).await?;
+        execute_multi(&self.pool, CREATE_ORACLE_RESPONSES_TABLE).await?;
 
         // Create existing message-related tables
-        sqlx::query(CREATE_INCOMING_BUNDLES_TABLE)
-            .execute(&self.pool)
-            .await?;
-        sqlx::query(CREATE_POSTED_MESSAGES_TABLE)
-            .execute(&self.pool)
-            .await?;
+        execute_multi(&self.pool, CREATE_INCOMING_BUNDLES_TABLE).await?;
+        execute_multi(&self.pool, CREATE_POSTED_MESSAGES_TABLE).await?;
 
         Ok(())
     }
 
     /// Start a new transaction
-    async fn begin_transaction(&self) -> Result<Transaction<'_, Sqlite>, SqliteError> {
+    async fn begin_transaction(&self) -> Result<Transaction<'_, Postgres>, PostgresError> {
         Ok(self.pool.begin().await?)
     }
 
     /// Commit a transaction
-    async fn commit_transaction(&self, tx: Transaction<'_, Sqlite>) -> Result<(), SqliteError> {
-        tx.commit().await.map_err(SqliteError::Database)
+    async fn commit_transaction(&self, tx: Transaction<'_, Postgres>) -> Result<(), PostgresError> {
+        tx.commit().await.map_err(PostgresError::Database)
     }
 
     /// Insert a blob within a transaction
     async fn insert_blob_tx(
         &self,
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut Transaction<'_, Postgres>,
         blob_id: &BlobId,
         data: &[u8],
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), PostgresError> {
         let blob_id_str = blob_id.hash.to_string();
         let blob_type = format!("{:?}", blob_id.blob_type);
 
         // For now, we don't have block_hash and application_id context here
         // These could be passed as optional parameters in the future
-        sqlx::query("INSERT OR IGNORE INTO blobs (hash, blob_type, data) VALUES (?1, ?2, ?3)")
+        sqlx::query("INSERT INTO blobs (hash, blob_type, data) VALUES ($1, $2, $3) ON CONFLICT (hash) DO NOTHING")
             .bind(&blob_id_str)
             .bind(&blob_type)
             .bind(data)
@@ -151,16 +132,16 @@ impl SqliteDatabase {
     /// Insert a block within a transaction
     async fn insert_block_tx(
         &self,
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut Transaction<'_, Postgres>,
         hash: &CryptoHash,
         chain_id: &ChainId,
         height: BlockHeight,
         timestamp: Timestamp,
         data: &[u8],
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), PostgresError> {
         // Deserialize the block to extract denormalized data
         let block: Block = bincode::deserialize(data).map_err(|e| {
-            SqliteError::Serialization(format!("Failed to deserialize block: {}", e))
+            PostgresError::Serialization(format!("Failed to deserialize block: {}", e))
         })?;
 
         // Count aggregated data
@@ -179,11 +160,25 @@ impl SqliteDatabase {
 
         sqlx::query(
             r#"
-            INSERT OR REPLACE INTO blocks 
-            (hash, chain_id, height, timestamp, epoch, state_hash, previous_block_hash, 
-             authenticated_signer, operation_count, incoming_bundle_count, message_count, 
-             event_count, blob_count, data) 
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+            INSERT INTO blocks
+            (hash, chain_id, height, timestamp, epoch, state_hash, previous_block_hash,
+             authenticated_signer, operation_count, incoming_bundle_count, message_count,
+             event_count, blob_count, data)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            ON CONFLICT (hash) DO UPDATE SET
+                chain_id = EXCLUDED.chain_id,
+                height = EXCLUDED.height,
+                timestamp = EXCLUDED.timestamp,
+                epoch = EXCLUDED.epoch,
+                state_hash = EXCLUDED.state_hash,
+                previous_block_hash = EXCLUDED.previous_block_hash,
+                authenticated_signer = EXCLUDED.authenticated_signer,
+                operation_count = EXCLUDED.operation_count,
+                incoming_bundle_count = EXCLUDED.incoming_bundle_count,
+                message_count = EXCLUDED.message_count,
+                event_count = EXCLUDED.event_count,
+                blob_count = EXCLUDED.blob_count,
+                data = EXCLUDED.data
             "#,
         )
         .bind(&hash_str)
@@ -259,12 +254,12 @@ impl SqliteDatabase {
     /// Insert an operation within a transaction
     async fn insert_operation_tx(
         &self,
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut Transaction<'_, Postgres>,
         block_hash: &CryptoHash,
         operation_index: usize,
         operation: &Operation,
         authenticated_signer: Option<linera_base::identifiers::AccountOwner>,
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), PostgresError> {
         let block_hash_str = block_hash.to_string();
         let authenticated_signer_str = authenticated_signer.map(|s| s.to_string());
 
@@ -296,14 +291,14 @@ impl SqliteDatabase {
         };
 
         let data = bincode::serialize(operation).map_err(|e| {
-            SqliteError::Serialization(format!("Failed to serialize operation: {}", e))
+            PostgresError::Serialization(format!("Failed to serialize operation: {}", e))
         })?;
 
         sqlx::query(
             r#"
-            INSERT INTO operations 
+            INSERT INTO operations
             (block_hash, operation_index, operation_type, application_id, system_operation_type, authenticated_signer, data)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
         )
         .bind(&block_hash_str)
@@ -322,12 +317,12 @@ impl SqliteDatabase {
     /// Insert an outgoing message within a transaction
     async fn insert_outgoing_message_tx(
         &self,
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut Transaction<'_, Postgres>,
         block_hash: &CryptoHash,
         transaction_index: usize,
         message_index: usize,
         message: &OutgoingMessage,
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), PostgresError> {
         let block_hash_str = block_hash.to_string();
         let destination_chain_id_str = message.destination.to_string();
         let authenticated_signer_str = message.authenticated_signer.map(|s| s.to_string());
@@ -338,11 +333,11 @@ impl SqliteDatabase {
 
         sqlx::query(
             r#"
-            INSERT INTO outgoing_messages 
-            (block_hash, transaction_index, message_index, destination_chain_id, authenticated_signer, 
+            INSERT INTO outgoing_messages
+            (block_hash, transaction_index, message_index, destination_chain_id, authenticated_signer,
              grant_amount, message_kind, message_type, application_id, system_message_type,
              system_target, system_amount, system_source, system_owner, system_recipient, data)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             "#,
         )
         .bind(&block_hash_str)
@@ -370,20 +365,20 @@ impl SqliteDatabase {
     /// Insert an event within a transaction
     async fn insert_event_tx(
         &self,
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut Transaction<'_, Postgres>,
         block_hash: &CryptoHash,
         transaction_index: usize,
         event_index: usize,
         event: &Event,
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), PostgresError> {
         let block_hash_str = block_hash.to_string();
         let stream_id_str = event.stream_id.to_string();
 
         sqlx::query(
             r#"
-            INSERT INTO events 
+            INSERT INTO events
             (block_hash, transaction_index, event_index, stream_id, stream_index, data)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            VALUES ($1, $2, $3, $4, $5, $6)
             "#,
         )
         .bind(&block_hash_str)
@@ -401,12 +396,12 @@ impl SqliteDatabase {
     /// Insert an oracle response within a transaction
     async fn insert_oracle_response_tx(
         &self,
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut Transaction<'_, Postgres>,
         block_hash: &CryptoHash,
         transaction_index: usize,
         response_index: usize,
         response: &OracleResponse,
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), PostgresError> {
         let block_hash_str = block_hash.to_string();
 
         let (response_type, blob_hash, data): (&str, Option<String>, Option<Vec<u8>>) =
@@ -417,7 +412,7 @@ impl SqliteDatabase {
                 OracleResponse::Blob(blob_id) => ("Blob", Some(blob_id.hash.to_string()), None),
                 OracleResponse::Http(http_response) => {
                     let serialized = bincode::serialize(http_response).map_err(|e| {
-                        SqliteError::Serialization(format!(
+                        PostgresError::Serialization(format!(
                             "Failed to serialize HTTP response: {}",
                             e
                         ))
@@ -427,19 +422,19 @@ impl SqliteDatabase {
                 OracleResponse::Assert => ("Assert", None, None),
                 OracleResponse::Round(round) => {
                     let serialized = bincode::serialize(round).map_err(|e| {
-                        SqliteError::Serialization(format!("Failed to serialize round: {}", e))
+                        PostgresError::Serialization(format!("Failed to serialize round: {}", e))
                     })?;
                     ("Round", None, Some(serialized))
                 }
                 OracleResponse::Event(stream_id, index) => {
                     let serialized = bincode::serialize(&(stream_id, index)).map_err(|e| {
-                        SqliteError::Serialization(format!("Failed to serialize event: {}", e))
+                        PostgresError::Serialization(format!("Failed to serialize event: {}", e))
                     })?;
                     ("Event", None, Some(serialized))
                 }
                 OracleResponse::EventExists(event_exists) => {
                     let serialized = bincode::serialize(event_exists).map_err(|e| {
-                        SqliteError::Serialization(format!(
+                        PostgresError::Serialization(format!(
                             "Failed to serialize event exists: {}",
                             e
                         ))
@@ -450,9 +445,9 @@ impl SqliteDatabase {
 
         sqlx::query(
             r#"
-            INSERT INTO oracle_responses 
+            INSERT INTO oracle_responses
             (block_hash, transaction_index, response_index, response_type, blob_hash, data)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            VALUES ($1, $2, $3, $4, $5, $6)
             "#,
         )
         .bind(&block_hash_str)
@@ -470,11 +465,11 @@ impl SqliteDatabase {
     /// Insert an incoming bundle within a transaction and return the bundle ID
     async fn insert_incoming_bundle_tx(
         &self,
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut Transaction<'_, Postgres>,
         block_hash: &CryptoHash,
         bundle_index: usize,
         incoming_bundle: &IncomingBundle,
-    ) -> Result<i64, SqliteError> {
+    ) -> Result<i64, PostgresError> {
         let block_hash_str = block_hash.to_string();
         let origin_chain_str = incoming_bundle.origin.to_string();
         let action_str = match incoming_bundle.action {
@@ -485,9 +480,10 @@ impl SqliteDatabase {
 
         let result = sqlx::query(
             r#"
-            INSERT INTO incoming_bundles 
+            INSERT INTO incoming_bundles
             (block_hash, bundle_index, origin_chain_id, action, source_height, source_timestamp, source_cert_hash, transaction_index)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id
             "#
         )
         .bind(&block_hash_str)
@@ -498,19 +494,19 @@ impl SqliteDatabase {
         .bind(incoming_bundle.bundle.timestamp.micros() as i64)
         .bind(&source_cert_hash_str)
         .bind(incoming_bundle.bundle.transaction_index as i64)
-        .execute(&mut **tx)
+        .fetch_one(&mut **tx)
         .await?;
 
-        Ok(result.last_insert_rowid())
+        Ok(result.get("id"))
     }
 
     /// Insert a posted message within a transaction
     async fn insert_bundle_message_tx(
         &self,
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut Transaction<'_, Postgres>,
         bundle_id: i64,
         message: &PostedMessage,
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), PostgresError> {
         let authenticated_signer_str = message.authenticated_signer.map(|s| s.to_string());
         let refund_grant_to = message.refund_grant_to.as_ref().map(|s| format!("{s}"));
         let message_kind_str = message_kind_to_string(&message.kind);
@@ -520,11 +516,11 @@ impl SqliteDatabase {
 
         sqlx::query(
             r#"
-            INSERT INTO posted_messages 
-            (bundle_id, message_index, authenticated_signer, grant_amount, refund_grant_to, 
+            INSERT INTO posted_messages
+            (bundle_id, message_index, authenticated_signer, grant_amount, refund_grant_to,
              message_kind, message_type, application_id, system_message_type,
              system_target, system_amount, system_source, system_owner, system_recipient, message_data)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             "#
         )
         .bind(bundle_id)
@@ -549,30 +545,30 @@ impl SqliteDatabase {
     }
 
     /// Get a block by hash
-    pub async fn get_block(&self, hash: &CryptoHash) -> Result<Vec<u8>, SqliteError> {
+    pub async fn get_block(&self, hash: &CryptoHash) -> Result<Vec<u8>, PostgresError> {
         let hash_str = hash.to_string();
-        let row = sqlx::query("SELECT data FROM blocks WHERE hash = ?1")
+        let row = sqlx::query("SELECT data FROM blocks WHERE hash = $1")
             .bind(&hash_str)
             .fetch_optional(&self.pool)
             .await?;
 
         match row {
             Some(row) => Ok(row.get("data")),
-            None => Err(SqliteError::BlockNotFound(*hash)),
+            None => Err(PostgresError::BlockNotFound(*hash)),
         }
     }
 
     /// Get a blob by blob_id
-    pub async fn get_blob(&self, blob_id: &BlobId) -> Result<Vec<u8>, SqliteError> {
+    pub async fn get_blob(&self, blob_id: &BlobId) -> Result<Vec<u8>, PostgresError> {
         let blob_id_str = blob_id.hash.to_string();
-        let row = sqlx::query("SELECT data FROM blobs WHERE hash = ?1")
+        let row = sqlx::query("SELECT data FROM blobs WHERE hash = $1")
             .bind(&blob_id_str)
             .fetch_optional(&self.pool)
             .await?;
 
         match row {
             Some(row) => Ok(row.get("data")),
-            None => Err(SqliteError::BlobNotFound(*blob_id)),
+            None => Err(PostgresError::BlobNotFound(*blob_id)),
         }
     }
 
@@ -580,10 +576,10 @@ impl SqliteDatabase {
     pub async fn get_latest_block_for_chain(
         &self,
         chain_id: &ChainId,
-    ) -> Result<Option<(CryptoHash, BlockHeight, Vec<u8>)>, SqliteError> {
+    ) -> Result<Option<(CryptoHash, BlockHeight, Vec<u8>)>, PostgresError> {
         let chain_id_str = chain_id.to_string();
         let row = sqlx::query(
-            "SELECT hash, height, data FROM blocks WHERE chain_id = ?1 ORDER BY height DESC LIMIT 1"
+            "SELECT hash, height, data FROM blocks WHERE chain_id = $1 ORDER BY height DESC LIMIT 1"
         )
         .bind(&chain_id_str)
         .fetch_optional(&self.pool)
@@ -596,7 +592,7 @@ impl SqliteDatabase {
                 let data: Vec<u8> = row.get("data");
                 let hash = hash_str
                     .parse()
-                    .map_err(|_| SqliteError::Serialization("Invalid hash format".to_string()))?;
+                    .map_err(|_| PostgresError::Serialization("Invalid hash format".to_string()))?;
                 Ok(Some((hash, BlockHeight(height as u64), data)))
             }
             None => Ok(None),
@@ -609,10 +605,10 @@ impl SqliteDatabase {
         chain_id: &ChainId,
         start_height: BlockHeight,
         end_height: BlockHeight,
-    ) -> Result<Vec<(CryptoHash, BlockHeight, Vec<u8>)>, SqliteError> {
+    ) -> Result<Vec<(CryptoHash, BlockHeight, Vec<u8>)>, PostgresError> {
         let chain_id_str = chain_id.to_string();
         let rows = sqlx::query(
-            "SELECT hash, height, data FROM blocks WHERE chain_id = ?1 AND height >= ?2 AND height <= ?3 ORDER BY height ASC"
+            "SELECT hash, height, data FROM blocks WHERE chain_id = $1 AND height >= $2 AND height <= $3 ORDER BY height ASC"
         )
         .bind(&chain_id_str)
         .bind(start_height.0 as i64)
@@ -627,16 +623,16 @@ impl SqliteDatabase {
             let data: Vec<u8> = row.get("data");
             let hash = hash_str
                 .parse()
-                .map_err(|_| SqliteError::Serialization("Invalid hash format".to_string()))?;
+                .map_err(|_| PostgresError::Serialization("Invalid hash format".to_string()))?;
             result.push((hash, BlockHeight(height as u64), data));
         }
         Ok(result)
     }
 
     /// Check if a blob exists
-    pub async fn blob_exists(&self, blob_id: &BlobId) -> Result<bool, SqliteError> {
+    pub async fn blob_exists(&self, blob_id: &BlobId) -> Result<bool, PostgresError> {
         let blob_id_str = blob_id.hash.to_string();
-        let row = sqlx::query("SELECT 1 FROM blobs WHERE hash = ?1 LIMIT 1")
+        let row = sqlx::query("SELECT 1 FROM blobs WHERE hash = $1 LIMIT 1")
             .bind(&blob_id_str)
             .fetch_optional(&self.pool)
             .await?;
@@ -644,9 +640,9 @@ impl SqliteDatabase {
     }
 
     /// Check if a block exists
-    pub async fn block_exists(&self, hash: &CryptoHash) -> Result<bool, SqliteError> {
+    pub async fn block_exists(&self, hash: &CryptoHash) -> Result<bool, PostgresError> {
         let hash_str = hash.to_string();
-        let row = sqlx::query("SELECT 1 FROM blocks WHERE hash = ?1 LIMIT 1")
+        let row = sqlx::query("SELECT 1 FROM blocks WHERE hash = $1 LIMIT 1")
             .bind(&hash_str)
             .fetch_optional(&self.pool)
             .await?;
@@ -657,14 +653,14 @@ impl SqliteDatabase {
     pub async fn get_incoming_bundles_for_block(
         &self,
         block_hash: &CryptoHash,
-    ) -> Result<Vec<(i64, IncomingBundleInfo)>, SqliteError> {
+    ) -> Result<Vec<(i64, IncomingBundleInfo)>, PostgresError> {
         let block_hash_str = block_hash.to_string();
         let rows = sqlx::query(
             r#"
-            SELECT id, bundle_index, origin_chain_id, action, source_height, 
+            SELECT id, bundle_index, origin_chain_id, action, source_height,
                    source_timestamp, source_cert_hash, transaction_index
-            FROM incoming_bundles 
-            WHERE block_hash = ?1 
+            FROM incoming_bundles
+            WHERE block_hash = $1
             ORDER BY bundle_index ASC
             "#,
         )
@@ -680,18 +676,18 @@ impl SqliteDatabase {
                 origin_chain_id: row
                     .get::<String, _>("origin_chain_id")
                     .parse()
-                    .map_err(|_| SqliteError::Serialization("Invalid chain ID".to_string()))?,
+                    .map_err(|_| PostgresError::Serialization("Invalid chain ID".to_string()))?,
                 action: match row.get::<String, _>("action").as_str() {
                     "Accept" => MessageAction::Accept,
                     "Reject" => MessageAction::Reject,
-                    _ => return Err(SqliteError::Serialization("Invalid action".to_string())),
+                    _ => return Err(PostgresError::Serialization("Invalid action".to_string())),
                 },
                 source_height: BlockHeight(row.get::<i64, _>("source_height") as u64),
                 source_timestamp: Timestamp::from(row.get::<i64, _>("source_timestamp") as u64),
                 source_cert_hash: row
                     .get::<String, _>("source_cert_hash")
                     .parse()
-                    .map_err(|_| SqliteError::Serialization("Invalid cert hash".to_string()))?,
+                    .map_err(|_| PostgresError::Serialization("Invalid cert hash".to_string()))?,
                 transaction_index: row.get::<i64, _>("transaction_index") as u32,
             };
             bundles.push((bundle_id, bundle_info));
@@ -703,13 +699,13 @@ impl SqliteDatabase {
     pub async fn get_posted_messages_for_bundle(
         &self,
         bundle_id: i64,
-    ) -> Result<Vec<PostedMessageInfo>, SqliteError> {
+    ) -> Result<Vec<PostedMessageInfo>, PostgresError> {
         let rows = sqlx::query(
             r#"
-            SELECT message_index, authenticated_signer, grant_amount, refund_grant_to, 
+            SELECT message_index, authenticated_signer, grant_amount, refund_grant_to,
                    message_kind, message_data
-            FROM posted_messages 
-            WHERE bundle_id = ?1 
+            FROM posted_messages
+            WHERE bundle_id = $1
             ORDER BY message_index ASC
             "#,
         )
@@ -736,14 +732,14 @@ impl SqliteDatabase {
     pub async fn get_bundles_from_origin_chain(
         &self,
         origin_chain_id: &ChainId,
-    ) -> Result<Vec<(CryptoHash, i64, IncomingBundleInfo)>, SqliteError> {
+    ) -> Result<Vec<(CryptoHash, i64, IncomingBundleInfo)>, PostgresError> {
         let origin_chain_str = origin_chain_id.to_string();
         let rows = sqlx::query(
             r#"
-            SELECT block_hash, id, bundle_index, origin_chain_id, action, source_height, 
+            SELECT block_hash, id, bundle_index, origin_chain_id, action, source_height,
                    source_timestamp, source_cert_hash, transaction_index
-            FROM incoming_bundles 
-            WHERE origin_chain_id = ?1 
+            FROM incoming_bundles
+            WHERE origin_chain_id = $1
             ORDER BY source_height ASC, bundle_index ASC
             "#,
         )
@@ -756,25 +752,25 @@ impl SqliteDatabase {
             let block_hash: CryptoHash = row
                 .get::<String, _>("block_hash")
                 .parse()
-                .map_err(|_| SqliteError::Serialization("Invalid block hash".to_string()))?;
+                .map_err(|_| PostgresError::Serialization("Invalid block hash".to_string()))?;
             let bundle_id: i64 = row.get("id");
             let bundle_info = IncomingBundleInfo {
                 bundle_index: row.get::<i64, _>("bundle_index") as usize,
                 origin_chain_id: row
                     .get::<String, _>("origin_chain_id")
                     .parse()
-                    .map_err(|_| SqliteError::Serialization("Invalid chain ID".to_string()))?,
+                    .map_err(|_| PostgresError::Serialization("Invalid chain ID".to_string()))?,
                 action: match row.get::<String, _>("action").as_str() {
                     "Accept" => MessageAction::Accept,
                     "Reject" => MessageAction::Reject,
-                    _ => return Err(SqliteError::Serialization("Invalid action".to_string())),
+                    _ => return Err(PostgresError::Serialization("Invalid action".to_string())),
                 },
                 source_height: BlockHeight(row.get::<i64, _>("source_height") as u64),
                 source_timestamp: Timestamp::from(row.get::<i64, _>("source_timestamp") as u64),
                 source_cert_hash: row
                     .get::<String, _>("source_cert_hash")
                     .parse()
-                    .map_err(|_| SqliteError::Serialization("Invalid cert hash".to_string()))?,
+                    .map_err(|_| PostgresError::Serialization("Invalid cert hash".to_string()))?,
                 transaction_index: row.get::<i64, _>("transaction_index") as u32,
             };
             bundles.push((block_hash, bundle_id, bundle_info));
@@ -786,13 +782,13 @@ impl SqliteDatabase {
     pub async fn get_operations_for_block(
         &self,
         block_hash: &CryptoHash,
-    ) -> Result<Vec<(usize, Operation)>, SqliteError> {
+    ) -> Result<Vec<(usize, Operation)>, PostgresError> {
         let block_hash_str = block_hash.to_string();
         let rows = sqlx::query(
             r#"
             SELECT operation_index, data
-            FROM operations 
-            WHERE block_hash = ?1 
+            FROM operations
+            WHERE block_hash = $1
             ORDER BY operation_index ASC
             "#,
         )
@@ -805,7 +801,7 @@ impl SqliteDatabase {
             let index = row.get::<i64, _>("operation_index") as usize;
             let data: Vec<u8> = row.get("data");
             let operation: Operation = bincode::deserialize(&data).map_err(|e| {
-                SqliteError::Serialization(format!("Failed to deserialize operation: {}", e))
+                PostgresError::Serialization(format!("Failed to deserialize operation: {}", e))
             })?;
             operations.push((index, operation));
         }
@@ -816,13 +812,13 @@ impl SqliteDatabase {
     pub async fn get_outgoing_messages_for_block(
         &self,
         block_hash: &CryptoHash,
-    ) -> Result<Vec<OutgoingMessage>, SqliteError> {
+    ) -> Result<Vec<OutgoingMessage>, PostgresError> {
         let block_hash_str = block_hash.to_string();
         let rows = sqlx::query(
             r#"
             SELECT destination_chain_id, authenticated_signer, grant_amount, message_kind, data
-            FROM outgoing_messages 
-            WHERE block_hash = ?1 
+            FROM outgoing_messages
+            WHERE block_hash = $1
             ORDER BY transaction_index, message_index ASC
             "#,
         )
@@ -835,14 +831,15 @@ impl SqliteDatabase {
             let destination_str: String = row.get("destination_chain_id");
             let destination = destination_str
                 .parse()
-                .map_err(|_| SqliteError::Serialization("Invalid chain ID".to_string()))?;
+                .map_err(|_| PostgresError::Serialization("Invalid chain ID".to_string()))?;
             let authenticated_signer_str: Option<String> = row.get("authenticated_signer");
             let authenticated_signer = authenticated_signer_str.and_then(|s| s.parse().ok());
             let grant_amount: String = row.get("grant_amount");
             let grant = linera_base::data_types::Amount::from_str(grant_amount.as_str())
-                .map_err(|_| SqliteError::Serialization("Invalid grant amount".to_string()))?;
+                .map_err(|_| PostgresError::Serialization("Invalid grant amount".to_string()))?;
             let kind_str: String = row.get("message_kind");
-            let kind = parse_message_kind(kind_str.as_str()).map_err(SqliteError::Serialization)?;
+            let kind =
+                parse_message_kind(kind_str.as_str()).map_err(PostgresError::Serialization)?;
             let message_bytes: Vec<u8> = row.get("data");
             let message = Self::deserialize_message(message_bytes.as_slice())?;
 
@@ -862,13 +859,13 @@ impl SqliteDatabase {
     pub async fn get_events_for_block(
         &self,
         block_hash: &CryptoHash,
-    ) -> Result<Vec<Event>, SqliteError> {
+    ) -> Result<Vec<Event>, PostgresError> {
         let block_hash_str = block_hash.to_string();
         let rows = sqlx::query(
             r#"
             SELECT stream_id, stream_index, data
-            FROM events 
-            WHERE block_hash = ?1 
+            FROM events
+            WHERE block_hash = $1
             ORDER BY transaction_index, event_index ASC
             "#,
         )
@@ -881,7 +878,7 @@ impl SqliteDatabase {
             let stream_id_str: String = row.get("stream_id");
             let stream_id = stream_id_str
                 .parse()
-                .map_err(|_| SqliteError::Serialization("Invalid stream ID".to_string()))?;
+                .map_err(|_| PostgresError::Serialization("Invalid stream ID".to_string()))?;
             let stream_index = row.get::<i64, _>("stream_index") as u32;
             let value: Vec<u8> = row.get("data");
 
@@ -901,35 +898,45 @@ impl SqliteDatabase {
         epoch: Option<u64>,
         min_operations: Option<usize>,
         min_messages: Option<usize>,
-    ) -> Result<Vec<(CryptoHash, BlockHeight, Timestamp)>, SqliteError> {
+    ) -> Result<Vec<(CryptoHash, BlockHeight, Timestamp)>, PostgresError> {
         let mut query = String::from("SELECT hash, height, timestamp FROM blocks WHERE 1=1");
-        let mut bindings = Vec::new();
+        let mut param_count = 0;
 
-        if let Some(chain_id) = chain_id {
-            query.push_str(" AND chain_id = ?");
-            bindings.push(chain_id.to_string());
+        if chain_id.is_some() {
+            param_count += 1;
+            query.push_str(&format!(" AND chain_id = ${}", param_count));
         }
 
-        if let Some(epoch) = epoch {
-            query.push_str(" AND epoch = ?");
-            bindings.push(epoch.to_string());
+        if epoch.is_some() {
+            param_count += 1;
+            query.push_str(&format!(" AND epoch = ${}", param_count));
         }
 
-        if let Some(min_ops) = min_operations {
-            query.push_str(" AND operation_count >= ?");
-            bindings.push(min_ops.to_string());
+        if min_operations.is_some() {
+            param_count += 1;
+            query.push_str(&format!(" AND operation_count >= ${}", param_count));
         }
 
-        if let Some(min_msgs) = min_messages {
-            query.push_str(" AND message_count >= ?");
-            bindings.push(min_msgs.to_string());
+        if min_messages.is_some() {
+            param_count += 1;
+            query.push_str(&format!(" AND message_count >= ${}", param_count));
         }
 
         query.push_str(" ORDER BY height DESC");
 
         let mut sql_query = sqlx::query(&query);
-        for binding in bindings {
-            sql_query = sql_query.bind(binding);
+
+        if let Some(chain_id) = chain_id {
+            sql_query = sql_query.bind(chain_id.to_string());
+        }
+        if let Some(epoch) = epoch {
+            sql_query = sql_query.bind(epoch as i64);
+        }
+        if let Some(min_ops) = min_operations {
+            sql_query = sql_query.bind(min_ops as i64);
+        }
+        if let Some(min_msgs) = min_messages {
+            sql_query = sql_query.bind(min_msgs as i64);
         }
 
         let rows = sql_query.fetch_all(&self.pool).await?;
@@ -939,7 +946,7 @@ impl SqliteDatabase {
             let hash_str: String = row.get("hash");
             let hash = hash_str
                 .parse()
-                .map_err(|_| SqliteError::Serialization("Invalid hash".to_string()))?;
+                .map_err(|_| PostgresError::Serialization("Invalid hash".to_string()))?;
             let height = BlockHeight(row.get::<i64, _>("height") as u64);
             let timestamp = Timestamp::from(row.get::<i64, _>("timestamp") as u64);
             results.push((hash, height, timestamp));
@@ -951,15 +958,15 @@ impl SqliteDatabase {
     pub async fn get_block_summary(
         &self,
         hash: &CryptoHash,
-    ) -> Result<Option<BlockSummary>, SqliteError> {
+    ) -> Result<Option<BlockSummary>, PostgresError> {
         let hash_str = hash.to_string();
         let row = sqlx::query(
             r#"
             SELECT chain_id, height, timestamp, epoch, state_hash, previous_block_hash,
-                   authenticated_signer, operation_count, incoming_bundle_count, 
+                   authenticated_signer, operation_count, incoming_bundle_count,
                    message_count, event_count, blob_count
-            FROM blocks 
-            WHERE hash = ?1
+            FROM blocks
+            WHERE hash = $1
             "#,
         )
         .bind(&hash_str)
@@ -971,7 +978,7 @@ impl SqliteDatabase {
                 let chain_id_str: String = row.get("chain_id");
                 let chain_id = chain_id_str
                     .parse()
-                    .map_err(|_| SqliteError::Serialization("Invalid chain ID".to_string()))?;
+                    .map_err(|_| PostgresError::Serialization("Invalid chain ID".to_string()))?;
 
                 Ok(Some(BlockSummary {
                     hash: *hash,
@@ -980,7 +987,7 @@ impl SqliteDatabase {
                     timestamp: Timestamp::from(row.get::<i64, _>("timestamp") as u64),
                     epoch: row.get::<i64, _>("epoch") as u64,
                     state_hash: row.get::<String, _>("state_hash").parse().map_err(|_| {
-                        SqliteError::Serialization("Invalid state hash".to_string())
+                        PostgresError::Serialization("Invalid state hash".to_string())
                     })?,
                     previous_block_hash: row
                         .get::<Option<String>, _>("previous_block_hash")
@@ -998,14 +1005,15 @@ impl SqliteDatabase {
     }
 
     /// Serialize a Message with consistent error handling
-    fn serialize_message(message: &Message) -> Result<Vec<u8>, SqliteError> {
-        bincode::serialize(message)
-            .map_err(|e| SqliteError::Serialization(format!("Failed to serialize message: {}", e)))
+    fn serialize_message(message: &Message) -> Result<Vec<u8>, PostgresError> {
+        bincode::serialize(message).map_err(|e| {
+            PostgresError::Serialization(format!("Failed to serialize message: {}", e))
+        })
     }
 
-    fn deserialize_message(data: &[u8]) -> Result<Message, SqliteError> {
+    fn deserialize_message(data: &[u8]) -> Result<Message, PostgresError> {
         bincode::deserialize(data).map_err(|e| {
-            SqliteError::Serialization(format!("Failed to deserialize message: {}", e))
+            PostgresError::Serialization(format!("Failed to deserialize message: {}", e))
         })
     }
 }
@@ -1026,13 +1034,14 @@ pub struct BlockSummary {
     pub event_count: usize,
     pub blob_count: usize,
 }
+
 #[async_trait]
-impl IndexerDatabase for SqliteDatabase {
-    type Error = SqliteError;
+impl IndexerDatabase for PostgresDatabase {
+    type Error = PostgresError;
 
-    type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
+    type Transaction<'a> = sqlx::Transaction<'a, Postgres>;
 
-    async fn begin_transaction(&self) -> Result<Self::Transaction<'_>, SqliteError> {
+    async fn begin_transaction(&self) -> Result<Self::Transaction<'_>, PostgresError> {
         self.begin_transaction().await
     }
 
@@ -1041,7 +1050,7 @@ impl IndexerDatabase for SqliteDatabase {
         tx: &mut Self::Transaction<'_>,
         blob_id: &BlobId,
         data: &[u8],
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), PostgresError> {
         self.insert_blob_tx(tx, blob_id, data).await
     }
 
@@ -1053,27 +1062,27 @@ impl IndexerDatabase for SqliteDatabase {
         height: BlockHeight,
         timestamp: Timestamp,
         data: &[u8],
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), PostgresError> {
         self.insert_block_tx(tx, hash, chain_id, height, timestamp, data)
             .await
     }
 
-    async fn commit_transaction(&self, tx: Self::Transaction<'_>) -> Result<(), SqliteError> {
+    async fn commit_transaction(&self, tx: Self::Transaction<'_>) -> Result<(), PostgresError> {
         self.commit_transaction(tx).await
     }
 
-    async fn get_block(&self, hash: &CryptoHash) -> Result<Vec<u8>, SqliteError> {
+    async fn get_block(&self, hash: &CryptoHash) -> Result<Vec<u8>, PostgresError> {
         self.get_block(hash).await
     }
 
-    async fn get_blob(&self, blob_id: &BlobId) -> Result<Vec<u8>, SqliteError> {
+    async fn get_blob(&self, blob_id: &BlobId) -> Result<Vec<u8>, PostgresError> {
         self.get_blob(blob_id).await
     }
 
     async fn get_latest_block_for_chain(
         &self,
         chain_id: &ChainId,
-    ) -> Result<Option<(CryptoHash, BlockHeight, Vec<u8>)>, SqliteError> {
+    ) -> Result<Option<(CryptoHash, BlockHeight, Vec<u8>)>, PostgresError> {
         self.get_latest_block_for_chain(chain_id).await
     }
 
@@ -1082,37 +1091,37 @@ impl IndexerDatabase for SqliteDatabase {
         chain_id: &ChainId,
         start_height: BlockHeight,
         end_height: BlockHeight,
-    ) -> Result<Vec<(CryptoHash, BlockHeight, Vec<u8>)>, SqliteError> {
+    ) -> Result<Vec<(CryptoHash, BlockHeight, Vec<u8>)>, PostgresError> {
         self.get_blocks_for_chain_range(chain_id, start_height, end_height)
             .await
     }
 
-    async fn blob_exists(&self, blob_id: &BlobId) -> Result<bool, SqliteError> {
+    async fn blob_exists(&self, blob_id: &BlobId) -> Result<bool, PostgresError> {
         self.blob_exists(blob_id).await
     }
 
-    async fn block_exists(&self, hash: &CryptoHash) -> Result<bool, SqliteError> {
+    async fn block_exists(&self, hash: &CryptoHash) -> Result<bool, PostgresError> {
         self.block_exists(hash).await
     }
 
     async fn get_incoming_bundles_for_block(
         &self,
         block_hash: &CryptoHash,
-    ) -> Result<Vec<(i64, IncomingBundleInfo)>, SqliteError> {
+    ) -> Result<Vec<(i64, IncomingBundleInfo)>, PostgresError> {
         self.get_incoming_bundles_for_block(block_hash).await
     }
 
     async fn get_posted_messages_for_bundle(
         &self,
         bundle_id: i64,
-    ) -> Result<Vec<PostedMessageInfo>, SqliteError> {
+    ) -> Result<Vec<PostedMessageInfo>, PostgresError> {
         self.get_posted_messages_for_bundle(bundle_id).await
     }
 
     async fn get_bundles_from_origin_chain(
         &self,
         origin_chain_id: &ChainId,
-    ) -> Result<Vec<(CryptoHash, i64, IncomingBundleInfo)>, SqliteError> {
+    ) -> Result<Vec<(CryptoHash, i64, IncomingBundleInfo)>, PostgresError> {
         self.get_bundles_from_origin_chain(origin_chain_id).await
     }
 }

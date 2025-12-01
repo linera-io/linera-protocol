@@ -63,26 +63,28 @@ COPY linera-persistent linera-persistent
 COPY linera-version linera-version
 COPY linera-views linera-views
 COPY linera-views-derive linera-views-derive
+COPY web web
 COPY linera-witty linera-witty
 COPY linera-witty-macros linera-witty-macros
+COPY scripts scripts
 COPY rust-toolchain* Cargo.* ./
-COPY web web
 
 ENV GIT_COMMIT=${git_commit}
 ENV RUSTFLAGS=${rustflags}
 
-# Build indexer binaries (no scylladb needed for testing)
+
+# Build linera CLI, storage server, server, proxy, and block exporter with scylladb and metrics features
 RUN cargo build ${build_flag:+"$build_flag"} \
-    -p linera-indexer-example \
-    --bin linera-indexer-grpc
+    --bin linera-storage-server \
+    --features $build_features
 
 # Move binaries to avoid directory conflicts and clean up to save space
-RUN mv target/"$build_folder"/linera-indexer-grpc ./
+RUN mv target/"$build_folder"/linera-storage-server ./
 
 # Optionally copy binaries instead of using the build images above
 FROM scratch AS builder_copy
 ARG binaries
-COPY "$binaries"/linera-indexer-grpc ./
+COPY "$binaries"/linera-storage-server ./
 
 FROM builder$copy AS binaries
 
@@ -106,4 +108,4 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 ARG target
 
 # Copy linera CLI, storage server, server, proxy, indexer and exporter binaries
-COPY --from=binaries linera-indexer-grpc ./
+COPY --from=binaries linera-storage-server ./

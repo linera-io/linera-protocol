@@ -15,7 +15,7 @@ A simple, modern blockchain explorer for the Linera protocol built with TypeScri
 - **Frontend**: React 18 with TypeScript
 - **Styling**: Tailwind CSS
 - **Routing**: React Router
-- **Database**: SQLite with better-sqlite3
+- **Database**: PostgreSQL (recommended) or SQLite
 - **Build Tool**: Vite
 - **Icons**: Lucide React
 
@@ -23,7 +23,7 @@ A simple, modern blockchain explorer for the Linera protocol built with TypeScri
 
 - Node.js 16 or higher
 - npm or yarn
-- Access to a Linera indexer SQLite database
+- Access to a Linera indexer database (PostgreSQL or SQLite)
 
 ## Installation
 
@@ -37,17 +37,42 @@ A simple, modern blockchain explorer for the Linera protocol built with TypeScri
    npm install
    ```
 
-3. Set up environment variables (optional):
+3. Set up environment variables:
    ```bash
    cp .env.example .env
-   # Edit .env to set VITE_DB_PATH to your database location
+   ```
+
+   Edit `.env` to configure your database:
+
+   **For PostgreSQL (recommended):**
+   ```bash
+   DATABASE_URL=postgresql://username:password@localhost:5432/database_name
+   ```
+
+   **For SQLite:**
+   ```bash
+   DB_PATH=../docker/indexer-data/indexer.db
    ```
 
 ## Configuration
 
 The explorer uses a client-server architecture:
-- **Frontend**: React app running on port 3001
+- **Frontend**: React app running on port 5173 (Vite dev server)
 - **Backend**: Express API server running on port 3002
+
+### Database Configuration
+
+The backend supports two database types:
+
+**PostgreSQL** (recommended for production):
+- Set the `DATABASE_URL` environment variable
+- Example: `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/linera_indexer`
+- The explorer will automatically use PostgreSQL if DATABASE_URL is set
+
+**SQLite** (for development/testing):
+- Set the `DB_PATH` environment variable
+- Example: `DB_PATH=../docker/indexer-data/indexer.db`
+- Used only when DATABASE_URL is not set
 
 The backend connects to a SQLite database created by the Linera indexer. By default, it looks for the database at `../docker/indexer-data/indexer.db`.
 

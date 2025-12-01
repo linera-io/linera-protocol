@@ -11,9 +11,10 @@ use linera_base::{
     data_types::{BlockHeight, Timestamp},
     identifiers::{BlobId, ChainId},
 };
+use sqlx::Sqlite;
 
 use crate::{
-    db::{DatabaseTransaction, IncomingBundleInfo, IndexerDatabase, PostedMessageInfo},
+    db::{IncomingBundleInfo, IndexerDatabase, PostedMessageInfo},
     grpc::ProcessingError,
 };
 
@@ -48,7 +49,9 @@ impl From<MockDatabaseError> for ProcessingError {
 impl IndexerDatabase for MockFailingDatabase {
     type Error = MockDatabaseError;
 
-    async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, Self::Error> {
+    type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
+
+    async fn begin_transaction(&self) -> Result<Self::Transaction<'_>, Self::Error> {
         // Always fail transaction creation for testing error paths
         Err(MockDatabaseError::Serialization(
             "Mock: Cannot create real transaction".to_string(),
@@ -57,7 +60,7 @@ impl IndexerDatabase for MockFailingDatabase {
 
     async fn insert_blob_tx(
         &self,
-        _tx: &mut DatabaseTransaction<'_>,
+        _tx: &mut Self::Transaction<'_>,
         _blob_id: &BlobId,
         _data: &[u8],
     ) -> Result<(), Self::Error> {
@@ -66,7 +69,7 @@ impl IndexerDatabase for MockFailingDatabase {
 
     async fn insert_block_tx(
         &self,
-        _tx: &mut DatabaseTransaction<'_>,
+        _tx: &mut Self::Transaction<'_>,
         _hash: &CryptoHash,
         _chain_id: &ChainId,
         _height: BlockHeight,
@@ -76,7 +79,7 @@ impl IndexerDatabase for MockFailingDatabase {
         Ok(())
     }
 
-    async fn commit_transaction(&self, _tx: DatabaseTransaction<'_>) -> Result<(), Self::Error> {
+    async fn commit_transaction(&self, _tx: Self::Transaction<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -182,6 +185,8 @@ impl MockSuccessDatabase {
 impl IndexerDatabase for MockSuccessDatabase {
     type Error = MockDatabaseError;
 
+    type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
+
     /// Override the high-level method to succeed and store data
     async fn store_block_with_blobs(
         &self,
@@ -211,7 +216,7 @@ impl IndexerDatabase for MockSuccessDatabase {
 
         Ok(())
     }
-    async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, Self::Error> {
+    async fn begin_transaction(&self) -> Result<Self::Transaction<'_>, Self::Error> {
         // We can't create a real transaction, but for successful testing we can just
         // return an error that indicates we can't create a mock transaction
         Err(MockDatabaseError::Serialization(
@@ -221,7 +226,7 @@ impl IndexerDatabase for MockSuccessDatabase {
 
     async fn insert_blob_tx(
         &self,
-        _tx: &mut DatabaseTransaction<'_>,
+        _tx: &mut Self::Transaction<'_>,
         _blob_id: &BlobId,
         _data: &[u8],
     ) -> Result<(), Self::Error> {
@@ -230,7 +235,7 @@ impl IndexerDatabase for MockSuccessDatabase {
 
     async fn insert_block_tx(
         &self,
-        _tx: &mut DatabaseTransaction<'_>,
+        _tx: &mut Self::Transaction<'_>,
         _hash: &CryptoHash,
         _chain_id: &ChainId,
         _height: BlockHeight,
@@ -240,7 +245,7 @@ impl IndexerDatabase for MockSuccessDatabase {
         Ok(())
     }
 
-    async fn commit_transaction(&self, _tx: DatabaseTransaction<'_>) -> Result<(), Self::Error> {
+    async fn commit_transaction(&self, _tx: Self::Transaction<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
 
