@@ -38,6 +38,7 @@ use crate::{
         requests_scheduler::{in_flight_tracker::Subscribed, request::Cacheable},
         RequestsSchedulerConfig,
     },
+    data_types::{ChainInfo, ChainInfoQuery},
     environment::Environment,
     node::{NodeError, ValidatorNode},
     remote_node::RemoteNode,
@@ -423,6 +424,52 @@ impl<Env: Environment> RequestsScheduler<Env> {
         .await
     }
 
+    /// Queries chain information from a specific validator with automatic deduplication.
+    ///
+    /// This method leverages the request deduplication infrastructure to avoid redundant
+    /// network requests. Multiple concurrent calls with identical or subsumed queries will
+    /// share the result from a single network request.
+    ///
+    /// # Subsumption
+    ///
+    /// ChainInfoQuery supports subsumption: a query requesting more data can serve queries
+    /// requesting subsets. For example, a query with `request_committees=true` and
+    /// `request_pending_message_bundles=true` can serve a query with only
+    /// `request_committees=true`.
+    ///
+    /// # Arguments
+    /// - `peer`: The specific validator node to query
+    /// - `query`: The chain information query specifying what data to retrieve
+    ///
+    /// # Returns
+    /// A boxed `ChainInfo` containing the requested chain state information
+    ///
+    /// # Example
+    /// ```ignore
+    /// let query = ChainInfoQuery::new(chain_id)
+    ///     .with_committees()
+    ///     .with_pending_message_bundles();
+    /// let info = scheduler.handle_chain_info_query(&peer, query).await?;
+    /// ```
+    pub async fn handle_chain_info_query(
+        &self,
+        peer: &RemoteNode<Env::ValidatorNode>,
+        query: ChainInfoQuery,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        self.with_peer(
+            RequestKey::ChainInfo {
+                query: Box::new(query.clone()),
+                validator: peer.public_key,
+            },
+            peer.clone(),
+            |peer| {
+                let query = query.clone();
+                async move { peer.handle_chain_info_query(query).await }
+            },
+        )
+        .await
+    }
+
     /// Returns the alternative peers registered for an in-flight request, if any.
     ///
     /// This can be used to retry a failed request with alternative data sources
@@ -681,9 +728,16 @@ impl<Env: Environment> RequestsScheduler<Env> {
             .await;
 
         if let Ok(success) = shared_result.as_ref() {
-            self.cache
-                .store(key.clone(), Arc::new(success.clone()))
-                .await;
+            match key {
+                RequestKey::ChainInfo { .. } => {
+                    // Don't cache result of ChainInfo queries. Only deduplicate in-flight requests.
+                }
+                _ => {
+                    self.cache
+                        .store(key.clone(), Arc::new(success.clone()))
+                        .await;
+                }
+            }
         }
         result
     }
@@ -1476,6 +1530,67 @@ mod tests {
             total_time < 50,
             "Total time should be less than 50ms, got {}ms",
             total_time
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_chain_info_query_type_conversions() {
+        use assert_matches::assert_matches;
+        use linera_base::{
+            crypto::{CryptoHash, InMemorySigner},
+            data_types::BlockHeight,
+        };
+
+        use crate::{
+            data_types::ChainInfoQuery,
+            test_utils::{MemoryStorageBuilder, TestBuilder},
+        };
+
+        // Create a test environment with one validator
+        let mut builder = TestBuilder::new(
+            MemoryStorageBuilder::default(),
+            1,
+            0,
+            InMemorySigner::new(None),
+        )
+        .await
+        .unwrap();
+
+        // Get the validator node
+        let node = builder.node(0);
+        let public_key = node.name();
+        let peer = RemoteNode { public_key, node };
+
+        // Create a RequestsScheduler
+        let manager: Arc<RequestsScheduler<TestEnvironment>> =
+            Arc::new(RequestsScheduler::with_config(
+                vec![peer.clone()],
+                ScoringWeights::default(),
+                0.1,
+                1000.0,
+                Duration::from_secs(60),
+                100,
+                Duration::from_millis(MAX_REQUEST_TTL_MS),
+                Duration::from_millis(STAGGERED_DELAY_MS),
+            ));
+
+        // Create a test query
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+        let query = ChainInfoQuery::new(chain_id)
+            .with_committees()
+            .test_next_block_height(BlockHeight(0));
+
+        // Call handle_chain_info_query - this verifies:
+        // 1. The method signature is correct
+        // 2. ChainInfoQuery → RequestKey conversion works
+        // 3. RequestResult → Box<ChainInfo> conversion works
+        // 4. The deduplication pipeline accepts ChainInfo requests
+        let result = manager.handle_chain_info_query(&peer, query).await;
+
+        assert_matches!(
+            result,
+            Err(NodeError::BlobsNotFound(_)),
+            "Made up chain cannot be found"
         );
     }
 }
