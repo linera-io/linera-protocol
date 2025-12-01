@@ -10,6 +10,7 @@ pub mod config;
 pub mod node_service;
 pub mod project;
 pub mod storage;
+pub mod task_processor;
 pub mod tracing;
 pub mod util;
 pub mod wallet;
