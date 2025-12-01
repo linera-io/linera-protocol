@@ -26,6 +26,28 @@ metricsPort: 21100
 numShards: 4
 numProxies: 1
 
+# Shard container resource limits
+# These should be calculated based on node size and shard count
+# to ensure cgroup-aware memory/CPU detection works correctly in RocksDB
+shardResources: {}
+# Example:
+#   requests:
+#     cpu: "2"
+#     memory: "8Gi"
+#   limits:
+#     cpu: "4"
+#     memory: "16Gi"
+
+# Proxy container resource limits
+proxyResources: {}
+# Example:
+#   requests:
+#     cpu: "1"
+#     memory: "4Gi"
+#   limits:
+#     cpu: "2"
+#     memory: "8Gi"
+
 # Performance tuning
 # Set to empty string to use default Tokio thread count
 serverTokioThreads: ""

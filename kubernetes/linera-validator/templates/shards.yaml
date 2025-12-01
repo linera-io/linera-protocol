@@ -43,6 +43,10 @@ spec:
         - name: linera-server-initializer
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
+          {{- with .Values.shardResources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command:
             - sh
             - -c
@@ -101,6 +105,10 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
+          {{- with .Values.shardResources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command:
             - sh
             - -c
