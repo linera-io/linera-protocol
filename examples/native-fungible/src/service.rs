@@ -8,8 +8,8 @@ use std::sync::Arc;
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use fungible::Parameters;
 use linera_sdk::{
-    abis::fungible::{NativeFungibleOperation, NativeFungibleTokenAbi},
-    graphql::GraphQLMutationRoot,
+    abis::fungible::{FungibleOperation, FungibleTokenAbi},
+    graphql::GraphQLMutationRoot as _,
     linera_base_types::{AccountOwner, WithServiceAbi},
     Service, ServiceRuntime,
 };
@@ -23,7 +23,7 @@ pub struct NativeFungibleTokenService {
 linera_sdk::service!(NativeFungibleTokenService);
 
 impl WithServiceAbi for NativeFungibleTokenService {
-    type Abi = NativeFungibleTokenAbi;
+    type Abi = FungibleTokenAbi;
 }
 
 impl Service for NativeFungibleTokenService {
@@ -38,7 +38,7 @@ impl Service for NativeFungibleTokenService {
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.clone(),
-            NativeFungibleOperation::mutation_root(self.runtime.clone()),
+            FungibleOperation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish();

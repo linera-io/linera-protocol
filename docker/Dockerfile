@@ -25,7 +25,7 @@ ARG binaries=
 ARG copy=${binaries:+_copy}
 ARG build_flag=--release
 ARG build_folder=release
-ARG build_features=scylladb,metrics,memory-profiling,tempo
+ARG build_features=scylladb,metrics,memory-profiling
 ARG rustflags="-C force-frame-pointers=yes"
 
 FROM rust:1.74-slim-bookworm AS builder
@@ -118,14 +118,4 @@ COPY --from=binaries \
     linera \
     linera-server \
     linera-proxy \
-    ./
-
-COPY --chmod=755 \
-    docker/server-entrypoint.sh \
-    docker/server-init.sh \
-    docker/proxy-entrypoint.sh \
-    docker/proxy-init.sh \
-    docker/compose-server-entrypoint.sh \
-    docker/compose-proxy-entrypoint.sh \
-    docker/compose-server-init.sh \
     ./

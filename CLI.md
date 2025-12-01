@@ -8,6 +8,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera transfer`↴](#linera-transfer)
 * [`linera open-chain`↴](#linera-open-chain)
 * [`linera open-multi-owner-chain`↴](#linera-open-multi-owner-chain)
+* [`linera show-ownership`↴](#linera-show-ownership)
 * [`linera change-ownership`↴](#linera-change-ownership)
 * [`linera set-preferred-owner`↴](#linera-set-preferred-owner)
 * [`linera change-application-permissions`↴](#linera-change-application-permissions)
@@ -18,12 +19,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera sync-balance`↴](#linera-sync-balance)
 * [`linera sync`↴](#linera-sync)
 * [`linera process-inbox`↴](#linera-process-inbox)
-* [`linera query-validator`↴](#linera-query-validator)
-* [`linera query-validators`↴](#linera-query-validators)
-* [`linera sync-validator`↴](#linera-sync-validator)
-* [`linera sync-all-validators`↴](#linera-sync-all-validators)
-* [`linera set-validator`↴](#linera-set-validator)
-* [`linera remove-validator`↴](#linera-remove-validator)
+* [`linera query-shard-info`↴](#linera-query-shard-info)
 * [`linera revoke-epochs`↴](#linera-revoke-epochs)
 * [`linera resource-control-policy`↴](#linera-resource-control-policy)
 * [`linera benchmark`↴](#linera-benchmark)
@@ -60,6 +56,14 @@ This document contains the help content for the `linera` command-line program.
 * [`linera net`↴](#linera-net)
 * [`linera net up`↴](#linera-net-up)
 * [`linera net helper`↴](#linera-net-helper)
+* [`linera validator`↴](#linera-validator)
+* [`linera validator add`↴](#linera-validator-add)
+* [`linera validator batch-query`↴](#linera-validator-batch-query)
+* [`linera validator update`↴](#linera-validator-update)
+* [`linera validator list`↴](#linera-validator-list)
+* [`linera validator query`↴](#linera-validator-query)
+* [`linera validator remove`↴](#linera-validator-remove)
+* [`linera validator sync`↴](#linera-validator-sync)
 * [`linera storage`↴](#linera-storage)
 * [`linera storage delete-all`↴](#linera-storage-delete-all)
 * [`linera storage delete-namespace`↴](#linera-storage-delete-namespace)
@@ -68,6 +72,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera storage list-namespaces`↴](#linera-storage-list-namespaces)
 * [`linera storage list-blob-ids`↴](#linera-storage-list-blob-ids)
 * [`linera storage list-chain-ids`↴](#linera-storage-list-chain-ids)
+* [`linera storage list-event-ids`↴](#linera-storage-list-event-ids)
 
 ## `linera`
 
@@ -80,6 +85,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `transfer` — Transfer funds
 * `open-chain` — Open (i.e. activate) a new chain deriving the UID from an existing one
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
+* `show-ownership` — Display who owns the chain, and how the owners work together proposing blocks
 * `change-ownership` — Change who owns the chain, and how the owners work together proposing blocks
 * `set-preferred-owner` — Change the preferred owner of a chain
 * `change-application-permissions` — Changes the application permissions configuration
@@ -90,12 +96,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `sync-balance` — (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the local balance
 * `sync` — Synchronize the local state of the chain with a quorum validators
 * `process-inbox` — Process all pending incoming messages from the inbox of the given chain by creating as many blocks as needed to execute all (non-failing) messages. Failing messages will be marked as rejected and may bounce to their sender depending on their configuration
-* `query-validator` — Show the version and genesis config hash of a new validator, and print a warning if it is incompatible. Also print some information about the given chain while we are at it
-* `query-validators` — Show the current set of validators for a chain. Also print some information about the given chain while we are at it
-* `sync-validator` — Synchronizes a validator with the local state of chains
-* `sync-all-validators` — Synchronizes all validators with the local state of chains
-* `set-validator` — Add or modify a validator (admin only)
-* `remove-validator` — Remove a validator (admin only)
+* `query-shard-info` — Query validators for shard information about a specific chain
 * `revoke-epochs` — Deprecates all committees up to and including the specified one
 * `resource-control-policy` — View or update the resource control policy
 * `benchmark` — Run benchmarks to test network performance
@@ -116,6 +117,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `chain` — Show the information about a chain
 * `project` — Manage Linera projects
 * `net` — Manage a local Linera Network
+* `validator` — Manage validators in the committee
 * `storage` — Operation on the storage
 
 ###### **Options:**
@@ -135,12 +137,18 @@ Client implementation and command-line tool for the Linera blockchain
 * `--chain-worker-ttl-ms <CHAIN_WORKER_TTL>` — The duration in milliseconds after which an idle chain worker will free its memory
 
   Default value: `30000`
+* `--sender-chain-worker-ttl-ms <SENDER_CHAIN_WORKER_TTL>` — The duration, in milliseconds, after which an idle sender chain worker will free its memory
+
+  Default value: `1000`
 * `--retry-delay-ms <RETRY_DELAY>` — Delay increment for retrying to connect to a validator
 
   Default value: `1000`
 * `--max-retries <MAX_RETRIES>` — Number of times to retry connecting to a validator
 
   Default value: `10`
+* `--chrome-trace-exporter` — Enable OpenTelemetry Chrome JSON exporter for trace data analysis
+* `--chrome-trace-file <CHROME_TRACE_FILE>` — Output file path for Chrome trace JSON format. Can be visualized in chrome://tracing or Perfetto UI
+* `--otlp-exporter-endpoint <OTLP_EXPORTER_ENDPOINT>` — OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature)
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
 * `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries
 * `--blanket-message-policy <BLANKET_MESSAGE_POLICY>` — The policy for handling incoming messages
@@ -156,6 +164,8 @@ Client implementation and command-line tool for the Linera blockchain
     Don't include any messages in blocks, and don't make any decision whether to accept or reject
 
 * `--restrict-chain-ids-to <RESTRICT_CHAIN_IDS_TO>` — A set of chains to restrict incoming messages from. By default, messages from all chains are accepted. To reject messages from all chains, specify an empty string
+* `--reject-message-bundles-without-application-ids <REJECT_MESSAGE_BUNDLES_WITHOUT_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles with at least one message from one of these applications will be accepted
+* `--reject-message-bundles-with-other-application-ids <REJECT_MESSAGE_BUNDLES_WITH_OTHER_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles where all messages are from one of these applications will be accepted
 * `--timings` — Enable timing reports during operations
 * `--timing-interval <TIMING_INTERVAL>` — Interval in seconds between timing reports (defaults to 5)
 
@@ -166,6 +176,36 @@ Client implementation and command-line tool for the Linera blockchain
 * `--blob-download-timeout-ms <BLOB_DOWNLOAD_TIMEOUT>` — The delay when downloading a blob, after which we try a second validator, in milliseconds
 
   Default value: `1000`
+* `--cert-batch-download-timeout-ms <CERTIFICATE_BATCH_DOWNLOAD_TIMEOUT>` — The delay when downloading a batch of certificates, after which we try a second validator, in milliseconds
+
+  Default value: `1000`
+* `--certificate-download-batch-size <CERTIFICATE_DOWNLOAD_BATCH_SIZE>` — Maximum number of certificates that we download at a time from one validator when synchronizing one of our chains
+
+  Default value: `500`
+* `--sender-certificate-download-batch-size <SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE>` — Maximum number of sender certificates we try to download and receive in one go when syncing sender chains
+
+  Default value: `20000`
+* `--max-joined-tasks <MAX_JOINED_TASKS>` — Maximum number of tasks that can are joined concurrently in the client
+
+  Default value: `100`
+* `--max-accepted-latency-ms <MAX_ACCEPTED_LATENCY_MS>` — Maximum expected latency in milliseconds for score normalization
+
+  Default value: `5000`
+* `--cache-ttl-ms <CACHE_TTL_MS>` — Time-to-live for cached responses in milliseconds
+
+  Default value: `2000`
+* `--cache-max-size <CACHE_MAX_SIZE>` — Maximum number of entries in the cache
+
+  Default value: `1000`
+* `--max-request-ttl-ms <MAX_REQUEST_TTL_MS>` — Maximum latency for an in-flight request before we stop deduplicating it (in milliseconds)
+
+  Default value: `200`
+* `--alpha <ALPHA>` — Smoothing factor for Exponential Moving Averages (0 < alpha < 1). Higher values give more weight to recent observations. Typical values are between 0.01 and 0.5. A value of 0.1 means that 10% of the new observation is considered and 90% of the previous average is retained
+
+  Default value: `0.1`
+* `--alternative-peers-retry-delay-ms <ALTERNATIVE_PEERS_RETRY_DELAY_MS>` — Delay in milliseconds between starting requests to different peers. This helps to stagger requests and avoid overwhelming the network
+
+  Default value: `150`
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
 * `--storage-max-concurrent-queries <STORAGE_MAX_CONCURRENT_QUERIES>` — The maximal number of simultaneous queries to the database
 * `--storage-max-stream-queries <STORAGE_MAX_STREAM_QUERIES>` — The maximal number of simultaneous stream queries to the database
@@ -174,12 +214,27 @@ Client implementation and command-line tool for the Linera blockchain
 * `--storage-max-cache-size <STORAGE_MAX_CACHE_SIZE>` — The maximal memory used in the storage cache
 
   Default value: `10000000`
-* `--storage-max-entry-size <STORAGE_MAX_ENTRY_SIZE>` — The maximal size of an entry in the storage cache
+* `--storage-max-value-entry-size <STORAGE_MAX_VALUE_ENTRY_SIZE>` — The maximal size of a value entry in the storage cache
+
+  Default value: `1000000`
+* `--storage-max-find-keys-entry-size <STORAGE_MAX_FIND_KEYS_ENTRY_SIZE>` — The maximal size of a find-keys entry in the storage cache
+
+  Default value: `1000000`
+* `--storage-max-find-key-values-entry-size <STORAGE_MAX_FIND_KEY_VALUES_ENTRY_SIZE>` — The maximal size of a find-key-values entry in the storage cache
 
   Default value: `1000000`
 * `--storage-max-cache-entries <STORAGE_MAX_CACHE_ENTRIES>` — The maximal number of entries in the storage cache
 
   Default value: `1000`
+* `--storage-max-cache-value-size <STORAGE_MAX_CACHE_VALUE_SIZE>` — The maximal memory used in the value cache
+
+  Default value: `10000000`
+* `--storage-max-cache-find-keys-size <STORAGE_MAX_CACHE_FIND_KEYS_SIZE>` — The maximal memory used in the find_keys_by_prefix cache
+
+  Default value: `10000000`
+* `--storage-max-cache-find-key-values-size <STORAGE_MAX_CACHE_FIND_KEY_VALUES_SIZE>` — The maximal memory used in the find_key_values_by_prefix cache
+
+  Default value: `10000000`
 * `--storage-replication-factor <STORAGE_REPLICATION_FACTOR>` — The replication factor for the keyspace
 
   Default value: `1`
@@ -240,6 +295,7 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
 * `--super-owners <SUPER_OWNERS>` — The new super owners
 * `--owners <OWNERS>` — The new regular owners
+* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If not set, this is random like other rounds
 * `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners.
 
    If they are specified there must be exactly one weight for each owner. If no weights are given, every owner will have weight 100.
@@ -267,6 +323,18 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 
 
 
+## `linera show-ownership`
+
+Display who owns the chain, and how the owners work together proposing blocks
+
+**Usage:** `linera show-ownership [OPTIONS]`
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
+
+
+
 ## `linera change-ownership`
 
 Change who owns the chain, and how the owners work together proposing blocks.
@@ -280,6 +348,7 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 * `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
 * `--super-owners <SUPER_OWNERS>` — The new super owners
 * `--owners <OWNERS>` — The new regular owners
+* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If not set, this is random like other rounds
 * `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners.
 
    If they are specified there must be exactly one weight for each owner. If no weights are given, every owner will have weight 100.
@@ -417,90 +486,15 @@ Process all pending incoming messages from the inbox of the given chain by creat
 
 
 
-## `linera query-validator`
+## `linera query-shard-info`
 
-Show the version and genesis config hash of a new validator, and print a warning if it is incompatible. Also print some information about the given chain while we are at it
+Query validators for shard information about a specific chain
 
-**Usage:** `linera query-validator [OPTIONS] <ADDRESS> [CHAIN_ID]`
-
-###### **Arguments:**
-
-* `<ADDRESS>` — The new validator's address
-* `<CHAIN_ID>` — The chain to query. If omitted, query the default chain of the wallet
-
-###### **Options:**
-
-* `--public-key <PUBLIC_KEY>` — The public key of the validator. If given, the signature of the chain query info will be checked
-
-
-
-## `linera query-validators`
-
-Show the current set of validators for a chain. Also print some information about the given chain while we are at it
-
-**Usage:** `linera query-validators [CHAIN_ID]`
+**Usage:** `linera query-shard-info <CHAIN_ID>`
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — The chain to query. If omitted, query the default chain of the wallet
-
-
-
-## `linera sync-validator`
-
-Synchronizes a validator with the local state of chains
-
-**Usage:** `linera sync-validator [OPTIONS] <ADDRESS>`
-
-###### **Arguments:**
-
-* `<ADDRESS>` — The public address of the validator to synchronize
-
-###### **Options:**
-
-* `--chains <CHAINS>` — The chains to synchronize, or the default chain if empty
-
-
-
-## `linera sync-all-validators`
-
-Synchronizes all validators with the local state of chains
-
-**Usage:** `linera sync-all-validators [OPTIONS]`
-
-###### **Options:**
-
-* `--chains <CHAINS>` — The chains to synchronize, or the default chain if empty
-
-
-
-## `linera set-validator`
-
-Add or modify a validator (admin only)
-
-**Usage:** `linera set-validator [OPTIONS] --public-key <PUBLIC_KEY> --account-key <ACCOUNT_KEY> --address <ADDRESS>`
-
-###### **Options:**
-
-* `--public-key <PUBLIC_KEY>` — The public key of the validator
-* `--account-key <ACCOUNT_KEY>` — The public key of the account controlled by the validator
-* `--address <ADDRESS>` — Network address
-* `--votes <VOTES>` — Voting power
-
-  Default value: `1`
-* `--skip-online-check` — Skip the version and genesis config checks
-
-
-
-## `linera remove-validator`
-
-Remove a validator (admin only)
-
-**Usage:** `linera remove-validator --public-key <PUBLIC_KEY>`
-
-###### **Options:**
-
-* `--public-key <PUBLIC_KEY>` — The public key of the validator
+* `<CHAIN_ID>` — The chain to query shard information for
 
 
 
@@ -749,7 +743,7 @@ Run a GraphQL service to explore and extend the chains of the wallet
 
 Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 
-**Usage:** `linera faucet [OPTIONS] --amount <AMOUNT> [CHAIN_ID]`
+**Usage:** `linera faucet [OPTIONS] --amount <AMOUNT> --storage-path <STORAGE_PATH> [CHAIN_ID]`
 
 ###### **Arguments:**
 
@@ -977,7 +971,9 @@ Initialize a wallet from the genesis configuration
 
 ###### **Options:**
 
-* `--genesis <GENESIS_CONFIG_PATH>` — The path to the genesis configuration for a Linera deployment. Either this or `--faucet` must be specified
+* `--genesis <GENESIS_CONFIG_PATH>` — The path to the genesis configuration for a Linera deployment. Either this or `--faucet` must be specified.
+
+   Overrides `--faucet` if provided.
 * `--faucet <FAUCET>` — The address of a faucet
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 
@@ -1207,10 +1203,10 @@ Start a Local Linera Network
 * `--external-protocol <EXTERNAL_PROTOCOL>` — External protocol used, either `grpc` or `grpcs`
 
   Default value: `grpc`
-* `--with-faucet` — If present, a faucet is started using the chain provided by --faucet-chain, or `ChainId::root(1)` if not provided, as root 0 is usually the admin chain
+* `--with-faucet` — If present, a faucet is started using the chain provided by --faucet-chain, or the first non-admin chain if not provided
 
   Default value: `false`
-* `--faucet-chain <FAUCET_CHAIN>` — When using --with-faucet, this specifies the chain on which the faucet will be started. The chain is specified by its root number (0 for the admin chain, 1 for the first non-admin initial chain, etc)
+* `--faucet-chain <FAUCET_CHAIN>` — When using --with-faucet, this specifies the chain on which the faucet will be started. If this is `n`, the `n`-th non-admin chain (lexicographically) in the wallet is selected
 * `--faucet-port <FAUCET_PORT>` — The port on which to run the faucet server
 
   Default value: `8080`
@@ -1220,6 +1216,9 @@ Start a Local Linera Network
 * `--with-block-exporter` — Whether to start a block exporter for each validator
 
   Default value: `false`
+* `--num-block-exporters <NUM_BLOCK_EXPORTERS>` — The number of block exporters to start
+
+  Default value: `1`
 * `--exporter-address <EXPORTER_ADDRESS>` — The address of the block exporter
 
   Default value: `localhost`
@@ -1234,6 +1233,151 @@ Start a Local Linera Network
 Print a bash helper script to make `linera net up` easier to use. The script is meant to be installed in `~/.bash_profile` or sourced when needed
 
 **Usage:** `linera net helper`
+
+
+
+## `linera validator`
+
+Manage validators in the committee
+
+**Usage:** `linera validator <COMMAND>`
+
+###### **Subcommands:**
+
+* `add` — Add a validator to the committee
+* `batch-query` — Query multiple validators using a JSON specification file
+* `update` — Apply multiple validator changes from JSON input
+* `list` — List all validators in the committee
+* `query` — Query a single validator's state and connectivity
+* `remove` — Remove a validator from the committee
+* `sync` — Synchronize chain state to a validator
+
+
+
+## `linera validator add`
+
+Add a validator to the committee.
+
+Adds a new validator with the specified public key, account key, network address, and voting weight. The validator must not already exist in the committee.
+
+**Usage:** `linera validator add [OPTIONS] --public-key <PUBLIC_KEY> --account-key <ACCOUNT_KEY> --address <ADDRESS>`
+
+###### **Options:**
+
+* `--public-key <PUBLIC_KEY>` — Public key of the validator to add
+* `--account-key <ACCOUNT_KEY>` — Account public key for receiving payments and rewards
+* `--address <ADDRESS>` — Network address where the validator can be reached (e.g., grpcs://host:port)
+* `--votes <VOTES>` — Voting weight for consensus (default: 1)
+
+  Default value: `1`
+* `--skip-online-check` — Skip online connectivity verification before adding
+
+
+
+## `linera validator batch-query`
+
+Query multiple validators using a JSON specification file.
+
+Reads validator specifications from a JSON file and queries their state. The JSON should contain an array of validator objects with publicKey and networkAddress.
+
+**Usage:** `linera validator batch-query [OPTIONS] <FILE>`
+
+###### **Arguments:**
+
+* `<FILE>` — Path to JSON file containing validator query specifications
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — Chain ID to query (defaults to default chain)
+
+
+
+## `linera validator update`
+
+Apply multiple validator changes from JSON input.
+
+Reads a JSON object mapping validator public keys to their desired state: - Key with state object (address, votes, accountKey): add or modify validator - Key with null: remove validator - Keys not present: unchanged
+
+Input can be provided via file path, stdin pipe, or shell redirect.
+
+**Usage:** `linera validator update [OPTIONS] [FILE]`
+
+###### **Arguments:**
+
+* `<FILE>` — Path to JSON file with validator changes (omit or use "-" for stdin)
+
+###### **Options:**
+
+* `--dry-run` — Preview changes without applying them
+* `-y`, `--yes` — Skip confirmation prompt (use with caution)
+* `--skip-online-check` — Skip online connectivity checks for validators being added or modified
+
+
+
+## `linera validator list`
+
+List all validators in the committee.
+
+Displays the current validator set with their network addresses, voting weights, and connection status. Optionally filter by minimum voting weight.
+
+**Usage:** `linera validator list [OPTIONS]`
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — Chain ID to query (defaults to default chain)
+* `--min-votes <MIN_VOTES>` — Only show validators with at least this many votes
+
+
+
+## `linera validator query`
+
+Query a single validator's state and connectivity.
+
+Connects to a validator at the specified network address and queries its view of the blockchain state, including block height and committee information.
+
+**Usage:** `linera validator query [OPTIONS] <ADDRESS>`
+
+###### **Arguments:**
+
+* `<ADDRESS>` — Network address of the validator (e.g., grpcs://host:port)
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — Chain ID to query about (defaults to default chain)
+* `--public-key <PUBLIC_KEY>` — Expected public key of the validator (for verification)
+
+
+
+## `linera validator remove`
+
+Remove a validator from the committee.
+
+Removes the validator with the specified public key from the committee. The validator will no longer participate in consensus.
+
+**Usage:** `linera validator remove --public-key <PUBLIC_KEY>`
+
+###### **Options:**
+
+* `--public-key <PUBLIC_KEY>` — Public key of the validator to remove
+
+
+
+## `linera validator sync`
+
+Synchronize chain state to a validator.
+
+Pushes the current chain state from local storage to a validator node, ensuring the validator has up-to-date information about specified chains.
+
+**Usage:** `linera validator sync [OPTIONS] <ADDRESS>`
+
+###### **Arguments:**
+
+* `<ADDRESS>` — Network address of the validator to sync (e.g., grpcs://host:port)
+
+###### **Options:**
+
+* `--chains <CHAINS>` — Chain IDs to synchronize (defaults to all chains in wallet)
+* `--check-online` — Verify validator is online before syncing
 
 
 
@@ -1252,6 +1396,7 @@ Operation on the storage
 * `list-namespaces` — List the namespaces in the database
 * `list-blob-ids` — List the blob IDs in the database
 * `list-chain-ids` — List the chain IDs in the database
+* `list-event-ids` — List the event IDs in the database
 
 
 
@@ -1312,6 +1457,14 @@ List the blob IDs in the database
 List the chain IDs in the database
 
 **Usage:** `linera storage list-chain-ids`
+
+
+
+## `linera storage list-event-ids`
+
+List the event IDs in the database
+
+**Usage:** `linera storage list-event-ids`
 
 
 

@@ -6,7 +6,7 @@ use std::{num::NonZeroU16, str::FromStr};
 use colored::Colorize as _;
 use linera_base::{data_types::Amount, listen_for_shutdown_signals, time::Duration};
 use linera_client::client_options::ResourceControlPolicyConfig;
-use linera_rpc::config::{CrossChainConfig, ExporterServiceConfig};
+use linera_rpc::config::CrossChainConfig;
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
     child::{StorageService, StorageServiceGuard},
@@ -125,7 +125,12 @@ pub async fn handle_net_up_kubernetes(
     faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
+    with_block_exporter: bool,
+    num_block_exporters: usize,
+    indexer_image_name: String,
+    explorer_image_name: String,
     dual_store: bool,
+    path: &Option<String>,
 ) -> anyhow::Result<()> {
     assert!(
         num_initial_validators >= 1,
@@ -149,6 +154,16 @@ pub async fn handle_net_up_kubernetes(
     let shutdown_notifier = CancellationToken::new();
     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
+    let num_block_exporters = if with_block_exporter {
+        assert!(
+            num_block_exporters > 0,
+            "If --with-block-exporter is provided, --num-block-exporters must be greater than 0"
+        );
+        num_block_exporters
+    } else {
+        0
+    };
+
     let config = LocalKubernetesNetConfig {
         network: Network::Grpc,
         testing_prng_seed,
@@ -162,7 +177,11 @@ pub async fn handle_net_up_kubernetes(
         docker_image_name,
         build_mode,
         policy_config,
+        num_block_exporters,
+        indexer_image_name,
+        explorer_image_name,
         dual_store,
+        path_provider: PathProvider::from_path_option(path)?,
     };
     let (mut net, client) = config.instantiate().await?;
     let faucet_service = print_messages_and_create_faucet(
@@ -223,15 +242,11 @@ pub async fn handle_net_up_service(
     let network = NetworkConfig { external, internal };
     let path_provider = PathProvider::from_path_option(path)?;
     let num_proxies = 1; // Local networks currently support exactly 1 proxy.
-    let block_exporters = if with_block_exporter {
-        let exporter_config = ExporterServiceConfig {
-            host: block_exporter_address,
-            port: block_exporter_port.into(),
-        };
-        ExportersSetup::Remote(vec![exporter_config])
-    } else {
-        ExportersSetup::Local(vec![])
-    };
+    let block_exporters = ExportersSetup::new(
+        with_block_exporter,
+        block_exporter_address,
+        block_exporter_port,
+    );
     let config = LocalNetConfig {
         network,
         database,
@@ -303,21 +318,21 @@ async fn print_messages_and_create_faucet(
         "{}",
         format!(
             "export LINERA_WALLET=\"{}\"",
-            client.wallet_path().display()
+            client.wallet_path().display(),
         )
-        .bold()
+        .bold(),
     );
     println!(
         "{}",
         format!(
             "export LINERA_KEYSTORE=\"{}\"",
-            client.keystore_path().display()
+            client.keystore_path().display(),
         )
         .bold()
     );
     println!(
         "{}",
-        format!("export LINERA_STORAGE=\"{}\"\n", client.storage_path()).bold()
+        format!("export LINERA_STORAGE=\"{}\"", client.storage_path()).bold(),
     );
 
     let wallet = client.load_wallet()?;
@@ -325,18 +340,31 @@ async fn print_messages_and_create_faucet(
 
     // Run the faucet,
     let faucet_service = if with_faucet {
-        let faucet_chain_idx = faucet_chain.unwrap_or(0);
-        assert!(
-            num_other_initial_chains > faucet_chain_idx,
-            "num_other_initial_chains must be strictly greater than the faucet chain index if \
-            with_faucet is true"
+        let faucet_chain = if let Some(faucet_chain_idx) = faucet_chain {
+            assert!(
+                num_other_initial_chains > faucet_chain_idx,
+                "num_other_initial_chains must be strictly greater than the faucet chain index if \
+                 with_faucet is true"
+            );
+
+            // This picks a lexicographically faucet_chain_idx-th non-admin chain.
+            Some(
+                chains
+                    .into_iter()
+                    .filter(|chain_id| *chain_id != wallet.genesis_admin_chain())
+                    .nth(faucet_chain_idx as usize)
+                    .expect("there should be at least one non-admin chain"),
+            )
+        } else {
+            None
+        };
+
+        eprintln!("To connect to this network, you can use the following faucet URL:");
+        println!(
+            "{}",
+            format!("export LINERA_FAUCET_URL=\"http://localhost:{faucet_port}\"").bold(),
         );
-        // This picks a lexicographically faucet_chain_idx-th non-admin chain.
-        let faucet_chain = chains
-            .into_iter()
-            .filter(|chain_id| *chain_id != wallet.genesis_admin_chain())
-            .nth(faucet_chain_idx as usize)
-            .unwrap(); // we checked that there are enough chains above, so this should be safe
+
         let service = client
             .run_faucet(Some(faucet_port.into()), faucet_chain, faucet_amount)
             .await?;
@@ -344,6 +372,8 @@ async fn print_messages_and_create_faucet(
     } else {
         None
     };
+
+    println!();
 
     eprintln!(
         "\nREADY!\nPress ^C to terminate the local test network and clean the temporary directory."

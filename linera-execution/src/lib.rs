@@ -22,6 +22,7 @@ mod wasm;
 
 use std::{any::Any, collections::BTreeMap, fmt, ops::RangeInclusive, str::FromStr, sync::Arc};
 
+use allocative::Allocative;
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
@@ -36,13 +37,12 @@ use linera_base::{
         Bytecode, DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate,
         Timestamp,
     },
-    doc_scalar, hex_debug, http,
+    doc_scalar, ensure, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, DataBlobHash, EventId,
-        GenericApplicationId, ModuleId, StreamName,
+        GenericApplicationId, ModuleId, StreamId, StreamName,
     },
     ownership::ChainOwnership,
-    task,
     vm::VmRuntime,
 };
 use linera_views::{batch::Batch, ViewError};
@@ -52,6 +52,7 @@ use thiserror::Error;
 
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;
+use crate::system::EPOCH_STREAM_NAME;
 #[cfg(with_testing)]
 use crate::test_utils::dummy_chain_description;
 #[cfg(all(with_testing, with_wasm_runtime))]
@@ -100,7 +101,7 @@ pub type UserContractInstance = Box<dyn UserContract>;
 pub type UserServiceInstance = Box<dyn UserService>;
 
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
-pub trait UserContractModule: dyn_clone::DynClone + Any + task::Post + Send + Sync {
+pub trait UserContractModule: dyn_clone::DynClone + Any + web_thread::Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
@@ -116,7 +117,7 @@ impl<T: UserContractModule + Send + Sync + 'static> From<T> for UserContractCode
 dyn_clone::clone_trait_object!(UserContractModule);
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
-pub trait UserServiceModule: dyn_clone::DynClone + Any + task::Post + Send + Sync {
+pub trait UserServiceModule: dyn_clone::DynClone + Any + web_thread::Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
@@ -149,40 +150,78 @@ impl UserContractCode {
     }
 }
 
+pub struct JsVec<T>(pub Vec<T>);
+
 #[cfg(web)]
 const _: () = {
     // TODO(#2775): add a vtable pointer into the JsValue rather than assuming the
     // implementor
 
-    impl From<UserContractCode> for JsValue {
-        fn from(code: UserContractCode) -> JsValue {
-            let module: WasmContractModule = *(code.0 as Box<dyn Any>)
-                .downcast()
-                .expect("we only support Wasm modules on the Web for now");
-            module.into()
+    impl web_thread::AsJs for UserContractCode {
+        fn to_js(&self) -> Result<JsValue, JsValue> {
+            ((&*self.0) as &dyn Any)
+                .downcast_ref::<WasmContractModule>()
+                .expect("we only support Wasm modules on the Web for now")
+                .to_js()
+        }
+
+        fn from_js(value: JsValue) -> Result<Self, JsValue> {
+            WasmContractModule::from_js(value).map(Into::into)
         }
     }
 
-    impl From<UserServiceCode> for JsValue {
-        fn from(code: UserServiceCode) -> JsValue {
-            let module: WasmServiceModule = *(code.0 as Box<dyn Any>)
-                .downcast()
-                .expect("we only support Wasm modules on the Web for now");
-            module.into()
+    impl web_thread::Post for UserContractCode {
+        fn transferables(&self) -> js_sys::Array {
+            self.0.transferables()
         }
     }
 
-    impl TryFrom<JsValue> for UserContractCode {
-        type Error = JsValue;
-        fn try_from(value: JsValue) -> Result<Self, JsValue> {
-            WasmContractModule::try_from(value).map(Into::into)
+    impl web_thread::AsJs for UserServiceCode {
+        fn to_js(&self) -> Result<JsValue, JsValue> {
+            ((&*self.0) as &dyn Any)
+                .downcast_ref::<WasmServiceModule>()
+                .expect("we only support Wasm modules on the Web for now")
+                .to_js()
+        }
+
+        fn from_js(value: JsValue) -> Result<Self, JsValue> {
+            WasmServiceModule::from_js(value).map(Into::into)
         }
     }
 
-    impl TryFrom<JsValue> for UserServiceCode {
-        type Error = JsValue;
-        fn try_from(value: JsValue) -> Result<Self, JsValue> {
-            WasmServiceModule::try_from(value).map(Into::into)
+    impl web_thread::Post for UserServiceCode {
+        fn transferables(&self) -> js_sys::Array {
+            self.0.transferables()
+        }
+    }
+
+    impl<T: web_thread::AsJs> web_thread::AsJs for JsVec<T> {
+        fn to_js(&self) -> Result<JsValue, JsValue> {
+            let array = self
+                .0
+                .iter()
+                .map(T::to_js)
+                .collect::<Result<js_sys::Array, _>>()?;
+            Ok(array.into())
+        }
+
+        fn from_js(value: JsValue) -> Result<Self, JsValue> {
+            let array = js_sys::Array::from(&value);
+            let v = array
+                .into_iter()
+                .map(T::from_js)
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(JsVec(v))
+        }
+    }
+
+    impl<T: web_thread::Post> web_thread::Post for JsVec<T> {
+        fn transferables(&self) -> js_sys::Array {
+            let mut array = js_sys::Array::new();
+            for x in &self.0 {
+                array = array.concat(&x.transferables());
+            }
+            array
         }
     }
 };
@@ -271,10 +310,8 @@ pub enum ExecutionError {
     UnauthorizedHttpRequest(reqwest::Url),
     #[error("Attempt to perform an HTTP request to an invalid URL")]
     InvalidUrlForHttpRequest(#[from] url::ParseError),
-    #[error("Failed to send contract code to worker thread: {0:?}")]
-    ContractModuleSend(#[from] linera_base::task::SendError<UserContractCode>),
-    #[error("Failed to send service code to worker thread: {0:?}")]
-    ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
+    #[error("Worker thread failure: {0:?}")]
+    Thread(#[from] web_thread::Error),
     #[error("The chain being queried is not active {0}")]
     InactiveChain(ChainId),
     #[error("Blobs not found: {0:?}")]
@@ -293,7 +330,7 @@ pub enum ExecutionError {
     InvalidEpoch { chain_id: ChainId, epoch: Epoch },
     #[error("Transfer must have positive amount")]
     IncorrectTransferAmount,
-    #[error("Transfer from owned account must be authenticated by the right signer")]
+    #[error("Transfer from owned account must be authenticated by the right owner")]
     UnauthenticatedTransferOwner,
     #[error("The transferred amount must not exceed the balance of the current account {account}: {balance}")]
     InsufficientBalance {
@@ -304,7 +341,7 @@ pub enum ExecutionError {
     FeesExceedFunding { fees: Amount, balance: Amount },
     #[error("Claim must have positive amount")]
     IncorrectClaimAmount,
-    #[error("Claim must be authenticated by the right signer")]
+    #[error("Claim must be authenticated by the right owner")]
     UnauthenticatedClaimOwner,
     #[error("Admin operations are only allowed on the admin chain.")]
     AdminOperationOnNonAdminChain,
@@ -320,6 +357,73 @@ pub enum ExecutionError {
     InternalError(&'static str),
     #[error("UpdateStreams is outdated")]
     OutdatedUpdateStreams,
+}
+
+impl ExecutionError {
+    /// Returns whether this error is caused by an issue in the local node.
+    ///
+    /// Returns `false` whenever the error could be caused by a bad message from a peer.
+    pub fn is_local(&self) -> bool {
+        match self {
+            ExecutionError::ArithmeticError(_)
+            | ExecutionError::UserError(_)
+            | ExecutionError::DecompressionError(_)
+            | ExecutionError::InvalidPromise
+            | ExecutionError::CrossApplicationCallInFinalize { .. }
+            | ExecutionError::ReentrantCall(_)
+            | ExecutionError::ApplicationBytecodeNotFound(_)
+            | ExecutionError::UnsupportedDynamicApplicationLoad(_)
+            | ExecutionError::ExcessiveRead
+            | ExecutionError::ExcessiveWrite
+            | ExecutionError::MaximumFuelExceeded(_)
+            | ExecutionError::MaximumServiceOracleExecutionTimeExceeded
+            | ExecutionError::ServiceOracleResponseTooLarge
+            | ExecutionError::BlockTooLarge
+            | ExecutionError::HttpResponseSizeLimitExceeded { .. }
+            | ExecutionError::UnauthorizedApplication(_)
+            | ExecutionError::UnexpectedOracleResponse
+            | ExecutionError::JsonError(_)
+            | ExecutionError::BcsError(_)
+            | ExecutionError::OracleResponseMismatch
+            | ExecutionError::ServiceOracleQueryOperations(_)
+            | ExecutionError::AssertBefore { .. }
+            | ExecutionError::StreamNameTooLong
+            | ExecutionError::BlobTooLarge
+            | ExecutionError::BytecodeTooLarge
+            | ExecutionError::UnauthorizedHttpRequest(_)
+            | ExecutionError::InvalidUrlForHttpRequest(_)
+            | ExecutionError::InactiveChain(_)
+            | ExecutionError::BlobsNotFound(_)
+            | ExecutionError::EventsNotFound(_)
+            | ExecutionError::InvalidHeaderName(_)
+            | ExecutionError::InvalidHeaderValue(_)
+            | ExecutionError::InvalidEpoch { .. }
+            | ExecutionError::IncorrectTransferAmount
+            | ExecutionError::UnauthenticatedTransferOwner
+            | ExecutionError::InsufficientBalance { .. }
+            | ExecutionError::FeesExceedFunding { .. }
+            | ExecutionError::IncorrectClaimAmount
+            | ExecutionError::UnauthenticatedClaimOwner
+            | ExecutionError::AdminOperationOnNonAdminChain
+            | ExecutionError::InvalidCommitteeEpoch { .. }
+            | ExecutionError::InvalidCommitteeRemoval
+            | ExecutionError::MissingOracleResponse
+            | ExecutionError::UnprocessedStreams
+            | ExecutionError::OutdatedUpdateStreams
+            | ExecutionError::ViewError(ViewError::NotFound(_)) => false,
+            #[cfg(with_wasm_runtime)]
+            ExecutionError::WasmError(_) => false,
+            #[cfg(with_revm)]
+            ExecutionError::EvmError(..) => false,
+            ExecutionError::MissingRuntimeResponse
+            | ExecutionError::ViewError(_)
+            | ExecutionError::ReqwestError(_)
+            | ExecutionError::Thread(_)
+            | ExecutionError::NoNetworkDescriptionFound
+            | ExecutionError::InternalError(_)
+            | ExecutionError::IoError(_) => true,
+        }
+    }
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -381,10 +485,81 @@ pub trait ExecutionRuntimeContext {
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
-    async fn committees_for(
+    /// Returns the committees for the epochs in the given range.
+    async fn get_committees(
         &self,
         epoch_range: RangeInclusive<Epoch>,
-    ) -> Result<BTreeMap<Epoch, Committee>, ViewError>;
+    ) -> Result<BTreeMap<Epoch, Committee>, ExecutionError> {
+        let net_description = self
+            .get_network_description()
+            .await?
+            .ok_or(ExecutionError::NoNetworkDescriptionFound)?;
+        let committee_hashes = futures::future::join_all(
+            (epoch_range.start().0..=epoch_range.end().0).map(|epoch| async move {
+                if epoch == 0 {
+                    // Genesis epoch is stored in NetworkDescription.
+                    Ok((epoch, net_description.genesis_committee_blob_hash))
+                } else {
+                    let event_id = EventId {
+                        chain_id: net_description.admin_chain_id,
+                        stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                        index: epoch,
+                    };
+                    let event = self
+                        .get_event(event_id.clone())
+                        .await?
+                        .ok_or_else(|| ExecutionError::EventsNotFound(vec![event_id]))?;
+                    Ok((epoch, bcs::from_bytes(&event)?))
+                }
+            }),
+        )
+        .await;
+        let missing_events = committee_hashes
+            .iter()
+            .filter_map(|result| {
+                if let Err(ExecutionError::EventsNotFound(event_ids)) = result {
+                    return Some(event_ids);
+                }
+                None
+            })
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>();
+        ensure!(
+            missing_events.is_empty(),
+            ExecutionError::EventsNotFound(missing_events)
+        );
+        let committee_hashes = committee_hashes
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+        let committees = futures::future::join_all(committee_hashes.into_iter().map(
+            |(epoch, committee_hash)| async move {
+                let blob_id = BlobId::new(committee_hash, BlobType::Committee);
+                let committee_blob = self
+                    .get_blob(blob_id)
+                    .await?
+                    .ok_or_else(|| ExecutionError::BlobsNotFound(vec![blob_id]))?;
+                Ok((Epoch(epoch), bcs::from_bytes(committee_blob.bytes())?))
+            },
+        ))
+        .await;
+        let missing_blobs = committees
+            .iter()
+            .filter_map(|result| {
+                if let Err(ExecutionError::BlobsNotFound(blob_ids)) = result {
+                    return Some(blob_ids);
+                }
+                None
+            })
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>();
+        ensure!(
+            missing_blobs.is_empty(),
+            ExecutionError::BlobsNotFound(missing_blobs)
+        );
+        committees.into_iter().collect()
+    }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
@@ -407,9 +582,9 @@ pub trait ExecutionRuntimeContext {
 pub struct OperationContext {
     /// The current chain ID.
     pub chain_id: ChainId,
-    /// The authenticated signer of the operation, if any.
+    /// The authenticated owner of the operation, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<AccountOwner>,
+    pub authenticated_owner: Option<AccountOwner>,
     /// The current block height.
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
@@ -426,9 +601,9 @@ pub struct MessageContext {
     pub origin: ChainId,
     /// Whether the message was rejected by the original receiver and is now bouncing back.
     pub is_bouncing: bool,
-    /// The authenticated signer of the operation that created the message, if any.
+    /// The authenticated owner of the operation that created the message, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<AccountOwner>,
+    pub authenticated_owner: Option<AccountOwner>,
     /// Where to send a refund for the unused part of each grant after execution, if any.
     #[debug(skip_if = Option::is_none)]
     pub refund_grant_to: Option<Account>,
@@ -478,9 +653,9 @@ impl From<OperationContext> for ProcessStreamsContext {
 pub struct FinalizeContext {
     /// The current chain ID.
     pub chain_id: ChainId,
-    /// The authenticated signer of the operation, if any.
+    /// The authenticated owner of the operation, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<AccountOwner>,
+    pub authenticated_owner: Option<AccountOwner>,
     /// The current block height.
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
@@ -666,6 +841,9 @@ pub trait BaseRuntime {
 
     /// Asserts the existence of a data blob with the given hash.
     fn assert_data_blob_exists(&mut self, hash: DataBlobHash) -> Result<(), ExecutionError>;
+
+    /// Returns true if the corresponding contract uses a zero amount of storage.
+    fn has_empty_storage(&mut self, application: ApplicationId) -> Result<bool, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
@@ -684,8 +862,8 @@ pub trait ServiceRuntime: BaseRuntime {
 }
 
 pub trait ContractRuntime: BaseRuntime {
-    /// The authenticated signer for this execution, if there is one.
-    fn authenticated_signer(&mut self) -> Result<Option<AccountOwner>, ExecutionError>;
+    /// The authenticated owner for this execution, if there is one.
+    fn authenticated_owner(&mut self) -> Result<Option<AccountOwner>, ExecutionError>;
 
     /// If the current message (if there is one) was rejected by its destination and is now
     /// bouncing back.
@@ -797,6 +975,10 @@ pub trait ContractRuntime: BaseRuntime {
         required_application_ids: Vec<ApplicationId>,
     ) -> Result<ApplicationId, ExecutionError>;
 
+    /// Returns the next application index, which is equal to the number of
+    /// new applications created so far in this block.
+    fn peek_application_index(&mut self) -> Result<u32, ExecutionError>;
+
     /// Creates a new data blob and returns its hash.
     fn create_data_blob(&mut self, bytes: Vec<u8>) -> Result<DataBlobHash, ExecutionError>;
 
@@ -808,7 +990,7 @@ pub trait ContractRuntime: BaseRuntime {
         vm_runtime: VmRuntime,
     ) -> Result<ModuleId, ExecutionError>;
 
-    /// Returns the round in which this block was validated.
+    /// Returns the multi-leader round in which this block was validated.
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;
 
     /// Writes a batch of changes.
@@ -816,7 +998,7 @@ pub trait ContractRuntime: BaseRuntime {
 }
 
 /// An operation to be executed in a block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub enum Operation {
     /// A system operation.
     System(Box<SystemOperation>),
@@ -832,7 +1014,7 @@ pub enum Operation {
 impl BcsHashable<'_> for Operation {}
 
 /// A message to be sent and possibly executed in the receiver's block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub enum Message {
     /// A system message.
     System(SystemMessage),
@@ -908,7 +1090,7 @@ pub enum QueryResponse {
 }
 
 /// The kind of outgoing message being sent.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Copy, Allocative)]
 pub enum MessageKind {
     /// The message can be skipped or rejected. No receipt is requested.
     Simple,
@@ -934,13 +1116,13 @@ impl Display for MessageKind {
 }
 
 /// A posted message together with routing information.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject, Allocative)]
 pub struct OutgoingMessage {
     /// The destination of the message.
     pub destination: ChainId,
     /// The user authentication carried by the message, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<AccountOwner>,
+    pub authenticated_owner: Option<AccountOwner>,
     /// A grant to pay for the message execution.
     #[debug(skip_if = Amount::is_zero)]
     pub grant: Amount,
@@ -956,11 +1138,11 @@ pub struct OutgoingMessage {
 impl BcsHashable<'_> for OutgoingMessage {}
 
 impl OutgoingMessage {
-    /// Creates a new simple outgoing message with no grant and no authenticated signer.
+    /// Creates a new simple outgoing message with no grant and no authenticated owner.
     pub fn new(recipient: ChainId, message: impl Into<Message>) -> Self {
         OutgoingMessage {
             destination: recipient,
-            authenticated_signer: None,
+            authenticated_owner: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
             kind: MessageKind::Simple,
@@ -974,18 +1156,18 @@ impl OutgoingMessage {
         self
     }
 
-    /// Returns the same message, with the specified authenticated signer.
-    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<AccountOwner>) -> Self {
-        self.authenticated_signer = authenticated_signer;
+    /// Returns the same message, with the specified authenticated owner.
+    pub fn with_authenticated_owner(mut self, authenticated_owner: Option<AccountOwner>) -> Self {
+        self.authenticated_owner = authenticated_owner;
         self
     }
 }
 
 impl OperationContext {
     /// Returns an account for the refund.
-    /// Returns `None` if there is no authenticated signer of the [`OperationContext`].
+    /// Returns `None` if there is no authenticated owner of the [`OperationContext`].
     fn refund_grant_to(&self) -> Option<Account> {
-        self.authenticated_signer.map(|owner| Account {
+        self.authenticated_owner.map(|owner| Account {
             chain_id: self.chain_id,
             owner,
         })
@@ -1076,33 +1258,21 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+        let pinned = self.blobs.pin();
+        let genesis_committee_blob_hash = pinned
+            .iter()
+            .find(|(_, blob)| blob.content().blob_type() == BlobType::Committee)
+            .map_or_else(
+                || CryptoHash::test_hash("genesis committee"),
+                |(_, blob)| blob.id().hash,
+            );
         Ok(Some(NetworkDescription {
             admin_chain_id: dummy_chain_description(0).id(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),
             genesis_timestamp: Timestamp::from(0),
-            genesis_committee_blob_hash: CryptoHash::test_hash("genesis committee"),
+            genesis_committee_blob_hash,
             name: "dummy network description".to_string(),
         }))
-    }
-
-    async fn committees_for(
-        &self,
-        epoch_range: RangeInclusive<Epoch>,
-    ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
-        let pinned = self.blobs.pin();
-        let committee_blob_bytes = pinned
-            .values()
-            .find(|blob| blob.content().blob_type() == BlobType::Committee)
-            .ok_or_else(|| ViewError::NotFound("committee not found".to_owned()))?
-            .bytes()
-            .to_vec();
-        let committee: Committee = bcs::from_bytes(&committee_blob_bytes)?;
-        // TODO(#4146): this currently assigns the first found committee to all epochs,
-        // which should be fine for the tests we have at the moment, but might not be in
-        // the future.
-        Ok((epoch_range.start().0..=epoch_range.end().0)
-            .map(|epoch| (Epoch::from(epoch), committee.clone()))
-            .collect())
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

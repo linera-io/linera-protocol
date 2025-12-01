@@ -123,6 +123,10 @@ where
         self.store.max_stream_queries()
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
+        self.store.root_key()
+    }
+
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         self.store.read_value_bytes(key).await
     }
@@ -131,13 +135,13 @@ where
         self.store.contains_key(key).await
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error> {
         self.store.contains_keys(keys).await
     }
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         self.store.read_multi_values_bytes(keys).await
     }
@@ -190,11 +194,8 @@ where
         D::list_all(config).await
     }
 
-    async fn list_root_keys(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        D::list_root_keys(config, namespace).await
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, Self::Error> {
+        self.database.list_root_keys().await
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {

@@ -3,6 +3,11 @@ kind: ConfigMap
 metadata:
   name: scylla-config
   namespace: scylla
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    meta.helm.sh/release-name: linera-core
+    meta.helm.sh/release-namespace: default
 data:
   scylla.yaml: |
     query_tombstone_page_limit: 200000

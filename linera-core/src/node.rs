@@ -51,6 +51,8 @@ pub trait ValidatorNode {
     #[cfg(web)]
     type NotificationStream: Stream<Item = Notification> + Unpin;
 
+    fn address(&self) -> String;
+
     /// Proposes a new block.
     async fn handle_block_proposal(
         &self,
@@ -163,6 +165,12 @@ pub trait ValidatorNode {
 
     /// Returns the missing `Blob`s by their IDs.
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError>;
+
+    /// Gets shard information for a specific chain.
+    async fn get_shard_info(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<crate::data_types::ShardInfo, NodeError>;
 }
 
 /// Turn an address into a validator node.
@@ -230,7 +238,8 @@ pub enum NodeError {
     WrongRound(Round),
 
     #[error(
-        "Was expecting block height {expected_block_height} but found {found_block_height} instead"
+        "Chain is expecting a next block at height {expected_block_height} but the given block \
+        is at height {found_block_height} instead"
     )]
     UnexpectedBlockHeight {
         expected_block_height: BlockHeight,
@@ -283,7 +292,7 @@ pub enum NodeError {
     CannotResolveValidatorAddress { address: String },
     #[error("Subscription error due to incorrect transport. Was expecting gRPC, instead found: {transport}")]
     SubscriptionError { transport: String },
-    #[error("Failed to subscribe; tonic status: {status}")]
+    #[error("Failed to subscribe; tonic status: {status:?}")]
     SubscriptionFailed { status: String },
 
     #[error("Node failed to provide a 'last used by' certificate for the blob")]

@@ -16,7 +16,7 @@ spec:
       name: metrics
   selector:
     app: proxy
-  clusterIp: None
+  clusterIP: None
 
 ---
 apiVersion: v1
@@ -63,12 +63,32 @@ spec:
         - name: linera-proxy-initializer
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
-          command: ["./proxy-init.sh"]
+          command:
+            - sh
+            - -c
+            - |
+              while true; do
+                ./linera storage check-existence --storage "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+                status=$?
+                if [ "$status" -eq 0 ]; then
+                  echo "Database already exists, no need to initialize."
+                  exit 0
+                else
+                  if [ "$status" -eq 1 ]; then
+                    echo "Database does not exist, retrying in 5 seconds..."
+                  else
+                    echo "An unexpected error occurred (status: $status), retrying in 5 seconds..."
+                  fi
+                  sleep 5
+                fi
+              done
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
             - name: RUST_BACKTRACE
               value: "1"
+            - name: LINERA_OTLP_EXPORTER_ENDPOINT
+              value: {{ .Values.otlpExporterEndpoint }}
       containers:
         - name: linera-proxy
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
@@ -78,10 +98,21 @@ spec:
               name: linera-port
             - containerPort: 20100
               name: private-port
-          command: ["./proxy-entrypoint.sh", {{ .Values.storageReplicationFactor | quote }}]
+          command:
+            - sh
+            - -c
+            - |
+              ORDINAL="${HOSTNAME##*-}"
+              exec ./linera-proxy \
+                --storage scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042 \
+                --storage-replication-factor {{ .Values.storageReplicationFactor | quote }} \
+                --id "$ORDINAL" \
+                /config/server.json
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
+            - name: LINERA_OTLP_EXPORTER_ENDPOINT
+              value: {{ .Values.otlpExporterEndpoint }}
           volumeMounts:
             - name: config
               mountPath: "/config"

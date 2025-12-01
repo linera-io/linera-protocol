@@ -1,7 +1,7 @@
 package linera:app;
 
 interface contract-runtime-api {
-    authenticated-signer: func() -> option<account-owner>;
+    authenticated-owner: func() -> option<account-owner>;
     message-is-bouncing: func() -> option<bool>;
     message-origin-chain-id: func() -> option<chain-id>;
     authenticated-caller-id: func() -> option<application-id>;
@@ -23,6 +23,7 @@ interface contract-runtime-api {
     consume-fuel: func(fuel: u64);
     validation-round: func() -> option<u32>;
     write-batch: func(operations: list<write-operation>);
+    has-empty-storage: func(application: application-id) -> bool;
 
     record account {
         chain-id: chain-id,
@@ -69,6 +70,7 @@ interface contract-runtime-api {
     record chain-ownership {
         super-owners: list<account-owner>,
         owners: list<tuple<account-owner, u64>>,
+        first-leader: option<account-owner>,
         multi-leader-rounds: u32,
         open-multi-leader-rounds: bool,
         timeout-config: timeout-config,

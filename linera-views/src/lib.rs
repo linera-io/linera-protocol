@@ -74,6 +74,9 @@ pub mod context;
 /// Common definitions used for views and backends.
 pub mod common;
 
+/// Definitions for the LRU cache.
+pub mod lru_prefix_cache;
+
 mod error;
 pub use error::ViewError;
 
@@ -114,10 +117,14 @@ pub use backends::rocks_db;
 #[cfg(with_scylladb)]
 pub use backends::scylla_db;
 pub use backends::{journaling, lru_caching, memory, value_splitting};
-pub use views::{
-    bucket_queue_view, collection_view, hashable_wrapper, key_value_store_view, log_view, map_view,
-    queue_view, reentrant_collection_view, register_view, set_view,
-};
 /// Re-exports used by the derive macros of this library.
 #[doc(hidden)]
-pub use {generic_array, sha3};
+#[allow(deprecated)]
+pub use generic_array;
+#[doc(hidden)]
+pub use sha3;
+pub use views::{
+    bucket_queue_view, collection_view, hashable_wrapper, historical_hash_wrapper,
+    key_value_store_view, log_view, map_view, queue_view, reentrant_collection_view, register_view,
+    set_view,
+};

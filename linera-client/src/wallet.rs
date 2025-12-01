@@ -45,7 +45,7 @@ impl Wallet {
     }
 
     pub fn insert(&mut self, chain: UserChain) {
-        if self.default.is_none() {
+        if self.default.is_none() && chain.owner.is_some() {
             self.default = Some(chain.chain_id);
         }
 

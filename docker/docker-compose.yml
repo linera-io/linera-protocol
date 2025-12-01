@@ -11,9 +11,6 @@ services:
       - caddy_config:/config
     environment:
       - DOMAIN=${DOMAIN:-localhost}
-      - EMAIL=${ACME_EMAIL:-admin@example.com}
-    depends_on:
-      - proxy
     labels:
       com.centurylinklabs.watchtower.enable: "true"
 
@@ -26,7 +23,7 @@ services:
       - /sys:/host/sys
       - /etc/sysctl.d:/host/sysctl.d
       - ./compose-scylla-setup.sh:/setup.sh:ro
-    command: ["/bin/bash", "/setup.sh", "--persist"]
+    command: [ "/bin/bash", "/setup.sh", "--persist" ]
     restart: "no"
 
   scylla:
@@ -50,7 +47,13 @@ services:
     container_name: proxy
     ports:
       - "19100:443"
-    command: ["./compose-proxy-entrypoint.sh", "1"]
+    command:
+      - ./linera-proxy
+      - --storage
+      - scylladb:tcp:scylla:9042
+      - --storage-replication-factor
+      - "1"
+      - /config/server.json
     volumes:
       - .:/config
     labels:
@@ -63,7 +66,17 @@ services:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:latest}"
     deploy:
       replicas: 4
-    command: ["./compose-server-entrypoint.sh", "scylladb:tcp:scylla:9042", "1"]
+    command:
+      - ./linera-server
+      - run
+      - --storage
+      - scylladb:tcp:scylla:9042
+      - --server
+      - /config/server.json
+      - --shard
+      - "0"
+      - --storage-replication-factor
+      - "1"
     volumes:
       - .:/config
     labels:
@@ -75,7 +88,30 @@ services:
   shard-init:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:latest}"
     container_name: shard-init
-    command: ["./compose-server-init.sh", "scylladb:tcp:scylla:9042", "1"]
+    command:
+      - sh
+      - -c
+      - |
+        while true; do
+          ./linera storage check-existence --storage scylladb:tcp:scylla:9042
+          status=$$?
+          if [ $$status -eq 0 ]; then
+            echo "Database already exists, no need to initialize."
+            exit 0
+          elif [ $$status -eq 1 ]; then
+            echo "Database does not exist, attempting to initialize..."
+            if ./linera storage initialize --storage scylladb:tcp:scylla:9042 --genesis /config/genesis.json; then
+              echo "Initialization successful."
+              exit 0
+            else
+              echo "Initialization failed, retrying in 5 seconds..."
+              sleep 5
+            fi
+          else
+            echo "An unexpected error occurred (status: $$status), retrying in 5 seconds..."
+            sleep 5
+          fi
+        done
     volumes:
       - .:/config
     depends_on:
@@ -109,7 +145,7 @@ services:
     container_name: watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: ["--interval", "30"]
+    command: [ "--interval", "30" ]
 
 volumes:
   linera-scylla-data:

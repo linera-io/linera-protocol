@@ -176,7 +176,7 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
     store.write_batch(batch).await.unwrap();
     for key_prefix in keys
         .iter()
-        .flat_map(|key| (0..key.len()).map(|u| &key[..=u]))
+        .flat_map(|key| (0..=key.len()).map(|u| &key[..u]))
     {
         // Getting the find_keys_by_prefix / find_key_values_by_prefix
         let len_prefix = key_prefix.len();
@@ -233,8 +233,8 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
             test_exists.push(store.contains_key(key).await.unwrap());
             values_single_read.push(store.read_value_bytes(key).await.unwrap());
         }
-        let test_exists_direct = store.contains_keys(keys.clone()).await.unwrap();
-        let values_read = store.read_multi_values_bytes(keys).await.unwrap();
+        let test_exists_direct = store.contains_keys(&keys).await.unwrap();
+        let values_read = store.read_multi_values_bytes(&keys).await.unwrap();
         assert_eq!(values, values_read);
         assert_eq!(values, values_single_read);
         let values_read_stat = values_read.iter().map(|x| x.is_some()).collect::<Vec<_>>();
@@ -470,7 +470,7 @@ where
     // We reconnect so that the read is not using the cache.
     let store = D::connect(&config, &namespace).await.unwrap();
     let store = store.open_exclusive(&[]).unwrap();
-    let values_read = store.read_multi_values_bytes(keys).await.unwrap();
+    let values_read = store.read_multi_values_bytes(&keys).await.unwrap();
     assert_eq!(values, values_read);
 }
 
@@ -780,8 +780,8 @@ where
     {
         let size = 3;
         let mut rng = make_deterministic_rng();
-        let store = D::connect(&config, &namespace).await.expect("store");
-        let shared_store = store.open_shared(&[]).expect("shared store");
+        let database = D::connect(&config, &namespace).await.expect("store");
+        let shared_store = database.open_shared(&[]).expect("shared store");
         root_keys.push(vec![]);
         let mut batch = Batch::new();
         for _ in 0..2 {
@@ -793,7 +793,8 @@ where
 
         for _ in 0..20 {
             let root_key = get_random_byte_vector(&mut rng, &[], 4);
-            let exclusive_store = store.open_exclusive(&root_key).expect("exclusive store");
+            let exclusive_store = database.open_exclusive(&root_key).expect("exclusive store");
+            assert_eq!(exclusive_store.root_key().unwrap(), root_key);
             root_keys.push(root_key.clone());
             let size_select = rng.gen_range(0..size);
             let mut batch = Batch::new();
@@ -809,9 +810,10 @@ where
         }
     }
 
-    let read_root_keys = D::list_root_keys(&config, &namespace)
-        .await
-        .expect("read_root_keys");
+    let read_root_keys = {
+        let database = D::connect(&config, &namespace).await.expect("store");
+        database.list_root_keys().await.expect("read_root_keys")
+    };
     let set_root_keys = root_keys.iter().cloned().collect::<HashSet<_>>();
     for read_root_key in &read_root_keys {
         assert!(set_root_keys.contains(read_root_key));
@@ -821,9 +823,9 @@ where
     for root_key in read_root_keys {
         let store = D::connect(&config, &namespace)
             .await
-            .expect("store")
+            .expect("database")
             .open_exclusive(&root_key)
-            .expect("open_exclusive");
+            .expect("store");
         let keys = store.find_keys_by_prefix(&prefix).await.expect("keys");
         for key in keys {
             let mut big_key = prefix.clone();
@@ -833,6 +835,21 @@ where
         }
     }
     assert_eq!(keys, read_keys);
+
+    // Checking prefix freeness of the (root_key, key). This is a
+    // common problem that needs to be tested.
+    let database = D::connect_test_namespace().await.expect("database");
+    let store1 = database.open_shared(&[2, 3, 4, 5]).expect("store1");
+    let mut batch = Batch::new();
+    batch.put_key_value_bytes(vec![6, 7], vec![123, 135]);
+    store1.write_batch(batch).await.expect("write_batch");
+
+    let store2 = database.open_shared(&[]).expect("store2");
+    let key_values = store2
+        .find_key_values_by_prefix(&[2])
+        .await
+        .expect("key_values");
+    assert_eq!(key_values.len(), 0);
 }
 
 /// A store can be in exclusive access where it stores the absence of values

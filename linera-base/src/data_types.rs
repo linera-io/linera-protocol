@@ -12,12 +12,12 @@ use std::{
     hash::Hash,
     io, iter,
     num::ParseIntError,
-    ops::{Bound, RangeBounds},
     path::Path,
     str::FromStr,
     sync::Arc,
 };
 
+use allocative::{Allocative, Visitor};
 use alloy_primitives::U256;
 use async_graphql::{InputObject, SimpleObject};
 use custom_debug_derive::Debug;
@@ -52,6 +52,12 @@ use crate::{
     derive(test_strategy::Arbitrary)
 )]
 pub struct Amount(u128);
+
+impl Allocative for Amount {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        visitor.visit_simple_sized::<Self>();
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "Amount")]
@@ -88,6 +94,20 @@ impl From<Amount> for U256 {
     }
 }
 
+/// Error converting from `U256` to `Amount`.
+/// This can fail since `Amount` is a `u128`.
+#[derive(Error, Debug)]
+#[error("Failed to convert U256 to Amount. {0} has more than 128 bits")]
+pub struct AmountConversionError(U256);
+
+impl TryFrom<U256> for Amount {
+    type Error = AmountConversionError;
+    fn try_from(value: U256) -> Result<Amount, Self::Error> {
+        let value = u128::try_from(&value).map_err(|_| AmountConversionError(value))?;
+        Ok(Amount(value))
+    }
+}
+
 /// A block height to identify blocks in a chain.
 #[derive(
     Eq,
@@ -104,13 +124,25 @@ impl From<Amount> for U256 {
     WitType,
     WitLoad,
     WitStore,
+    Allocative,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub struct BlockHeight(pub u64);
 
 /// An identifier for successive attempts to decide a value in a consensus protocol.
 #[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Copy,
+    Clone,
+    Hash,
+    Default,
+    Debug,
+    Serialize,
+    Deserialize,
+    Allocative,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum Round {
@@ -141,6 +173,7 @@ pub enum Round {
     WitType,
     WitLoad,
     WitStore,
+    Allocative,
 )]
 pub struct TimeDelta(u64);
 
@@ -193,6 +226,7 @@ impl TimeDelta {
     WitType,
     WitLoad,
     WitStore,
+    Allocative,
 )]
 pub struct Timestamp(u64);
 
@@ -400,6 +434,11 @@ macro_rules! impl_wrapped_number {
                 Self(val)
             }
 
+            /// Returns the absolute difference between `self` and `other`.
+            pub fn abs_diff(self, other: Self) -> Self {
+                Self(self.0.abs_diff(other.0))
+            }
+
             /// Checked in-place addition.
             pub fn try_add_assign(&mut self, other: Self) -> Result<(), ArithmeticError> {
                 self.0 = self
@@ -427,6 +466,11 @@ macro_rules! impl_wrapped_number {
                     .checked_sub(other.0)
                     .ok_or(ArithmeticError::Underflow)?;
                 Ok(())
+            }
+
+            /// Saturating division.
+            pub fn saturating_div(&self, other: $wrapped) -> Self {
+                Self(self.0.checked_div(other).unwrap_or($wrapped::MAX))
             }
 
             /// Saturating multiplication.
@@ -495,32 +539,6 @@ impl TryFrom<BlockHeight> for usize {
 
     fn try_from(height: BlockHeight) -> Result<usize, ArithmeticError> {
         usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)
-    }
-}
-
-/// Allows converting [`BlockHeight`] ranges to inclusive tuples of bounds.
-pub trait BlockHeightRangeBounds {
-    /// Returns the range as a tuple of inclusive bounds.
-    /// If the range is empty, returns `None`.
-    fn to_inclusive(&self) -> Option<(BlockHeight, BlockHeight)>;
-}
-
-impl<T: RangeBounds<BlockHeight>> BlockHeightRangeBounds for T {
-    fn to_inclusive(&self) -> Option<(BlockHeight, BlockHeight)> {
-        let start = match self.start_bound() {
-            Bound::Included(height) => *height,
-            Bound::Excluded(height) => height.try_add_one().ok()?,
-            Bound::Unbounded => BlockHeight(0),
-        };
-        let end = match self.end_bound() {
-            Bound::Included(height) => *height,
-            Bound::Excluded(height) => height.try_sub_one().ok()?,
-            Bound::Unbounded => BlockHeight::MAX,
-        };
-        if start > end {
-            return None;
-        }
-        Some((start, end))
     }
 }
 
@@ -646,6 +664,11 @@ impl Round {
         }
     }
 
+    /// Returns whether this is a validator round.
+    pub fn is_validator(&self) -> bool {
+        matches!(self, Round::Validator(_))
+    }
+
     /// Whether the round is the fast round.
     pub fn is_fast(&self) -> bool {
         matches!(self, Round::Fast)
@@ -708,6 +731,11 @@ impl Amount {
         Amount(attotokens)
     }
 
+    /// Returns the number of attotokens.
+    pub const fn to_attos(self) -> u128 {
+        self.0
+    }
+
     /// Helper function to obtain the 64 most significant bits of the balance.
     pub const fn upper_half(self) -> u64 {
         (self.0 >> 64) as u64
@@ -719,7 +747,7 @@ impl Amount {
     }
 
     /// Divides this by the other amount. If the other is 0, it returns `u128::MAX`.
-    pub fn saturating_div(self, other: Amount) -> u128 {
+    pub fn saturating_ratio(self, other: Amount) -> u128 {
         self.0.checked_div(other.0).unwrap_or(u128::MAX)
     }
 
@@ -730,7 +758,9 @@ impl Amount {
 }
 
 /// What created a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize, Allocative,
+)]
 pub enum ChainOrigin {
     /// The chain was created by the genesis configuration.
     Root(u32),
@@ -751,10 +781,18 @@ impl ChainOrigin {
     pub fn is_child(&self) -> bool {
         matches!(self, ChainOrigin::Child { .. })
     }
+
+    /// Returns the root chain number, if this is a root chain.
+    pub fn root(&self) -> Option<u32> {
+        match self {
+            ChainOrigin::Root(i) => Some(*i),
+            ChainOrigin::Child { .. } => None,
+        }
+    }
 }
 
 /// A number identifying the configuration of the chain (aka the committee).
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Allocative)]
 pub struct Epoch(pub u32);
 
 impl Epoch {
@@ -839,7 +877,7 @@ impl Epoch {
 }
 
 /// The initial configuration for a new chain.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub struct InitialChainConfig {
     /// The ownership configuration of the new chain.
     pub ownership: ChainOwnership,
@@ -856,7 +894,7 @@ pub struct InitialChainConfig {
 }
 
 /// Initial chain configuration and chain origin.
-#[derive(Eq, PartialEq, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Hash, Debug, Serialize, Deserialize, Allocative)]
 pub struct ChainDescription {
     origin: ChainOrigin,
     timestamp: Timestamp,
@@ -932,6 +970,7 @@ pub struct NetworkDescription {
     WitLoad,
     WitStore,
     InputObject,
+    Allocative,
 )]
 pub struct ApplicationPermissions {
     /// If this is `None`, all system operations and application operations are allowed.
@@ -1025,7 +1064,7 @@ impl ApplicationPermissions {
 }
 
 /// A record of a single oracle response.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub enum OracleResponse {
     /// The response from a service query.
     Service(
@@ -1258,7 +1297,7 @@ impl BcsHashable<'_> for BlobContent {}
 
 /// A blob of binary data.
 #[serde_as]
-#[derive(Hash, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Hash, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Allocative)]
 pub struct BlobContent {
     /// The type of data represented by the bytes.
     blob_type: BlobType,
@@ -1354,7 +1393,7 @@ impl From<Blob> for BlobContent {
 }
 
 /// A blob of binary data, with its hash.
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Allocative)]
 pub struct Blob {
     /// ID of the blob.
     hash: CryptoHash,
@@ -1503,7 +1542,7 @@ impl<'a> Deserialize<'a> for Blob {
 impl BcsHashable<'_> for Blob {}
 
 /// An event recorded in a block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject, Allocative)]
 pub struct Event {
     /// The ID of the stream this event belongs to.
     pub stream_id: StreamId,
@@ -1609,6 +1648,8 @@ mod metrics {
 mod tests {
     use std::str::FromStr;
 
+    use alloy_primitives::U256;
+
     use super::{Amount, BlobContent};
     use crate::identifiers::BlobType;
 
@@ -1667,5 +1708,13 @@ mod tests {
 
         assert_eq!(hash1, hash2, "Hashes should be equal for same content");
         assert_eq!(blob1.bytes(), blob2.bytes(), "Byte content should be equal");
+    }
+
+    #[test]
+    fn test_conversion_amount_u256() {
+        let value_amount = Amount::from_tokens(15656565652209004332);
+        let value_u256: U256 = value_amount.into();
+        let value_amount_rev = Amount::try_from(value_u256).expect("Failed conversion");
+        assert_eq!(value_amount, value_amount_rev);
     }
 }

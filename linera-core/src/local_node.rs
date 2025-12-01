@@ -9,7 +9,7 @@ use std::{
 
 use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
-    crypto::ValidatorPublicKey,
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, Epoch},
     identifiers::{BlobId, ChainId},
 };
@@ -89,7 +89,8 @@ where
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
-        let (response, _actions) = self.node.state.handle_block_proposal(proposal).await?;
+        let (response, _actions) =
+            Box::pin(self.node.state.handle_block_proposal(proposal)).await?;
         Ok(response)
     }
 
@@ -187,15 +188,12 @@ where
         blob_ids: impl IntoIterator<Item = &BlobId>,
         chain_id: ChainId,
     ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
-        let chain = self.chain_state_view(chain_id).await?;
-        let mut blobs = Vec::new();
-        for blob_id in blob_ids {
-            match chain.manager.locking_blobs.get(blob_id).await? {
-                None => return Ok(None),
-                Some(blob) => blobs.push(blob),
-            }
-        }
-        Ok(Some(blobs))
+        let blob_ids_vec: Vec<_> = blob_ids.into_iter().copied().collect();
+        Ok(self
+            .node
+            .state
+            .get_locking_blobs(chain_id, blob_ids_vec)
+            .await?)
     }
 
     /// Writes the given blobs to storage if there is an appropriate blob state.
@@ -243,8 +241,13 @@ where
         &self,
         chain_id: ChainId,
         query: Query,
+        block_hash: Option<CryptoHash>,
     ) -> Result<QueryOutcome, LocalNodeError> {
-        let outcome = self.node.state.query_application(chain_id, query).await?;
+        let outcome = self
+            .node
+            .state
+            .query_application(chain_id, query, block_hash)
+            .await?;
         Ok(outcome)
     }
 
@@ -277,7 +280,13 @@ where
     ) -> Result<BTreeMap<ChainId, BlockHeight>, LocalNodeError> {
         let futures =
             FuturesUnordered::from_iter(chain_ids.into_iter().map(|chain_id| async move {
-                let chain = self.chain_state_view(*chain_id).await?;
+                let chain = match self.chain_state_view(*chain_id).await {
+                    Ok(chain) => chain,
+                    Err(LocalNodeError::BlobsNotFound(_) | LocalNodeError::InactiveChain(_)) => {
+                        return Ok((*chain_id, BlockHeight::ZERO))
+                    }
+                    Err(err) => Err(err)?,
+                };
                 let mut next_height = chain.tip_state.get().next_block_height;
                 if let Some(outbox) = chain.outboxes.try_load_entry(&receiver_id).await? {
                     next_height = next_height.max(*outbox.next_height_to_schedule.get());
@@ -297,6 +306,31 @@ where
             .update_received_certificate_trackers(chain_id, new_trackers)
             .await?;
         Ok(())
+    }
+
+    pub async fn get_preprocessed_block_hashes(
+        &self,
+        chain_id: ChainId,
+        start: BlockHeight,
+        end: BlockHeight,
+    ) -> Result<Vec<linera_base::crypto::CryptoHash>, LocalNodeError> {
+        Ok(self
+            .node
+            .state
+            .get_preprocessed_block_hashes(chain_id, start, end)
+            .await?)
+    }
+
+    pub async fn get_inbox_next_height(
+        &self,
+        chain_id: ChainId,
+        origin: ChainId,
+    ) -> Result<BlockHeight, LocalNodeError> {
+        Ok(self
+            .node
+            .state
+            .get_inbox_next_height(chain_id, origin)
+            .await?)
     }
 }
 

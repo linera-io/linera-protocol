@@ -79,8 +79,8 @@ cfg-if.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 clap.workspace = true
 clap-markdown.workspace = true
+clio.workspace = true
 colored.workspace = true
-comfy-table.workspace = true
 convert_case.workspace = true
 current_platform = "0.2.0"
 custom_debug_derive.workspace = true
@@ -90,6 +90,8 @@ fs_extra = { workspace = true, optional = true }
 futures.workspace = true
 heck.workspace = true
 http.workspace = true
+insta.workspace = true
+is-terminal.workspace = true
 k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
 linera-base.workspace = true
@@ -112,6 +114,9 @@ linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
 mini-moka.workspace = true
+opentelemetry.workspace = true
+opentelemetry-otlp.workspace = true
+opentelemetry_sdk = { workspace = true, features = ["testing"] }
 papaya.workspace = true
 pathdiff = { workspace = true, optional = true }
 port-selector.workspace = true
@@ -147,6 +152,9 @@ tonic-web.workspace = true
 tower.workspace = true
 tower-http = { workspace = true, features = ["cors"] }
 tracing.workspace = true
+tracing-chrome.workspace = true
+tracing-opentelemetry.workspace = true
+tracing-subscriber = { workspace = true, features = ["json", "fmt", "ansi"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
@@ -186,7 +194,6 @@ test-log = { workspace = true, features = ["trace"] }
 test-strategy.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
-track-instantiation.workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["tonic-prost"]

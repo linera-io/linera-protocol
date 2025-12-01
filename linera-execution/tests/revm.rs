@@ -8,7 +8,7 @@ use std::sync::Arc;
 use alloy_sol_types::{sol, SolCall, SolValue};
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Timestamp},
-    vm::EvmQuery,
+    vm::{EvmInstantiation, EvmOperation, EvmQuery},
 };
 use linera_execution::{
     evm::revm::{EvmContractModule, EvmServiceModule},
@@ -22,6 +22,11 @@ use linera_execution::{
     ResourceController, ResourceTracker, TransactionTracker,
 };
 use linera_views::{context::Context as _, views::View};
+
+fn operation_to_bytes(operation: impl alloy_sol_types::SolCall) -> Result<Vec<u8>, bcs::Error> {
+    let operation = EvmOperation::new(Amount::ZERO, operation.abi_encode());
+    operation.to_bytes()
+}
 
 #[tokio::test]
 async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
@@ -40,7 +45,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
     let args = ConstructorArgs { initial_value };
     let constructor_argument = args.abi_encode();
     let constructor_argument = serde_json::to_string(&constructor_argument)?.into_bytes();
-    let instantiation_argument = Vec::<u8>::new();
+    let instantiation_argument = EvmInstantiation::default();
     let instantiation_argument = serde_json::to_string(&instantiation_argument)?.into_bytes();
     let state = SystemExecutionState {
         description: Some(dummy_chain_description(0)),
@@ -61,13 +66,15 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         module: module.clone(),
     };
     {
-        let pinned = view.context().extra().user_contracts().pin();
+        let context = view.context();
+        let pinned = context.extra().user_contracts().pin();
         pinned.insert(app_id, contract.clone().into());
     }
 
     let service = EvmServiceModule::Revm { module };
     {
-        let pinned = view.context().extra().user_services().pin();
+        let context = view.context();
+        let pinned = context.extra().user_services().pin();
         pinned.insert(app_id, service.into());
     }
 
@@ -85,7 +92,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         chain_id,
         height: BlockHeight(0),
         round: Some(0),
-        authenticated_signer: None,
+        authenticated_owner: None,
         timestamp: Default::default(),
     };
 
@@ -112,7 +119,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         ]);
         value += increment;
         let operation = incrementCall { input: *increment };
-        let bytes = operation.abi_encode();
+        let bytes = operation_to_bytes(operation)?;
         let operation = Operation::User {
             application_id: app_id,
             bytes,
@@ -159,7 +166,7 @@ async fn test_terminate_execute_operation_by_lack_of_fuel() -> anyhow::Result<()
     let args = ConstructorArgs { initial_value };
     let constructor_argument = args.abi_encode();
     let constructor_argument = serde_json::to_string(&constructor_argument)?.into_bytes();
-    let instantiation_argument = Vec::<u8>::new();
+    let instantiation_argument = EvmInstantiation::default();
     let instantiation_argument = serde_json::to_string(&instantiation_argument)?.into_bytes();
     let state = SystemExecutionState {
         description: Some(dummy_chain_description(0)),
@@ -180,13 +187,15 @@ async fn test_terminate_execute_operation_by_lack_of_fuel() -> anyhow::Result<()
         module: module.clone(),
     };
     {
-        let pinned = view.context().extra().user_contracts().pin();
+        let context = view.context();
+        let pinned = context.extra().user_contracts().pin();
         pinned.insert(app_id, contract.clone().into());
     }
 
     let service = EvmServiceModule::Revm { module };
     {
-        let pinned = view.context().extra().user_services().pin();
+        let context = view.context();
+        let pinned = context.extra().user_services().pin();
         pinned.insert(app_id, service.into());
     }
 
@@ -204,7 +213,7 @@ async fn test_terminate_execute_operation_by_lack_of_fuel() -> anyhow::Result<()
         chain_id,
         height: BlockHeight(0),
         round: Some(0),
-        authenticated_signer: None,
+        authenticated_owner: None,
         timestamp: Default::default(),
     };
 
@@ -226,7 +235,7 @@ async fn test_terminate_execute_operation_by_lack_of_fuel() -> anyhow::Result<()
     ]);
     let input = 2;
     let operation = incrementCall { input };
-    let bytes = operation.abi_encode();
+    let bytes = operation_to_bytes(operation)?;
     let operation = Operation::User {
         application_id: app_id,
         bytes,
@@ -254,7 +263,7 @@ async fn test_terminate_query_by_lack_of_fuel() -> anyhow::Result<()> {
     let args = ConstructorArgs { initial_value: 0 };
     let constructor_argument = args.abi_encode();
     let constructor_argument = serde_json::to_string(&constructor_argument)?.into_bytes();
-    let instantiation_argument = Vec::<u8>::new();
+    let instantiation_argument = EvmInstantiation::default();
     let instantiation_argument = serde_json::to_string(&instantiation_argument)?.into_bytes();
     let state = SystemExecutionState {
         description: Some(dummy_chain_description(0)),
@@ -272,13 +281,15 @@ async fn test_terminate_query_by_lack_of_fuel() -> anyhow::Result<()> {
         module: module.clone(),
     };
     {
-        let pinned = view.context().extra().user_contracts().pin();
+        let context = view.context();
+        let pinned = context.extra().user_contracts().pin();
         pinned.insert(app_id, contract.clone().into());
     }
 
     let service = EvmServiceModule::Revm { module };
     {
-        let pinned = view.context().extra().user_services().pin();
+        let context = view.context();
+        let pinned = context.extra().user_services().pin();
         pinned.insert(app_id, service.into());
     }
 
@@ -330,7 +341,7 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
 
     let constructor_argument = Vec::<u8>::new();
     let constructor_argument = serde_json::to_string(&constructor_argument)?.into_bytes();
-    let instantiation_argument = Vec::<u8>::new();
+    let instantiation_argument = EvmInstantiation::default();
     let instantiation_argument = serde_json::to_string(&instantiation_argument)?.into_bytes();
     let state = SystemExecutionState {
         description: Some(dummy_chain_description(0)),
@@ -351,13 +362,15 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
         module: module.clone(),
     };
     {
-        let pinned = view.context().extra().user_contracts().pin();
+        let context = view.context();
+        let pinned = context.extra().user_contracts().pin();
         pinned.insert(app_id, contract.clone().into());
     }
 
     let service = EvmServiceModule::Revm { module };
     {
-        let pinned = view.context().extra().user_services().pin();
+        let context = view.context();
+        let pinned = context.extra().user_services().pin();
         pinned.insert(app_id, service.into());
     }
 
@@ -375,7 +388,7 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
         chain_id,
         height: BlockHeight(0),
         round: Some(0),
-        authenticated_signer: None,
+        authenticated_owner: None,
         timestamp: Default::default(),
     };
 
@@ -399,7 +412,7 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
 
     // Trying a failing function, should be an error
     let operation = failing_functionCall {};
-    let bytes = operation.abi_encode();
+    let bytes = operation_to_bytes(operation)?;
     let operation = Operation::User {
         application_id: app_id,
         bytes,

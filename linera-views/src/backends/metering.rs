@@ -312,6 +312,10 @@ where
         self.store.max_stream_queries()
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
+        self.store.root_key()
+    }
+
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let _latency = self.counter.read_value_bytes_latency.measure_latency();
         self.counter
@@ -343,7 +347,7 @@ where
         self.store.contains_key(key).await
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error> {
         let _latency = self.counter.contains_keys_latency.measure_latency();
         self.counter
             .contains_keys_num_entries
@@ -359,7 +363,7 @@ where
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         let _latency = self
             .counter
@@ -496,14 +500,9 @@ where
         Ok(namespaces)
     }
 
-    async fn list_root_keys(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let name = D::get_name();
-        let counter = get_counter(&name);
-        let _latency = counter.list_root_keys_latency.measure_latency();
-        D::list_root_keys(config, namespace).await
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, Self::Error> {
+        let _latency = self.counter.list_root_keys_latency.measure_latency();
+        self.database.list_root_keys().await
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {

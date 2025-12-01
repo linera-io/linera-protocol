@@ -12,7 +12,7 @@ use linera_views::{
 };
 #[cfg(with_rocksdb)]
 use linera_views::{
-    lru_caching::StorageCacheConfig,
+    lru_prefix_cache::StorageCacheConfig,
     rocks_db::{
         PathWithGuard, RocksDbDatabase, RocksDbSpawnMode, RocksDbStoreConfig,
         RocksDbStoreInternalConfig,
@@ -92,7 +92,7 @@ impl StorageServer {
         }
     }
 
-    pub async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Status> {
+    pub async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Status> {
         match &self.store {
             LocalStore::Memory(store) => store
                 .contains_keys(keys)
@@ -108,7 +108,7 @@ impl StorageServer {
 
     pub async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Status> {
         match &self.store {
             LocalStore::Memory(store) => store.read_multi_values_bytes(keys).await.map_err(|e| {
@@ -186,7 +186,14 @@ impl StorageServer {
     pub async fn list_root_keys(&self, namespace: &[u8]) -> Result<Vec<Vec<u8>>, Status> {
         let mut full_key = vec![KeyPrefix::RootKey as u8];
         full_key.extend(namespace);
-        self.find_keys_by_prefix(&full_key).await
+        let bcs_root_keys = self.find_keys_by_prefix(&full_key).await?;
+        let mut root_keys = Vec::new();
+        for bcs_root_key in bcs_root_keys {
+            let root_key = bcs::from_bytes::<Vec<u8>>(&bcs_root_key)
+                .map_err(|e| Status::unknown(format!("Bcs error {e:?} at list_root_keys")))?;
+            root_keys.push(root_key);
+        }
+        Ok(root_keys)
     }
 
     pub async fn delete_all(&self) -> Result<(), Status> {
@@ -282,12 +289,27 @@ enum StorageServerOptions {
         /// The maximum size of the cache, in bytes (keys size + value sizes)
         #[arg(long, default_value = "10000000")]
         max_cache_size: usize,
-        /// The maximum size of an entry size, in bytes
+        /// The maximum size of a value entry, in bytes
         #[arg(long, default_value = "1000000")]
-        max_entry_size: usize,
+        max_value_entry_size: usize,
+        /// The maximum size of a find-keys entry, in bytes
+        #[arg(long, default_value = "1000000")]
+        max_find_keys_entry_size: usize,
+        /// The maximum size of a find-key-values entry, in bytes
+        #[arg(long, default_value = "1000000")]
+        max_find_key_values_entry_size: usize,
         /// The maximum number of entries in the cache.
         #[arg(long, default_value = "1000")]
         max_cache_entries: usize,
+        /// The maximum value size of the cache, in bytes
+        #[arg(long, default_value = "10000000")]
+        max_cache_value_size: usize,
+        /// The maximum find_keys_by_prefix size of the cache, in bytes
+        #[arg(long, default_value = "10000000")]
+        max_cache_find_keys_size: usize,
+        /// The maximum find_key_values_by_prefix size of the cache, in bytes
+        #[arg(long, default_value = "10000000")]
+        max_cache_find_key_values_size: usize,
     },
 }
 
@@ -341,7 +363,7 @@ impl StorageService for StorageServer {
     ) -> Result<Response<ReplyContainsKeys>, Status> {
         let request = request.into_inner();
         let RequestContainsKeys { keys } = request;
-        let tests = self.contains_keys(keys).await?;
+        let tests = self.contains_keys(&keys).await?;
         let response = ReplyContainsKeys { tests };
         Ok(Response::new(response))
     }
@@ -353,7 +375,7 @@ impl StorageService for StorageServer {
     ) -> Result<Response<ReplyReadMultiValues>, Status> {
         let request = request.into_inner();
         let RequestReadMultiValues { keys } = request;
-        let values = self.read_multi_values_bytes(keys.clone()).await?;
+        let values = self.read_multi_values_bytes(&keys).await?;
         let size = values
             .iter()
             .map(|x| match x {
@@ -647,8 +669,13 @@ async fn main() {
             path,
             max_stream_queries,
             max_cache_size,
-            max_entry_size,
+            max_value_entry_size,
+            max_find_keys_entry_size,
+            max_find_key_values_entry_size,
             max_cache_entries,
+            max_cache_value_size,
+            max_cache_find_keys_size,
+            max_cache_find_key_values_size,
         } => {
             let path_buf = path.into();
             let path_with_guard = PathWithGuard::new(path_buf);
@@ -660,8 +687,13 @@ async fn main() {
             };
             let storage_cache_config = StorageCacheConfig {
                 max_cache_size,
-                max_entry_size,
+                max_value_entry_size,
+                max_find_keys_entry_size,
+                max_find_key_values_entry_size,
                 max_cache_entries,
+                max_cache_value_size,
+                max_cache_find_keys_size,
+                max_cache_find_key_values_size,
             };
             let config = RocksDbStoreConfig {
                 inner_config,

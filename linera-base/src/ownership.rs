@@ -9,6 +9,7 @@ use std::{
     iter,
 };
 
+use allocative::Allocative;
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
@@ -21,7 +22,19 @@ use crate::{
 };
 
 /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
-#[derive(PartialEq, Eq, Clone, Hash, Debug, Serialize, Deserialize, WitLoad, WitStore, WitType)]
+#[derive(
+    PartialEq,
+    Eq,
+    Clone,
+    Hash,
+    Debug,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+    Allocative,
+)]
 pub struct TimeoutConfig {
     /// The duration of the fast round.
     #[debug(skip_if = Option::is_none)]
@@ -50,7 +63,18 @@ impl Default for TimeoutConfig {
 
 /// Represents the owner(s) of a chain.
 #[derive(
-    PartialEq, Eq, Clone, Hash, Debug, Default, Serialize, Deserialize, WitLoad, WitStore, WitType,
+    PartialEq,
+    Eq,
+    Clone,
+    Hash,
+    Debug,
+    Default,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+    Allocative,
 )]
 pub struct ChainOwnership {
     /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
@@ -59,6 +83,8 @@ pub struct ChainOwnership {
     /// The regular owners, with their weights that determine how often they are round leader.
     #[debug(skip_if = BTreeMap::is_empty)]
     pub owners: BTreeMap<AccountOwner, u64>,
+    /// The leader of the first single-leader round. If not set, this is random like other rounds.
+    pub first_leader: Option<AccountOwner>,
     /// The number of rounds in which all owners are allowed to propose blocks.
     pub multi_leader_rounds: u32,
     /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
@@ -75,6 +101,7 @@ impl ChainOwnership {
         ChainOwnership {
             super_owners: iter::once(owner).collect(),
             owners: BTreeMap::new(),
+            first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
@@ -86,6 +113,7 @@ impl ChainOwnership {
         ChainOwnership {
             super_owners: BTreeSet::new(),
             owners: iter::once((owner, 100)).collect(),
+            first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
@@ -101,6 +129,7 @@ impl ChainOwnership {
         ChainOwnership {
             super_owners: BTreeSet::new(),
             owners: owners_and_weights.into_iter().collect(),
+            first_leader: None,
             multi_leader_rounds,
             open_multi_leader_rounds: false,
             timeout_config,
@@ -113,6 +142,12 @@ impl ChainOwnership {
         self
     }
 
+    /// Fixes the given owner as the leader of the first single-leader round on all heights.
+    pub fn with_first_leader(mut self, owner: AccountOwner) -> Self {
+        self.first_leader = Some(owner);
+        self
+    }
+
     /// Returns whether there are any owners or super owners or it is a public chain.
     pub fn is_active(&self) -> bool {
         !self.super_owners.is_empty()
@@ -121,8 +156,17 @@ impl ChainOwnership {
     }
 
     /// Returns `true` if this is an owner or super owner.
-    pub fn verify_owner(&self, owner: &AccountOwner) -> bool {
-        self.super_owners.contains(owner) || self.owners.contains_key(owner)
+    pub fn is_owner(&self, owner: &AccountOwner) -> bool {
+        self.super_owners.contains(owner)
+            || self.owners.contains_key(owner)
+            || self.first_leader.as_ref().is_some_and(|fl| fl == owner)
+    }
+
+    /// Returns `true` if this is an owner or if `open_multi_leader_rounds`.
+    pub fn is_multi_leader_owner(&self, owner: &AccountOwner) -> bool {
+        self.open_multi_leader_rounds
+            || self.owners.contains_key(owner)
+            || self.super_owners.contains(owner)
     }
 
     /// Returns the duration of the given round.
@@ -162,6 +206,12 @@ impl ChainOwnership {
         self.super_owners.iter().chain(self.owners.keys())
     }
 
+    /// Returns whether fallback mode is enabled on this chain, i.e. the fallback duration
+    /// is less than `TimeDelta::MAX`.
+    pub fn has_fallback(&self) -> bool {
+        self.timeout_config.fallback_duration < TimeDelta::MAX
+    }
+
     /// Returns the round following the specified one, if any.
     pub fn next_round(&self, round: Round) -> Option<Round> {
         let next_round = match round {
@@ -177,6 +227,11 @@ impl ChainOwnership {
             Round::Validator(r) => Round::Validator(r.checked_add(1)?),
         };
         Some(next_round)
+    }
+
+    /// Returns whether the given owner a super owner and there are no regular owners.
+    pub fn is_super_owner_no_regular_owners(&self, owner: &AccountOwner) -> bool {
+        self.owners.is_empty() && self.super_owners.contains(owner)
     }
 }
 
@@ -220,6 +275,7 @@ mod tests {
         let ownership = ChainOwnership {
             super_owners: BTreeSet::from_iter([super_owner]),
             owners: BTreeMap::from_iter([(owner, 100)]),
+            first_leader: Some(owner),
             multi_leader_rounds: 10,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig {

@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use allocative::Allocative;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{de::DeserializeOwned, Serialize};
@@ -10,7 +11,6 @@ use crate::{
     common::{from_bytes_option_or_default, HasherOutput},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
-    store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View},
     ViewError,
 };
@@ -34,11 +34,17 @@ mod metrics {
 }
 
 /// A view that supports modifying a single value of type `T`.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, T: Allocative")]
 pub struct RegisterView<C, T> {
+    /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
+    /// The view context.
+    #[allocative(skip)]
     context: C,
+    /// The value persisted in storage.
     stored_value: Box<T>,
+    /// Pending update not yet persisted to storage.
     update: Option<Box<T>>,
 }
 
@@ -56,7 +62,7 @@ where
     ) -> Self::Target {
         RegisterView {
             delete_storage_first: self.delete_storage_first,
-            context: ctx(self.context()),
+            context: ctx(&self.context),
             stored_value: self.stored_value.clone(),
             update: self.update.clone(),
         }
@@ -72,8 +78,8 @@ where
 
     type Context = C;
 
-    fn context(&self) -> &C {
-        &self.context
+    fn context(&self) -> C {
+        self.context.clone()
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -92,12 +98,6 @@ where
         })
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let keys = Self::pre_load(&context)?;
-        let values = context.store().read_multi_values_bytes(keys).await?;
-        Self::post_load(context, &values)
-    }
-
     fn rollback(&mut self) {
         self.delete_storage_first = false;
         self.update = None;
@@ -110,20 +110,26 @@ where
         self.update.is_some()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
             batch.delete_key(self.context.base_key().bytes.clone());
-            self.stored_value = Box::default();
             delete_view = true;
-        } else if let Some(value) = self.update.take() {
+        } else if let Some(value) = &self.update {
             let key = self.context.base_key().bytes.clone();
-            batch.put_key_value(key, &value)?;
+            batch.put_key_value(key, value)?;
+        }
+        Ok(delete_view)
+    }
+
+    fn post_save(&mut self) {
+        if self.delete_storage_first {
+            self.stored_value = Box::default();
+        } else if let Some(value) = self.update.take() {
             self.stored_value = value;
         }
         self.delete_storage_first = false;
         self.update = None;
-        Ok(delete_view)
     }
 
     fn clear(&mut self) {
@@ -137,13 +143,13 @@ where
     C: Context,
     T: Clone + Default + Send + Sync + Serialize + DeserializeOwned,
 {
-    fn clone_unchecked(&mut self) -> Self {
-        RegisterView {
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(RegisterView {
             delete_storage_first: self.delete_storage_first,
             context: self.context.clone(),
             stored_value: self.stored_value.clone(),
             update: self.update.clone(),
-        }
+        })
     }
 }
 

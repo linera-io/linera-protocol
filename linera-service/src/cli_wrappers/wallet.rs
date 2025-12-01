@@ -8,6 +8,7 @@ use std::{
     marker::PhantomData,
     mem,
     path::{Path, PathBuf},
+    pin::Pin,
     process::Stdio,
     str::FromStr,
     sync,
@@ -23,7 +24,7 @@ use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, InMemorySigner},
-    data_types::{Amount, Bytecode, Epoch},
+    data_types::{Amount, BlockHeight, Bytecode, Epoch},
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId,
     },
@@ -43,7 +44,12 @@ use tokio::{
     sync::oneshot,
     task::JoinHandle,
 };
-use tracing::{error, info, warn};
+#[cfg(with_testing)]
+use {
+    futures::FutureExt as _,
+    linera_core::worker::Reason,
+    std::{collections::BTreeSet, future::Future},
+};
 
 use crate::{
     cli::command::BenchmarkCommand,
@@ -486,33 +492,39 @@ impl ClientWrapper {
                 .send()
                 .await;
             if request.is_ok() {
-                info!("Node service has started");
+                tracing::info!("Node service has started");
                 return Ok(NodeService::new(port, child));
             } else {
-                warn!("Waiting for node service to start");
+                tracing::warn!("Waiting for node service to start");
             }
         }
         bail!("Failed to start node service");
     }
 
-    /// Runs `linera query-validator`
+    /// Runs `linera validator query`
     pub async fn query_validator(&self, address: &str) -> Result<CryptoHash> {
         let mut command = self.command().await?;
-        command.arg("query-validator").arg(address);
+        command.arg("validator").arg("query").arg(address);
         let stdout = command.spawn_and_wait_for_stdout().await?;
+
+        // Parse the genesis config hash from the output.
+        // It's on a line like "Genesis config hash: <hash>"
         let hash = stdout
-            .trim()
-            .parse()
-            .context("error while parsing the result of `linera query-validator`")?;
+            .lines()
+            .find_map(|line| {
+                line.strip_prefix("Genesis config hash: ")
+                    .and_then(|hash_str| hash_str.trim().parse().ok())
+            })
+            .context("error while parsing the result of `linera validator query`")?;
         Ok(hash)
     }
 
-    /// Runs `linera query-validators`.
+    /// Runs `linera validator list`.
     pub async fn query_validators(&self, chain_id: Option<ChainId>) -> Result<()> {
         let mut command = self.command().await?;
-        command.arg("query-validators");
+        command.arg("validator").arg("list");
         if let Some(chain_id) = chain_id {
-            command.arg(chain_id.to_string());
+            command.args(["--chain-id", &chain_id.to_string()]);
         }
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
@@ -525,7 +537,10 @@ impl ClientWrapper {
         validator_address: impl Into<String>,
     ) -> Result<()> {
         let mut command = self.command().await?;
-        command.arg("sync-validator").arg(validator_address.into());
+        command
+            .arg("validator")
+            .arg("sync")
+            .arg(validator_address.into());
         let mut chain_ids = chain_ids.into_iter().peekable();
         if chain_ids.peek().is_some() {
             command
@@ -540,17 +555,26 @@ impl ClientWrapper {
     pub async fn run_faucet(
         &self,
         port: impl Into<Option<u16>>,
-        chain_id: ChainId,
+        chain_id: Option<ChainId>,
         amount: Amount,
     ) -> Result<FaucetService> {
         let port = port.into().unwrap_or(8080);
+        let temp_dir = tempfile::tempdir()
+            .context("Failed to create temporary directory for faucet storage")?;
+        let storage_path = temp_dir.path().join("faucet_storage.sqlite");
         let mut command = self.command().await?;
-        let child = command
+        let command = command
             .arg("faucet")
-            .arg(chain_id.to_string())
             .args(["--port".to_string(), port.to_string()])
             .args(["--amount".to_string(), amount.to_string()])
-            .spawn_into()?;
+            .args([
+                "--storage-path".to_string(),
+                storage_path.to_string_lossy().to_string(),
+            ]);
+        if let Some(chain_id) = chain_id {
+            command.arg(chain_id.to_string());
+        }
+        let child = command.spawn_into()?;
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
@@ -559,10 +583,10 @@ impl ClientWrapper {
                 .send()
                 .await;
             if request.is_ok() {
-                info!("Faucet has started");
-                return Ok(FaucetService::new(port, child));
+                tracing::info!("Faucet has started");
+                return Ok(FaucetService::new(port, child, temp_dir));
             } else {
-                warn!("Waiting for faucet to start");
+                tracing::debug!("Waiting for faucet to start");
             }
         }
         bail!("Failed to start faucet");
@@ -1006,7 +1030,8 @@ impl ClientWrapper {
         let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
         self.command()
             .await?
-            .arg("set-validator")
+            .arg("validator")
+            .arg("add")
             .args(["--public-key", &validator_key.0])
             .args(["--account-key", &validator_key.1])
             .args(["--address", &address])
@@ -1019,10 +1044,73 @@ impl ClientWrapper {
     pub async fn remove_validator(&self, validator_key: &str) -> Result<()> {
         self.command()
             .await?
-            .arg("remove-validator")
+            .arg("validator")
+            .arg("remove")
             .args(["--public-key", validator_key])
             .spawn_and_wait_for_stdout()
             .await?;
+        Ok(())
+    }
+
+    pub async fn change_validators(
+        &self,
+        add_validators: &[(String, String, usize, usize)], // (public_key, account_key, port, votes)
+        modify_validators: &[(String, String, usize, usize)], // (public_key, account_key, port, votes)
+        remove_validators: &[String],
+    ) -> Result<()> {
+        use std::str::FromStr;
+
+        use linera_base::crypto::{AccountPublicKey, ValidatorPublicKey};
+
+        // Build a map that will be serialized to JSON
+        // Use the exact types that deserialization expects
+        let mut changes = std::collections::HashMap::new();
+
+        // Add/modify validators
+        for (public_key_str, account_key_str, port, votes) in
+            add_validators.iter().chain(modify_validators.iter())
+        {
+            let public_key = ValidatorPublicKey::from_str(public_key_str)
+                .with_context(|| format!("Invalid validator public key: {}", public_key_str))?;
+
+            let account_key = AccountPublicKey::from_str(account_key_str)
+                .with_context(|| format!("Invalid account public key: {}", account_key_str))?;
+
+            let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
+
+            // Create ValidatorChange struct
+            let change = crate::cli::validator::ValidatorChange {
+                account_key,
+                network_address: address,
+                votes: std::num::NonZero::new(*votes as u64).context("Votes must be non-zero")?,
+            };
+
+            changes.insert(public_key, Some(change));
+        }
+
+        // Remove validators (set to None)
+        for validator_key_str in remove_validators {
+            let public_key = ValidatorPublicKey::from_str(validator_key_str)
+                .with_context(|| format!("Invalid validator public key: {}", validator_key_str))?;
+            changes.insert(public_key, None);
+        }
+
+        // Create temporary file with JSON
+        let temp_file = tempfile::NamedTempFile::new()
+            .context("Failed to create temporary file for validator changes")?;
+        serde_json::to_writer(&temp_file, &changes)
+            .context("Failed to write validator changes to file")?;
+        let temp_path = temp_file.path();
+
+        self.command()
+            .await?
+            .arg("validator")
+            .arg("update")
+            .arg(temp_path)
+            .arg("--yes") // Skip confirmation prompt
+            .spawn_and_wait_for_stdout()
+            .await?;
+
         Ok(())
     }
 
@@ -1111,7 +1199,7 @@ impl ClientWrapper {
 
         let contract_size = fs_err::tokio::metadata(&contract).await?.len();
         let service_size = fs_err::tokio::metadata(&service).await?.len();
-        info!("Done building application {name}: contract_size={contract_size}, service_size={service_size}");
+        tracing::info!("Done building application {name}: contract_size={contract_size}, service_size={service_size}");
 
         Ok((contract, service))
     }
@@ -1126,12 +1214,14 @@ impl Drop for ClientWrapper {
         }
 
         let Ok(binary_path) = self.binary_path.lock() else {
-            error!("Failed to close chains because a thread panicked with a lock to `binary_path`");
+            tracing::error!(
+                "Failed to close chains because a thread panicked with a lock to `binary_path`"
+            );
             return;
         };
 
         let Some(binary_path) = binary_path.as_ref() else {
-            warn!(
+            tracing::warn!(
                 "Assuming no chains need to be closed, because the command binary was never \
                 resolved and therefore presumably never called"
             );
@@ -1150,17 +1240,17 @@ impl Drop for ClientWrapper {
             .args(["wallet", "show", "--short", "--owned"])
             .output()
         else {
-            warn!("Failed to execute `wallet show --short` to list chains to close");
+            tracing::warn!("Failed to execute `wallet show --short` to list chains to close");
             return;
         };
 
         if !wallet_show_output.status.success() {
-            warn!("Failed to list chains in the wallet to close them");
+            tracing::warn!("Failed to list chains in the wallet to close them");
             return;
         }
 
         let Ok(chain_list_string) = String::from_utf8(wallet_show_output.stdout) else {
-            warn!(
+            tracing::warn!(
                 "Failed to close chains because `linera wallet show --short` \
                 returned a non-UTF-8 output"
             );
@@ -1183,8 +1273,8 @@ impl Drop for ClientWrapper {
 
             match close_chain_command.args(["close-chain", chain_id]).status() {
                 Ok(status) if status.success() => (),
-                Ok(failure) => warn!("Failed to close chain {chain_id}: {failure}"),
-                Err(error) => warn!("Failed to close chain {chain_id}: {error}"),
+                Ok(failure) => tracing::warn!("Failed to close chain {chain_id}: {failure}"),
+                Err(error) => tracing::warn!("Failed to close chain {chain_id}: {error}"),
             }
         }
     }
@@ -1248,6 +1338,12 @@ impl NodeService {
         let query = format!("mutation {{ processInbox(chainId: \"{chain_id}\") }}");
         let mut data = self.query_node(query).await?;
         Ok(serde_json::from_value(data["processInbox"].take())?)
+    }
+
+    pub async fn sync(&self, chain_id: &ChainId) -> Result<u64> {
+        let query = format!("mutation {{ sync(chainId: \"{chain_id}\") }}");
+        let mut data = self.query_node(query).await?;
+        Ok(serde_json::from_value(data["sync"].take())?)
     }
 
     pub async fn transfer(
@@ -1397,7 +1493,7 @@ impl NodeService {
                 .send()
                 .await;
             if matches!(result, Err(ref error) if error.is_timeout()) {
-                warn!(
+                tracing::warn!(
                     "Timeout when sending query {} to the node service",
                     truncate_query_output(query)
                 );
@@ -1420,7 +1516,7 @@ impl NodeService {
             );
             let value: Value = response.json().await.context("invalid JSON")?;
             if let Some(errors) = value.get("errors") {
-                warn!(
+                tracing::warn!(
                     "Query \"{}\" failed: {}",
                     truncate_query_output(query),
                     errors
@@ -1481,18 +1577,27 @@ impl NodeService {
             .with_abi())
     }
 
-    /// Obtains the hash of the `chain`'s tip block, as known by this node service.
-    pub async fn chain_tip_hash(&self, chain: ChainId) -> Result<Option<CryptoHash>> {
-        let query = format!(r#"query {{ block(chainId: "{chain}") {{ hash }} }}"#);
+    /// Obtains the hash and height of the `chain`'s tip block, as known by this node service.
+    pub async fn chain_tip(&self, chain: ChainId) -> Result<Option<(CryptoHash, BlockHeight)>> {
+        let query = format!(
+            r#"query {{ block(chainId: "{chain}") {{
+                hash
+                block {{ header {{ height }} }}
+            }} }}"#
+        );
 
         let mut response = self.query_node(&query).await?;
 
-        match mem::take(&mut response["block"]["hash"]) {
-            Value::Null => Ok(None),
-            Value::String(hash) => Ok(Some(
+        match (
+            mem::take(&mut response["block"]["hash"]),
+            mem::take(&mut response["block"]["block"]["header"]["height"]),
+        ) {
+            (Value::Null, Value::Null) => Ok(None),
+            (Value::String(hash), Value::Number(height)) => Ok(Some((
                 hash.parse()
                     .context("Received an invalid hash {hash:?} for chain tip")?,
-            )),
+                BlockHeight(height.as_u64().unwrap()),
+            ))),
             invalid_data => bail!("Expected a tip hash string, but got {invalid_data:?} instead"),
         }
     }
@@ -1501,7 +1606,7 @@ impl NodeService {
     pub async fn notifications(
         &self,
         chain_id: ChainId,
-    ) -> Result<impl Stream<Item = Result<Notification>>> {
+    ) -> Result<Pin<Box<impl Stream<Item = Result<Notification>>>>> {
         let query = format!("subscription {{ notifications(chainId: \"{chain_id}\") }}",);
         let url = format!("ws://localhost:{}/ws", self.port);
         let mut request = url.into_client_request()?;
@@ -1534,9 +1639,8 @@ impl NodeService {
           }
         });
         websocket.send(query_json.to_string().into()).await?;
-        Ok(websocket
-            .map_err(anyhow::Error::from)
-            .and_then(|message| async {
+        Ok(Box::pin(websocket.map_err(anyhow::Error::from).and_then(
+            |message| async {
                 let text = message.into_text()?;
                 let value: Value = serde_json::from_str(&text).context("invalid JSON")?;
                 if let Some(errors) = value["payload"].get("errors") {
@@ -1544,7 +1648,8 @@ impl NodeService {
                 }
                 serde_json::from_value(value["payload"]["data"]["notifications"].clone())
                     .context("Failed to deserialize notification")
-            }))
+            },
+        )))
     }
 }
 
@@ -1552,11 +1657,16 @@ impl NodeService {
 pub struct FaucetService {
     port: u16,
     child: Child,
+    _temp_dir: tempfile::TempDir,
 }
 
 impl FaucetService {
-    fn new(port: u16, child: Child) -> Self {
-        Self { port, child }
+    fn new(port: u16, child: Child, temp_dir: tempfile::TempDir) -> Self {
+        Self {
+            port,
+            child,
+            _temp_dir: temp_dir,
+        }
     }
 
     pub async fn terminate(mut self) -> Result<()> {
@@ -1597,7 +1707,7 @@ impl<A> ApplicationWrapper<A> {
             let response = match result {
                 Ok(response) => response,
                 Err(error) if i < MAX_RETRIES => {
-                    warn!(
+                    tracing::warn!(
                         "Failed to post query \"{}\": {error}; retrying",
                         truncate_query_output_serialize(&query),
                     );
@@ -1668,6 +1778,106 @@ impl<A> From<String> for ApplicationWrapper<A> {
         ApplicationWrapper {
             uri,
             _phantom: PhantomData,
+        }
+    }
+}
+
+/// Returns the timeout for tests that wait for notifications, either read from the env
+/// variable `LINERA_TEST_NOTIFICATION_TIMEOUT_MS`, or the default value of 10 seconds.
+#[cfg(with_testing)]
+fn notification_timeout() -> Duration {
+    const NOTIFICATION_TIMEOUT_MS_ENV: &str = "LINERA_TEST_NOTIFICATION_TIMEOUT_MS";
+    const NOTIFICATION_TIMEOUT_MS_DEFAULT: u64 = 10_000;
+
+    match env::var(NOTIFICATION_TIMEOUT_MS_ENV) {
+        Ok(var) => Duration::from_millis(var.parse().unwrap_or_else(|error| {
+            panic!("{NOTIFICATION_TIMEOUT_MS_ENV} is not a valid number: {error}")
+        })),
+        Err(env::VarError::NotPresent) => Duration::from_millis(NOTIFICATION_TIMEOUT_MS_DEFAULT),
+        Err(env::VarError::NotUnicode(_)) => {
+            panic!("{NOTIFICATION_TIMEOUT_MS_ENV} must be valid Unicode")
+        }
+    }
+}
+
+#[cfg(with_testing)]
+pub trait NotificationsExt {
+    /// Waits for a notification for which `f` returns `Some(t)`, and returns `t`.
+    fn wait_for<T>(
+        &mut self,
+        f: impl FnMut(Notification) -> Option<T>,
+    ) -> impl Future<Output = Result<T>>;
+
+    /// Waits for a `NewEvents` notification for the given block height. If no height is specified,
+    /// any height is accepted.
+    fn wait_for_events(
+        &mut self,
+        expected_height: impl Into<Option<BlockHeight>>,
+    ) -> impl Future<Output = Result<BTreeSet<StreamId>>> {
+        let expected_height = expected_height.into();
+        self.wait_for(move |notification| {
+            if let Reason::NewEvents {
+                height,
+                event_streams,
+                ..
+            } = notification.reason
+            {
+                if expected_height.is_none_or(|h| h == height) {
+                    return Some(event_streams);
+                }
+            }
+            None
+        })
+    }
+
+    /// Waits for a `NewBlock` notification for the given block height. If no height is specified,
+    /// any height is accepted.
+    fn wait_for_block(
+        &mut self,
+        expected_height: impl Into<Option<BlockHeight>>,
+    ) -> impl Future<Output = Result<CryptoHash>> {
+        let expected_height = expected_height.into();
+        self.wait_for(move |notification| {
+            if let Reason::NewBlock { height, hash, .. } = notification.reason {
+                if expected_height.is_none_or(|h| h == height) {
+                    return Some(hash);
+                }
+            }
+            None
+        })
+    }
+
+    /// Waits for a `NewIncomingBundle` notification for the given sender chain and sender block
+    /// height. If no height is specified, any height is accepted.
+    fn wait_for_bundle(
+        &mut self,
+        expected_origin: ChainId,
+        expected_height: impl Into<Option<BlockHeight>>,
+    ) -> impl Future<Output = Result<()>> {
+        let expected_height = expected_height.into();
+        self.wait_for(move |notification| {
+            if let Reason::NewIncomingBundle { height, origin } = notification.reason {
+                if expected_height.is_none_or(|h| h == height) && origin == expected_origin {
+                    return Some(());
+                }
+            }
+            None
+        })
+    }
+}
+
+#[cfg(with_testing)]
+impl<S: Stream<Item = Result<Notification>>> NotificationsExt for Pin<Box<S>> {
+    async fn wait_for<T>(&mut self, mut f: impl FnMut(Notification) -> Option<T>) -> Result<T> {
+        let mut timeout = Box::pin(linera_base::time::timer::sleep(notification_timeout())).fuse();
+        loop {
+            let notification = futures::select! {
+                () = timeout => bail!("Timeout waiting for notification"),
+                notification = self.next().fuse() => notification.context("Stream closed")??,
+            };
+            if let Some(t) = f(notification) {
+                return Ok(t);
+            }
         }
     }
 }

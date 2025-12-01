@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use linera_base::crypto::CryptoHash;
 use linera_views::{
     common::HasherOutput,
     context::MemoryContext,
     hashable_wrapper::WrappedHashableContainerView,
+    historical_hash_wrapper::HistoricallyHashableView,
     register_view::{HashedRegisterView, RegisterView},
-    views::{HashableView, View},
+    views::{HashableView, RootView, View},
 };
 use linera_views_derive::CryptoHashRootView;
 
@@ -39,5 +41,41 @@ async fn check_hashable_hash() -> Result<()> {
     assert_ne!(hash0, hash32);
     view.clear();
     assert_eq!(hash0, view.hash().await?);
+    Ok(())
+}
+
+#[derive(View)]
+struct TestInnerType<C> {
+    pub field1: RegisterView<C, u32>,
+    pub field2: RegisterView<C, u32>,
+    pub field3: RegisterView<C, Option<CryptoHash>>,
+}
+
+#[derive(RootView)]
+struct TestType2<C> {
+    pub field1: RegisterView<C, u32>,
+    pub field2: HistoricallyHashableView<C, TestInnerType<C>>,
+}
+
+#[tokio::test]
+async fn check_hashable_not_overwriting_field() -> Result<()> {
+    let context = MemoryContext::new_for_testing(());
+
+    // Let's store some data in the view.
+    let mut test = TestType2::load(context.clone()).await?;
+    let hash1 = CryptoHash::from([0u8; 32]);
+    test.field2.field1.set(1);
+    test.field2.field2.set(2);
+    test.field2.field3.set(Some(hash1));
+    // Pre-#4983, this would overwrite the contents of test.field2.field3, because of a
+    // base key collision.
+    test.save().await?;
+
+    // Let's reload the view.
+    let test = TestType2::load(context).await?;
+    let stored_hash = test.field2.field3.get();
+    // Assert that the data has not been overwritten.
+    assert_eq!(stored_hash, &Some(hash1));
+
     Ok(())
 }

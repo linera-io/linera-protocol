@@ -139,18 +139,351 @@ pub enum ConversionError {
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
     use linera_base::{
-        data_types::Event,
-        identifiers::{Account, StreamId},
+        data_types::{ApplicationPermissions, Event, TimeDelta},
+        identifiers::{Account, ApplicationId as RealApplicationId, ModuleId, StreamId},
+        ownership::{ChainOwnership, TimeoutConfig},
     };
     use linera_chain::{
         block::{Block, BlockBody, BlockHeader},
         types::ConfirmedBlock,
     };
-    use linera_execution::OutgoingMessage;
+    use linera_execution::{
+        system::{AdminOperation, OpenChainConfig},
+        OutgoingMessage,
+    };
 
     use super::*;
 
-    /// Convert GraphQL transaction metadata to a Transaction object
+    /// Convert GraphQL system operation metadata to a SystemOperation object.
+    fn convert_system_operation(
+        system_op: block::BlockBlockBlockBodyTransactionMetadataOperationSystemOperation,
+    ) -> Result<SystemOperation, ConversionError> {
+        match system_op.system_operation_type.as_str() {
+            "Transfer" => {
+                let transfer = system_op.transfer.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing transfer metadata for Transfer operation".to_string(),
+                    )
+                })?;
+                Ok(SystemOperation::Transfer {
+                    owner: transfer.owner,
+                    recipient: Account {
+                        chain_id: transfer.recipient.chain_id,
+                        owner: transfer.recipient.owner,
+                    },
+                    amount: transfer.amount,
+                })
+            }
+            "Claim" => {
+                let claim = system_op.claim.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing claim metadata for Claim operation".to_string(),
+                    )
+                })?;
+                Ok(SystemOperation::Claim {
+                    owner: claim.owner,
+                    target_id: claim.target_id,
+                    recipient: Account {
+                        chain_id: claim.recipient.chain_id,
+                        owner: claim.recipient.owner,
+                    },
+                    amount: claim.amount,
+                })
+            }
+            "OpenChain" => {
+                let open_chain = system_op.open_chain.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing open_chain metadata for OpenChain operation".to_string(),
+                    )
+                })?;
+
+                let ownership: ChainOwnership =
+                    serde_json::from_str(&open_chain.ownership.ownership_json)
+                        .map_err(ConversionError::Serde)?;
+
+                let application_permissions: ApplicationPermissions =
+                    serde_json::from_str(&open_chain.application_permissions.permissions_json)
+                        .map_err(ConversionError::Serde)?;
+
+                Ok(SystemOperation::OpenChain(OpenChainConfig {
+                    ownership,
+                    balance: open_chain.balance,
+                    application_permissions,
+                }))
+            }
+            "CloseChain" => Ok(SystemOperation::CloseChain),
+            "ChangeOwnership" => {
+                let change_ownership = system_op.change_ownership.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing change_ownership metadata for ChangeOwnership operation"
+                            .to_string(),
+                    )
+                })?;
+
+                let timeout_config = TimeoutConfig {
+                    fast_round_duration: change_ownership
+                        .timeout_config
+                        .fast_round_ms
+                        .as_ref()
+                        .map(|s| {
+                            s.parse::<u64>().map_err(|_| {
+                                ConversionError::UnexpectedCertificateType(
+                                    "Invalid fast_round_ms value".to_string(),
+                                )
+                            })
+                        })
+                        .transpose()?
+                        .map(|ms| TimeDelta::from_micros(ms * 1000)),
+                    base_timeout: TimeDelta::from_micros(
+                        change_ownership
+                            .timeout_config
+                            .base_timeout_ms
+                            .parse::<u64>()
+                            .map_err(|_| {
+                                ConversionError::UnexpectedCertificateType(
+                                    "Invalid base_timeout_ms value".to_string(),
+                                )
+                            })?
+                            * 1000,
+                    ),
+                    timeout_increment: TimeDelta::from_micros(
+                        change_ownership
+                            .timeout_config
+                            .timeout_increment_ms
+                            .parse::<u64>()
+                            .map_err(|_| {
+                                ConversionError::UnexpectedCertificateType(
+                                    "Invalid timeout_increment_ms value".to_string(),
+                                )
+                            })?
+                            * 1000,
+                    ),
+                    fallback_duration: TimeDelta::from_micros(
+                        change_ownership
+                            .timeout_config
+                            .fallback_duration_ms
+                            .parse::<u64>()
+                            .map_err(|_| {
+                                ConversionError::UnexpectedCertificateType(
+                                    "Invalid fallback_duration_ms value".to_string(),
+                                )
+                            })?
+                            * 1000,
+                    ),
+                };
+
+                Ok(SystemOperation::ChangeOwnership {
+                    super_owners: change_ownership.super_owners,
+                    owners: change_ownership
+                        .owners
+                        .into_iter()
+                        .map(|ow| {
+                            let weight = ow.weight.parse::<u64>().map_err(|_| {
+                                ConversionError::UnexpectedCertificateType(
+                                    "Invalid owner weight value".to_string(),
+                                )
+                            })?;
+                            Ok((ow.owner, weight))
+                        })
+                        .collect::<Result<Vec<_>, ConversionError>>()?,
+                    first_leader: change_ownership.first_leader,
+                    multi_leader_rounds: change_ownership.multi_leader_rounds as u32,
+                    open_multi_leader_rounds: change_ownership.open_multi_leader_rounds,
+                    timeout_config,
+                })
+            }
+            "ChangeApplicationPermissions" => {
+                let change_permissions =
+                    system_op.change_application_permissions.ok_or_else(|| {
+                        ConversionError::UnexpectedCertificateType(
+                            "Missing change_application_permissions metadata".to_string(),
+                        )
+                    })?;
+
+                let permissions: ApplicationPermissions =
+                    serde_json::from_str(&change_permissions.permissions.permissions_json)
+                        .map_err(ConversionError::Serde)?;
+
+                Ok(SystemOperation::ChangeApplicationPermissions(permissions))
+            }
+            "PublishModule" => {
+                let publish_module = system_op.publish_module.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing publish_module metadata for PublishModule operation".to_string(),
+                    )
+                })?;
+
+                let module_id: ModuleId = publish_module.module_id.parse().map_err(|_| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Invalid module_id format".to_string(),
+                    )
+                })?;
+
+                Ok(SystemOperation::PublishModule { module_id })
+            }
+            "PublishDataBlob" => {
+                let publish_data_blob = system_op.publish_data_blob.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing publish_data_blob metadata".to_string(),
+                    )
+                })?;
+                Ok(SystemOperation::PublishDataBlob {
+                    blob_hash: publish_data_blob.blob_hash,
+                })
+            }
+            "VerifyBlob" => {
+                let verify_blob = system_op.verify_blob.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing verify_blob metadata for VerifyBlob operation".to_string(),
+                    )
+                })?;
+                let blob_id: BlobId = verify_blob.blob_id.parse().map_err(|_| {
+                    ConversionError::UnexpectedCertificateType("Invalid blob_id format".to_string())
+                })?;
+                Ok(SystemOperation::VerifyBlob { blob_id })
+            }
+            "CreateApplication" => {
+                let create_application = system_op.create_application.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing create_application metadata".to_string(),
+                    )
+                })?;
+
+                let module_id: ModuleId = create_application.module_id.parse().map_err(|_| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Invalid module_id format".to_string(),
+                    )
+                })?;
+
+                let parameters = hex::decode(create_application.parameters_hex).map_err(|_| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Invalid hex in parameters_hex".to_string(),
+                    )
+                })?;
+
+                let instantiation_argument =
+                    hex::decode(create_application.instantiation_argument_hex).map_err(|_| {
+                        ConversionError::UnexpectedCertificateType(
+                            "Invalid hex in instantiation_argument_hex".to_string(),
+                        )
+                    })?;
+
+                let required_application_ids = create_application
+                    .required_application_ids
+                    .into_iter()
+                    .map(|id| {
+                        id.parse::<RealApplicationId>().map_err(|_| {
+                            ConversionError::UnexpectedCertificateType(
+                                "Invalid required_application_id format".to_string(),
+                            )
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Ok(SystemOperation::CreateApplication {
+                    module_id,
+                    parameters,
+                    instantiation_argument,
+                    required_application_ids,
+                })
+            }
+            "Admin" => {
+                let admin = system_op.admin.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing admin metadata for Admin operation".to_string(),
+                    )
+                })?;
+
+                let admin_op = match admin.admin_operation_type.as_str() {
+                    "PublishCommitteeBlob" => {
+                        let blob_hash = admin.blob_hash.ok_or_else(|| {
+                            ConversionError::UnexpectedCertificateType(
+                                "Missing blob_hash for PublishCommitteeBlob".to_string(),
+                            )
+                        })?;
+                        AdminOperation::PublishCommitteeBlob { blob_hash }
+                    }
+                    "CreateCommittee" => {
+                        let epoch_val = admin.epoch.ok_or_else(|| {
+                            ConversionError::UnexpectedCertificateType(
+                                "Missing epoch for CreateCommittee".to_string(),
+                            )
+                        })?;
+                        let epoch = Epoch(epoch_val as u32);
+                        let blob_hash = admin.blob_hash.ok_or_else(|| {
+                            ConversionError::UnexpectedCertificateType(
+                                "Missing blob_hash for CreateCommittee".to_string(),
+                            )
+                        })?;
+                        AdminOperation::CreateCommittee { epoch, blob_hash }
+                    }
+                    "RemoveCommittee" => {
+                        let epoch_val = admin.epoch.ok_or_else(|| {
+                            ConversionError::UnexpectedCertificateType(
+                                "Missing epoch for RemoveCommittee".to_string(),
+                            )
+                        })?;
+                        let epoch = Epoch(epoch_val as u32);
+                        AdminOperation::RemoveCommittee { epoch }
+                    }
+                    _ => {
+                        return Err(ConversionError::UnexpectedCertificateType(format!(
+                            "Unknown admin operation type: {}",
+                            admin.admin_operation_type
+                        )));
+                    }
+                };
+
+                Ok(SystemOperation::Admin(admin_op))
+            }
+            "ProcessNewEpoch" => {
+                let epoch_val = system_op.epoch.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing epoch for ProcessNewEpoch operation".to_string(),
+                    )
+                })?;
+                Ok(SystemOperation::ProcessNewEpoch(Epoch(epoch_val as u32)))
+            }
+            "ProcessRemovedEpoch" => {
+                let epoch_val = system_op.epoch.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing epoch for ProcessRemovedEpoch operation".to_string(),
+                    )
+                })?;
+                Ok(SystemOperation::ProcessRemovedEpoch(Epoch(
+                    epoch_val as u32,
+                )))
+            }
+            "UpdateStreams" => {
+                let update_streams = system_op.update_streams.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing update_streams metadata for UpdateStreams operation".to_string(),
+                    )
+                })?;
+
+                let streams = update_streams
+                    .into_iter()
+                    .map(|stream| {
+                        let stream_id_parsed: StreamId =
+                            stream.stream_id.parse().map_err(|_| {
+                                ConversionError::UnexpectedCertificateType(
+                                    "Invalid stream_id format".to_string(),
+                                )
+                            })?;
+                        Ok((stream.chain_id, stream_id_parsed, stream.next_index as u32))
+                    })
+                    .collect::<Result<Vec<_>, ConversionError>>()?;
+
+                Ok(SystemOperation::UpdateStreams(streams))
+            }
+            _ => Err(ConversionError::UnexpectedCertificateType(format!(
+                "Unknown system operation type: {}",
+                system_op.system_operation_type
+            ))),
+        }
+    }
+
+    /// Convert GraphQL transaction metadata to a Transaction object.
     fn convert_transaction_metadata(
         metadata: block::BlockBlockBlockBodyTransactionMetadata,
     ) -> Result<Transaction, ConversionError> {
@@ -174,7 +507,7 @@ mod from {
                             .messages
                             .into_iter()
                             .map(|msg| linera_chain::data_types::PostedMessage {
-                                authenticated_signer: msg.authenticated_signer,
+                                authenticated_owner: msg.authenticated_owner,
                                 grant: msg.grant,
                                 refund_grant_to: msg.refund_grant_to.map(|rgt| Account {
                                     chain_id: rgt.chain_id,
@@ -200,29 +533,14 @@ mod from {
 
                 let operation = match graphql_operation.operation_type.as_str() {
                     "System" => {
-                        let bytes_hex = graphql_operation.system_bytes_hex.ok_or_else(|| {
+                        let system_op = graphql_operation.system_operation.ok_or_else(|| {
                             ConversionError::UnexpectedCertificateType(
-                                "Missing system_bytes_hex for System operation".to_string(),
+                                "Missing system_operation for System operation".to_string(),
                             )
                         })?;
 
-                        // Convert hex string to bytes
-                        let bytes = hex::decode(bytes_hex).map_err(|_| {
-                            ConversionError::UnexpectedCertificateType(
-                                "Invalid hex in system_bytes_hex".to_string(),
-                            )
-                        })?;
-
-                        // Deserialize the system operation from BCS bytes
-                        let system_operation: SystemOperation =
-                            linera_base::bcs::from_bytes(&bytes).map_err(|_| {
-                                ConversionError::UnexpectedCertificateType(
-                                    "Failed to deserialize system operation from BCS bytes"
-                                        .to_string(),
-                                )
-                            })?;
-
-                        Operation::System(Box::new(system_operation))
+                        let sys_op = convert_system_operation(system_op)?;
+                        Operation::System(Box::new(sys_op))
                     }
                     "User" => {
                         let application_id = graphql_operation.application_id.ok_or_else(|| {
@@ -274,7 +592,7 @@ mod from {
         fn from(val: block::BlockBlockBlockBodyMessages) -> Self {
             let block::BlockBlockBlockBodyMessages {
                 destination,
-                authenticated_signer,
+                authenticated_owner,
                 grant,
                 refund_grant_to,
                 kind,
@@ -282,7 +600,7 @@ mod from {
             } = val;
             OutgoingMessage {
                 destination,
-                authenticated_signer,
+                authenticated_owner,
                 grant,
                 refund_grant_to: refund_grant_to.map(|rgt| Account {
                     chain_id: rgt.chain_id,
@@ -304,7 +622,7 @@ mod from {
                 epoch,
                 height,
                 timestamp,
-                authenticated_signer,
+                authenticated_owner,
                 previous_block_hash,
                 state_hash,
                 transactions_hash,
@@ -332,7 +650,7 @@ mod from {
                 epoch,
                 height,
                 timestamp,
-                authenticated_signer,
+                authenticated_owner,
                 previous_block_hash,
                 state_hash,
                 transactions_hash,

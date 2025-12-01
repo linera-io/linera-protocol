@@ -66,7 +66,7 @@ where
 
     /// Returns a storage context suitable for a root view.
     pub fn root_view_storage_context(&self) -> ViewStorageContext {
-        ViewStorageContext::new_unsafe(self.key_value_store(), Vec::new(), ())
+        ViewStorageContext::new_unchecked(self.key_value_store(), Vec::new(), ())
     }
 }
 
@@ -164,15 +164,20 @@ where
     pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
         base_wit::assert_data_blob_exists(hash.into())
     }
+
+    /// Returns true if the corresponding contract uses a zero amount of storage.
+    pub fn has_empty_storage(&mut self, application: ApplicationId) -> bool {
+        contract_wit::has_empty_storage(application.into())
+    }
 }
 
 impl<Application> ContractRuntime<Application>
 where
     Application: Contract,
 {
-    /// Returns the authenticated signer for this execution, if there is one.
-    pub fn authenticated_signer(&mut self) -> Option<AccountOwner> {
-        contract_wit::authenticated_signer().map(AccountOwner::from)
+    /// Returns the authenticated owner for this execution, if there is one.
+    pub fn authenticated_owner(&mut self) -> Option<AccountOwner> {
+        contract_wit::authenticated_owner().map(AccountOwner::from)
     }
 
     /// Returns [`true`] if the incoming message was rejected from the original destination and is
@@ -203,7 +208,7 @@ where
         owner: AccountOwner,
     ) -> Result<(), AccountPermissionError> {
         ensure!(
-            self.authenticated_signer() == Some(owner)
+            self.authenticated_owner() == Some(owner)
                 || self.authenticated_caller_id().map(AccountOwner::from) == Some(owner),
             AccountPermissionError::NotPermitted(owner)
         );
@@ -390,7 +395,7 @@ where
         contract_wit::publish_module(&contract.into(), &service.into(), vm_runtime.into()).into()
     }
 
-    /// Returns the round in which this block was validated.
+    /// Returns the multi-leader round in which this block was validated.
     pub fn validation_round(&mut self) -> Option<u32> {
         contract_wit::validation_round()
     }
@@ -430,7 +435,7 @@ where
         self
     }
 
-    /// Forwards the authenticated signer with the message.
+    /// Forwards the authenticated owner with the message.
     pub fn with_authentication(mut self) -> Self {
         self.authenticated = true;
         self

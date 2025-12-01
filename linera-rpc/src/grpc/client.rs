@@ -25,7 +25,7 @@ use linera_core::{
 };
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
-use tracing::{debug, info, instrument, warn, Level};
+use tracing::{debug, instrument, trace, warn, Level};
 
 use super::{
     api::{self, validator_node_client::ValidatorNodeClient, SubscriptionRequest},
@@ -71,11 +71,11 @@ impl GrpcClient {
     fn is_retryable(status: &Status) -> bool {
         match status.code() {
             Code::DeadlineExceeded | Code::Aborted | Code::Unavailable | Code::Unknown => {
-                info!("gRPC request interrupted: {}; retrying", status);
+                trace!("gRPC request interrupted: {status:?}; retrying");
                 true
             }
             Code::Ok | Code::Cancelled | Code::ResourceExhausted => {
-                info!("Unexpected gRPC status: {}; retrying", status);
+                trace!("Unexpected gRPC status: {status:?}; retrying");
                 true
             }
             Code::NotFound => false, // This code is used if e.g. the validator is missing blobs.
@@ -88,7 +88,7 @@ impl GrpcClient {
             | Code::Internal
             | Code::DataLoss
             | Code::Unauthenticated => {
-                info!("Unexpected gRPC status: {}", status);
+                trace!("Unexpected gRPC status: {status:?}");
                 false
             }
         }
@@ -187,6 +187,10 @@ macro_rules! client_delegate {
 
 impl ValidatorNode for GrpcClient {
     type NotificationStream = NotificationStream;
+
+    fn address(&self) -> String {
+        self.address.clone()
+    }
 
     #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
     async fn handle_block_proposal(
@@ -496,5 +500,17 @@ impl ValidatorNode for GrpcClient {
     #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         Ok(client_delegate!(self, missing_blob_ids, blob_ids)?.try_into()?)
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    async fn get_shard_info(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<linera_core::data_types::ShardInfo, NodeError> {
+        let response = client_delegate!(self, get_shard_info, chain_id)?;
+        Ok(linera_core::data_types::ShardInfo {
+            shard_id: response.shard_id as usize,
+            total_shards: response.total_shards as usize,
+        })
     }
 }

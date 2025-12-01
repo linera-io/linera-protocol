@@ -1,0 +1,71 @@
+name: Remote Kubernetes Net Test
+
+on:
+  push:
+    branches: [ 'devnet_*', 'testnet_*' ]
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+# This allows a subsequently queued workflow run to interrupt previous runs on pull requests
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: full
+  # We allow redundant explicit links because `cargo rdme` doesn't know how to resolve implicit intra-crate links.
+  RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links -D warnings
+  RUSTFLAGS: -D warnings
+  RUSTUP_MAX_RETRIES: 10
+  RUST_LOG: linera=debug
+  RUST_LOG_FORMAT: plain
+  LINERA_STORAGE_SERVICE: 127.0.0.1:1235
+  LINERA_WALLET: /tmp/local-linera-net/wallet_0.json
+  LINERA_KEYSTORE: /tmp/local-linera-net/keystore_0.json
+  LINERA_STORAGE: rocksdb:/tmp/local-linera-net/client_0.db
+  LINERA_FAUCET_URL: http://localhost:8079
+
+permissions:
+  contents: read
+
+jobs:
+  remote-kubernetes-net-test:
+    if: ${{ github.event_name == 'merge_group' }}
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 90
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install helmfile
+      run: |
+        # Install specific version to match local development environment
+        HELMFILE_VERSION="v0.168.0"
+        curl -fsSL -o helmfile.tar.gz "https://github.com/helmfile/helmfile/releases/download/${HELMFILE_VERSION}/helmfile_${HELMFILE_VERSION#v}_linux_amd64.tar.gz"
+        tar -xzf helmfile.tar.gz helmfile
+        sudo mv helmfile /usr/local/bin/
+        rm helmfile.tar.gz
+        # Verify installation
+        which helmfile && helmfile --version
+    - name: Build binaries
+      run: |
+        cargo build --features storage-service --bin linera-server --bin linera-proxy --bin linera
+    - name: Run the validators with Kubernetes and wait for faucet
+      run: |
+        mkdir /tmp/local-linera-net
+        FAUCET_PORT=$(echo "$LINERA_FAUCET_URL" | cut -d: -f3)
+        LOG_FILE="/tmp/linera-net-up-kubernetes.log"
+        cargo run --bin linera --features kubernetes -- net up --kubernetes --policy-config testnet --path /tmp/local-linera-net --validators 1 --shards 2 --with-faucet --faucet-port $FAUCET_PORT --faucet-amount 1000 > "$LOG_FILE" 2>&1 &
+        NETWORK_PID=$!
+        bash scripts/wait-for-kubernetes-service.sh "$LINERA_FAUCET_URL" "$NETWORK_PID" "$LOG_FILE"
+    - name: Run the Kubernetes tests
+      run: |
+        cargo test -p linera-service remote_net_grpc --features remote-net

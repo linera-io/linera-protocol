@@ -3,16 +3,16 @@
 
 use std::{collections::BTreeMap, vec};
 
+use allocative::Allocative;
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{BlobContent, BlockHeight, StreamUpdate},
-    identifiers::{AccountOwner, BlobId, StreamId},
+    identifiers::{AccountOwner, BlobId},
     time::Instant,
 };
 use linera_views::{
     context::Context,
     key_value_store_view::KeyValueStoreView,
-    map_view::MapView,
     reentrant_collection_view::HashedReentrantCollectionView,
     views::{ClonableView, ReplaceContext, View},
 };
@@ -31,20 +31,19 @@ use super::{execution_state_actor::ExecutionRequest, runtime::ServiceRuntimeRequ
 use crate::{
     execution_state_actor::ExecutionStateActor, resources::ResourceController,
     system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ExecutionError,
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageContext, OperationContext,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, JsVec, MessageContext, OperationContext,
     ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime, Timestamp,
     TransactionTracker,
 };
 
 /// A view accessing the execution state of a chain.
-#[derive(Debug, ClonableView, CryptoHashView)]
+#[derive(Debug, ClonableView, CryptoHashView, Allocative)]
+#[allocative(bound = "C")]
 pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
     /// User applications.
     pub users: HashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
-    /// The number of events in the streams that this chain is writing to.
-    pub stream_event_counts: MapView<C, StreamId, u32>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
@@ -57,7 +56,6 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
         ExecutionStateView {
             system: self.system.with_context(ctx.clone()).await,
             users: self.users.with_context(ctx.clone()).await,
-            stream_event_counts: self.stream_event_counts.with_context(ctx.clone()).await,
         }
     }
 }
@@ -89,7 +87,7 @@ where
         assert_eq!(chain_id, self.context().extra().chain_id);
         let context = OperationContext {
             chain_id,
-            authenticated_signer: None,
+            authenticated_owner: None,
             height: application_description.block_height,
             round: None,
             timestamp: local_time,
@@ -133,9 +131,11 @@ where
             &[],
         );
         txn_tracker.add_created_blob(blob);
-        ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller)
-            .run_user_action(application_id, action, context.refund_grant_to(), None)
-            .await?;
+        Box::pin(
+            ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller)
+                .run_user_action(application_id, action, context.refund_grant_to(), None),
+        )
+        .await?;
 
         Ok(())
     }
@@ -151,10 +151,10 @@ pub enum UserAction {
 impl UserAction {
     pub(crate) fn signer(&self) -> Option<AccountOwner> {
         match self {
-            UserAction::Instantiate(context, _) => context.authenticated_signer,
-            UserAction::Operation(context, _) => context.authenticated_signer,
+            UserAction::Instantiate(context, _) => context.authenticated_owner,
+            UserAction::Operation(context, _) => context.authenticated_owner,
             UserAction::ProcessStreams(_, _) => None,
-            UserAction::Message(context, _) => context.authenticated_signer,
+            UserAction::Message(context, _) => context.authenticated_owner,
         }
     }
 
@@ -258,27 +258,26 @@ where
         let mut txn_tracker = TransactionTracker::default().with_blobs(created_blobs);
         let mut resource_controller = ResourceController::default();
         let mut actor = ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller);
-        let (code, description) = actor.load_service(application_id).await?;
 
-        let service_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
+        let (codes, descriptions) = actor.service_and_dependencies(application_id).await?;
+
+        let thread = web_thread::Thread::new();
+        let service_runtime_task = thread.run_send(JsVec(codes), move |codes| async move {
             let mut runtime =
                 ServiceSyncRuntime::new_with_deadline(execution_state_sender, context, deadline);
 
-            async move {
-                let code = codes.next().await.expect("we send this immediately below");
-                runtime.preload_service(application_id, code, description)?;
-                runtime.run_query(application_id, query)
+            for (code, description) in codes.0.into_iter().zip(descriptions) {
+                runtime.preload_service(ApplicationId::from(&description), code, description)?;
             }
-        })
-        .await;
 
-        service_runtime_task.send(code)?;
+            runtime.run_query(application_id, query)
+        });
 
         while let Some(request) = execution_state_receiver.next().await {
             actor.handle_request(request).await?;
         }
 
-        service_runtime_task.join().await
+        service_runtime_task.await?
     }
 
     async fn query_user_application_with_long_lived_service(

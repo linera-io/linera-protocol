@@ -26,6 +26,7 @@ test = [
 web = ["linera-base/web", "linera-views/web", "linera-execution/web"]
 
 [dependencies]
+allocative.workspace = true
 anyhow = { workspace = true, optional = true }
 async-graphql.workspace = true
 axum = { workspace = true, optional = true }
@@ -39,6 +40,7 @@ rand_chacha.workspace = true
 rand_distr = { workspace = true, features = ["alloc", "serde1"] }
 serde.workspace = true
 serde_bytes.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

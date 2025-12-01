@@ -12,7 +12,7 @@ use async_graphql::{EmptySubscription, Request, Response, Schema};
 use ethereum_tracker::Operation;
 use linera_sdk::{
     ethereum::{EthereumDataType, EthereumEvent, EthereumQueries, ServiceEthereumClient},
-    graphql::GraphQLMutationRoot,
+    graphql::GraphQLMutationRoot as _,
     linera_base_types::WithServiceAbi,
     views::View,
     Service, ServiceRuntime,

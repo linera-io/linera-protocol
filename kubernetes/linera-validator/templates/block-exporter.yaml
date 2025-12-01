@@ -1,0 +1,236 @@
+{{- if .Values.blockExporter.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: block-exporter-config
+data:
+{{- range $i := until (int .Values.blockExporter.replicas) }}
+  exporter-config-{{ $i }}.toml: |
+{{ tpl ($.Files.Get "exporter-config.toml.tpl") (dict "exporterId" $i "Values" $.Values) | indent 4 }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: linera-block-exporter
+  labels:
+    app: linera-block-exporter
+spec:
+  clusterIP: None
+  ports:
+    - port: {{ .Values.blockExporter.port }}
+      name: http
+    - port: {{ .Values.blockExporter.metricsPort }}
+      name: metrics
+  selector:
+    app: linera-block-exporter
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: linera-block-exporter
+spec:
+  serviceName: linera-block-exporter
+  replicas: {{ .Values.blockExporter.replicas }}
+  selector:
+    matchLabels:
+      app: linera-block-exporter
+  template:
+    metadata:
+      labels:
+        app: linera-block-exporter
+    spec:
+      {{- if eq .Values.environment "GCP" }}
+      nodeSelector:
+        workload: system
+      tolerations:
+      - key: system
+        value: "true"
+        effect: NoSchedule
+      {{- end }}
+      initContainers:
+        - name: linera-exporter-initializer
+          image: {{ .Values.indexer.image }}
+          imagePullPolicy: {{ .Values.indexer.imagePullPolicy }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          command:
+            - bash
+            - -c
+            - |
+              set -euo pipefail
+              while true; do
+                output=$(./linera storage check-existence --storage "{{ .Values.storage }}" 2>&1)
+                status=$?
+                if [ "$status" -eq 0 ]; then
+                  echo "Database already exists, no need to initialize."
+                  exit 0
+                else
+                  if [ "$status" -eq 1 ]; then
+                    echo "Database does not exist, retrying in {{ .Values.blockExporter.initRetryIntervalSeconds | default 5 }} seconds..."
+                  else
+                    echo "An unexpected error occurred (status: $status): $output"
+                    echo "Retrying in {{ .Values.blockExporter.initRetryIntervalSeconds | default 5 }} seconds..."
+                  fi
+                  sleep {{ .Values.blockExporter.initRetryIntervalSeconds | default 5 }}
+                fi
+              done
+        - name: config-selector
+          image: busybox
+          command:
+            - sh
+            - -c
+            - |
+              ORDINAL=$(echo $HOSTNAME | sed 's/.*-//')
+              cp /configmap/exporter-config-${ORDINAL}.toml /config/exporter-config.toml
+          volumeMounts:
+            - name: configmap
+              mountPath: /configmap
+            - name: config
+              mountPath: /config
+        - name: indexer-readiness-check
+          image: curlimages/curl:latest
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "25m"
+            limits:
+              memory: "64Mi"
+              cpu: "50m"
+          env:
+            - name: INDEXER_ENDPOINT
+              value: {{ if .Values.blockExporter.indexerEndpoint }}"{{ .Values.blockExporter.indexerEndpoint }}"{{ else }}"linera-indexer-{{ .Values.networkName }}.linera-indexer.svc.cluster.local"{{ end }}
+            - name: INDEXER_PORT
+              value: {{ if .Values.blockExporter.indexerEndpoint }}"443"{{ else }}"{{ .Values.blockExporter.indexerPort }}"{{ end }}
+            - name: INDEXER_TLS
+              value: {{ if .Values.blockExporter.indexerEndpoint }}"true"{{ else }}"false"{{ end }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              # Validate extracted values
+              if [ -z "$INDEXER_ENDPOINT" ] || [ -z "$INDEXER_PORT" ]; then
+                echo "Error: INDEXER_ENDPOINT or INDEXER_PORT is empty"
+                exit 1
+              fi
+
+              if [ "$INDEXER_TLS" = "true" ]; then
+                INDEXER_URL="https://${INDEXER_ENDPOINT}:${INDEXER_PORT}"
+              else
+                INDEXER_URL="http://${INDEXER_ENDPOINT}:${INDEXER_PORT}"
+              fi
+
+              echo "Checking indexer readiness at ${INDEXER_URL}..."
+
+              while true; do
+                # Try to connect to the indexer (just check if it's listening)
+                # Using --insecure for init container readiness check only
+                # This is acceptable because:
+                # 1. Only checking if service is reachable, not exchanging sensitive data
+                # 2. External endpoints may use self-signed certs in dev/staging
+                # 3. Actual exporter traffic uses proper TLS validation
+                if curl --max-time 5 --connect-timeout 5 --silent --fail --insecure "${INDEXER_URL}" > /dev/null 2>&1 || \
+                   curl --max-time 5 --connect-timeout 5 --silent --head --insecure "${INDEXER_URL}" > /dev/null 2>&1; then
+                  echo "Indexer is reachable, exporter can start."
+                  exit 0
+                else
+                  echo "Indexer not ready yet, retrying in {{ .Values.blockExporter.initRetryIntervalSeconds | default 5 }} seconds..."
+                  sleep {{ .Values.blockExporter.initRetryIntervalSeconds | default 5 }}
+                fi
+              done
+      containers:
+        - name: linera-block-exporter
+          image: {{ .Values.indexer.image }}
+          imagePullPolicy: {{ .Values.indexer.imagePullPolicy }}
+          command:
+            - "./linera-exporter"
+            - "--storage"
+            - "{{ .Values.storage }}"
+            - "--config-path"
+            - "/config/exporter-config.toml"
+            - "--metrics-port"
+            - "{{ .Values.blockExporter.metricsPort }}"
+          ports:
+            - containerPort: {{ .Values.blockExporter.port }}
+              name: http
+            - containerPort: {{ .Values.blockExporter.metricsPort }}
+              name: metrics
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.blockExporter.logLevel }}
+            - name: RUST_BACKTRACE
+              value: "1"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: exporter-data
+              mountPath: /data
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.blockExporter.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.blockExporter.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: configmap
+          configMap:
+            name: block-exporter-config
+        - name: config
+          emptyDir: {}
+        - name: exporter-data
+          persistentVolumeClaim:
+            claimName: exporter-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: exporter-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.blockExporter.storageSize }}
+{{- if .Values.blockExporter.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: linera-block-exporter
+  labels:
+    app: linera-block-exporter
+spec:
+  selector:
+    matchLabels:
+      app: linera-block-exporter
+  endpoints:
+  - port: metrics
+    path: /metrics
+{{- end }}
+{{- end }}

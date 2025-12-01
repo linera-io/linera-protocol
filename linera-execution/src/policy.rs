@@ -11,6 +11,7 @@
 
 use std::{collections::BTreeSet, fmt};
 
+use allocative::Allocative;
 use linera_base::{
     data_types::{Amount, ArithmeticError, BlobContent, CompressedBytecode, Resources},
     ensure,
@@ -22,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use crate::ExecutionError;
 
 /// A collection of prices and limits associated with block execution.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Allocative)]
 pub struct ResourceControlPolicy {
     /// The price per unit of fuel (aka gas) for Wasm execution.
     pub wasm_fuel_unit: Amount,
@@ -406,7 +407,7 @@ impl ResourceControlPolicy {
     /// Returns how much fuel can be paid with the given balance.
     pub(crate) fn remaining_fuel(&self, balance: Amount, vm_runtime: VmRuntime) -> u64 {
         let fuel_unit = self.fuel_unit_price(vm_runtime);
-        u64::try_from(balance.saturating_div(fuel_unit)).unwrap_or(u64::MAX)
+        u64::try_from(balance.saturating_ratio(fuel_unit)).unwrap_or(u64::MAX)
     }
 
     pub fn check_blob_size(&self, content: &BlobContent) -> Result<(), ExecutionError> {

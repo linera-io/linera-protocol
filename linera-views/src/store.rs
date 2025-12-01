@@ -47,6 +47,9 @@ pub trait ReadableKeyValueStore: WithError {
     /// Retrieve the number of stream queries.
     fn max_stream_queries(&self) -> usize;
 
+    /// Gets the root key of the store.
+    fn root_key(&self) -> Result<Vec<u8>, Self::Error>;
+
     /// Retrieves a `Vec<u8>` from the database using the provided `key`.
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
@@ -54,12 +57,12 @@ pub trait ReadableKeyValueStore: WithError {
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
 
     /// Tests whether a list of keys exist in the database
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error>;
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
 
     /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
@@ -86,7 +89,7 @@ pub trait ReadableKeyValueStore: WithError {
     /// Reads multiple `keys` and deserializes the results if present.
     fn read_multi_values<V: DeserializeOwned + Send + Sync>(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> impl Future<Output = Result<Vec<Option<V>>, Self::Error>> {
         async {
             let mut values = Vec::with_capacity(keys.len());
@@ -165,10 +168,7 @@ pub trait KeyValueDatabase: WithError + Sized {
 
     /// Lists the root keys of the namespace.
     /// It is possible that some root keys have no keys.
-    async fn list_root_keys(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, Self::Error>;
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, Self::Error>;
 
     /// Deletes all the existing namespaces.
     fn delete_all(config: &Self::Config) -> impl Future<Output = Result<(), Self::Error>> {
@@ -296,6 +296,10 @@ pub mod inactive_store {
             0
         }
 
+        fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
+            panic!("attempt to read from an inactive store!")
+        }
+
         async fn read_value_bytes(&self, _key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
             panic!("attempt to read from an inactive store!")
         }
@@ -304,13 +308,13 @@ pub mod inactive_store {
             panic!("attempt to read from an inactive store!")
         }
 
-        async fn contains_keys(&self, _keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
+        async fn contains_keys(&self, _keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error> {
             panic!("attempt to read from an inactive store!")
         }
 
         async fn read_multi_values_bytes(
             &self,
-            _keys: Vec<Vec<u8>>,
+            _keys: &[Vec<u8>],
         ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
             panic!("attempt to read from an inactive store!")
         }

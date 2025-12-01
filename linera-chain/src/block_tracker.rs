@@ -13,10 +13,11 @@ use linera_base::{
 };
 use linera_execution::{
     execution_state_actor::ExecutionStateActor, ExecutionRuntimeContext, ExecutionStateView,
-    MessageContext, OperationContext, OutgoingMessage, ResourceController, ResourceTracker,
-    SystemExecutionStateView, TransactionOutcome, TransactionTracker,
+    MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
+    ResourceTracker, SystemExecutionStateView, TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::Context;
+use tracing::instrument;
 
 #[cfg(with_metrics)]
 use crate::chain::metrics;
@@ -35,7 +36,7 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
     chain_id: ChainId,
     block_height: BlockHeight,
     timestamp: Timestamp,
-    authenticated_signer: Option<AccountOwner>,
+    authenticated_owner: Option<AccountOwner>,
     resource_controller: &'resources mut ResourceController<Option<AccountOwner>, ResourceTracker>,
     local_time: Timestamp,
     #[debug(skip_if = Option::is_none)]
@@ -82,7 +83,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             chain_id: proposal.chain_id,
             block_height: proposal.height,
             timestamp: proposal.timestamp,
-            authenticated_signer: proposal.authenticated_signer,
+            authenticated_owner: proposal.authenticated_owner,
             resource_controller,
             local_time,
             replaying_oracle_responses,
@@ -100,6 +101,10 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Executes a transaction in the context of the block.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id,
+        block_height = %self.block_height,
+    ))]
     pub async fn execute_transaction<C>(
         &mut self,
         transaction: &Transaction,
@@ -141,7 +146,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     chain_id: self.chain_id,
                     height: self.block_height,
                     round,
-                    authenticated_signer: self.authenticated_signer,
+                    authenticated_owner: self.authenticated_owner,
                     timestamp: self.timestamp,
                 };
                 let mut actor =
@@ -198,7 +203,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             is_bouncing: posted_message.is_bouncing(),
             height: self.block_height,
             round,
-            authenticated_signer: posted_message.authenticated_signer,
+            authenticated_owner: posted_message.authenticated_owner,
             refund_grant_to: posted_message.refund_grant_to,
             timestamp: self.timestamp,
         };
@@ -282,6 +287,9 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         let mut resource_controller = self.resource_controller.with_state(view).await?;
 
         for message_out in &txn_outcome.outgoing_messages {
+            if message_out.kind == MessageKind::Bouncing {
+                continue; // Bouncing messages are free.
+            }
             resource_controller
                 .track_message(&message_out.message)
                 .with_execution_context(context)?;
@@ -352,18 +360,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             .collect()
     }
 
-    /// Returns the execution context for the current transaction.
-    pub fn chain_execution_context(&self, transaction: &Transaction) -> ChainExecutionContext {
-        match transaction {
-            Transaction::ReceiveMessages(_) => {
-                ChainExecutionContext::IncomingBundle(self.transaction_index)
-            }
-            Transaction::ExecuteOperation(_) => {
-                ChainExecutionContext::Operation(self.transaction_index)
-            }
-        }
-    }
-
     /// Returns a mutable reference to the resource controller.
     pub fn resource_controller_mut(
         &mut self,
@@ -393,6 +389,18 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             self.blobs,
             self.operation_results,
         )
+    }
+
+    /// Returns the execution context for the current transaction.
+    fn chain_execution_context(&self, transaction: &Transaction) -> ChainExecutionContext {
+        match transaction {
+            Transaction::ReceiveMessages(_) => {
+                ChainExecutionContext::IncomingBundle(self.transaction_index)
+            }
+            Transaction::ExecuteOperation(_) => {
+                ChainExecutionContext::Operation(self.transaction_index)
+            }
+        }
     }
 }
 

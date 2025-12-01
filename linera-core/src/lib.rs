@@ -29,3 +29,7 @@ pub use crate::join_set_ext::{JoinSetExt, TaskHandle};
 
 pub mod environment;
 pub use environment::Environment;
+
+/// The maximum number of entries in a `received_log` included in a `ChainInfo` response.
+// TODO(#4638): Revisit the number.
+pub const CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES: usize = 20_000;

@@ -203,13 +203,14 @@ async fn create_and_store_populated_reentrant_collection_view(
     let mut view = create_populated_reentrant_collection_view().await;
     let context = view.context().clone();
     let mut batch = Batch::new();
-    view.flush(&mut batch)
+    view.pre_save(&mut batch)
         .expect("Failed to flush populated `ReentrantCollectionView`'s contents");
     context
         .store()
         .write_batch(batch)
         .await
         .expect("Failed to store populated `ReentrantCollectionView`'s contents");
+    view.post_save();
 
     ReentrantCollectionView::load(context)
         .await

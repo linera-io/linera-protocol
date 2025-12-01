@@ -30,7 +30,6 @@ use linera_base::{
 };
 use linera_execution::ExecutionError;
 use linera_views::ViewError;
-use rand_distr::WeightedError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -56,7 +55,7 @@ pub enum ChainError {
         height: BlockHeight,
     },
     #[error(
-        "Message in block proposed to {chain_id:?} does not match the previously received messages from \
+        "Message in block proposed to {chain_id} does not match the previously received messages from \
         origin {origin:?}: was {bundle:?} instead of {previous_bundle:?}"
     )]
     UnexpectedMessage {
@@ -66,7 +65,7 @@ pub enum ChainError {
         previous_bundle: Box<MessageBundle>,
     },
     #[error(
-        "Message in block proposed to {chain_id:?} is out of order compared to previous messages \
+        "Message in block proposed to {chain_id} is out of order compared to previous messages \
          from origin {origin:?}: {bundle:?}. Block and height should be at least: \
          {next_height}, {next_index}"
     )]
@@ -78,7 +77,7 @@ pub enum ChainError {
         next_index: u32,
     },
     #[error(
-        "Block proposed to {chain_id:?} is attempting to reject protected message \
+        "Block proposed to {chain_id} is attempting to reject protected message \
         {posted_message:?}"
     )]
     CannotRejectMessage {
@@ -87,7 +86,7 @@ pub enum ChainError {
         posted_message: Box<PostedMessage>,
     },
     #[error(
-        "Block proposed to {chain_id:?} is attempting to skip a message bundle \
+        "Block proposed to {chain_id} is attempting to skip a message bundle \
          that cannot be skipped: {bundle:?}"
     )]
     CannotSkipMessage {
@@ -96,7 +95,7 @@ pub enum ChainError {
         bundle: Box<MessageBundle>,
     },
     #[error(
-        "Incoming message bundle in block proposed to {chain_id:?} has timestamp \
+        "Incoming message bundle in block proposed to {chain_id} has timestamp \
         {bundle_timestamp:}, which is later than the block timestamp {block_timestamp:}."
     )]
     IncorrectBundleTimestamp {
@@ -107,7 +106,8 @@ pub enum ChainError {
     #[error("The signature was not created by a valid entity")]
     InvalidSigner,
     #[error(
-        "Was expecting block height {expected_block_height} but found {found_block_height} instead"
+        "Chain is expecting a next block at height {expected_block_height} but the given block \
+        is at height {found_block_height} instead"
     )]
     UnexpectedBlockHeight {
         expected_block_height: BlockHeight,
@@ -143,8 +143,6 @@ pub enum ChainError {
     BlockProposalTooLarge(usize),
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
-    #[error("Invalid owner weights: {0}")]
-    OwnerWeightError(#[from] WeightedError),
     #[error("Closed chains cannot have operations, accepted messages or empty blocks")]
     ClosedChain,
     #[error("Empty blocks are not allowed")]
@@ -159,6 +157,51 @@ pub enum ChainError {
     RoundDoesNotTimeOut,
     #[error("Not signing timeout certificate; current round times out at time {0}")]
     NotTimedOutYet(Timestamp),
+}
+
+impl ChainError {
+    /// Returns whether this error is caused by an issue in the local node.
+    ///
+    /// Returns `false` whenever the error could be caused by a bad message from a peer.
+    pub fn is_local(&self) -> bool {
+        match self {
+            ChainError::CryptoError(_)
+            | ChainError::ArithmeticError(_)
+            | ChainError::ViewError(ViewError::NotFound(_))
+            | ChainError::InactiveChain(_)
+            | ChainError::IncorrectMessageOrder { .. }
+            | ChainError::CannotRejectMessage { .. }
+            | ChainError::CannotSkipMessage { .. }
+            | ChainError::IncorrectBundleTimestamp { .. }
+            | ChainError::InvalidSigner
+            | ChainError::UnexpectedBlockHeight { .. }
+            | ChainError::UnexpectedPreviousBlockHash
+            | ChainError::BlockHeightOverflow
+            | ChainError::InvalidBlockTimestamp { .. }
+            | ChainError::InsufficientRound(_)
+            | ChainError::InsufficientRoundStrict(_)
+            | ChainError::WrongRound(_)
+            | ChainError::HasIncompatibleConfirmedVote(..)
+            | ChainError::MustBeNewerThanLockingBlock(..)
+            | ChainError::MissingEarlierBlocks { .. }
+            | ChainError::CertificateValidatorReuse
+            | ChainError::CertificateRequiresQuorum
+            | ChainError::BlockProposalTooLarge(_)
+            | ChainError::ClosedChain
+            | ChainError::EmptyBlock
+            | ChainError::AuthorizedApplications(_)
+            | ChainError::MissingMandatoryApplications(_)
+            | ChainError::MissingOracleResponseList
+            | ChainError::RoundDoesNotTimeOut
+            | ChainError::NotTimedOutYet(_)
+            | ChainError::MissingCrossChainUpdate { .. } => false,
+            ChainError::ViewError(_)
+            | ChainError::UnexpectedMessage { .. }
+            | ChainError::InternalError(_)
+            | ChainError::BcsError(_) => true,
+            ChainError::ExecutionError(execution_error, _) => execution_error.is_local(),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug)]

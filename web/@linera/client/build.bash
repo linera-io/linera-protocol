@@ -2,6 +2,8 @@
 
 set -eu
 
+shopt -s extglob
+
 cd $(dirname -- "${BASH_SOURCE[0]}")
 
 export RUST_TOOLCHAIN=nightly
@@ -31,6 +33,10 @@ cargo build --lib --target wasm32-unknown-unknown $profile_flag
 wasm-bindgen \
     "$target_dir"/wasm32-unknown-unknown/$profile_dir/linera_web.wasm \
     --out-dir dist \
+    --out-name linera \
     --typescript \
     --target web \
     --split-linked-modules
+
+pnpm exec tsc
+pnpm exec tsc-alias

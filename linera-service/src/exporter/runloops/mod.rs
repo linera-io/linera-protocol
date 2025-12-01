@@ -69,13 +69,18 @@ struct NewBlockQueue {
 
 impl NewBlockQueue {
     async fn recv(&mut self) -> Option<BlockId> {
-        self.queue_front.recv().await
+        let block = self.queue_front.recv().await;
+        #[cfg(with_metrics)]
+        crate::metrics::EXPORTER_NOTIFICATION_QUEUE_LENGTH.dec();
+        block
     }
 
     fn push_back(&self, block_id: BlockId) {
         self.queue_rear
             .send(block_id)
             .expect("sender should never fail");
+        #[cfg(with_metrics)]
+        crate::metrics::EXPORTER_NOTIFICATION_QUEUE_LENGTH.inc();
     }
 }
 
@@ -107,7 +112,7 @@ where
         options,
         limits.work_queue_size.into(),
         shutdown_signal.clone(),
-        exporter_storage.clone(),
+        exporter_storage.clone()?,
         destination_config.destinations.clone(),
     );
 

@@ -1,0 +1,59 @@
+name: Benchmark Test
+
+on:
+  push:
+    branches: [ 'devnet_*', 'testnet_*' ]
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+# This allows a subsequently queued workflow run to interrupt previous runs on pull requests
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: full
+  # We allow redundant explicit links because `cargo rdme` doesn't know how to resolve implicit intra-crate links.
+  RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links -D warnings
+  RUSTFLAGS: -D warnings
+  RUSTUP_MAX_RETRIES: 10
+  RUST_LOG: linera=debug
+  RUST_LOG_FORMAT: plain
+  LINERA_STORAGE_SERVICE: 127.0.0.1:1235
+  LINERA_WALLET: /tmp/local-linera-net/wallet_0.json
+  LINERA_KEYSTORE: /tmp/local-linera-net/keystore_0.json
+  LINERA_STORAGE: rocksdb:/tmp/local-linera-net/client_0.db
+  LINERA_FAUCET_URL: http://localhost:8079
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark-test:
+    if: ${{ github.event_name == 'merge_group' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run the storage-service instance
+      run: |
+        cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
+    - name: Wait for storage service to be ready
+      run: |
+        STORAGE_HOST=$(echo "$LINERA_STORAGE_SERVICE" | cut -d: -f1)
+        STORAGE_PORT=$(echo "$LINERA_STORAGE_SERVICE" | cut -d: -f2)
+        until nc -z "$STORAGE_HOST" "$STORAGE_PORT"; do sleep 1; done
+    - name: Run the benchmark test
+      run: |
+        cargo build --locked -p linera-service --bin linera-benchmark --features storage-service
+        cargo test --locked -p linera-service --features storage-service benchmark

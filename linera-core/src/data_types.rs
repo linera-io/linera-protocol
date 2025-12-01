@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, ops::Not};
+use std::{collections::BTreeMap, fmt, ops::Not};
 
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -23,7 +23,7 @@ use linera_storage::ChainRuntimeContext;
 use linera_views::context::Context;
 use serde::{Deserialize, Serialize};
 
-use crate::client::ChainClientError;
+use crate::client::chain_client;
 
 /// A range of block heights as used in `ChainInfoQuery`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -238,6 +238,16 @@ pub struct ChainInfoResponse {
     pub signature: Option<ValidatorSignature>,
 }
 
+/// Information about shard allocation for a chain.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct ShardInfo {
+    /// The shard ID that will process this chain.
+    pub shard_id: usize,
+    /// The total number of shards in the validator.
+    pub total_shards: usize,
+}
+
 /// An internal request between chains within a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
@@ -354,12 +364,22 @@ pub struct RoundTimeout {
     pub next_block_height: BlockHeight,
 }
 
+impl fmt::Display for RoundTimeout {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} at height {} times out at {}",
+            self.current_round, self.next_block_height, self.timestamp
+        )
+    }
+}
+
 impl<T> ClientOutcome<T> {
     #[cfg(with_testing)]
     pub fn unwrap(self) -> T {
         match self {
             ClientOutcome::Committed(t) => t,
-            ClientOutcome::WaitForTimeout(timeout) => panic!("Unexpected timeout: {timeout:?}"),
+            ClientOutcome::WaitForTimeout(timeout) => panic!("unexpected timeout: {timeout}"),
         }
     }
 
@@ -380,9 +400,9 @@ impl<T> ClientOutcome<T> {
         }
     }
 
-    pub fn try_map<F, S>(self, f: F) -> Result<ClientOutcome<S>, ChainClientError>
+    pub fn try_map<F, S>(self, f: F) -> Result<ClientOutcome<S>, chain_client::Error>
     where
-        F: FnOnce(T) -> Result<S, ChainClientError>,
+        F: FnOnce(T) -> Result<S, chain_client::Error>,
     {
         match self {
             ClientOutcome::Committed(t) => Ok(ClientOutcome::Committed(f(t)?)),

@@ -51,28 +51,26 @@
     <script type="importmap">
       {
           "imports": {
-              "@linera/client": "./js/@linera/client/linera_web.js",
-              "@linera/signer": "./js/@linera/signer/index.js"
+              "@linera/client": "./js/@linera/client/index.js"
           }
       }
     </script>
 
     <script type="module">
       import * as linera from '@linera/client';
-      import { PrivateKey } from '@linera/signer';
       import { ethers } from 'ethers';
 
-      async function run() {
-          await linera.default();
+     async function run() {
+         console.log(linera);
+          await linera.initialize();
           const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
-          const mnemonic = ethers.Wallet.createRandom().mnemonic.phrase;
-          const signer = PrivateKey.fromMnemonic(mnemonic);
+          const signer = linera.PrivateKeySigner.createRandom();
           const wallet = await faucet.createWallet();
           const owner = await signer.address();
           document.getElementById('owner').innerText = owner;
           document.getElementById('chain-id').innerText = await faucet.claimChain(wallet, owner);
           const client = await new linera.Client(wallet, signer);
-          const counter = await client.frontend().application(import.meta.env.LINERA_APPLICATION_ID);
+          const counter = await client.application(import.meta.env.LINERA_APPLICATION_ID);
           const logs = document.getElementById('logs');
           const incrementButton = document.getElementById('increment-btn');
           const blockTemplate = document.getElementById('block-template');
@@ -84,18 +82,22 @@
               logs.insertBefore(entry, logs.firstChild);
           }
 
-          async function updateCount() {
-              const response = await counter.query('{ "query": "query { value }" }');
+          async function updateCount(block_hash) {
+              const response = await counter.query('{ "query": "query { value }" }', block_hash || '');
               document.getElementById('count').innerText
                   = JSON.parse(response).data.value;
           }
 
-          updateCount();
+          updateCount(null);
           client.onNotification(notification => {
               let newBlock = notification.reason.NewBlock;
-              if (!newBlock) return;
-              addLogEntry(newBlock);
-              updateCount();
+              if (notification.reason.BlockExecuted) {
+                let hash = notification.reason.BlockExecuted.hash;
+                updateCount(hash);
+              } else if(newBlock) {
+                addLogEntry(newBlock);
+                updateCount(null);
+              }
           });
 
           incrementButton.addEventListener('click', () => {

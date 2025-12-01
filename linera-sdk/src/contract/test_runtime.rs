@@ -56,7 +56,7 @@ where
     application_id: Option<ApplicationId<Application::Abi>>,
     application_creator_chain_id: Option<ChainId>,
     chain_id: Option<ChainId>,
-    authenticated_signer: Option<Option<AccountOwner>>,
+    authenticated_owner: Option<Option<AccountOwner>>,
     block_height: Option<BlockHeight>,
     round: Option<u32>,
     message_is_bouncing: Option<Option<bool>>,
@@ -78,6 +78,7 @@ where
     expected_http_requests: VecDeque<(http::Request, http::Response)>,
     expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
+    expected_has_empty_storage_requests: VecDeque<(ApplicationId, bool)>,
     expected_open_chain_calls: VecDeque<(ChainOwnership, ApplicationPermissions, Amount, ChainId)>,
     expected_publish_module_calls: VecDeque<ExpectedPublishModuleCall>,
     expected_create_application_calls: VecDeque<ExpectedCreateApplicationCall>,
@@ -105,7 +106,7 @@ where
             application_id: None,
             application_creator_chain_id: None,
             chain_id: None,
-            authenticated_signer: None,
+            authenticated_owner: None,
             block_height: None,
             round: None,
             message_is_bouncing: None,
@@ -127,6 +128,7 @@ where
             expected_http_requests: VecDeque::new(),
             expected_read_data_blob_requests: VecDeque::new(),
             expected_assert_data_blob_exists_requests: VecDeque::new(),
+            expected_has_empty_storage_requests: VecDeque::new(),
             expected_open_chain_calls: VecDeque::new(),
             expected_publish_module_calls: VecDeque::new(),
             expected_create_application_calls: VecDeque::new(),
@@ -142,7 +144,7 @@ where
 
     /// Returns a storage context suitable for a root view.
     pub fn root_view_storage_context(&self) -> ViewStorageContext {
-        ViewStorageContext::new_unsafe(self.key_value_store(), Vec::new(), ())
+        ViewStorageContext::new_unchecked(self.key_value_store(), Vec::new(), ())
     }
 
     /// Configures the application parameters to return during the test.
@@ -234,29 +236,29 @@ where
         )
     }
 
-    /// Configures the authenticated signer to return during the test.
-    pub fn with_authenticated_signer(
+    /// Configures the authenticated owner to return during the test.
+    pub fn with_authenticated_owner(
         mut self,
-        authenticated_signer: impl Into<Option<AccountOwner>>,
+        authenticated_owner: impl Into<Option<AccountOwner>>,
     ) -> Self {
-        self.authenticated_signer = Some(authenticated_signer.into());
+        self.authenticated_owner = Some(authenticated_owner.into());
         self
     }
 
-    /// Configures the authenticated signer to return during the test.
-    pub fn set_authenticated_signer(
+    /// Configures the authenticated owner to return during the test.
+    pub fn set_authenticated_owner(
         &mut self,
-        authenticated_signer: impl Into<Option<AccountOwner>>,
+        authenticated_owner: impl Into<Option<AccountOwner>>,
     ) -> &mut Self {
-        self.authenticated_signer = Some(authenticated_signer.into());
+        self.authenticated_owner = Some(authenticated_owner.into());
         self
     }
 
-    /// Returns the authenticated signer for this execution, if there is one.
-    pub fn authenticated_signer(&mut self) -> Option<AccountOwner> {
-        self.authenticated_signer.expect(
-            "Authenticated signer has not been mocked, \
-            please call `MockContractRuntime::set_authenticated_signer` first",
+    /// Returns the authenticated owner for this execution, if there is one.
+    pub fn authenticated_owner(&mut self) -> Option<AccountOwner> {
+        self.authenticated_owner.expect(
+            "Authenticated owner has not been mocked, \
+            please call `MockContractRuntime::set_authenticated_owner` first",
         )
     }
 
@@ -370,7 +372,7 @@ where
         owner: AccountOwner,
     ) -> Result<(), AccountPermissionError> {
         ensure!(
-            self.authenticated_signer() == Some(owner)
+            self.authenticated_owner() == Some(owner)
                 || self.authenticated_caller_id().map(AccountOwner::from) == Some(owner),
             AccountPermissionError::NotPermitted(owner)
         );
@@ -936,6 +938,16 @@ where
             .push_back((hash, response));
     }
 
+    /// Adds an expected `has_empty_storage` call, and the response it should return in the test.
+    pub fn add_expected_has_empty_storage_requests(
+        &mut self,
+        application: ApplicationId,
+        response: bool,
+    ) {
+        self.expected_has_empty_storage_requests
+            .push_back((application, response));
+    }
+
     /// Queries an application service as an oracle and returns the response.
     ///
     /// Should only be used with queries where it is very likely that all validators will compute
@@ -997,7 +1009,16 @@ where
         response.expect("Blob does not exist!");
     }
 
-    /// Returns the round in which this block was validated.
+    /// Returns true if the corresponding contract uses a zero amount of storage.
+    pub fn has_empty_storage(&mut self, application: ApplicationId) -> bool {
+        let maybe_request = self.expected_has_empty_storage_requests.pop_front();
+        let (expected_application_id, response) =
+            maybe_request.expect("Unexpected has_empty_storage request");
+        assert_eq!(application, expected_application_id);
+        response
+    }
+
+    /// Returns the multi-leader round in which this block was validated.
     pub fn validation_round(&mut self) -> Option<u32> {
         self.round
     }
@@ -1045,7 +1066,7 @@ where
         self
     }
 
-    /// Forwards the authenticated signer with the message.
+    /// Forwards the authenticated owner with the message.
     pub fn with_authentication(mut self) -> Self {
         self.authenticated = true;
         self

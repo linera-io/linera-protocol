@@ -18,12 +18,14 @@ use std::collections::BTreeMap;
 use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
+use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Operation as CrowdFundingOperation};
 use fungible::{FungibleOperation, InitialState, Parameters};
 use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
     crypto::{CryptoHash, InMemorySigner},
     data_types::{
-        Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse,
+        Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse, Round,
+        TimeDelta, Timestamp,
     },
     identifiers::{
         Account, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName,
@@ -50,8 +52,9 @@ use crate::client::client_tests::ScyllaDbStorageBuilder;
 use crate::client::client_tests::ServiceStorageBuilder;
 use crate::{
     client::{
+        chain_client::{self, ChainClient},
         client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
-        ChainClient, ChainClientError,
+        BlanketMessagePolicy, ClientOutcome, MessagePolicy,
     },
     local_node::LocalNodeError,
     test_utils::{ClientOutcomeResultExt as _, FaultType},
@@ -165,7 +168,7 @@ where
         .unwrap_ok_committed();
 
     let increment = 5_u64;
-    let counter_operation = counter::CounterOperation::Increment(increment);
+    let counter_operation = counter::CounterOperation::Increment { value: increment };
     creator
         .execute_operation(Operation::user(application_id, &counter_operation)?)
         .await
@@ -197,7 +200,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
         )) if matches!(&*chain_error, ChainError::ExecutionError(
             error, ChainExecutionContext::Block
@@ -208,7 +211,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
         )) if matches!(&*chain_error, ChainError::ExecutionError(
             error, ChainExecutionContext::Block
@@ -374,10 +377,6 @@ where
     assert_eq!(response_json["data"], json!({"value": 10}));
 
     receiver.synchronize_from_validators().await.unwrap();
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
     receiver.process_inbox().await.unwrap();
 
     let query = Request::new("{ value }");
@@ -401,11 +400,13 @@ where
         .execute_operation(Operation::user(application_id2, &operation)?)
         .await
         .unwrap_ok_committed();
-
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(creator.chain_id(), BlockHeight::from(4), 3)
+            .await,
+        Some(cert)
+    );
+    receiver.synchronize_from_validators().await.unwrap();
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
@@ -427,11 +428,14 @@ where
         .execute_operation(Operation::user(application_id2, &operation)?)
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(creator.chain_id(), BlockHeight::from(5), 3)
+            .await,
+        Some(cert)
+    );
 
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    receiver.synchronize_from_validators().await.unwrap();
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
@@ -446,10 +450,7 @@ where
     assert_eq!(messages.len(), 1);
 
     // The bounced message is marked as "bouncing" in the Wasm context and succeeds.
-    creator
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    creator.synchronize_from_validators().await.unwrap();
     let mut certs = creator.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
@@ -538,9 +539,9 @@ where
     let module_id = sender.publish_wasm_example("fungible").await?;
     let module_id = module_id.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
 
-    let sender_owner = sender.preferred_owner.unwrap();
-    let receiver_owner = receiver.preferred_owner.unwrap();
-    let receiver2_owner = receiver2.preferred_owner.unwrap();
+    let sender_owner = sender.preferred_owner().unwrap();
+    let receiver_owner = receiver.preferred_owner().unwrap();
+    let receiver2_owner = receiver2.preferred_owner().unwrap();
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
     let state = InitialState { accounts };
@@ -600,11 +601,14 @@ where
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(3), 3)
+            .await,
+        Some(cert)
+    );
 
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    receiver.synchronize_from_validators().await.unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let bundles = certs[0].block().body.incoming_bundles();
@@ -640,11 +644,14 @@ where
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(receiver.chain_id(), BlockHeight::from(2), 3)
+            .await,
+        Some(certificate)
+    );
 
-    receiver2
-        .receive_certificate_and_update_validators(certificate)
-        .await
-        .unwrap();
+    receiver2.synchronize_from_validators().await.unwrap();
 
     Ok(())
 }
@@ -703,7 +710,15 @@ where
     builder.set_fault_type([3], FaultType::Offline);
 
     let sender = builder.add_root_chain(0, Amount::ONE).await?;
-    let receiver = builder.add_root_chain(1, Amount::ONE).await?;
+    let sender2 = builder.add_root_chain(1, Amount::ONE).await?;
+    // Make sure that sender's chain ID is less than sender2's - important for the final
+    // query check
+    let (sender, sender2) = if sender.chain_id() < sender2.chain_id() {
+        (sender, sender2)
+    } else {
+        (sender2, sender)
+    };
+    let mut receiver = builder.add_root_chain(2, Amount::ONE).await?;
 
     let module_id = receiver.publish_wasm_example("social").await?;
     let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
@@ -713,12 +728,21 @@ where
         .await
         .unwrap_ok_committed();
 
-    // Request to subscribe to the sender.
+    // Request to subscribe to the senders.
     let request_subscribe = social::Operation::Subscribe {
         chain_id: sender.chain_id(),
     };
+    let request_subscribe2 = social::Operation::Subscribe {
+        chain_id: sender2.chain_id(),
+    };
     receiver
-        .execute_operation(Operation::user(application_id, &request_subscribe)?)
+        .execute_operations(
+            vec![
+                Operation::user(application_id, &request_subscribe)?,
+                Operation::user(application_id, &request_subscribe2)?,
+            ],
+            vec![],
+        )
         .await
         .unwrap_ok_committed();
 
@@ -728,15 +752,12 @@ where
         text: text.clone(),
         image_url: None,
     };
-    let cert = sender
+    sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
         .unwrap_ok_committed();
 
-    receiver
-        .receive_certificate_and_update_validators(cert.clone())
-        .await
-        .unwrap();
+    receiver.synchronize_from_validators().await.unwrap();
 
     builder.set_fault_type([3], FaultType::Honest);
     builder.set_fault_type([2], FaultType::Offline);
@@ -767,7 +788,7 @@ where
             async_graphql::Value::from_json(json!({
                 "receivedPosts": {
                     "keys": [
-                        { "author": sender.chain_id, "index": 0 }
+                        { "author": sender.chain_id(), "index": 0 }
                     ]
                 }
             }))
@@ -777,6 +798,76 @@ where
     };
     assert_eq!(outcome, expected);
 
+    // Make two more posts.
+    let text = "Follow sender2!".to_string();
+    let post = social::Operation::Post {
+        text: text.clone(),
+        image_url: None,
+    };
+    sender
+        .execute_operation(Operation::user(application_id, &post)?)
+        .await
+        .unwrap_ok_committed();
+
+    let text = "Thanks for the shoutout!".to_string();
+    let post = social::Operation::Post {
+        text: text.clone(),
+        image_url: None,
+    };
+    sender2
+        .execute_operation(Operation::user(application_id, &post)?)
+        .await
+        .unwrap_ok_committed();
+
+    receiver.synchronize_from_validators().await.unwrap();
+
+    receiver.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        Some([sender.chain_id()].into_iter().collect()),
+        None,
+        None,
+    );
+
+    // Receiver should only process the event from sender now.
+    let certs = receiver.process_inbox().await.unwrap().0;
+    assert_eq!(certs.len(), 1);
+
+    // There should be an UpdateStreams operation due to the new post.
+    let operations = certs[0].block().body.operations().collect::<Vec<_>>();
+    let [Operation::System(operation)] = &*operations else {
+        panic!("Expected one operation, got {:?}", operations);
+    };
+    let stream_id = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: b"posts".into(),
+    };
+    assert_eq!(
+        **operation,
+        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 2)])
+    );
+
+    // Let's receive from everyone again.
+    receiver.options_mut().message_policy =
+        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None);
+
+    // Receiver should now process the event from sender2 as well.
+    let certs = receiver.process_inbox().await.unwrap().0;
+    assert_eq!(certs.len(), 1);
+
+    // There should be an UpdateStreams operation due to the new post.
+    let operations = certs[0].block().body.operations().collect::<Vec<_>>();
+    let [Operation::System(operation)] = &*operations else {
+        panic!("Expected one operation, got {:?}", operations);
+    };
+    let stream_id = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: b"posts".into(),
+    };
+    assert_eq!(
+        **operation,
+        SystemOperation::UpdateStreams(vec![(sender2.chain_id(), stream_id, 1)])
+    );
+
     // Request to unsubscribe from the sender.
     let request_unsubscribe = social::Operation::Unsubscribe {
         chain_id: sender.chain_id(),
@@ -785,13 +876,15 @@ where
         .execute_operation(Operation::user(application_id, &request_unsubscribe)?)
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(receiver.chain_id(), BlockHeight::from(6), 3)
+            .await,
+        Some(cert)
+    );
 
     // Unsubscribe the receiver.
     sender.synchronize_from_validators().await.unwrap();
-    sender
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
     let _certs = sender.process_inbox().await.unwrap();
 
     // Make a post.
@@ -803,12 +896,15 @@ where
         .execute_operation(Operation::user(application_id, &post)?)
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::from(2), 3)
+            .await,
+        Some(cert)
+    );
 
     // The post will not be received by the unsubscribed chain.
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+    receiver.synchronize_from_validators().await.unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert!(certs.is_empty());
 
@@ -822,7 +918,9 @@ where
         response: async_graphql::Response::new(
             async_graphql::Value::from_json(json!({
                 "receivedPosts": {
-                    "keys": [ { "author": sender.chain_id, "index": 0 } ]
+                    "keys": [ { "author": sender.chain_id(), "index": 1 },
+                              { "author": sender.chain_id(), "index": 0 },
+                              { "author": sender2.chain_id(), "index": 0 } ]
                 }
             }))
             .unwrap(),
@@ -830,6 +928,227 @@ where
         operations: vec![],
     };
     assert_eq!(outcome, expected);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_memory_message_policy_accept_apps(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_message_policy_accept_apps(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+#[ignore]
+#[cfg(feature = "storage-service")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_service_message_policy_accept_apps(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_message_policy_accept_apps(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime))
+        .await
+}
+
+#[ignore]
+#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_rocks_db_message_policy_accept_apps(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_message_policy_accept_apps(
+        RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await,
+    )
+    .await
+}
+
+#[ignore]
+#[cfg(feature = "dynamodb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_message_policy_accept_apps(
+    wasm_runtime: WasmRuntime,
+) -> anyhow::Result<()> {
+    run_test_message_policy_accept_apps(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime))
+        .await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_message_policy_accept_apps(
+    wasm_runtime: WasmRuntime,
+) -> anyhow::Result<()> {
+    run_test_message_policy_accept_apps(ScyllaDbStorageBuilder::with_wasm_runtime(wasm_runtime))
+        .await
+}
+
+async fn run_test_message_policy_accept_apps<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let keys = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
+        .await?
+        .with_policy(ResourceControlPolicy::all_categories());
+    let pledger_chain = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let mut campaign_chain = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
+
+    let pledger_owner = pledger_chain.preferred_owner().unwrap();
+    let campaign_owner = campaign_chain.preferred_owner().unwrap();
+
+    // Create a fungible token application.
+    let fungible_module = pledger_chain.publish_wasm_example("fungible").await?;
+    let fungible_module =
+        fungible_module.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
+    let accounts = BTreeMap::from_iter([(pledger_owner, Amount::from_tokens(1_000))]);
+    let state = InitialState { accounts };
+    let params = Parameters::new("FUN");
+    let (fungible_id, _cert) = pledger_chain
+        .create_application(fungible_module, &params, &state, vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // Create a crowd-funding application that uses the fungible token.
+    let crowd_funding_module = pledger_chain.publish_wasm_example("crowd-funding").await?;
+    let crowd_funding_module =
+        crowd_funding_module.with_abi::<CrowdFundingAbi, ApplicationId, InstantiationArgument>();
+    let deadline = Timestamp::from(u64::MAX);
+    let target = Amount::from_tokens(10);
+    let instantiation_arg = InstantiationArgument {
+        owner: campaign_owner,
+        deadline,
+        target,
+    };
+    let (crowd_funding_id, _cert) = campaign_chain
+        .create_application(
+            crowd_funding_module,
+            &fungible_id.forget_abi(),
+            &instantiation_arg,
+            vec![],
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Make a pledge from pledger_chain to campaign_chain.
+    // This creates a cross-chain bundle with messages from both fungible and crowd-funding apps.
+    let pledge_amount = Amount::from_tokens(5);
+    pledger_chain
+        .execute_operation(Operation::user(
+            crowd_funding_id,
+            &CrowdFundingOperation::Pledge {
+                owner: pledger_owner,
+                amount: pledge_amount,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+
+    campaign_chain.synchronize_from_validators().await?;
+
+    // Test 1: Accept bundles with at least one message from fungible app.
+    campaign_chain.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        Some([fungible_id.forget_abi().into()].into_iter().collect()),
+        None,
+    );
+    let certs = campaign_chain.process_inbox().await?.0;
+    assert_eq!(certs.len(), 1, "Should accept bundle with fungible message");
+
+    // Reset for next test by making another pledge.
+    pledger_chain
+        .execute_operation(Operation::user(
+            crowd_funding_id,
+            &CrowdFundingOperation::Pledge {
+                owner: pledger_owner,
+                amount: pledge_amount,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+    campaign_chain.synchronize_from_validators().await?;
+
+    // Test 2: Accept bundles with at least one message from crowd-funding app.
+    campaign_chain.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        Some([crowd_funding_id.forget_abi().into()].into_iter().collect()),
+        None,
+    );
+    let certs = campaign_chain.process_inbox().await?.0;
+    assert_eq!(
+        certs.len(),
+        1,
+        "Should accept bundle with crowd-funding message"
+    );
+
+    // Reset for next test.
+    pledger_chain
+        .execute_operation(Operation::user(
+            crowd_funding_id,
+            &CrowdFundingOperation::Pledge {
+                owner: pledger_owner,
+                amount: pledge_amount,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+    campaign_chain.synchronize_from_validators().await?;
+
+    // Test 3: Reject bundles without any message from a non-existent app.
+    // Use a different application description hash to create a fake app ID.
+    let fake_app_id = ApplicationId::new(CryptoHash::test_hash("fake app"));
+    campaign_chain.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        Some([fake_app_id.into()].into_iter().collect()),
+        None,
+    );
+    let certs = campaign_chain.process_inbox().await?.0;
+    assert_eq!(
+        certs.len(),
+        0,
+        "Should reject bundle without message from fake app"
+    );
+
+    // Test 4: Reject bundles that contain messages from apps not in the allowlist.
+    // The bundle has messages from both fungible and crowd-funding, but we only allow fungible.
+    campaign_chain.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        None,
+        Some([fungible_id.forget_abi().into()].into_iter().collect()),
+    );
+    let certs = campaign_chain.process_inbox().await?.0;
+    assert_eq!(
+        certs.len(),
+        0,
+        "Should reject bundle with message from non-allowed crowd-funding app"
+    );
+
+    // Test 5: Accept bundles when all app messages are in the allowlist.
+    campaign_chain.options_mut().message_policy = MessagePolicy::new(
+        BlanketMessagePolicy::Accept,
+        None,
+        None,
+        Some(
+            [
+                fungible_id.forget_abi().into(),
+                crowd_funding_id.forget_abi().into(),
+            ]
+            .into_iter()
+            .collect(),
+        ),
+    );
+    let certs = campaign_chain.process_inbox().await?.0;
+    assert_eq!(
+        certs.len(),
+        1,
+        "Should accept bundle when all app messages are allowed"
+    );
 
     Ok(())
 }
@@ -882,7 +1201,7 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
         .unwrap_ok_committed();
 
     let increment = 5_u64;
-    let operation = counter::CounterOperation::Increment(increment);
+    let operation = counter::CounterOperation::Increment { value: increment };
     publisher
         .execute_operation(Operation::user(application_id, &operation)?)
         .await
@@ -974,7 +1293,7 @@ where
     let result = client_b
         .execute_operation(Operation::user(app_id, &move_op)?)
         .await;
-    assert_matches!(result, Err(ChainClientError::CommunicationError(_)));
+    assert_matches!(result, Err(chain_client::Error::CommunicationError(_)));
 
     // Advance the clock so much that player B times out.
     clock.add(timeouts.start_time * 2);
@@ -1105,6 +1424,135 @@ where
         .unwrap_ok_committed();
     assert_eq!(certificate.block().body.oracle_responses[0].len(), 0);
     assert_eq!(certificate.block().body.oracle_responses[1].len(), 0);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_time_expiry_rounds(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_time_expiry_rounds(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+async fn run_test_time_expiry_rounds<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let keys = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, keys)
+        .await?
+        .with_policy(ResourceControlPolicy::all_categories());
+
+    let creator = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+
+    // Publish and create the time-expiry application.
+    let module_id = creator.publish_wasm_example("time-expiry").await?;
+    let module_id = module_id.with_abi::<time_expiry::TimeExpiryAbi, (), ()>();
+    let (app_id, _) = creator
+        .create_application(module_id, &(), &(), vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // Set two validators offline so we can't reach a quorum.
+    builder.set_fault_type([2, 3], FaultType::Offline);
+
+    // Try to commit ExpireAfter(5 seconds) - should fail (no quorum).
+    let op1 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(5));
+    let result = creator
+        .execute_operation(Operation::user(app_id, &op1)?)
+        .await;
+    assert_matches!(result, Err(chain_client::Error::CommunicationError(_)));
+
+    // The proposal should be in round MultiLeader(0).
+    let chain_info = creator.chain_info_with_manager_values().await?;
+    assert_eq!(
+        chain_info.manager.requested_proposed.unwrap().content.round,
+        Round::MultiLeader(0)
+    );
+
+    // Clear the pending proposal and try again with ExpireAfter(6 seconds).
+    creator.clear_pending_proposal();
+    let op2 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(6));
+    let result = creator
+        .execute_operation(Operation::user(app_id, &op2)?)
+        .await;
+    assert_matches!(result, Err(chain_client::Error::CommunicationError(_)));
+
+    // The proposal should now be in round MultiLeader(1).
+    let chain_info = creator.chain_info_with_manager_values().await?;
+    assert_eq!(
+        chain_info.manager.requested_proposed.unwrap().content.round,
+        Round::MultiLeader(1)
+    );
+
+    // Clear the pending proposal and try once more with ExpireAfter(7 seconds).
+    creator.clear_pending_proposal();
+    let op3 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(7));
+    let result = creator
+        .execute_operation(Operation::user(app_id, &op3)?)
+        .await;
+    assert_matches!(result, Err(chain_client::Error::CommunicationError(_)));
+
+    // The proposal should now be in round SingleLeader(0).
+    let chain_info = creator.chain_info_with_manager_values().await?;
+    assert_eq!(
+        chain_info.manager.requested_proposed.unwrap().content.round,
+        Round::SingleLeader(0)
+    );
+
+    // Make all validators honest again.
+    builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
+
+    // Advance the clock by 10 seconds.
+    clock.add(TimeDelta::from_secs(10));
+
+    // Clear pending and try to commit ExpireAfter(10 minutes) - should timeout.
+    creator.clear_pending_proposal();
+    let op4 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(600));
+    let result = creator
+        .execute_operation(Operation::user(app_id, &op4)?)
+        .await?;
+    // The operation should return WaitForTimeout because the block expired.
+    assert_matches!(result, ClientOutcome::WaitForTimeout(_));
+
+    // Retry to process the pending block a few times. It is not guaranteed in each attempt
+    // that the client successfully updates enough validators before `communicate_with_quorum`
+    // cancels the tasks, but eventually it will succeed and all validators will agree that the
+    // round has timed out.
+    let certificate = loop {
+        clock.add(TimeDelta::from_secs(20));
+        match creator.process_pending_block().await? {
+            ClientOutcome::Committed(Some(cert)) => break cert,
+            ClientOutcome::WaitForTimeout(_)
+                if clock.current_time()
+                    < Timestamp::from(0).saturating_add(TimeDelta::from_secs(200)) =>
+            {
+                continue
+            }
+            outcome => panic!("Failed to commit the block: {outcome:?}"),
+        }
+    };
+
+    // Verify the certificate contains the "10 minutes" operation.
+    let operations: Vec<_> = certificate.block().body.operations().collect();
+    assert_eq!(operations.len(), 1);
+    let operation = &operations[0];
+    if let Operation::User {
+        application_id,
+        bytes,
+    } = operation
+    {
+        assert_eq!(application_id, &app_id.forget_abi());
+        let decoded_op: time_expiry::TimeExpiryOperation = bcs::from_bytes(bytes)?;
+        assert_matches!(
+            decoded_op,
+            time_expiry::TimeExpiryOperation::ExpireAfter(delta) if delta == TimeDelta::from_secs(600)
+        );
+    } else {
+        panic!("Expected a user operation");
+    }
 
     Ok(())
 }

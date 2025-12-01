@@ -23,8 +23,23 @@ impl NotifierService for ExporterService {
     async fn notify(&self, request: Request<Notification>) -> Result<Response<()>, Status> {
         let notification = request.into_inner();
         let block_id =
-            parse_notification(notification).map_err(|e| Status::from_error(e.into()))?;
+            match parse_notification(notification).map_err(|e| Status::from_error(e.into())) {
+                Ok(block_id) => {
+                    tracing::debug!(
+                        ?block_id,
+                        "received new block notification from notifier service"
+                    );
+                    block_id
+                }
+                Err(status) => {
+                    // We assume errors when parsing are not critical and just log them.
+                    tracing::warn!(error=?status, "received bad notification");
+                    return Ok(Response::new(()));
+                }
+            };
 
+        #[cfg(with_metrics)]
+        crate::metrics::EXPORTER_NOTIFICATION_QUEUE_LENGTH.inc();
         self.block_processor_sender
             .send(block_id)
             .expect("sender should never fail");

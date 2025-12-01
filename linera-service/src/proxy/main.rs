@@ -96,6 +96,10 @@ pub struct ProxyOptions {
     /// Runs a specific proxy instance.
     #[arg(long)]
     id: Option<usize>,
+
+    /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
+    #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
+    otlp_exporter_endpoint: Option<String>,
 }
 
 /// A Linera Proxy, either gRPC or over 'Simple Transport', meaning TCP or UDP.
@@ -247,7 +251,7 @@ where
         {
             Ok(maybe_response) => maybe_response,
             Err(error) => {
-                error!(error = %error, "Failed to proxy message to {}", shard.address());
+                error!(%error, "Failed to proxy message to {}", shard.address());
                 None
             }
         }
@@ -332,6 +336,15 @@ where
                 Ok(Some(RpcMessage::NetworkDescriptionResponse(Box::new(
                     description,
                 ))))
+            }
+            ShardInfoQuery(chain_id) => {
+                let shard_id = self.internal_config.get_shard_id(chain_id);
+                let total_shards = self.internal_config.shards.len();
+                let shard_info = linera_rpc::ShardInfo {
+                    shard_id,
+                    total_shards,
+                };
+                Ok(Some(RpcMessage::ShardInfoResponse(shard_info)))
             }
             UploadBlob(content) => {
                 let blob = Blob::new(*content);
@@ -440,6 +453,7 @@ where
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
             | NetworkDescriptionResponse(_)
+            | ShardInfoResponse(_)
             | DownloadBlobResponse(_)
             | DownloadPendingBlob(_)
             | DownloadPendingBlobResponse(_)
@@ -484,8 +498,10 @@ impl ProxyOptions {
         let server_config: ValidatorServerConfig =
             util::read_json(&self.config_path).expect("Fail to read server config");
         let public_key = &server_config.validator.public_key;
-        linera_base::tracing::init_with_opentelemetry(&format!("validator-{public_key}-proxy"))
-            .await;
+        linera_service::tracing::opentelemetry::init(
+            &format!("validator-{public_key}-proxy"),
+            self.otlp_exporter_endpoint.as_deref(),
+        );
 
         let store_config = self
             .storage_config

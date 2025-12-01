@@ -17,46 +17,135 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Auth service account
         uses: google-github-actions/auth@v1
         with:
           credentials_json: ${{ secrets.GCP_SA_ACTIONS_RUNNER_KEY }}
+
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
-    
-      - name: Authenticate Docker with GCP
-        run: |
-          gcloud auth configure-docker us-docker.pkg.dev
-  
+
       - name: Set env variables
         run: |
-          echo "GIT_COMMIT_SHORT=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
-          echo "GIT_COMMIT_LONG=${GITHUB_SHA}" >> $GITHUB_ENV
+          # Set basic variables
           if [ -n "${{ github.head_ref }}" ]; then
-            echo "BRANCH_NAME=${{ github.head_ref }}" >> $GITHUB_ENV
+            BRANCH_NAME="${{ github.head_ref }}"
           else
-            echo "BRANCH_NAME=${{ github.ref_name }}" >> $GITHUB_ENV
+            BRANCH_NAME="${{ github.ref_name }}"
           fi
 
-      - name: Set docker image env variable
+          echo "GIT_COMMIT_SHORT=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+          echo "GIT_COMMIT_LONG=${GITHUB_SHA}" >> $GITHUB_ENV
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
+          echo "BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_ENV
+
+          # Image registry base
+          REGISTRY_BASE="us-docker.pkg.dev/linera-io-dev/linera-public-registry"
+          LINERA_IMAGE_NAME="linera"
+          INDEXER_IMAGE_NAME="linera-indexer"
+          EXPLORER_IMAGE_NAME="linera-explorer"
+
+          # Main linera image names
+          echo "LINERA_IMAGE_BRANCH=${REGISTRY_BASE}/${LINERA_IMAGE_NAME}:${BRANCH_NAME}" >> $GITHUB_ENV
+          echo "LINERA_IMAGE_SHORT=${REGISTRY_BASE}/${LINERA_IMAGE_NAME}:${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+          echo "LINERA_IMAGE_LONG=${REGISTRY_BASE}/${LINERA_IMAGE_NAME}:${GITHUB_SHA}" >> $GITHUB_ENV
+
+          # Indexer image names
+          echo "INDEXER_IMAGE_BRANCH=${REGISTRY_BASE}/${INDEXER_IMAGE_NAME}:${BRANCH_NAME}" >> $GITHUB_ENV
+          echo "INDEXER_IMAGE_SHORT=${REGISTRY_BASE}/${INDEXER_IMAGE_NAME}:${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+          echo "INDEXER_IMAGE_LONG=${REGISTRY_BASE}/${INDEXER_IMAGE_NAME}:${GITHUB_SHA}" >> $GITHUB_ENV
+
+          # Explorer image names
+          echo "EXPLORER_IMAGE_BRANCH=${REGISTRY_BASE}/${EXPLORER_IMAGE_NAME}:${BRANCH_NAME}" >> $GITHUB_ENV
+          echo "EXPLORER_IMAGE_SHORT=${REGISTRY_BASE}/${EXPLORER_IMAGE_NAME}:${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+          echo "EXPLORER_IMAGE_LONG=${REGISTRY_BASE}/${EXPLORER_IMAGE_NAME}:${GITHUB_SHA}" >> $GITHUB_ENV
+
+      - name: Build and push all images in parallel using GCP Cloud Build
         run: |
-          echo "DOCKER_IMAGE=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera" >> $GITHUB_ENV
-  
-      - name: Build Docker image
-        run: |
-          docker build --build-arg git_commit=${{ env.GIT_COMMIT_LONG }} \
-            -f docker/Dockerfile . \
-            -t ${{ env.DOCKER_IMAGE }}:${{ env.BRANCH_NAME }} \
-            -t ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_SHORT }} \
-            -t ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_LONG }}
-  
-      - name: Push Docker image to Google Artifact Registry
-        run: |
-          docker push ${{ env.DOCKER_IMAGE }}:${{ env.BRANCH_NAME }}
-          docker push ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_SHORT }}
-          docker push ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_LONG }}
+          set -e
+
+          echo "Submitting all three builds to GCP Cloud Build..."
+
+          # Submit main linera image build and capture build ID
+          BUILD_ID_1=$(gcloud builds submit . \
+            --config=docker/build-image.yaml \
+            --substitutions="_IMAGE_PATH=${{ env.LINERA_IMAGE_BRANCH }},_IMAGE_NAME_SHORT_COMMIT=${{ env.LINERA_IMAGE_SHORT }},_IMAGE_NAME_LONG_COMMIT=${{ env.LINERA_IMAGE_LONG }},_GIT_COMMIT=${{ env.GIT_COMMIT_LONG }},_BUILD_DATE=${{ env.BUILD_DATE }},_BUILD_FLAG=--release,_BUILD_FOLDER=release" \
+            --timeout=3h \
+            --machine-type=e2-highcpu-32 \
+            --async \
+            --format="value(id)")
+          echo "Linera build submitted: $BUILD_ID_1"
+
+          # Submit indexer image build and capture build ID
+          BUILD_ID_2=$(gcloud builds submit . \
+            --config=docker/build-indexer-image.yaml \
+            --substitutions="_IMAGE_PATH=${{ env.INDEXER_IMAGE_BRANCH }},_IMAGE_NAME_SHORT_COMMIT=${{ env.INDEXER_IMAGE_SHORT }},_IMAGE_NAME_LONG_COMMIT=${{ env.INDEXER_IMAGE_LONG }},_GIT_COMMIT=${{ env.GIT_COMMIT_LONG }},_BUILD_DATE=${{ env.BUILD_DATE }},_BUILD_FLAG=--release,_BUILD_FOLDER=release" \
+            --timeout=3h \
+            --machine-type=e2-highcpu-32 \
+            --async \
+            --format="value(id)")
+          echo "Indexer build submitted: $BUILD_ID_2"
+
+          # Submit explorer image build and capture build ID
+          BUILD_ID_3=$(gcloud builds submit . \
+            --config=docker/build-explorer-image.yaml \
+            --substitutions="_IMAGE_PATH=${{ env.EXPLORER_IMAGE_BRANCH }},_IMAGE_NAME_SHORT_COMMIT=${{ env.EXPLORER_IMAGE_SHORT }},_IMAGE_NAME_LONG_COMMIT=${{ env.EXPLORER_IMAGE_LONG }},_GIT_COMMIT=${{ env.GIT_COMMIT_LONG }},_BUILD_DATE=${{ env.BUILD_DATE }},_BUILD_FLAG=--release,_BUILD_FOLDER=release" \
+            --timeout=3h \
+            --machine-type=e2-highcpu-32 \
+            --async \
+            --format="value(id)")
+          echo "Explorer build submitted: $BUILD_ID_3"
+
+          echo ""
+          echo "All three builds submitted. Now streaming logs and waiting for completion..."
+          echo ""
+
+          # Function to stream logs and wait for build completion
+          # gcloud builds log --stream waits for the build to complete and returns proper exit codes
+          stream_build_logs() {
+            local BUILD_ID=$1
+            local BUILD_NAME=$2
+
+            echo "========================================"
+            echo "Streaming logs for $BUILD_NAME (ID: $BUILD_ID)"
+            echo "========================================"
+
+            # Stream logs - this will wait for build completion and return exit code
+            gcloud builds log "$BUILD_ID" --stream
+
+            local EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 0 ]; then
+              echo ""
+              echo "$BUILD_NAME completed successfully"
+            else
+              echo ""
+              echo "$BUILD_NAME failed (exit code: $EXIT_CODE)"
+              echo "Logs: https://console.cloud.google.com/cloud-build/builds/$BUILD_ID?project=linera-io-dev"
+            fi
+
+            return $EXIT_CODE
+          }
+
+          # Stream all three builds in parallel
+          stream_build_logs "$BUILD_ID_1" "Linera build" &
+          PID1=$!
+          stream_build_logs "$BUILD_ID_2" "Indexer build" &
+          PID2=$!
+          stream_build_logs "$BUILD_ID_3" "Explorer build" &
+          PID3=$!
+
+          # Wait for all background jobs and check exit codes
+          EXIT_CODE=0
+          wait $PID1 || EXIT_CODE=$?
+          wait $PID2 || EXIT_CODE=$?
+          wait $PID3 || EXIT_CODE=$?
+
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo ""
+            echo "One or more image builds failed"
+            exit $EXIT_CODE
+          fi
+
+          echo ""
+          echo "All three image builds completed successfully!"

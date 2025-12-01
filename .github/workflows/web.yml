@@ -59,9 +59,10 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
+      # Install dependencies
     - uses: actions/checkout@v4
     - name: Switch to nightly Rust toolchain
       run: |
@@ -80,12 +81,37 @@ jobs:
     - name: Install pnpm
       uses: pnpm/action-setup@v4
       with:
-        version: 10
+        version: 10.17
 
+    # Setup fixtures
+    - name: Run the storage-service instance
+      run: |
+        cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
+    - name: Wait for storage service to be ready
+      run: until nc -z ${LINERA_STORAGE_SERVICE/:/ }; do sleep 1; done
+    - name: Build binaries
+      run: |
+        cargo build --features storage-service --bin linera-server --bin linera-proxy --bin linera
+    - name: Run the validators and faucet, wait for faucet to be ready
+      run: |
+        FAUCET_PORT=$(echo "$LINERA_FAUCET_URL" | cut -d: -f3)
+        LOG_FILE="/tmp/linera-net-up.log"
+        mkdir /tmp/local-linera-net
+        cargo run --features storage-service --bin linera -- net up --storage service:tcp:$LINERA_STORAGE_SERVICE:table --policy-config testnet --path /tmp/local-linera-net --validators 2 --shards 2 --with-faucet --faucet-port $FAUCET_PORT --faucet-amount 1000 > "$LOG_FILE" 2>&1 &
+        FAUCET_PID=$!
+        bash scripts/wait-for-kubernetes-service.sh "$LINERA_FAUCET_URL" "$FAUCET_PID" "$LOG_FILE"
+        # Create two epochs
+        # See https://github.com/linera-io/linera-protocol/pull/2835 for details.
+        LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- storage initialize --genesis /tmp/local-linera-net/genesis.json
+        LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 1000
+        LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_1.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 500
+
+    # Run tests
     - name: Test the npm packages
       run: |
         cd web
-        pnpm install
+        pnpm install --frozen-lockfile
+        (cd @linera/client && pnpm exec playwright install)
         pnpm -r run ci
     - name: Test `linera-views` on the Web
       run: |

@@ -34,7 +34,7 @@ pub fn make_child_block(parent: &ConfirmedBlock) -> ProposedBlock {
         transactions: vec![],
         previous_block_hash: Some(parent.hash()),
         height: parent_header.height.try_add_one().unwrap(),
-        authenticated_signer: parent_header.authenticated_signer,
+        authenticated_owner: parent_header.authenticated_owner,
         timestamp: parent_header.timestamp,
     }
 }
@@ -47,7 +47,7 @@ pub fn make_first_block(chain_id: ChainId) -> ProposedBlock {
         transactions: vec![],
         previous_block_hash: None,
         height: BlockHeight::ZERO,
-        authenticated_signer: None,
+        authenticated_owner: None,
         timestamp: Timestamp::default(),
     }
 }
@@ -55,8 +55,8 @@ pub fn make_first_block(chain_id: ChainId) -> ProposedBlock {
 /// A helper trait to simplify constructing blocks for tests.
 #[allow(async_fn_in_trait)]
 pub trait BlockTestExt: Sized {
-    /// Returns the block with the given authenticated signer.
-    fn with_authenticated_signer(self, authenticated_signer: Option<AccountOwner>) -> Self;
+    /// Returns the block with the given authenticated owner.
+    fn with_authenticated_owner(self, authenticated_owner: Option<AccountOwner>) -> Self;
 
     /// Returns the block with the given operation appended at the end.
     fn with_operation(self, operation: impl Into<Operation>) -> Self;
@@ -100,8 +100,8 @@ pub trait BlockTestExt: Sized {
 }
 
 impl BlockTestExt for ProposedBlock {
-    fn with_authenticated_signer(mut self, authenticated_signer: Option<AccountOwner>) -> Self {
-        self.authenticated_signer = authenticated_signer;
+    fn with_authenticated_owner(mut self, authenticated_owner: Option<AccountOwner>) -> Self {
+        self.authenticated_owner = authenticated_owner;
         self
     }
 
@@ -189,7 +189,7 @@ pub trait MessageTestExt: Sized {
 impl<T: Into<Message>> MessageTestExt for T {
     fn to_posted(self, index: u32, kind: MessageKind) -> PostedMessage {
         PostedMessage {
-            authenticated_signer: None,
+            authenticated_owner: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
             kind,

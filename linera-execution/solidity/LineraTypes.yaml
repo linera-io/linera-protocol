@@ -22,6 +22,8 @@ ChainOwnership:
           KEY:
             TYPENAME: AccountOwner
           VALUE: U64
+    - first_leader:
+        TYPENAME: OptionAccountOwner
     - multi_leader_rounds: U32
     - open_multi_leader_rounds: BOOL
     - timeout_config:
@@ -48,6 +50,12 @@ Amount:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+Account:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - owner:
+        TYPENAME: AccountOwner
 AccountOwnerBalanceInner:
   STRUCT:
     - account_owner:
@@ -137,7 +145,7 @@ BaseRuntimePrecompile:
 ContractRuntimePrecompile:
   ENUM:
     0:
-      AuthenticatedSigner: UNIT
+      AuthenticatedOwner: UNIT
     1:
       MessageOriginChainId: UNIT
     2:
@@ -196,6 +204,13 @@ ContractRuntimePrecompile:
           - query: BYTES
     11:
       ValidationRound: UNIT
+    12:
+      Transfer:
+        STRUCT:
+          - account:
+              TYPENAME: Account
+          - amount:
+              TYPENAME: Amount
 ServiceRuntimePrecompile:
   ENUM:
     0:

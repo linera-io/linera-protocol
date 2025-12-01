@@ -8,10 +8,6 @@ pub enum ViewError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// We failed to acquire an entry in a `CollectionView`.
-    #[error("trying to access a collection view while some entries are still being accessed")]
-    CannotAcquireCollectionEntry,
-
     /// Input output error.
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
@@ -54,8 +50,8 @@ pub enum ViewError {
     InconsistentEntries,
 
     /// The database is corrupt: Some entries are missing
-    #[error("missing database entries")]
-    MissingEntries,
+    #[error("missing database entries for the context  {0}")]
+    MissingEntries(String),
 
     /// The values are incoherent.
     #[error("post load values error")]

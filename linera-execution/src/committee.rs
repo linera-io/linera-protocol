@@ -4,6 +4,7 @@
 
 use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
+use allocative::Allocative;
 use linera_base::crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey};
 use serde::{Deserialize, Serialize};
 
@@ -47,7 +48,7 @@ impl<'de> Deserialize<'de> for ValidatorName {
 }
 
 /// Public state of a validator.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Allocative)]
 pub struct ValidatorState {
     /// The network address (in a string format understood by the networking layer).
     pub network_address: String,
@@ -58,7 +59,7 @@ pub struct ValidatorState {
 }
 
 /// A set of validators (identified by their public keys) and their voting rights.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Default)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Allocative)]
 #[cfg_attr(with_graphql, derive(async_graphql::InputObject))]
 pub struct Committee {
     /// The validators in the committee.
@@ -67,7 +68,8 @@ pub struct Committee {
     total_votes: u64,
     /// The threshold to form a quorum.
     quorum_threshold: u64,
-    /// The threshold to prove the validity of a statement.
+    /// The threshold to prove the validity of a statement. I.e. the assumption is that strictly
+    /// less than `validity_threshold` are faulty.
     validity_threshold: u64,
     /// The policy agreed on for this epoch.
     policy: ResourceControlPolicy,
@@ -219,12 +221,12 @@ impl Committee {
         policy: ResourceControlPolicy,
     ) -> Self {
         let total_votes = validators.values().fold(0, |sum, state| sum + state.votes);
-        // Let N = 3f + 1 + k such that 0 <= k <= 2. (Notably ⌊k / 3⌋ = 0 and ⌊(2 - k) / 3⌋ = 0.)
-        // The following thresholds verify:
-        // * ⌊2 N / 3⌋ + 1 = ⌊(6f + 2 + 2k) / 3⌋ + 1 = 2f + 1 + k + ⌊(2 - k) / 3⌋ = N - f
-        // * ⌊(N + 2) / 3⌋= ⌊(3f + 3 + k) / 3⌋ = f + 1 + ⌊k / 3⌋ = f + 1
-        let quorum_threshold = 2 * total_votes / 3 + 1;
+        // The validity threshold is f + 1, where f is maximal so that it is less than a third.
+        // So the threshold is N / 3, rounded up.
         let validity_threshold = total_votes.div_ceil(3);
+        // The quorum threshold is minimal such that any two quorums intersect in at least one
+        // validity threshold.
+        let quorum_threshold = (total_votes + validity_threshold).div_ceil(2);
 
         Committee {
             validators,

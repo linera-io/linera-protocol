@@ -18,12 +18,6 @@ workspace = true
 metrics = ["prometheus"]
 reqwest = ["dep:reqwest"]
 revm = []
-tempo = [
-    "opentelemetry",
-    "opentelemetry-otlp",
-    "opentelemetry_sdk",
-    "tracing-opentelemetry",
-]
 test = ["test-strategy", "proptest"]
 web = [
     "getrandom/js",
@@ -32,14 +26,12 @@ web = [
     "rand/std",
     "rand/std_rng",
     "tracing-web",
-    "wasm-bindgen",
     "wasm-bindgen-futures",
-    "wasm_thread",
-    "web-sys",
     "web-time",
 ]
 
 [dependencies]
+allocative.workspace = true
 alloy-primitives.workspace = true
 anyhow.workspace = true
 async-graphql.workspace = true
@@ -54,7 +46,6 @@ ed25519-dalek.workspace = true
 futures.workspace = true
 getrandom = { workspace = true, optional = true }
 hex.workspace = true
-is-terminal.workspace = true
 k256.workspace = true
 linera-kywasmtime = { workspace = true, optional = true }
 linera-witty = { workspace = true, features = ["macros"] }
@@ -70,14 +61,9 @@ serde_with.workspace = true
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["time"] }
-tokio-stream.workspace = true
 tracing.workspace = true
-tracing-subscriber = { workspace = true, features = ["json", "fmt", "ansi"] }
 trait-variant.workspace = true
-wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
-wasm_thread = { workspace = true, optional = true }
-web-sys = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -86,10 +72,6 @@ tracing-web = { optional = true, workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono.workspace = true
-opentelemetry = { workspace = true, optional = true }
-opentelemetry-otlp = { workspace = true, optional = true }
-opentelemetry_sdk = { workspace = true, optional = true }
-tracing-opentelemetry = { workspace = true, optional = true }
 rand = { workspace = true, features = ["getrandom", "std", "std_rng"] }
 tokio = { workspace = true, features = [
     "process",
@@ -107,6 +89,7 @@ assert_matches.workspace = true
 bcs.workspace = true
 linera-base = { path = ".", default-features = false, features = ["test"] }
 linera-witty = { workspace = true, features = ["test"] }
+tempfile.workspace = true
 test-case.workspace = true
 
 [build-dependencies]

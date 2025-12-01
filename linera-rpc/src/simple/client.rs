@@ -77,6 +77,13 @@ impl SimpleClient {
 impl ValidatorNode for SimpleClient {
     type NotificationStream = NotificationStream;
 
+    fn address(&self) -> String {
+        format!(
+            "{}://{}:{}",
+            self.network.protocol, self.network.host, self.network.port
+        )
+    }
+
     /// Initiates a new block.
     async fn handle_block_proposal(
         &self,
@@ -258,5 +265,17 @@ impl ValidatorNode for SimpleClient {
 
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         self.query(RpcMessage::MissingBlobIds(blob_ids)).await
+    }
+
+    async fn get_shard_info(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<linera_core::data_types::ShardInfo, NodeError> {
+        let rpc_shard_info: crate::message::ShardInfo =
+            self.query(RpcMessage::ShardInfoQuery(chain_id)).await?;
+        Ok(linera_core::data_types::ShardInfo {
+            shard_id: rpc_shard_info.shard_id,
+            total_shards: rpc_shard_info.total_shards,
+        })
     }
 }

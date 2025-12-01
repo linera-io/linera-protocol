@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Debug, sync::Arc};
+use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 #[cfg(with_metrics)]
@@ -20,6 +20,7 @@ use linera_execution::{
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
+    batch::Batch,
     context::ViewContext,
     store::{
         KeyValueDatabase, KeyValueStore, ReadableKeyValueStore as _, WritableKeyValueStore as _,
@@ -33,7 +34,7 @@ use tracing::instrument;
 use {
     futures::channel::oneshot::{self, Receiver},
     linera_views::{random::generate_test_namespace, store::TestKeyValueDatabase},
-    std::{cmp::Reverse, collections::BTreeMap},
+    std::cmp::Reverse,
 };
 
 use crate::{ChainRuntimeContext, Clock, Storage};
@@ -224,37 +225,59 @@ pub mod metrics {
     });
 }
 
-#[derive(Default)]
-struct Batch {
-    key_value_bytes: Vec<(Vec<u8>, Vec<u8>)>,
+/// The key used for blobs. The Blob ID itself is contained in the root key.
+const BLOB_KEY: &[u8] = &[0];
+
+/// The key used for blob states. The Blob ID itself is contained in the root key.
+const BLOB_STATE_KEY: &[u8] = &[1];
+
+/// The key used for lite certificates. The cryptohash itself is contained in the root key.
+const LITE_CERTIFICATE_KEY: &[u8] = &[2];
+
+/// The key used for confirmed blocks. The cryptohash itself is contained in the root key.
+const BLOCK_KEY: &[u8] = &[3];
+
+/// The key used for the network description.
+const NETWORK_DESCRIPTION_KEY: &[u8] = &[4];
+
+fn get_block_keys() -> Vec<Vec<u8>> {
+    vec![LITE_CERTIFICATE_KEY.to_vec(), BLOCK_KEY.to_vec()]
 }
 
-impl Batch {
+#[derive(Default)]
+#[allow(clippy::type_complexity)]
+struct MultiPartitionBatch {
+    keys_value_bytes: BTreeMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>,
+}
+
+impl MultiPartitionBatch {
     fn new() -> Self {
         Self::default()
     }
 
-    fn put_key_value_bytes(&mut self, key: Vec<u8>, value: Vec<u8>) {
-        self.key_value_bytes.push((key, value));
+    fn put_key_values(&mut self, root_key: Vec<u8>, key_values: Vec<(Vec<u8>, Vec<u8>)>) {
+        let entry = self.keys_value_bytes.entry(root_key).or_default();
+        entry.extend(key_values);
     }
 
-    fn put_key_value<T: Serialize>(&mut self, key: Vec<u8>, value: &T) -> Result<(), ViewError> {
-        let bytes = bcs::to_bytes(value)?;
-        self.key_value_bytes.push((key, bytes));
-        Ok(())
+    fn put_key_value(&mut self, root_key: Vec<u8>, key: Vec<u8>, value: Vec<u8>) {
+        self.put_key_values(root_key, vec![(key, value)]);
     }
 
     fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob.id()))?;
-        self.put_key_value_bytes(blob_key.to_vec(), blob.bytes().to_vec());
+        let root_key = RootKey::BlobId(blob.id()).bytes();
+        let key = BLOB_KEY.to_vec();
+        self.put_key_value(root_key, key, blob.bytes().to_vec());
         Ok(())
     }
 
     fn add_blob_state(&mut self, blob_id: BlobId, blob_state: &BlobState) -> Result<(), ViewError> {
-        let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        self.put_key_value(blob_state_key.to_vec(), blob_state)?;
+        let root_key = RootKey::BlobId(blob_id).bytes();
+        let key = BLOB_STATE_KEY.to_vec();
+        let value = bcs::to_bytes(blob_state)?;
+        self.put_key_value(root_key, key, value);
         Ok(())
     }
 
@@ -267,18 +290,24 @@ impl Batch {
             .with_label_values(&[])
             .inc();
         let hash = certificate.hash();
-        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
-        self.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
-        self.put_key_value(block_key.to_vec(), certificate.value())?;
+        let root_key = RootKey::BlockHash(hash).bytes();
+        let mut key_values = Vec::new();
+        let key = LITE_CERTIFICATE_KEY.to_vec();
+        let value = bcs::to_bytes(&certificate.lite_certificate())?;
+        key_values.push((key, value));
+        let key = BLOCK_KEY.to_vec();
+        let value = bcs::to_bytes(&certificate.value())?;
+        key_values.push((key, value));
+        self.put_key_values(root_key, key_values);
         Ok(())
     }
 
     fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
-        let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
-        self.put_key_value_bytes(event_key.to_vec(), value);
+        let key = to_event_key(&event_id);
+        let root_key = RootKey::Event(event_id.chain_id).bytes();
+        self.put_key_value(root_key, key, value);
         Ok(())
     }
 
@@ -290,8 +319,10 @@ impl Batch {
         metrics::WRITE_NETWORK_DESCRIPTION
             .with_label_values(&[])
             .inc();
-        let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
-        self.put_key_value(key, information)?;
+        let root_key = RootKey::NetworkDescription.bytes();
+        let key = NETWORK_DESCRIPTION_KEY.to_vec();
+        let value = bcs::to_bytes(information)?;
+        self.put_key_value(root_key, key, value);
         Ok(())
     }
 }
@@ -308,94 +339,44 @@ pub struct DbStorage<Database, Clock = WallClock> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum BaseKey {
-    ChainState(ChainId),
-    Certificate(CryptoHash),
-    ConfirmedBlock(CryptoHash),
-    Blob(BlobId),
-    BlobState(BlobId),
-    Event(EventId),
-    BlockExporterState(u32),
+enum RootKey {
     NetworkDescription,
+    BlockExporterState(u32),
+    ChainState(ChainId),
+    BlockHash(CryptoHash),
+    BlobId(BlobId),
+    Event(ChainId),
 }
 
-const INDEX_CHAIN_ID: u8 = 0;
-const INDEX_BLOB_ID: u8 = 3;
-const INDEX_EVENT_ID: u8 = 5;
-const CHAIN_ID_LENGTH: usize = std::mem::size_of::<ChainId>();
-const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
+const CHAIN_ID_TAG: u8 = 2;
+const BLOB_ID_TAG: u8 = 4;
+const EVENT_ID_TAG: u8 = 5;
 
-#[cfg(test)]
-mod tests {
-    use linera_base::{
-        crypto::CryptoHash,
-        identifiers::{
-            ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId,
-            StreamName,
-        },
+impl RootKey {
+    fn bytes(&self) -> Vec<u8> {
+        bcs::to_bytes(self).unwrap()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct RestrictedEventId {
+    pub stream_id: StreamId,
+    pub index: u32,
+}
+
+fn to_event_key(event_id: &EventId) -> Vec<u8> {
+    let restricted_event_id = RestrictedEventId {
+        stream_id: event_id.stream_id.clone(),
+        index: event_id.index,
     };
+    bcs::to_bytes(&restricted_event_id).unwrap()
+}
 
-    use crate::db_storage::{
-        BaseKey, BLOB_ID_LENGTH, CHAIN_ID_LENGTH, INDEX_BLOB_ID, INDEX_CHAIN_ID, INDEX_EVENT_ID,
-    };
-
-    // Several functionalities of the storage rely on the way that the serialization
-    // is done. Thus we need to check that the serialization works in the way that
-    // we expect.
-
-    // The listing of the blobs in `list_blob_ids` depends on the serialization
-    // of `BaseKey::Blob`.
-    #[test]
-    fn test_basekey_blob_serialization() {
-        let hash = CryptoHash::default();
-        let blob_type = BlobType::default();
-        let blob_id = BlobId::new(hash, blob_type);
-        let base_key = BaseKey::Blob(blob_id);
-        let key = bcs::to_bytes(&base_key).expect("a key");
-        assert_eq!(key[0], INDEX_BLOB_ID);
-        assert_eq!(key.len(), 1 + BLOB_ID_LENGTH);
+fn is_chain_state(root_key: &[u8]) -> bool {
+    if root_key.is_empty() {
+        return false;
     }
-
-    // The listing of the chains in `list_chain_ids` depends on the serialization
-    // of `BaseKey::ChainState`.
-    #[test]
-    fn test_basekey_chainstate_serialization() {
-        let hash = CryptoHash::default();
-        let chain_id = ChainId(hash);
-        let base_key = BaseKey::ChainState(chain_id);
-        let key = bcs::to_bytes(&base_key).expect("a key");
-        assert_eq!(key[0], INDEX_CHAIN_ID);
-        assert_eq!(key.len(), 1 + CHAIN_ID_LENGTH);
-    }
-
-    // The listing of the events in `read_events_from_index` depends on the
-    // serialization of `BaseKey::Event`.
-    #[test]
-    fn test_basekey_event_serialization() {
-        let hash = CryptoHash::test_hash("49");
-        let chain_id = ChainId(hash);
-        let application_description_hash = CryptoHash::test_hash("42");
-        let application_id = ApplicationId::new(application_description_hash);
-        let application_id = GenericApplicationId::User(application_id);
-        let stream_name = StreamName(bcs::to_bytes("linera_stream").unwrap());
-        let stream_id = StreamId {
-            application_id,
-            stream_name,
-        };
-        let mut prefix = vec![INDEX_EVENT_ID];
-        prefix.extend(bcs::to_bytes(&chain_id).unwrap());
-        prefix.extend(bcs::to_bytes(&stream_id).unwrap());
-
-        let index = 1567;
-        let event_id = EventId {
-            chain_id,
-            stream_id,
-            index,
-        };
-        let base_key = BaseKey::Event(event_id);
-        let key = bcs::to_bytes(&base_key).unwrap();
-        assert!(key.starts_with(&prefix));
-    }
+    root_key[0] == CHAIN_ID_TAG
 }
 
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the
@@ -408,9 +389,9 @@ impl DualStoreRootKeyAssignment for ChainStatesFirstAssignment {
         if root_key.is_empty() {
             return Ok(StoreInUse::Second);
         }
-        let store = match bcs::from_bytes(root_key)? {
-            BaseKey::ChainState(_) => StoreInUse::First,
-            _ => StoreInUse::Second,
+        let store = match is_chain_state(root_key) {
+            true => StoreInUse::First,
+            false => StoreInUse::Second,
         };
         Ok(store)
     }
@@ -545,7 +526,7 @@ where
         &self.clock
     }
 
-    #[instrument(level = "trace", target = "telemetry_only", skip_all, fields(chain_id = %chain_id))]
+    #[instrument(level = "trace", skip_all, fields(chain_id = %chain_id))]
     async fn load_chain(
         &self,
         chain_id: ChainId,
@@ -559,34 +540,29 @@ where
             user_contracts: self.user_contracts.clone(),
             user_services: self.user_services.clone(),
         };
-        let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
+        let root_key = RootKey::ChainState(chain_id).bytes();
         let store = self.database.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
 
-    #[instrument(level = "trace", target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
+    #[instrument(level = "trace", skip_all, fields(%blob_id))]
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let test = store.contains_key(&blob_key).await?;
+        let root_key = RootKey::BlobId(blob_id).bytes();
+        let store = self.database.open_shared(&root_key)?;
+        let test = store.contains_key(BLOB_KEY).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(test)
     }
 
-    #[instrument(target = "telemetry_only", skip_all, fields(blob_count = blob_ids.len()))]
+    #[instrument(skip_all, fields(blob_count = blob_ids.len()))]
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let mut keys = Vec::new();
-        for blob_id in blob_ids {
-            let key = bcs::to_bytes(&BaseKey::Blob(*blob_id))?;
-            keys.push(key);
-        }
-        let results = store.contains_keys(keys).await?;
         let mut missing_blobs = Vec::new();
-        for (blob_id, result) in blob_ids.iter().zip(results) {
-            if !result {
+        for blob_id in blob_ids {
+            let root_key = RootKey::BlobId(*blob_id).bytes();
+            let store = self.database.open_shared(&root_key)?;
+            if !store.contains_key(BLOB_KEY).await? {
                 missing_blobs.push(*blob_id);
             }
         }
@@ -595,10 +571,11 @@ where
         Ok(missing_blobs)
     }
 
+    #[instrument(skip_all, fields(%blob_id))]
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let test = store.contains_key(&blob_key).await?;
+        let root_key = RootKey::BlobId(blob_id).bytes();
+        let store = self.database.open_shared(&root_key)?;
+        let test = store.contains_key(BLOB_STATE_KEY).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_BLOB_STATE_COUNTER
             .with_label_values(&[])
@@ -606,14 +583,14 @@ where
         Ok(test)
     }
 
-    #[instrument(target = "telemetry_only", skip_all, fields(hash = %hash))]
+    #[instrument(skip_all, fields(%hash))]
     async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlock>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
-        let value = store.read_value(&block_key).await?;
+        let root_key = RootKey::BlockHash(hash).bytes();
+        let store = self.database.open_shared(&root_key)?;
+        let value = store.read_value(BLOCK_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[])
@@ -621,44 +598,37 @@ where
         Ok(value)
     }
 
-    #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
+    #[instrument(skip_all, fields(%blob_id))]
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let maybe_blob_bytes = store.read_value_bytes(&blob_key).await?;
+        let root_key = RootKey::BlobId(blob_id).bytes();
+        let store = self.database.open_shared(&root_key)?;
+        let maybe_blob_bytes = store.read_value_bytes(BLOB_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
     }
 
+    #[instrument(skip_all, fields(blob_ids_len = %blob_ids.len()))]
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
-        let blob_keys = blob_ids
-            .iter()
-            .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
-            .collect::<Result<Vec<_>, _>>()?;
-        let store = self.database.open_shared(&[])?;
-        let maybe_blob_bytes = store.read_multi_values_bytes(blob_keys).await?;
+        let mut blobs = Vec::new();
+        for blob_id in blob_ids {
+            blobs.push(self.read_blob(*blob_id).await?);
+        }
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER
             .with_label_values(&[])
             .inc_by(blob_ids.len() as u64);
-
-        Ok(blob_ids
-            .iter()
-            .zip(maybe_blob_bytes)
-            .map(|(blob_id, maybe_blob_bytes)| {
-                maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(*blob_id, blob_bytes))
-            })
-            .collect())
+        Ok(blobs)
     }
 
+    #[instrument(skip_all, fields(%blob_id))]
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let blob_state = store.read_value::<BlobState>(&blob_state_key).await?;
+        let root_key = RootKey::BlobId(blob_id).bytes();
+        let store = self.database.open_shared(&root_key)?;
+        let blob_state = store.read_value::<BlobState>(BLOB_STATE_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_STATE_COUNTER
             .with_label_values(&[])
@@ -666,6 +636,7 @@ where
         Ok(blob_state)
     }
 
+    #[instrument(skip_all, fields(blob_ids_len = %blob_ids.len()))]
     async fn read_blob_states(
         &self,
         blob_ids: &[BlobId],
@@ -673,14 +644,10 @@ where
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
-        let blob_state_keys = blob_ids
-            .iter()
-            .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
-            .collect::<Result<_, _>>()?;
-        let store = self.database.open_shared(&[])?;
-        let blob_states = store
-            .read_multi_values::<BlobState>(blob_state_keys)
-            .await?;
+        let mut blob_states = Vec::new();
+        for blob_id in blob_ids {
+            blob_states.push(self.read_blob_state(*blob_id).await?);
+        }
         #[cfg(with_metrics)]
         metrics::READ_BLOB_STATES_COUNTER
             .with_label_values(&[])
@@ -688,14 +655,15 @@ where
         Ok(blob_states)
     }
 
-    #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob.id()))]
+    #[instrument(skip_all, fields(blob_id = %blob.id()))]
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
+        let mut batch = MultiPartitionBatch::new();
         batch.add_blob(blob)?;
         self.write_batch(batch).await?;
         Ok(())
     }
 
+    #[instrument(skip_all, fields(blob_ids_len = %blob_ids.len()))]
     async fn maybe_write_blob_states(
         &self,
         blob_ids: &[BlobId],
@@ -704,15 +672,14 @@ where
         if blob_ids.is_empty() {
             return Ok(());
         }
-        let blob_state_keys = blob_ids
-            .iter()
-            .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
-            .collect::<Result<_, _>>()?;
-        let store = self.database.open_shared(&[])?;
-        let maybe_blob_states = store
-            .read_multi_values::<BlobState>(blob_state_keys)
-            .await?;
-        let mut batch = Batch::new();
+        let mut maybe_blob_states = Vec::new();
+        for blob_id in blob_ids {
+            let root_key = RootKey::BlobId(*blob_id).bytes();
+            let store = self.database.open_shared(&root_key)?;
+            let maybe_blob_state = store.read_value::<BlobState>(BLOB_STATE_KEY).await?;
+            maybe_blob_states.push(maybe_blob_state);
+        }
+        let mut batch = MultiPartitionBatch::new();
         for (maybe_blob_state, blob_id) in maybe_blob_states.iter().zip(blob_ids) {
             match maybe_blob_state {
                 None => {
@@ -732,19 +699,19 @@ where
         Ok(())
     }
 
+    #[instrument(skip_all, fields(blobs_len = %blobs.len()))]
     async fn maybe_write_blobs(&self, blobs: &[Blob]) -> Result<Vec<bool>, ViewError> {
         if blobs.is_empty() {
             return Ok(Vec::new());
         }
-        let blob_state_keys = blobs
-            .iter()
-            .map(|blob| bcs::to_bytes(&BaseKey::BlobState(blob.id())))
-            .collect::<Result<_, _>>()?;
-        let store = self.database.open_shared(&[])?;
-        let blob_states = store.contains_keys(blob_state_keys).await?;
-        let mut batch = Batch::new();
-        for (blob, has_state) in blobs.iter().zip(&blob_states) {
-            if *has_state {
+        let mut batch = MultiPartitionBatch::new();
+        let mut blob_states = Vec::new();
+        for blob in blobs {
+            let root_key = RootKey::BlobId(blob.id()).bytes();
+            let store = self.database.open_shared(&root_key)?;
+            let has_state = store.contains_key(BLOB_STATE_KEY).await?;
+            blob_states.push(has_state);
+            if has_state {
                 batch.add_blob(blob)?;
             }
         }
@@ -752,23 +719,25 @@ where
         Ok(blob_states)
     }
 
+    #[instrument(skip_all, fields(blobs_len = %blobs.len()))]
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError> {
         if blobs.is_empty() {
             return Ok(());
         }
-        let mut batch = Batch::new();
+        let mut batch = MultiPartitionBatch::new();
         for blob in blobs {
             batch.add_blob(blob)?;
         }
         self.write_batch(batch).await
     }
 
+    #[instrument(skip_all, fields(blobs_len = %blobs.len()))]
     async fn write_blobs_and_certificate(
         &self,
         blobs: &[Blob],
         certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
+        let mut batch = MultiPartitionBatch::new();
         for blob in blobs {
             batch.add_blob(blob)?;
         }
@@ -776,10 +745,11 @@ where
         self.write_batch(batch).await
     }
 
+    #[instrument(skip_all, fields(%hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
-        let keys = Self::get_keys_for_certificates(&[hash])?;
-        let store = self.database.open_shared(&[])?;
-        let results = store.contains_keys(keys).await?;
+        let root_key = RootKey::BlockHash(hash).bytes();
+        let store = self.database.open_shared(&root_key)?;
+        let results = store.contains_keys(&get_block_keys()).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_CERTIFICATE_COUNTER
             .with_label_values(&[])
@@ -787,23 +757,22 @@ where
         Ok(results[0] && results[1])
     }
 
+    #[instrument(skip_all, fields(%hash))]
     async fn read_certificate(
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let keys = Self::get_keys_for_certificates(&[hash])?;
-        let values = store.read_multi_values_bytes(keys).await;
-        if values.is_ok() {
-            #[cfg(with_metrics)]
-            metrics::READ_CERTIFICATE_COUNTER
-                .with_label_values(&[])
-                .inc();
-        }
-        let values = values?;
+        let root_key = RootKey::BlockHash(hash).bytes();
+        let store = self.database.open_shared(&root_key)?;
+        let values = store.read_multi_values_bytes(&get_block_keys()).await?;
+        #[cfg(with_metrics)]
+        metrics::READ_CERTIFICATE_COUNTER
+            .with_label_values(&[])
+            .inc();
         Self::deserialize_certificate(&values, hash)
     }
 
+    #[instrument(skip_all)]
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
@@ -812,16 +781,16 @@ where
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        let keys = Self::get_keys_for_certificates(&hashes)?;
-        let store = self.database.open_shared(&[])?;
-        let values = store.read_multi_values_bytes(keys).await;
-        if values.is_ok() {
-            #[cfg(with_metrics)]
-            metrics::READ_CERTIFICATES_COUNTER
-                .with_label_values(&[])
-                .inc_by(hashes.len() as u64);
+        let root_keys = Self::get_root_keys_for_certificates(&hashes);
+        let mut values = Vec::new();
+        for root_key in root_keys {
+            let store = self.database.open_shared(&root_key)?;
+            values.extend(store.read_multi_values_bytes(&get_block_keys()).await?);
         }
-        let values = values?;
+        #[cfg(with_metrics)]
+        metrics::READ_CERTIFICATES_COUNTER
+            .with_label_values(&[])
+            .inc_by(hashes.len() as u64);
         let mut certificates = Vec::new();
         for (pair, hash) in values.chunks_exact(2).zip(hashes) {
             let certificate = Self::deserialize_certificate(pair, hash)?;
@@ -836,6 +805,7 @@ where
     /// and the second element is confirmed block.
     ///
     /// It does not check if all hashes all returned.
+    #[instrument(skip_all)]
     async fn read_certificates_raw<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
@@ -844,9 +814,12 @@ where
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        let keys = Self::get_keys_for_certificates(&hashes)?;
-        let store = self.database.open_shared(&[])?;
-        let values = store.read_multi_values_bytes(keys).await?;
+        let root_keys = Self::get_root_keys_for_certificates(&hashes);
+        let mut values = Vec::new();
+        for root_key in root_keys {
+            let store = self.database.open_shared(&root_key)?;
+            values.extend(store.read_multi_values_bytes(&get_block_keys()).await?);
+        }
         #[cfg(with_metrics)]
         metrics::READ_CERTIFICATES_COUNTER
             .with_label_values(&[])
@@ -861,36 +834,40 @@ where
             .collect())
     }
 
+    #[instrument(skip_all, fields(event_id = ?event_id))]
     async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
+        let event_key = to_event_key(&event_id);
+        let root_key = RootKey::Event(event_id.chain_id).bytes();
+        let store = self.database.open_shared(&root_key)?;
         let event = store.read_value_bytes(&event_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
         Ok(event)
     }
 
+    #[instrument(skip_all, fields(event_id = ?event_id))]
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
+        let event_key = to_event_key(&event_id);
+        let root_key = RootKey::Event(event_id.chain_id).bytes();
+        let store = self.database.open_shared(&root_key)?;
         let exists = store.contains_key(&event_key).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_EVENT_COUNTER.with_label_values(&[]).inc();
         Ok(exists)
     }
 
+    #[instrument(skip_all, fields(chain_id = %chain_id, stream_id = %stream_id, start_index = %start_index))]
     async fn read_events_from_index(
         &self,
         chain_id: &ChainId,
         stream_id: &StreamId,
         start_index: u32,
     ) -> Result<Vec<IndexAndEvent>, ViewError> {
-        let mut prefix = vec![INDEX_EVENT_ID];
-        prefix.extend(bcs::to_bytes(chain_id).unwrap());
-        prefix.extend(bcs::to_bytes(stream_id).unwrap());
+        let root_key = RootKey::Event(*chain_id).bytes();
+        let store = self.database.open_shared(&root_key)?;
         let mut keys = Vec::new();
         let mut indices = Vec::new();
-        let store = self.database.open_shared(&[])?;
+        let prefix = bcs::to_bytes(stream_id).unwrap();
         for short_key in store.find_keys_by_prefix(&prefix).await? {
             let index = bcs::from_bytes::<u32>(&short_key)?;
             if index >= start_index {
@@ -900,7 +877,7 @@ where
                 indices.push(index);
             }
         }
-        let values = store.read_multi_values_bytes(keys).await?;
+        let values = store.read_multi_values_bytes(&keys).await?;
         let mut returned_values = Vec::new();
         for (index, value) in indices.into_iter().zip(values) {
             let event = value.unwrap();
@@ -909,21 +886,23 @@ where
         Ok(returned_values)
     }
 
+    #[instrument(skip_all)]
     async fn write_events(
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
     ) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
+        let mut batch = MultiPartitionBatch::new();
         for (event_id, value) in events {
             batch.add_event(event_id, value)?;
         }
         self.write_batch(batch).await
     }
 
+    #[instrument(skip_all)]
     async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
-        let maybe_value = store.read_value(&key).await?;
+        let root_key = RootKey::NetworkDescription.bytes();
+        let store = self.database.open_shared(&root_key)?;
+        let maybe_value = store.read_value(NETWORK_DESCRIPTION_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_NETWORK_DESCRIPTION
             .with_label_values(&[])
@@ -931,11 +910,12 @@ where
         Ok(maybe_value)
     }
 
+    #[instrument(skip_all)]
     async fn write_network_description(
         &self,
         information: &NetworkDescription,
     ) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
+        let mut batch = MultiPartitionBatch::new();
         batch.add_network_description(information)?;
         self.write_batch(batch).await?;
         Ok(())
@@ -945,13 +925,63 @@ where
         self.wasm_runtime
     }
 
+    #[instrument(skip_all)]
     async fn block_exporter_context(
         &self,
         block_exporter_id: u32,
     ) -> Result<Self::BlockExporterContext, ViewError> {
-        let root_key = bcs::to_bytes(&BaseKey::BlockExporterState(block_exporter_id))?;
+        let root_key = RootKey::BlockExporterState(block_exporter_id).bytes();
         let store = self.database.open_exclusive(&root_key)?;
         Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
+    }
+
+    async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError> {
+        let root_keys = self.database.list_root_keys().await?;
+        let mut blob_ids = Vec::new();
+        for root_key in root_keys {
+            if !root_key.is_empty() && root_key[0] == BLOB_ID_TAG {
+                let root_key_red = &root_key[1..];
+                let blob_id = bcs::from_bytes(root_key_red)?;
+                blob_ids.push(blob_id);
+            }
+        }
+        Ok(blob_ids)
+    }
+
+    async fn list_chain_ids(&self) -> Result<Vec<ChainId>, ViewError> {
+        let root_keys = self.database.list_root_keys().await?;
+        let mut chain_ids = Vec::new();
+        for root_key in root_keys {
+            if !root_key.is_empty() && root_key[0] == CHAIN_ID_TAG {
+                let root_key_red = &root_key[1..];
+                let chain_id = bcs::from_bytes(root_key_red)?;
+                chain_ids.push(chain_id);
+            }
+        }
+        Ok(chain_ids)
+    }
+
+    async fn list_event_ids(&self) -> Result<Vec<EventId>, ViewError> {
+        let root_keys = self.database.list_root_keys().await?;
+        let mut event_ids = Vec::new();
+        for root_key in root_keys {
+            if !root_key.is_empty() && root_key[0] == EVENT_ID_TAG {
+                let root_key_red = &root_key[1..];
+                let chain_id = bcs::from_bytes(root_key_red)?;
+                let store = self.database.open_shared(&root_key)?;
+                let keys = store.find_keys_by_prefix(&[]).await?;
+                for key in keys {
+                    let restricted_event_id = bcs::from_bytes::<RestrictedEventId>(&key)?;
+                    let event_id = EventId {
+                        chain_id,
+                        stream_id: restricted_event_id.stream_id,
+                        index: restricted_event_id.index,
+                    };
+                    event_ids.push(event_id);
+                }
+            }
+        }
+        Ok(event_ids)
     }
 }
 
@@ -962,17 +992,15 @@ where
     C: Clock,
     Database::Error: Send + Sync,
 {
-    fn get_keys_for_certificates(hashes: &[CryptoHash]) -> Result<Vec<Vec<u8>>, ViewError> {
-        Ok(hashes
+    #[instrument(skip_all)]
+    fn get_root_keys_for_certificates(hashes: &[CryptoHash]) -> Vec<Vec<u8>> {
+        hashes
             .iter()
-            .flat_map(|hash| {
-                let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash));
-                let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(*hash));
-                vec![cert_key, block_key]
-            })
-            .collect::<Result<_, _>>()?)
+            .map(|hash| RootKey::BlockHash(*hash).bytes())
+            .collect()
     }
 
+    #[instrument(skip_all)]
     fn deserialize_certificate(
         pair: &[Option<Vec<u8>>],
         hash: CryptoHash,
@@ -992,26 +1020,28 @@ where
         Ok(Some(certificate))
     }
 
+    #[instrument(skip_all)]
     async fn write_entry(
         store: &Database::Store,
-        key: Vec<u8>,
-        bytes: Vec<u8>,
+        key_values: Vec<(Vec<u8>, Vec<u8>)>,
     ) -> Result<(), ViewError> {
-        let mut batch = linera_views::batch::Batch::new();
-        batch.put_key_value_bytes(key, bytes);
+        let mut batch = Batch::new();
+        for (key, value) in key_values {
+            batch.put_key_value_bytes(key, value);
+        }
         store.write_batch(batch).await?;
         Ok(())
     }
 
-    #[instrument(target = "telemetry_only", skip_all, fields(batch_size = batch.key_value_bytes.len()))]
-    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        if batch.key_value_bytes.is_empty() {
+    #[instrument(skip_all, fields(batch_size = batch.keys_value_bytes.len()))]
+    async fn write_batch(&self, batch: MultiPartitionBatch) -> Result<(), ViewError> {
+        if batch.keys_value_bytes.is_empty() {
             return Ok(());
         }
         let mut futures = Vec::new();
-        for (key, bytes) in batch.key_value_bytes {
-            let store = self.database.open_shared(&[])?;
-            futures.push(async move { Self::write_entry(&store, key, bytes).await });
+        for (root_key, key_values) in batch.keys_value_bytes {
+            let store = self.database.open_shared(&root_key)?;
+            futures.push(async move { Self::write_entry(&store, key_values).await });
         }
         futures::future::try_join_all(futures).await?;
         Ok(())
@@ -1054,47 +1084,6 @@ where
         let database = Database::connect(config, namespace).await?;
         Ok(Self::new(database, wasm_runtime, WallClock))
     }
-
-    /// Lists the blob IDs of the storage.
-    pub async fn list_blob_ids(
-        config: &Database::Config,
-        namespace: &str,
-    ) -> Result<Vec<BlobId>, ViewError> {
-        let database = Database::maybe_create_and_connect(config, namespace).await?;
-        let store = database.open_shared(&[])?;
-        let prefix = &[INDEX_BLOB_ID];
-        let keys = store.find_keys_by_prefix(prefix).await?;
-        let mut blob_ids = Vec::new();
-        for key in keys {
-            let key_red = &key[..BLOB_ID_LENGTH];
-            let blob_id = bcs::from_bytes(key_red)?;
-            blob_ids.push(blob_id);
-        }
-        Ok(blob_ids)
-    }
-}
-
-impl<Database> DbStorage<Database, WallClock>
-where
-    Database: KeyValueDatabase + Clone + Send + Sync + 'static,
-    Database::Error: Send + Sync,
-{
-    /// Lists the chain IDs of the storage.
-    pub async fn list_chain_ids(
-        config: &Database::Config,
-        namespace: &str,
-    ) -> Result<Vec<ChainId>, ViewError> {
-        let root_keys = Database::list_root_keys(config, namespace).await?;
-        let mut chain_ids = Vec::new();
-        for root_key in root_keys {
-            if root_key.len() == 1 + CHAIN_ID_LENGTH && root_key[0] == INDEX_CHAIN_ID {
-                let root_key_red = &root_key[1..=CHAIN_ID_LENGTH];
-                let chain_id = bcs::from_bytes(root_key_red)?;
-                chain_ids.push(chain_id);
-            }
-        }
-        Ok(chain_ids)
-    }
 }
 
 #[cfg(with_testing)]
@@ -1125,5 +1114,76 @@ where
     ) -> Result<Self, Database::Error> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
         Ok(Self::new(database, wasm_runtime, clock))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_base::{
+        crypto::CryptoHash,
+        identifiers::{
+            ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId,
+            StreamName,
+        },
+    };
+
+    use crate::db_storage::{to_event_key, RootKey, BLOB_ID_TAG, CHAIN_ID_TAG, EVENT_ID_TAG};
+
+    // Several functionalities of the storage rely on the way that the serialization
+    // is done. Thus we need to check that the serialization works in the way that
+    // we expect.
+
+    // The listing of the blobs in `list_blob_ids` depends on the serialization
+    // of `RootKey::Blob`.
+    #[test]
+    fn test_root_key_blob_serialization() {
+        let hash = CryptoHash::default();
+        let blob_type = BlobType::default();
+        let blob_id = BlobId::new(hash, blob_type);
+        let root_key = RootKey::BlobId(blob_id).bytes();
+        assert_eq!(root_key[0], BLOB_ID_TAG);
+        assert_eq!(bcs::from_bytes::<BlobId>(&root_key[1..]).unwrap(), blob_id);
+    }
+
+    // The listing of the chains in `list_chain_ids` depends on the serialization
+    // of `RootKey::ChainState`.
+    #[test]
+    fn test_root_key_chainstate_serialization() {
+        let hash = CryptoHash::default();
+        let chain_id = ChainId(hash);
+        let root_key = RootKey::ChainState(chain_id).bytes();
+        assert_eq!(root_key[0], CHAIN_ID_TAG);
+        assert_eq!(
+            bcs::from_bytes::<ChainId>(&root_key[1..]).unwrap(),
+            chain_id
+        );
+    }
+
+    // The listing of the events in `read_events_from_index` depends on the
+    // serialization of `RootKey::Event`.
+    #[test]
+    fn test_root_key_event_serialization() {
+        let hash = CryptoHash::test_hash("49");
+        let chain_id = ChainId(hash);
+        let application_description_hash = CryptoHash::test_hash("42");
+        let application_id = ApplicationId::new(application_description_hash);
+        let application_id = GenericApplicationId::User(application_id);
+        let stream_name = StreamName(bcs::to_bytes("linera_stream").unwrap());
+        let stream_id = StreamId {
+            application_id,
+            stream_name,
+        };
+        let prefix = bcs::to_bytes(&stream_id).unwrap();
+
+        let index = 1567;
+        let event_id = EventId {
+            chain_id,
+            stream_id,
+            index,
+        };
+        let root_key = RootKey::Event(chain_id).bytes();
+        assert_eq!(root_key[0], EVENT_ID_TAG);
+        let key = to_event_key(&event_id);
+        assert!(key.starts_with(&prefix));
     }
 }

@@ -9,6 +9,7 @@ use std::{
     marker::PhantomData,
 };
 
+use allocative::Allocative;
 #[cfg(with_revm)]
 use alloy_primitives::{Address, B256};
 use anyhow::{anyhow, Context};
@@ -30,7 +31,9 @@ use crate::{
 };
 
 /// An account owner.
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType)]
+#[derive(
+    Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType, Allocative,
+)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum AccountOwner {
     /// Short addresses reserved for the protocol.
@@ -79,6 +82,14 @@ impl AccountOwner {
     }
 }
 
+#[cfg(with_revm)]
+impl From<Address> for AccountOwner {
+    fn from(address: Address) -> Self {
+        let address = address.into_array();
+        AccountOwner::Address20(address)
+    }
+}
+
 #[cfg(with_testing)]
 impl From<CryptoHash> for AccountOwner {
     fn from(address: CryptoHash) -> Self {
@@ -101,6 +112,7 @@ impl From<CryptoHash> for AccountOwner {
     WitType,
     SimpleObject,
     InputObject,
+    Allocative,
 )]
 #[graphql(name = "AccountOutput", input_name = "Account")]
 pub struct Account {
@@ -178,6 +190,7 @@ impl std::str::FromStr for Account {
     WitLoad,
     WitStore,
     WitType,
+    Allocative,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 #[cfg_attr(with_testing, derive(Default))]
@@ -200,6 +213,7 @@ pub struct ChainId(pub CryptoHash);
     WitStore,
     WitLoad,
     Default,
+    Allocative,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum BlobType {
@@ -251,7 +265,9 @@ impl std::str::FromStr for BlobType {
 }
 
 /// A content-addressed blob ID i.e. the hash of the `BlobContent`.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Debug, WitType, WitStore, WitLoad)]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Debug, WitType, WitStore, WitLoad, Allocative,
+)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Default))]
 pub struct BlobId {
     /// The type of the blob.
@@ -343,13 +359,15 @@ impl From<DataBlobHash> for BlobId {
 }
 
 /// A unique identifier for a user application from a blob.
-#[derive(Debug, WitLoad, WitStore, WitType)]
+#[derive(Debug, WitLoad, WitStore, WitType, Allocative)]
 #[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
+#[allocative(bound = "A")]
 pub struct ApplicationId<A = ()> {
     /// The hash of the `ApplicationDescription` this refers to.
     pub application_description_hash: CryptoHash,
     #[witty(skip)]
     #[debug(skip)]
+    #[allocative(skip)]
     _phantom: PhantomData<A>,
 }
 
@@ -368,6 +386,7 @@ pub struct ApplicationId<A = ()> {
     WitLoad,
     WitStore,
     WitType,
+    Allocative,
 )]
 pub enum GenericApplicationId {
     /// The system application.
@@ -416,7 +435,12 @@ impl GenericApplicationId {
 
 impl<A> From<ApplicationId<A>> for AccountOwner {
     fn from(app_id: ApplicationId<A>) -> Self {
-        AccountOwner::Address32(app_id.application_description_hash)
+        if app_id.is_evm() {
+            let hash_bytes = app_id.application_description_hash.as_bytes();
+            AccountOwner::Address20(hash_bytes[..20].try_into().unwrap())
+        } else {
+            AccountOwner::Address32(app_id.application_description_hash)
+        }
     }
 }
 
@@ -455,7 +479,7 @@ impl From<EvmPublicKey> for AccountOwner {
 }
 
 /// A unique identifier for a module.
-#[derive(Debug, WitLoad, WitStore, WitType)]
+#[derive(Debug, WitLoad, WitStore, WitType, Allocative)]
 #[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
 pub struct ModuleId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     /// The hash of the blob containing the contract bytecode.
@@ -483,6 +507,7 @@ pub struct ModuleId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     WitLoad,
     WitStore,
     WitType,
+    Allocative,
 )]
 pub struct StreamName(
     #[serde(with = "serde_bytes")]
@@ -530,6 +555,7 @@ impl std::str::FromStr for StreamName {
     WitType,
     SimpleObject,
     InputObject,
+    Allocative,
 )]
 #[graphql(input_name = "StreamIdInput")]
 pub struct StreamId {
@@ -612,6 +638,7 @@ impl std::str::FromStr for StreamId {
     WitStore,
     WitType,
     SimpleObject,
+    Allocative,
 )]
 pub struct EventId {
     /// The ID of the chain that generated this event.
@@ -620,6 +647,12 @@ pub struct EventId {
     pub stream_id: StreamId,
     /// The event index, i.e. the number of events in the stream before this one.
     pub index: u32,
+}
+
+impl fmt::Display for EventId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}:{}", self.chain_id, self.stream_id, self.index)
+    }
 }
 
 impl StreamName {
@@ -960,6 +993,14 @@ impl<A> ApplicationId<A> {
     }
 }
 
+impl<A> ApplicationId<A> {
+    /// Returns whether the `ApplicationId` is the one of an EVM application.
+    pub fn is_evm(&self) -> bool {
+        let bytes = self.application_description_hash.as_bytes();
+        bytes.0[20..] == [0; 12]
+    }
+}
+
 #[cfg(with_revm)]
 impl From<Address> for ApplicationId {
     fn from(address: Address) -> ApplicationId {
@@ -984,18 +1025,6 @@ impl<A> ApplicationId<A> {
     /// Converts the `ApplicationId` into an Ethereum-compatible 32-byte array.
     pub fn bytes32(&self) -> B256 {
         *self.application_description_hash.as_bytes()
-    }
-
-    /// Returns whether the `ApplicationId` is the one of an EVM application.
-    pub fn is_evm(&self) -> bool {
-        let bytes = self.application_description_hash.as_bytes();
-        let bytes = bytes.0.as_ref();
-        for byte in &bytes[20..] {
-            if byte != &0 {
-                return false;
-            }
-        }
-        true
     }
 }
 
@@ -1179,7 +1208,7 @@ mod tests {
         );
         assert_eq!(
             description.id().to_string(),
-            "fe947fddf2735224d01eb9d56580109f2d9d02397dc5ddd748ef9beeb38d9caa"
+            "ea15bcf049a65569c12dd07ba0566f52e0880d571e41203341a153fe47008275"
         );
     }
 
@@ -1260,5 +1289,19 @@ mod tests {
         };
         let stream_id2 = StreamId::from_str(&format!("{stream_id1}")).unwrap();
         assert_eq!(stream_id1, stream_id2);
+    }
+
+    #[cfg(with_revm)]
+    #[test]
+    fn test_address_account_owner() {
+        use alloy_primitives::Address;
+        let mut vec = Vec::new();
+        for i in 0..20 {
+            vec.push(i as u8);
+        }
+        let address1 = Address::from_slice(&vec);
+        let account_owner = AccountOwner::from(address1);
+        let address2 = account_owner.to_evm_address().unwrap();
+        assert_eq!(address1, address2);
     }
 }

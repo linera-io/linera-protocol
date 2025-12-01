@@ -50,50 +50,26 @@ jobs:
           filters: |
             paths:
               - '!docker/**'
-              - '!docker_scylla/**'
               - '!configuration/**'
               - '!kubernetes/**'
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
-  remote-net-test:
-    needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest-8-cores
-    timeout-minutes: 40
-
+  changed-files-kubernetes:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.files-changed.outputs.paths }}
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Run the storage-service instance
-      run: |
-        cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
-    - name: Wait for storage service to be ready
-      run: |
-        until nc -z 127.0.0.1 1235; do sleep 1; done
-    - name: Build binaries
-      run: |
-        cargo build --features storage-service --bin linera-server --bin linera-proxy --bin linera
-    - name: Run the validators
-      run: |
-        mkdir /tmp/local-linera-net
-        cargo run --features storage-service --bin linera -- net up --storage service:tcp:$LINERA_STORAGE_SERVICE:table --policy-config testnet --path /tmp/local-linera-net --validators 2 --shards 2 &
-    - name: Create two epochs and run the faucet
-      # See https://github.com/linera-io/linera-protocol/pull/2835 for details.
-      run: |
-        cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 1000
-        cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 500
-        cargo run --bin linera -- faucet --amount 1000 --port 8079 &
-    - name: Wait for faucet to be ready
-      run: |
-        until curl -s http://localhost:8079 >/dev/null; do sleep 1; done
-    - name: Run the remote-net tests
-      run: |
-        cargo test -p linera-service remote_net_grpc --features remote-net
-
+      - uses: actions/checkout@v4
+      - name: Filter paths
+        uses: dorny/paths-filter@v3
+        id: files-changed
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            paths:
+              - '!configuration/**'
+              - '!CONTRIBUTING.md'
+              - '!INSTALL.md'
   execution-wasmtime-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
@@ -137,6 +113,29 @@ jobs:
       run: |
         cd examples
         cargo test --locked
+
+  linera-sdk-tests-fixtures:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run linera-sdk fixtures
+      run: |
+        cd linera-sdk/tests/fixtures
+        cargo test --locked
+    - name: Run linera-sdk tests application lints
+      run: |
+        cd linera-sdk/tests/fixtures
+        cargo fmt -- --check
+        cargo clippy --all-targets --all-features --target wasm32-unknown-unknown --locked
 
   default-features-and-witty-integration-test:
     needs: changed-files
@@ -183,30 +182,6 @@ jobs:
           echo 'Run `linera help-markdown > CLI.md` to update it.'
           exit 1
         fi
-
-  benchmark-test:
-    needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-
-    steps:
-    - uses: actions/checkout@v4
-    - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Run the storage-service instance
-      run: |
-        cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
-    - name: Wait for storage service to be ready
-      run: |
-        until nc -z 127.0.0.1 1235; do sleep 1; done
-    - name: Run the benchmark test
-      run: |
-        cargo build --locked -p linera-service --bin linera-benchmark --features storage-service
-        cargo test --locked -p linera-service --features storage-service benchmark
 
   ethereum-tests:
     needs: changed-files
@@ -262,7 +237,9 @@ jobs:
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
     - name: Wait for storage service to be ready
       run: |
-        until nc -z 127.0.0.1 1235; do sleep 1; done
+        STORAGE_HOST=$(echo "$LINERA_STORAGE_SERVICE" | cut -d: -f1)
+        STORAGE_PORT=$(echo "$LINERA_STORAGE_SERVICE" | cut -d: -f2)
+        until nc -z "$STORAGE_HOST" "$STORAGE_PORT"; do sleep 1; done
     - name: Run Ethereum tests
       run: |
         cargo test -p linera-ethereum --features ethereum
@@ -270,6 +247,7 @@ jobs:
     - name: Run REVM test
       run: |
         cargo test evm --features revm,storage-service
+
 
   storage-service-tests:
     needs: changed-files
@@ -292,7 +270,9 @@ jobs:
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
     - name: Wait for storage service to be ready
       run: |
-        until nc -z 127.0.0.1 1235; do sleep 1; done
+        STORAGE_HOST=$(echo "$LINERA_STORAGE_SERVICE" | cut -d: -f1)
+        STORAGE_PORT=$(echo "$LINERA_STORAGE_SERVICE" | cut -d: -f2)
+        until nc -z "$STORAGE_HOST" "$STORAGE_PORT"; do sleep 1; done
     - name: Run the storage-service tests
       run: |
         cargo test --features storage-service -- storage_service --nocapture

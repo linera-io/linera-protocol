@@ -23,13 +23,14 @@ env:
   RUSTUP_MAX_RETRIES: 10
   RUST_LOG: warn
   DOCKER_COMPOSE_WAIT: "true"
+  LINERA_IMAGE: linera
 
 permissions:
   contents: read
 
 jobs:
   compose:
-    if: ${{ github.event_name == 'merge_group' }}
+    if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 40
 

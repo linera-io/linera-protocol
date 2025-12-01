@@ -35,9 +35,10 @@ fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
 wasmer = ["dep:wasmer", "wasmer/enable-serde", "linera-witty/wasmer"]
 wasmtime = ["dep:wasmtime", "linera-witty/wasmtime"]
-web = ["linera-base/web", "linera-views/web", "js-sys"]
+web = ["linera-base/web", "linera-views/web", "js-sys", "web-thread/web"]
 
 [dependencies]
+allocative.workspace = true
 alloy-primitives = { workspace = true, optional = true }
 alloy-sol-types = { workspace = true, optional = true }
 anyhow.workspace = true
@@ -99,6 +100,7 @@ tracing = { workspace = true, features = ["log"] }
 url.workspace = true
 wasm-instrument = { workspace = true, features = ["sign_ext"] }
 wasmtime = { workspace = true, optional = true }
+web-thread.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }

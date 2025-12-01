@@ -7,26 +7,35 @@ use std::{
     sync::Mutex,
 };
 
+use allocative::Allocative;
+use linera_base::visit_allocative_simple;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
     common::from_bytes_option,
     context::Context,
-    store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
 
-/// A hash for `ContainerView` and storing of the hash for memoization purposes
-#[derive(Debug)]
+/// Wrapping a view to memoize its hash.
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, O, W: Allocative")]
 pub struct WrappedHashableContainerView<C, W, O> {
+    /// Phantom data for the context type.
+    #[allocative(skip)]
     _phantom: PhantomData<C>,
+    /// The hash persisted in storage.
+    #[allocative(visit = visit_allocative_simple)]
     stored_hash: Option<O>,
+    /// Memoized hash, if any.
+    #[allocative(visit = visit_allocative_simple)]
     hash: Mutex<Option<O>>,
+    /// The wrapped view.
     inner: W,
 }
 
-/// Key tags to create the sub-keys of a `MapView` on top of the base key.
+/// Key tags to create the sub-keys of a `WrappedHashableContainerView` on top of the base key.
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the indices of the view.
@@ -68,8 +77,9 @@ where
 
     type Context = W::Context;
 
-    fn context(&self) -> &Self::Context {
-        self.inner.context()
+    fn context(&self) -> Self::Context {
+        // The inner context has our base key + the KeyTag::Inner byte
+        self.inner.context().clone_with_trimmed_key(1)
     }
 
     fn pre_load(context: &Self::Context) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -96,12 +106,6 @@ where
         })
     }
 
-    async fn load(context: Self::Context) -> Result<Self, ViewError> {
-        let keys = Self::pre_load(&context)?;
-        let values = context.store().read_multi_values_bytes(keys).await?;
-        Self::post_load(context, &values)
-    }
-
     fn rollback(&mut self) {
         self.inner.rollback();
         *self.hash.get_mut().unwrap() = self.stored_hash;
@@ -115,26 +119,29 @@ where
         self.stored_hash != *hash
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        let delete_view = self.inner.flush(batch)?;
-        let hash = self.hash.get_mut().unwrap();
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let delete_view = self.inner.pre_save(batch)?;
+        let hash = *self.hash.lock().unwrap();
         if delete_view {
             let mut key_prefix = self.inner.context().base_key().bytes.clone();
             key_prefix.pop();
             batch.delete_key_prefix(key_prefix);
-            self.stored_hash = None;
-            *hash = None;
-        } else if self.stored_hash != *hash {
+        } else if self.stored_hash != hash {
             let mut key = self.inner.context().base_key().bytes.clone();
             let tag = key.last_mut().unwrap();
             *tag = KeyTag::Hash as u8;
             match hash {
                 None => batch.delete_key(key),
-                Some(hash) => batch.put_key_value(key, hash)?,
+                Some(hash) => batch.put_key_value(key, &hash)?,
             }
-            self.stored_hash = *hash;
         }
         Ok(delete_view)
+    }
+
+    fn post_save(&mut self) {
+        self.inner.post_save();
+        let hash = *self.hash.get_mut().unwrap();
+        self.stored_hash = hash;
     }
 
     fn clear(&mut self) {
@@ -149,13 +156,13 @@ where
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
-    fn clone_unchecked(&mut self) -> Self {
-        WrappedHashableContainerView {
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(WrappedHashableContainerView {
             _phantom: PhantomData,
             stored_hash: self.stored_hash,
             hash: Mutex::new(*self.hash.get_mut().unwrap()),
-            inner: self.inner.clone_unchecked(),
-        }
+            inner: self.inner.clone_unchecked()?,
+        })
     }
 }
 

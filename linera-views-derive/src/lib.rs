@@ -64,7 +64,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
     } = Constraints::get(&input);
 
     let attrs: StructAttrs = deluxe::parse_attributes(&input)
-        .map_err(|e| Error::new_spanned(&input, format!("Failed to parse attributes: {}", e)))?;
+        .map_err(|e| Error::new_spanned(&input, format!("Failed to parse attributes: {e}")))?;
     let context = attrs.context.or_else(|| {
         input.generics.type_params().next().map(|param| {
             let ident = &param.ident;
@@ -82,8 +82,8 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
 
     let mut name_quotes = Vec::new();
     let mut rollback_quotes = Vec::new();
-    let mut flush_quotes = Vec::new();
-    let mut test_flush_quotes = Vec::new();
+    let mut pre_save_quotes = Vec::new();
+    let mut delete_view_quotes = Vec::new();
     let mut clear_quotes = Vec::new();
     let mut has_pending_changes_quotes = Vec::new();
     let mut num_init_keys_quotes = Vec::new();
@@ -92,12 +92,12 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
     let num_fields = input.fields.len();
     for (idx, e) in input.fields.iter().enumerate() {
         let name = e.ident.clone().unwrap();
-        let test_flush_ident = format_ident!("deleted{}", idx);
+        let delete_view_ident = format_ident!("deleted{}", idx);
         let g = get_extended_entry(e.ty.clone())?;
         name_quotes.push(quote! { #name });
         rollback_quotes.push(quote! { self.#name.rollback(); });
-        flush_quotes.push(quote! { let #test_flush_ident = self.#name.flush(batch)?; });
-        test_flush_quotes.push(quote! { #test_flush_ident });
+        pre_save_quotes.push(quote! { let #delete_view_ident = self.#name.pre_save(batch)?; });
+        delete_view_quotes.push(quote! { #delete_view_ident });
         clear_quotes.push(quote! { self.#name.clear(); });
         has_pending_changes_quotes.push(quote! {
             if self.#name.has_pending_changes().await {
@@ -133,6 +133,20 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
         });
     }
 
+    // derive_key_logic above adds one byte to the key as a tag, and then either one or two more
+    // bytes for field indices, depending on how many fields there are. Thus, we need to trim 2
+    // bytes if there are less than 256 child fields (then the field index fits within one byte),
+    // or 3 bytes if there are more.
+    let trim_key_logic = if num_fields < 256 {
+        quote! {
+            let __bytes_to_trim = 2;
+        }
+    } else {
+        quote! {
+            let __bytes_to_trim = 3;
+        }
+    };
+
     let first_name_quote = name_quotes.first().ok_or(Error::new_spanned(
         &input,
         "Struct must have at least one field",
@@ -165,8 +179,11 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
 
             type Context = #context;
 
-            fn context(&self) -> &#context {
-                self.#first_name_quote.context()
+            fn context(&self) -> #context {
+                use linera_views::{context::Context as _};
+                #trim_key_logic
+                let context = self.#first_name_quote.context();
+                context.clone_with_trimmed_key(__bytes_to_trim)
             }
 
             fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
@@ -190,7 +207,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
                     Self::post_load(context, &[])
                 } else {
                     let keys = Self::pre_load(&context)?;
-                    let values = context.store().read_multi_values_bytes(keys).await?;
+                    let values = context.store().read_multi_values_bytes(&keys).await?;
                     Self::post_load(context, &values)
                 }
             }
@@ -205,9 +222,13 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
                 false
             }
 
-            fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<bool, linera_views::ViewError> {
-                #(#flush_quotes)*
-                Ok( #(#test_flush_quotes)&&* )
+            fn pre_save(&self, batch: &mut linera_views::batch::Batch) -> Result<bool, linera_views::ViewError> {
+                #(#pre_save_quotes)*
+                Ok( #(#delete_view_quotes)&&* )
+            }
+
+            fn post_save(&mut self) {
+                #(self.#name_quotes.post_save();)*
             }
 
             fn clear(&mut self) {
@@ -248,10 +269,11 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
                 use linera_views::{context::Context as _, batch::Batch, store::WritableKeyValueStore as _, views::View as _};
                 #increment_counter
                 let mut batch = Batch::new();
-                self.flush(&mut batch)?;
+                self.pre_save(&mut batch)?;
                 if !batch.is_empty() {
                     self.context().store().write_batch(batch).await?;
                 }
+                self.post_save();
                 Ok(())
             }
         }
@@ -380,7 +402,7 @@ fn generate_clonable_view_code(input: ItemStruct) -> Result<TokenStream2, Error>
         let name = &field.ident;
         let ty = &field.ty;
         clone_constraints.push(quote! { #ty: ClonableView });
-        clone_fields.push(quote! { #name: self.#name.clone_unchecked() });
+        clone_fields.push(quote! { #name: self.#name.clone_unchecked()? });
     }
 
     Ok(quote! {
@@ -390,10 +412,10 @@ fn generate_clonable_view_code(input: ItemStruct) -> Result<TokenStream2, Error>
             #(#clone_constraints,)*
             Self: linera_views::views::View,
         {
-            fn clone_unchecked(&mut self) -> Self {
-                Self {
+            fn clone_unchecked(&mut self) -> Result<Self, linera_views::ViewError> {
+                Ok(Self {
                     #(#clone_fields,)*
-                }
+                })
             }
         }
     })

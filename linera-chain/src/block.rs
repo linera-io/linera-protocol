@@ -8,6 +8,7 @@ use std::{
     fmt::Debug,
 };
 
+use allocative::Allocative;
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
@@ -28,7 +29,7 @@ use crate::{
 };
 
 /// Wrapper around a `Block` that has been validated.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
 #[serde(transparent)]
 pub struct ValidatedBlock(Hashed<Block>);
 
@@ -74,7 +75,7 @@ impl ValidatedBlock {
 }
 
 /// Wrapper around a `Block` that has been confirmed.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
 #[serde(transparent)]
 pub struct ConfirmedBlock(Hashed<Block>);
 
@@ -153,11 +154,11 @@ impl ConfirmedBlock {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
 #[serde(transparent)]
 pub struct Timeout(Hashed<TimeoutInner>);
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
 #[serde(rename = "Timeout")]
 pub(crate) struct TimeoutInner {
     chain_id: ChainId,
@@ -221,7 +222,7 @@ pub enum ConversionError {
 /// and operations to execute which define a state transition of the chain.
 /// Resulting messages produced by the operations are also included in the block body,
 /// together with oracle responses and events.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject, Allocative)]
 pub struct Block {
     /// Header of the block containing metadata of the block.
     pub header: BlockHeader,
@@ -240,7 +241,7 @@ impl Serialize for Block {
             timestamp: self.header.timestamp,
             state_hash: self.header.state_hash,
             previous_block_hash: self.header.previous_block_hash,
-            authenticated_signer: self.header.authenticated_signer,
+            authenticated_owner: self.header.authenticated_owner,
         };
         state.serialize_field("header", &header)?;
         state.serialize_field("body", &self.body)?;
@@ -278,7 +279,7 @@ impl<'de> Deserialize<'de> for Block {
             timestamp: inner.header.timestamp,
             state_hash: inner.header.state_hash,
             previous_block_hash: inner.header.previous_block_hash,
-            authenticated_signer: inner.header.authenticated_signer,
+            authenticated_owner: inner.header.authenticated_owner,
             transactions_hash,
             messages_hash,
             previous_message_blocks_hash,
@@ -299,7 +300,7 @@ impl<'de> Deserialize<'de> for Block {
 /// Succinct representation of a block.
 /// Contains all the metadata to follow the chain of blocks or verifying
 /// inclusion (event, message, oracle response, etc.) in the block's body.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject, Allocative)]
 pub struct BlockHeader {
     /// The chain to which this block belongs.
     pub chain_id: ChainId,
@@ -317,7 +318,7 @@ pub struct BlockHeader {
     /// fees. If set, this must be the `owner` in the block proposal. `None` means that
     /// the default account of the chain is used. This value is also used as recipient of
     /// potential refunds for the message grants created by the operations.
-    pub authenticated_signer: Option<AccountOwner>,
+    pub authenticated_owner: Option<AccountOwner>,
 
     // Inputs to the block, chosen by the block proposer.
     /// Cryptographic hash of all the transactions in the block.
@@ -341,7 +342,7 @@ pub struct BlockHeader {
 }
 
 /// The body of a block containing all the data included in the block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject, Allocative)]
 #[graphql(complex)]
 pub struct BlockBody {
     /// The transactions to execute in this block. Each transaction can be either
@@ -415,7 +416,7 @@ impl Block {
             timestamp: block.timestamp,
             state_hash: outcome.state_hash,
             previous_block_hash: block.previous_block_hash,
-            authenticated_signer: block.authenticated_signer,
+            authenticated_owner: block.authenticated_owner,
             transactions_hash,
             messages_hash,
             previous_message_blocks_hash,
@@ -502,7 +503,7 @@ impl Block {
                     && blob_id.hash == self.header.chain_id.0))
     }
 
-    /// Returns all the published blob IDs in this block's operations.
+    /// Returns all the published blob IDs in this block's transactions.
     pub fn published_blob_ids(&self) -> BTreeSet<BlobId> {
         self.body
             .operations()
@@ -510,7 +511,7 @@ impl Block {
             .collect()
     }
 
-    /// Returns all the blob IDs created by the block's operations.
+    /// Returns all the blob IDs created by the block's transactions.
     pub fn created_blob_ids(&self) -> BTreeSet<BlobId> {
         self.body
             .blobs
@@ -520,7 +521,7 @@ impl Block {
             .collect()
     }
 
-    /// Returns all the blobs created by the block's operations.
+    /// Returns all the blobs created by the block's transactions.
     pub fn created_blobs(&self) -> BTreeMap<BlobId, Blob> {
         self.body
             .blobs
@@ -574,7 +575,7 @@ impl Block {
             transactions,
             height,
             timestamp,
-            authenticated_signer,
+            authenticated_owner,
             previous_block_hash,
         } = block;
         *chain_id == self.header.chain_id
@@ -582,7 +583,7 @@ impl Block {
             && *transactions == self.body.transactions
             && *height == self.header.height
             && *timestamp == self.header.timestamp
-            && *authenticated_signer == self.header.authenticated_signer
+            && *authenticated_owner == self.header.authenticated_owner
             && *previous_block_hash == self.header.previous_block_hash
     }
 
@@ -593,7 +594,7 @@ impl Block {
             transactions: self.body.transactions,
             height: self.header.height,
             timestamp: self.header.timestamp,
-            authenticated_signer: self.header.authenticated_signer,
+            authenticated_owner: self.header.authenticated_owner,
             previous_block_hash: self.header.previous_block_hash,
         };
         let outcome = BlockExecutionOutcome {
@@ -643,7 +644,7 @@ struct SerializedHeader {
     timestamp: Timestamp,
     state_hash: CryptoHash,
     previous_block_hash: Option<CryptoHash>,
-    authenticated_signer: Option<AccountOwner>,
+    authenticated_owner: Option<AccountOwner>,
 }
 
 mod hashing {

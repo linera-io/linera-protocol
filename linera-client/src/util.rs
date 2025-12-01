@@ -7,7 +7,7 @@ use futures::future;
 use linera_base::{
     crypto::CryptoError,
     data_types::{TimeDelta, Timestamp},
-    identifiers::ChainId,
+    identifiers::{ApplicationId, ChainId, GenericApplicationId},
     time::Duration,
 };
 use linera_core::{data_types::RoundTimeout, node::NotificationStream, worker::Reason};
@@ -32,6 +32,16 @@ pub fn parse_chain_set(s: &str) -> Result<HashSet<ChainId>, CryptoError> {
     }
 }
 
+pub fn parse_app_set(s: &str) -> anyhow::Result<HashSet<GenericApplicationId>> {
+    s.trim()
+        .split(",")
+        .map(|app_str| {
+            GenericApplicationId::from_str(app_str)
+                .or_else(|_| Ok(ApplicationId::from_str(app_str)?.into()))
+        })
+        .collect()
+}
+
 pub fn parse_ascii_alphanumeric_string(s: &str) -> Result<String, &'static str> {
     if s.chars().all(|x| x.is_ascii_alphanumeric()) {
         Ok(s.to_string())
@@ -47,7 +57,7 @@ pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: Round
             *height >= timeout.next_block_height
         }
         Reason::NewRound { round, .. } => *round > timeout.current_round,
-        Reason::NewIncomingBundle { .. } => false,
+        Reason::NewIncomingBundle { .. } | Reason::BlockExecuted { .. } => false,
     });
     future::select(
         Box::pin(stream.next()),

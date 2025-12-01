@@ -8,6 +8,9 @@ use linera_summary::{
     github::Github, performance_summary::PerformanceSummary, summary_options::SummaryOptions,
 };
 use tracing::{error, Instrument};
+use tracing_subscriber::{
+    prelude::__tracing_subscriber_SubscriberExt as _, util::SubscriberInitExt as _,
+};
 
 async fn run(options: SummaryOptions) -> Result<()> {
     let tracked_workflows = options.workflows();
@@ -20,7 +23,10 @@ async fn run(options: SummaryOptions) -> Result<()> {
 fn main() -> anyhow::Result<()> {
     let options = SummaryOptions::init();
 
-    linera_base::tracing::init("summary");
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
     let mut runtime = tokio::runtime::Builder::new_multi_thread();
 

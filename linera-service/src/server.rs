@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![recursion_limit = "256"]
+
 #[cfg(feature = "jemalloc")]
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
@@ -37,7 +39,7 @@ use linera_base::{
     listen_for_shutdown_signals,
 };
 use linera_client::config::{CommitteeConfig, ValidatorConfig, ValidatorServerConfig};
-use linera_core::{worker::WorkerState, JoinSetExt as _};
+use linera_core::{worker::WorkerState, JoinSetExt as _, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES};
 use linera_execution::{WasmRuntime, WithWasmDefault};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
@@ -70,6 +72,7 @@ struct ServerContext {
     chain_worker_ttl: Duration,
     block_cache_size: usize,
     execution_state_cache_size: usize,
+    chain_info_max_received_log_entries: usize,
 }
 
 impl ServerContext {
@@ -98,7 +101,8 @@ impl ServerContext {
         .with_allow_inactive_chains(false)
         .with_allow_messages_from_deprecated_epochs(false)
         .with_grace_period(self.grace_period)
-        .with_chain_worker_ttl(self.chain_worker_ttl);
+        .with_chain_worker_ttl(self.chain_worker_ttl)
+        .with_chain_info_max_received_log_entries(self.chain_info_max_received_log_entries);
         (state, shard_id, shard.clone())
     }
 
@@ -366,7 +370,7 @@ enum ServerCommand {
 
         /// Common storage options.
         #[command(flatten)]
-        common_storage_options: CommonStorageOptions,
+        common_storage_options: Box<CommonStorageOptions>,
 
         /// Configuration for cross-chain requests
         #[command(flatten)]
@@ -396,6 +400,19 @@ enum ServerCommand {
             value_parser = util::parse_millis
         )]
         chain_worker_ttl: Duration,
+
+        /// Maximum size for received_log entries in chain info responses. This should
+        /// generally only be increased from the default value.
+        #[arg(
+            long,
+            default_value_t = CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+            env = "LINERA_SERVER_CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES",
+        )]
+        chain_info_max_received_log_entries: usize,
+
+        /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
+        #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
+        otlp_exporter_endpoint: Option<String>,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -472,6 +489,16 @@ fn main() {
 }
 
 /// Returns the log file name to use based on the [`ServerCommand`] that will run.
+fn otlp_exporter_endpoint_for(command: &ServerCommand) -> Option<&str> {
+    match command {
+        ServerCommand::Run {
+            otlp_exporter_endpoint,
+            ..
+        } => otlp_exporter_endpoint.as_deref(),
+        ServerCommand::Generate { .. } | ServerCommand::EditShards { .. } => None,
+    }
+}
+
 fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
     match command {
         ServerCommand::Run {
@@ -495,7 +522,10 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
 }
 
 async fn run(options: ServerOptions) {
-    linera_base::tracing::init_with_opentelemetry(&log_file_name_for(&options.command)).await;
+    linera_service::tracing::opentelemetry::init(
+        &log_file_name_for(&options.command),
+        otlp_exporter_endpoint_for(&options.command),
+    );
 
     match options.command {
         ServerCommand::Run {
@@ -508,6 +538,8 @@ async fn run(options: ServerOptions) {
             grace_period,
             wasm_runtime,
             chain_worker_ttl,
+            chain_info_max_received_log_entries,
+            otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
 
@@ -523,6 +555,7 @@ async fn run(options: ServerOptions) {
                 chain_worker_ttl,
                 block_cache_size: options.block_cache_size,
                 execution_state_cache_size: options.execution_state_cache_size,
+                chain_info_max_received_log_entries,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let store_config = storage_config

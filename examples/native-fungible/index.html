@@ -142,15 +142,13 @@
     <script type="importmap">
       {
           "imports": {
-              "@linera/client": "./js/@linera/client/linera_web.js",
-              "@linera/signer": "./js/@linera/signer/index.js"
+              "@linera/client": "./js/@linera/client/index.js",
           }
       }
     </script>
 
     <script type="module">
       import * as linera from '@linera/client';
-      import { PrivateKey } from '@linera/signer';
       import { ethers } from 'ethers';
 
       const gql = (query, variables = {}) => JSON.stringify({ query, variables });
@@ -165,8 +163,8 @@
           parent.insertBefore(entry, parent.firstChild);
       }
 
-      async function updateBalance(application, owner) {
-          const response = JSON.parse(await application.query(gql(`query { tickerSymbol, accounts { entry(key: "${owner}") { value } } }`)));
+      async function updateBalance(application, owner, blockHash) {
+          const response = JSON.parse(await application.query(gql(`query { tickerSymbol, accounts { entry(key: "${owner}") { value } } }`), blockHash || ''));
           console.debug('application response:', response);
           document.querySelector('#ticker-symbol').textContent = response.data.tickerSymbol;
           document.querySelector('#balance').textContent = (+( response.data.accounts.entry?.value || 0)).toFixed(2);
@@ -186,7 +184,7 @@
               const query = gql(`mutation(
                   $donor: AccountOwner!,
                   $amount: Amount!,
-                  $recipient: FungibleAccount!,
+                  $recipient: Account!,
               ) {
                   transfer(owner: $donor, amount: $amount, targetAccount: $recipient)
               }`, {
@@ -195,7 +193,7 @@
                   recipient: { owner: match[1], chainId: match[2] },
               });
 
-              errors = JSON.parse(await application.query(query)).errors || [];
+              errors = JSON.parse(await application.query(query, '')).errors || [];
           } catch (e) {
               console.error(e);
               errors.push({ message: e.message });
@@ -225,10 +223,10 @@
               navigator.clipboard.writeText(document.querySelector('#account-id').textContent);
           });
 
-          await linera.default();
+          await linera.initialize();
           const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
           const mnemonic = ethers.Wallet.createRandom().mnemonic.phrase;
-          const signer = PrivateKey.fromMnemonic(mnemonic);
+          const signer = linera.PrivateKeySigner.fromMnemonic(mnemonic);
           const wallet = await faucet.createWallet();
           const owner = signer.address();
           const chainId = await faucet.claimChain(wallet, owner);
@@ -236,15 +234,20 @@
           document.querySelector('#chain-id').innerText = chainId;
           document.querySelector('#owner').innerText = owner;
 
-          const application = await client.frontend().application(import.meta.env.LINERA_APPLICATION_ID);
+          const application = await client.application(import.meta.env.LINERA_APPLICATION_ID);
 
-          await updateBalance(application, owner);
+          await updateBalance(application, owner, null);
 
           client.onNotification(notification => {
               let newBlock = notification.reason.NewBlock;
-              if (!newBlock) return;
-              prependEntry(document.querySelector('#logs'), newBlock);
-              updateBalance(application, owner);
+              if (notification.reason.BlockExecuted) {
+                let blockHash = notification.reason.BlockExecuted.hash;
+                updateBalance(application, owner, blockHash);
+              } else {
+                if (!newBlock) return;
+                prependEntry(document.querySelector('#logs'), newBlock);
+                updateBalance(application, owner, null);
+              }
           });
 
           submitButton.disabled = false;

@@ -48,7 +48,7 @@ use {
 };
 
 use crate::{
-    client::{ChainClientOptions, Client},
+    client::{chain_client, Client},
     data_types::*,
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
@@ -98,6 +98,10 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     type NotificationStream = NotificationStream;
+
+    fn address(&self) -> String {
+        format!("local:{}", self.public_key)
+    }
 
     async fn handle_block_proposal(
         &self,
@@ -271,6 +275,17 @@ where
             validator.do_missing_blob_ids(blob_ids, sender)
         })
         .await
+    }
+
+    async fn get_shard_info(
+        &self,
+        _chain_id: ChainId,
+    ) -> Result<crate::data_types::ShardInfo, NodeError> {
+        // For test purposes, return a dummy shard info
+        Ok(crate::data_types::ShardInfo {
+            shard_id: 0,
+            total_shards: 1,
+        })
     }
 }
 
@@ -1027,11 +1042,12 @@ where
         Ok(self.genesis_storage_builder.build(storage).await)
     }
 
-    pub async fn make_client(
+    pub async fn make_client_with_options(
         &mut self,
         chain_id: ChainId,
         block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
+        options: chain_client::Options,
     ) -> anyhow::Result<ChainClient<B::Storage>> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
@@ -1048,9 +1064,11 @@ where
             [chain_id],
             format!("Client node for {:.8}", chain_id),
             Duration::from_secs(30),
-            ChainClientOptions::test_default(),
+            Duration::from_secs(1),
+            options,
             5_000,
             10_000,
+            crate::client::RequestsSchedulerConfig::default(),
         ));
         Ok(client.create_chain_client(
             chain_id,
@@ -1060,6 +1078,21 @@ where
             self.chain_owners.get(&chain_id).copied(),
             None,
         ))
+    }
+
+    pub async fn make_client(
+        &mut self,
+        chain_id: ChainId,
+        block_hash: Option<CryptoHash>,
+        block_height: BlockHeight,
+    ) -> anyhow::Result<ChainClient<B::Storage>> {
+        self.make_client_with_options(
+            chain_id,
+            block_hash,
+            block_height,
+            chain_client::Options::test_default(),
+        )
+        .await
     }
 
     /// Tries to find a (confirmation) certificate for the given chain_id and block height.

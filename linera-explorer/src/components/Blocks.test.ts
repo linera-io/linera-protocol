@@ -17,7 +17,7 @@ test('Blocks mounting', () => {
                 height: 6,
                 stateHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 timestamp: 1694097511817833,
-                authenticatedSigner: "a36c72207a7c3cef20eb254978c0947d7cf28c9c7d7c62de42a0ed9db901cf3f",
+                authenticatedOwner: "a36c72207a7c3cef20eb254978c0947d7cf28c9c7d7c62de42a0ed9db901cf3f",
                 previousBlockHash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
                 transactionsHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 messagesHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
@@ -31,7 +31,7 @@ test('Blocks mounting', () => {
               body: {
                 messages: [[{
                   destination: { Subscribers: [1] },
-                  authenticatedSigner: null,
+                  authenticatedOwner: null,
                   kind: "Protected",
                   grant: 0,
                   message: {
@@ -65,11 +65,17 @@ test('Blocks mounting', () => {
                       certificateHash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
                       height: 5,
                       messages: [{
-                        authenticatedSigner: null,
+                        authenticatedOwner: null,
                         message: { System: { BytecodePublished: { operation_index: 0 } } },
                         grant: "0.01",
                         index: 4,
-                        kind: "Tracked"
+                        kind: "Tracked",
+                        messageMetadata: {
+                          messageType: "System",
+                          applicationId: null,
+                          userBytesHex: null,
+                          systemMessage: null
+                        }
                       }],
                       transactionIndex: 0,
                       timestamp: 1694097510206912

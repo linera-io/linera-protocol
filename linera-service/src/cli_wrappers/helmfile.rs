@@ -8,9 +8,12 @@ use fs_extra::dir::CopyOptions;
 use linera_base::command::CommandExt;
 use tokio::process::Command;
 
+pub const DEFAULT_BLOCK_EXPORTER_PORT: u16 = 8882;
+
 pub struct HelmFile;
 
 impl HelmFile {
+    #[expect(clippy::too_many_arguments)]
     pub async fn sync(
         server_config_id: usize,
         github_root: &Path,
@@ -18,6 +21,10 @@ impl HelmFile {
         num_shards: usize,
         cluster_id: u32,
         docker_image_name: String,
+        with_block_exporter: bool,
+        num_block_exporters: usize,
+        indexer_image_name: String,
+        explorer_image_name: String,
         dual_store: bool,
     ) -> Result<()> {
         let chart_dir = format!("{}/kubernetes/linera-validator", github_root.display());
@@ -34,6 +41,20 @@ impl HelmFile {
                 "dualrocksdbscylladb:/linera.db:spawn_blocking:tcp:scylla-client.scylla.svc.cluster.local:9042",
             );
             command.env("LINERA_HELMFILE_SET_DUAL_STORE", "true");
+        }
+
+        if with_block_exporter {
+            command.env("LINERA_HELMFILE_SET_EXPLORER_ENABLED", "true");
+            command.env(
+                "LINERA_HELMFILE_NUM_BLOCK_EXPORTERS",
+                num_block_exporters.to_string(),
+            );
+            command.env(
+                "LINERA_HELMFILE_BLOCK_EXPORTER_PORT",
+                DEFAULT_BLOCK_EXPORTER_PORT.to_string(),
+            );
+            command.env("LINERA_HELMFILE_INDEXER_IMAGE", indexer_image_name);
+            command.env("LINERA_HELMFILE_EXPLORER_IMAGE", explorer_image_name);
         }
 
         command

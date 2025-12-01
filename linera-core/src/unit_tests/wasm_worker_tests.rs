@@ -218,7 +218,7 @@ where
             previous_message_blocks: BTreeMap::new(),
             previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
-            state_hash: creator_state.crypto_hash().await?,
+            state_hash: creator_state.crypto_hash_mut().await?,
             oracle_responses: vec![vec![
                 OracleResponse::Blob(contract_blob_id),
                 OracleResponse::Blob(service_blob_id),
@@ -253,7 +253,7 @@ where
 
     // Execute an application operation
     let increment = 5_u64;
-    let counter_operation = counter::CounterOperation::Increment(increment);
+    let counter_operation = counter::CounterOperation::Increment { value: increment };
     let user_operation = bcs::to_bytes(&counter_operation)?;
     let run_block = make_child_block(&create_certificate.into_value())
         .with_timestamp(3)
@@ -263,7 +263,7 @@ where
         });
     let operation_context = OperationContext {
         chain_id: creator_chain.id(),
-        authenticated_signer: None,
+        authenticated_owner: None,
         height: run_block.height,
         round: Some(0),
         timestamp: Timestamp::from(3),
@@ -298,7 +298,7 @@ where
             previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
-            state_hash: creator_state.crypto_hash().await?,
+            state_hash: creator_state.crypto_hash_mut().await?,
             oracle_responses: vec![vec![]],
             operation_results: vec![OperationResult(bcs::to_bytes(&15u64)?)],
         }

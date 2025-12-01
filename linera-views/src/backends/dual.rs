@@ -96,6 +96,13 @@ where
         }
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
+        Ok(match self {
+            Self::First(store) => store.root_key().map_err(DualStoreError::First)?,
+            Self::Second(store) => store.root_key().map_err(DualStoreError::Second)?,
+        })
+    }
+
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let result = match self {
             Self::First(store) => store
@@ -124,7 +131,7 @@ where
         Ok(result)
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error> {
         let result = match self {
             Self::First(store) => store
                 .contains_keys(keys)
@@ -140,7 +147,7 @@ where
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         let result = match self {
             Self::First(store) => store
@@ -304,15 +311,15 @@ where
         Ok(namespaces)
     }
 
-    async fn list_root_keys(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let mut root_keys = D1::list_root_keys(&config.first_config, namespace)
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, Self::Error> {
+        let mut root_keys = self
+            .first_database
+            .list_root_keys()
             .await
             .map_err(DualStoreError::First)?;
         root_keys.extend(
-            D2::list_root_keys(&config.second_config, namespace)
+            self.second_database
+                .list_root_keys()
                 .await
                 .map_err(DualStoreError::Second)?,
         );

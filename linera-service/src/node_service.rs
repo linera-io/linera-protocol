@@ -28,7 +28,7 @@ use linera_chain::{
 };
 use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
 use linera_core::{
-    client::{ChainClient, ChainClientError},
+    client::chain_client::{self, ChainClient},
     data_types::ClientOutcome,
     worker::Notification,
 };
@@ -75,7 +75,7 @@ pub struct MutationRoot<C> {
 #[derive(Debug, ThisError)]
 enum NodeServiceError {
     #[error(transparent)]
-    ChainClientError(#[from] ChainClientError),
+    ChainClientError(#[from] chain_client::Error),
     #[error(transparent)]
     BcsHexError(#[from] BcsHexParseError),
     #[error(transparent)]
@@ -183,8 +183,7 @@ where
         let mut hashes = Vec::new();
         loop {
             let client = self.context.lock().await.make_chain_client(chain_id);
-            client.synchronize_from_validators().await?;
-            let result = client.process_inbox_without_prepare().await;
+            let result = client.process_inbox().await;
             self.context.lock().await.update_wallet(&client).await?;
             let (certificates, maybe_timeout) = result?;
             hashes.extend(certificates.into_iter().map(|cert| cert.hash()));
@@ -197,6 +196,20 @@ where
                 }
             }
         }
+    }
+
+    /// Synchronizes the chain with the validators. Returns the chain's length.
+    ///
+    /// This is only used for testing, to make sure that a client is up to date.
+    // TODO(#4718): Remove this mutation.
+    async fn sync(
+        &self,
+        #[graphql(desc = "The chain being synchronized.")] chain_id: ChainId,
+    ) -> Result<u64, Error> {
+        let client = self.context.lock().await.make_chain_client(chain_id);
+        let info = client.synchronize_from_validators().await?;
+        self.context.lock().await.update_wallet(&client).await?;
+        Ok(info.next_block_height.0)
     }
 
     /// Retries the pending block that was unsuccessfully proposed earlier.
@@ -399,6 +412,7 @@ where
         let operation = SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
             owners: Vec::new(),
+            first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
@@ -418,6 +432,9 @@ where
             desc = "Whether multi-leader rounds are unrestricted, that is not limited to chain owners."
         )]
         open_multi_leader_rounds: bool,
+        #[graphql(desc = "The leader of the first single-leader round. \
+                          If not set, this is random like other rounds.")]
+        first_leader: Option<AccountOwner>,
         #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
         fast_round_ms: Option<u64>,
         #[graphql(
@@ -441,6 +458,7 @@ where
         let operation = SystemOperation::ChangeOwnership {
             super_owners: Vec::new(),
             owners: new_owners.into_iter().zip(new_weights).collect(),
+            first_leader,
             multi_leader_rounds,
             open_multi_leader_rounds,
             timeout_config: TimeoutConfig {
@@ -648,10 +666,7 @@ where
         let client = self.context.lock().await.make_chain_client(chain_id);
         let hash = match hash {
             Some(hash) => Some(hash),
-            None => {
-                let view = client.chain_state_view().await?;
-                view.tip_state.get().block_hash
-            }
+            None => client.chain_info().await?.block_hash,
         };
         if let Some(hash) = hash {
             let block = client.read_confirmed_block(hash).await?;
@@ -686,10 +701,7 @@ where
         let limit = limit.unwrap_or(10);
         let from = match from {
             Some(from) => Some(from),
-            None => {
-                let view = client.chain_state_view().await?;
-                view.tip_state.get().block_hash
-            }
+            None => client.chain_info().await?.block_hash,
         };
         let Some(from) = from else {
             return Ok(vec![]);
@@ -917,7 +929,7 @@ where
             storage,
             cancellation_token.clone(),
         )
-        .run()
+        .run(true)
         .await?;
         let mut chain_listener = Box::pin(chain_listener).fuse();
         let tcp_listener =
@@ -939,12 +951,13 @@ where
         application_id: ApplicationId,
         request: Vec<u8>,
         chain_id: ChainId,
+        block_hash: Option<CryptoHash>,
     ) -> Result<Vec<u8>, NodeServiceError> {
         let QueryOutcome {
             response,
             operations,
         } = self
-            .query_user_application(application_id, request, chain_id)
+            .query_user_application(application_id, request, chain_id, block_hash)
             .await?;
         if operations.is_empty() {
             return Ok(response);
@@ -961,7 +974,7 @@ where
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             let mut stream = client.subscribe().map_err(|_| {
-                ChainClientError::InternalError("Could not subscribe to the local node.")
+                chain_client::Error::InternalError("Could not subscribe to the local node.")
             })?;
             util::wait_for_next_round(&mut stream, timeout).await;
         };
@@ -975,6 +988,7 @@ where
         application_id: ApplicationId,
         bytes: Vec<u8>,
         chain_id: ChainId,
+        block_hash: Option<CryptoHash>,
     ) -> Result<QueryOutcome<Vec<u8>>, NodeServiceError> {
         let query = Query::User {
             application_id,
@@ -984,7 +998,7 @@ where
         let QueryOutcome {
             response,
             operations,
-        } = client.query_application(query).await?;
+        } = client.query_application(query, block_hash).await?;
         match response {
             QueryResponse::System(_) => {
                 unreachable!("cannot get a system response for a user query")
@@ -1018,12 +1032,14 @@ where
         let application_id: ApplicationId = application_id.parse()?;
 
         debug!(
-            "Processing request for application {application_id} on chain {chain_id}:\n{:?}",
+            %chain_id,
+            %application_id,
+            "processing request for application:\n{:?}",
             &request
         );
         let response = service
             .0
-            .handle_service_request(application_id, request.into_bytes(), chain_id)
+            .handle_service_request(application_id, request.into_bytes(), chain_id, None)
             .await?;
 
         Ok(response)

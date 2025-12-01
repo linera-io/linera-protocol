@@ -34,7 +34,11 @@ cfg_if::cfg_if! {
             options: &Options,
         ) -> Result<Channel, Error> {
             let mut endpoint = tonic::transport::Endpoint::from_shared(address)?
-                .tls_config(tonic::transport::channel::ClientTlsConfig::default().with_webpki_roots())?;
+                .tls_config(tonic::transport::channel::ClientTlsConfig::default().with_webpki_roots())?
+                .tcp_keepalive(Some(std::time::Duration::from_secs(60)))
+                .http2_keep_alive_interval(std::time::Duration::from_secs(30))
+                .keep_alive_timeout(std::time::Duration::from_secs(10))
+                .keep_alive_while_idle(true);
 
             if let Some(timeout) = options.connect_timeout {
                 endpoint = endpoint.connect_timeout(timeout);

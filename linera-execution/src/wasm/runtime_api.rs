@@ -392,12 +392,12 @@ where
     Caller: Instance<UserData = RuntimeApiData<Runtime>>,
     Runtime: ContractRuntime + 'static,
 {
-    /// Returns the authenticated signer for this execution, if there is one.
-    fn authenticated_signer(caller: &mut Caller) -> Result<Option<AccountOwner>, RuntimeError> {
+    /// Returns the authenticated owner for this execution, if there is one.
+    fn authenticated_owner(caller: &mut Caller) -> Result<Option<AccountOwner>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .authenticated_signer()
+            .authenticated_owner()
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -649,7 +649,7 @@ where
             .map_err(|e| RuntimeError::Custom(e.into()))
     }
 
-    /// Returns the round in which this block was validated.
+    /// Returns the multi-leader round in which this block was validated.
     fn validation_round(caller: &mut Caller) -> Result<Option<u32>, RuntimeError> {
         caller
             .user_data_mut()
@@ -667,6 +667,18 @@ where
             .user_data_mut()
             .runtime_mut()
             .write_batch(Batch { operations })
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns true if the corresponding contract uses a zero amount of storage.
+    fn has_empty_storage(
+        caller: &mut Caller,
+        application: ApplicationId,
+    ) -> Result<bool, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime_mut()
+            .has_empty_storage(application)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 }

@@ -22,7 +22,6 @@ env:
   RUSTFLAGS: -D warnings
   RUSTUP_MAX_RETRIES: 10
   RUST_LOG: warn
-  DOCKER_COMPOSE_WAIT: "true"
 
 permissions:
   contents: read
@@ -31,7 +30,7 @@ jobs:
   lint-check-all-features:
     if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 40
+    timeout-minutes: 50
 
     steps:
     - uses: actions/checkout@v4

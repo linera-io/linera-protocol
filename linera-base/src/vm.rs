@@ -5,11 +5,14 @@
 
 use std::str::FromStr;
 
+use allocative::Allocative;
 use async_graphql::scalar;
 use derive_more::Display;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::data_types::Amount;
 
 #[derive(
     Clone,
@@ -27,6 +30,7 @@ use thiserror::Error;
     WitStore,
     WitLoad,
     Debug,
+    Allocative,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 /// The virtual machine runtime
@@ -63,5 +67,46 @@ pub enum EvmQuery {
     /// A read-only query.
     Query(Vec<u8>),
     /// A request to schedule an operation that can mutate the application state.
-    Mutation(Vec<u8>),
+    Operation(Vec<u8>),
+    /// A request to schedule operations that can mutate the application state.
+    Operations(Vec<Vec<u8>>),
+}
+
+/// An EVM operation containing a value and argument data.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct EvmOperation {
+    /// The amount being transferred.
+    pub value: alloy_primitives::U256,
+    /// The encoded argument data.
+    pub argument: Vec<u8>,
+}
+
+impl EvmOperation {
+    /// Creates an EVM operation with a specified amount and function input.
+    pub fn new(amount: Amount, argument: Vec<u8>) -> Self {
+        Self {
+            value: amount.into(),
+            argument,
+        }
+    }
+
+    /// Converts the input to a `Vec<u8>` if possible.
+    pub fn to_bytes(&self) -> Result<Vec<u8>, bcs::Error> {
+        bcs::to_bytes(&self)
+    }
+
+    /// Creates an `EvmQuery` from the input.
+    pub fn to_evm_query(&self) -> Result<EvmQuery, bcs::Error> {
+        Ok(EvmQuery::Operation(self.to_bytes()?))
+    }
+}
+
+/// The instantiation argument to EVM smart contracts.
+/// `value` is the amount being transferred.
+#[derive(Default, Serialize, Deserialize)]
+pub struct EvmInstantiation {
+    /// The initial value put in the instantiation of the contract.
+    pub value: alloy_primitives::U256,
+    /// The input to the `fn instantiate` of the EVM smart contract.
+    pub argument: Vec<u8>,
 }

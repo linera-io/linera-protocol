@@ -72,8 +72,9 @@ license = "Apache-2.0"
 edition = "2021"
 
 [workspace.dependencies]
+allocative = "0.3.4"
 alloy = { version = "1.0.5", default-features = false }
-alloy-primitives = { version = "1.1.0", default-features = false, features = [
+alloy-primitives = { version = "1.3.0", default-features = false, features = [
     "serde",
     "k256",
 ] }
@@ -99,8 +100,8 @@ cfg_aliases = "0.2.1"
 chrono = { version = "0.4.35", default-features = false }
 clap = { version = "4", features = ["cargo", "derive", "env"] }
 clap-markdown = "0.1.3"
+clio = "0.3.5"
 colored = "2.1.0"
-comfy-table = "7.1.0"
 console_error_panic_hook = "0.1.7"
 convert_case = "0.6.0"
 criterion = { version = "0.5.1", default-features = false }
@@ -177,7 +178,7 @@ proptest = { version = "1.6.0", default-features = false, features = ["alloc"] }
 prost = "0.14"
 quick_cache = "0.6.13"
 quote = "1.0"
-rand = { version = "0.8.5", default-features = false }
+rand = { version = "0.8.5", default-features = false, features = ["std_rng"] }
 rand_chacha = { version = "0.3.1", default-features = false }
 rand_distr = { version = "0.4.3", default-features = false }
 rcgen = "0.12.1"
@@ -213,8 +214,10 @@ revm-state = { version = "4.0.1", default-features = false, features = [
     "serde",
 ] }
 rocksdb = "0.21.0"
-ruzstd = "0.8.1"
-scylla = "1.1.0"
+# 0.8.2 doesn't build with Rust 1.87. Remove `=` once
+# https://github.com/linera-io/linera-protocol/issues/4742 is resolved.
+ruzstd = "=0.8.1"
+scylla = "~1.1.0"
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }
 serde-command-opts = "0.1.1"
@@ -230,6 +233,7 @@ serde_with = { version = "3", default-features = false, features = [
 serde_yaml = "0.9.34"
 sha3 = "0.10.8"
 similar-asserts = "1.5.0"
+sqlx = "0.8"
 static_assertions = "1.1.0"
 stdext = "0.3.3"
 syn = "2.0.52"
@@ -259,7 +263,8 @@ tonic-web = "0.14"
 tonic-web-wasm-client = "0.8.0"
 tower = "0.4.13"
 tower-http = "0.6.6"
-tracing = { version = "0.1.40", features = ["release_max_level_debug"] }
+tracing = { version = "0.1.40", features = ["release_max_level_trace"] }
+tracing-chrome = "0.7.2"
 tracing-opentelemetry = "0.31.0"
 tracing-subscriber = { version = "0.3.18", default-features = false, features = [
     "env-filter",
@@ -271,7 +276,6 @@ wasm-bindgen = "0.2.92"
 wasm-bindgen-futures = "0.4.42"
 wasm-bindgen-test = "0.3.42"
 wasm-instrument = { package = "linera-wasm-instrument", version = "0.4.0-linera.1" }
-wasm_thread = "0.3.0"
 wasmer = { package = "linera-wasmer", version = "4.4.0-linera.7", default-features = false }
 wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.4.0-linera.7", default-features = false, features = [
     "std",
@@ -323,12 +327,12 @@ ethereum-tracker = { path = "./examples/ethereum-tracker" }
 fungible = { path = "./examples/fungible" }
 hex-game = { path = "./examples/hex-game" }
 matching-engine = { path = "./examples/matching-engine" }
-meta-counter = { path = "./examples/meta-counter" }
+meta-counter = { path = "./linera-sdk/tests/fixtures/meta-counter" }
 native-fungible = { path = "./examples/native-fungible" }
 non-fungible = { path = "./examples/non-fungible" }
-publish-read-data-blob = { path = "./examples/publish-read-data-blob" }
+publish-read-data-blob = { path = "./linera-sdk/tests/fixtures/publish-read-data-blob" }
 social = { path = "./examples/social" }
-track-instantiation = { path = "./examples/track-instantiation" }
+time-expiry = { path = "./linera-sdk/tests/fixtures/time-expiry" }
 
 [workspace.dependencies.aws-config]
 default-features = false
@@ -337,7 +341,11 @@ version = "1.6.3"
 [workspace.dependencies.aws-sdk-dynamodb]
 default-features = false
 features = ["rt-tokio", "rustls"]
-version = "1.76.0"
+version = "1.88.0"
+
+[workspace.dependencies.web-thread]
+package = "web-thread-select"
+version = "0.2.0"
 
 [profile.release]
 lto = "thin"
@@ -363,10 +371,6 @@ opt-level = 3
 version = "0.4.1"
 git = "https://github.com/Twey/rust-indexed-db"
 branch = "no-uuid-wasm-bindgen"
-
-[patch.crates-io.wasm_thread]
-git = "https://github.com/Twey/wasm_thread"
-branch = "post-message"
 
 [workspace.metadata.spellcheck]
 config = "spellcheck-cfg.toml"

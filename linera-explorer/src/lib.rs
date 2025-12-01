@@ -99,10 +99,11 @@ impl Config {
             node: "localhost:8080".to_string(),
             tls: false,
         };
-        match web_sys::window()
-            .expect("window object not found")
-            .local_storage()
-        {
+        // Return default if window doesn't exist (e.g., in test environment).
+        let Some(window) = web_sys::window() else {
+            return default;
+        };
+        match window.local_storage() {
             Ok(Some(st)) => match st.get_item("config") {
                 Ok(Some(s)) => serde_json::from_str::<Config>(&s).unwrap_or(default),
                 _ => default,

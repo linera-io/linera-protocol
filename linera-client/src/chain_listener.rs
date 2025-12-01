@@ -19,7 +19,10 @@ use linera_base::{
     task::NonBlockingFuture,
 };
 use linera_core::{
-    client::{AbortOnDrop, ChainClient, ChainClientError, ListeningMode},
+    client::{
+        chain_client::{self, ChainClient},
+        AbortOnDrop, ListeningMode,
+    },
     node::NotificationStream,
     worker::{Notification, Reason},
     Environment,
@@ -167,10 +170,9 @@ impl<C: ClientContext> ListeningClient<C> {
     }
 
     async fn stop(self) {
+        // TODO(#4965): this is unnecessary: the join handle now also acts as an abort handle
         drop(self.abort_handle);
-        if let Err(error) = self.join_handle.await {
-            warn!("Failed to join listening task: {error:?}");
-        }
+        self.join_handle.await;
     }
 }
 
@@ -187,7 +189,7 @@ pub struct ChainListener<C: ClientContext> {
     cancellation_token: CancellationToken,
 }
 
-impl<C: ClientContext> ChainListener<C> {
+impl<C: ClientContext + 'static> ChainListener<C> {
     /// Creates a new chain listener given client chains.
     pub fn new(
         config: ChainListenerConfig,
@@ -207,13 +209,16 @@ impl<C: ClientContext> ChainListener<C> {
 
     /// Runs the chain listener.
     #[instrument(skip(self))]
-    pub async fn run(mut self) -> Result<impl Future<Output = Result<(), Error>>, Error> {
+    pub async fn run(
+        mut self,
+        enable_background_sync: bool,
+    ) -> Result<impl Future<Output = Result<(), Error>>, Error> {
         let chain_ids = {
             let guard = self.context.lock().await;
             let admin_chain_id = guard.wallet().genesis_admin_chain();
             guard
                 .make_chain_client(admin_chain_id)
-                .synchronize_from_validators()
+                .synchronize_chain_state(admin_chain_id)
                 .await?;
             BTreeMap::from_iter(
                 guard
@@ -224,6 +229,30 @@ impl<C: ClientContext> ChainListener<C> {
                     .map(|chain_id| (chain_id, ListeningMode::FullChain)),
             )
         };
+
+        // Start background tasks to sync received certificates for each chain,
+        // if enabled.
+        if enable_background_sync {
+            let context = Arc::clone(&self.context);
+            let cancellation_token = self.cancellation_token.clone();
+            for chain_id in chain_ids.keys() {
+                let context = Arc::clone(&context);
+                let cancellation_token = cancellation_token.clone();
+                let chain_id = *chain_id;
+                linera_base::task::spawn(async move {
+                    if let Err(e) = Self::background_sync_received_certificates(
+                        context,
+                        chain_id,
+                        cancellation_token,
+                    )
+                    .await
+                    {
+                        warn!("Background sync failed for chain {chain_id}: {e}");
+                    }
+                })
+                .forget();
+            }
+        }
 
         Ok(async {
             self.listen_recursively(chain_ids).await?;
@@ -294,19 +323,21 @@ impl<C: ClientContext> ChainListener<C> {
                 }
                 self.process_new_events(notification.chain_id).await?;
             }
+            Reason::BlockExecuted { .. } => {}
         }
         Self::sleep(self.config.delay_after_ms).await;
         Ok(())
     }
 
     /// If any new chains were created by the given block, and we have a key pair for them,
-    /// add them to the wallet and start listening for notifications.
+    /// add them to the wallet and start listening for notifications. (This is not done for
+    /// fallback owners, as those would have to monitor all chains anyway.)
     async fn add_new_chains(&mut self, hash: CryptoHash) -> Result<(), Error> {
         let block = self
             .storage
             .read_confirmed_block(hash)
             .await?
-            .ok_or(ChainClientError::MissingConfirmedBlock(hash))?
+            .ok_or(chain_client::Error::MissingConfirmedBlock(hash))?
             .into_block();
         let blobs = block.created_blobs().into_iter();
         let new_chains = blobs
@@ -314,8 +345,7 @@ impl<C: ClientContext> ChainListener<C> {
                 if blob_id.blob_type == BlobType::ChainDescription {
                     let chain_desc: ChainDescription = bcs::from_bytes(blob.content().bytes())
                         .expect("ChainDescription should deserialize correctly");
-                    let owners = chain_desc.config().ownership.all_owners().cloned();
-                    Some((ChainId(blob_id.hash), owners.collect::<Vec<_>>()))
+                    Some((ChainId(blob_id.hash), chain_desc))
                 } else {
                     None
                 }
@@ -326,19 +356,19 @@ impl<C: ClientContext> ChainListener<C> {
         }
         let mut new_ids = BTreeMap::new();
         let mut context_guard = self.context.lock().await;
-        for (new_chain_id, owners) in new_chains {
-            for chain_owner in owners {
+        for (new_chain_id, chain_desc) in new_chains {
+            for chain_owner in chain_desc.config().ownership.all_owners() {
                 if context_guard
                     .client()
                     .signer()
-                    .contains_key(&chain_owner)
+                    .contains_key(chain_owner)
                     .await
-                    .map_err(ChainClientError::signer_failure)?
+                    .map_err(chain_client::Error::signer_failure)?
                 {
                     context_guard
                         .update_wallet_for_new_chain(
                             new_chain_id,
-                            Some(chain_owner),
+                            Some(*chain_owner),
                             block.header.timestamp,
                             block.header.epoch,
                         )
@@ -383,6 +413,22 @@ impl<C: ClientContext> ChainListener<C> {
         }
 
         Ok(())
+    }
+
+    /// Background task that syncs received certificates in small batches.
+    /// This discovers unacknowledged sender blocks gradually without overwhelming the system.
+    #[instrument(skip(context, cancellation_token))]
+    async fn background_sync_received_certificates(
+        context: Arc<Mutex<C>>,
+        chain_id: ChainId,
+        cancellation_token: CancellationToken,
+    ) -> Result<(), Error> {
+        info!("Starting background certificate sync for chain {chain_id}");
+        let client = context.lock().await.make_chain_client(chain_id);
+
+        Ok(client
+            .find_received_certificates(Some(cancellation_token))
+            .await?)
     }
 
     /// Starts listening for notifications about the given chain.
@@ -493,7 +539,16 @@ impl<C: ClientContext> ChainListener<C> {
     async fn update_validators(&self, notification: &Notification) -> Result<(), Error> {
         let chain_id = notification.chain_id;
         let listening_client = self.listening.get(&chain_id).expect("missing client");
-        if let Err(error) = listening_client.client.update_validators(None).await {
+        let latest_block = if let Reason::NewBlock { hash, .. } = &notification.reason {
+            listening_client.client.read_certificate(*hash).await.ok()
+        } else {
+            None
+        };
+        if let Err(error) = listening_client
+            .client
+            .update_validators(None, latest_block)
+            .await
+        {
             warn!(
                 "Failed to update validators about the local chain after \
                  receiving {notification:?} with error: {error:?}"
@@ -530,6 +585,10 @@ impl<C: ClientContext> ChainListener<C> {
             debug!("Not processing inbox for non-tracked chain {chain_id:.8}");
             return Ok(());
         }
+        if listening_client.client.preferred_owner().is_none() {
+            debug!("Not processing inbox for non-owned chain {chain_id:.8}");
+            return Ok(());
+        }
         debug!("Processing inbox for {chain_id:.8}");
         listening_client.timeout = Timestamp::from(u64::MAX);
         match listening_client
@@ -537,16 +596,21 @@ impl<C: ClientContext> ChainListener<C> {
             .process_inbox_without_prepare()
             .await
         {
-            Err(ChainClientError::CannotFindKeyForChain(chain_id)) => {
+            Err(chain_client::Error::CannotFindKeyForChain(chain_id)) => {
                 debug!(%chain_id, "Cannot find key for chain");
             }
             Err(error) => warn!(%error, "Failed to process inbox."),
-            Ok((certs, None)) => info!("Done processing inbox. {} blocks created.", certs.len()),
+            Ok((certs, None)) => info!(
+                %chain_id,
+                created_block_count = %certs.len(),
+                "done processing inbox",
+            ),
             Ok((certs, Some(new_timeout))) => {
                 info!(
-                    "{} blocks created. Will try processing the inbox later based \
-                     on the given round timeout: {new_timeout:?}",
-                    certs.len(),
+                    %chain_id,
+                    created_block_count = %certs.len(),
+                    timeout = %new_timeout,
+                    "waiting for round timeout before continuing to process the inbox",
                 );
                 listening_client.timeout = new_timeout.timestamp;
             }

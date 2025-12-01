@@ -24,13 +24,7 @@ pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0
 #[export_name = "_rjem_malloc_conf"]
 pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    env,
-    path::PathBuf,
-    process,
-    sync::Arc,
-};
+use std::{collections::BTreeSet, env, path::PathBuf, process, sync::Arc};
 
 use anyhow::{anyhow, bail, ensure, Context, Error};
 use async_trait::async_trait;
@@ -54,16 +48,13 @@ use linera_client::{
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
-    client::{ChainClientError, ListeningMode},
+    client::{chain_client, ListeningMode},
     data_types::ClientOutcome,
-    node::ValidatorNodeProvider,
+    node::{ValidatorNode, ValidatorNodeProvider},
     worker::Reason,
     JoinSetExt as _, LocalNodeError,
 };
-use linera_execution::{
-    committee::{Committee, ValidatorState},
-    WasmRuntime, WithWasmDefault as _,
-};
+use linera_execution::{committee::Committee, WasmRuntime, WithWasmDefault as _};
 use linera_faucet_server::{FaucetConfig, FaucetService};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
@@ -74,7 +65,7 @@ use linera_service::{
             BenchmarkCommand, BenchmarkOptions, ChainCommand, ClientCommand, DatabaseToolCommand,
             NetCommand, ProjectCommand, WalletCommand,
         },
-        net_up_utils,
+        net_up_utils, validator,
     },
     cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     node_service::NodeService,
@@ -97,6 +88,48 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
 
 struct Job(ClientOptions);
+
+/// Check if an error is retryable (HTTP 502, 503, 504, timeouts, connection errors)
+fn is_retryable_error(err: &anyhow::Error) -> bool {
+    // Check for reqwest errors in the error chain
+    if let Some(reqwest_err) = err.downcast_ref::<reqwest::Error>() {
+        // Check for retryable HTTP status codes (502, 503, 504)
+        if let Some(status) = reqwest_err.status() {
+            return status == reqwest::StatusCode::BAD_GATEWAY
+                || status == reqwest::StatusCode::SERVICE_UNAVAILABLE
+                || status == reqwest::StatusCode::GATEWAY_TIMEOUT;
+        }
+        // Check for connection errors or timeouts
+        return reqwest_err.is_timeout() || reqwest_err.is_connect();
+    }
+    false
+}
+
+/// Retry a faucet operation with exponential backoff
+async fn retry_faucet_operation<F, Fut, T>(operation: F) -> anyhow::Result<T>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<T>>,
+{
+    let max_retries = 5;
+    let mut attempt = 0;
+
+    loop {
+        attempt += 1;
+        match operation().await {
+            Ok(result) => return Ok(result),
+            Err(err) if attempt < max_retries && is_retryable_error(&err) => {
+                let backoff_ms = 100 * 2_u64.pow(attempt - 1);
+                warn!(
+                    "Faucet operation failed with retryable error (attempt {}/{}): {:?}. Retrying after {}ms",
+                    attempt, max_retries, err, backoff_ms
+                );
+                tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+            }
+            Err(err) => return Err(err),
+        }
+    }
+}
 
 fn read_json(string: Option<String>, path: Option<PathBuf>) -> anyhow::Result<Vec<u8>> {
     let value = match (string, path) {
@@ -253,10 +286,25 @@ impl Runnable for Job {
                 println!("{}", id);
             }
 
+            ShowOwnership { chain_id } => {
+                let mut context =
+                    options.create_client_context(storage, wallet, signer.into_value());
+                let ownership = context.ownership(chain_id).await?;
+                let json = serde_json::to_string_pretty(&ownership)?;
+                println!("{}", json);
+            }
+
             ChangeOwnership {
                 chain_id,
                 ownership_config,
             } => {
+                ensure!(
+                    !ownership_config.super_owners.is_empty()
+                        || !ownership_config.owners.is_empty(),
+                    "This command requires at least one owner or super owner to be set. \
+                     To close a chain, use `close-chain`. To show the current config, use `show-ownership`."
+                );
+
                 let mut context =
                     options.create_client_context(storage, wallet, signer.into_value());
                 context.change_ownership(chain_id, ownership_config).await?
@@ -330,7 +378,8 @@ impl Runnable for Job {
 
             ShowNetworkDescription => {
                 let network_description = storage.read_network_description().await?;
-                println!("Network description: \n{:#?}", network_description);
+                let json = serde_json::to_string_pretty(&network_description)?;
+                println!("{}", json);
             }
 
             LocalBalance { account } => {
@@ -412,236 +461,64 @@ impl Runnable for Job {
                 );
             }
 
-            QueryValidator {
-                address,
-                chain_id,
-                public_key,
-            } => {
-                let context = options.create_client_context(storage, wallet, signer.into_value());
-                let node = context.make_node_provider().make_node(&address)?;
-                let mut has_errors = false;
-                if let Err(e) = context.check_compatible_version_info(&address, &node).await {
-                    error!("{}", e);
-                    has_errors = true;
-                }
-                match context
-                    .check_matching_network_description(&address, &node)
-                    .await
-                {
-                    Ok(genesis_config_hash) => {
-                        println!("{}", genesis_config_hash);
-                    }
-                    Err(e) => {
-                        error!("{}", e);
-                        has_errors = true;
-                    }
-                }
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                if let Err(e) = context
-                    .check_validator_chain_info_response(
-                        public_key.as_ref(),
-                        &address,
-                        &node,
-                        chain_id,
-                    )
-                    .await
-                {
-                    error!("{}", e);
-                    has_errors = true;
-                }
-                if has_errors {
-                    bail!("Found one or several issue(s) while querying validator {address}");
-                }
-            }
-
-            QueryValidators { chain_id } => {
+            QueryShardInfo { chain_id } => {
                 let mut context =
                     options.create_client_context(storage, wallet, signer.into_value());
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                println!("Querying validators for shard information about chain {chain_id}.\n");
                 let chain_client = context.make_chain_client(chain_id);
-                info!("Querying validators about chain {}", chain_id);
                 let result = chain_client.local_committee().await;
                 context.update_wallet_from_client(&chain_client).await?;
                 let committee = result.context("Failed to get local committee")?;
-                info!(
-                    "Using the local set of validators: {:?}",
-                    committee.validators()
-                );
                 let node_provider = context.make_node_provider();
-                let mut faulty_validators = BTreeMap::<_, Vec<_>>::new();
+
+                println!("Chain ID: {}", chain_id);
+                println!("Validator Shard Information:\n");
+
                 for (name, state) in committee.validators() {
                     let address = &state.network_address;
                     let node = node_provider.make_node(address)?;
-                    if let Err(e) = context.check_compatible_version_info(address, &node).await {
-                        error!("{}", e);
-                        faulty_validators
-                            .entry((name, address))
-                            .or_default()
-                            .push(e);
-                    }
-                    if let Err(e) = context
-                        .check_matching_network_description(address, &node)
-                        .await
-                    {
-                        error!("{}", e);
-                        faulty_validators
-                            .entry((name, address))
-                            .or_default()
-                            .push(e);
-                    }
-                    if let Err(e) = context
-                        .check_validator_chain_info_response(Some(name), address, &node, chain_id)
-                        .await
-                    {
-                        error!("{}", e);
-                        faulty_validators
-                            .entry((name, address))
-                            .or_default()
-                            .push(e);
-                    }
-                }
-                let num_ok_validators = committee.validators().len() - faulty_validators.len();
-                if !faulty_validators.is_empty() {
-                    println!("{:#?}", faulty_validators);
-                }
-                info!(
-                    "{}/{} validators are OK.",
-                    num_ok_validators,
-                    committee.validators().len()
-                );
-            }
 
-            SyncValidator {
-                address,
-                mut chains,
-            } => {
-                let time_start = Instant::now();
-                let context = options.create_client_context(storage, wallet, signer.into_value());
-
-                if chains.is_empty() {
-                    chains.push(context.default_chain());
-                }
-
-                let validator = context.make_node_provider().make_node(&address)?;
-
-                for chain_id in chains {
-                    let chain = context.make_chain_client(chain_id);
-
-                    Box::pin(chain.sync_validator(validator.clone())).await?;
-                }
-                let time_total = time_start.elapsed();
-                info!(
-                    "Syncing with validator {address} in {} ms",
-                    time_total.as_millis()
-                );
-            }
-
-            SyncAllValidators { mut chains } => {
-                let time_start = Instant::now();
-                let context =
-                    Arc::new(options.create_client_context(storage, wallet, signer.into_value()));
-
-                if chains.is_empty() {
-                    chains.push(context.default_chain());
-                }
-
-                let committee = context.wallet().genesis_config().committee.clone();
-
-                // Parallelize the validator loop - sync all validators concurrently
-                let tasks = committee
-                    .validator_addresses()
-                    .map(|(_validator_name, network_address)| {
-                        let context = context.clone();
-                        let chains = chains.clone();
-                        async move {
-                            let validator =
-                                context.make_node_provider().make_node(network_address)?;
-                            // For each validator, sync all chains sequentially
-                            for chain_id in &chains {
-                                let chain = context.make_chain_client(*chain_id);
-                                Box::pin(chain.sync_validator(validator.clone())).await?;
-                            }
-                            anyhow::Result::<()>::Ok(())
+                    match node.get_shard_info(chain_id).await {
+                        Ok(shard_info) => {
+                            println!("  Validator: {}", name);
+                            println!("    Address: {}", address);
+                            println!("    Total Shards: {}", shard_info.total_shards);
+                            println!("    Shard ID for chain: {}", shard_info.shard_id);
+                            println!();
                         }
-                    })
-                    .collect::<Vec<_>>();
-
-                // Wait for all validator sync tasks to complete
-                futures::future::try_join_all(tasks).await?;
-
-                let time_total = time_start.elapsed();
-                info!(
-                    "Syncing with all validators in {} ms",
-                    time_total.as_millis()
-                );
+                        Err(e) => {
+                            println!("  Validator: {}", name);
+                            println!("    Address: {}", address);
+                            println!("    Error: Failed to get shard info - {}", e);
+                            println!();
+                        }
+                    }
+                }
             }
 
-            command @ (SetValidator { .. }
-            | RemoveValidator { .. }
-            | ResourceControlPolicy { .. }) => {
-                info!("Starting operations to change validator set");
+            command @ ResourceControlPolicy { .. } => {
+                info!("Starting operations to change resource control policy");
                 let time_start = Instant::now();
                 let context = options.create_client_context(storage, wallet, signer.into_value());
 
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
-                if let SetValidator {
-                    public_key: _,
-                    account_key: _,
-                    address,
-                    votes: _,
-                    skip_online_check: false,
-                } = &command
-                {
-                    let node = context.make_node_provider().make_node(address)?;
-                    context
-                        .check_compatible_version_info(address, &node)
-                        .await?;
-                    context
-                        .check_matching_network_description(address, &node)
-                        .await?;
-                }
-                let chain_client = context.make_chain_client(context.wallet.genesis_admin_chain());
-                let n = context
-                    .process_inbox(&chain_client)
-                    .await
-                    .unwrap()
-                    .into_iter()
-                    .map(|c| c.block().messages().len())
-                    .sum::<usize>();
-                info!("Subscribed {} chains to new committees", n);
+                // ResourceControlPolicy doesn't need version checks
+                let admin_id = context.wallet.genesis_admin_chain();
+                let chain_client = context.make_chain_client(admin_id);
+                // Synchronize the chain state to make sure we're applying the changes to the
+                // latest committee.
+                chain_client.synchronize_chain_state(admin_id).await?;
                 let maybe_certificate = context
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
                         let command = command.clone();
                         async move {
-                            // Create the new committee.
+                            // Update resource control policy
                             let mut committee = chain_client.local_committee().await.unwrap();
                             let mut policy = committee.policy().clone();
-                            let mut validators = committee.validators().clone();
+                            let validators = committee.validators().clone();
                             match command {
-                                SetValidator {
-                                    public_key,
-                                    account_key,
-                                    address,
-                                    votes,
-                                    skip_online_check: _,
-                                } => {
-                                    validators.insert(
-                                        public_key,
-                                        ValidatorState {
-                                            network_address: address,
-                                            votes,
-                                            account_public_key: account_key,
-                                        },
-                                    );
-                                }
-                                RemoveValidator { public_key } => {
-                                    if validators.remove(&public_key).is_none() {
-                                        warn!("Skipping removal of nonexistent validator");
-                                        return Ok(ClientOutcome::Committed(None));
-                                    }
-                                }
                                 ResourceControlPolicy {
                                     wasm_fuel_unit,
                                     evm_fuel_unit,
@@ -969,8 +846,12 @@ impl Runnable for Job {
                             let client = client.clone();
                             let faucet_client = faucet_client.clone();
                             join_set.spawn(async move {
-                                client.wallet_init(Some(&faucet_client)).await?;
-                                client.request_chain(&faucet_client, true).await?;
+                                retry_faucet_operation(|| client.wallet_init(Some(&faucet_client)))
+                                    .await?;
+                                retry_faucet_operation(|| {
+                                    client.request_chain(&faucet_client, true)
+                                })
+                                .await?;
                                 Ok::<_, anyhow::Error>(())
                             });
                         }
@@ -1033,8 +914,12 @@ impl Runnable for Job {
                         for client in clients.clone() {
                             let faucet_client = faucet_client.clone();
                             join_set.spawn(async move {
-                                client.wallet_init(Some(&faucet_client)).await?;
-                                client.request_chain(&faucet_client, true).await?;
+                                retry_faucet_operation(|| client.wallet_init(Some(&faucet_client)))
+                                    .await?;
+                                retry_faucet_operation(|| {
+                                    client.request_chain(&faucet_client, true)
+                                })
+                                .await?;
                                 Ok::<_, anyhow::Error>(())
                             });
                         }
@@ -1588,20 +1473,26 @@ impl Runnable for Job {
                 );
             }
 
-            Wallet(WalletCommand::Init { faucet, .. }) => {
-                let Some(faucet_url) = faucet else {
+            Wallet(WalletCommand::Init {
+                faucet,
+                genesis_config_path,
+                ..
+            }) => {
+                let (Some(faucet_url), None) = (faucet, genesis_config_path) else {
                     return Ok(());
                 };
                 let Some(network_description) = storage.read_network_description().await? else {
                     anyhow::bail!("Missing network description");
                 };
-                let context = options.create_client_context(storage, wallet, signer.into_value());
+                let mut context =
+                    options.create_client_context(storage, wallet, signer.into_value());
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let committee = faucet.current_committee().await?;
                 let chain_client = context.make_chain_client(network_description.admin_chain_id);
                 chain_client
                     .synchronize_chain_state_from_committee(committee)
                     .await?;
+                context.update_wallet_from_client(&chain_client).await?;
             }
 
             Wallet(WalletCommand::FollowChain { chain_id, sync }) => {
@@ -1611,7 +1502,7 @@ impl Runnable for Job {
                 context.client.track_chain(chain_id);
                 let chain_client = context.make_chain_client(chain_id);
                 if sync {
-                    chain_client.synchronize_from_validators().await?;
+                    chain_client.synchronize_chain_state(chain_id).await?;
                 } else {
                     chain_client.fetch_chain_info().await?;
                 }
@@ -1631,7 +1522,7 @@ impl Runnable for Job {
                     .await
                     .context("Failed to load chain")?;
                 let block_hash = chain_state_view
-                    .block_hashes(height..=height)
+                    .block_hashes([height])
                     .await
                     .context("Failed to find a block hash for the given height")?[0];
                 let block = context
@@ -1648,13 +1539,26 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(chain_id);
                 let description = match chain_client.get_chain_description().await {
                     Ok(description) => description,
-                    Err(ChainClientError::LocalNodeError(LocalNodeError::BlobsNotFound(_))) => {
+                    Err(chain_client::Error::LocalNodeError(LocalNodeError::BlobsNotFound(_))) => {
                         println!("Could not find a chain description corresponding to the given chain ID.");
                         return Ok(());
                     }
                     err => err.context("Failed to get the chain description")?,
                 };
                 println!("{:#?}", description);
+            }
+
+            Validator(validator_command) => {
+                validator::handle_command(
+                    options.context_options.clone(),
+                    storage,
+                    wallet,
+                    signer.into_value(),
+                    options.block_cache_size,
+                    options.execution_state_cache_size,
+                    validator_command.clone(),
+                )
+                .await?;
             }
 
             CreateGenesisConfig { .. }
@@ -1821,7 +1725,7 @@ impl ClientOptions {
                     path: Self::config_path()?.join("wallet.db"),
                     spawn_mode,
                 };
-                let namespace = "default".to_string();
+                let namespace = linera_storage::DEFAULT_NAMESPACE.to_string();
                 Ok(StorageConfig {
                     inner_storage_config,
                     namespace,
@@ -1955,7 +1859,9 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 }
             }
             DatabaseToolCommand::ListBlobIds => {
-                let blob_ids = DbStorage::<D, _>::list_blob_ids(&config, &namespace).await?;
+                let storage =
+                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let blob_ids = storage.list_blob_ids().await?;
                 info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
                 info!("The list of blob IDs is:");
                 for id in blob_ids {
@@ -1963,13 +1869,28 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 }
             }
             DatabaseToolCommand::ListChainIds => {
-                let chain_ids = DbStorage::<D, _>::list_chain_ids(&config, &namespace).await?;
+                let storage =
+                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let chain_ids = storage.list_chain_ids().await?;
                 info!(
                     "Chain IDs listed in {} ms",
                     start_time.elapsed().as_millis()
                 );
                 info!("The list of chain IDs is:");
                 for id in chain_ids {
+                    println!("{}", id);
+                }
+            }
+            DatabaseToolCommand::ListEventIds => {
+                let storage =
+                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let event_ids = storage.list_event_ids().await?;
+                info!(
+                    "Event IDs listed in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+                info!("The list of event IDs is:");
+                for id in event_ids {
                     println!("{}", id);
                 }
             }
@@ -1989,11 +1910,43 @@ async fn kill_all_processes(pids: &[u32]) {
     }
 }
 
-fn main() -> anyhow::Result<()> {
-    let options = ClientOptions::init();
+#[cfg(not(target_arch = "wasm32"))]
+fn init_tracing(
+    options: &ClientOptions,
+) -> anyhow::Result<Option<linera_service::tracing::chrome::ChromeTraceGuard>> {
+    if matches!(&options.command, ClientCommand::Faucet { .. }) {
+        linera_service::tracing::opentelemetry::init(
+            &options.command.log_file_name(),
+            options.context_options.otlp_exporter_endpoint.as_deref(),
+        );
+        Ok(None)
+    } else if options.context_options.chrome_trace_exporter {
+        let trace_file_path = options
+            .context_options
+            .chrome_trace_file
+            .as_deref()
+            .map_or_else(
+                || format!("{}.trace.json", options.command.log_file_name()),
+                |s| s.to_string(),
+            );
+        let writer = std::fs::File::create(&trace_file_path)?;
+        Ok(Some(linera_service::tracing::chrome::init(
+            &options.command.log_file_name(),
+            writer,
+        )))
+    } else {
+        linera_service::tracing::init(&options.command.log_file_name());
+        Ok(None)
+    }
+}
 
+#[cfg(target_arch = "wasm32")]
+fn init_tracing(options: &ClientOptions) {
     linera_base::tracing::init(&options.command.log_file_name());
+}
 
+fn main() -> anyhow::Result<process::ExitCode> {
+    let options = ClientOptions::init();
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
     } else {
@@ -2006,6 +1959,8 @@ fn main() -> anyhow::Result<()> {
         builder
     };
 
+    // The default stack size 2 MiB causes some stack overflows in ValidatorUpdater methods.
+    runtime.thread_stack_size(4 << 20);
     if let Some(blocking_threads) = options.tokio_blocking_threads {
         runtime.max_blocking_threads(blocking_threads);
     }
@@ -2017,21 +1972,21 @@ fn main() -> anyhow::Result<()> {
 
     let result = runtime
         .enable_all()
-        .build()
-        .expect("Failed to create Tokio runtime")
+        .build()?
         .block_on(run(&options).instrument(span));
 
-    let error_code = match result {
-        Ok(code) => code,
+    Ok(match result {
+        Ok(0) => process::ExitCode::SUCCESS,
+        Ok(code) => process::ExitCode::from(code as u8),
         Err(msg) => {
             error!("Error is {:?}", msg);
-            2
+            process::ExitCode::FAILURE
         }
-    };
-    process::exit(error_code);
+    })
 }
 
 async fn run(options: &ClientOptions) -> Result<i32, Error> {
+    let _guard = init_tracing(options)?;
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();
@@ -2264,7 +2219,12 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 faucet_chain,
                 faucet_port,
                 faucet_amount,
+                with_block_exporter,
+                num_block_exporters,
+                indexer_image_name,
+                explorer_image_name,
                 dual_store,
+                path,
                 ..
             } => {
                 net_up_utils::handle_net_up_kubernetes(
@@ -2283,7 +2243,12 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
+                    *with_block_exporter,
+                    *num_block_exporters,
+                    indexer_image_name.clone(),
+                    explorer_image_name.clone(),
                     *dual_store,
+                    path,
                 )
                 .boxed()
                 .await?;
@@ -2355,7 +2320,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 short,
                 owned,
             } => {
-                let start_time = Instant::now();
+                let wallet_path = options.wallet_path()?;
+                tracing::info!("Reading wallet from file: {}", wallet_path.display());
                 let wallet = options.wallet()?;
                 let chain_ids = if let Some(chain_id) = chain_id {
                     ensure!(!owned, "Cannot specify both --owned and a chain ID");
@@ -2372,7 +2338,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 } else {
                     wallet::pretty_print(&wallet, chain_ids);
                 }
-                info!("Wallet shown in {} ms", start_time.elapsed().as_millis());
                 Ok(0)
             }
 
@@ -2427,7 +2392,10 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             } => {
                 let start_time = Instant::now();
                 let genesis_config: GenesisConfig = match (genesis_config_path, faucet) {
-                    (Some(genesis_config_path), None) => util::read_json(genesis_config_path)?,
+                    (None, None) => {
+                        anyhow::bail!("please specify one of `--faucet` or `--genesis`.")
+                    }
+                    (Some(genesis_config_path), _) => util::read_json(genesis_config_path)?,
                     (None, Some(url)) => {
                         let faucet = cli_wrappers::Faucet::new(url.clone());
                         let version_info = faucet
@@ -2453,7 +2421,6 @@ Make sure to use a Linera client compatible with this network.
                             .await
                             .context("Failed to obtain the genesis configuration from the faucet")?
                     }
-                    (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
                 };
                 let mut keystore = options.create_keystore(*testing_prng_seed)?;
                 keystore.persist().await?;
@@ -2472,6 +2439,11 @@ Make sure to use a Linera client compatible with this network.
                 Ok(0)
             }
         },
+
+        ClientCommand::Validator(_) => {
+            options.run_with_storage(Job(options.clone())).await??;
+            Ok(0)
+        }
 
         _ => {
             options.run_with_storage(Job(options.clone())).await??;

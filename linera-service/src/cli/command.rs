@@ -20,11 +20,41 @@ use linera_client::{
 };
 use linera_rpc::config::CrossChainConfig;
 
+use crate::cli::validator;
+
 const DEFAULT_TOKENS_PER_CHAIN: Amount = Amount::from_millis(100);
 const DEFAULT_TRANSACTIONS_PER_BLOCK: usize = 1;
 const DEFAULT_WRAP_UP_MAX_IN_FLIGHT: usize = 5;
 const DEFAULT_NUM_CHAINS: usize = 10;
 const DEFAULT_BPS: usize = 10;
+
+/// Specification for a validator to be added to the committee.
+#[derive(Clone, Debug)]
+pub struct ValidatorToAdd {
+    pub public_key: ValidatorPublicKey,
+    pub account_key: AccountPublicKey,
+    pub address: String,
+    pub votes: u64,
+}
+
+impl std::str::FromStr for ValidatorToAdd {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split(',').collect();
+        anyhow::ensure!(
+            parts.len() == 4,
+            "Validator spec must be in format: public_key,account_key,address,votes"
+        );
+
+        Ok(ValidatorToAdd {
+            public_key: parts[0].parse()?,
+            account_key: parts[1].parse()?,
+            address: parts[2].to_string(),
+            votes: parts[3].parse()?,
+        })
+    }
+}
 
 #[derive(Clone, clap::Args, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -138,7 +168,7 @@ pub enum BenchmarkCommand {
         processes: usize,
 
         /// The faucet (which implicitly defines the network)
-        #[arg(long)]
+        #[arg(long, env = "LINERA_FAUCET_URL")]
         faucet: String,
 
         /// If specified, a directory with a random name will be created in this directory, and the
@@ -225,6 +255,13 @@ pub enum ClientCommand {
         /// balance.
         #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
+    },
+
+    /// Display who owns the chain, and how the owners work together proposing blocks.
+    ShowOwnership {
+        /// The ID of the chain whose owners will be changed.
+        #[clap(long)]
+        chain_id: Option<ChainId>,
     },
 
     /// Change who owns the chain, and how the owners work together proposing blocks.
@@ -325,71 +362,10 @@ pub enum ClientCommand {
         chain_id: Option<ChainId>,
     },
 
-    /// Show the version and genesis config hash of a new validator, and print a warning if it is
-    /// incompatible. Also print some information about the given chain while we are at it.
-    QueryValidator {
-        /// The new validator's address.
-        address: String,
-        /// The chain to query. If omitted, query the default chain of the wallet.
-        chain_id: Option<ChainId>,
-        /// The public key of the validator. If given, the signature of the chain query
-        /// info will be checked.
-        #[arg(long)]
-        public_key: Option<ValidatorPublicKey>,
-    },
-
-    /// Show the current set of validators for a chain. Also print some information about
-    /// the given chain while we are at it.
-    QueryValidators {
-        /// The chain to query. If omitted, query the default chain of the wallet.
-        chain_id: Option<ChainId>,
-    },
-
-    /// Synchronizes a validator with the local state of chains.
-    SyncValidator {
-        /// The public address of the validator to synchronize.
-        address: String,
-
-        /// The chains to synchronize, or the default chain if empty.
-        #[arg(long, num_args = 0..)]
-        chains: Vec<ChainId>,
-    },
-
-    /// Synchronizes all validators with the local state of chains.
-    SyncAllValidators {
-        /// The chains to synchronize, or the default chain if empty.
-        #[arg(long, num_args = 0..)]
-        chains: Vec<ChainId>,
-    },
-
-    /// Add or modify a validator (admin only)
-    SetValidator {
-        /// The public key of the validator.
-        #[arg(long)]
-        public_key: ValidatorPublicKey,
-
-        /// The public key of the account controlled by the validator.
-        #[arg(long)]
-        account_key: AccountPublicKey,
-
-        /// Network address
-        #[arg(long)]
-        address: String,
-
-        /// Voting power
-        #[arg(long, default_value = "1")]
-        votes: u64,
-
-        /// Skip the version and genesis config checks.
-        #[arg(long)]
-        skip_online_check: bool,
-    },
-
-    /// Remove a validator (admin only)
-    RemoveValidator {
-        /// The public key of the validator.
-        #[arg(long)]
-        public_key: ValidatorPublicKey,
+    /// Query validators for shard information about a specific chain.
+    QueryShardInfo {
+        /// The chain to query shard information for.
+        chain_id: ChainId,
     },
 
     /// Deprecates all committees up to and including the specified one.
@@ -779,7 +755,7 @@ pub enum ClientCommand {
 
         /// Path to the persistent storage file for faucet mappings.
         #[arg(long)]
-        storage_path: Option<PathBuf>,
+        storage_path: PathBuf,
 
         /// Maximum number of operations to include in a single block (default: 100).
         #[arg(long, default_value = "100")]
@@ -944,6 +920,10 @@ pub enum ClientCommand {
     #[command(subcommand)]
     Net(NetCommand),
 
+    /// Manage validators in the committee.
+    #[command(subcommand)]
+    Validator(validator::ValidatorCommand),
+
     /// Operation on the storage.
     #[command(subcommand)]
     Storage(DatabaseToolCommand),
@@ -976,6 +956,7 @@ impl ClientCommand {
             ClientCommand::Transfer { .. }
             | ClientCommand::OpenChain { .. }
             | ClientCommand::OpenMultiOwnerChain { .. }
+            | ClientCommand::ShowOwnership { .. }
             | ClientCommand::ChangeOwnership { .. }
             | ClientCommand::SetPreferredOwner { .. }
             | ClientCommand::ChangeApplicationPermissions { .. }
@@ -986,12 +967,7 @@ impl ClientCommand {
             | ClientCommand::SyncBalance { .. }
             | ClientCommand::Sync { .. }
             | ClientCommand::ProcessInbox { .. }
-            | ClientCommand::QueryValidator { .. }
-            | ClientCommand::QueryValidators { .. }
-            | ClientCommand::SyncValidator { .. }
-            | ClientCommand::SyncAllValidators { .. }
-            | ClientCommand::SetValidator { .. }
-            | ClientCommand::RemoveValidator { .. }
+            | ClientCommand::QueryShardInfo { .. }
             | ClientCommand::ResourceControlPolicy { .. }
             | ClientCommand::RevokeEpochs { .. }
             | ClientCommand::CreateGenesisConfig { .. }
@@ -1005,6 +981,7 @@ impl ClientCommand {
             | ClientCommand::Assign { .. }
             | ClientCommand::Wallet { .. }
             | ClientCommand::Chain { .. }
+            | ClientCommand::Validator { .. }
             | ClientCommand::RetryPendingBlock { .. } => "client".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Single { .. }) => "single-benchmark".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Multi { .. }) => "multi-benchmark".into(),
@@ -1046,6 +1023,9 @@ pub enum DatabaseToolCommand {
 
     /// List the chain IDs in the database
     ListChainIds,
+
+    /// List the event IDs in the database
+    ListEventIds,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -1128,13 +1108,12 @@ pub enum NetCommand {
         external_protocol: String,
 
         /// If present, a faucet is started using the chain provided by --faucet-chain, or
-        /// `ChainId::root(1)` if not provided, as root 0 is usually the admin chain.
+        /// the first non-admin chain if not provided.
         #[arg(long, default_value = "false")]
         with_faucet: bool,
 
         /// When using --with-faucet, this specifies the chain on which the faucet will be started.
-        /// The chain is specified by its root number (0 for the admin chain, 1 for the first
-        /// non-admin initial chain, etc).
+        /// If this is `n`, the `n`-th non-admin chain (lexicographically) in the wallet is selected.
         #[arg(long)]
         faucet_chain: Option<u32>,
 
@@ -1150,6 +1129,10 @@ pub enum NetCommand {
         #[arg(long, default_value = "false")]
         with_block_exporter: bool,
 
+        /// The number of block exporters to start.
+        #[arg(long, default_value = "1")]
+        num_block_exporters: usize,
+
         /// The address of the block exporter.
         #[arg(long, default_value = "localhost")]
         exporter_address: String,
@@ -1157,6 +1140,16 @@ pub enum NetCommand {
         /// The port on which to run the block exporter.
         #[arg(long, default_value = "8081")]
         exporter_port: NonZeroU16,
+
+        /// The name of the indexer docker image to use.
+        #[cfg(feature = "kubernetes")]
+        #[arg(long, default_value = "linera-indexer:latest")]
+        indexer_image_name: String,
+
+        /// The name of the explorer docker image to use.
+        #[cfg(feature = "kubernetes")]
+        #[arg(long, default_value = "linera-explorer:latest")]
+        explorer_image_name: String,
 
         /// Use dual store (rocksdb and scylladb) instead of just scylladb. This is exclusive for
         /// kubernetes deployments.
@@ -1191,11 +1184,13 @@ pub enum WalletCommand {
     Init {
         /// The path to the genesis configuration for a Linera deployment. Either this or `--faucet`
         /// must be specified.
+        ///
+        /// Overrides `--faucet` if provided.
         #[arg(long = "genesis")]
         genesis_config_path: Option<PathBuf>,
 
         /// The address of a faucet.
-        #[arg(long = "faucet")]
+        #[arg(long, env = "LINERA_FAUCET_URL")]
         faucet: Option<String>,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
@@ -1207,7 +1202,7 @@ pub enum WalletCommand {
     /// Request a new chain from a faucet and add it to the wallet.
     RequestChain {
         /// The address of a faucet.
-        #[arg(long)]
+        #[arg(long, env = "LINERA_FAUCET_URL")]
         faucet: String,
 
         /// Whether this chain should become the default chain.

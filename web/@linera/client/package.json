@@ -5,8 +5,12 @@
   "publishConfig": {
     "access": "public"
   },
-  "main": "dist/linera_web.js",
-  "types": "dist/linera_web.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "files": [
     "dist"
   ],
@@ -15,8 +19,9 @@
     "install": "true",
     "build": "bash build.bash --release",
     "prepare": "pnpm build",
-    "lint": "pnpm build && pnpm exec tsc && cargo fmt --check && cargo clippy",
-    "ci": "pnpm lint && pnpm doc",
+    "lint": "pnpm build && cargo fmt --check && cargo clippy",
+    "test": "pnpm exec vitest --run",
+    "ci": "pnpm lint && pnpm test && pnpm doc",
     "format": "pnpm exec prettier . --write",
     "doc": "pnpm exec typedoc"
   },
@@ -30,10 +35,18 @@
   "bugs": {
     "url": "https://github.com/linera-io/linera-protocol/issues"
   },
-  "homepage": "https://github.com/linera-io/linera-protocol/tree/main/linera-web#readme",
+  "homepage": "https://github.com/linera-io/linera-protocol/tree/main/web#readme",
+  "dependencies": {
+    "ethers": "^6.15.0"
+  },
   "devDependencies": {
+    "@vitest/browser": "^3.2.4",
+    "playwright": "1.54.0",
     "prettier": "3.5.3",
-    "typedoc": "^0.28.5",
-    "typedoc-plugin-markdown": "^4.7.0"
+    "tsc-alias": "^1.8.16",
+    "typedoc": "^0.28.13",
+    "typedoc-plugin-markdown": "^4.9.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }

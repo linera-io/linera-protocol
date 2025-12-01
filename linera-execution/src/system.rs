@@ -8,6 +8,7 @@ mod tests;
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
+use allocative::Allocative;
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
@@ -59,7 +60,8 @@ mod metrics {
 }
 
 /// A view accessing the execution state of the system of a chain.
-#[derive(Debug, ClonableView, HashableView)]
+#[derive(Debug, ClonableView, HashableView, Allocative)]
+#[allocative(bound = "C")]
 pub struct SystemExecutionStateView<C> {
     /// How the chain was created. May be unknown for inactive chains.
     pub description: HashedRegisterView<C, Option<ChainDescription>>,
@@ -88,6 +90,8 @@ pub struct SystemExecutionStateView<C> {
     pub used_blobs: HashedSetView<C, BlobId>,
     /// The event stream subscriptions of applications on this chain.
     pub event_subscriptions: HashedMapView<C, (ChainId, StreamId), EventSubscriptions>,
+    /// The number of events in the streams that this chain is writing to.
+    pub stream_event_counts: HashedMapView<C, StreamId, u32>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
@@ -110,12 +114,13 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
             application_permissions: self.application_permissions.with_context(ctx.clone()).await,
             used_blobs: self.used_blobs.with_context(ctx.clone()).await,
             event_subscriptions: self.event_subscriptions.with_context(ctx.clone()).await,
+            stream_event_counts: self.stream_event_counts.with_context(ctx.clone()).await,
         }
     }
 }
 
 /// The applications subscribing to a particular stream, and the next event index.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, Allocative)]
 pub struct EventSubscriptions {
     /// The next event index, i.e. the total number of events in this stream that have already
     /// been processed by this chain.
@@ -125,7 +130,7 @@ pub struct EventSubscriptions {
 }
 
 /// The initial configuration for a new chain.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub struct OpenChainConfig {
     /// The ownership configuration of the new chain.
     pub ownership: ChainOwnership,
@@ -156,7 +161,7 @@ impl OpenChainConfig {
 }
 
 /// A system operation.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub enum SystemOperation {
     /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
@@ -187,6 +192,9 @@ pub enum SystemOperation {
         /// The regular owners, with their weights that determine how often they are round leader.
         #[debug(skip_if = Vec::is_empty)]
         owners: Vec<(AccountOwner, u64)>,
+        /// The leader of the first single-leader round. If not set, this is random like other rounds.
+        #[debug(skip_if = Option::is_none)]
+        first_leader: Option<AccountOwner>,
         /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
         multi_leader_rounds: u32,
         /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
@@ -227,7 +235,7 @@ pub enum SystemOperation {
 }
 
 /// Operations that are only allowed on the admin chain.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub enum AdminOperation {
     /// Publishes a new committee as a blob. This can be assigned to an epoch using
     /// [`AdminOperation::CreateCommittee`] in a later block.
@@ -242,7 +250,7 @@ pub enum AdminOperation {
 }
 
 /// A system message meant to be executed on a remote chain.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub enum SystemMessage {
     /// Credits `amount` units of value to the account `target` -- unless the message is
     /// bouncing, in which case `source` is credited instead.
@@ -364,6 +372,7 @@ where
             ChangeOwnership {
                 super_owners,
                 owners,
+                first_leader,
                 multi_leader_rounds,
                 open_multi_leader_rounds,
                 timeout_config,
@@ -371,6 +380,7 @@ where
                 self.ownership.set(ChainOwnership {
                     super_owners: super_owners.into_iter().collect(),
                     owners: owners.into_iter().collect(),
+                    first_leader,
                     multi_leader_rounds,
                     open_multi_leader_rounds,
                     timeout_config,
@@ -386,7 +396,7 @@ where
                 recipient,
             } => {
                 let maybe_message = self
-                    .transfer(context.authenticated_signer, None, owner, recipient, amount)
+                    .transfer(context.authenticated_owner, None, owner, recipient, amount)
                     .await?;
                 txn_tracker.add_outgoing_messages(maybe_message);
             }
@@ -398,7 +408,7 @@ where
             } => {
                 let maybe_message = self
                     .claim(
-                        context.authenticated_signer,
+                        context.authenticated_owner,
                         None,
                         owner,
                         target_id,
@@ -555,7 +565,8 @@ where
                         stream_id,
                         index,
                     };
-                    let extra = self.context().extra();
+                    let context = self.context();
+                    let extra = context.extra();
                     txn_tracker
                         .oracle(|| async {
                             if !extra.contains_event(event_id.clone()).await? {
@@ -624,7 +635,7 @@ where
 
     pub async fn transfer(
         &mut self,
-        authenticated_signer: Option<AccountOwner>,
+        authenticated_owner: Option<AccountOwner>,
         authenticated_application_id: Option<ApplicationId>,
         source: AccountOwner,
         recipient: Account,
@@ -632,16 +643,13 @@ where
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
         if source == AccountOwner::CHAIN {
             ensure!(
-                authenticated_signer.is_some()
-                    && self
-                        .ownership
-                        .get()
-                        .verify_owner(&authenticated_signer.unwrap()),
+                authenticated_owner.is_some()
+                    && self.ownership.get().is_owner(&authenticated_owner.unwrap()),
                 ExecutionError::UnauthenticatedTransferOwner
             );
         } else {
             ensure!(
-                authenticated_signer == Some(source)
+                authenticated_owner == Some(source)
                     || authenticated_application_id.map(AccountOwner::from) == Some(source),
                 ExecutionError::UnauthenticatedTransferOwner
             );
@@ -656,7 +664,7 @@ where
 
     pub async fn claim(
         &mut self,
-        authenticated_signer: Option<AccountOwner>,
+        authenticated_owner: Option<AccountOwner>,
         authenticated_application_id: Option<ApplicationId>,
         source: AccountOwner,
         target_id: ChainId,
@@ -664,7 +672,7 @@ where
         amount: Amount,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
         ensure!(
-            authenticated_signer == Some(source)
+            authenticated_owner == Some(source)
                 || authenticated_application_id.map(AccountOwner::from) == Some(source),
             ExecutionError::UnauthenticatedClaimOwner
         );
@@ -684,7 +692,7 @@ where
             };
             Ok(Some(
                 OutgoingMessage::new(target_id, message)
-                    .with_authenticated_signer(authenticated_signer),
+                    .with_authenticated_owner(authenticated_owner),
             ))
         }
     }
@@ -776,20 +784,22 @@ where
         self.timestamp.set(description.timestamp());
         self.description.set(Some(description));
         self.epoch.set(epoch);
+
         let committees = self
             .context()
             .extra()
-            .committees_for(min_active_epoch..=max_active_epoch)
+            .get_committees(min_active_epoch..=max_active_epoch)
             .await?;
-        self.committees.set(committees);
-        let admin_id = self
+        let admin_chain_id = self
             .context()
             .extra()
             .get_network_description()
             .await?
             .ok_or(ExecutionError::NoNetworkDescriptionFound)?
             .admin_chain_id;
-        self.admin_id.set(Some(admin_id));
+
+        self.committees.set(committees);
+        self.admin_id.set(Some(admin_chain_id));
         self.ownership.set(ownership);
         self.balance.set(balance);
         self.application_permissions.set(application_permissions);

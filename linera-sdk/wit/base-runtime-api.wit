@@ -61,6 +61,7 @@ interface base-runtime-api {
     record chain-ownership {
         super-owners: list<account-owner>,
         owners: list<tuple<account-owner, u64>>,
+        first-leader: option<account-owner>,
         multi-leader-rounds: u32,
         open-multi-leader-rounds: bool,
         timeout-config: timeout-config,

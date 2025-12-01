@@ -7,9 +7,11 @@ use std::{
     io::Write,
     marker::PhantomData,
     mem,
-    sync::{Arc, Mutex},
+    ops::Deref,
+    sync::Arc,
 };
 
+use allocative::{Allocative, Key, Visitor};
 use async_lock::{RwLock, RwLockReadGuardArc, RwLockWriteGuardArc};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -17,9 +19,10 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
-    common::{CustomSerialize, HasherOutput, Update},
+    common::{CustomSerialize, HasherOutput, SliceExt as _, Update},
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
+    historical_hash_wrapper::HistoricallyHashableView,
     store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
@@ -81,8 +84,32 @@ pub struct ReentrantByteCollectionView<C, W> {
     delete_storage_first: bool,
     /// Entries that may have staged changes.
     updates: BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
-    /// Entries cached in memory that have the exact same state as in the persistent storage.
-    cached_entries: Mutex<BTreeMap<Vec<u8>, Arc<RwLock<W>>>>,
+}
+
+impl<C, W: Allocative> Allocative for ReentrantByteCollectionView<C, W> {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        let name = Key::new("ReentrantByteCollectionView");
+        let size = mem::size_of::<Self>();
+        let mut visitor = visitor.enter(name, size);
+
+        for (k, v) in &self.updates {
+            let key_name = Key::new("key");
+            visitor.visit_field(key_name, k);
+            match v {
+                Update::Removed => {
+                    let key = Key::new("update_removed");
+                    visitor.visit_field(key, &());
+                }
+                Update::Set(v) => {
+                    if let Some(v) = v.try_read() {
+                        let key = Key::new("update_set");
+                        visitor.visit_field(key, v.deref());
+                    }
+                }
+            }
+        }
+        visitor.exit();
+    }
 }
 
 impl<W, C2> ReplaceContext<C2> for ReentrantByteCollectionView<W::Context, W>
@@ -97,7 +124,6 @@ where
         ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
     ) -> Self::Target {
         let mut updates: BTreeMap<_, Update<Arc<RwLock<W::Target>>>> = BTreeMap::new();
-        let mut cached_entries = BTreeMap::new();
         for (key, update) in &self.updates {
             let new_value = match update {
                 Update::Removed => Update::Removed,
@@ -107,20 +133,10 @@ where
             };
             updates.insert(key.clone(), new_value);
         }
-        let old_cached_entries = self.cached_entries.lock().unwrap().clone();
-        for (key, entry) in old_cached_entries {
-            cached_entries.insert(
-                key,
-                Arc::new(RwLock::new(
-                    entry.write().await.with_context(ctx.clone()).await,
-                )),
-            );
-        }
         ReentrantByteCollectionView {
-            context: ctx(self.context()),
+            context: ctx(&self.context),
             delete_storage_first: self.delete_storage_first,
             updates,
-            cached_entries: Mutex::new(cached_entries),
         }
     }
 }
@@ -145,8 +161,8 @@ impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
 
     type Context = W::Context;
 
-    fn context(&self) -> &Self::Context {
-        &self.context
+    fn context(&self) -> Self::Context {
+        self.context.clone()
     }
 
     fn pre_load(_context: &Self::Context) -> Result<Vec<Vec<u8>>, ViewError> {
@@ -158,12 +174,7 @@ impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
             context,
             delete_storage_first: false,
             updates: BTreeMap::new(),
-            cached_entries: Mutex::new(BTreeMap::new()),
         })
-    }
-
-    async fn load(context: Self::Context) -> Result<Self, ViewError> {
-        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
@@ -178,53 +189,61 @@ impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
         !self.updates.is_empty()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
             delete_view = true;
             batch.delete_key_prefix(self.context.base_key().bytes.clone());
-            for (index, update) in mem::take(&mut self.updates) {
+            for (index, update) in &self.updates {
                 if let Update::Set(view) = update {
-                    let mut view = Arc::try_unwrap(view)
-                        .map_err(|_| ViewError::TryLockError(index.clone()))?
-                        .into_inner();
-                    view.flush(batch)?;
-                    self.add_index(batch, &index);
+                    let view = view
+                        .try_read()
+                        .ok_or_else(|| ViewError::TryLockError(index.clone()))?;
+                    view.pre_save(batch)?;
+                    self.add_index(batch, index);
                     delete_view = false;
                 }
             }
         } else {
-            for (index, update) in mem::take(&mut self.updates) {
+            for (index, update) in &self.updates {
                 match update {
                     Update::Set(view) => {
-                        let mut view = Arc::try_unwrap(view)
-                            .map_err(|_| ViewError::TryLockError(index.clone()))?
-                            .into_inner();
-                        view.flush(batch)?;
-                        self.add_index(batch, &index);
+                        let view = view
+                            .try_read()
+                            .ok_or_else(|| ViewError::TryLockError(index.clone()))?;
+                        view.pre_save(batch)?;
+                        self.add_index(batch, index);
                     }
                     Update::Removed => {
-                        let key_subview = self.get_subview_key(&index);
-                        let key_index = self.get_index_key(&index);
+                        let key_subview = self.get_subview_key(index);
+                        let key_index = self.get_index_key(index);
                         batch.delete_key(key_index);
                         batch.delete_key_prefix(key_subview);
                     }
                 }
             }
         }
-        self.delete_storage_first = false;
         Ok(delete_view)
+    }
+
+    fn post_save(&mut self) {
+        for (_index, update) in mem::take(&mut self.updates) {
+            if let Update::Set(view) = update {
+                let mut view = view.try_write().expect("pre_save was called before");
+                view.post_save();
+            }
+        }
+        self.delete_storage_first = false;
     }
 
     fn clear(&mut self) {
         self.delete_storage_first = true;
         self.updates.clear();
-        self.cached_entries.get_mut().unwrap().clear();
     }
 }
 
 impl<W: ClonableView> ClonableView for ReentrantByteCollectionView<W::Context, W> {
-    fn clone_unchecked(&mut self) -> Self {
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         let cloned_updates = self
             .updates
             .iter()
@@ -234,21 +253,19 @@ impl<W: ClonableView> ClonableView for ReentrantByteCollectionView<W::Context, W
                     Update::Set(view_lock) => {
                         let mut view = view_lock
                             .try_write()
-                            .expect("Unable to acquire write lock during clone_unchecked");
-
-                        Update::Set(Arc::new(RwLock::new(view.clone_unchecked())))
+                            .ok_or_else(|| ViewError::TryLockError(key.clone()))?;
+                        Update::Set(Arc::new(RwLock::new(view.clone_unchecked()?)))
                     }
                 };
-                (key.clone(), cloned_value)
+                Ok::<_, ViewError>((key.clone(), cloned_value))
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
 
-        ReentrantByteCollectionView {
+        Ok(ReentrantByteCollectionView {
             context: self.context.clone(),
             delete_storage_first: self.delete_storage_first,
             updates: cloned_updates,
-            cached_entries: Mutex::new(BTreeMap::new()),
-        }
+        })
     }
 }
 
@@ -305,13 +322,8 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 }
             },
             Vacant(entry) => {
-                let wrapped_view = match self.cached_entries.get_mut().unwrap().remove(short_key) {
-                    Some(view) => view,
-                    None => {
-                        Self::wrapped_view(&self.context, self.delete_storage_first, short_key)
-                            .await?
-                    }
-                };
+                let wrapped_view =
+                    Self::wrapped_view(&self.context, self.delete_storage_first, short_key).await?;
                 entry.insert(Update::Set(wrapped_view.clone()));
                 wrapped_view
             }
@@ -330,26 +342,15 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         } else if self.delete_storage_first {
             None
         } else {
-            let view = {
-                let cached_entries = self.cached_entries.lock().unwrap();
-                let view = cached_entries.get(short_key);
-                view.cloned()
-            };
-            if let Some(view) = view {
-                Some(view.clone())
+            let key_index = self
+                .context
+                .base_key()
+                .base_tag_index(KeyTag::Index as u8, short_key);
+            if self.context.store().contains_key(&key_index).await? {
+                let view = Self::wrapped_view(&self.context, false, short_key).await?;
+                Some(view)
             } else {
-                let key_index = self
-                    .context
-                    .base_key()
-                    .base_tag_index(KeyTag::Index as u8, short_key);
-                if self.context.store().contains_key(&key_index).await? {
-                    let view = Self::wrapped_view(&self.context, false, short_key).await?;
-                    let mut cached_entries = self.cached_entries.lock().unwrap();
-                    cached_entries.insert(short_key.to_owned(), view.clone());
-                    Some(view)
-                } else {
-                    None
-                }
+                None
             }
         })
     }
@@ -438,8 +439,6 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             }
         } else if self.delete_storage_first {
             false
-        } else if self.cached_entries.lock().unwrap().contains_key(short_key) {
-            true
         } else {
             let key_index = self
                 .context
@@ -468,7 +467,6 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
     /// # })
     /// ```
     pub fn remove_entry(&mut self, short_key: Vec<u8>) {
-        self.cached_entries.get_mut().unwrap().remove(&short_key);
         if self.delete_storage_first {
             // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
             self.updates.remove(&short_key);
@@ -508,7 +506,6 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         let view = Arc::new(RwLock::new(view));
         let view = Update::Set(view);
         self.updates.insert(short_key.to_vec(), view);
-        self.cached_entries.get_mut().unwrap().remove(short_key);
         Ok(())
     }
 
@@ -546,7 +543,6 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         &mut self,
         short_keys: Vec<Vec<u8>>,
     ) -> Result<Vec<WriteGuardedView<W>>, ViewError> {
-        let cached_entries = self.cached_entries.get_mut().unwrap();
         let mut short_keys_to_load = Vec::new();
         let mut keys = Vec::new();
         for short_key in &short_keys {
@@ -561,16 +557,12 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
                         entry.insert(Update::Set(view));
-                        cached_entries.remove(short_key);
                     }
                 }
                 btree_map::Entry::Vacant(entry) => {
                     if self.delete_storage_first {
-                        cached_entries.remove(short_key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
-                        entry.insert(Update::Set(view));
-                    } else if let Some(view) = cached_entries.remove(short_key) {
                         entry.insert(Update::Set(view));
                     } else {
                         keys.extend(W::pre_load(&context)?);
@@ -579,9 +571,9 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 }
             }
         }
-        let values = self.context.store().read_multi_values_bytes(keys).await?;
+        let values = self.context.store().read_multi_values_bytes(&keys).await?;
         for (loaded_values, short_key) in values
-            .chunks_exact(W::NUM_INIT_KEYS)
+            .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
             .zip(short_keys_to_load)
         {
             let key = self
@@ -608,6 +600,37 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 ))
             })
             .collect()
+    }
+
+    /// Loads multiple entries for writing at once with their keys.
+    /// The entries in short_keys have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
+    ///     ReentrantByteCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let mut subview = view.try_load_entry_mut(&vec![0, 1]).await.unwrap();
+    ///     *subview.get_mut() = "Bonjour".to_string();
+    /// }
+    /// let short_keys = vec![vec![0, 1], vec![2, 3]];
+    /// let subviews = view.try_load_entries_pairs_mut(short_keys).await.unwrap();
+    /// let value1 = subviews[0].1.get();
+    /// let value2 = subviews[1].1.get();
+    /// assert_eq!(*value1, "Bonjour".to_string());
+    /// assert_eq!(*value2, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries_pairs_mut(
+        &mut self,
+        short_keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<(Vec<u8>, WriteGuardedView<W>)>, ViewError> {
+        let values = self.try_load_entries_mut(short_keys.clone()).await?;
+        Ok(short_keys.into_iter().zip(values).collect())
     }
 
     /// Loads multiple entries for reading at once.
@@ -639,27 +662,22 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         let mut keys_to_check = Vec::new();
         let mut keys_to_check_metadata = Vec::new();
 
-        {
-            let cached_entries = self.cached_entries.lock().unwrap();
-            for (position, short_key) in short_keys.into_iter().enumerate() {
-                if let Some(update) = self.updates.get(&short_key) {
-                    if let Update::Set(view) = update {
-                        results[position] = Some((short_key, view.clone()));
-                    }
-                } else if let Some(view) = cached_entries.get(&short_key) {
+        for (position, short_key) in short_keys.into_iter().enumerate() {
+            if let Some(update) = self.updates.get(&short_key) {
+                if let Update::Set(view) = update {
                     results[position] = Some((short_key, view.clone()));
-                } else if !self.delete_storage_first {
-                    let key_index = self
-                        .context
-                        .base_key()
-                        .base_tag_index(KeyTag::Index as u8, &short_key);
-                    keys_to_check.push(key_index);
-                    keys_to_check_metadata.push((position, short_key));
                 }
+            } else if !self.delete_storage_first {
+                let key_index = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Index as u8, &short_key);
+                keys_to_check.push(key_index);
+                keys_to_check_metadata.push((position, short_key));
             }
         }
 
-        let found_keys = self.context.store().contains_keys(keys_to_check).await?;
+        let found_keys = self.context.store().contains_keys(&keys_to_check).await?;
         let entries_to_load = keys_to_check_metadata
             .into_iter()
             .zip(found_keys)
@@ -681,15 +699,14 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             let values = self
                 .context
                 .store()
-                .read_multi_values_bytes(keys_to_load)
+                .read_multi_values_bytes(&keys_to_load)
                 .await?;
-            let mut cached_entries = self.cached_entries.lock().unwrap();
-            for (loaded_values, (position, short_key, context)) in
-                values.chunks_exact(W::NUM_INIT_KEYS).zip(entries_to_load)
+            for (loaded_values, (position, short_key, context)) in values
+                .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
+                .zip(entries_to_load)
             {
                 let view = W::post_load(context, loaded_values)?;
                 let wrapped_view = Arc::new(RwLock::new(view));
-                cached_entries.insert(short_key.clone(), wrapped_view.clone());
                 results[position] = Some((short_key, wrapped_view));
             }
         }
@@ -704,6 +721,35 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 None => Ok(None),
             })
             .collect()
+    }
+
+    /// Loads multiple entries for reading at once with their keys.
+    /// The entries in short_keys have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
+    ///     ReentrantByteCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.try_load_entry_mut(&vec![0, 1]).await.unwrap();
+    /// }
+    /// let short_keys = vec![vec![0, 1], vec![0, 2]];
+    /// let subviews = view.try_load_entries_pairs(short_keys).await.unwrap();
+    /// assert!(subviews[1].1.is_none());
+    /// let value0 = subviews[0].1.as_ref().unwrap().get();
+    /// assert_eq!(*value0, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries_pairs(
+        &self,
+        short_keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<(Vec<u8>, Option<ReadGuardedView<W>>)>, ViewError> {
+        let values = self.try_load_entries(short_keys.clone()).await?;
+        Ok(short_keys.into_iter().zip(values).collect())
     }
 
     /// Loads all the entries for reading at once.
@@ -727,51 +773,48 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         &self,
     ) -> Result<Vec<(Vec<u8>, ReadGuardedView<W>)>, ViewError> {
         let short_keys = self.keys().await?;
+        let mut loaded_views = vec![None; short_keys.len()];
+
+        // Load views that are not in updates and not deleted
         if !self.delete_storage_first {
             let mut keys = Vec::new();
-            let mut short_keys_to_load = Vec::new();
-            {
-                let cached_entries = self.cached_entries.lock().unwrap();
-                for short_key in &short_keys {
-                    if !self.updates.contains_key(short_key)
-                        && !cached_entries.contains_key(short_key)
-                    {
-                        let key = self
-                            .context
-                            .base_key()
-                            .base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = self.context.clone_with_base_key(key);
-                        keys.extend(W::pre_load(&context)?);
-                        short_keys_to_load.push(short_key.to_vec());
-                    }
-                }
-            }
-            let values = self.context.store().read_multi_values_bytes(keys).await?;
-            {
-                let mut cached_entries = self.cached_entries.lock().unwrap();
-                for (loaded_values, short_key) in values
-                    .chunks_exact(W::NUM_INIT_KEYS)
-                    .zip(short_keys_to_load)
-                {
+            let mut short_keys_and_indexes = Vec::new();
+            for (index, short_key) in short_keys.iter().enumerate() {
+                if !self.updates.contains_key(short_key) {
                     let key = self
                         .context
                         .base_key()
-                        .base_tag_index(KeyTag::Subview as u8, &short_key);
+                        .base_tag_index(KeyTag::Subview as u8, short_key);
                     let context = self.context.clone_with_base_key(key);
-                    let view = W::post_load(context, loaded_values)?;
-                    let wrapped_view = Arc::new(RwLock::new(view));
-                    cached_entries.insert(short_key.to_vec(), wrapped_view);
+                    keys.extend(W::pre_load(&context)?);
+                    short_keys_and_indexes.push((short_key.to_vec(), index));
                 }
             }
+            let values = self.context.store().read_multi_values_bytes(&keys).await?;
+            for (loaded_values, (short_key, index)) in values
+                .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
+                .zip(short_keys_and_indexes)
+            {
+                let key = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                let context = self.context.clone_with_base_key(key);
+                let view = W::post_load(context, loaded_values)?;
+                let wrapped_view = Arc::new(RwLock::new(view));
+                loaded_views[index] = Some(wrapped_view);
+            }
         }
-        let cached_entries = self.cached_entries.lock().unwrap();
+
+        // Create result from updates and loaded views
         short_keys
             .into_iter()
-            .map(|short_key| {
+            .zip(loaded_views)
+            .map(|(short_key, loaded_view)| {
                 let view = if let Some(Update::Set(view)) = self.updates.get(&short_key) {
                     view.clone()
-                } else if let Some(view) = cached_entries.get(&short_key) {
-                    view.clone()
+                } else if let Some(view) = loaded_view {
+                    view
                 } else {
                     unreachable!("All entries should have been loaded into memory");
                 };
@@ -808,27 +851,22 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         if !self.delete_storage_first {
             let mut keys = Vec::new();
             let mut short_keys_to_load = Vec::new();
-            {
-                let cached_entries = self.cached_entries.get_mut().unwrap();
-                for short_key in &short_keys {
-                    if !self.updates.contains_key(short_key) {
-                        if let Some(view) = cached_entries.remove(short_key) {
-                            self.updates.insert(short_key.to_vec(), Update::Set(view));
-                        } else {
-                            let key = self
-                                .context
-                                .base_key()
-                                .base_tag_index(KeyTag::Subview as u8, short_key);
-                            let context = self.context.clone_with_base_key(key);
-                            keys.extend(W::pre_load(&context)?);
-                            short_keys_to_load.push(short_key.to_vec());
-                        }
-                    }
+
+            for short_key in &short_keys {
+                if !self.updates.contains_key(short_key) {
+                    let key = self
+                        .context
+                        .base_key()
+                        .base_tag_index(KeyTag::Subview as u8, short_key);
+                    let context = self.context.clone_with_base_key(key);
+                    keys.extend(W::pre_load(&context)?);
+                    short_keys_to_load.push(short_key.to_vec());
                 }
             }
-            let values = self.context.store().read_multi_values_bytes(keys).await?;
+
+            let values = self.context.store().read_multi_values_bytes(&keys).await?;
             for (loaded_values, short_key) in values
-                .chunks_exact(W::NUM_INIT_KEYS)
+                .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
                 .zip(short_keys_to_load)
             {
                 let key = self
@@ -1023,18 +1061,12 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
         let keys = self.keys().await?;
         let count = keys.len() as u32;
         hasher.update_with_bcs_bytes(&count)?;
-        let cached_entries = self.cached_entries.get_mut().unwrap();
         for key in keys {
             hasher.update_with_bytes(&key)?;
             let hash = if let Some(entry) = self.updates.get_mut(&key) {
                 let Update::Set(view) = entry else {
                     unreachable!();
                 };
-                let mut view = view
-                    .try_write_arc()
-                    .ok_or_else(|| ViewError::TryLockError(key))?;
-                view.hash_mut().await?
-            } else if let Some(view) = cached_entries.get_mut(&key) {
                 let mut view = view
                     .try_write_arc()
                     .ok_or_else(|| ViewError::TryLockError(key))?;
@@ -1060,24 +1092,12 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
         let keys = self.keys().await?;
         let count = keys.len() as u32;
         hasher.update_with_bcs_bytes(&count)?;
-        let mut cached_entries_result = Vec::new();
-        {
-            let cached_entries = self.cached_entries.lock().unwrap();
-            for key in &keys {
-                cached_entries_result.push(cached_entries.get(key).cloned());
-            }
-        }
-        for (key, cached_entry) in keys.into_iter().zip(cached_entries_result) {
+        for key in keys {
             hasher.update_with_bytes(&key)?;
             let hash = if let Some(entry) = self.updates.get(&key) {
                 let Update::Set(view) = entry else {
                     unreachable!();
                 };
-                let view = view
-                    .try_read_arc()
-                    .ok_or_else(|| ViewError::TryLockError(key))?;
-                view.hash().await?
-            } else if let Some(view) = cached_entry {
                 let view = view
                     .try_read_arc()
                     .ok_or_else(|| ViewError::TryLockError(key))?;
@@ -1099,9 +1119,11 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
 
 /// A view that supports accessing a collection of views of the same kind, indexed by keys,
 /// possibly several subviews at a time.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, I, W: Allocative")]
 pub struct ReentrantCollectionView<C, I, W> {
     collection: ReentrantByteCollectionView<C, W>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
 
@@ -1133,7 +1155,7 @@ where
 
     type Context = W::Context;
 
-    fn context(&self) -> &Self::Context {
+    fn context(&self) -> Self::Context {
         self.collection.context()
     }
 
@@ -1149,10 +1171,6 @@ where
         })
     }
 
-    async fn load(context: Self::Context) -> Result<Self, ViewError> {
-        Self::post_load(context, &[])
-    }
-
     fn rollback(&mut self) {
         self.collection.rollback()
     }
@@ -1161,8 +1179,12 @@ where
         self.collection.has_pending_changes().await
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        self.collection.flush(batch)
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.collection.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.collection.post_save()
     }
 
     fn clear(&mut self) {
@@ -1175,18 +1197,18 @@ where
     W: ClonableView,
     I: Send + Sync + Serialize + DeserializeOwned,
 {
-    fn clone_unchecked(&mut self) -> Self {
-        ReentrantCollectionView {
-            collection: self.collection.clone_unchecked(),
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(ReentrantCollectionView {
+            collection: self.collection.clone_unchecked()?,
             _phantom: PhantomData,
-        }
+        })
     }
 }
 
 impl<I, W> ReentrantCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    I: Sync + Send + Serialize + DeserializeOwned,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// is absent then a default entry is put on the collection. The obtained view can
@@ -1339,7 +1361,7 @@ where
 impl<I, W> ReentrantCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    I: Sync + Send + Serialize + DeserializeOwned,
 {
     /// Load multiple entries for writing at once.
     /// The entries in indices have to be all distinct.
@@ -1373,6 +1395,38 @@ where
             .map(|index| BaseKey::derive_short_key(index))
             .collect::<Result<_, _>>()?;
         self.collection.try_load_entries_mut(short_keys).await
+    }
+
+    /// Loads multiple entries for writing at once with their keys.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
+    ///     ReentrantCollectionView::load(context).await.unwrap();
+    /// let indices = [23, 42];
+    /// let subviews = view.try_load_entries_pairs_mut(indices).await.unwrap();
+    /// let value1 = subviews[0].1.get();
+    /// let value2 = subviews[1].1.get();
+    /// assert_eq!(*value1, String::default());
+    /// assert_eq!(*value2, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries_pairs_mut<Q>(
+        &mut self,
+        indices: impl IntoIterator<Item = Q>,
+    ) -> Result<Vec<(Q, WriteGuardedView<W>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + Clone,
+    {
+        let indices_vec: Vec<Q> = indices.into_iter().collect();
+        let values = self.try_load_entries_mut(indices_vec.iter()).await?;
+        Ok(indices_vec.into_iter().zip(values).collect())
     }
 
     /// Load multiple entries for reading at once.
@@ -1411,6 +1465,40 @@ where
         self.collection.try_load_entries(short_keys).await
     }
 
+    /// Loads multiple entries for reading at once with their keys.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
+    ///     ReentrantCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    /// }
+    /// let indices = [23, 42];
+    /// let subviews = view.try_load_entries_pairs(indices).await.unwrap();
+    /// assert!(subviews[1].1.is_none());
+    /// let value0 = subviews[0].1.as_ref().unwrap().get();
+    /// assert_eq!(*value0, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries_pairs<Q>(
+        &self,
+        indices: impl IntoIterator<Item = Q>,
+    ) -> Result<Vec<(Q, Option<ReadGuardedView<W>>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + Clone,
+    {
+        let indices_vec: Vec<Q> = indices.into_iter().collect();
+        let values = self.try_load_entries(indices_vec.iter()).await?;
+        Ok(indices_vec.into_iter().zip(values).collect())
+    }
+
     /// Loads all entries for writing at once.
     /// The entries in indices have to be all distinct.
     /// ```rust
@@ -1429,13 +1517,9 @@ where
     /// assert_eq!(subviews.len(), 1);
     /// # })
     /// ```
-    pub async fn try_load_all_entries_mut<'a, Q>(
-        &'a mut self,
-    ) -> Result<Vec<(I, WriteGuardedView<W>)>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + 'a,
-    {
+    pub async fn try_load_all_entries_mut(
+        &mut self,
+    ) -> Result<Vec<(I, WriteGuardedView<W>)>, ViewError> {
         let results = self.collection.try_load_all_entries_mut().await?;
         results
             .into_iter()
@@ -1464,13 +1548,7 @@ where
     /// assert_eq!(subviews.len(), 1);
     /// # })
     /// ```
-    pub async fn try_load_all_entries<'a, Q>(
-        &'a self,
-    ) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + 'a,
-    {
+    pub async fn try_load_all_entries(&self) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError> {
         let results = self.collection.try_load_all_entries().await?;
         results
             .into_iter()
@@ -1485,7 +1563,7 @@ where
 impl<I, W> ReentrantCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    I: Sync + Send + Serialize + DeserializeOwned,
 {
     /// Returns the list of indices in the collection in an order determined
     /// by serialization.
@@ -1625,9 +1703,11 @@ where
 
 /// A view that supports accessing a collection of views of the same kind, indexed by an ordered key,
 /// possibly several subviews at a time.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, I, W: Allocative")]
 pub struct ReentrantCustomCollectionView<C, I, W> {
     collection: ReentrantByteCollectionView<C, W>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
 
@@ -1640,7 +1720,7 @@ where
 
     type Context = W::Context;
 
-    fn context(&self) -> &Self::Context {
+    fn context(&self) -> Self::Context {
         self.collection.context()
     }
 
@@ -1656,10 +1736,6 @@ where
         })
     }
 
-    async fn load(context: Self::Context) -> Result<Self, ViewError> {
-        Self::post_load(context, &[])
-    }
-
     fn rollback(&mut self) {
         self.collection.rollback()
     }
@@ -1668,8 +1744,12 @@ where
         self.collection.has_pending_changes().await
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        self.collection.flush(batch)
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.collection.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.collection.post_save()
     }
 
     fn clear(&mut self) {
@@ -1682,18 +1762,18 @@ where
     W: ClonableView,
     Self: View,
 {
-    fn clone_unchecked(&mut self) -> Self {
-        ReentrantCustomCollectionView {
-            collection: self.collection.clone_unchecked(),
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(ReentrantCustomCollectionView {
+            collection: self.collection.clone_unchecked()?,
             _phantom: PhantomData,
-        }
+        })
     }
 }
 
 impl<I, W> ReentrantCustomCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + CustomSerialize,
+    I: Sync + Send + CustomSerialize,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// is absent then a default entry is put in the collection on this index.
@@ -1846,7 +1926,7 @@ where
 
 impl<I, W: View> ReentrantCustomCollectionView<W::Context, I, W>
 where
-    I: Sync + Clone + Send + CustomSerialize,
+    I: Sync + Send + CustomSerialize,
 {
     /// Load multiple entries for writing at once.
     /// The entries in indices have to be all distinct.
@@ -1859,27 +1939,58 @@ where
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
-    /// let indices = vec![23, 42];
-    /// let subviews = view.try_load_entries_mut(indices).await.unwrap();
+    /// let subviews = view.try_load_entries_mut(&[23, 42]).await.unwrap();
     /// let value1 = subviews[0].get();
     /// let value2 = subviews[1].get();
     /// assert_eq!(*value1, String::default());
     /// assert_eq!(*value2, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entries_mut<Q>(
+    pub async fn try_load_entries_mut<'a, Q>(
         &mut self,
-        indices: impl IntoIterator<Item = Q>,
+        indices: impl IntoIterator<Item = &'a Q>,
     ) -> Result<Vec<WriteGuardedView<W>>, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize,
+        Q: CustomSerialize + 'a,
     {
         let short_keys = indices
             .into_iter()
             .map(|index| index.to_custom_bytes())
             .collect::<Result<_, _>>()?;
         self.collection.try_load_entries_mut(short_keys).await
+    }
+
+    /// Loads multiple entries for writing at once with their keys.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
+    ///     ReentrantCustomCollectionView::load(context).await.unwrap();
+    /// let indices = [23, 42];
+    /// let subviews = view.try_load_entries_pairs_mut(indices).await.unwrap();
+    /// let value1 = subviews[0].1.get();
+    /// let value2 = subviews[1].1.get();
+    /// assert_eq!(*value1, String::default());
+    /// assert_eq!(*value2, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries_pairs_mut<Q>(
+        &mut self,
+        indices: impl IntoIterator<Item = Q>,
+    ) -> Result<Vec<(Q, WriteGuardedView<W>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + Clone,
+    {
+        let indices_vec: Vec<Q> = indices.into_iter().collect();
+        let values = self.try_load_entries_mut(indices_vec.iter()).await?;
+        Ok(indices_vec.into_iter().zip(values).collect())
     }
 
     /// Load multiple entries for reading at once.
@@ -1896,26 +2007,59 @@ where
     /// {
     ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
     /// }
-    /// let indices = vec![23, 42];
-    /// let subviews = view.try_load_entries(indices).await.unwrap();
+    /// let subviews = view.try_load_entries(&[23, 42]).await.unwrap();
     /// assert!(subviews[1].is_none());
     /// let value0 = subviews[0].as_ref().unwrap().get();
     /// assert_eq!(*value0, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entries<Q>(
+    pub async fn try_load_entries<'a, Q>(
         &self,
-        indices: impl IntoIterator<Item = Q>,
+        indices: impl IntoIterator<Item = &'a Q>,
     ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize,
+        Q: CustomSerialize + 'a,
     {
         let short_keys = indices
             .into_iter()
             .map(|index| index.to_custom_bytes())
             .collect::<Result<_, _>>()?;
         self.collection.try_load_entries(short_keys).await
+    }
+
+    /// Loads multiple entries for reading at once with their keys.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
+    ///     ReentrantCustomCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
+    /// }
+    /// let indices = [23, 42];
+    /// let subviews = view.try_load_entries_pairs(indices).await.unwrap();
+    /// assert!(subviews[1].1.is_none());
+    /// let value0 = subviews[0].1.as_ref().unwrap().get();
+    /// assert_eq!(*value0, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries_pairs<Q>(
+        &self,
+        indices: impl IntoIterator<Item = Q>,
+    ) -> Result<Vec<(Q, Option<ReadGuardedView<W>>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + Clone,
+    {
+        let indices_vec: Vec<Q> = indices.into_iter().collect();
+        let values = self.try_load_entries(indices_vec.iter()).await?;
+        Ok(indices_vec.into_iter().zip(values).collect())
     }
 
     /// Loads all entries for writing at once.
@@ -1936,13 +2080,9 @@ where
     /// assert_eq!(subviews.len(), 1);
     /// # })
     /// ```
-    pub async fn try_load_all_entries_mut<Q>(
+    pub async fn try_load_all_entries_mut(
         &mut self,
-    ) -> Result<Vec<(I, WriteGuardedView<W>)>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: CustomSerialize,
-    {
+    ) -> Result<Vec<(I, WriteGuardedView<W>)>, ViewError> {
         let results = self.collection.try_load_all_entries_mut().await?;
         results
             .into_iter()
@@ -1971,11 +2111,7 @@ where
     /// assert_eq!(subviews.len(), 1);
     /// # })
     /// ```
-    pub async fn try_load_all_entries<Q>(&self) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: CustomSerialize,
-    {
+    pub async fn try_load_all_entries(&self) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError> {
         let results = self.collection.try_load_all_entries().await?;
         results
             .into_iter()
@@ -1990,7 +2126,7 @@ where
 impl<I, W> ReentrantCustomCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + CustomSerialize,
+    I: Sync + Send + CustomSerialize,
 {
     /// Returns the list of indices in the collection. The order is determined by
     /// the custom serialization.
@@ -2142,13 +2278,25 @@ pub type HashedReentrantCollectionView<C, I, W> =
 pub type HashedReentrantCustomCollectionView<C, I, W> =
     WrappedHashableContainerView<C, ReentrantCustomCollectionView<C, I, W>, HasherOutput>;
 
+/// Wrapper around `ReentrantByteCollectionView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedReentrantByteCollectionView<C, W> =
+    HistoricallyHashableView<C, ReentrantByteCollectionView<C, W>>;
+
+/// Wrapper around `ReentrantCollectionView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedReentrantCollectionView<C, I, W> =
+    HistoricallyHashableView<C, ReentrantCollectionView<C, I, W>>;
+
+/// Wrapper around `ReentrantCustomCollectionView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedReentrantCustomCollectionView<C, I, W> =
+    HistoricallyHashableView<C, ReentrantCustomCollectionView<C, I, W>>;
+
 #[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 
     use super::{ReadGuardedView, ReentrantCollectionView};
     use crate::{
-        graphql::{hash_name, mangle, missing_key_error, Entry, MapFilters, MapInput},
+        graphql::{hash_name, mangle, missing_key_error, Entry, MapInput},
         views::View,
     };
 
@@ -2191,14 +2339,16 @@ mod graphql {
             + async_graphql::OutputType
             + serde::ser::Serialize
             + serde::de::DeserializeOwned
-            + std::fmt::Debug
-            + Clone,
+            + std::fmt::Debug,
         V: View + async_graphql::OutputType,
-        MapInput<K>: async_graphql::InputType,
-        MapFilters<K>: async_graphql::InputType,
     {
         async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
             Ok(self.indices().await?)
+        }
+
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count().await? as u32)
         }
 
         async fn entry(
@@ -2225,16 +2375,12 @@ mod graphql {
                 self.indices().await?
             };
 
-            let mut values = vec![];
-            for key in keys {
-                let value = self
-                    .try_load_entry(&key)
-                    .await?
-                    .ok_or_else(|| missing_key_error(&key))?;
-                values.push(Entry { value, key })
-            }
-
-            Ok(values)
+            let values = self.try_load_entries(&keys).await?;
+            Ok(values
+                .into_iter()
+                .zip(keys)
+                .filter_map(|(value, key)| value.map(|value| Entry { value, key }))
+                .collect())
         }
     }
 
@@ -2259,11 +2405,8 @@ mod graphql {
         K: async_graphql::InputType
             + async_graphql::OutputType
             + crate::common::CustomSerialize
-            + std::fmt::Debug
-            + Clone,
+            + std::fmt::Debug,
         V: View + async_graphql::OutputType,
-        MapInput<K>: async_graphql::InputType,
-        MapFilters<K>: async_graphql::InputType,
     {
         async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
             Ok(self.indices().await?)
@@ -2293,16 +2436,12 @@ mod graphql {
                 self.indices().await?
             };
 
-            let mut values = vec![];
-            for key in keys {
-                let value = self
-                    .try_load_entry(&key)
-                    .await?
-                    .ok_or_else(|| missing_key_error(&key))?;
-                values.push(Entry { value, key })
-            }
-
-            Ok(values)
+            let values = self.try_load_entries(&keys).await?;
+            Ok(values
+                .into_iter()
+                .zip(keys)
+                .filter_map(|(value, key)| value.map(|value| Entry { value, key }))
+                .collect())
         }
     }
 }

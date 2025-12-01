@@ -79,10 +79,10 @@ where
             {
                 self.current_committee_destinations
                     .insert(destination.clone());
-                tracing::trace!(id=?destination, "starting committee exporter");
+                tracing::info!(id=?destination, "starting committee exporter");
                 self.spawn(destination);
             } else {
-                tracing::trace!(id=?destination, "skipping already running committee exporter");
+                tracing::info!(id=?destination, "skipping already running committee exporter");
             }
         }
     }
@@ -94,7 +94,7 @@ where
             .current_committee_destinations
             .difference(&new_committee.iter().cloned().collect())
         {
-            tracing::trace!(id=?id, "shutting down old committee member");
+            tracing::info!(id=?id, "shutting down old committee member");
             if let Some(abort_handle) = self.join_handles.remove(id) {
                 abort_handle.abort();
             }
@@ -112,7 +112,8 @@ where
 
     fn spawn(&mut self, id: DestinationId) {
         let exporter_builder = &self.exporters_builder;
-        let join_handle = exporter_builder.spawn(id.clone(), self.storage.clone());
+        let storage = self.storage.clone().expect("Failed to clone storage");
+        let join_handle = exporter_builder.spawn(id.clone(), storage);
         self.join_handles.insert(id, join_handle);
     }
 }

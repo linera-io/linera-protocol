@@ -116,10 +116,17 @@ impl Runnable for ExporterContext {
         );
 
         let service = ExporterService::new(sender);
-        service
-            .run(shutdown_notifier, self.config.service_config.port)
-            .await?;
-        handle.join().unwrap()
+
+        let mut block_processor_task = tokio::task::spawn_blocking(move || handle.join().unwrap());
+        tokio::select! {
+            result = service.run(shutdown_notifier, self.config.service_config.port) => {
+                result?;
+                block_processor_task.await.expect("block processor task panicked")
+            }
+            result = &mut block_processor_task => {
+                result.expect("block processor task panicked")
+            }
+        }
     }
 }
 
@@ -133,7 +140,7 @@ impl ExporterContext {
 }
 
 fn main() -> Result<()> {
-    linera_base::tracing::init("linera-exporter");
+    linera_service::tracing::init("linera-exporter");
     let options = <ExporterOptions as clap::Parser>::parse();
     options.run()
 }

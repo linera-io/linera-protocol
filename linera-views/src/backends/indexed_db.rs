@@ -119,6 +119,12 @@ impl ReadableKeyValueStore for IndexedDbStore {
         self.max_stream_queries
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, IndexedDbStoreError> {
+        assert!(self.start_key.starts_with(&ROOT_KEY_DOMAIN));
+        let root_key = bcs::from_bytes(&self.start_key[ROOT_KEY_DOMAIN.len()..])?;
+        Ok(root_key)
+    }
+
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, IndexedDbStoreError> {
         let key = self.full_key(key);
         let key = js_sys::Uint8Array::from(key.as_slice());
@@ -134,21 +140,21 @@ impl ReadableKeyValueStore for IndexedDbStore {
         Ok(count == 1)
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, IndexedDbStoreError> {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, IndexedDbStoreError> {
         future::try_join_all(
-            keys.into_iter()
-                .map(|key| async move { self.contains_key(&key).await }),
+            keys.iter()
+                .map(|key| async move { self.contains_key(key).await }),
         )
         .await
     }
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, IndexedDbStoreError> {
         future::try_join_all(
-            keys.into_iter()
-                .map(|key| async move { self.read_value_bytes(&key).await }),
+            keys.iter()
+                .map(|key| async move { self.read_value_bytes(key).await }),
         )
         .await
     }
@@ -285,7 +291,7 @@ impl KeyValueDatabase for IndexedDbDatabase {
 
     fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, IndexedDbStoreError> {
         let mut start_key = ROOT_KEY_DOMAIN.to_vec();
-        start_key.extend(root_key);
+        start_key.extend(bcs::to_bytes(&root_key)?);
         Ok(self.open_internal(start_key))
     }
 
@@ -301,13 +307,9 @@ impl KeyValueDatabase for IndexedDbDatabase {
             .collect())
     }
 
-    async fn list_root_keys(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, IndexedDbStoreError> {
-        let database = Self::connect(config, namespace).await?;
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, IndexedDbStoreError> {
         let start_key = STORED_ROOT_KEYS_PREFIX.to_vec();
-        let store = database.open_internal(start_key);
+        let store = self.open_internal(start_key);
         store.find_keys_by_prefix(&[]).await
     }
 

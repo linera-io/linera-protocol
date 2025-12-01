@@ -237,7 +237,7 @@ BlockHeader:
     - previous_block_hash:
         OPTION:
           TYPENAME: CryptoHash
-    - authenticated_signer:
+    - authenticated_owner:
         OPTION:
           TYPENAME: AccountOwner
 BlockHeight:
@@ -435,6 +435,9 @@ ChainOwnership:
           KEY:
             TYPENAME: AccountOwner
           VALUE: U64
+    - first_leader:
+        OPTION:
+          TYPENAME: AccountOwner
     - multi_leader_rounds: U32
     - open_multi_leader_rounds: BOOL
     - timeout_config:
@@ -873,7 +876,7 @@ OutgoingMessage:
   STRUCT:
     - destination:
         TYPENAME: ChainId
-    - authenticated_signer:
+    - authenticated_owner:
         OPTION:
           TYPENAME: AccountOwner
     - grant:
@@ -887,7 +890,7 @@ OutgoingMessage:
         TYPENAME: Message
 PostedMessage:
   STRUCT:
-    - authenticated_signer:
+    - authenticated_owner:
         OPTION:
           TYPENAME: AccountOwner
     - grant:
@@ -922,7 +925,7 @@ ProposedBlock:
         TYPENAME: BlockHeight
     - timestamp:
         TYPENAME: Timestamp
-    - authenticated_signer:
+    - authenticated_owner:
         OPTION:
           TYPENAME: AccountOwner
     - previous_block_hash:
@@ -1142,6 +1145,14 @@ RpcMessage:
       BlobLastUsedByCertificateResponse:
         NEWTYPE:
           TYPENAME: ConfirmedBlockCertificate
+    33:
+      ShardInfoQuery:
+        NEWTYPE:
+          TYPENAME: ChainId
+    34:
+      ShardInfoResponse:
+        NEWTYPE:
+          TYPENAME: ShardInfo
 Secp256k1PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -1152,6 +1163,10 @@ Secp256k1Signature:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
+ShardInfo:
+  STRUCT:
+    - shard_id: U64
+    - total_shards: U64
 StreamId:
   STRUCT:
     - application_id:
@@ -1219,6 +1234,9 @@ SystemOperation:
                 TUPLE:
                   - TYPENAME: AccountOwner
                   - U64
+          - first_leader:
+              OPTION:
+                TYPENAME: AccountOwner
           - multi_leader_rounds: U32
           - open_multi_leader_rounds: BOOL
           - timeout_config:

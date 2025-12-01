@@ -44,6 +44,14 @@ impl From<SimpleClient> for Client {
 impl ValidatorNode for Client {
     type NotificationStream = NotificationStream;
 
+    fn address(&self) -> String {
+        match self {
+            Client::Grpc(grpc_client) => grpc_client.address().to_string(),
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.address(),
+        }
+    }
+
     async fn handle_block_proposal(
         &self,
         proposal: BlockProposal,
@@ -296,6 +304,18 @@ impl ValidatorNode for Client {
 
             #[cfg(with_simple_network)]
             Client::Simple(simple_client) => simple_client.missing_blob_ids(blob_ids).await?,
+        })
+    }
+
+    async fn get_shard_info(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<linera_core::data_types::ShardInfo, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.get_shard_info(chain_id).await?,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.get_shard_info(chain_id).await?,
         })
     }
 }

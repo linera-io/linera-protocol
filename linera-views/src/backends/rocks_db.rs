@@ -431,6 +431,12 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         self.max_stream_queries
     }
 
+    fn root_key(&self) -> Result<Vec<u8>, RocksDbStoreInternalError> {
+        assert!(self.executor.start_key.starts_with(&ROOT_KEY_DOMAIN));
+        let root_key = bcs::from_bytes(&self.executor.start_key[ROOT_KEY_DOMAIN.len()..])?;
+        Ok(root_key)
+    }
+
     async fn read_value_bytes(
         &self,
         key: &[u8],
@@ -464,21 +470,24 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
 
     async fn contains_keys(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<bool>, RocksDbStoreInternalError> {
         let executor = self.executor.clone();
         self.spawn_mode
-            .spawn(move |x| executor.contains_keys_internal(x), keys)
+            .spawn(move |x| executor.contains_keys_internal(x), keys.to_vec())
             .await
     }
 
     async fn read_multi_values_bytes(
         &self,
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreInternalError> {
         let executor = self.executor.clone();
         self.spawn_mode
-            .spawn(move |x| executor.read_multi_values_bytes_internal(x), keys)
+            .spawn(
+                move |x| executor.read_multi_values_bytes_internal(x),
+                keys.to_vec(),
+            )
             .await
     }
 
@@ -547,7 +556,7 @@ impl KeyValueDatabase for RocksDbDatabaseInternal {
 
     fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, RocksDbStoreInternalError> {
         let mut start_key = ROOT_KEY_DOMAIN.to_vec();
-        start_key.extend(root_key);
+        start_key.extend(bcs::to_bytes(root_key)?);
         let mut executor = self.executor.clone();
         executor.start_key = start_key;
         Ok(RocksDbStoreInternal {
@@ -582,13 +591,16 @@ impl KeyValueDatabase for RocksDbDatabaseInternal {
         Ok(namespaces)
     }
 
-    async fn list_root_keys(
-        config: &Self::Config,
-        namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
-        let start_key = vec![STORED_ROOT_KEYS_PREFIX];
-        let store = RocksDbStoreInternal::build(config, namespace, start_key)?;
-        store.find_keys_by_prefix(&[]).await
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
+        let mut store = self.open_shared(&[])?;
+        store.executor.start_key = vec![STORED_ROOT_KEYS_PREFIX];
+        let bcs_root_keys = store.find_keys_by_prefix(&[]).await?;
+        let mut root_keys = Vec::new();
+        for bcs_root_key in bcs_root_keys {
+            let root_key = bcs::from_bytes::<Vec<u8>>(&bcs_root_key)?;
+            root_keys.push(root_key);
+        }
+        Ok(root_keys)
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), RocksDbStoreInternalError> {
