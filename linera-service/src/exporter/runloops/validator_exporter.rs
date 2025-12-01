@@ -118,17 +118,7 @@ where
                 .with_label_values(&[self.node.address()])
                 .set(receiver.len() as i64);
             match self.dispatch_block((*block).clone()).await {
-                Ok(_) => {
-                    if let Err(error) = self.upload_blobs(blobs_ids).await {
-                        tracing::error!(
-                            %error,
-                            block=?block.hash(),
-                            chain_id=?block.inner().chain_id(),
-                            "error when uploading blobs after dispatching block"
-                        );
-                        // We ignore the error and continue to the next block.
-                    }
-                }
+                Ok(_) => {}
 
                 Err(NodeError::BlobsNotFound(blobs_to_maybe_send)) => {
                     let blobs = blobs_ids
