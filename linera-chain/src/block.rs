@@ -588,6 +588,7 @@ impl Block {
     }
 
     /// Returns whether the outcomes of the block's execution match the passed values.
+    #[cfg(with_testing)]
     #[expect(clippy::too_many_arguments)]
     pub fn outcome_matches(
         &self,
