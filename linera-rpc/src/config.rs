@@ -59,9 +59,17 @@ impl CrossChainConfig {
 
 #[derive(Clone, Debug, Parser)]
 pub struct NotificationConfig {
-    /// Number of notifications allowed before blocking the main server loop
+    /// Size of the broadcast channel buffer for notifications
     #[arg(long = "notification-queue-size", default_value = "1000")]
-    pub(crate) notification_queue_size: usize,
+    pub notification_queue_size: usize,
+
+    /// Maximum number of notifications per batch sent to proxy
+    #[arg(long = "notification-batch-size", default_value = "100")]
+    pub notification_batch_size: usize,
+
+    /// Maximum number of concurrent batch send tasks per proxy
+    #[arg(long = "notification-max-in-flight", default_value = "8")]
+    pub notification_max_in_flight: usize,
 }
 
 pub type ShardId = usize;
