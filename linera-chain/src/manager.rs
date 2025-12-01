@@ -665,22 +665,15 @@ where
     /// Returns the leader who is allowed to propose a block in the given round, or `None` if every
     /// owner is allowed to propose. Exception: In `Round::Fast`, only super owners can propose.
     fn round_leader(&self, round: Round) -> Option<&AccountOwner> {
-        match round {
-            Round::SingleLeader(r) => {
-                let index =
-                    round_leader_index(r, *self.seed.get(), self.distribution.get().as_ref())?;
-                self.ownership.get().owners.keys().nth(index)
-            }
-            Round::Validator(r) => {
-                let index = round_leader_index(
-                    r,
-                    *self.seed.get(),
-                    self.fallback_distribution.get().as_ref(),
-                )?;
-                self.fallback_owners.get().keys().nth(index)
-            }
-            Round::Fast | Round::MultiLeader(_) => None,
-        }
+        let ownership = self.ownership.get();
+        compute_round_leader(
+            round,
+            *self.seed.get(),
+            &ownership.owners,
+            self.distribution.get().as_ref(),
+            self.fallback_owners.get(),
+            self.fallback_distribution.get().as_ref(),
+        )
     }
 
     /// Returns whether the owner is a super owner.
@@ -872,8 +865,10 @@ impl ChainManagerInfo {
     }
 
     /// Returns whether the `identity` is allowed to propose a block in `round`.
-    /// This is dependent on the type of round and whether `identity` is a validator or (super)owner.
-    pub fn can_propose(
+    ///
+    /// **Exception:** In single-leader rounds, a **super owner** should only propose
+    /// if they are the designated **leader** for that round.
+    pub fn should_propose(
         &self,
         identity: &AccountOwner,
         round: Round,
@@ -883,25 +878,18 @@ impl ChainManagerInfo {
         match round {
             Round::Fast => self.ownership.super_owners.contains(identity),
             Round::MultiLeader(_) => true,
-            Round::SingleLeader(r) => {
-                if let Some(distribution) = calculate_distribution(self.ownership.owners.iter()) {
-                    let leader_index = round_leader_index(r, seed, Some(&distribution))
-                        .expect("cannot fail if distribution is set");
-                    self.ownership.owners.keys().nth(leader_index) == Some(identity)
-                } else {
-                    tracing::warn!("no owners in chain ownership");
-                    false
-                }
-            }
-            Round::Validator(r) => {
-                if let Some(distribution) = calculate_distribution(current_committee.iter()) {
-                    let leader_index = round_leader_index(r, seed, Some(&distribution))
-                        .expect("cannot fail if distribution is set");
-                    current_committee.keys().nth(leader_index) == Some(identity)
-                } else {
-                    tracing::warn!("no owners in current committee");
-                    false
-                }
+            Round::SingleLeader(_) | Round::Validator(_) => {
+                let distribution = calculate_distribution(self.ownership.owners.iter());
+                let fallback_distribution = calculate_distribution(current_committee.iter());
+                let leader = compute_round_leader(
+                    round,
+                    seed,
+                    &self.ownership.owners,
+                    distribution.as_ref(),
+                    current_committee,
+                    fallback_distribution.as_ref(),
+                );
+                leader == Some(identity)
             }
         }
     }
@@ -930,6 +918,29 @@ fn calculate_distribution<'a, T: 'a>(
         None
     } else {
         Some(WeightedAliasIndex::new(weights).ok()?)
+    }
+}
+
+/// Returns the designated leader for single-leader or validator rounds.
+/// Returns `None` for fast or multi-leader rounds.
+fn compute_round_leader<'a>(
+    round: Round,
+    seed: u64,
+    owners: &'a BTreeMap<AccountOwner, u64>,
+    distribution: Option<&WeightedAliasIndex<u64>>,
+    fallback_owners: &'a BTreeMap<AccountOwner, u64>,
+    fallback_distribution: Option<&WeightedAliasIndex<u64>>,
+) -> Option<&'a AccountOwner> {
+    match round {
+        Round::SingleLeader(r) => {
+            let index = round_leader_index(r, seed, distribution)?;
+            owners.keys().nth(index)
+        }
+        Round::Validator(r) => {
+            let index = round_leader_index(r, seed, fallback_distribution)?;
+            fallback_owners.keys().nth(index)
+        }
+        Round::Fast | Round::MultiLeader(_) => None,
     }
 }
 
