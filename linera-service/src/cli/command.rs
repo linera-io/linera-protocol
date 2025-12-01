@@ -20,7 +20,7 @@ use linera_client::{
 };
 use linera_rpc::config::CrossChainConfig;
 
-use crate::cli::validator;
+use crate::{cli::validator, task_processor::parse_operator};
 
 const DEFAULT_TOKENS_PER_CHAIN: Amount = Amount::from_millis(100);
 const DEFAULT_TRANSACTIONS_PER_BLOCK: usize = 1;
@@ -723,6 +723,17 @@ pub enum ClientCommand {
         #[cfg(with_metrics)]
         #[arg(long)]
         metrics_port: NonZeroU16,
+
+        /// Application IDs of operator applications to watch.
+        /// When specified, a task processor is started alongside the node service.
+        #[arg(long = "operator-application-ids")]
+        operator_application_ids: Vec<ApplicationId>,
+
+        /// Supported operators and their binary paths.
+        /// Format: `name=path` or just `name` (uses name as path).
+        /// Example: `--operators my-operator=/path/to/binary`
+        #[arg(long = "operators", value_parser = parse_operator)]
+        operators: Vec<(String, PathBuf)>,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.

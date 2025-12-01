@@ -71,6 +71,7 @@ use linera_service::{
     node_service::NodeService,
     project::{self, Project},
     storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig},
+    task_processor::TaskProcessor,
     util, wallet,
 };
 use linera_storage::{DbStorage, Storage};
@@ -1112,20 +1113,42 @@ impl Runnable for Job {
                 port,
                 #[cfg(with_metrics)]
                 metrics_port,
+                operator_application_ids,
+                operators,
             } => {
                 let context = options.create_client_context(storage, wallet, signer.into_value());
 
                 let default_chain = context.wallet().default_chain();
+                let chain_id =
+                    default_chain.expect("Service requires a default chain in the wallet");
+
+                let cancellation_token = CancellationToken::new();
+                tokio::spawn(listen_for_shutdown_signals(cancellation_token.clone()));
+
+                // Start the task processor if operator applications are specified.
+                if !operator_application_ids.is_empty() {
+                    let operators = Arc::new(operators.into_iter().collect());
+                    info!("Supported operators: {:?}", operators);
+
+                    let chain_client = context.make_chain_client(chain_id);
+                    let processor = TaskProcessor::new(
+                        chain_id,
+                        operator_application_ids,
+                        chain_client,
+                        cancellation_token.clone(),
+                        operators,
+                    );
+                    tokio::spawn(processor.run());
+                }
+
                 let service = NodeService::new(
                     config,
                     port,
                     #[cfg(with_metrics)]
                     metrics_port,
-                    default_chain,
+                    Some(chain_id),
                     context,
                 );
-                let cancellation_token = CancellationToken::new();
-                tokio::spawn(listen_for_shutdown_signals(cancellation_token.clone()));
                 service.run(cancellation_token).await?;
             }
 
