@@ -23,14 +23,13 @@ ARG build_date
 ARG target=x86_64-unknown-linux-gnu
 ARG binaries=
 ARG copy=${binaries:+_copy}
-ARG build_flag=--release
-ARG build_folder=release
-ARG build_features=scylladb,metrics,memory-profiling
+# ARG build_flag=--release
+ARG build_folder=debug
+ARG build_features=scylladb,metrics
 ARG rustflags="-C force-frame-pointers=yes"
 
-FROM rust:1.74-slim-bookworm AS builder
+FROM rust:1.86-slim-bookworm AS builder
 ARG git_commit
-ARG target
 ARG build_flag
 ARG build_folder
 ARG build_features
@@ -39,8 +38,7 @@ ARG rustflags
 RUN apt-get update && apt-get install -y \
     pkg-config \
     protobuf-compiler \
-    clang \
-    make
+    clang
 
 COPY examples examples
 COPY linera-base linera-base
@@ -48,8 +46,8 @@ COPY linera-chain linera-chain
 COPY linera-client linera-client
 COPY linera-core linera-core
 COPY linera-ethereum linera-ethereum
-COPY linera-execution linera-execution
 COPY linera-explorer linera-explorer
+COPY linera-execution linera-execution
 COPY linera-faucet linera-faucet
 COPY linera-indexer linera-indexer
 COPY linera-metrics linera-metrics
@@ -65,38 +63,33 @@ COPY linera-persistent linera-persistent
 COPY linera-version linera-version
 COPY linera-views linera-views
 COPY linera-views-derive linera-views-derive
+COPY web web
 COPY linera-witty linera-witty
 COPY linera-witty-macros linera-witty-macros
 COPY scripts scripts
-COPY web web
 COPY rust-toolchain* Cargo.* ./
 
 ENV GIT_COMMIT=${git_commit}
 ENV RUSTFLAGS=${rustflags}
 
-RUN cargo build ${build_flag:+"$build_flag"} --target "$target" --bin linera-proxy --features $build_features
-RUN cargo build ${build_flag:+"$build_flag"} --target "$target" --bin linera-server --features $build_features
-RUN cargo build ${build_flag:+"$build_flag"} --target "$target" --bin linera --features $build_features
 
-RUN mv \
-    target/"$target"/"$build_folder"/linera \
-    target/"$target"/"$build_folder"/linera-proxy \
-    target/"$target"/"$build_folder"/linera-server \
-    ./
+# Build linera CLI, storage server, server, proxy, and block exporter with scylladb and metrics features
+RUN cargo build ${build_flag:+"$build_flag"} \
+    --bin linera-storage-server \
+    --features $build_features
+
+# Move binaries to avoid directory conflicts and clean up to save space
+RUN mv target/"$build_folder"/linera-storage-server ./
 
 # Optionally copy binaries instead of using the build images above
 FROM scratch AS builder_copy
 ARG binaries
-COPY \
-    "$binaries"/linera \
-    "$binaries"/linera-server \
-    "$binaries"/linera-proxy \
-    ./
+COPY "$binaries"/linera-storage-server ./
 
 FROM builder$copy AS binaries
 
 # Setup running environment for container
-FROM debian:latest
+FROM debian:bookworm-slim
 
 ARG git_commit
 LABEL git_commit=$git_commit
@@ -104,15 +97,15 @@ LABEL git_commit=$git_commit
 ARG build_date
 LABEL build_date=$build_date
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install --no-install-recommends -y \
     ca-certificates \
-    openssl
-RUN update-ca-certificates
+    openssl \
+    pkg-config \
+    netcat-openbsd \
+    sqlite3
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ARG target
 
-COPY --from=binaries \
-    linera \
-    linera-server \
-    linera-proxy \
-    ./
+# Copy linera CLI, storage server, server, proxy, indexer and exporter binaries
+COPY --from=binaries linera-storage-server ./
