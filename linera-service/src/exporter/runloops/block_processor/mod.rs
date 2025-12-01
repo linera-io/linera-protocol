@@ -148,7 +148,11 @@ where
 
                         Err(ExporterError::ReadCertificateError(hash)) => {
                             if self.known_missing_certs.contains(&hash) {
-                                tracing::debug!(?hash, "certificate known to be missing, skipping retry");
+                                tracing::debug!(
+                                    block_id=?next_block_notification,
+                                    missing_cert=?hash,
+                                    "certificate known to be missing, skipping retry of this notification"
+                                );
                                 continue;
                             }
                             match self.retried_certs.remove(&hash) {
