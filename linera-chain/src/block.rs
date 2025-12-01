@@ -591,21 +591,31 @@ impl Block {
     #[expect(clippy::too_many_arguments)]
     pub fn outcome_matches(
         &self,
-        messages: Vec<Vec<OutgoingMessage>>,
-        previous_message_blocks: BTreeMap<ChainId, (CryptoHash, BlockHeight)>,
-        previous_event_blocks: BTreeMap<StreamId, (CryptoHash, BlockHeight)>,
-        oracle_responses: Vec<Vec<OracleResponse>>,
-        events: Vec<Vec<Event>>,
-        blobs: Vec<Vec<Blob>>,
-        operation_results: Vec<OperationResult>,
+        expected_messages: Vec<Vec<OutgoingMessage>>,
+        expected_previous_message_blocks: BTreeMap<ChainId, (CryptoHash, BlockHeight)>,
+        expected_previous_event_blocks: BTreeMap<StreamId, (CryptoHash, BlockHeight)>,
+        expected_oracle_responses: Vec<Vec<OracleResponse>>,
+        expected_events: Vec<Vec<Event>>,
+        expected_blobs: Vec<Vec<Blob>>,
+        expected_operation_results: Vec<OperationResult>,
     ) -> bool {
-        self.body.messages == messages
-            && self.body.previous_message_blocks == previous_message_blocks
-            && self.body.previous_event_blocks == previous_event_blocks
-            && self.body.oracle_responses == oracle_responses
-            && self.body.events == events
-            && self.body.blobs == blobs
-            && self.body.operation_results == operation_results
+        let BlockBody {
+            transactions: _,
+            messages,
+            previous_message_blocks,
+            previous_event_blocks,
+            oracle_responses,
+            events,
+            blobs,
+            operation_results,
+        } = &self.body;
+        *messages == expected_messages
+            && *previous_message_blocks == expected_previous_message_blocks
+            && *previous_event_blocks == expected_previous_event_blocks
+            && *oracle_responses == expected_oracle_responses
+            && *events == expected_events
+            && *blobs == expected_blobs
+            && *operation_results == expected_operation_results
     }
 
     pub fn into_proposal(self) -> (ProposedBlock, BlockExecutionOutcome) {

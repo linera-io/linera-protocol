@@ -78,7 +78,13 @@ const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;
 
 struct TestEnvironment<S: Storage> {
     committee: Committee,
+    // The main worker used for assertions.
     worker: WorkerState<S>,
+    // This second worker is mostly used to create certificates that can then be handled by the
+    // main worker, but some tests depend on the worker handling proposals to be a validator, so
+    // they need to use this worker for everything.
+    // The certificates have to be created by a worker due to the difficulty of computing
+    // historical hashes for manually prepared certificates.
     executing_worker: WorkerState<S>,
     admin_keypair: AccountSecretKey,
     admin_description: ChainDescription,
@@ -373,9 +379,6 @@ where
     }
 
     /// Creates a certificate with a transfer.
-    ///
-    /// This does not work for blocks with ancestors that sent a message to the same recipient, unless
-    /// the `previous_confirmed_block` also did.
     #[expect(clippy::too_many_arguments)]
     async fn make_transfer_certificate_for_epoch(
         &mut self,
@@ -550,6 +553,8 @@ where
         }
     }
 
+    /// A method creating a `ConfirmedBlockCertificate` for a proposal by executing it on the
+    /// `executing_worker`.
     async fn execute_proposal(
         &mut self,
         proposal: ProposedBlock,
