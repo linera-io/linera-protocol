@@ -495,8 +495,7 @@ where
                 }
                 Err(error) => {
                     Self::log_request_outcome_and_latency(start, false, "handle_block_proposal");
-                    let nickname = self.state.nickname();
-                    warn!(nickname, %error, "Failed to handle block proposal");
+                    self.log_error(&error, "Failed to handle block proposal");
                     NodeError::from(error).try_into()?
                 }
             },
