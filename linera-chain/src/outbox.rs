@@ -84,7 +84,7 @@ where
     }
 
     /// Marks all messages as received up to the given height.
-    /// Returns true if a change was made.
+    /// Returns the heights that were newly marked as received.
     pub(crate) async fn mark_messages_as_received(
         &mut self,
         height: BlockHeight,
