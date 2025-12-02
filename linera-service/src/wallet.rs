@@ -196,7 +196,7 @@ impl Wallet {
 
         let mut chains = chain_ids
             .into_iter()
-            .map(|chain_id| ChainDetails::new(chain_id, &*self.0))
+            .map(|chain_id| ChainDetails::new(chain_id, &self.0))
             .collect::<Vec<_>>();
         // Print first the default, then the admin chain, then other root chains, and finally the
         // child chains.
@@ -227,9 +227,9 @@ impl Wallet {
     }
 
     pub fn forget_keys(&self, chain_id: ChainId) -> anyhow::Result<AccountOwner> {
-        Ok(self.mutate(chain_id, |chain| chain.owner.take())
+        self.mutate(chain_id, |chain| chain.owner.take())
            .ok_or(anyhow::anyhow!("nonexistent chain `{chain_id}`"))??
-           .ok_or(anyhow::anyhow!("keypair not found for chain `{chain_id}`"))?)
+           .ok_or(anyhow::anyhow!("keypair not found for chain `{chain_id}`"))
     }
 
     pub fn forget_chain(&self, chain_id: ChainId) -> anyhow::Result<wallet::Chain> {

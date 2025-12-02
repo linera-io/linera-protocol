@@ -32,7 +32,7 @@ impl<T: Send> Persist for Memory<T> {
         self.value
     }
 
-    fn persist(&mut self) -> impl std::future::Future<Output = Result<(), Error>> {
-        async { Ok(()) }
+    async fn persist(&mut self) -> Result<(), Error> {
+        Ok(())
     }
 }

@@ -60,7 +60,7 @@ impl From<&ChainDescription> for Chain {
 
 impl From<ChainDescription> for Chain {
     fn from(description: ChainDescription) -> Self {
-        description.into()
+        (&description).into()
     }
 }
 
