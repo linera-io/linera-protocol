@@ -8,7 +8,6 @@ edition = "2021"
 async-graphql.workspace = true
 linera-sdk.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 
 [dev-dependencies]
 linera-sdk = { workspace = true, features = ["test"] }
