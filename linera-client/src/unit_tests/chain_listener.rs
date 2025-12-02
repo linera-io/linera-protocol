@@ -63,7 +63,9 @@ impl chain_listener::ClientContext for ClientContext {
         timestamp: Timestamp,
         epoch: Epoch,
     ) -> Result<(), Error> {
-        let _ = self.wallet().try_insert(chain_id, wallet::Chain::new(owner, epoch, timestamp));
+        let _ = self
+            .wallet()
+            .try_insert(chain_id, wallet::Chain::new(owner, epoch, timestamp));
         Ok(())
     }
 
@@ -74,11 +76,14 @@ impl chain_listener::ClientContext for ClientContext {
         let info = client.chain_info().await?;
         let client_owner = client.preferred_owner();
         let pending_proposal = client.pending_proposal().clone();
-        self.wallet().insert(info.chain_id, wallet::Chain {
-            pending_proposal,
-            owner: client_owner,
-            ..info.as_ref().into()
-        });
+        self.wallet().insert(
+            info.chain_id,
+            wallet::Chain {
+                pending_proposal,
+                owner: client_owner,
+                ..info.as_ref().into()
+            },
+        );
         Ok(())
     }
 }

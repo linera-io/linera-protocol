@@ -181,7 +181,11 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client.query_validators(None).await?;
     client.query_validators(Some(chain_1)).await?;
     if let Some((service, notifications)) = &mut node_service_2 {
-        let admin_height = client.load_wallet()?.get(chain_1).unwrap().next_block_height;
+        let admin_height = client
+            .load_wallet()?
+            .get(chain_1)
+            .unwrap()
+            .next_block_height;
         let event_height = admin_height.try_sub_one()?;
         notifications.wait_for_events(event_height).await?;
         assert!(!service.process_inbox(&chain_2).await?.is_empty());
@@ -235,7 +239,10 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .await?;
 
     if let Some((service, notifications)) = &mut node_service_2 {
-        let height = client.load_wallet()?.get(chain_1).unwrap()
+        let height = client
+            .load_wallet()?
+            .get(chain_1)
+            .unwrap()
             .next_block_height
             .try_sub_one()?;
         notifications.wait_for_block(height).await?;

@@ -50,10 +50,7 @@ use {
 use crate::{
     client::{chain_client, Client},
     data_types::*,
-    environment::{
-        TestWallet,
-        TestSigner,
-    },
+    environment::{TestSigner, TestWallet},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
@@ -825,8 +822,7 @@ impl GenesisStorageBuilder {
     }
 }
 
-pub type ChainClient<S> =
-    crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>>>;
+pub type ChainClient<S> = crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>>>;
 
 impl<S: Storage + Clone + Send + Sync + 'static> ChainClient<S> {
     /// Reads the hashed certificate values in descending order from the given hash.

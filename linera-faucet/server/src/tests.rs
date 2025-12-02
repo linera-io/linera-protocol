@@ -11,10 +11,7 @@ use linera_base::{
     data_types::{Amount, Epoch, Timestamp},
     identifiers::{AccountOwner, ChainId},
 };
-use linera_client::{
-    chain_listener,
-    config::GenesisConfig,
-};
+use linera_client::{chain_listener, config::GenesisConfig};
 use linera_core::{
     client::ChainClient,
     environment,
@@ -57,7 +54,10 @@ impl chain_listener::ClientContext for ClientContext {
         None
     }
 
-    async fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<environment::Test>, linera_client::Error> {
+    async fn make_chain_client(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainClient<environment::Test>, linera_client::Error> {
         assert_eq!(chain_id, self.client.chain_id());
         Ok(self.client.clone())
     }

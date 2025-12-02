@@ -26,7 +26,12 @@ pub trait Environment: AutoTraits {
     fn wallet(&self) -> &Self::Wallet;
 }
 
-pub struct Impl<Storage, Network, Signer = linera_base::crypto::InMemorySigner, Wallet = crate::wallet::Memory> {
+pub struct Impl<
+    Storage,
+    Network,
+    Signer = linera_base::crypto::InMemorySigner,
+    Wallet = crate::wallet::Memory,
+> {
     pub storage: Storage,
     pub network: Network,
     pub signer: Signer,

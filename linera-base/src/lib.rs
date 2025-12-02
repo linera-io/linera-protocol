@@ -35,9 +35,9 @@ pub mod prometheus_util;
 #[cfg(not(chain))]
 pub mod task;
 pub mod time;
-pub mod util;
 #[cfg(test)]
 mod unit_tests;
+pub mod util;
 pub mod vm;
 
 pub use graphql::BcsHexParseError;

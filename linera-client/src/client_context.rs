@@ -18,8 +18,7 @@ use linera_core::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
     node::ValidatorNode,
-    wallet,
-    Environment, JoinSetExt as _, Wallet as _,
+    wallet, Environment, JoinSetExt as _, Wallet as _,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_version::VersionInfo;
@@ -52,7 +51,7 @@ use {
         identifiers::ModuleId,
         vm::VmRuntime,
     },
-    linera_core::{client::create_bytecode_blobs},
+    linera_core::client::create_bytecode_blobs,
     std::{fs, path::PathBuf},
 };
 
@@ -60,8 +59,7 @@ use crate::{
     chain_listener::{self, ClientContext as _},
     client_options::{ChainOwnershipConfig, ClientContextOptions},
     config::GenesisConfig,
-    error, util,
-    Error,
+    error, util, Error,
 };
 
 /// Results from querying a validator about version, network description, and chain info.
@@ -285,7 +283,11 @@ where
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
         });
-        let chain_ids: Vec<_> = wallet.chain_ids().try_collect().await.map_err(error::Inner::wallet)?;
+        let chain_ids: Vec<_> = wallet
+            .chain_ids()
+            .try_collect()
+            .await
+            .map_err(error::Inner::wallet)?;
         let name = match chain_ids.len() {
             0 => "Client node".to_string(),
             1 => format!("Client node for {:.8}", chain_ids[0]),
@@ -346,14 +348,20 @@ impl<Env: Environment> ClientContext<Env> {
 
     /// Retrieve the default chain.
     pub fn default_chain(&self) -> ChainId {
-        self.default_chain.expect("default chain requested but none set")
+        self.default_chain
+            .expect("default chain requested but none set")
     }
 
     pub async fn first_non_admin_chain(&self) -> Result<ChainId, Error> {
         let admin_id = self.genesis_config.admin_id();
-        std::pin::pin!(self.wallet().chain_ids().try_filter(|chain_id| futures::future::ready(*chain_id != admin_id))).next().await
-            .expect("No non-admin chain specified in wallet with no non-admin chain")
-            .map_err(Error::wallet)
+        std::pin::pin!(self
+            .wallet()
+            .chain_ids()
+            .try_filter(|chain_id| futures::future::ready(*chain_id != admin_id)))
+        .next()
+        .await
+        .expect("No non-admin chain specified in wallet with no non-admin chain")
+        .map_err(Error::wallet)
     }
 
     pub fn make_node_provider(&self) -> NodeProvider {
@@ -381,14 +389,18 @@ impl<Env: Environment> ClientContext<Env> {
         let info = client.chain_info().await?;
         let client_owner = client.preferred_owner();
         let pending_proposal = client.pending_proposal().clone();
-        let _old_value = self.wallet().insert(
-            info.chain_id,
-            wallet::Chain {
-                pending_proposal,
-                owner: client_owner,
-                ..info.as_ref().into()
-            },
-        ).await.map_err(error::Inner::wallet)?;
+        let _old_value = self
+            .wallet()
+            .insert(
+                info.chain_id,
+                wallet::Chain {
+                    pending_proposal,
+                    owner: client_owner,
+                    ..info.as_ref().into()
+                },
+            )
+            .await
+            .map_err(error::Inner::wallet)?;
         Ok(())
     }
 
@@ -400,8 +412,12 @@ impl<Env: Environment> ClientContext<Env> {
         timestamp: Timestamp,
         epoch: Epoch,
     ) -> Result<(), Error> {
-        let _ = self.wallet()
-            .try_insert(chain_id, linera_core::wallet::Chain::new(owner, epoch, timestamp))
+        let _ = self
+            .wallet()
+            .try_insert(
+                chain_id,
+                linera_core::wallet::Chain::new(owner, epoch, timestamp),
+            )
             .await
             .map_err(error::Inner::wallet)?;
         Ok(())
@@ -462,12 +478,17 @@ impl<Env: Environment> ClientContext<Env> {
             return Err(error::Inner::ChainOwnership.into());
         }
 
-        self.wallet().insert(chain_id, wallet::Chain {
-            owner: Some(owner),
-            timestamp: chain_description.timestamp(),
-            epoch: Some(chain_description.config().epoch),
-            ..Default::default()
-        }).await
+        self.wallet()
+            .insert(
+                chain_id,
+                wallet::Chain {
+                    owner: Some(owner),
+                    timestamp: chain_description.timestamp(),
+                    epoch: Some(chain_description.config().epoch),
+                    ..Default::default()
+                },
+            )
+            .await
             .map_err(error::Inner::wallet)
             .context("assigning new chain")?;
         Ok(())
@@ -683,7 +704,10 @@ impl<Env: Environment> ClientContext<Env> {
     /// Query the local node for version info, network description, and chain info.
     ///
     /// Returns a `ValidatorQueryResults` struct with the local node's information.
-    pub async fn query_local_node(&self, chain_id: ChainId) -> Result<ValidatorQueryResults, Error> {
+    pub async fn query_local_node(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ValidatorQueryResults, Error> {
         let version_info = Ok(linera_version::VERSION_INFO.clone());
         let genesis_config_hash = Ok(self
             .genesis_config
@@ -898,11 +922,17 @@ impl<Env: Environment> ClientContext<Env> {
                 let info = chain_client.chain_info().await?;
                 let client_owner = chain_client.preferred_owner();
                 let pending_proposal = chain_client.pending_proposal().clone();
-                self.wallet().insert(info.chain_id, wallet::Chain {
-                    pending_proposal,
-                    owner: client_owner,
-                    ..info.as_ref().into()
-                }).await.map_err(error::Inner::wallet)?;
+                self.wallet()
+                    .insert(
+                        info.chain_id,
+                        wallet::Chain {
+                            pending_proposal,
+                            owner: client_owner,
+                            ..info.as_ref().into()
+                        },
+                    )
+                    .await
+                    .map_err(error::Inner::wallet)?;
             }
         }
 
@@ -912,10 +942,14 @@ impl<Env: Environment> ClientContext<Env> {
     async fn process_inboxes_and_force_validator_updates(&mut self) {
         let mut join_set = task::JoinSet::new();
 
-        let chain_clients: Vec<_> = self.wallet().owned_chain_ids()
+        let chain_clients: Vec<_> = self
+            .wallet()
+            .owned_chain_ids()
             .map_err(|e| error::Inner::wallet(e).into())
             .and_then(|id| self.make_chain_client(id))
-            .try_collect().await.unwrap();
+            .try_collect()
+            .await
+            .unwrap();
 
         for chain_client in chain_clients {
             join_set.spawn(async move {
@@ -1097,7 +1131,14 @@ impl<Env: Environment> ClientContext<Env> {
         application_id: ApplicationId,
     ) -> Result<(), Error> {
         let default_chain_id = self.default_chain();
-        let default_key = self.wallet().get(default_chain_id).await.unwrap().unwrap().owner.unwrap();
+        let default_key = self
+            .wallet()
+            .get(default_chain_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .owner
+            .unwrap();
         // This should be enough to run the benchmark at 1M TPS for an hour.
         let amount = Amount::from_nanos(4);
         let operations: Vec<Operation> = key_pairs

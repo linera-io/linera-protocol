@@ -15,9 +15,7 @@ pub struct Memory<T> {
 
 impl<T> Memory<T> {
     pub fn new(value: T) -> Self {
-        Self {
-            value,
-        }
+        Self { value }
     }
 }
 

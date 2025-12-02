@@ -30,7 +30,7 @@ use linera_base::{
     },
     vm::VmRuntime,
 };
-use linera_client::{client_options::ResourceControlPolicyConfig};
+use linera_client::client_options::ResourceControlPolicyConfig;
 use linera_core::worker::Notification;
 use linera_execution::committee::Committee;
 use linera_faucet_client::Faucet;
@@ -1009,7 +1009,10 @@ impl ClientWrapper {
 
     pub fn get_owner(&self) -> Option<AccountOwner> {
         let wallet = self.load_wallet().ok()?;
-        wallet.get(wallet.default_chain()?).expect("default chain must be in wallet").owner
+        wallet
+            .get(wallet.default_chain()?)
+            .expect("default chain must be in wallet")
+            .owner
     }
 
     pub fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {

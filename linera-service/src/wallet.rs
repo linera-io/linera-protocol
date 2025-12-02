@@ -1,19 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{
-    data_types::{ChainDescription, ChainOrigin},
-};
-
-use futures::{stream, Stream};
-
 use std::iter::IntoIterator;
 
+use futures::{stream, Stream};
 use linera_base::{
+    data_types::{ChainDescription, ChainOrigin},
     identifiers::{AccountOwner, ChainId},
 };
-use linera_core::wallet;
 use linera_client::config::GenesisConfig;
+use linera_core::wallet;
 use linera_persistent as persistent;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -107,23 +103,31 @@ pub struct Wallet(persistent::File<Data>);
 impl linera_core::Wallet for Wallet {
     type Error = persistent::file::Error;
 
-    async fn get(&self, id:ChainId) -> Result<Option<wallet::Chain> ,Self::Error> {
+    async fn get(&self, id: ChainId) -> Result<Option<wallet::Chain>, Self::Error> {
         Ok(self.get(id))
     }
 
-    async fn remove(&self, id:ChainId) -> Result<Option<wallet::Chain> ,Self::Error> {
+    async fn remove(&self, id: ChainId) -> Result<Option<wallet::Chain>, Self::Error> {
         self.remove(id)
     }
 
-    fn items(&self) -> impl Stream<Item = Result<(ChainId, wallet::Chain),Self::Error> > {
+    fn items(&self) -> impl Stream<Item = Result<(ChainId, wallet::Chain), Self::Error>> {
         stream::iter(self.items().into_iter().map(Ok))
     }
 
-    async fn insert(&self,id:ChainId,chain: wallet::Chain) -> Result<Option<wallet::Chain> ,Self::Error> {
+    async fn insert(
+        &self,
+        id: ChainId,
+        chain: wallet::Chain,
+    ) -> Result<Option<wallet::Chain>, Self::Error> {
         self.insert(id, chain)
     }
 
-    async fn try_insert(&self,id:ChainId,chain:wallet::Chain) -> Result<Option<wallet::Chain> ,Self::Error> {
+    async fn try_insert(
+        &self,
+        id: ChainId,
+        chain: wallet::Chain,
+    ) -> Result<Option<wallet::Chain>, Self::Error> {
         self.try_insert(id, chain)
     }
 }
@@ -135,11 +139,11 @@ impl Extend<(ChainId, wallet::Chain)> for Wallet {
 }
 
 impl Wallet {
-    pub fn get(&self, id:ChainId) -> Option<wallet::Chain> {
+    pub fn get(&self, id: ChainId) -> Option<wallet::Chain> {
         self.0.chains.get(id)
     }
 
-    pub fn remove(&self, id:ChainId) -> Result<Option<wallet::Chain> ,persistent::file::Error> {
+    pub fn remove(&self, id: ChainId) -> Result<Option<wallet::Chain>, persistent::file::Error> {
         let chain = self.0.chains.remove(id);
         self.0.save()?;
         Ok(chain)
@@ -149,24 +153,38 @@ impl Wallet {
         self.0.chains.items()
     }
 
-    pub fn insert(&self,id:ChainId,chain: wallet::Chain) -> Result<Option<wallet::Chain> , persistent::file::Error> {
+    pub fn insert(
+        &self,
+        id: ChainId,
+        chain: wallet::Chain,
+    ) -> Result<Option<wallet::Chain>, persistent::file::Error> {
         let chain = self.0.chains.insert(id, chain);
         self.0.save()?;
         Ok(chain)
     }
 
-    pub fn try_insert(&self,id:ChainId,chain:wallet::Chain) -> Result<Option<wallet::Chain> ,persistent::file::Error> {
+    pub fn try_insert(
+        &self,
+        id: ChainId,
+        chain: wallet::Chain,
+    ) -> Result<Option<wallet::Chain>, persistent::file::Error> {
         let chain = self.0.chains.try_insert(id, chain);
         self.0.save()?;
         Ok(chain)
     }
 
-    pub fn create(path: &std::path::Path, genesis_config: GenesisConfig) -> Result<Self, persistent::file::Error> {
-        Ok(Self(persistent::File::new(path, Data {
-            chains: wallet::Memory::default(),
-            default: None,
-            genesis_config,
-        })?))
+    pub fn create(
+        path: &std::path::Path,
+        genesis_config: GenesisConfig,
+    ) -> Result<Self, persistent::file::Error> {
+        Ok(Self(persistent::File::new(
+            path,
+            Data {
+                chains: wallet::Memory::default(),
+                default: None,
+                genesis_config,
+            },
+        )?))
     }
 
     pub fn read(path: &std::path::Path) -> Result<Self, persistent::file::Error> {
@@ -220,24 +238,29 @@ impl Wallet {
         self.0.save()
     }
 
-    pub fn mutate<R>(&self, chain_id: ChainId, mutate: impl FnMut(&mut wallet::Chain) -> R) -> Option<Result<R, persistent::file::Error>> {
-        self.0.chains.mutate(chain_id, mutate).map(|outcome| {
-            self.0.save().map(|()| outcome)
-        })
+    pub fn mutate<R>(
+        &self,
+        chain_id: ChainId,
+        mutate: impl FnMut(&mut wallet::Chain) -> R,
+    ) -> Option<Result<R, persistent::file::Error>> {
+        self.0
+            .chains
+            .mutate(chain_id, mutate)
+            .map(|outcome| self.0.save().map(|()| outcome))
     }
 
     pub fn forget_keys(&self, chain_id: ChainId) -> anyhow::Result<AccountOwner> {
         self.mutate(chain_id, |chain| chain.owner.take())
-           .ok_or(anyhow::anyhow!("nonexistent chain `{chain_id}`"))??
-           .ok_or(anyhow::anyhow!("keypair not found for chain `{chain_id}`"))
+            .ok_or(anyhow::anyhow!("nonexistent chain `{chain_id}`"))??
+            .ok_or(anyhow::anyhow!("keypair not found for chain `{chain_id}`"))
     }
 
     pub fn forget_chain(&self, chain_id: ChainId) -> anyhow::Result<wallet::Chain> {
         let chain = self
             .0
-           .chains
-           .remove(chain_id)
-           .ok_or(anyhow::anyhow!("nonexistent chain `{chain_id}`"))?;
+            .chains
+            .remove(chain_id)
+            .ok_or(anyhow::anyhow!("nonexistent chain `{chain_id}`"))?;
         self.0.save()?;
         Ok(chain)
     }

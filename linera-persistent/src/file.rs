@@ -115,14 +115,16 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
     /// Creates a new persistent file at `path` containing `value`.
     pub fn new(path: &Path, value: T) -> Result<Self, Error> {
         let this = Self {
-            lock: Mutex::new(Lock::new(
-                fs_err::OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .create(true)
-                    .open(path)?,
-            )
-            .with_context(|| format!("locking path {}", path.display()))?),
+            lock: Mutex::new(
+                Lock::new(
+                    fs_err::OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .create(true)
+                        .open(path)?,
+                )
+                .with_context(|| format!("locking path {}", path.display()))?,
+            ),
             path: path.into(),
             value,
         };

@@ -5,7 +5,6 @@
 //! This module defines the core Linera protocol.
 
 #![recursion_limit = "256"]
-
 // We conditionally add autotraits to the traits here.
 #![allow(async_fn_in_trait)]
 

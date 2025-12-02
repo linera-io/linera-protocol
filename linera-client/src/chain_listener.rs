@@ -26,8 +26,7 @@ use linera_core::{
     },
     node::NotificationStream,
     worker::{Notification, Reason},
-    Environment,
-    Wallet,
+    Environment, Wallet,
 };
 use linera_storage::{Clock as _, Storage as _};
 use tokio_util::sync::CancellationToken;
@@ -57,7 +56,7 @@ pub struct ChainListenerConfig {
     #[arg(
         long = "listener-delay-after-ms",
         default_value = "0",
-        env = "LINERA_LISTENER_DELAY_AFTER",
+        env = "LINERA_LISTENER_DELAY_AFTER"
     )]
     pub delay_after_ms: u64,
 }
@@ -90,13 +89,17 @@ pub trait ClientContext {
         None
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> impl Future<Output = Result<ChainClient<Self::Environment>, Error>> {
+    fn make_chain_client(
+        &self,
+        chain_id: ChainId,
+    ) -> impl Future<Output = Result<ChainClient<Self::Environment>, Error>> {
         async move {
             let chain = self
                 .wallet()
                 .get(chain_id)
                 .make_sync()
-                .await.map_err(error::Inner::wallet)?
+                .await
+                .map_err(error::Inner::wallet)?
                 .unwrap_or_default();
             Ok(self.client().create_chain_client(
                 chain_id,
@@ -124,7 +127,12 @@ pub trait ClientContext {
 pub trait ClientContextExt: ClientContext {
     async fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
         use futures::stream::TryStreamExt as _;
-        self.wallet().chain_ids().map_err(|e| error::Inner::wallet(e).into()).and_then(|chain_id| self.make_chain_client(chain_id)).try_collect().await
+        self.wallet()
+            .chain_ids()
+            .map_err(|e| error::Inner::wallet(e).into())
+            .and_then(|chain_id| self.make_chain_client(chain_id))
+            .try_collect()
+            .await
     }
 }
 
@@ -230,7 +238,11 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .chain([Ok(admin_chain_id)])
                 .map(|chain_id| Ok((chain_id?, ListeningMode::FullChain)))
                 .collect::<Result<BTreeMap<_, _>, _>>()
-                .map_err(|e: <<C::Environment as Environment>::Wallet as Wallet>::Error| crate::error::Inner::Wallet(Box::new(e) as _))?
+                .map_err(
+                    |e: <<C::Environment as Environment>::Wallet as Wallet>::Error| {
+                        crate::error::Inner::Wallet(Box::new(e) as _)
+                    },
+                )?
         };
 
         // Start background tasks to sync received certificates for each chain,
@@ -454,7 +466,12 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .get(&chain_id)
                 .map(|existing_client| existing_client.listening_mode.clone()),
         );
-        let client = self.context.lock().await.make_chain_client(chain_id).await?;
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         let (listener, abort_handle, notification_stream) =
             client.listen(listening_mode.clone()).await?;
         let join_handle = linera_base::task::spawn(listener.in_current_span());

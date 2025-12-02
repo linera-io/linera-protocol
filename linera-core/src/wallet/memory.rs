@@ -1,11 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Wallet, Chain};
-
+use futures::{Stream, StreamExt as _};
 use linera_base::identifiers::ChainId;
 
-use futures::{Stream, StreamExt as _};
+use super::{Chain, Wallet};
 
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Memory(papaya::HashMap<ChainId, Chain>);
@@ -22,7 +21,7 @@ impl Memory {
     pub fn try_insert(&self, id: ChainId, chain: Chain) -> Option<Chain> {
         match self.0.pin().try_insert(id, chain) {
             Ok(_inserted) => None,
-            Err(error) => Some(error.not_inserted)
+            Err(error) => Some(error.not_inserted),
         }
     }
 
@@ -31,7 +30,11 @@ impl Memory {
     }
 
     pub fn items(&self) -> Vec<(ChainId, Chain)> {
-        self.0.pin().iter().map(|(id, chain)| (*id, chain.clone())).collect::<Vec<_>>()
+        self.0
+            .pin()
+            .iter()
+            .map(|(id, chain)| (*id, chain.clone()))
+            .collect::<Vec<_>>()
     }
 
     pub fn chain_ids(&self) -> Vec<ChainId> {
@@ -39,19 +42,29 @@ impl Memory {
     }
 
     pub fn owned_chain_ids(&self) -> Vec<ChainId> {
-        self.0.pin().iter().filter_map(|(id, chain)| chain.owner.as_ref().map(|_| *id)).collect::<Vec<_>>()
+        self.0
+            .pin()
+            .iter()
+            .filter_map(|(id, chain)| chain.owner.as_ref().map(|_| *id))
+            .collect::<Vec<_>>()
     }
 
-    pub fn mutate<R>(&self, chain_id: ChainId, mut mutate: impl FnMut(&mut Chain) -> R) -> Option<R> {
+    pub fn mutate<R>(
+        &self,
+        chain_id: ChainId,
+        mut mutate: impl FnMut(&mut Chain) -> R,
+    ) -> Option<R> {
         use papaya::Operation::*;
 
         let mut outcome = None;
-        self.0.pin().compute(chain_id, |chain| if let Some((_, chain)) = chain {
-            let mut chain = chain.clone();
-            outcome = Some(mutate(&mut chain));
-            Insert(chain)
-        } else {
-            Abort(())
+        self.0.pin().compute(chain_id, |chain| {
+            if let Some((_, chain)) = chain {
+                let mut chain = chain.clone();
+                outcome = Some(mutate(&mut chain));
+                Insert(chain)
+            } else {
+                Abort(())
+            }
         });
 
         outcome

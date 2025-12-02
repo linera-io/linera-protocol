@@ -1,24 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::identifiers::{
-    ChainId,
-    AccountOwner,
-};
-
-use linera_base::data_types::{
-    BlockHeight,
-    Epoch,
-    Timestamp,
-    ChainDescription,
-};
-
-use linera_base::crypto::CryptoHash;
-
-use crate::client::PendingProposal;
-use crate::data_types::ChainInfo;
-
 use futures::{Stream, StreamExt as _, TryStreamExt as _};
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::{BlockHeight, ChainDescription, Epoch, Timestamp},
+    identifiers::{AccountOwner, ChainId},
+};
+
+use crate::{client::PendingProposal, data_types::ChainInfo};
 
 mod memory;
 pub use memory::Memory;
@@ -66,11 +56,7 @@ impl From<ChainDescription> for Chain {
 
 impl Chain {
     /// Create a chain that we haven't interacted with before.
-    pub fn new(
-        owner: Option<AccountOwner>,
-        current_epoch: Epoch,
-        now: Timestamp,
-    ) -> Self {
+    pub fn new(owner: Option<AccountOwner>, current_epoch: Epoch, now: Timestamp) -> Self {
         Self {
             owner,
             block_hash: None,
@@ -98,6 +84,7 @@ pub trait Wallet {
     }
 
     fn owned_chain_ids(&self) -> impl Stream<Item = Result<ChainId, Self::Error>> {
-        self.items().try_filter_map(|(id, chain)| async move { Ok(chain.owner.map(|_| id)) })
+        self.items()
+            .try_filter_map(|(id, chain)| async move { Ok(chain.owner.map(|_| id)) })
     }
 }

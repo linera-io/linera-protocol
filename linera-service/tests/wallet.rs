@@ -1,28 +1,22 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use linera_base::{
     crypto::InMemorySigner,
     data_types::{Amount, Blob, BlockHeight, Epoch},
 };
 use linera_chain::data_types::ProposedBlock;
+use linera_client::{client_context::ClientContext, util::test::make_genesis_config};
 use linera_core::{
     client::{Client, PendingProposal},
     join_set_ext::JoinSet,
     test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
     wallet,
 };
-
-use linera_client::{
-    client_context::ClientContext,
-    util::test::make_genesis_config,
-};
-
 use linera_rpc::{NodeOptions, NodeProvider};
-
 use linera_service::Wallet;
-
-use std::time::Duration;
 
 pub async fn new_test_client_context(
     storage: impl linera_core::environment::Storage,
@@ -75,7 +69,8 @@ pub async fn new_test_client_context(
             block_cache_size,
             execution_state_cache_size,
             linera_core::client::RequestsSchedulerConfig::default(),
-        ).into(),
+        )
+        .into(),
         genesis_config,
         send_timeout: send_recv_timeout,
         recv_timeout: send_recv_timeout,
@@ -113,23 +108,28 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     }
     let wallet = Wallet::create(&wallet_path, genesis_config)?;
     let admin_description = builder.admin_description().unwrap().clone();
-    wallet.insert(admin_description.id(), wallet::Chain {
-        owner: Some(new_pubkey.into()),
-        timestamp: clock.current_time(),
-        pending_proposal: Some(PendingProposal {
-            block: ProposedBlock {
-                chain_id,
-                epoch: Epoch::ZERO,
-                transactions: vec![],
-                height: BlockHeight::ZERO,
+    wallet
+        .insert(
+            admin_description.id(),
+            wallet::Chain {
+                owner: Some(new_pubkey.into()),
                 timestamp: clock.current_time(),
-                authenticated_owner: None,
-                previous_block_hash: None,
+                pending_proposal: Some(PendingProposal {
+                    block: ProposedBlock {
+                        chain_id,
+                        epoch: Epoch::ZERO,
+                        transactions: vec![],
+                        height: BlockHeight::ZERO,
+                        timestamp: clock.current_time(),
+                        authenticated_owner: None,
+                        previous_block_hash: None,
+                    },
+                    blobs: vec![Blob::new_data(b"blob".to_vec())],
+                }),
+                ..admin_description.into()
             },
-            blobs: vec![Blob::new_data(b"blob".to_vec())],
-        }),
-        ..admin_description.into()
-    }).expect("wallet should be empty");
+        )
+        .expect("wallet should be empty");
     wallet.save()?;
     Ok(())
 }
