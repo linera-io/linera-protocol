@@ -24,7 +24,13 @@ pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0
 #[export_name = "_rjem_malloc_conf"]
 pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
 
-use std::{collections::BTreeSet, env, path::PathBuf, process, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    env,
+    path::PathBuf,
+    process,
+    sync::Arc,
+};
 
 use anyhow::{anyhow, bail, ensure, Context, Error};
 use async_trait::async_trait;
@@ -1127,8 +1133,11 @@ impl Runnable for Job {
 
                 // Start the task processor if operator applications are specified.
                 if !operator_application_ids.is_empty() {
-                    let operators = Arc::new(operators.into_iter().collect());
-                    info!("Supported operators: {:?}", operators);
+                    let operators: BTreeMap<String, PathBuf> = operators.into_iter().collect();
+                    for (name, path) in &operators {
+                        info!("Operator '{}' -> {}", name, path.display());
+                    }
+                    let operators = Arc::new(operators);
 
                     let chain_client = context.make_chain_client(chain_id);
                     let processor = TaskProcessor::new(
