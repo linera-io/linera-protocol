@@ -1296,8 +1296,8 @@ async fn test_node_service_with_task_processor() -> Result<()> {
     let mut notifications = Box::pin(node_service.notifications(chain).await?);
 
     // Query the initial task count (should be 0).
-    let app =
-        node_service.make_application::<TaskProcessorAbi>(&chain, &app_id.with_abi::<TaskProcessorAbi>())?;
+    let app = node_service
+        .make_application::<TaskProcessorAbi>(&chain, &app_id.with_abi::<TaskProcessorAbi>())?;
     let task_count: u64 = app.query_json("taskCount").await?;
     assert_eq!(task_count, 0);
 
@@ -1325,7 +1325,10 @@ async fn test_node_service_with_task_processor() -> Result<()> {
 
     // Check that the task was processed (task count should be 1).
     let task_count: u64 = app.query_json("taskCount").await?;
-    assert_eq!(task_count, 1, "Expected task count to be 1 after processing");
+    assert_eq!(
+        task_count, 1,
+        "Expected task count to be 1 after processing"
+    );
 
     net.ensure_is_running().await?;
     net.terminate().await?;
