@@ -295,11 +295,6 @@ async fn test_process_stream_end_to_end_mixed_elements() {
         database.blob_exists(&test_blob.id()).await.unwrap(),
         "Blob should be stored in database"
     );
-
-    // Verify both valid blocks were stored
-    // We can't easily check block count without adding a helper method,
-    // so we verify the blocks exist by attempting to query them
-    // (The test passes if no errors occur during storage)
 }
 
 #[tokio::test]
