@@ -13,6 +13,8 @@ use linera_base::{
 use linera_core::{data_types::RoundTimeout, node::NotificationStream, worker::Reason};
 use tokio_stream::StreamExt as _;
 
+pub mod test;
+
 pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
 }
@@ -58,16 +60,6 @@ pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: Round
     .await;
 }
 
-macro_rules! impl_from_dynamic {
-    ($target:ty : $variant:ident, $source:ty) => {
-        impl From<$source> for $target {
-            fn from(error: $source) -> Self {
-                <$target>::$variant(Box::new(error))
-            }
-        }
-    };
-}
-
 macro_rules! impl_from_infallible {
     ($target:path) => {
         impl From<::std::convert::Infallible> for $target {
@@ -78,5 +70,4 @@ macro_rules! impl_from_infallible {
     };
 }
 
-pub(crate) use impl_from_dynamic;
 pub(crate) use impl_from_infallible;

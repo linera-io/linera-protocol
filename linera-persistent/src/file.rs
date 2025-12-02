@@ -4,12 +4,13 @@
 use std::{
     io::{self, BufRead as _, Write as _},
     path::Path,
+    sync::Mutex,
 };
 
 use fs4::FileExt;
 use thiserror_context::Context;
 
-use super::{Dirty, Persist};
+use super::Persist;
 
 /// A guard that keeps an exclusive lock on a file.
 struct Lock(fs_err::File);
@@ -80,10 +81,9 @@ impl Drop for Lock {
 /// happen, and writes are saved to a staging file before being moved over the old file,
 /// an operation that is atomic on all Unixes.
 pub struct File<T> {
-    _lock: Lock,
+    lock: Mutex<Lock>,
     path: std::path::PathBuf,
     value: T,
-    dirty: Dirty,
 }
 
 impl<T> std::ops::Deref for File<T> {
@@ -95,7 +95,6 @@ impl<T> std::ops::Deref for File<T> {
 
 impl<T> std::ops::DerefMut for File<T> {
     fn deref_mut(&mut self) -> &mut T {
-        *self.dirty = true;
         &mut self.value
     }
 }
@@ -116,18 +115,18 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
     /// Creates a new persistent file at `path` containing `value`.
     pub fn new(path: &Path, value: T) -> Result<Self, Error> {
         let this = Self {
-            _lock: Lock::new(
+            lock: Mutex::new(Lock::new(
                 fs_err::OpenOptions::new()
                     .read(true)
                     .write(true)
                     .create(true)
                     .open(path)?,
             )
-            .with_context(|| format!("locking path {}", path.display()))?,
+            .with_context(|| format!("locking path {}", path.display()))?),
             path: path.into(),
             value,
-            dirty: Dirty::new(true),
         };
+        this.save()?;
         Ok(this)
     }
 
@@ -158,17 +157,17 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
             } else {
                 serde_json::from_reader(reader)?
             },
-            dirty: Dirty::new(file_is_empty),
             path: path.into(),
-            _lock: lock,
+            lock: Mutex::new(lock),
         })
     }
 
-    fn save(&mut self) -> Result<(), Error> {
+    pub fn save(&self) -> Result<(), Error> {
         let mut temp_file_path = self.path.clone();
         temp_file_path.set_extension("json.new");
         let temp_file = open_options().open(&temp_file_path)?;
-        let mut temp_file_writer = std::io::BufWriter::new(temp_file);
+        let lock = Lock::new(temp_file)?;
+        let mut temp_file_writer = std::io::BufWriter::new(&lock.0);
 
         let remove_temp_file = || fs_err::remove_file(&temp_file_path);
 
@@ -179,8 +178,9 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
             .flush()
             .map_err(Error::from)
             .or_cleanup(remove_temp_file)?;
+        drop(temp_file_writer);
         fs_err::rename(&temp_file_path, &self.path)?;
-        *self.dirty = false;
+        *self.lock.lock().unwrap() = lock;
         Ok(())
     }
 }
@@ -201,8 +201,9 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned + Send> Persist for File<
     /// The temporary file is then renamed to the original filename. If
     /// serialization or writing to disk fails, the temporary file is
     /// deleted.
-    async fn persist(&mut self) -> Result<(), Error> {
-        self.save()
+    fn persist(&mut self) -> impl std::future::Future<Output = Result<(), Error>> {
+        let result = self.save();
+        async { result }
     }
 
     /// Takes the value out, releasing the lock on the persistent file.

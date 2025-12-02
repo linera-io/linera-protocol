@@ -29,17 +29,9 @@ pub enum Error {
     IoError(#[from] std::io::Error),
     #[error("there are {public_keys} public keys but {weights} weights")]
     MisalignedWeights { public_keys: usize, weights: usize },
-    #[error("persistence error: {0}")]
-    Persistence(#[from] Box<dyn std::error::Error + Send + Sync>),
     #[error("config error: {0}")]
     Config(#[from] crate::config::Error),
 }
-
-#[cfg(feature = "fs")]
-util::impl_from_dynamic!(Error:Persistence, linera_persistent::file::Error);
-
-#[cfg(web)]
-util::impl_from_dynamic!(Error:Persistence, linera_persistent::indexed_db::Error);
 
 util::impl_from_infallible!(Error);
 

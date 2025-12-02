@@ -1,15 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(web)]
-pub trait AutoTraits: 'static {}
-#[cfg(web)]
-impl<T: 'static> AutoTraits for T {}
-
-#[cfg(not(web))]
-trait_set::trait_set! {
-    pub trait AutoTraits = Send + Sync + 'static;
-}
+use linera_base::util::traits::AutoTraits;
 
 trait_set::trait_set! {
     pub trait Network = crate::node::ValidatorNodeProvider + AutoTraits;
@@ -22,6 +14,8 @@ pub trait Environment: AutoTraits {
     type Storage: Storage<Context = Self::StorageContext>;
     type Network: Network<Node = Self::ValidatorNode>;
     type Signer: Signer;
+    type Wallet: Wallet;
+
     type ValidatorNode: crate::node::ValidatorNode + AutoTraits + Clone;
     type StorageContext: linera_views::context::Context<Extra: linera_execution::ExecutionRuntimeContext>
         + 'static;
@@ -29,18 +23,22 @@ pub trait Environment: AutoTraits {
     fn storage(&self) -> &Self::Storage;
     fn network(&self) -> &Self::Network;
     fn signer(&self) -> &Self::Signer;
+    fn wallet(&self) -> &Self::Wallet;
 }
 
-pub struct Impl<Storage, Network, Signer> {
+pub struct Impl<Storage, Network, Signer = linera_base::crypto::InMemorySigner, Wallet = crate::wallet::Memory> {
     pub storage: Storage,
     pub network: Network,
     pub signer: Signer,
+    pub wallet: Wallet,
 }
 
-impl<St: Storage, N: Network, Si: Signer> Environment for Impl<St, N, Si> {
+impl<St: Storage, N: Network, Si: Signer, W: Wallet> Environment for Impl<St, N, Si, W> {
     type Storage = St;
     type Network = N;
     type Signer = Si;
+    type Wallet = W;
+
     type ValidatorNode = N::Node;
     type StorageContext = St::Context;
 
@@ -55,6 +53,10 @@ impl<St: Storage, N: Network, Si: Signer> Environment for Impl<St, N, Si> {
     fn signer(&self) -> &Si {
         &self.signer
     }
+
+    fn wallet(&self) -> &W {
+        &self.wallet
+    }
 }
 
 cfg_if::cfg_if! {
@@ -62,6 +64,7 @@ cfg_if::cfg_if! {
         pub type TestStorage = linera_storage::DbStorage<linera_views::memory::MemoryDatabase, linera_storage::TestClock>;
         pub type TestNetwork = crate::test_utils::NodeProvider<TestStorage>;
         pub type TestSigner = linera_base::crypto::InMemorySigner;
-        pub type Test = Impl<TestStorage, TestNetwork, TestSigner>;
+        pub type TestWallet = crate::wallet::Memory;
+        pub type Test = Impl<TestStorage, TestNetwork, TestSigner, TestWallet>;
     }
 }

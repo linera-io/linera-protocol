@@ -17,6 +17,7 @@ use linera_base::{
     data_types::{ChainDescription, Epoch, Timestamp},
     identifiers::{AccountOwner, BlobType, ChainId},
     task::NonBlockingFuture,
+    util::future::FutureSyncExt as _,
 };
 use linera_core::{
     client::{
@@ -26,15 +27,13 @@ use linera_core::{
     node::NotificationStream,
     worker::{Notification, Reason},
     Environment,
+    Wallet,
 };
 use linera_storage::{Clock as _, Storage as _};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn, Instrument as _};
 
-use crate::{
-    wallet::{UserChain, Wallet},
-    Error,
-};
+use crate::error::{self, Error};
 
 #[derive(Debug, Default, Clone, clap::Args, serde::Serialize)]
 pub struct ChainListenerConfig {
@@ -58,23 +57,25 @@ pub struct ChainListenerConfig {
     #[arg(
         long = "listener-delay-after-ms",
         default_value = "0",
-        env = "LINERA_LISTENER_DELAY_AFTER"
+        env = "LINERA_LISTENER_DELAY_AFTER",
     )]
     pub delay_after_ms: u64,
 }
 
 type ContextChainClient<C> = ChainClient<<C as ClientContext>::Environment>;
 
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 #[allow(async_fn_in_trait)]
 pub trait ClientContext {
     type Environment: linera_core::Environment;
 
-    fn wallet(&self) -> &Wallet;
+    fn wallet(&self) -> &<Self::Environment as linera_core::Environment>::Wallet;
 
     fn storage(&self) -> &<Self::Environment as linera_core::Environment>::Storage;
 
     fn client(&self) -> &Arc<linera_core::client::Client<Self::Environment>>;
+
+    fn genesis_config(&self) -> &crate::config::GenesisConfig;
 
     /// Gets the timing sender for benchmarking, if available.
     #[cfg(not(web))]
@@ -89,20 +90,23 @@ pub trait ClientContext {
         None
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<Self::Environment> {
-        let chain = self
-            .wallet()
-            .get(chain_id)
-            .cloned()
-            .unwrap_or_else(|| UserChain::make_other(chain_id, Timestamp::from(0)));
-        self.client().create_chain_client(
-            chain_id,
-            chain.block_hash,
-            chain.next_block_height,
-            chain.pending_proposal,
-            chain.owner,
-            self.timing_sender(),
-        )
+    fn make_chain_client(&self, chain_id: ChainId) -> impl Future<Output = Result<ChainClient<Self::Environment>, Error>> {
+        async move {
+            let chain = self
+                .wallet()
+                .get(chain_id)
+                .make_sync()
+                .await.map_err(error::Inner::wallet)?
+                .unwrap_or_default();
+            Ok(self.client().create_chain_client(
+                chain_id,
+                chain.block_hash,
+                chain.next_block_height,
+                chain.pending_proposal,
+                chain.owner,
+                self.timing_sender(),
+            ))
+        }
     }
 
     async fn update_wallet_for_new_chain(
@@ -118,13 +122,9 @@ pub trait ClientContext {
 
 #[allow(async_fn_in_trait)]
 pub trait ClientContextExt: ClientContext {
-    fn clients(&self) -> Vec<ContextChainClient<Self>> {
-        let chain_ids = self.wallet().chain_ids();
-        let mut clients = vec![];
-        for chain_id in chain_ids {
-            clients.push(self.make_chain_client(chain_id));
-        }
-        clients
+    async fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
+        use futures::stream::TryStreamExt as _;
+        self.wallet().chain_ids().map_err(|e| error::Inner::wallet(e).into()).and_then(|chain_id| self.make_chain_client(chain_id)).try_collect().await
     }
 }
 
@@ -215,19 +215,22 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     ) -> Result<impl Future<Output = Result<(), Error>>, Error> {
         let chain_ids = {
             let guard = self.context.lock().await;
-            let admin_chain_id = guard.wallet().genesis_admin_chain();
+            let admin_chain_id = guard.genesis_config().admin_id();
             guard
                 .make_chain_client(admin_chain_id)
+                .await?
                 .synchronize_chain_state(admin_chain_id)
                 .await?;
-            BTreeMap::from_iter(
-                guard
-                    .wallet()
-                    .chain_ids()
-                    .into_iter()
-                    .chain([admin_chain_id])
-                    .map(|chain_id| (chain_id, ListeningMode::FullChain)),
-            )
+            guard
+                .wallet()
+                .chain_ids()
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .chain([Ok(admin_chain_id)])
+                .map(|chain_id| Ok((chain_id?, ListeningMode::FullChain)))
+                .collect::<Result<BTreeMap<_, _>, _>>()
+                .map_err(|e: <<C::Environment as Environment>::Wallet as Wallet>::Error| crate::error::Inner::Wallet(Box::new(e) as _))?
         };
 
         // Start background tasks to sync received certificates for each chain,
@@ -424,7 +427,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         cancellation_token: CancellationToken,
     ) -> Result<(), Error> {
         info!("Starting background certificate sync for chain {chain_id}");
-        let client = context.lock().await.make_chain_client(chain_id);
+        let client = context.lock().await.make_chain_client(chain_id).await?;
 
         Ok(client
             .find_received_certificates(Some(cancellation_token))
@@ -451,7 +454,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .get(&chain_id)
                 .map(|existing_client| existing_client.listening_mode.clone()),
         );
-        let client = self.context.lock().await.make_chain_client(chain_id);
+        let client = self.context.lock().await.make_chain_client(chain_id).await?;
         let (listener, abort_handle, notification_stream) =
             client.listen(listening_mode.clone()).await?;
         let join_handle = linera_base::task::spawn(listener.in_current_span());

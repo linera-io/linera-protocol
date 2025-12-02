@@ -5143,6 +5143,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "serde_with",
+ "sync_wrapper 1.0.2",
  "tempfile",
  "test-case",
  "test-strategy",
@@ -5151,6 +5152,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-web",
+ "trait-set",
  "trait-variant",
  "wasm-bindgen-futures",
  "web-time",
@@ -5214,7 +5216,6 @@ dependencies = [
  "linera-core",
  "linera-ethereum",
  "linera-execution",
- "linera-persistent",
  "linera-rpc",
  "linera-sdk",
  "linera-storage",
@@ -5224,6 +5225,7 @@ dependencies = [
  "native-fungible",
  "non-fungible",
  "num-format",
+ "papaya",
  "prometheus-parse",
  "proptest",
  "rand 0.8.5",
@@ -7086,6 +7088,7 @@ checksum = "aeb8b9616002a83f9779ea70a2a44364fe804f8b532b96989d0790a34ad76479"
 dependencies = [
  "equivalent",
  "seize",
+ "serde",
 ]
 
 [[package]]

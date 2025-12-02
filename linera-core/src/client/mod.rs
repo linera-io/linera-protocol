@@ -16,7 +16,7 @@ use futures::{
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
-    crypto::{CryptoHash, Signer, ValidatorPublicKey},
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch},
     ensure,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, StreamId},
@@ -331,8 +331,13 @@ impl<Env: Environment> Client<Env> {
 
     /// Returns a reference to the [`Signer`] of the client.
     #[instrument(level = "trace", skip(self))]
-    pub fn signer(&self) -> &impl Signer {
+    pub fn signer(&self) -> &Env::Signer {
         self.environment.signer()
+    }
+
+    /// Returns a reference to the [`Wallet`] of the client.
+    pub fn wallet(&self) -> &Env::Wallet {
+        self.environment.wallet()
     }
 
     /// Adds a chain to the set of chains tracked by the local node.

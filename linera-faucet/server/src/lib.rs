@@ -852,7 +852,7 @@ where
         context: C,
         storage: <C::Environment as linera_core::Environment>::Storage,
     ) -> anyhow::Result<Self> {
-        let client = context.make_chain_client(config.chain_id);
+        let client = context.make_chain_client(config.chain_id).await?;
         let context = Arc::new(Mutex::new(context));
         let start_timestamp = client.storage_client().clock().current_time();
         client.process_inbox().await?;

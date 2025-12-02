@@ -6,3 +6,4 @@ Utilities used throughout the Linera codebase.
 */
 
 pub mod future;
+pub mod traits;

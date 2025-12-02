@@ -17,7 +17,7 @@ use linera_chain::{
 };
 use linera_client::{
     chain_listener::{ChainListenerConfig, ClientContext},
-    wallet::Wallet,
+    config::GenesisConfig,
     Error,
 };
 use linera_core::{
@@ -198,9 +198,14 @@ impl ClientContext for DummyContext {
         DbStorage<MemoryDatabase>,
         DummyValidatorNodeProvider,
         linera_base::crypto::InMemorySigner,
+        linera_core::wallet::Memory,
     >;
 
-    fn wallet(&self) -> &Wallet {
+    fn genesis_config(&self) -> &GenesisConfig {
+        unimplemented!()
+    }
+
+    fn wallet(&self) -> &linera_core::wallet::Memory {
         unimplemented!()
     }
 

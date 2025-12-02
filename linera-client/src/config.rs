@@ -17,7 +17,6 @@ use linera_execution::{
     committee::{Committee, ValidatorState},
     ResourceControlPolicy,
 };
-use linera_persistent as persistent;
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
@@ -28,21 +27,11 @@ pub enum Error {
     IoError(#[from] std::io::Error),
     #[error("chain error: {0}")]
     Chain(#[from] linera_chain::ChainError),
-    #[error("persistence error: {0}")]
-    Persistence(Box<dyn std::error::Error + Send + Sync>),
     #[error("storage is already initialized: {0:?}")]
     StorageIsAlreadyInitialized(Box<NetworkDescription>),
     #[error("no admin chain configured")]
     NoAdminChain,
 }
-
-use crate::util;
-
-util::impl_from_dynamic!(Error:Persistence, persistent::memory::Error);
-#[cfg(web)]
-util::impl_from_dynamic!(Error:Persistence, persistent::indexed_db::Error);
-#[cfg(feature = "fs")]
-util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
 
 /// The public configuration of a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]

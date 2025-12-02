@@ -30,7 +30,7 @@ use linera_base::{
     },
     vm::VmRuntime,
 };
-use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
+use linera_client::{client_options::ResourceControlPolicyConfig};
 use linera_core::worker::Notification;
 use linera_execution::committee::Committee;
 use linera_faucet_client::Faucet;
@@ -58,6 +58,7 @@ use crate::{
         Network,
     },
     util::{self, ChildExt},
+    wallet::Wallet,
 };
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -987,7 +988,7 @@ impl ClientWrapper {
     }
 
     pub fn load_wallet(&self) -> Result<Wallet> {
-        util::read_json(self.wallet_path())
+        Ok(Wallet::read(&self.wallet_path())?)
     }
 
     pub fn load_keystore(&self) -> Result<InMemorySigner> {
@@ -1008,8 +1009,7 @@ impl ClientWrapper {
 
     pub fn get_owner(&self) -> Option<AccountOwner> {
         let wallet = self.load_wallet().ok()?;
-        let chain_id = wallet.default_chain()?;
-        wallet.get(chain_id)?.owner
+        wallet.get(wallet.default_chain()?).expect("default chain must be in wallet").owner
     }
 
     pub fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {
