@@ -8,7 +8,7 @@
 mod wasm;
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     iter,
     sync::{Arc, Mutex},
     time::Duration,
@@ -21,14 +21,14 @@ use linera_base::{
         ValidatorKeypair,
     },
     data_types::*,
-    identifiers::{Account, AccountOwner, ChainId, EventId, StreamId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, EventId, StreamId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, ChainAndHeight, IncomingBundle, LiteValue, LiteVote,
-        MessageAction, MessageBundle, OperationResult, PostedMessage, SignatureAggregator,
-        Transaction,
+        MessageAction, MessageBundle, OperationResult, PostedMessage, ProposedBlock,
+        SignatureAggregator, Transaction,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -45,19 +45,14 @@ use linera_execution::{
         EPOCH_STREAM_NAME as NEW_EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
     },
     test_utils::{
-        dummy_chain_description, ExpectedCall, RegisterMockApplication, SystemExecutionState,
+        dummy_chain_description, ExpectedCall, MockApplication, RegisterMockApplication,
+        SystemExecutionState,
     },
     ExecutionError, ExecutionRuntimeContext, Message, MessageKind, OutgoingMessage, Query,
     QueryContext, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
-use linera_storage::{DbStorage, Storage, TestClock};
-use linera_views::{
-    context::Context,
-    memory::MemoryDatabase,
-    random::generate_test_namespace,
-    store::TestKeyValueDatabase as _,
-    views::{CryptoHashView, RootView},
-};
+use linera_storage::Storage;
+use linera_views::{context::Context, views::RootView};
 use test_case::test_case;
 use test_log::test;
 
@@ -83,7 +78,14 @@ const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;
 
 struct TestEnvironment<S: Storage> {
     committee: Committee,
+    // The main worker used for assertions.
     worker: WorkerState<S>,
+    // This second worker is mostly used to create certificates that can then be handled by the
+    // main worker, but some tests depend on the worker handling proposals to be a validator, so
+    // they need to use this worker for everything.
+    // The certificates have to be created by a worker due to the difficulty of computing
+    // historical hashes for manually prepared certificates.
+    executing_worker: WorkerState<S>,
     admin_keypair: AccountSecretKey,
     admin_description: ChainDescription,
     other_chains: BTreeMap<ChainId, ChainDescription>,
@@ -93,9 +95,13 @@ impl<S> TestEnvironment<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    async fn new(storage: S, is_client: bool, has_long_lived_services: bool) -> Self {
+    async fn new<B: StorageBuilder<Storage = S>>(
+        builder: &mut B,
+        is_client: bool,
+        has_long_lived_services: bool,
+    ) -> Result<Self, anyhow::Error> {
         Self::new_with_amount(
-            storage,
+            builder,
             is_client,
             has_long_lived_services,
             Amount::from_tokens(1_000_000),
@@ -103,12 +109,12 @@ where
         .await
     }
 
-    async fn new_with_amount(
-        storage: S,
+    async fn new_with_amount<B: StorageBuilder<Storage = S>>(
+        builder: &mut B,
         is_client: bool,
         has_long_lived_services: bool,
         amount: Amount,
-    ) -> Self {
+    ) -> Result<Self, anyhow::Error> {
         let validator_keypair = ValidatorKeypair::generate();
         let account_secret = AccountSecretKey::generate();
         let committee = Committee::make_simple(vec![(
@@ -127,43 +133,55 @@ where
         };
         let admin_description = ChainDescription::new(origin, config, Timestamp::from(0));
         let committee_blob = Blob::new_committee(bcs::to_bytes(&committee).unwrap());
-        storage
-            .write_blob(&Blob::new_chain_description(&admin_description))
-            .await
-            .expect("writing a blob should not fail");
-        storage
-            .write_blob(&committee_blob)
-            .await
-            .expect("writing a blob should succeed");
-        storage
-            .write_network_description(&NetworkDescription {
-                admin_chain_id: admin_description.id(),
-                genesis_config_hash: CryptoHash::test_hash("genesis config"),
-                genesis_timestamp: Timestamp::from(0),
-                genesis_committee_blob_hash: committee_blob.id().hash,
-                name: "test network".to_string(),
-            })
-            .await
-            .expect("writing a network description should not fail");
 
-        let worker = WorkerState::new(
-            "Single validator node".to_string(),
-            Some(validator_keypair.secret_key),
-            storage,
-            5_000,
-            10_000,
-        )
-        .with_allow_inactive_chains(is_client)
-        .with_allow_messages_from_deprecated_epochs(is_client)
-        .with_long_lived_services(has_long_lived_services)
-        .with_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
-        Self {
+        let mut make_worker = async |keypair: ValidatorKeypair| {
+            let storage = builder
+                .build()
+                .await
+                .expect("building storage should not fail");
+            storage
+                .write_blob(&Blob::new_chain_description(&admin_description))
+                .await
+                .expect("writing a blob should not fail");
+            storage
+                .write_blob(&committee_blob)
+                .await
+                .expect("writing a blob should succeed");
+            storage
+                .write_network_description(&NetworkDescription {
+                    admin_chain_id: admin_description.id(),
+                    genesis_config_hash: CryptoHash::test_hash("genesis config"),
+                    genesis_timestamp: Timestamp::from(0),
+                    genesis_committee_blob_hash: committee_blob.id().hash,
+                    name: "test network".to_string(),
+                })
+                .await
+                .expect("writing a network description should not fail");
+
+            WorkerState::new(
+                "Single validator node".to_string(),
+                Some(keypair.secret_key),
+                storage,
+                5_000,
+                10_000,
+            )
+            .with_allow_inactive_chains(is_client)
+            .with_allow_messages_from_deprecated_epochs(is_client)
+            .with_long_lived_services(has_long_lived_services)
+            .with_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS))
+        };
+
+        let worker = make_worker(ValidatorKeypair::generate()).await;
+        let executing_worker = make_worker(validator_keypair).await;
+
+        Ok(Self {
             committee,
             worker,
+            executing_worker,
             admin_description,
             admin_keypair: account_secret,
             other_chains: BTreeMap::new(),
-        }
+        })
     }
 
     fn admin_id(&self) -> ChainId {
@@ -178,8 +196,38 @@ where
         &self.worker
     }
 
+    fn executing_worker(&self) -> &WorkerState<S> {
+        &self.executing_worker
+    }
+
     fn admin_public_key(&self) -> AccountPublicKey {
         self.admin_keypair.public()
+    }
+
+    pub async fn write_blobs(&mut self, blobs: &[Blob]) -> Result<(), linera_views::ViewError> {
+        self.worker.storage.write_blobs(blobs).await?;
+        self.executing_worker.storage.write_blobs(blobs).await?;
+        Ok(())
+    }
+
+    pub async fn register_mock_application(
+        &mut self,
+        chain_id: ChainId,
+        index: u32,
+    ) -> Result<(ApplicationId, MockApplication), anyhow::Error> {
+        let mut chain = self.worker.storage.load_chain(chain_id).await?;
+        let _ = chain
+            .execution_state
+            .register_mock_application(index)
+            .await?;
+        chain.save().await?;
+        let mut chain = self.executing_worker.storage.load_chain(chain_id).await?;
+        let (application_id, application, _) = chain
+            .execution_state
+            .register_mock_application(index)
+            .await?;
+        chain.save().await?;
+        Ok((application_id, application))
     }
 
     async fn add_root_chain(
@@ -215,6 +263,11 @@ where
             .create_chain(description.clone())
             .await
             .unwrap();
+        self.executing_worker
+            .storage
+            .create_chain(description.clone())
+            .await
+            .unwrap();
         description
     }
 
@@ -245,6 +298,11 @@ where
             .create_chain(description.clone())
             .await
             .unwrap();
+        self.executing_worker
+            .storage
+            .create_chain(description.clone())
+            .await
+            .unwrap();
         description
     }
 
@@ -262,77 +320,98 @@ where
         let vote = LiteVote::new(
             LiteValue::new(&value),
             round,
-            self.worker.chain_worker_config.key_pair().unwrap(),
+            self.executing_worker
+                .chain_worker_config
+                .key_pair()
+                .unwrap(),
         );
         let mut builder = SignatureAggregator::new(value, round, &self.committee);
         builder
-            .append(self.worker.public_key(), vote.signature)
+            .append(self.executing_worker.public_key(), vote.signature)
             .unwrap()
             .unwrap()
     }
-    #[expect(clippy::too_many_arguments)]
+
     async fn make_simple_transfer_certificate(
-        &self,
-        chain_description: ChainDescription,
+        &mut self,
+        chain_id: ChainId,
         chain_owner_pubkey: AccountPublicKey,
         target_id: ChainId,
         amount: Amount,
         incoming_bundles: Vec<IncomingBundle>,
-        balance: Amount,
-        previous_confirmed_blocks: Vec<&ConfirmedBlockCertificate>,
+        previous_confirmed_block: Option<&ConfirmedBlockCertificate>,
     ) -> ConfirmedBlockCertificate {
         self.make_transfer_certificate_for_epoch(
-            chain_description,
-            chain_owner_pubkey,
+            chain_id,
             chain_owner_pubkey.into(),
             AccountOwner::CHAIN,
             Account::chain(target_id),
             amount,
             incoming_bundles,
             Epoch::ZERO,
-            balance,
-            BTreeMap::new(),
-            previous_confirmed_blocks,
+            previous_confirmed_block,
         )
         .await
     }
 
     #[expect(clippy::too_many_arguments)]
     async fn make_transfer_certificate(
-        &self,
-        chain_description: ChainDescription,
-        chain_owner_pubkey: AccountPublicKey,
+        &mut self,
+        chain_id: ChainId,
         authenticated_owner: AccountOwner,
         source: AccountOwner,
         recipient: Account,
         amount: Amount,
         incoming_bundles: Vec<IncomingBundle>,
-        balance: Amount,
-        balances: BTreeMap<AccountOwner, Amount>,
-        previous_confirmed_blocks: Vec<&ConfirmedBlockCertificate>,
+        previous_confirmed_block: Option<&ConfirmedBlockCertificate>,
     ) -> ConfirmedBlockCertificate {
         self.make_transfer_certificate_for_epoch(
-            chain_description,
-            chain_owner_pubkey,
+            chain_id,
             authenticated_owner,
             source,
             recipient,
             amount,
             incoming_bundles,
             Epoch::ZERO,
-            balance,
-            balances,
-            previous_confirmed_blocks,
+            previous_confirmed_block,
         )
         .await
+    }
+
+    /// Creates a certificate with a transfer.
+    #[expect(clippy::too_many_arguments)]
+    async fn make_transfer_certificate_for_epoch(
+        &mut self,
+        chain_id: ChainId,
+        authenticated_owner: AccountOwner,
+        source: AccountOwner,
+        recipient: Account,
+        amount: Amount,
+        incoming_bundles: Vec<IncomingBundle>,
+        epoch: Epoch,
+        previous_confirmed_block: Option<&ConfirmedBlockCertificate>,
+    ) -> ConfirmedBlockCertificate {
+        let block = match previous_confirmed_block {
+            None => make_first_block(chain_id),
+            Some(cert) => make_child_block(cert.value()),
+        }
+        .with_incoming_bundles(incoming_bundles)
+        .with_transfer(source, recipient, amount)
+        .with_epoch(epoch)
+        .with_authenticated_owner(Some(authenticated_owner));
+
+        self.execute_proposal(block, vec![]).await.unwrap()
     }
 
     /// Creates a certificate with a transfer.
     ///
     /// This does not work for blocks with ancestors that sent a message to the same recipient, unless
     /// the `previous_confirmed_block` also did.
+    /// It also does not work as a certificate that can be processed - it doesn't do
+    /// proper hashing of the execution state, so such a certificate will be rejected by
+    /// the worker.
     #[expect(clippy::too_many_arguments)]
-    async fn make_transfer_certificate_for_epoch(
+    async fn make_transfer_certificate_for_epoch_unprocessable(
         &self,
         chain_description: ChainDescription,
         chain_owner_pubkey: AccountPublicKey,
@@ -473,6 +552,24 @@ where
             ..SystemExecutionState::new(description.clone())
         }
     }
+
+    /// A method creating a `ConfirmedBlockCertificate` for a proposal by executing it on the
+    /// `executing_worker`.
+    async fn execute_proposal(
+        &mut self,
+        proposal: ProposedBlock,
+        blobs: Vec<Blob>,
+    ) -> Result<ConfirmedBlockCertificate, anyhow::Error> {
+        let (block, _) = self
+            .executing_worker
+            .stage_block_execution(proposal, None, blobs)
+            .await?;
+        let certificate = self.make_certificate(ConfirmedBlock::new(block));
+        self.executing_worker
+            .fully_handle_certificate_with_notifications(certificate.clone(), &())
+            .await?;
+        Ok(certificate)
+    }
 }
 
 /// Asserts that there are no "removed" bundles in the inbox, that have been included as
@@ -554,7 +651,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let sender_public_key = signer.generate_new();
     let sender_owner = sender_public_key.into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -588,13 +685,13 @@ where
     };
     bad_signature_block_proposal.signature = bad_signature;
     assert_matches!(
-        env.worker()
+        env.executing_worker()
             .handle_block_proposal(bad_signature_block_proposal)
             .await,
             Err(WorkerError::CryptoError(error))
                 if matches!(error, linera_base::crypto::CryptoError::InvalidSignature {..})
     );
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
@@ -612,7 +709,7 @@ where
 {
     let mut signer = InMemorySigner::new(None);
     let sender_owner = signer.generate_new().into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -629,7 +726,7 @@ where
         .await
         .unwrap();
     assert_matches!(
-    env.worker()
+    env.executing_worker()
         .handle_block_proposal(zero_amount_block_proposal)
         .await,
         Err(
@@ -638,7 +735,7 @@ where
             execution_error, ChainExecutionContext::Operation(_)
         ) if matches!(**execution_error, ExecutionError::IncorrectTransferAmount))
     );
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
@@ -657,13 +754,12 @@ where
     B: StorageBuilder,
 {
     let mut signer = InMemorySigner::new(None);
-    let storage = storage_builder.build().await?;
-    let clock = storage_builder.clock();
     let public_key = signer.generate_new();
     let owner = public_key.into();
     let balance = Amount::from_tokens(5);
     let small_transfer = Amount::from_micros(1);
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner, balance).await;
     let chain_2_desc = env.add_root_chain(2, owner, balance).await;
     let chain_1 = chain_1_desc.id();
@@ -679,46 +775,35 @@ where
             .unwrap();
         // Timestamp too far in the future
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await,
+            env.executing_worker()
+                .handle_block_proposal(block_proposal)
+                .await,
             Err(WorkerError::InvalidTimestamp { .. })
         );
     }
 
     let block_0_time = Timestamp::from(TEST_GRACE_PERIOD_MICROS);
+    let block = make_first_block(chain_1)
+        .with_timestamp(block_0_time)
+        .with_simple_transfer(chain_2, small_transfer)
+        .with_authenticated_owner(Some(owner));
     let certificate = {
-        let block = make_first_block(chain_1)
-            .with_timestamp(block_0_time)
-            .with_simple_transfer(chain_2, small_transfer)
-            .with_authenticated_owner(Some(owner));
-        let block_proposal = block
-            .clone()
-            .into_first_proposal(owner, &signer)
-            .await
-            .unwrap();
-        let future = env.worker().handle_block_proposal(block_proposal);
+        let future = env.execute_proposal(block.clone(), vec![]);
         clock.set(block_0_time);
-        future.await?;
-
-        let system_state = SystemExecutionState {
-            balance: balance - small_transfer,
-            timestamp: block_0_time,
-            ..env.system_execution_state(&chain_1_desc.id())
-        };
-        let state_hash = system_state.into_hash().await;
-        let value = ConfirmedBlock::new(
-            BlockExecutionOutcome {
-                state_hash,
-                messages: vec![vec![direct_credit_message(chain_2, small_transfer)]],
-                oracle_responses: vec![vec![]],
-                events: vec![vec![]],
-                blobs: vec![vec![]],
-                operation_results: vec![OperationResult::default()],
-                ..BlockExecutionOutcome::default()
-            }
-            .with(block),
-        );
-        env.make_certificate(value)
+        future.await?
     };
+
+    assert!(certificate.value().matches_proposed_block(&block));
+    assert!(certificate.block().outcome_matches(
+        vec![vec![direct_credit_message(chain_2, small_transfer)]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![OperationResult::default()],
+    ));
+
     env.worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
@@ -731,7 +816,7 @@ where
             .unwrap();
         // Timestamp older than previous one
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await,
+            env.executing_worker().handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(error))
                 if matches!(*error, ChainError::InvalidBlockTimestamp { .. })
         );
@@ -750,7 +835,7 @@ where
 {
     let mut signer = InMemorySigner::new(None);
     let sender_public_key = signer.generate_new();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_public_key.into(), Amount::from_tokens(5))
         .await;
@@ -768,12 +853,12 @@ where
         .await
         .unwrap();
     assert_matches!(
-        env.worker()
+        env.executing_worker()
             .handle_block_proposal(unknown_sender_block_proposal)
             .await,
         Err(WorkerError::InvalidOwner)
     );
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
@@ -792,7 +877,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let sender_public_key = signer.generate_new();
     let sender_owner = sender_public_key.into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -806,13 +891,12 @@ where
         .unwrap();
     let certificate0 = env
         .make_simple_transfer_certificate(
-            chain_desc.clone(),
+            chain_1,
             sender_public_key,
             chain_2,
             Amount::ONE,
-            Vec::new(),
-            Amount::from_tokens(4),
             vec![],
+            None,
         )
         .await;
     let block_proposal1 = make_child_block(certificate0.value())
@@ -898,7 +982,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let sender_public_key = signer.generate_new();
     let sender_owner = sender_public_key.into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -910,37 +994,34 @@ where
 
     let certificate0 = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             sender_public_key,
             chain_2,
             Amount::ONE,
             Vec::new(),
-            Amount::from_tokens(4),
-            vec![],
+            None,
         )
         .await;
 
     let certificate1 = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             sender_public_key,
             chain_3,
             Amount::ONE,
             Vec::new(),
-            Amount::from_tokens(3),
-            vec![&certificate0],
+            Some(&certificate0),
         )
         .await;
 
     let certificate2 = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             sender_public_key,
             chain_2,
             Amount::ONE,
             Vec::new(),
-            Amount::from_tokens(2),
-            vec![&certificate1, &certificate0],
+            Some(&certificate1),
         )
         .await;
 
@@ -1029,7 +1110,7 @@ where
     let sender_owner = sender_public_key.into();
     let recipient_public_key = signer.generate_new();
     let recipient_owner = recipient_public_key.into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(6))
         .await;
@@ -1038,58 +1119,42 @@ where
     let chain_1 = chain_1_desc.id();
     let chain_2 = chain_2_desc.id();
     let chain_3 = chain_3_desc.id();
-    let certificate0 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![
-                vec![direct_credit_message(chain_2, Amount::ONE)],
-                vec![direct_credit_message(chain_2, Amount::from_tokens(2))],
-            ],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new(); 2],
-            blobs: vec![Vec::new(); 2],
-            state_hash: SystemExecutionState {
-                balance: Amount::from_tokens(3),
-                ..env.system_execution_state(&chain_1_desc.id())
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new(); 2],
-            operation_results: vec![OperationResult::default(); 2],
-        }
-        .with(
-            make_first_block(chain_1)
-                .with_simple_transfer(chain_2, Amount::ONE)
-                .with_simple_transfer(chain_2, Amount::from_tokens(2))
-                .with_authenticated_owner(Some(sender_owner)),
-        ),
+    let proposal0 = make_first_block(chain_1)
+        .with_simple_transfer(chain_2, Amount::ONE)
+        .with_simple_transfer(chain_2, Amount::from_tokens(2))
+        .with_authenticated_owner(Some(sender_owner));
+    let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
+
+    assert!(certificate0.value().matches_proposed_block(&proposal0));
+    assert!(certificate0.block().outcome_matches(
+        vec![
+            vec![direct_credit_message(chain_2, Amount::ONE)],
+            vec![direct_credit_message(chain_2, Amount::from_tokens(2))],
+        ],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]; 2],
+        vec![vec![]; 2],
+        vec![vec![]; 2],
+        vec![OperationResult::default(); 2],
     ));
 
-    let certificate1 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![direct_credit_message(chain_2, Amount::from_tokens(3))]],
-            previous_message_blocks: BTreeMap::from([(
-                chain_2,
-                (certificate0.hash(), BlockHeight(0)),
-            )]),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                balance: Amount::ZERO,
-                ..env.system_execution_state(&chain_1_desc.id())
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_child_block(&certificate0.clone().into_value())
-                .with_simple_transfer(chain_2, Amount::from_tokens(3))
-                .with_authenticated_owner(Some(sender_owner)),
-        ),
+    let proposal1 = make_child_block(&certificate0.clone().into_value())
+        .with_simple_transfer(chain_2, Amount::from_tokens(3))
+        .with_authenticated_owner(Some(sender_owner));
+    let certificate1 = env.execute_proposal(proposal1.clone(), vec![]).await?;
+
+    assert!(certificate1.value().matches_proposed_block(&proposal1));
+    assert!(certificate1.block().outcome_matches(
+        vec![vec![direct_credit_message(chain_2, Amount::from_tokens(3))]],
+        BTreeMap::from([(chain_2, (certificate0.hash(), BlockHeight(0)),)]),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![OperationResult::default()],
     ));
+
     // Missing earlier blocks, but the certificate will be preprocessed.
     assert_matches!(
         env.worker()
@@ -1287,7 +1352,7 @@ where
         );
     }
     {
-        let block_proposal = make_first_block(chain_2)
+        let proposed_block = make_first_block(chain_2)
             .with_incoming_bundle(IncomingBundle {
                 origin: chain_1,
                 bundle: MessageBundle {
@@ -1302,7 +1367,9 @@ where
                 action: MessageAction::Accept,
             })
             .with_simple_transfer(chain_3, Amount::ONE)
-            .with_authenticated_owner(Some(recipient_owner))
+            .with_authenticated_owner(Some(recipient_owner));
+        let block_proposal = proposed_block
+            .clone()
             .into_first_proposal(recipient_owner, &signer)
             .await
             .unwrap();
@@ -1310,25 +1377,21 @@ where
         env.worker()
             .handle_block_proposal(block_proposal.clone())
             .await?;
-        let certificate: ConfirmedBlockCertificate = env.make_certificate(ConfirmedBlock::new(
-            BlockExecutionOutcome {
-                messages: vec![
-                    Vec::new(),
-                    vec![direct_credit_message(chain_3, Amount::ONE)],
-                ],
-                previous_message_blocks: BTreeMap::new(),
-                previous_event_blocks: BTreeMap::new(),
-                events: vec![Vec::new(); 2],
-                blobs: vec![Vec::new(); 2],
-                state_hash: env
-                    .system_execution_state(&chain_2_desc.id())
-                    .into_hash()
-                    .await,
-                oracle_responses: vec![Vec::new(); 2],
-                operation_results: vec![OperationResult::default()],
-            }
-            .with(block_proposal.content.block),
+        let certificate = env
+            .execute_proposal(block_proposal.content.block, vec![])
+            .await?;
+
+        assert!(certificate.value().matches_proposed_block(&proposed_block));
+        assert!(certificate.block().outcome_matches(
+            vec![vec![], vec![direct_credit_message(chain_3, Amount::ONE)],],
+            BTreeMap::new(),
+            BTreeMap::new(),
+            vec![vec![]; 2],
+            vec![vec![]; 2],
+            vec![vec![]; 2],
+            vec![OperationResult::default()],
         ));
+
         env.worker()
             .handle_confirmed_certificate(certificate.clone(), None)
             .await?;
@@ -1381,7 +1444,7 @@ where
 {
     let mut signer = InMemorySigner::new(None);
     let sender_owner = signer.generate_new().into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -1397,14 +1460,14 @@ where
         .await
         .unwrap();
     assert_matches!(
-        env.worker().handle_block_proposal(block_proposal).await,
+        env.executing_worker().handle_block_proposal(block_proposal).await,
         Err(
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
                 execution_error, ChainExecutionContext::Operation(_)
         ) if matches!(**execution_error, ExecutionError::InsufficientBalance { .. }))
     );
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
@@ -1422,7 +1485,7 @@ where
 {
     let mut signer = InMemorySigner::new(None);
     let sender_owner = signer.generate_new().into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -1438,10 +1501,12 @@ where
         .await
         .unwrap();
 
-    let (chain_info_response, _actions) =
-        env.worker().handle_block_proposal(block_proposal).await?;
-    chain_info_response.check(env.worker().public_key())?;
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let (chain_info_response, _actions) = env
+        .executing_worker()
+        .handle_block_proposal(block_proposal)
+        .await?;
+    chain_info_response.check(env.executing_worker().public_key())?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none()); // It was a multi-leader
                                                        // round.
@@ -1450,11 +1515,11 @@ where
     drop(chain);
 
     let (chain_info_response, _actions) = env
-        .worker()
+        .executing_worker()
         .handle_validated_certificate(validated_certificate)
         .await?;
-    chain_info_response.check(env.worker().public_key())?;
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    chain_info_response.check(env.executing_worker().public_key())?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.validated_vote().is_none()); // Should be confirmed by now.
     let pending_vote = chain.manager.confirmed_vote().unwrap().lite();
@@ -1476,7 +1541,7 @@ where
 {
     let mut signer = InMemorySigner::new(None);
     let sender_owner = signer.generate_new().into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -1493,11 +1558,14 @@ where
         .unwrap();
 
     let (response, _actions) = env
-        .worker()
+        .executing_worker()
         .handle_block_proposal(block_proposal.clone())
         .await?;
-    response.check(env.worker().public_key())?;
-    let (replay_response, _actions) = env.worker().handle_block_proposal(block_proposal).await?;
+    response.check(env.executing_worker().public_key())?;
+    let (replay_response, _actions) = env
+        .executing_worker()
+        .handle_block_proposal(block_proposal)
+        .await?;
     // Workaround lack of equality.
     assert_eq!(
         CryptoHash::new(&*response.info),
@@ -1518,105 +1586,18 @@ where
     let mut signer = InMemorySigner::new(None);
     let sender_pubkey = signer.generate_new();
     let test_pubkey = signer.generate_new();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_2_desc = env
         .add_root_chain(2, test_pubkey.into(), Amount::ZERO)
         .await;
     let chain_2 = chain_2_desc.id();
     let chain_1_desc = dummy_chain_description(1);
     let certificate = env
-        .make_simple_transfer_certificate(
+        .make_transfer_certificate_for_epoch_unprocessable(
             chain_1_desc.clone(),
             sender_pubkey,
-            chain_2,
-            Amount::from_tokens(5),
-            Vec::new(),
-            Amount::from_tokens(5),
-            vec![],
-        )
-        .await;
-    assert_matches!(
-        env.worker()
-            .fully_handle_certificate_with_notifications(certificate, &())
-            .await,
-        Err(WorkerError::BlobsNotFound(error))
-            if error == vec![Blob::new_chain_description(&chain_1_desc).id()]
-    );
-    Ok(())
-}
-
-#[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
-#[test_log::test(tokio::test)]
-async fn test_handle_certificate_with_open_chain<B>(mut storage_builder: B) -> anyhow::Result<()>
-where
-    B: StorageBuilder,
-{
-    let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
-    let chain_2_desc = env
-        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ZERO)
-        .await;
-    let balance = Amount::from_tokens(42);
-    let small_transfer = Amount::from_tokens(1);
-    let description = env
-        .add_child_chain(chain_2_desc.id(), sender_key_pair.public().into(), balance)
-        .await;
-    let chain_id = description.id();
-    let mut state = env.system_execution_state(&description.id());
-    // Account for transferred tokens.
-    state.balance = balance;
-    let block = make_first_block(chain_id)
-        .with_simple_transfer(chain_id, small_transfer)
-        .with_authenticated_owner(Some(sender_key_pair.public().into()));
-
-    let value = ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![]],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![vec![]],
-            blobs: vec![vec![]],
-            state_hash: state.into_hash().await,
-            oracle_responses: vec![vec![]],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(block),
-    );
-    let certificate = env.make_certificate(value);
-    let info = env
-        .worker()
-        .fully_handle_certificate_with_notifications(certificate, &())
-        .await?
-        .info;
-    assert_eq!(info.next_block_height, BlockHeight::from(1));
-    Ok(())
-}
-
-#[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
-#[test_log::test(tokio::test)]
-async fn test_handle_certificate_wrong_owner<B>(mut storage_builder: B) -> anyhow::Result<()>
-where
-    B: StorageBuilder,
-{
-    let sender_key_pair = AccountSecretKey::generate();
-    let chain_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
-    let chain_2_desc = env
-        .add_root_chain(2, chain_key_pair.public().into(), Amount::from_tokens(5))
-        .await;
-    let chain_2 = chain_2_desc.id();
-    let certificate = env
-        .make_transfer_certificate_for_epoch(
-            chain_2_desc.clone(),
-            sender_key_pair.public(),
-            chain_key_pair.public().into(),
-            AccountOwner::CHAIN,
+            sender_pubkey.into(),
+            test_pubkey.into(),
             Account::chain(chain_2),
             Amount::from_tokens(5),
             Vec::new(),
@@ -1626,13 +1607,12 @@ where
             vec![],
         )
         .await;
-    // This fails because `make_simple_transfer_certificate` uses `sender_key_pair.public()` to
-    // compute the hash of the execution state.
     assert_matches!(
-        env.worker()
+        env.executing_worker()
             .fully_handle_certificate_with_notifications(certificate, &())
             .await,
-        Err(WorkerError::IncorrectOutcome { .. })
+        Err(WorkerError::BlobsNotFound(error))
+            if error == vec![Blob::new_chain_description(&chain_1_desc).id()]
     );
     Ok(())
 }
@@ -1647,7 +1627,7 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(5))
         .await;
@@ -1657,20 +1637,19 @@ where
     let chain_2 = chain_2_desc.id();
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1_desc.id(),
             sender_key_pair.public(),
             chain_2,
             Amount::from_tokens(5),
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
     // Replays are ignored.
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate, &())
         .await?;
     Ok(())
@@ -1688,7 +1667,7 @@ where
     B: StorageBuilder,
 {
     let key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, key_pair.public().into(), Amount::from_tokens(5))
         .await;
@@ -1696,22 +1675,33 @@ where
         .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ZERO)
         .await;
     let chain_3_desc = env
-        .add_root_chain(3, AccountPublicKey::test_key(3).into(), Amount::ZERO)
+        .add_root_chain(3, key_pair.public().into(), Amount::from_tokens(995))
         .await;
     let chain_1 = chain_1_desc.id();
     let chain_2 = chain_2_desc.id();
     let chain_3 = chain_3_desc.id();
 
+    let transfer_proposal = make_first_block(chain_3)
+        .with_simple_transfer(chain_1, Amount::from_tokens(995))
+        .with_authenticated_owner(Some(key_pair.public().into()));
+    let transfer_certificate = env
+        .execute_proposal(transfer_proposal.clone(), vec![])
+        .await?;
+
+    assert!(transfer_certificate
+        .value()
+        .matches_proposed_block(&transfer_proposal));
+
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             key_pair.public(),
             chain_2,
             Amount::from_tokens(1000),
             vec![IncomingBundle {
                 origin: chain_3,
                 bundle: MessageBundle {
-                    certificate_hash: CryptoHash::test_hash("certificate"),
+                    certificate_hash: transfer_certificate.hash(),
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
@@ -1720,8 +1710,7 @@ where
                 },
                 action: MessageAction::Accept,
             }],
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
     env.worker()
@@ -1753,7 +1742,7 @@ where
             timestamp,
             transaction_index: 0,
             messages,
-        } if certificate_hash == CryptoHash::test_hash("certificate")
+        } if certificate_hash == transfer_certificate.hash()
             && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
             && matches!(messages[..], [PostedMessage {
@@ -1785,7 +1774,7 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::ONE)
         .await;
@@ -1797,19 +1786,18 @@ where
 
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             sender_key_pair.public(),
             chain_2,
             Amount::ONE,
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
-    let new_sender_chain = env.worker().chain_state_view(chain_1).await?;
+    let new_sender_chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(new_sender_chain.is_active());
     assert_eq!(
         Amount::ZERO,
@@ -1824,7 +1812,7 @@ where
         Some(certificate.hash()),
         new_sender_chain.tip_state.get().block_hash
     );
-    let new_recipient_chain = env.worker().chain_state_view(chain_2).await?;
+    let new_recipient_chain = env.executing_worker().chain_state_view(chain_2).await?;
     assert!(new_recipient_chain.is_active());
     assert_eq!(
         Amount::MAX,
@@ -1844,28 +1832,26 @@ async fn test_handle_certificate_same_chain_same_owner_no_messages<B>(
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let key_pair = AccountSecretKey::generate();
     let owner = key_pair.public().into();
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env.add_root_chain(1, owner, Amount::ONE).await;
     let chain_1 = chain_1_desc.id();
 
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             key_pair.public(),
             chain_1,
             Amount::ONE,
             Vec::new(),
-            Amount::ONE,
-            vec![],
+            None,
         )
         .await;
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
-    let chain = env.worker().chain_state_view(chain_1).await?;
+    let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
 
@@ -1893,10 +1879,9 @@ async fn test_handle_certificate_different_chain_with_messages<B>(
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let key_pair = AccountSecretKey::generate();
     let owner = key_pair.public().into();
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env.add_root_chain(1, owner, Amount::ONE).await;
     let chain_1 = chain_1_desc.id();
     let chain_2_desc = env.add_root_chain(2, owner, Amount::ZERO).await;
@@ -1904,21 +1889,20 @@ where
 
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             key_pair.public(),
             chain_2,
             Amount::ONE,
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
     // Check the sender chain
-    let chain_1_state = env.worker().chain_state_view(chain_1).await?;
+    let chain_1_state = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain_1_state.is_active());
     assert_eq!(
         Amount::ZERO,
@@ -1926,7 +1910,7 @@ where
     );
 
     // Check the receiver chain has the inbox with the expected message
-    let chain_2_state = env.worker().chain_state_view(chain_2).await?;
+    let chain_2_state = env.executing_worker().chain_state_view(chain_2).await?;
     let inbox = chain_2_state
         .inboxes
         .try_load_entry(&chain_1)
@@ -1977,22 +1961,24 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let sender_public_key = sender_key_pair.public();
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let chain_1_desc = env
+        .add_root_chain(1, sender_public_key.into(), Amount::from_tokens(20))
+        .await;
+    let chain_1 = chain_1_desc.id();
     let chain_2_desc = env
         .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
         .await;
     let chain_2 = chain_2_desc.id();
-    let chain_1_desc = dummy_chain_description(1);
-    let chain_1 = chain_1_desc.id();
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc,
-            sender_key_pair.public(),
+            chain_1,
+            sender_public_key,
             chain_2,
             Amount::from_tokens(10),
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
     env.worker()
@@ -2050,31 +2036,29 @@ async fn test_handle_cross_chain_request_no_recipient_chain<B>(
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(10))
         .await;
     let chain_2 = dummy_chain_description(2).id();
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc,
+            chain_1_desc.id(),
             sender_key_pair.public(),
             chain_2,
             Amount::from_tokens(10),
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
     assert!(env
-        .worker()
+        .executing_worker()
         .handle_cross_chain_request(update_recipient_direct(chain_2, &certificate))
         .await?
         .cross_chain_requests
         .is_empty());
-    let chain = env.worker().chain_state_view(chain_2).await?;
+    let chain = env.executing_worker().chain_state_view(chain_2).await?;
     // The target chain did not receive the message
     assert!(chain.inboxes.indices().await?.is_empty());
     Ok(())
@@ -2091,9 +2075,8 @@ async fn test_handle_cross_chain_request_no_recipient_chain_on_client<B>(
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage, true, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(10))
         .await;
@@ -2101,13 +2084,12 @@ where
     let chain_2 = dummy_chain_description(2).id();
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc,
+            chain_1,
             sender_key_pair.public(),
             chain_2,
             Amount::from_tokens(10),
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
     // An inactive target chain is created and it acknowledges the message.
@@ -2147,7 +2129,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let recipient_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(5))
         .await;
@@ -2161,7 +2143,7 @@ where
     let chain_2 = chain_2_desc.id();
     let chain_3 = chain_3_desc.id();
     assert_eq!(
-        env.worker()
+        env.executing_worker()
             .query_application(chain_1, Query::System(SystemQuery), None)
             .await?,
         QueryOutcome {
@@ -2173,7 +2155,7 @@ where
         }
     );
     assert_eq!(
-        env.worker()
+        env.executing_worker()
             .query_application(chain_2, Query::System(SystemQuery), None)
             .await?,
         QueryOutcome {
@@ -2187,18 +2169,17 @@ where
 
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             sender_key_pair.public(),
             chain_2,
             Amount::from_tokens(5),
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
 
     let info = env
-        .worker()
+        .executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?
         .info;
@@ -2208,7 +2189,7 @@ where
     assert_eq!(Some(certificate.hash()), info.block_hash);
     assert!(info.manager.pending.is_none());
     assert_eq!(
-        env.worker()
+        env.executing_worker()
             .query_application(chain_1, Query::System(SystemQuery), None)
             .await?,
         QueryOutcome {
@@ -2223,7 +2204,7 @@ where
     // Try to use the money. This requires selecting the incoming message in a next block.
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_2_desc.clone(),
+            chain_2,
             recipient_key_pair.public(),
             chain_3,
             Amount::ONE,
@@ -2239,16 +2220,15 @@ where
                 },
                 action: MessageAction::Accept,
             }],
-            Amount::from_tokens(4),
-            vec![],
+            None,
         )
         .await;
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
     assert_eq!(
-        env.worker()
+        env.executing_worker()
             .query_application(chain_2, Query::System(SystemQuery), None)
             .await?,
         QueryOutcome {
@@ -2261,7 +2241,7 @@ where
     );
 
     {
-        let recipient_chain = env.worker().chain_state_view(chain_2).await?;
+        let recipient_chain = env.executing_worker().chain_state_view(chain_2).await?;
         assert!(recipient_chain.is_active());
         assert_eq!(
             *recipient_chain.execution_state.system.balance.get(),
@@ -2283,7 +2263,10 @@ where
         assert_eq!(recipient_chain.received_log.count(), 1);
     }
     let query = ChainInfoQuery::new(chain_2).with_received_log_excluding_first_n(0);
-    let (response, _actions) = env.worker().handle_chain_info_query(query).await?;
+    let (response, _actions) = env
+        .executing_worker()
+        .handle_chain_info_query(query)
+        .await?;
     assert_eq!(response.info.requested_received_log.len(), 1);
     assert_eq!(
         response.info.requested_received_log[0],
@@ -2307,7 +2290,7 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = AccountSecretKey::generate();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(5))
         .await;
@@ -2315,18 +2298,17 @@ where
     let chain_2 = dummy_chain_description(2).id();
     let certificate = env
         .make_simple_transfer_certificate(
-            chain_1_desc.clone(),
+            chain_1,
             sender_key_pair.public(),
             chain_2, // the recipient chain does not exist
             Amount::from_tokens(5),
             Vec::new(),
-            Amount::ZERO,
-            vec![],
+            None,
         )
         .await;
 
     let info = env
-        .worker()
+        .executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?
         .info;
@@ -2357,7 +2339,7 @@ where
     let recipient_pubkey = recipient_key_pair.public();
     let recipient = AccountOwner::from(recipient_pubkey);
 
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(6))
         .await;
@@ -2379,67 +2361,57 @@ where
     // Transfer money from the CHAIN account to the sender's account.
     let certificate0 = env
         .make_transfer_certificate(
-            chain_1_desc.clone(),
-            sender_pubkey,
+            chain_1,
             sender,
             AccountOwner::CHAIN,
             sender_account,
             Amount::from_tokens(5),
             Vec::new(),
-            Amount::ONE,
-            BTreeMap::from_iter([(sender, Amount::from_tokens(5))]),
-            vec![],
+            None,
         )
         .await;
 
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
 
     // Then, make two transfers to the recipient.
     let certificate1 = env
         .make_transfer_certificate(
-            chain_1_desc.clone(),
-            sender_pubkey,
+            chain_1,
             sender,
             sender,
             recipient_account,
             Amount::from_tokens(3),
             Vec::new(),
-            Amount::ONE,
-            BTreeMap::from_iter([(sender, Amount::from_tokens(2))]),
-            vec![&certificate0],
+            Some(&certificate0),
         )
         .await;
 
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
 
     let certificate2 = env
         .make_transfer_certificate(
-            chain_1_desc.clone(),
-            sender_pubkey,
+            chain_1,
             sender,
             sender,
             recipient_account,
             Amount::from_tokens(2),
             Vec::new(),
-            Amount::ONE,
-            BTreeMap::new(),
-            vec![&certificate1, &certificate0],
+            Some(&certificate1),
         )
         .await;
 
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate2.clone(), &())
         .await?;
 
     // Reject the first transfer and try to use the money of the second one.
     let certificate = env
         .make_transfer_certificate(
-            chain_2_desc.clone(),
-            recipient_pubkey,
+            chain_2,
             recipient,
             recipient,
             Account::chain(chain_2_desc.id()),
@@ -2478,18 +2450,16 @@ where
                     action: MessageAction::Accept,
                 },
             ],
-            Amount::ONE,
-            BTreeMap::from_iter([(recipient, Amount::from_tokens(1))]),
-            vec![],
+            None,
         )
         .await;
 
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
     {
-        let chain = env.worker().chain_state_view(chain_2).await?;
+        let chain = env.executing_worker().chain_state_view(chain_2).await?;
         assert!(chain.is_active());
         assert_no_removed_bundles(&chain).await;
     }
@@ -2497,8 +2467,7 @@ where
     // Process the bounced message and try to use the refund.
     let certificate3 = env
         .make_transfer_certificate(
-            chain_1_desc.clone(),
-            sender_pubkey,
+            chain_1,
             sender,
             sender,
             Account::chain(chain_2_desc.id()),
@@ -2519,13 +2488,11 @@ where
                 },
                 action: MessageAction::Accept,
             }],
-            Amount::ONE,
-            BTreeMap::new(),
-            vec![&certificate2, &certificate1, &certificate0],
+            Some(&certificate2),
         )
         .await;
 
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate3.clone(), &())
         .await?;
 
@@ -2548,10 +2515,13 @@ async fn run_test_chain_creation_with_committee_creation<B>(
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
-    let mut env =
-        TestEnvironment::new_with_amount(storage.clone(), false, false, Amount::from_tokens(2))
-            .await;
+    let mut env = TestEnvironment::new_with_amount(
+        &mut storage_builder,
+        false,
+        false,
+        Amount::from_tokens(2),
+    )
+    .await?;
     let mut committees = BTreeMap::new();
     let committee = env.committee().clone();
     committees.insert(Epoch::ZERO, committee.clone());
@@ -2561,27 +2531,26 @@ where
         .add_child_chain(admin_id, env.admin_public_key().into(), Amount::ZERO)
         .await;
     let user_id = user_description.id();
-    let certificate0 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![]],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![vec![Blob::new_chain_description(&user_description)]],
-            state_hash: env.system_execution_state(&admin_id).into_hash().await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_first_block(admin_id)
-                .with_operation(SystemOperation::OpenChain(OpenChainConfig {
-                    ownership: ChainOwnership::single(env.admin_public_key().into()),
-                    balance: Amount::ZERO,
-                    application_permissions: Default::default(),
-                }))
-                .with_authenticated_owner(Some(env.admin_public_key().into())),
-        ),
+    let proposal0 = make_first_block(admin_id)
+        .with_operation(SystemOperation::OpenChain(OpenChainConfig {
+            ownership: ChainOwnership::single(env.admin_public_key().into()),
+            balance: Amount::ZERO,
+            application_permissions: Default::default(),
+        }))
+        .with_authenticated_owner(Some(env.admin_public_key().into()));
+    let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
+
+    assert!(certificate0.value().matches_proposed_block(&proposal0));
+    assert!(certificate0.block().outcome_matches(
+        vec![vec![]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![Vec::new()],
+        vec![Vec::new()],
+        vec![vec![Blob::new_chain_description(&user_description)]],
+        vec![OperationResult::default()],
     ));
+
     env.worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
@@ -2601,59 +2570,46 @@ where
     }
 
     // Create a new committee and transfer money before accepting the subscription.
-    let committees2 = BTreeMap::from_iter([
-        (Epoch::ZERO, committee.clone()),
-        (Epoch::from(1), committee.clone()),
-    ]);
+    let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
+    // `PublishCommitteeBlob` is tested e.g. in `client_tests::test_change_voting_rights`, so we
+    // just write it directly to storage here for simplicity.
+    env.write_blobs(&[committee_blob.clone()]).await?;
+    let blob_hash = committee_blob.id().hash;
+    let proposal1 = make_child_block(&certificate0.clone().into_value())
+        .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+            epoch: Epoch::from(1),
+            blob_hash,
+        }))
+        .with_simple_transfer(user_id, Amount::from_tokens(2));
+    let certificate1 = env.execute_proposal(proposal1.clone(), vec![]).await?;
+
     let event_id = EventId {
         chain_id: admin_id,
         stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
         index: 1,
     };
-    let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
-    // `PublishCommitteeBlob` is tested e.g. in `client_tests::test_change_voting_rights`, so we
-    // just write it directly to storage here for simplicity.
-    storage.write_blob(&committee_blob).await?;
-    let blob_hash = committee_blob.id().hash;
-    let certificate1 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![
-                vec![],
-                vec![direct_credit_message(user_id, Amount::from_tokens(2))],
-            ],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![
-                vec![Event {
-                    stream_id: event_id.stream_id.clone(),
-                    index: event_id.index,
-                    value: bcs::to_bytes(&blob_hash).unwrap(),
-                }],
-                Vec::new(),
-            ],
-            blobs: vec![Vec::new(); 2],
-            state_hash: SystemExecutionState {
-                // The root chain knows both committees at the end.
-                committees: committees2.clone(),
-                used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Epoch::from(1),
-                balance: Amount::ZERO,
-                ..env.system_execution_state(&admin_id)
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
-            operation_results: vec![OperationResult::default(); 2],
-        }
-        .with(
-            make_child_block(&certificate0.clone().into_value())
-                .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
-                    epoch: Epoch::from(1),
-                    blob_hash,
-                }))
-                .with_simple_transfer(user_id, Amount::from_tokens(2)),
-        ),
+
+    assert!(certificate1.value().matches_proposed_block(&proposal1));
+    assert!(certificate1.block().outcome_matches(
+        vec![
+            vec![],
+            vec![direct_credit_message(user_id, Amount::from_tokens(2))],
+        ],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
+        vec![
+            vec![Event {
+                stream_id: event_id.stream_id.clone(),
+                index: event_id.index,
+                value: bcs::to_bytes(&blob_hash).unwrap(),
+            }],
+            vec![],
+        ],
+        vec![vec![]; 2],
+        vec![OperationResult::default(); 2],
     ));
+
     env.worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
@@ -2686,57 +2642,47 @@ where
         );
         assert_eq!(user_chain.execution_state.system.committees.get().len(), 1);
     }
+    let proposal3 = make_first_block(user_id)
+        .with_incoming_bundle(IncomingBundle {
+            origin: admin_id,
+            bundle: MessageBundle {
+                certificate_hash: certificate1.hash(),
+                height: BlockHeight::from(1),
+                timestamp: Timestamp::from(0),
+                transaction_index: 1,
+                messages: vec![system_credit_message(Amount::from_tokens(2))
+                    .to_posted(0, MessageKind::Tracked)],
+            },
+            action: MessageAction::Accept,
+        })
+        .with_operation(SystemOperation::ProcessNewEpoch(Epoch::from(1)));
     // Make the child receive the pending messages.
-    let certificate3 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![Vec::new(); 2],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new(); 2],
-            blobs: vec![Vec::new(); 2],
-            state_hash: SystemExecutionState {
-                // Finally the child knows about both committees and has the money.
-                committees: committees2.clone(),
-                balance: Amount::from_tokens(2),
-                used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Epoch::from(1),
-                ..env.system_execution_state(&user_description.id())
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![
-                vec![],
-                vec![
-                    OracleResponse::Event(
-                        EventId {
-                            chain_id: admin_id,
-                            stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                            index: 1,
-                        },
-                        bcs::to_bytes(&blob_hash).unwrap(),
-                    ),
-                    OracleResponse::Blob(committee_blob.id()),
-                ],
-            ],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_first_block(user_id)
-                .with_incoming_bundle(IncomingBundle {
-                    origin: admin_id,
-                    bundle: MessageBundle {
-                        certificate_hash: certificate1.hash(),
-                        height: BlockHeight::from(1),
-                        timestamp: Timestamp::from(0),
-                        transaction_index: 1,
-                        messages: vec![system_credit_message(Amount::from_tokens(2))
-                            .to_posted(0, MessageKind::Tracked)],
+    let certificate3 = env.execute_proposal(proposal3.clone(), vec![]).await?;
+
+    assert!(certificate3.value().matches_proposed_block(&proposal3));
+    assert!(certificate3.block().outcome_matches(
+        vec![vec![]; 2],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![
+            vec![],
+            vec![
+                OracleResponse::Event(
+                    EventId {
+                        chain_id: admin_id,
+                        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                        index: 1,
                     },
-                    action: MessageAction::Accept,
-                })
-                .with_operation(SystemOperation::ProcessNewEpoch(Epoch::from(1))),
-        ),
+                    bcs::to_bytes(&blob_hash).unwrap(),
+                ),
+                OracleResponse::Blob(committee_blob.id()),
+            ],
+        ],
+        vec![vec![]; 2],
+        vec![vec![]; 2],
+        vec![OperationResult::default()],
     ));
+
     env.worker()
         .fully_handle_certificate_with_notifications(certificate3, &())
         .await?;
@@ -2767,8 +2713,7 @@ where
     B: StorageBuilder,
 {
     let owner1 = AccountSecretKey::generate().public().into();
-    let storage = storage_builder.build().await?;
-    let mut env = TestEnvironment::new(storage.clone(), false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env.add_root_chain(1, owner1, Amount::from_tokens(3)).await;
     let mut committees = BTreeMap::new();
     let committee = env.committee().clone();
@@ -2777,67 +2722,49 @@ where
     let user_id = chain_1_desc.id();
 
     // Have the user chain start a transfer to the admin chain.
-    let certificate0 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                balance: Amount::from_tokens(2),
-                ..env.system_execution_state(&chain_1_desc.id())
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_first_block(user_id)
-                .with_simple_transfer(admin_id, Amount::ONE)
-                .with_authenticated_owner(Some(owner1)),
-        ),
+    let proposal0 = make_first_block(user_id)
+        .with_simple_transfer(admin_id, Amount::ONE)
+        .with_authenticated_owner(Some(owner1));
+    let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
+
+    assert!(certificate0.value().matches_proposed_block(&proposal0));
+    assert!(certificate0.block().outcome_matches(
+        vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![OperationResult::default()],
     ));
+
     // Have the admin chain create a new epoch without retiring the old one.
-    let committees2 = BTreeMap::from_iter([
-        (Epoch::ZERO, committee.clone()),
-        (Epoch::from(1), committee.clone()),
-    ]);
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     let blob_hash = committee_blob.id().hash;
-    storage.write_blob(&committee_blob).await?;
-    let certificate1 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![]],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![vec![Event {
-                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                index: 1,
-                value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
-            }]],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                committees: committees2.clone(),
-                used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Epoch::from(1),
-                ..env.system_execution_state(&admin_id)
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())]],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_first_block(admin_id).with_operation(SystemOperation::Admin(
-                AdminOperation::CreateCommittee {
-                    epoch: Epoch::from(1),
-                    blob_hash,
-                },
-            )),
-        ),
+    env.write_blobs(&[committee_blob.clone()]).await?;
+    let proposal1 = make_first_block(admin_id).with_operation(SystemOperation::Admin(
+        AdminOperation::CreateCommittee {
+            epoch: Epoch::from(1),
+            blob_hash,
+        },
     ));
+    let certificate1 = env.execute_proposal(proposal1.clone(), vec![]).await?;
+
+    assert!(certificate1.value().matches_proposed_block(&proposal1));
+    assert!(certificate1.block().outcome_matches(
+        vec![vec![]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![OracleResponse::Blob(committee_blob.id())]],
+        vec![vec![Event {
+            stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+            index: 1,
+            value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+        }]],
+        vec![vec![]],
+        vec![OperationResult::default()],
+    ));
+
     env.worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
@@ -2890,9 +2817,8 @@ async fn test_transfers_and_committee_removal<B>(mut storage_builder: B) -> anyh
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let mut env =
-        TestEnvironment::new_with_amount(storage.clone(), false, false, Amount::ZERO).await;
+        TestEnvironment::new_with_amount(&mut storage_builder, false, false, Amount::ZERO).await?;
     let owner1 = AccountSecretKey::generate().public().into();
     let chain_1_desc = env.add_root_chain(1, owner1, Amount::from_tokens(3)).await;
     let mut committees = BTreeMap::new();
@@ -2902,73 +2828,58 @@ where
     let user_id = chain_1_desc.id();
 
     // Have the user chain start a transfer to the admin chain.
-    let certificate0 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                balance: Amount::from_tokens(2),
-                ..env.system_execution_state(&chain_1_desc.id())
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_first_block(user_id)
-                .with_simple_transfer(admin_id, Amount::ONE)
-                .with_authenticated_owner(Some(owner1)),
-        ),
+    let proposal0 = make_first_block(user_id)
+        .with_simple_transfer(admin_id, Amount::ONE)
+        .with_authenticated_owner(Some(owner1));
+    let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
+
+    assert!(certificate0.value().matches_proposed_block(&proposal0));
+    assert!(certificate0.block().outcome_matches(
+        vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![Vec::new()],
+        vec![Vec::new()],
+        vec![Vec::new()],
+        vec![OperationResult::default()]
     ));
+
     // Have the admin chain create a new epoch and retire the old one immediately.
-    let committees1 = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     let blob_hash = committee_blob.id().hash;
-    storage.write_blob(&committee_blob).await?;
+    env.write_blobs(&[committee_blob.clone()]).await?;
 
-    let certificate1 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![]; 2],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![
-                vec![Event {
-                    stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                    index: 1,
-                    value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
-                }],
-                vec![Event {
-                    stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
-                    index: 0,
-                    value: Vec::new(),
-                }],
-            ],
-            blobs: vec![Vec::new(); 2],
-            state_hash: SystemExecutionState {
-                committees: committees1.clone(),
-                used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Epoch::from(1),
-                ..env.system_execution_state(&admin_id)
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
-            operation_results: vec![OperationResult::default(); 2],
-        }
-        .with(
-            make_first_block(admin_id)
-                .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
-                    epoch: Epoch::from(1),
-                    blob_hash,
-                }))
-                .with_operation(SystemOperation::Admin(AdminOperation::RemoveCommittee {
-                    epoch: Epoch::ZERO,
-                })),
-        ),
+    let proposal1 = make_first_block(admin_id)
+        .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+            epoch: Epoch::from(1),
+            blob_hash,
+        }))
+        .with_operation(SystemOperation::Admin(AdminOperation::RemoveCommittee {
+            epoch: Epoch::ZERO,
+        }));
+
+    let certificate1 = env.execute_proposal(proposal1.clone(), vec![]).await?;
+
+    assert!(certificate1.value().matches_proposed_block(&proposal1));
+    assert!(certificate1.block().outcome_matches(
+        vec![vec![]; 2],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
+        vec![
+            vec![Event {
+                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                index: 1,
+                value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+            }],
+            vec![Event {
+                stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
+                index: 0,
+                value: Vec::new(),
+            }],
+        ],
+        vec![vec![]; 2],
+        vec![OperationResult::default(); 2],
     ));
 
     env.worker()
@@ -3001,43 +2912,34 @@ where
     }
 
     // Force the admin chain to receive the money nonetheless by anticipation.
-    let certificate2 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![Vec::new()],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                committees: committees1.clone(),
-                balance: Amount::ONE,
-                used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Epoch::from(1),
-                ..env.system_execution_state(&admin_id)
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![],
-        }
-        .with(
-            make_child_block(&certificate1.clone().into_value())
-                .with_epoch(1)
-                .with_incoming_bundle(IncomingBundle {
-                    origin: user_id,
-                    bundle: MessageBundle {
-                        certificate_hash: certificate0.hash(),
-                        height: BlockHeight::ZERO,
-                        timestamp: Timestamp::from(0),
-                        transaction_index: 0,
-                        messages: vec![
-                            system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
-                        ],
-                    },
-                    action: MessageAction::Accept,
-                }),
-        ),
+    let proposal2 = make_child_block(&certificate1.clone().into_value())
+        .with_epoch(1)
+        .with_incoming_bundle(IncomingBundle {
+            origin: user_id,
+            bundle: MessageBundle {
+                certificate_hash: certificate0.hash(),
+                height: BlockHeight::ZERO,
+                timestamp: Timestamp::from(0),
+                transaction_index: 0,
+                messages: vec![
+                    system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                ],
+            },
+            action: MessageAction::Accept,
+        });
+    let certificate2 = env.execute_proposal(proposal2.clone(), vec![]).await?;
+
+    assert!(certificate2.value().matches_proposed_block(&proposal2));
+    assert!(certificate2.block().outcome_matches(
+        vec![vec![]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![],
     ));
+
     env.worker()
         .fully_handle_certificate_with_notifications(certificate2.clone(), &())
         .await?;
@@ -3072,44 +2974,30 @@ where
 
     // Let's make a certificate for a block creating another epoch.
     // This one should contain previous_event_blocks.
-    let committees3 = BTreeMap::from_iter([
-        (Epoch::from(1), committee.clone()),
-        (Epoch::from(2), committee.clone()),
-    ]);
-    let certificate3 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![Vec::new()],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::from([(
-                StreamId::system(NEW_EPOCH_STREAM_NAME),
-                (certificate1.hash(), BlockHeight(0)),
-            )]),
-            events: vec![vec![Event {
-                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                index: 2,
-                value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
-            }]],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                committees: committees3.clone(),
-                balance: Amount::ONE,
-                used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Epoch::from(2),
-                ..env.system_execution_state(&admin_id)
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(
-            make_child_block(&certificate2.into_value())
-                .with_epoch(1)
-                .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
-                    epoch: Epoch::from(2),
-                    blob_hash,
-                })),
-        ),
+    let proposal3 = make_child_block(&certificate2.into_value())
+        .with_epoch(1)
+        .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+            epoch: Epoch::from(2),
+            blob_hash,
+        }));
+    let certificate3 = env.execute_proposal(proposal3.clone(), vec![]).await?;
+
+    assert!(certificate3.value().matches_proposed_block(&proposal3));
+    assert!(certificate3.block().outcome_matches(
+        vec![vec![]],
+        BTreeMap::new(),
+        BTreeMap::from([(
+            StreamId::system(NEW_EPOCH_STREAM_NAME),
+            (certificate1.hash(), BlockHeight(0)),
+        )]),
+        vec![vec![]],
+        vec![vec![Event {
+            stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+            index: 2,
+            value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+        }]],
+        vec![vec![]],
+        vec![OperationResult::default()],
     ));
 
     env.worker()
@@ -3121,16 +3009,8 @@ where
 
 #[test(tokio::test)]
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
-    let store_config = MemoryDatabase::new_test_config().await?;
-    let namespace = generate_test_namespace();
-    let store = DbStorage::<MemoryDatabase, _>::new_for_testing(
-        store_config,
-        &namespace,
-        None,
-        TestClock::new(),
-    )
-    .await?;
-    let env = TestEnvironment::new(store, true, false).await;
+    let mut storage_builder = MemoryStorageBuilder::default();
+    let env = TestEnvironment::new(&mut storage_builder, true, false).await?;
     let committees = BTreeMap::from([(Epoch::from(1), env.committee().clone())]);
 
     let chain_0 = env.admin_description.clone();
@@ -3141,7 +3021,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let id1 = chain_1.id();
 
     let certificate0 = env
-        .make_transfer_certificate_for_epoch(
+        .make_transfer_certificate_for_epoch_unprocessable(
             chain_0.clone(),
             key_pair0.public(),
             key_pair0.public().into(),
@@ -3156,7 +3036,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         )
         .await;
     let certificate1 = env
-        .make_transfer_certificate_for_epoch(
+        .make_transfer_certificate_for_epoch_unprocessable(
             chain_0.clone(),
             key_pair0.public(),
             key_pair0.public().into(),
@@ -3171,7 +3051,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         )
         .await;
     let certificate2 = env
-        .make_transfer_certificate_for_epoch(
+        .make_transfer_certificate_for_epoch_unprocessable(
             chain_0.clone(),
             key_pair0.public(),
             key_pair0.public().into(),
@@ -3187,7 +3067,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         .await;
     // Weird case: epoch going backward.
     let certificate3 = env
-        .make_transfer_certificate_for_epoch(
+        .make_transfer_certificate_for_epoch_unprocessable(
             chain_0.clone(),
             key_pair0.public(),
             key_pair0.public().into(),
@@ -3302,13 +3182,12 @@ async fn test_timeouts<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let mut signer = InMemorySigner::new(None);
-    let clock = storage_builder.clock();
     let key_pairs = generate_key_pairs(&mut signer, 2);
     let owner0 = AccountOwner::from(key_pairs[0]);
     let owner1 = AccountOwner::from(key_pairs[1]);
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
     let small_transfer = Amount::from_micros(1);
     let chain_1 = chain_1_desc.id();
@@ -3326,13 +3205,13 @@ where
         })
         .with_authenticated_owner(Some(owner0));
     let (block0, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block0, None, vec![])
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
     let response = env
-        .worker()
+        .executing_worker()
         .fully_handle_certificate_with_notifications(certificate0, &())
         .await?;
 
@@ -3346,14 +3225,14 @@ where
         .into_proposal_with_round(owner1, &signer, Round::SingleLeader(0))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0)
         .with_simple_transfer(chain_1, small_transfer)
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
 
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::SingleLeader(0)))
@@ -3361,7 +3240,10 @@ where
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
     let query = ChainInfoQuery::new(chain_1).with_timeout(BlockHeight(1), Round::SingleLeader(0));
-    let result = env.worker().handle_chain_info_query(query.clone()).await;
+    let result = env
+        .executing_worker()
+        .handle_chain_info_query(query.clone())
+        .await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::NotTimedOutYet(_))
     );
@@ -3370,7 +3252,10 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let (response, _) = env.worker().handle_chain_info_query(query).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_chain_info_query(query)
+        .await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout = Timeout::new(chain_1, BlockHeight::from(1), Epoch::from(0));
 
@@ -3379,9 +3264,9 @@ where
     let certificate_timeout = vote
         .with_value(value_timeout.clone())
         .unwrap()
-        .into_certificate(env.worker().public_key());
+        .into_certificate(env.executing_worker().public_key());
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_timeout_certificate(certificate_timeout)
         .await?;
     assert_eq!(response.info.manager.leader, Some(owner0));
@@ -3389,7 +3274,7 @@ where
     // Now owner 0 can propose a block, but owner 1 can't.
     let proposed_block1 = make_child_block(&value0).with_simple_transfer(chain_1, small_transfer);
     let (block1, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block1.clone(), None, vec![])
         .await?;
     let proposal1_wrong_owner = proposed_block1
@@ -3399,7 +3284,7 @@ where
         .await
         .unwrap();
     let result = env
-        .worker()
+        .executing_worker()
         .handle_block_proposal(proposal1_wrong_owner)
         .await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
@@ -3408,7 +3293,10 @@ where
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
         .await
         .unwrap();
-    let (response, _) = env.worker().handle_block_proposal(proposal1).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_block_proposal(proposal1)
+        .await?;
     let value1 = ValidatedBlock::new(block1.clone());
 
     // If we send the validated block certificate to the worker, it votes to confirm.
@@ -3416,9 +3304,9 @@ where
     let certificate1 = vote
         .with_value(value1.clone())
         .unwrap()
-        .into_certificate(env.worker().public_key());
+        .into_certificate(env.executing_worker().public_key());
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_validated_certificate(certificate1.clone())
         .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
@@ -3429,7 +3317,7 @@ where
     let certificate_timeout =
         env.make_certificate_with_round(value_timeout.clone(), Round::SingleLeader(4));
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_timeout_certificate(certificate_timeout)
         .await?;
     assert_eq!(response.info.manager.leader, Some(owner1));
@@ -3439,19 +3327,19 @@ where
     let amount = Amount::from_tokens(1);
     let proposed_block2 = make_child_block(&value0.clone()).with_simple_transfer(chain_1, amount);
     let (block2, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block2.clone(), None, vec![])
         .await?;
 
     // Since round 3 is already over, the validator won't vote for a validated block from round 3.
     let value2 = ValidatedBlock::new(block2.clone());
     let certificate = env.make_certificate_with_round(value2.clone(), Round::SingleLeader(2));
-    env.worker()
+    env.executing_worker()
         .handle_validated_certificate(certificate)
         .await?;
     let query_values = ChainInfoQuery::new(chain_1).with_manager_values();
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_chain_info_query(query_values.clone())
         .await?;
     let manager = response.info.manager;
@@ -3467,7 +3355,10 @@ where
         .into_proposal_with_round(owner1, &signer, Round::SingleLeader(5))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal.clone()).await;
+    let result = env
+        .executing_worker()
+        .handle_block_proposal(proposal.clone())
+        .await;
     assert_matches!(result, Err(WorkerError::ChainError(error))
          if matches!(*error, ChainError::HasIncompatibleConfirmedVote(_, _))
     );
@@ -3484,9 +3375,12 @@ where
     .await
     .unwrap();
     let lite_value2 = LiteValue::new(&value2);
-    let (_, _) = env.worker().handle_block_proposal(proposal).await?;
+    let (_, _) = env
+        .executing_worker()
+        .handle_block_proposal(proposal)
+        .await?;
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_chain_info_query(query_values.clone())
         .await?;
     assert_eq!(
@@ -3501,7 +3395,7 @@ where
     let certificate_timeout =
         env.make_certificate_with_round(value_timeout.clone(), Round::SingleLeader(5));
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_timeout_certificate(certificate_timeout)
         .await?;
     assert_eq!(response.info.manager.leader, Some(owner0));
@@ -3512,7 +3406,10 @@ where
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(6))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal.clone()).await;
+    let result = env
+        .executing_worker()
+        .handle_block_proposal(proposal.clone())
+        .await;
     assert_matches!(result, Err(WorkerError::ChainError(error))
          if matches!(*error, ChainError::HasIncompatibleConfirmedVote(_, _))
     );
@@ -3521,7 +3418,7 @@ where
     let certificate_timeout =
         env.make_certificate_with_round(value_timeout, Round::SingleLeader(7));
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_timeout_certificate(certificate_timeout)
         .await?;
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(8));
@@ -3529,7 +3426,7 @@ where
     // The worker updates its locking block even if it's from a past round and it doesn't sign
     // to confirm.
     let certificate = env.make_certificate_with_round(value1, Round::SingleLeader(7));
-    let worker = env.worker().clone();
+    let worker = env.executing_worker().clone();
     worker
         .handle_validated_certificate(certificate.clone())
         .await?;
@@ -3554,13 +3451,12 @@ async fn test_round_types<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let mut signer = InMemorySigner::new(None);
-    let clock = storage_builder.clock();
     let key_pairs = generate_key_pairs(&mut signer, 2);
     let owner0 = AccountOwner::from(key_pairs[0]);
     let owner1 = AccountOwner::from(key_pairs[1]);
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
     let small_transfer = Amount::from_micros(1);
     let chain_id = chain_1_desc.id();
@@ -3579,13 +3475,13 @@ where
             },
         });
     let (block0, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block0, None, vec![])
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
     let response = env
-        .worker()
+        .executing_worker()
         .fully_handle_certificate_with_notifications(certificate0, &())
         .await?;
 
@@ -3599,20 +3495,23 @@ where
         .into_proposal_with_round(owner1, &signer, Round::Fast)
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0)
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::Fast))
     );
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
     let query = ChainInfoQuery::new(chain_id).with_timeout(BlockHeight(1), Round::Fast);
-    let result = env.worker().handle_chain_info_query(query.clone()).await;
+    let result = env
+        .executing_worker()
+        .handle_chain_info_query(query.clone())
+        .await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::NotTimedOutYet(_))
     );
@@ -3621,7 +3520,10 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let (response, _) = env.worker().handle_chain_info_query(query).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_chain_info_query(query)
+        .await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout = Timeout::new(chain_id, BlockHeight::from(1), Epoch::from(0));
 
@@ -3629,9 +3531,9 @@ where
     let certificate_timeout = vote
         .with_value(value_timeout)
         .unwrap()
-        .into_certificate(env.worker().public_key());
+        .into_certificate(env.executing_worker().public_key());
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_timeout_certificate(certificate_timeout)
         .await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
@@ -3645,10 +3547,16 @@ where
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(1))
         .await
         .unwrap();
-    let (_, actions) = env.worker().handle_block_proposal(proposal1).await?;
+    let (_, actions) = env
+        .executing_worker()
+        .handle_block_proposal(proposal1)
+        .await?;
     assert_matches!(actions.notifications[0].reason, Reason::NewRound { .. });
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = env.worker().handle_chain_info_query(query_values).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_chain_info_query(query_values)
+        .await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(1));
     Ok(())
 }
@@ -3662,11 +3570,10 @@ async fn test_open_multi_leader_rounds<B>(mut storage_builder: B) -> anyhow::Res
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
     let mut signer = InMemorySigner::new(None);
     let public_key = signer.generate_new();
     let owner = public_key.into();
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env.add_root_chain(1, owner, Amount::from_tokens(2)).await;
     let small_transfer = Amount::from_micros(1);
     let chain_id = chain_1_desc.id();
@@ -3685,12 +3592,12 @@ where
             },
         });
     let (change_ownership_block, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(change_ownership_block, None, vec![])
         .await?;
     let change_ownership_value = ConfirmedBlock::new(change_ownership_block);
     let change_ownership_certificate = env.make_certificate(change_ownership_value.clone());
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(change_ownership_certificate, &())
         .await?;
 
@@ -3701,7 +3608,7 @@ where
         .into_proposal_with_round(owner, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(error)) if matches!(&*error,
         ChainError::ExecutionError(error, _) if matches!(&**error,
         ExecutionError::UnauthenticatedTransferOwner
@@ -3715,11 +3622,14 @@ where
         .await
         .unwrap();
     let (block, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposal.content.block.clone(), None, vec![])
         .await?;
     let value = ConfirmedBlock::new(block);
-    let (response, _) = env.worker().handle_block_proposal(proposal).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_block_proposal(proposal)
+        .await?;
     let vote = response.info.manager.pending.unwrap();
     assert_eq!(vote.round, Round::MultiLeader(0));
     assert_eq!(vote.value.value_hash, value.hash());
@@ -3735,13 +3645,12 @@ async fn test_fast_proposal_is_locked<B>(mut storage_builder: B) -> anyhow::Resu
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
-    let clock = storage_builder.clock();
     let mut signer = InMemorySigner::new(None);
     let key_pairs = generate_key_pairs(&mut signer, 2);
     let owner0 = AccountOwner::from(key_pairs[0]);
     let owner1 = AccountOwner::from(key_pairs[1]);
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
     let chain_id = chain_1_desc.id();
 
@@ -3765,13 +3674,13 @@ where
             },
         });
     let (block0, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block0, None, vec![])
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
     let response = env
-        .worker()
+        .executing_worker()
         .fully_handle_certificate_with_notifications(certificate0, &())
         .await?;
 
@@ -3793,12 +3702,12 @@ where
         .await
         .unwrap();
     let (block1, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block1.clone(), None, vec![])
         .await?;
     let value1 = ConfirmedBlock::new(block1);
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_block_proposal(proposal1.clone())
         .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
@@ -3812,7 +3721,7 @@ where
     let value_timeout = Timeout::new(chain_id, BlockHeight::from(1), Epoch::from(0));
     let certificate_timeout = env.make_certificate_with_round(value_timeout.clone(), Round::Fast);
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_timeout_certificate(certificate_timeout)
         .await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
@@ -3823,7 +3732,10 @@ where
         BlockProposal::new_retry_fast(owner1, Round::MultiLeader(0), proposal1.clone(), &signer)
             .await
             .unwrap();
-    let (response, _) = env.worker().handle_block_proposal(proposal1b).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_block_proposal(proposal1b)
+        .await?;
 
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.round, Round::MultiLeader(0));
@@ -3838,7 +3750,10 @@ where
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(1))
         .await
         .unwrap();
-    let result = env.worker().handle_block_proposal(proposal2).await;
+    let result = env
+        .executing_worker()
+        .handle_block_proposal(proposal2)
+        .await;
     assert_matches!(result, Err(WorkerError::ChainError(err))
         if matches!(*err, ChainError::HasIncompatibleConfirmedVote(_, Round::Fast))
     );
@@ -3846,11 +3761,13 @@ where
         BlockProposal::new_retry_fast(owner0, Round::MultiLeader(2), proposal1.clone(), &signer)
             .await
             .unwrap();
-    env.worker().handle_block_proposal(proposal3).await?;
+    env.executing_worker()
+        .handle_block_proposal(proposal3)
+        .await?;
 
     // A validated block certificate from a later round can override the locked fast block.
     let (block2, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block2.clone(), None, vec![])
         .await?;
     let value2 = ValidatedBlock::new(block2.clone());
@@ -3864,9 +3781,15 @@ where
     .await
     .unwrap();
     let lite_value2 = LiteValue::new(&value2);
-    let (_, _) = env.worker().handle_block_proposal(proposal).await?;
+    let (_, _) = env
+        .executing_worker()
+        .handle_block_proposal(proposal)
+        .await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = env.worker().handle_chain_info_query(query_values).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_chain_info_query(query_values)
+        .await?;
     assert_eq!(
         response.info.manager.requested_locking,
         Some(Box::new(LockingBlock::Regular(certificate2)))
@@ -3886,11 +3809,10 @@ async fn test_fallback<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let storage = storage_builder.build().await?;
-    let clock = storage_builder.clock();
     let mut signer = InMemorySigner::new(None);
     let public_key = signer.generate_new();
-    let mut env = TestEnvironment::new(storage, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let clock = storage_builder.clock();
     let balance = Amount::from_tokens(5);
     let mut ownership = ChainOwnership::single(public_key.into());
     // Configure a fallback duration. (The default is `MAX`, i.e. never.)
@@ -3912,7 +3834,10 @@ where
     let query = ChainInfoQuery::new(chain_1)
         .with_fallback()
         .with_committees();
-    let (response, _) = env.worker().handle_chain_info_query(query.clone()).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_chain_info_query(query.clone())
+        .await?;
     let manager = response.info.manager;
     assert!(manager.fallback_vote.is_none());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
@@ -3921,7 +3846,10 @@ where
 
     // Even if a long time passes: Without an incoming message there's no fallback mode.
     clock.add(fallback_duration);
-    let (response, _) = env.worker().handle_chain_info_query(query.clone()).await?;
+    let (response, _) = env
+        .executing_worker()
+        .handle_chain_info_query(query.clone())
+        .await?;
     assert!(response.info.manager.fallback_vote.is_none());
 
     // Make a tracked message between chains. This will create a cross-chain message.
@@ -3929,12 +3857,12 @@ where
         .with_simple_transfer(chain_2, Amount::ONE)
         .with_authenticated_owner(Some(public_key.into()));
     let (block, _) = env
-        .worker()
+        .executing_worker()
         .stage_block_execution(proposed_block, None, vec![])
         .await?;
     let value = ConfirmedBlock::new(block);
     let certificate = env.make_certificate(value);
-    env.worker()
+    env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate, &())
         .await?;
 
@@ -3945,7 +3873,7 @@ where
 
     // The message only just arrived: No fallback mode.
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_chain_info_query(query_chain_2.clone())
         .await?;
     assert!(response.info.manager.fallback_vote.is_none());
@@ -3953,7 +3881,7 @@ where
     // If for a long time the message isn't handled, we vote for fallback mode.
     clock.add(fallback_duration);
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_chain_info_query(query_chain_2.clone())
         .await?;
     let vote = response.info.manager.fallback_vote.unwrap();
@@ -3962,11 +3890,13 @@ where
     assert_eq!(vote.value.value_hash, value.hash());
     assert_eq!(vote.round, round);
     let certificate = env.make_certificate_with_round(value, round);
-    env.worker().handle_timeout_certificate(certificate).await?;
+    env.executing_worker()
+        .handle_timeout_certificate(certificate)
+        .await?;
 
     // Now we are in fallback mode, and the validator is the leader.
     let (response, _) = env
-        .worker()
+        .executing_worker()
         .handle_chain_info_query(query_chain_2.clone())
         .await?;
     let manager = response.info.manager;
@@ -3977,7 +3907,7 @@ where
         .get(&response.info.epoch)
         .unwrap()
         .validators
-        .get(&env.worker().public_key())
+        .get(&env.executing_worker().public_key())
         .unwrap()
         .account_public_key;
     assert_eq!(manager.current_round, Round::Validator(0));
@@ -4001,9 +3931,8 @@ where
 {
     const NUM_QUERIES: usize = 5;
 
-    let storage = storage_builder.build().await?;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, true).await?;
     let clock = storage_builder.clock();
-    let mut env = TestEnvironment::new(storage, false, true).await;
 
     let chain_description = env
         .add_root_chain(
@@ -4014,13 +3943,7 @@ where
         .await;
     let chain_id = chain_description.id();
 
-    let (application_id, application);
-    {
-        let mut chain = env.worker().storage.load_chain(chain_id).await?;
-        (application_id, application, _) =
-            chain.execution_state.register_mock_application(0).await?;
-        chain.save().await?;
-    }
+    let (application_id, application) = env.register_mock_application(chain_id, 0).await?;
 
     let query_times = (0..NUM_QUERIES as u64).map(Timestamp::from);
     let query_contexts = query_times.clone().map(|local_time| QueryContext {
@@ -4044,7 +3967,7 @@ where
         clock.set(query_time);
 
         assert_eq!(
-            env.worker()
+            env.executing_worker()
                 .query_application(chain_id, query.clone(), None)
                 .await?,
             QueryOutcome {
@@ -4078,27 +4001,20 @@ where
     const NUM_QUERIES: usize = 2;
     const BLOCK_TIMESTAMP: u64 = 10;
 
-    let storage = storage_builder.build().await?;
-    let clock = storage_builder.clock();
     let mut signer = InMemorySigner::new(None);
     let public_key = signer.generate_new();
     let owner = public_key.into();
     let balance = Amount::from_tokens(1);
     let small_transfer = Amount::from_micros(1);
 
-    let mut env = TestEnvironment::new(storage.clone(), false, true).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, true).await?;
+    let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner, balance).await;
     let chain_2_desc = env.add_root_chain(2, owner, balance).await;
     let chain_1 = chain_1_desc.id();
     let chain_2 = chain_2_desc.id();
 
-    let (application_id, application);
-    {
-        let mut chain = storage.load_chain(chain_1).await?;
-        (application_id, application, _) =
-            chain.execution_state.register_mock_application(0).await?;
-        chain.save().await?;
-    }
+    let (application_id, application) = env.register_mock_application(chain_1, 0).await?;
 
     let queries_before_proposal = (0..NUM_QUERIES as u64).map(Timestamp::from);
     let queries_before_confirmation =
@@ -4143,7 +4059,7 @@ where
         clock.set(local_time);
 
         assert_eq!(
-            env.worker()
+            env.executing_worker()
                 .query_application(chain_1, query.clone(), None)
                 .await?,
             QueryOutcome {
@@ -4164,13 +4080,16 @@ where
         .into_first_proposal(owner, &signer)
         .await
         .unwrap();
-    let _ = env.worker().handle_block_proposal(block_proposal).await?;
+    let _ = env
+        .executing_worker()
+        .handle_block_proposal(block_proposal)
+        .await?;
 
     for local_time in queries_before_confirmation {
         clock.set(local_time);
 
         assert_eq!(
-            env.worker()
+            env.executing_worker()
                 .query_application(chain_1, query.clone(), None)
                 .await?,
             QueryOutcome {
@@ -4189,23 +4108,18 @@ where
     .await;
     let _ = state.register_mock_application(0).await?;
 
-    let value = ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![vec![direct_credit_message(chain_2, small_transfer)]],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![vec![]],
-            blobs: vec![vec![]],
-            state_hash: state.crypto_hash_mut().await?,
-            oracle_responses: vec![vec![]],
-            operation_results: vec![OperationResult::default()],
-        }
-        .with(block),
-    );
-    let certificate = env.make_certificate(value);
-    env.worker()
-        .handle_confirmed_certificate(certificate, None)
-        .await?;
+    let certificate = env.execute_proposal(block.clone(), vec![]).await?;
+
+    assert!(certificate.value().matches_proposed_block(&block));
+    assert!(certificate.block().outcome_matches(
+        vec![vec![direct_credit_message(chain_2, small_transfer)]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![OperationResult::default()],
+    ));
 
     for _ in query_contexts_after_new_block.clone() {
         application.expect_call(ExpectedCall::handle_query(move |_runtime, query| {
@@ -4218,7 +4132,7 @@ where
         clock.set(local_time);
 
         assert_eq!(
-            env.worker()
+            env.executing_worker()
                 .query_application(chain_1, query.clone(), None)
                 .await?,
             QueryOutcome {
@@ -4249,56 +4163,97 @@ where
     let mut signer = InMemorySigner::new(None);
     let receiver_public_key = signer.generate_new();
     let owner = receiver_public_key.into();
-    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
     let chain_1_desc = env.add_root_chain(1, owner, Amount::from_tokens(10)).await;
     let chain_2_desc = env.add_root_chain(2, owner, Amount::ZERO).await;
     let chain_1 = chain_1_desc.id();
     let chain_2 = chain_2_desc.id();
 
+    // Transfer some funds to `owner` on chain 2, so that we can claim it later.
+    let transfer_cert = env
+        .execute_proposal(
+            make_first_block(chain_1)
+                .with_transfer(
+                    AccountOwner::CHAIN,
+                    Account::new(chain_2, owner),
+                    Amount::from_tokens(2),
+                )
+                .with_authenticated_owner(Some(owner)),
+            vec![],
+        )
+        .await?;
+
+    // Accept the transfer on chain 2.
+    let chain_2_first_block = env
+        .execute_proposal(
+            make_first_block(chain_2).with_incoming_bundle(IncomingBundle {
+                origin: chain_1,
+                bundle: MessageBundle {
+                    certificate_hash: transfer_cert.hash(),
+                    height: BlockHeight::ZERO,
+                    timestamp: Timestamp::from(0),
+                    transaction_index: 0,
+                    messages: vec![Message::System(SystemMessage::Credit {
+                        source: AccountOwner::CHAIN,
+                        target: owner,
+                        amount: Amount::from_tokens(2),
+                    })
+                    .to_posted(0, MessageKind::Tracked)],
+                },
+                action: MessageAction::Accept,
+            }),
+            vec![],
+        )
+        .await?;
+
     // Simulate a certificate sending two messages from chain_1 to chain_2.
-    let sender_hash = CryptoHash::test_hash("sender block");
+    // The first message is a skippable `Withdraw` message, which makes it possible to receive only
+    // the second one.
+    let sender_cert = env
+        .execute_proposal(
+            make_child_block(transfer_cert.value())
+                .with_operation(SystemOperation::Claim {
+                    owner,
+                    target_id: chain_2,
+                    recipient: Account::chain(chain_1),
+                    amount: Amount::from_tokens(2),
+                })
+                .with_simple_transfer(chain_2, Amount::from_tokens(2))
+                .with_authenticated_owner(Some(owner)),
+            vec![],
+        )
+        .await?;
 
     // Process the second message bundle on chain_2. This advances next_cursor_to_remove
     // to height=0, index=1.
-    let block_proposal = make_first_block(chain_2)
-        .with_incoming_bundle(IncomingBundle {
+    let block_proposal =
+        make_child_block(chain_2_first_block.value()).with_incoming_bundle(IncomingBundle {
             origin: chain_1,
             bundle: MessageBundle {
-                certificate_hash: sender_hash,
-                height: BlockHeight::ZERO,
+                certificate_hash: sender_cert.hash(),
+                height: BlockHeight::from(1),
                 timestamp: Timestamp::from(0),
                 transaction_index: 1,
                 messages: vec![system_credit_message(Amount::from_tokens(2))
-                    .to_posted(0, MessageKind::Tracked)],
+                    .to_posted(1, MessageKind::Tracked)],
             },
             action: MessageAction::Accept,
-        })
-        .into_first_proposal(owner, &signer)
-        .await
-        .unwrap();
+        });
 
-    let certificate_chain_2 = env.make_certificate(ConfirmedBlock::new(
-        BlockExecutionOutcome {
-            messages: vec![Vec::new()],
-            previous_message_blocks: BTreeMap::new(),
-            previous_event_blocks: BTreeMap::new(),
-            events: vec![Vec::new()],
-            blobs: vec![Vec::new()],
-            state_hash: SystemExecutionState {
-                balance: Amount::from_tokens(2),
-                ..env.system_execution_state(&chain_2_desc.id())
-            }
-            .into_hash()
-            .await,
-            oracle_responses: vec![Vec::new()],
-            operation_results: vec![],
-        }
-        .with(block_proposal.content.block),
+    let certificate_chain_2 = env.execute_proposal(block_proposal.clone(), vec![]).await?;
+
+    assert!(certificate_chain_2
+        .value()
+        .matches_proposed_block(&block_proposal));
+    assert!(certificate_chain_2.block().outcome_matches(
+        vec![vec![]],
+        BTreeMap::new(),
+        BTreeMap::new(),
+        vec![vec![]],
+        vec![vec![]],
+        vec![vec![]],
+        vec![],
     ));
-
-    env.worker()
-        .handle_confirmed_certificate(certificate_chain_2.clone(), None)
-        .await?;
 
     // Now try to stage a block with the earlier message (transaction_index: 0).
     // This should fail with IncorrectMessageOrder because next_cursor_to_remove
@@ -4307,20 +4262,23 @@ where
         .with_incoming_bundle(IncomingBundle {
             origin: chain_1,
             bundle: MessageBundle {
-                certificate_hash: sender_hash,
-                height: BlockHeight::ZERO,
+                certificate_hash: sender_cert.hash(),
+                height: BlockHeight::from(1),
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
-                messages: vec![
-                    system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
-                ],
+                messages: vec![Message::System(SystemMessage::Withdraw {
+                    owner,
+                    recipient: Account::chain(chain_2),
+                    amount: Amount::from_tokens(2),
+                })
+                .to_posted(0, MessageKind::Simple)],
             },
             action: MessageAction::Accept,
         });
 
     // Test stage_block_execution directly - this should fail with IncorrectMessageOrder.
     assert_matches!(
-        env.worker()
+        env.executing_worker()
             .stage_block_execution(bad_proposed_block.clone(), None, vec![])
             .await,
         Err(WorkerError::ChainError(chain_error))
@@ -4334,7 +4292,7 @@ where
         .unwrap();
 
     assert_matches!(
-        env.worker().handle_block_proposal(bad_proposal).await,
+        env.executing_worker().handle_block_proposal(bad_proposal).await,
         Err(WorkerError::ChainError(chain_error))
             if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. })
     );
