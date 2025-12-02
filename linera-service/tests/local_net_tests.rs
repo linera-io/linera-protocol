@@ -1285,6 +1285,9 @@ async fn test_node_service_with_task_processor() -> Result<()> {
 
     node_service.ensure_is_running()?;
 
+    // Subscribe to notifications for the chain.
+    let mut notifications = Box::pin(node_service.notifications(chain).await?);
+
     // Query the initial task count (should be 0).
     let app =
         node_service.make_application::<TaskProcessorAbi>(&chain, &app_id.with_abi::<TaskProcessorAbi>())?;
@@ -1292,8 +1295,12 @@ async fn test_node_service_with_task_processor() -> Result<()> {
     assert_eq!(task_count, 0);
 
     // Submit a mutation to request a task.
+    // This creates a block with the RequestTask operation.
     app.mutate(r#"requestTask(operator: "echo", input: "hello world")"#)
         .await?;
+
+    // Wait for the block containing the RequestTask operation.
+    notifications.wait_for_block(None).await?;
 
     // The task should now be pending. Query nextActions to verify.
     let response = app.query("nextActions(now: 0)").await?;
@@ -1305,20 +1312,12 @@ async fn test_node_service_with_task_processor() -> Result<()> {
         "Expected at least one task in execute_tasks, got: {actions}"
     );
 
-    // Give the task processor time to execute the task and submit the outcome.
-    // The processor polls on new blocks and timeouts, so we need to wait.
-    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    // The task processor will execute the task and submit a StoreResult operation.
+    // Wait for the block containing the StoreResult operation.
+    notifications.wait_for_block(None).await?;
 
-    // Check that the task was processed (task count should increase).
-    // Note: This may take some time as it depends on block processing.
-    let mut task_count = 0u64;
-    for _ in 0..10 {
-        task_count = app.query_json("taskCount").await?;
-        if task_count > 0 {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-    }
+    // Check that the task was processed (task count should be 1).
+    let task_count: u64 = app.query_json("taskCount").await?;
     assert_eq!(task_count, 1, "Expected task count to be 1 after processing");
 
     net.ensure_is_running().await?;
