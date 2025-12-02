@@ -17,6 +17,7 @@ members = [
     "non-fungible",
     "rfq",
     "social",
+    "task-processor",
 ]
 
 [workspace.dependencies]

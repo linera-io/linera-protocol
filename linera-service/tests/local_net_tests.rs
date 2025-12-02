@@ -1238,30 +1238,39 @@ impl EthereumTrackerApp {
 /// and the service starts correctly with task processor configuration.
 #[cfg(feature = "storage-service")]
 #[test_log::test(tokio::test)]
-async fn test_node_service_with_task_processor_options() -> Result<()> {
+async fn test_node_service_with_task_processor() -> Result<()> {
     use std::{io::Write, os::unix::fs::PermissionsExt};
 
-    use linera_base::identifiers::ApplicationId;
+    use linera_base::{abi::ContractAbi, identifiers::ApplicationId};
+
+    // Dummy ABI type for the task-processor application.
+    // The actual ABI doesn't matter for the GraphQL interface.
+    struct TaskProcessorAbi;
+
+    impl ContractAbi for TaskProcessorAbi {
+        type Operation = ();
+        type Response = ();
+    }
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
     let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
 
-    // Publish and create the counter application.
-    let example_dir = ClientWrapper::example_path("counter")?;
+    // Publish and create the task-processor example application.
+    let example_dir = ClientWrapper::example_path("task-processor")?;
     let app_id_str = client
-        .project_publish(example_dir, vec![], None, &0)
+        .project_publish(example_dir, vec![], None, &())
         .await?;
     let app_id: ApplicationId = app_id_str.trim().parse()?;
 
-    // Create a simple echo operator script.
+    // Create an echo operator script that reads stdin and writes it to stdout.
     let tmp_dir = tempfile::tempdir()?;
     let operator_path = tmp_dir.path().join("echo-operator");
     {
         let mut file = std::fs::File::create(&operator_path)?;
-        // Script that reads stdin and writes it to stdout.
         writeln!(file, "#!/bin/sh")?;
         writeln!(file, "cat")?;
     }
@@ -1276,11 +1285,41 @@ async fn test_node_service_with_task_processor_options() -> Result<()> {
 
     node_service.ensure_is_running()?;
 
-    // The counter app doesn't implement the task processor interface (nextActions, etc.),
-    // so the task processor will fail to query it. But we've verified that:
-    // 1. The CLI arguments are accepted.
-    // 2. The node service starts successfully.
-    // 3. The task processor is initialized (even if it can't query the app).
+    // Query the initial task count (should be 0).
+    let app =
+        node_service.make_application::<TaskProcessorAbi>(&chain, &app_id.with_abi::<TaskProcessorAbi>())?;
+    let task_count: u64 = app.query_json("taskCount").await?;
+    assert_eq!(task_count, 0);
+
+    // Submit a mutation to request a task.
+    app.mutate(r#"requestTask(operator: "echo", input: "hello world")"#)
+        .await?;
+
+    // The task should now be pending. Query nextActions to verify.
+    let response = app.query("nextActions(now: 0)").await?;
+    let actions = &response["nextActions"];
+    assert!(
+        actions["execute_tasks"]
+            .as_array()
+            .is_some_and(|arr| !arr.is_empty()),
+        "Expected at least one task in execute_tasks, got: {actions}"
+    );
+
+    // Give the task processor time to execute the task and submit the outcome.
+    // The processor polls on new blocks and timeouts, so we need to wait.
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+    // Check that the task was processed (task count should increase).
+    // Note: This may take some time as it depends on block processing.
+    let mut task_count = 0u64;
+    for _ in 0..10 {
+        task_count = app.query_json("taskCount").await?;
+        if task_count > 0 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+    assert_eq!(task_count, 1, "Expected task count to be 1 after processing");
 
     net.ensure_is_running().await?;
     net.terminate().await?;
