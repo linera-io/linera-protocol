@@ -1,22 +1,29 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, vec};
+use std::{
+    collections::BTreeMap,
+    ops::{Deref, DerefMut},
+    vec,
+};
 
 use allocative::Allocative;
 use futures::{FutureExt, StreamExt};
 use linera_base::{
+    crypto::{BcsHashable, CryptoHash},
     data_types::{BlobContent, BlockHeight, StreamUpdate},
     identifiers::{AccountOwner, BlobId},
     time::Instant,
 };
 use linera_views::{
     context::Context,
+    historical_hash_wrapper::HistoricallyHashableView,
     key_value_store_view::KeyValueStoreView,
-    reentrant_collection_view::HashedReentrantCollectionView,
+    reentrant_collection_view::ReentrantCollectionView,
     views::{ClonableView, ReplaceContext, View},
+    ViewError,
 };
-use linera_views_derive::CryptoHashView;
+use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
 use {
     crate::{
@@ -36,14 +43,63 @@ use crate::{
     TransactionTracker,
 };
 
-/// A view accessing the execution state of a chain.
-#[derive(Debug, ClonableView, CryptoHashView, Allocative)]
+/// An inner view accessing the execution state of a chain, for hashing purposes.
+#[derive(Debug, ClonableView, View, Allocative)]
 #[allocative(bound = "C")]
-pub struct ExecutionStateView<C> {
+pub struct ExecutionStateViewInner<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
     /// User applications.
-    pub users: HashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
+    pub users: ReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
+}
+
+impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateViewInner<C> {
+    type Target = ExecutionStateViewInner<C2>;
+
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
+        ExecutionStateViewInner {
+            system: self.system.with_context(ctx.clone()).await,
+            users: self.users.with_context(ctx.clone()).await,
+        }
+    }
+}
+
+/// A view accessing the execution state of a chain.
+#[derive(Debug, ClonableView, View, Allocative)]
+#[allocative(bound = "C")]
+pub struct ExecutionStateView<C> {
+    inner: HistoricallyHashableView<C, ExecutionStateViewInner<C>>,
+}
+
+impl<C> Deref for ExecutionStateView<C> {
+    type Target = ExecutionStateViewInner<C>;
+
+    fn deref(&self) -> &ExecutionStateViewInner<C> {
+        self.inner.deref()
+    }
+}
+
+impl<C> DerefMut for ExecutionStateView<C> {
+    fn deref_mut(&mut self) -> &mut ExecutionStateViewInner<C> {
+        self.inner.deref_mut()
+    }
+}
+
+impl<C> ExecutionStateView<C>
+where
+    C: Context + Clone + Send + Sync + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    pub async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
+        #[derive(Serialize, Deserialize)]
+        struct ExecutionStateViewHash([u8; 32]);
+        impl BcsHashable<'_> for ExecutionStateViewHash {}
+        let hash = self.inner.historical_hash().await?;
+        Ok(CryptoHash::new(&ExecutionStateViewHash(hash.into())))
+    }
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
@@ -54,8 +110,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
         ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
     ) -> Self::Target {
         ExecutionStateView {
-            system: self.system.with_context(ctx.clone()).await,
-            users: self.users.with_context(ctx.clone()).await,
+            inner: self.inner.with_context(ctx.clone()).await,
         }
     }
 }

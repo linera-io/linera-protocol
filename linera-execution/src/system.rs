@@ -22,10 +22,10 @@ use linera_base::{
 };
 use linera_views::{
     context::Context,
-    map_view::HashedMapView,
-    register_view::HashedRegisterView,
-    set_view::HashedSetView,
-    views::{ClonableView, HashableView, ReplaceContext, View},
+    map_view::MapView,
+    register_view::RegisterView,
+    set_view::SetView,
+    views::{ClonableView, ReplaceContext, View},
 };
 use serde::{Deserialize, Serialize};
 
@@ -60,38 +60,38 @@ mod metrics {
 }
 
 /// A view accessing the execution state of the system of a chain.
-#[derive(Debug, ClonableView, HashableView, Allocative)]
+#[derive(Debug, ClonableView, View, Allocative)]
 #[allocative(bound = "C")]
 pub struct SystemExecutionStateView<C> {
     /// How the chain was created. May be unknown for inactive chains.
-    pub description: HashedRegisterView<C, Option<ChainDescription>>,
+    pub description: RegisterView<C, Option<ChainDescription>>,
     /// The number identifying the current configuration.
-    pub epoch: HashedRegisterView<C, Epoch>,
+    pub epoch: RegisterView<C, Epoch>,
     /// The admin of the chain.
-    pub admin_id: HashedRegisterView<C, Option<ChainId>>,
+    pub admin_id: RegisterView<C, Option<ChainId>>,
     /// The committees that we trust, indexed by epoch number.
     // Not using a `MapView` because the set active of committees is supposed to be
     // small. Plus, currently, we would create the `BTreeMap` anyway in various places
     // (e.g. the `OpenChain` operation).
-    pub committees: HashedRegisterView<C, BTreeMap<Epoch, Committee>>,
+    pub committees: RegisterView<C, BTreeMap<Epoch, Committee>>,
     /// Ownership of the chain.
-    pub ownership: HashedRegisterView<C, ChainOwnership>,
+    pub ownership: RegisterView<C, ChainOwnership>,
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
-    pub balance: HashedRegisterView<C, Amount>,
+    pub balance: RegisterView<C, Amount>,
     /// Balances attributed to a given owner.
-    pub balances: HashedMapView<C, AccountOwner, Amount>,
+    pub balances: MapView<C, AccountOwner, Amount>,
     /// The timestamp of the most recent block.
-    pub timestamp: HashedRegisterView<C, Timestamp>,
+    pub timestamp: RegisterView<C, Timestamp>,
     /// Whether this chain has been closed.
-    pub closed: HashedRegisterView<C, bool>,
+    pub closed: RegisterView<C, bool>,
     /// Permissions for applications on this chain.
-    pub application_permissions: HashedRegisterView<C, ApplicationPermissions>,
+    pub application_permissions: RegisterView<C, ApplicationPermissions>,
     /// Blobs that have been used or published on this chain.
-    pub used_blobs: HashedSetView<C, BlobId>,
+    pub used_blobs: SetView<C, BlobId>,
     /// The event stream subscriptions of applications on this chain.
-    pub event_subscriptions: HashedMapView<C, (ChainId, StreamId), EventSubscriptions>,
+    pub event_subscriptions: MapView<C, (ChainId, StreamId), EventSubscriptions>,
     /// The number of events in the streams that this chain is writing to.
-    pub stream_event_counts: HashedMapView<C, StreamId, u32>,
+    pub stream_event_counts: MapView<C, StreamId, u32>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {

@@ -2269,7 +2269,6 @@ dependencies = [
  "futures",
  "linera-base",
  "linera-views",
- "linera-views-derive",
  "linera-wasm-instrument",
  "linera-wasmer",
  "linera-wasmer-compiler-singlepass",
