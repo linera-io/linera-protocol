@@ -35,7 +35,7 @@ impl chain_listener::ClientContext for ClientContext {
     type Environment = environment::Test;
 
     fn wallet(&self) -> &environment::TestWallet {
-        &self.client.wallet()
+        self.client.wallet()
     }
 
     fn storage(&self) -> &environment::TestStorage {

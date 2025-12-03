@@ -6,6 +6,7 @@ use linera_base::util::traits::AutoTraits;
 trait_set::trait_set! {
     pub trait Network = crate::node::ValidatorNodeProvider + AutoTraits;
     pub trait Signer = linera_base::crypto::Signer + AutoTraits;
+    // TODO(#5064): we shouldn't hard-code `Send` + `Sync` here
     pub trait Storage = linera_storage::Storage + Clone + Send + Sync + 'static;
     pub trait Wallet = crate::wallet::Wallet + AutoTraits;
 }
@@ -17,8 +18,9 @@ pub trait Environment: AutoTraits {
     type Wallet: Wallet;
 
     type ValidatorNode: crate::node::ValidatorNode + AutoTraits + Clone;
+    // TODO(#5064): we shouldn't hard-code `Send` + `Sync` here
     type StorageContext: linera_views::context::Context<Extra: linera_execution::ExecutionRuntimeContext>
-        + 'static;
+        + Send + Sync + 'static;
 
     fn storage(&self) -> &Self::Storage;
     fn network(&self) -> &Self::Network;
