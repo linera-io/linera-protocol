@@ -288,7 +288,7 @@ async fn test_process_stream_end_to_end_mixed_elements() {
     );
 
     // Verify data was stored successfully by querying the database
-    // All 3 blobs have the same content, so they should have the same BlobId
+    // All 3 blobs have the same content, so they should have the same blob id
     // and only 1 unique blob should be stored
     let test_blob = Blob::new_data(b"test blob content".to_vec());
     assert!(

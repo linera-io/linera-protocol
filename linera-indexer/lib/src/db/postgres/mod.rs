@@ -129,15 +129,17 @@ impl PostgresDatabase {
         let transaction_index_i64 = transaction_index.map(|i| i as i64);
 
         sqlx::query(
-            "INSERT INTO blobs (hash, blob_type, data, block_hash, transaction_index) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (hash) DO NOTHING"
+            "INSERT INTO blobs (hash, blob_type, data, block_hash, transaction_index) 
+            VALUES ($1, $2, $3, $4, $5) 
+            ON CONFLICT (hash) DO NOTHING",
         )
-            .bind(&blob_id_str)
-            .bind(&blob_type)
-            .bind(data)
-            .bind(block_hash_str)
-            .bind(transaction_index_i64)
-            .execute(&mut **tx)
-            .await?;
+        .bind(&blob_id_str)
+        .bind(&blob_type)
+        .bind(data)
+        .bind(block_hash_str)
+        .bind(transaction_index_i64)
+        .execute(&mut **tx)
+        .await?;
         Ok(())
     }
 

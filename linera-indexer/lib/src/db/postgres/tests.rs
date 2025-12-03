@@ -249,6 +249,8 @@ async fn test_incoming_bundles_storage_and_query() {
 
 #[tokio::test]
 async fn test_block_with_embedded_blobs() {
+    use sqlx::Row;
+
     run_with_postgres(|database_url| async move {
         let db = PostgresDatabase::new(&database_url)
             .await
@@ -300,8 +302,6 @@ async fn test_block_with_embedded_blobs() {
         assert!(db.get_blob(&blob2.id()).await.is_ok());
         assert!(db.get_blob(&blob3.id()).await.is_ok());
 
-        // Query the database directly to verify metadata
-        use sqlx::Row;
         let pool = &db.pool;
 
         // Check standalone blob has no block_hash or transaction_index
