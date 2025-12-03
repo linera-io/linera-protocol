@@ -29,6 +29,7 @@ use std::{collections::BTreeSet, env, path::PathBuf, process, sync::Arc};
 use anyhow::{anyhow, bail, ensure, Context, Error};
 use async_trait::async_trait;
 use chrono::Utc;
+use clap_complete::generate;
 use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
@@ -1567,7 +1568,8 @@ impl Runnable for Job {
             | Storage { .. }
             | Wallet(_)
             | ExtractScriptFromMarkdown { .. }
-            | HelpMarkdown => {
+            | HelpMarkdown
+            | Completion { .. } => {
                 unreachable!()
             }
         }
@@ -2008,6 +2010,12 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 pause_after_linera_service,
                 pause_after_gql_mutations,
             )?;
+            Ok(0)
+        }
+
+        ClientCommand::Completion { shell } => {
+            let mut cmd = <ClientOptions as clap::CommandFactory>::command();
+            generate(*shell, &mut cmd, "linera", &mut std::io::stdout());
             Ok(0)
         }
 
