@@ -28,12 +28,6 @@ pub trait IndexerDatabase: Send + Sync {
 
     type Transaction<'a>: Send + Sync;
 
-    /// Atomically store a block with its required blobs
-    ///
-    /// Arguments:
-    /// - block_cert: The confirmed block certificate containing the block data
-    /// - pending_blobs: Map of standalone blobs received before the block (blob_id -> blob_data)
-    ///   These blobs will be stored with NULL block_hash and transaction_index
     async fn store_block_with_blobs(
         &self,
         block_cert: &ConfirmedBlockCertificate,
@@ -51,19 +45,19 @@ pub trait IndexerDatabase: Send + Sync {
 
         // Extract blobs from the block body
         let block = block_cert.inner().block();
-        let mut all_blobs: Vec<(BlobId, Vec<u8>, Option<u32>)> = Vec::new();
+        let mut all_blobs: Vec<(BlobId, Vec<u8>)> = Vec::new();
 
-        // Add standalone blobs (no transaction index)
+        // Add standalone blobs
         for (blob_id, blob_data) in pending_blobs {
-            all_blobs.push((*blob_id, blob_data.clone(), None));
+            all_blobs.push((*blob_id, blob_data.clone()));
         }
 
-        // Add blobs from the block body (with transaction index)
-        for (txn_index, transaction_blobs) in block.body.blobs.iter().enumerate() {
+        // Add blobs from the block body
+        for transaction_blobs in &block.body.blobs {
             for blob in transaction_blobs {
                 let blob_id = blob.id();
                 let blob_data = bincode::serialize(blob)?;
-                all_blobs.push((blob_id, blob_data, Some(txn_index as u32)));
+                all_blobs.push((blob_id, blob_data));
             }
         }
 
@@ -82,21 +76,8 @@ pub trait IndexerDatabase: Send + Sync {
         .await?;
 
         // Insert all blobs
-        // Only blobs extracted from the block (those with transaction_index) get the block_hash
-        for (blob_id, blob_data, transaction_index) in &all_blobs {
-            let block_hash_for_blob = if transaction_index.is_some() {
-                Some(block_hash)
-            } else {
-                None
-            };
-            self.insert_blob_tx(
-                &mut tx,
-                blob_id,
-                blob_data,
-                block_hash_for_blob,
-                *transaction_index,
-            )
-            .await?;
+        for (blob_id, blob_data) in &all_blobs {
+            self.insert_blob_tx(&mut tx, blob_id, blob_data).await?;
         }
 
         // Commit transaction - this is the only point where data becomes visible
@@ -108,14 +89,11 @@ pub trait IndexerDatabase: Send + Sync {
     /// Start a new transaction
     async fn begin_transaction(&self) -> Result<Self::Transaction<'_>, Self::Error>;
 
-    /// Insert a blob within a transaction
     async fn insert_blob_tx(
         &self,
         tx: &mut Self::Transaction<'_>,
         blob_id: &BlobId,
         data: &[u8],
-        block_hash: Option<CryptoHash>,
-        transaction_index: Option<u32>,
     ) -> Result<(), Self::Error>;
 
     /// Insert a block within a transaction

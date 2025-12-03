@@ -139,22 +139,14 @@ impl SqliteDatabase {
         tx: &mut Transaction<'_, Sqlite>,
         blob_id: &BlobId,
         data: &[u8],
-        block_hash: Option<CryptoHash>,
-        transaction_index: Option<u32>,
     ) -> Result<(), SqliteError> {
         let blob_id_str = blob_id.hash.to_string();
         let blob_type = format!("{:?}", blob_id.blob_type);
-        let block_hash_str = block_hash.as_ref().map(|h| h.to_string());
-        let transaction_index_i64 = transaction_index.map(|i| i as i64);
 
-        sqlx::query(
-            "INSERT OR IGNORE INTO blobs (hash, blob_type, data, block_hash, transaction_index) VALUES (?1, ?2, ?3, ?4, ?5)"
-        )
+        sqlx::query("INSERT OR IGNORE INTO blobs (hash, blob_type, data) VALUES (?1, ?2, ?3)")
             .bind(&blob_id_str)
             .bind(&blob_type)
             .bind(data)
-            .bind(block_hash_str)
-            .bind(transaction_index_i64)
             .execute(&mut **tx)
             .await?;
         Ok(())
@@ -1053,11 +1045,8 @@ impl IndexerDatabase for SqliteDatabase {
         tx: &mut Self::Transaction<'_>,
         blob_id: &BlobId,
         data: &[u8],
-        block_hash: Option<CryptoHash>,
-        transaction_index: Option<u32>,
     ) -> Result<(), SqliteError> {
-        self.insert_blob_tx(tx, blob_id, data, block_hash, transaction_index)
-            .await
+        self.insert_blob_tx(tx, blob_id, data).await
     }
 
     async fn insert_block_tx(

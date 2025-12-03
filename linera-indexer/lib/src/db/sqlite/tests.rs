@@ -29,7 +29,7 @@ async fn test_sqlite_database_operations() {
     let blob_data = bincode::serialize(&blob).unwrap();
 
     let mut tx = db.begin_transaction().await.unwrap();
-    db.insert_blob_tx(&mut tx, &blob_hash, &blob_data, None, None)
+    db.insert_blob_tx(&mut tx, &blob_hash, &blob_data)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -54,7 +54,7 @@ async fn test_atomic_transaction_behavior() {
     // Start transaction but don't commit
     {
         let mut tx = db.begin_transaction().await.unwrap();
-        db.insert_blob_tx(&mut tx, &blob_hash, &blob_data, None, None)
+        db.insert_blob_tx(&mut tx, &blob_hash, &blob_data)
             .await
             .unwrap();
         // tx is dropped here without commit, should rollback
@@ -65,7 +65,7 @@ async fn test_atomic_transaction_behavior() {
 
     // Now test successful commit
     let mut tx = db.begin_transaction().await.unwrap();
-    db.insert_blob_tx(&mut tx, &blob_hash, &blob_data, None, None)
+    db.insert_blob_tx(&mut tx, &blob_hash, &blob_data)
         .await
         .unwrap();
     tx.commit().await.unwrap();

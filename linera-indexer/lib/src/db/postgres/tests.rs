@@ -33,7 +33,7 @@ async fn test_postgres_database_operations() {
         let blob_data = bincode::serialize(&blob).unwrap();
 
         let mut tx = db.begin_transaction().await.unwrap();
-        db.insert_blob_tx(&mut tx, &blob_hash, &blob_data, None, None)
+        db.insert_blob_tx(&mut tx, &blob_hash, &blob_data)
             .await
             .unwrap();
         tx.commit().await.unwrap();
@@ -60,7 +60,7 @@ async fn test_atomic_transaction_behavior() {
         // Start transaction but don't commit
         {
             let mut tx = db.begin_transaction().await.unwrap();
-            db.insert_blob_tx(&mut tx, &blob_hash, &blob_data, None, None)
+            db.insert_blob_tx(&mut tx, &blob_hash, &blob_data)
                 .await
                 .unwrap();
             // tx is dropped here without commit, should rollback
@@ -71,7 +71,7 @@ async fn test_atomic_transaction_behavior() {
 
         // Now test successful commit
         let mut tx = db.begin_transaction().await.unwrap();
-        db.insert_blob_tx(&mut tx, &blob_hash, &blob_data, None, None)
+        db.insert_blob_tx(&mut tx, &blob_hash, &blob_data)
             .await
             .unwrap();
         tx.commit().await.unwrap();
@@ -304,73 +304,24 @@ async fn test_block_with_embedded_blobs() {
 
         let pool = &db.pool;
 
-        // Check standalone blob has no block_hash or transaction_index
-        let standalone_row =
-            sqlx::query("SELECT block_hash, transaction_index FROM blobs WHERE hash = $1")
-                .bind(standalone_blob.id().hash.to_string())
-                .fetch_one(pool)
-                .await
-                .unwrap();
+        // Verify all blobs have NULL for block_hash and transaction_index
+        // (these columns are not populated by the indexer)
+        for blob in [&standalone_blob, &blob1, &blob2, &blob3] {
+            let row =
+                sqlx::query("SELECT block_hash, transaction_index FROM blobs WHERE hash = $1")
+                    .bind(blob.id().hash.to_string())
+                    .fetch_one(pool)
+                    .await
+                    .unwrap();
 
-        let block_hash_val: Option<String> = standalone_row.get("block_hash");
-        let txn_index_val: Option<i64> = standalone_row.get("transaction_index");
-        assert!(
-            block_hash_val.is_none(),
-            "Standalone blob should not have block_hash"
-        );
-        assert!(
-            txn_index_val.is_none(),
-            "Standalone blob should not have transaction_index"
-        );
-
-        // Check embedded blobs have correct block_hash and transaction_index
-        let blob1_row =
-            sqlx::query("SELECT block_hash, transaction_index FROM blobs WHERE hash = $1")
-                .bind(blob1.id().hash.to_string())
-                .fetch_one(pool)
-                .await
-                .unwrap();
-
-        let blob1_block_hash: Option<String> = blob1_row.get("block_hash");
-        let blob1_txn_index: Option<i64> = blob1_row.get("transaction_index");
-        assert_eq!(
-            blob1_block_hash,
-            Some(block_hash.to_string()),
-            "Blob1 should reference the block"
-        );
-        assert_eq!(blob1_txn_index, Some(0), "Blob1 should be in transaction 0");
-
-        let blob2_row =
-            sqlx::query("SELECT block_hash, transaction_index FROM blobs WHERE hash = $1")
-                .bind(blob2.id().hash.to_string())
-                .fetch_one(pool)
-                .await
-                .unwrap();
-
-        let blob2_block_hash: Option<String> = blob2_row.get("block_hash");
-        let blob2_txn_index: Option<i64> = blob2_row.get("transaction_index");
-        assert_eq!(
-            blob2_block_hash,
-            Some(block_hash.to_string()),
-            "Blob2 should reference the block"
-        );
-        assert_eq!(blob2_txn_index, Some(0), "Blob2 should be in transaction 0");
-
-        let blob3_row =
-            sqlx::query("SELECT block_hash, transaction_index FROM blobs WHERE hash = $1")
-                .bind(blob3.id().hash.to_string())
-                .fetch_one(pool)
-                .await
-                .unwrap();
-
-        let blob3_block_hash: Option<String> = blob3_row.get("block_hash");
-        let blob3_txn_index: Option<i64> = blob3_row.get("transaction_index");
-        assert_eq!(
-            blob3_block_hash,
-            Some(block_hash.to_string()),
-            "Blob3 should reference the block"
-        );
-        assert_eq!(blob3_txn_index, Some(1), "Blob3 should be in transaction 1");
+            let block_hash_val: Option<String> = row.get("block_hash");
+            let txn_index_val: Option<i64> = row.get("transaction_index");
+            assert!(block_hash_val.is_none(), "Blob should not have block_hash");
+            assert!(
+                txn_index_val.is_none(),
+                "Blob should not have transaction_index"
+            );
+        }
     })
     .await;
 }

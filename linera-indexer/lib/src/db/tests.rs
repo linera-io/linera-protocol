@@ -67,8 +67,6 @@ impl IndexerDatabase for MockFailingDatabase {
         _tx: &mut Self::Transaction<'_>,
         _blob_id: &BlobId,
         _data: &[u8],
-        _block_hash: Option<CryptoHash>,
-        _transaction_index: Option<u32>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
