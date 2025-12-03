@@ -79,6 +79,7 @@ cfg-if.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 clap.workspace = true
 clap-markdown.workspace = true
+clap_complete.workspace = true
 clio.workspace = true
 colored.workspace = true
 convert_case.workspace = true

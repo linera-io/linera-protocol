@@ -73,6 +73,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera storage list-blob-ids`↴](#linera-storage-list-blob-ids)
 * [`linera storage list-chain-ids`↴](#linera-storage-list-chain-ids)
 * [`linera storage list-event-ids`↴](#linera-storage-list-event-ids)
+* [`linera completion`↴](#linera-completion)
 
 ## `linera`
 
@@ -119,6 +120,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `net` — Manage a local Linera Network
 * `validator` — Manage validators in the committee
 * `storage` — Operation on the storage
+* `completion` — Generate shell completion scripts
 
 ###### **Options:**
 
@@ -1465,6 +1467,21 @@ List the chain IDs in the database
 List the event IDs in the database
 
 **Usage:** `linera storage list-event-ids`
+
+
+
+## `linera completion`
+
+Generate shell completion scripts
+
+**Usage:** `linera completion <SHELL>`
+
+###### **Arguments:**
+
+* `<SHELL>` — The shell to generate completions for
+
+  Possible values: `bash`, `elvish`, `fish`, `powershell`, `zsh`
+
 
 
 
