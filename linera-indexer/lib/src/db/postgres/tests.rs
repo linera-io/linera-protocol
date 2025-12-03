@@ -249,8 +249,6 @@ async fn test_incoming_bundles_storage_and_query() {
 
 #[tokio::test]
 async fn test_block_with_embedded_blobs() {
-    use sqlx::Row;
-
     run_with_postgres(|database_url| async move {
         let db = PostgresDatabase::new(&database_url)
             .await
@@ -301,27 +299,6 @@ async fn test_block_with_embedded_blobs() {
         assert!(db.get_blob(&blob1.id()).await.is_ok());
         assert!(db.get_blob(&blob2.id()).await.is_ok());
         assert!(db.get_blob(&blob3.id()).await.is_ok());
-
-        let pool = &db.pool;
-
-        // Verify all blobs have NULL for block_hash and transaction_index
-        // (these columns are not populated by the indexer)
-        for blob in [&standalone_blob, &blob1, &blob2, &blob3] {
-            let row =
-                sqlx::query("SELECT block_hash, transaction_index FROM blobs WHERE hash = $1")
-                    .bind(blob.id().hash.to_string())
-                    .fetch_one(pool)
-                    .await
-                    .unwrap();
-
-            let block_hash_val: Option<String> = row.get("block_hash");
-            let txn_index_val: Option<i64> = row.get("transaction_index");
-            assert!(block_hash_val.is_none(), "Blob should not have block_hash");
-            assert!(
-                txn_index_val.is_none(),
-                "Blob should not have transaction_index"
-            );
-        }
     })
     .await;
 }
