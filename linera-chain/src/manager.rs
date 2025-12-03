@@ -748,6 +748,8 @@ where
 pub struct ChainManagerInfo {
     /// The configuration of the chain's owners.
     pub ownership: ChainOwnership,
+    /// The seed for the pseudo-random number generator that determines the round leaders.
+    pub seed: u64,
     /// Latest authenticated block that we have received, if requested. This can even contain
     /// proposals that did not execute successfully, to determine which round to propose in.
     pub requested_signed_proposal: Option<Box<BlockProposal>>,
@@ -805,6 +807,7 @@ where
         };
         ChainManagerInfo {
             ownership: manager.ownership.get().clone(),
+            seed: *manager.seed.get(),
             requested_signed_proposal: None,
             requested_proposed: None,
             requested_locking: None,
