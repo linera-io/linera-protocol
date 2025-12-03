@@ -1142,14 +1142,13 @@ where
         &self,
         blob_ids: Vec<BlobId>,
     ) -> Result<Option<Vec<Blob>>, WorkerError> {
-        let mut blobs = Vec::new();
-        for blob_id in blob_ids {
-            match self.chain.manager.locking_blobs.get(&blob_id).await? {
-                None => return Ok(None),
-                Some(blob) => blobs.push(blob),
-            }
-        }
-        Ok(Some(blobs))
+        let results = self
+            .chain
+            .manager
+            .locking_blobs
+            .multi_get(&blob_ids)
+            .await?;
+        Ok(results.into_iter().collect())
     }
 
     /// Gets block hashes for specified heights.
@@ -1162,16 +1161,22 @@ where
 
     /// Gets proposed blobs from the manager for specified blob IDs.
     async fn get_proposed_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<Blob>, WorkerError> {
+        let results = self
+            .chain
+            .manager
+            .proposed_blobs
+            .multi_get(&blob_ids)
+            .await?;
         let mut blobs = Vec::with_capacity(blob_ids.len());
-        for blob_id in blob_ids {
-            let blob = self
-                .chain
-                .manager
-                .proposed_blobs
-                .get(&blob_id)
-                .await?
-                .ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))?;
-            blobs.push(blob);
+        let mut missing = Vec::new();
+        for (blob_id, maybe_blob) in blob_ids.into_iter().zip(results) {
+            match maybe_blob {
+                Some(blob) => blobs.push(blob),
+                None => missing.push(blob_id),
+            }
+        }
+        if !missing.is_empty() {
+            return Err(WorkerError::BlobsNotFound(missing));
         }
         Ok(blobs)
     }
