@@ -1860,12 +1860,8 @@ impl<Env: Environment> ChainClient<Env> {
         identity: &AccountOwner,
         has_oracle_responses: bool,
     ) -> Result<Either<Round, RoundTimeout>, Error> {
-        let seed = self
-            .client
-            .local_node
-            .get_manager_seed(self.chain_id)
-            .await?;
         let manager = &info.manager;
+        let seed = manager.seed;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         // Similarly, we cannot propose a block that uses oracles in the fast round.

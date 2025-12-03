@@ -261,9 +261,6 @@ where
             ChainWorkerRequest::GetReceivedCertificateTrackers { callback } => callback
                 .send(self.get_received_certificate_trackers().await)
                 .is_ok(),
-            ChainWorkerRequest::GetManagerSeed { callback } => {
-                callback.send(self.get_manager_seed().await).is_ok()
-            }
             ChainWorkerRequest::GetTipStateAndOutboxInfo {
                 receiver_id,
                 callback,
@@ -1203,11 +1200,6 @@ where
         &self,
     ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
         Ok(self.chain.received_certificate_trackers.get().clone())
-    }
-
-    /// Gets the manager seed.
-    async fn get_manager_seed(&self) -> Result<u64, WorkerError> {
-        Ok(*self.chain.manager.seed.get())
     }
 
     /// Gets tip state and outbox info for next_outbox_heights calculation.

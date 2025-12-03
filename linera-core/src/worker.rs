@@ -1359,14 +1359,6 @@ where
         .await
     }
 
-    /// Gets the manager seed.
-    pub async fn get_manager_seed(&self, chain_id: ChainId) -> Result<u64, WorkerError> {
-        self.query_chain_worker(chain_id, |callback| ChainWorkerRequest::GetManagerSeed {
-            callback,
-        })
-        .await
-    }
-
     /// Gets tip state and outbox info for next_outbox_heights calculation.
     pub async fn get_tip_state_and_outbox_info(
         &self,

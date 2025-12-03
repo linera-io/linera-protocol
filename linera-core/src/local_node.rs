@@ -392,11 +392,6 @@ where
             .await?)
     }
 
-    /// Gets the manager seed.
-    pub async fn get_manager_seed(&self, chain_id: ChainId) -> Result<u64, LocalNodeError> {
-        Ok(self.node.state.get_manager_seed(chain_id).await?)
-    }
-
     /// Gets tip state and outbox info for next_outbox_heights calculation.
     pub async fn get_tip_state_and_outbox_info(
         &self,

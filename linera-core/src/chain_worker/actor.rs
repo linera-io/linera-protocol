@@ -234,12 +234,6 @@ where
         callback: oneshot::Sender<Result<HashMap<ValidatorPublicKey, u64>, WorkerError>>,
     },
 
-    /// Get the manager seed.
-    GetManagerSeed {
-        #[debug(skip)]
-        callback: oneshot::Sender<Result<u64, WorkerError>>,
-    },
-
     /// Get tip state info for next_outbox_heights calculation.
     GetTipStateAndOutboxInfo {
         receiver_id: ChainId,
