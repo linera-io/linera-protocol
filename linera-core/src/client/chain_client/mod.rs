@@ -407,22 +407,18 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn event_stream_publishers(
         &self,
     ) -> Result<BTreeMap<ChainId, BTreeSet<StreamId>>, LocalNodeError> {
-        let mut publishers = self
-            .chain_state_view()
-            .await?
-            .execution_state
-            .system
-            .event_subscriptions
-            .indices()
-            .await?
-            .into_iter()
-            .fold(
-                BTreeMap::<ChainId, BTreeSet<StreamId>>::new(),
-                |mut map, (chain_id, stream_id)| {
-                    map.entry(chain_id).or_default().insert(stream_id);
-                    map
-                },
-            );
+        let subscriptions = self
+            .client
+            .local_node
+            .get_event_subscriptions(self.chain_id)
+            .await?;
+        let mut publishers = subscriptions.into_iter().fold(
+            BTreeMap::<ChainId, BTreeSet<StreamId>>::new(),
+            |mut map, ((chain_id, stream_id), _)| {
+                map.entry(chain_id).or_default().insert(stream_id);
+                map
+            },
+        );
         if self.chain_id != self.client.admin_id {
             publishers.insert(
                 self.client.admin_id,
@@ -533,12 +529,9 @@ impl<Env: Environment> ChainClient<Env> {
     async fn collect_stream_updates(&self) -> Result<Option<Operation>, Error> {
         // Load all our subscriptions.
         let subscription_map = self
-            .chain_state_view()
-            .await?
-            .execution_state
-            .system
-            .event_subscriptions
-            .index_values()
+            .client
+            .local_node
+            .get_event_subscriptions(self.chain_id)
             .await?;
         // Collect the indices of all new events.
         let futures = subscription_map
@@ -553,14 +546,14 @@ impl<Env: Environment> ChainClient<Env> {
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
                 async move {
-                    let chain = client.local_node.chain_state_view(chain_id).await?;
-                    if let Some(next_expected_index) = chain
-                        .next_expected_events
-                        .get(&stream_id)
-                        .await?
+                    let next_expected_index = client
+                        .local_node
+                        .get_next_expected_event(chain_id, stream_id.clone())
+                        .await?;
+                    if let Some(next_index) = next_expected_index
                         .filter(|next_index| *next_index > subscriptions.next_index)
                     {
-                        Ok(Some((chain_id, stream_id, next_expected_index)))
+                        Ok(Some((chain_id, stream_id, next_index)))
                     } else {
                         Ok::<_, Error>(None)
                     }
@@ -766,16 +759,14 @@ impl<Env: Environment> ChainClient<Env> {
     /// Synchronizes all chains that any application on this chain subscribes to.
     /// We always consider the admin chain a relevant publishing chain, for new epochs.
     async fn synchronize_publisher_chains(&self) -> Result<(), Error> {
-        let chain_ids = self
-            .chain_state_view()
-            .await?
-            .execution_state
-            .system
-            .event_subscriptions
-            .indices()
-            .await?
+        let subscriptions = self
+            .client
+            .local_node
+            .get_event_subscriptions(self.chain_id)
+            .await?;
+        let chain_ids = subscriptions
             .iter()
-            .map(|(chain_id, _)| *chain_id)
+            .map(|((chain_id, _), _)| *chain_id)
             .chain(iter::once(self.client.admin_id))
             .filter(|chain_id| *chain_id != self.chain_id)
             .collect::<BTreeSet<_>>();
@@ -816,11 +807,8 @@ impl<Env: Environment> ChainClient<Env> {
         let trackers = self
             .client
             .local_node
-            .chain_state_view(chain_id)
-            .await?
-            .received_certificate_trackers
-            .get()
-            .clone();
+            .get_received_certificate_trackers(chain_id)
+            .await?;
 
         trace!("find_received_certificates: read trackers");
 
@@ -1872,7 +1860,11 @@ impl<Env: Environment> ChainClient<Env> {
         identity: &AccountOwner,
         has_oracle_responses: bool,
     ) -> Result<Either<Round, RoundTimeout>, Error> {
-        let seed = *self.chain_state_view().await?.manager.seed.get();
+        let seed = self
+            .client
+            .local_node
+            .get_manager_seed(self.chain_id)
+            .await?;
         let manager = &info.manager;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
@@ -2833,10 +2825,13 @@ impl<Env: Environment> ChainClient<Env> {
             - usize::try_from(missing_certificate_count).expect("`usize` should be at least `u64`");
 
         let missing_certificate_hashes = self
-            .chain_state_view()
-            .await?
-            .confirmed_log
-            .read(missing_certificates_start..missing_certificates_end)
+            .client
+            .local_node
+            .read_confirmed_log(
+                self.chain_id,
+                BlockHeight(missing_certificates_start as u64),
+                BlockHeight(missing_certificates_end as u64),
+            )
             .await?;
 
         let certificates = self

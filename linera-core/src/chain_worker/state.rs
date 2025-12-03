@@ -20,7 +20,7 @@ use linera_base::{
     },
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, StreamId},
 };
 use linera_chain::{
     data_types::{
@@ -43,7 +43,7 @@ use linera_views::{
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
 use tracing::{debug, instrument, trace, warn};
 
-use super::{ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier};
+use super::{ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier, EventSubscriptionsResult};
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
@@ -249,6 +249,36 @@ where
                 callback,
             } => callback
                 .send(self.read_confirmed_log(start, end).await)
+                .is_ok(),
+            ChainWorkerRequest::GetBlockHashes { heights, callback } => {
+                callback.send(self.get_block_hashes(heights).await).is_ok()
+            }
+            ChainWorkerRequest::GetProposedBlobs { blob_ids, callback } => callback
+                .send(self.get_proposed_blobs(blob_ids).await)
+                .is_ok(),
+            ChainWorkerRequest::GetEventSubscriptions { callback } => {
+                callback.send(self.get_event_subscriptions().await).is_ok()
+            }
+            ChainWorkerRequest::GetNextExpectedEvent {
+                stream_id,
+                callback,
+            } => callback
+                .send(self.get_next_expected_event(stream_id).await)
+                .is_ok(),
+            ChainWorkerRequest::GetReceivedCertificateTrackers { callback } => callback
+                .send(self.get_received_certificate_trackers().await)
+                .is_ok(),
+            ChainWorkerRequest::GetManagerSeed { callback } => {
+                callback.send(self.get_manager_seed().await).is_ok()
+            }
+            ChainWorkerRequest::GetTipStateAndOutboxInfo {
+                receiver_id,
+                callback,
+            } => callback
+                .send(self.get_tip_state_and_outbox_info(receiver_id).await)
+                .is_ok(),
+            ChainWorkerRequest::GetNextHeightToPreprocess { callback } => callback
+                .send(self.get_next_height_to_preprocess().await)
                 .is_ok(),
         };
 
@@ -1161,6 +1191,81 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(hashes)
+    }
+
+    /// Gets block hashes for specified heights.
+    async fn get_block_hashes(
+        &self,
+        heights: Vec<BlockHeight>,
+    ) -> Result<Vec<CryptoHash>, WorkerError> {
+        Ok(self.chain.block_hashes(heights).await?)
+    }
+
+    /// Gets proposed blobs from the manager for specified blob IDs.
+    async fn get_proposed_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<Blob>, WorkerError> {
+        let mut blobs = Vec::with_capacity(blob_ids.len());
+        for blob_id in blob_ids {
+            let blob = self
+                .chain
+                .manager
+                .proposed_blobs
+                .get(&blob_id)
+                .await?
+                .ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))?;
+            blobs.push(blob);
+        }
+        Ok(blobs)
+    }
+
+    /// Gets event subscriptions.
+    async fn get_event_subscriptions(&self) -> Result<EventSubscriptionsResult, WorkerError> {
+        Ok(self
+            .chain
+            .execution_state
+            .system
+            .event_subscriptions
+            .index_values()
+            .await?)
+    }
+
+    /// Gets the next expected event index for a stream.
+    async fn get_next_expected_event(
+        &self,
+        stream_id: StreamId,
+    ) -> Result<Option<u32>, WorkerError> {
+        Ok(self.chain.next_expected_events.get(&stream_id).await?)
+    }
+
+    /// Gets received certificate trackers.
+    async fn get_received_certificate_trackers(
+        &self,
+    ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
+        Ok(self.chain.received_certificate_trackers.get().clone())
+    }
+
+    /// Gets the manager seed.
+    async fn get_manager_seed(&self) -> Result<u64, WorkerError> {
+        Ok(*self.chain.manager.seed.get())
+    }
+
+    /// Gets tip state and outbox info for next_outbox_heights calculation.
+    async fn get_tip_state_and_outbox_info(
+        &self,
+        receiver_id: ChainId,
+    ) -> Result<(BlockHeight, Option<BlockHeight>), WorkerError> {
+        let next_block_height = self.chain.tip_state.get().next_block_height;
+        let next_height_to_schedule = self
+            .chain
+            .outboxes
+            .try_load_entry(&receiver_id)
+            .await?
+            .map(|outbox| *outbox.next_height_to_schedule.get());
+        Ok((next_block_height, next_height_to_schedule))
+    }
+
+    /// Gets the next height to preprocess.
+    async fn get_next_height_to_preprocess(&self) -> Result<BlockHeight, WorkerError> {
+        Ok(self.chain.next_height_to_preprocess().await?)
     }
 
     /// Attempts to vote for a leader timeout, if possible.

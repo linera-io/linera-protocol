@@ -4,7 +4,7 @@
 //! An actor that runs a chain worker.
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt,
     sync::{self, Arc, RwLock},
 };
@@ -15,7 +15,7 @@ use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     hashed::Hashed,
-    identifiers::{ApplicationId, BlobId, ChainId},
+    identifiers::{ApplicationId, BlobId, ChainId, StreamId},
     time::Instant,
 };
 use linera_chain::{
@@ -24,8 +24,8 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    ExecutionStateView, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint,
-    ServiceSyncRuntime,
+    system::EventSubscriptions, ExecutionStateView, Query, QueryContext, QueryOutcome,
+    ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::context::InactiveContext;
@@ -39,6 +39,9 @@ use crate::{
     value_cache::ValueCache,
     worker::{NetworkActions, WorkerError},
 };
+
+/// Type alias for event subscriptions result.
+pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscriptions)>;
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -204,6 +207,58 @@ where
         end: BlockHeight,
         #[debug(skip)]
         callback: oneshot::Sender<Result<Vec<CryptoHash>, WorkerError>>,
+    },
+
+    /// Get block hashes for specified heights.
+    GetBlockHashes {
+        heights: Vec<BlockHeight>,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<Vec<CryptoHash>, WorkerError>>,
+    },
+
+    /// Get proposed blobs from the manager for specified blob IDs.
+    GetProposedBlobs {
+        blob_ids: Vec<BlobId>,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<Vec<Blob>, WorkerError>>,
+    },
+
+    /// Get event subscriptions as a list of ((ChainId, StreamId), EventSubscriptions).
+    GetEventSubscriptions {
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<EventSubscriptionsResult, WorkerError>>,
+    },
+
+    /// Get the next expected event index for a stream.
+    GetNextExpectedEvent {
+        stream_id: StreamId,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<Option<u32>, WorkerError>>,
+    },
+
+    /// Get received certificate trackers.
+    GetReceivedCertificateTrackers {
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<HashMap<ValidatorPublicKey, u64>, WorkerError>>,
+    },
+
+    /// Get the manager seed.
+    GetManagerSeed {
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<u64, WorkerError>>,
+    },
+
+    /// Get tip state info for next_outbox_heights calculation.
+    GetTipStateAndOutboxInfo {
+        receiver_id: ChainId,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<(BlockHeight, Option<BlockHeight>), WorkerError>>,
+    },
+
+    /// Get the next height to preprocess.
+    GetNextHeightToPreprocess {
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<BlockHeight, WorkerError>>,
     },
 }
 
