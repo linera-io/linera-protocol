@@ -48,8 +48,14 @@ pub enum PostgresError {
     BlobNotFound(BlobId),
 }
 
+impl From<bincode::Error> for PostgresError {
+    fn from(err: bincode::Error) -> Self {
+        PostgresError::Serialization(err.to_string())
+    }
+}
+
 pub struct PostgresDatabase {
-    pool: PgPool,
+    pub(crate) pool: PgPool,
 }
 
 impl PostgresDatabase {
@@ -118,14 +124,16 @@ impl PostgresDatabase {
         let blob_id_str = blob_id.hash.to_string();
         let blob_type = format!("{:?}", blob_id.blob_type);
 
-        // For now, we don't have block_hash and application_id context here
-        // These could be passed as optional parameters in the future
-        sqlx::query("INSERT INTO blobs (hash, blob_type, data) VALUES ($1, $2, $3) ON CONFLICT (hash) DO NOTHING")
-            .bind(&blob_id_str)
-            .bind(&blob_type)
-            .bind(data)
-            .execute(&mut **tx)
-            .await?;
+        sqlx::query(
+            "INSERT INTO blobs (hash, blob_type, data) 
+            VALUES ($1, $2, $3) 
+            ON CONFLICT (hash) DO NOTHING",
+        )
+        .bind(&blob_id_str)
+        .bind(&blob_type)
+        .bind(data)
+        .execute(&mut **tx)
+        .await?;
         Ok(())
     }
 

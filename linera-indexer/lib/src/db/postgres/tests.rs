@@ -1,16 +1,19 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+
 use dockertest::{waitfor, DockerTest, Image, Source, TestBodySpecification};
 use linera_base::{
     crypto::{CryptoHash, TestString},
-    data_types::{Amount, Blob, BlockHeight, Epoch, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, Epoch, Round, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, ChainId},
 };
 use linera_chain::{
-    block::{Block, BlockBody, BlockHeader},
+    block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
     data_types::{IncomingBundle, MessageAction, PostedMessage},
+    types::ConfirmedBlockCertificate,
 };
 use linera_execution::{Message, MessageKind};
 use linera_service_graphql_client::MessageBundle;
@@ -93,30 +96,24 @@ async fn test_high_level_atomic_api() {
         let blob1_data = bincode::serialize(&blob1).unwrap();
         let blob2_data = bincode::serialize(&blob2).unwrap();
 
-        // Create a proper test block
+        // Create a proper test block certificate
         let chain_id = ChainId(CryptoHash::new(blob2.content()));
         let height = BlockHeight(1);
-        let timestamp = Timestamp::now();
         let test_block = create_test_block(chain_id, height);
-        let block_hash = Hashed::new(test_block.clone()).hash();
-        let block_data = bincode::serialize(&test_block).unwrap();
+        let confirmed_block = ConfirmedBlock::new(test_block);
+        let block_cert = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
 
-        let blobs = vec![
-            (blob1.id(), blob1_data.clone()),
-            (blob2.id(), blob2_data.clone()),
-        ];
+        let block_hash = block_cert.hash();
+        let block_data = bincode::serialize(&block_cert).unwrap();
+
+        let mut pending_blobs = HashMap::new();
+        pending_blobs.insert(blob1.id(), blob1_data.clone());
+        pending_blobs.insert(blob2.id(), blob2_data.clone());
 
         // Test atomic storage of block with blobs
-        db.store_block_with_blobs(
-            &block_hash,
-            &chain_id,
-            height,
-            timestamp,
-            &block_data,
-            &blobs,
-        )
-        .await
-        .unwrap();
+        db.store_block_with_blobs(&block_cert, &pending_blobs)
+            .await
+            .unwrap();
 
         // Verify block was stored
         let retrieved_block = db.get_block(&block_hash).await.unwrap();
@@ -246,6 +243,62 @@ async fn test_incoming_bundles_storage_and_query() {
         assert_eq!(origin_bundles.len(), 1);
         assert_eq!(origin_bundles[0].0, block_hash);
         assert_eq!(origin_bundles[0].1, *queried_bundle_id);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_block_with_embedded_blobs() {
+    run_with_postgres(|database_url| async move {
+        let db = PostgresDatabase::new(&database_url)
+            .await
+            .expect("Failed to create test database");
+
+        // Create blobs that will be embedded in the block
+        let blob1 = Blob::new_data(b"embedded blob 1".to_vec());
+        let blob2 = Blob::new_data(b"embedded blob 2".to_vec());
+        let blob3 = Blob::new_data(b"embedded blob 3".to_vec());
+
+        // Create a standalone blob (not in the block)
+        let standalone_blob = Blob::new_data(b"standalone blob".to_vec());
+        let standalone_blob_data = bincode::serialize(&standalone_blob).unwrap();
+
+        // Create a test block with blobs in its body
+        let chain_id = ChainId(CryptoHash::new(&TestString::new("test_chain")));
+        let height = BlockHeight(1);
+
+        let mut test_block = create_test_block(chain_id, height);
+        // Add blobs to two different transactions
+        test_block.body.blobs = vec![
+            vec![blob1.clone(), blob2.clone()], // Transaction 0 has 2 blobs
+            vec![blob3.clone()],                // Transaction 1 has 1 blob
+        ];
+
+        let confirmed_block = ConfirmedBlock::new(test_block);
+        let block_cert = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
+
+        let block_hash = block_cert.hash();
+        let block_data = bincode::serialize(&block_cert).unwrap();
+
+        // Prepare pending blobs (standalone blobs that arrived before the block)
+        let mut pending_blobs = HashMap::new();
+        pending_blobs.insert(standalone_blob.id(), standalone_blob_data.clone());
+
+        // Store block with blobs
+        // The API will extract blobs from the block body and combine with pending_blobs
+        db.store_block_with_blobs(&block_cert, &pending_blobs)
+            .await
+            .unwrap();
+
+        // Verify block was stored
+        let retrieved_block = db.get_block(&block_hash).await.unwrap();
+        assert_eq!(block_data, retrieved_block);
+
+        // Verify all blobs were stored
+        assert!(db.get_blob(&standalone_blob.id()).await.is_ok());
+        assert!(db.get_blob(&blob1.id()).await.is_ok());
+        assert!(db.get_blob(&blob2.id()).await.is_ok());
+        assert!(db.get_blob(&blob3.id()).await.is_ok());
     })
     .await;
 }

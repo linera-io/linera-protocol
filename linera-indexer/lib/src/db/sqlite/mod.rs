@@ -48,6 +48,12 @@ pub enum SqliteError {
     BlobNotFound(BlobId),
 }
 
+impl From<bincode::Error> for SqliteError {
+    fn from(err: bincode::Error) -> Self {
+        SqliteError::Serialization(err.to_string())
+    }
+}
+
 pub struct SqliteDatabase {
     pool: SqlitePool,
 }
@@ -137,8 +143,6 @@ impl SqliteDatabase {
         let blob_id_str = blob_id.hash.to_string();
         let blob_type = format!("{:?}", blob_id.blob_type);
 
-        // For now, we don't have block_hash and application_id context here
-        // These could be passed as optional parameters in the future
         sqlx::query("INSERT OR IGNORE INTO blobs (hash, blob_type, data) VALUES (?1, ?2, ?3)")
             .bind(&blob_id_str)
             .bind(&blob_type)

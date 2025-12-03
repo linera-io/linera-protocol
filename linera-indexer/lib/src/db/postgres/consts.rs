@@ -129,15 +129,11 @@ CREATE TABLE IF NOT EXISTS blobs (
     hash TEXT PRIMARY KEY NOT NULL,
     blob_type TEXT NOT NULL, -- 'Data', 'ContractBytecode', 'ServiceBytecode', etc.
     application_id TEXT, -- If applicable
-    block_hash TEXT, -- Block that created this blob
-    transaction_index BIGINT, -- Transaction that created this blob
     data BYTEA NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (block_hash) REFERENCES blocks(hash)
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_blobs_type ON blobs(blob_type);
-CREATE INDEX IF NOT EXISTS idx_blobs_block_hash ON blobs(block_hash);
 CREATE INDEX IF NOT EXISTS idx_blobs_application_id ON blobs(application_id);
 "#;
 
