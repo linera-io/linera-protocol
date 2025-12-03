@@ -865,6 +865,7 @@ impl Runnable for Job {
                                 None,
                                 n,
                                 on_drop,
+                                benchmark_options.transactions_per_block,
                                 vec![
                                     "--storage-max-stream-queries".to_string(),
                                     "50".to_string(),
