@@ -1794,16 +1794,14 @@ impl<Env: Environment> ChainClient<Env> {
     /// Returns chain IDs that this chain subscribes to.
     #[instrument(level = "trace", skip(self))]
     pub async fn event_stream_publishers(&self) -> Result<BTreeSet<ChainId>, LocalNodeError> {
-        let mut publishers = self
-            .chain_state_view()
-            .await?
-            .execution_state
-            .system
-            .event_subscriptions
-            .indices()
-            .await?
+        let subscriptions = self
+            .client
+            .local_node
+            .get_event_subscriptions(self.chain_id)
+            .await?;
+        let mut publishers = subscriptions
             .into_iter()
-            .map(|(chain_id, _)| chain_id)
+            .map(|((chain_id, _), _)| chain_id)
             .collect::<BTreeSet<_>>();
         if self.chain_id != self.client.admin_id {
             publishers.insert(self.client.admin_id);
@@ -1907,12 +1905,9 @@ impl<Env: Environment> ChainClient<Env> {
     async fn collect_stream_updates(&self) -> Result<Option<Operation>, ChainClientError> {
         // Load all our subscriptions.
         let subscription_map = self
-            .chain_state_view()
-            .await?
-            .execution_state
-            .system
-            .event_subscriptions
-            .index_values()
+            .client
+            .local_node
+            .get_event_subscriptions(self.chain_id)
             .await?;
         // Collect the indices of all new events.
         let futures = subscription_map
@@ -1927,13 +1922,12 @@ impl<Env: Environment> ChainClient<Env> {
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
                 async move {
-                    let chain = client.local_node.chain_state_view(chain_id).await?;
-                    if let Some(next_index) = chain
-                        .execution_state
-                        .stream_event_counts
-                        .get(&stream_id)
-                        .await?
-                        .filter(|next_index| *next_index > subscriptions.next_index)
+                    let next_index = client
+                        .local_node
+                        .get_stream_event_count(chain_id, stream_id.clone())
+                        .await?;
+                    if let Some(next_index) =
+                        next_index.filter(|next_index| *next_index > subscriptions.next_index)
                     {
                         Ok(Some((chain_id, stream_id, next_index)))
                     } else {
@@ -2146,16 +2140,14 @@ impl<Env: Environment> ChainClient<Env> {
     /// Synchronizes all chains that any application on this chain subscribes to.
     /// We always consider the admin chain a relevant publishing chain, for new epochs.
     async fn synchronize_publisher_chains(&self) -> Result<(), ChainClientError> {
-        let chain_ids = self
-            .chain_state_view()
-            .await?
-            .execution_state
-            .system
-            .event_subscriptions
-            .indices()
-            .await?
+        let subscriptions = self
+            .client
+            .local_node
+            .get_event_subscriptions(self.chain_id)
+            .await?;
+        let chain_ids = subscriptions
             .iter()
-            .map(|(chain_id, _)| *chain_id)
+            .map(|((chain_id, _), _)| *chain_id)
             .chain(iter::once(self.client.admin_id))
             .filter(|chain_id| *chain_id != self.chain_id)
             .collect::<BTreeSet<_>>();
@@ -2196,11 +2188,8 @@ impl<Env: Environment> ChainClient<Env> {
         let trackers = self
             .client
             .local_node
-            .chain_state_view(chain_id)
-            .await?
-            .received_certificate_trackers
-            .get()
-            .clone();
+            .get_received_certificate_trackers(chain_id)
+            .await?;
 
         trace!("find_received_certificates: read trackers");
 
@@ -3293,8 +3282,12 @@ impl<Env: Environment> ChainClient<Env> {
         identity: &AccountOwner,
         has_oracle_responses: bool,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
-        let seed = *self.chain_state_view().await?.manager.seed.get();
         let manager = &info.manager;
+        let seed = self
+            .client
+            .local_node
+            .get_manager_seed(self.chain_id)
+            .await?;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         // Similarly, we cannot propose a block that uses oracles in the fast round.
@@ -4168,32 +4161,25 @@ impl<Env: Environment> ChainClient<Env> {
             .handle_chain_info_query(ChainInfoQuery::new(self.chain_id))
             .await
         {
-            Ok(info) => info.info.next_block_height.0,
-            Err(NodeError::BlobsNotFound(_)) => 0,
+            Ok(info) => info.info.next_block_height,
+            Err(NodeError::BlobsNotFound(_)) => BlockHeight::ZERO,
             Err(err) => return Err(err.into()),
         };
-        let local_chain_state = self.chain_info().await?;
+        let local_next_block_height = self.chain_info().await?.next_block_height;
 
-        let Some(missing_certificate_count) = local_chain_state
-            .next_block_height
-            .0
-            .checked_sub(validator_next_block_height)
-            .filter(|count| *count > 0)
-        else {
+        if validator_next_block_height >= local_next_block_height {
             debug!("Validator is up-to-date with local state");
             return Ok(());
-        };
+        }
 
-        let missing_certificates_end = usize::try_from(local_chain_state.next_block_height.0)
-            .expect("`usize` should be at least `u64`");
-        let missing_certificates_start = missing_certificates_end
-            - usize::try_from(missing_certificate_count).expect("`usize` should be at least `u64`");
+        let heights: Vec<_> = (validator_next_block_height.0..local_next_block_height.0)
+            .map(BlockHeight)
+            .collect();
 
         let missing_certificate_hashes = self
-            .chain_state_view()
-            .await?
-            .confirmed_log
-            .read(missing_certificates_start..missing_certificates_end)
+            .client
+            .local_node
+            .get_block_hashes(self.chain_id, heights)
             .await?;
 
         let certificates = self

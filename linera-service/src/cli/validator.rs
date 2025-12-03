@@ -326,7 +326,7 @@ where
             let context =
                 ClientContext::new(storage.clone(), context_options.clone(), wallet, signer);
             let context = Arc::new(Mutex::new(context));
-            handle_sync(context, address, chains, check_online).await
+            Box::pin(handle_sync(context, address, chains, check_online)).await
         }
     }
 }
@@ -916,7 +916,7 @@ where
         info!("Syncing chain {} to {}", chain_id, address);
         let chain = context.make_chain_client(chain_id);
 
-        chain.sync_validator(validator.clone()).await?;
+        Box::pin(chain.sync_validator(validator.clone())).await?;
         info!("Chain {} synced successfully", chain_id);
     }
 

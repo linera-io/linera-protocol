@@ -541,9 +541,7 @@ where
                         let height = self
                             .client
                             .local_node
-                            .chain_state_view(chain_id)
-                            .await?
-                            .next_height_to_preprocess()
+                            .get_next_height_to_preprocess(chain_id)
                             .await?;
                         publisher_heights.insert(chain_id, height);
                         publisher_chain_ids_sent.insert(chain_id);
@@ -564,14 +562,11 @@ where
                     let published_blob_ids =
                         BTreeSet::from_iter(proposal.content.block.published_blob_ids());
                     blob_ids.retain(|blob_id| !published_blob_ids.contains(blob_id));
-                    let mut published_blobs = Vec::new();
-                    {
-                        let chain = self.client.local_node.chain_state_view(chain_id).await?;
-                        for blob_id in published_blob_ids {
-                            published_blobs
-                                .extend(chain.manager.proposed_blobs.get(&blob_id).await?);
-                        }
-                    }
+                    let published_blobs = self
+                        .client
+                        .local_node
+                        .get_proposed_blobs(chain_id, published_blob_ids.into_iter().collect())
+                        .await?;
                     self.remote_node
                         .send_pending_blobs(chain_id, published_blobs)
                         .await?;
@@ -635,9 +630,7 @@ where
                 let hash = self
                     .client
                     .local_node
-                    .chain_state_view(chain_id)
-                    .await?
-                    .block_hashes([height])
+                    .get_block_hashes(chain_id, vec![height])
                     .await?
                     .into_iter()
                     .next()
@@ -665,13 +658,13 @@ where
                 }
             };
             // Obtain the missing blocks and the manager state from the local node.
-            let heights = (info.next_block_height.0..target_block_height.0).map(BlockHeight);
+            let heights: Vec<_> = (info.next_block_height.0..target_block_height.0)
+                .map(BlockHeight)
+                .collect();
             let validator_missing_hashes = self
                 .client
                 .local_node
-                .chain_state_view(chain_id)
-                .await?
-                .block_hashes(heights)
+                .get_block_hashes(chain_id, heights)
                 .await?;
             if !validator_missing_hashes.is_empty() {
                 // Send the requested certificates in order.
