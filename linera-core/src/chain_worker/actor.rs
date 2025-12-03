@@ -201,14 +201,6 @@ where
         callback: oneshot::Sender<Result<Option<Vec<Blob>>, WorkerError>>,
     },
 
-    /// Read a range from the confirmed log.
-    ReadConfirmedLog {
-        start: BlockHeight,
-        end: BlockHeight,
-        #[debug(skip)]
-        callback: oneshot::Sender<Result<Vec<CryptoHash>, WorkerError>>,
-    },
-
     /// Get block hashes for specified heights.
     GetBlockHashes {
         heights: Vec<BlockHeight>,

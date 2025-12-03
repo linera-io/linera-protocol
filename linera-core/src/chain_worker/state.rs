@@ -243,13 +243,6 @@ where
             ChainWorkerRequest::GetLockingBlobs { blob_ids, callback } => callback
                 .send(self.get_locking_blobs(blob_ids).await)
                 .is_ok(),
-            ChainWorkerRequest::ReadConfirmedLog {
-                start,
-                end,
-                callback,
-            } => callback
-                .send(self.read_confirmed_log(start, end).await)
-                .is_ok(),
             ChainWorkerRequest::GetBlockHashes { heights, callback } => {
                 callback.send(self.get_block_hashes(heights).await).is_ok()
             }
@@ -1160,37 +1153,6 @@ where
             }
         }
         Ok(Some(blobs))
-    }
-
-    /// Reads a range from the confirmed log.
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        start = %start,
-        end = %end
-    ))]
-    async fn read_confirmed_log(
-        &self,
-        start: BlockHeight,
-        end: BlockHeight,
-    ) -> Result<Vec<CryptoHash>, WorkerError> {
-        let start_usize = usize::try_from(start)?;
-        let end_usize = usize::try_from(end)?;
-        let log_heights: Vec<_> = (start_usize..end_usize).collect();
-        let hashes = self
-            .chain
-            .confirmed_log
-            .multi_get(log_heights.clone())
-            .await?
-            .into_iter()
-            .enumerate()
-            .map(|(i, maybe_hash)| {
-                maybe_hash.ok_or_else(|| WorkerError::ConfirmedLogEntryNotFound {
-                    height: BlockHeight(u64::try_from(start_usize + i).unwrap_or(u64::MAX)),
-                    chain_id: self.chain_id(),
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(hashes)
     }
 
     /// Gets block hashes for specified heights.

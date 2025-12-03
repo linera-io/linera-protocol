@@ -1298,29 +1298,6 @@ where
         .await
     }
 
-    /// Reads a range from the confirmed log.
-    #[instrument(skip_all, fields(
-        nickname = %self.nickname,
-        chain_id = %chain_id,
-        start = %start,
-        end = %end
-    ))]
-    pub async fn read_confirmed_log(
-        &self,
-        chain_id: ChainId,
-        start: BlockHeight,
-        end: BlockHeight,
-    ) -> Result<Vec<CryptoHash>, WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::ReadConfirmedLog {
-                start,
-                end,
-                callback,
-            }
-        })
-        .await
-    }
-
     /// Gets block hashes for the given heights.
     pub async fn get_block_hashes(
         &self,

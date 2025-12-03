@@ -2803,35 +2803,25 @@ impl<Env: Environment> ChainClient<Env> {
             .handle_chain_info_query(ChainInfoQuery::new(self.chain_id))
             .await
         {
-            Ok(info) => info.info.next_block_height.0,
-            Err(NodeError::BlobsNotFound(_)) => 0,
+            Ok(info) => info.info.next_block_height,
+            Err(NodeError::BlobsNotFound(_)) => BlockHeight::ZERO,
             Err(err) => return Err(err.into()),
         };
-        let local_chain_state = self.chain_info().await?;
+        let local_next_block_height = self.chain_info().await?.next_block_height;
 
-        let Some(missing_certificate_count) = local_chain_state
-            .next_block_height
-            .0
-            .checked_sub(validator_next_block_height)
-            .filter(|count| *count > 0)
-        else {
+        if validator_next_block_height >= local_next_block_height {
             debug!("Validator is up-to-date with local state");
             return Ok(());
-        };
+        }
 
-        let missing_certificates_end = usize::try_from(local_chain_state.next_block_height.0)
-            .expect("`usize` should be at least `u64`");
-        let missing_certificates_start = missing_certificates_end
-            - usize::try_from(missing_certificate_count).expect("`usize` should be at least `u64`");
+        let heights: Vec<_> = (validator_next_block_height.0..local_next_block_height.0)
+            .map(BlockHeight)
+            .collect();
 
         let missing_certificate_hashes = self
             .client
             .local_node
-            .read_confirmed_log(
-                self.chain_id,
-                BlockHeight(missing_certificates_start as u64),
-                BlockHeight(missing_certificates_end as u64),
-            )
+            .get_block_hashes(self.chain_id, heights)
             .await?;
 
         let certificates = self

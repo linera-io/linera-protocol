@@ -410,20 +410,6 @@ where
             .await?)
     }
 
-    /// Reads a range from the confirmed log.
-    pub async fn read_confirmed_log(
-        &self,
-        chain_id: ChainId,
-        start: BlockHeight,
-        end: BlockHeight,
-    ) -> Result<Vec<CryptoHash>, LocalNodeError> {
-        Ok(self
-            .node
-            .state
-            .read_confirmed_log(chain_id, start, end)
-            .await?)
-    }
-
     /// Gets the next height to preprocess.
     pub async fn get_next_height_to_preprocess(
         &self,
