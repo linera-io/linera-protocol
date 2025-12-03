@@ -940,6 +940,10 @@ where
             .recv_response()?;
         Ok(key_size + value_size == 0)
     }
+
+    fn maximum_blob_size(&mut self) -> Result<u64, ExecutionError> {
+        Ok(self.inner().resource_controller.policy().maximum_blob_size)
+    }
 }
 
 /// An extension trait to determine in compile time the different behaviors between contract and

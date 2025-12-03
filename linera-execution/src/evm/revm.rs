@@ -66,10 +66,6 @@ const GET_DEPLOYED_BYTECODE_SELECTOR: &[u8] = &[21, 34, 55, 89];
 /// The json serialization of a trivial vector.
 const JSON_EMPTY_VECTOR: &[u8] = &[91, 93];
 
-/// The maximum size of a deployed EVM contract
-/// Note: The limit of Etherem contract is 24576.
-const MAX_SIZE_EVM_CONTRACT: usize = 10000000;
-
 #[cfg(with_metrics)]
 mod metrics {
     use std::sync::LazyLock;
@@ -1520,9 +1516,11 @@ where
             error: Arc::new(Mutex::new(None)),
         };
         let block_env = self.db.get_contract_block_env()?;
-        let gas_limit = {
+        let (max_size_evm_contract, gas_limit) = {
             let mut runtime = self.db.runtime.lock().unwrap();
-            runtime.remaining_fuel(VmRuntime::Evm)?
+            let gas_limit = runtime.remaining_fuel(VmRuntime::Evm)?;
+            let max_size_evm_contract = runtime.maximum_blob_size()? as usize;
+            (max_size_evm_contract, gas_limit)
         };
         let nonce = self.db.get_nonce(&caller)?;
         let result = {
@@ -1538,7 +1536,7 @@ where
                 SpecId::PRAGUE,
             )
             .with_block(block_env);
-            ctx.cfg.limit_contract_code_size = Some(MAX_SIZE_EVM_CONTRACT);
+            ctx.cfg.limit_contract_code_size = Some(max_size_evm_contract);
             let instructions = EthInstructions::new_mainnet();
             let mut evm = Evm::new_with_inspector(
                 ctx,
@@ -1690,6 +1688,10 @@ where
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
         };
+        let max_size_evm_contract = {
+            let mut runtime = self.db.runtime.lock().unwrap();
+            runtime.maximum_blob_size()? as usize
+        };
         let nonce = self.db.get_nonce(&caller)?;
         let result_state = {
             let mut ctx: revm_context::Context<
@@ -1704,7 +1706,7 @@ where
                 SpecId::PRAGUE,
             )
             .with_block(block_env);
-            ctx.cfg.limit_contract_code_size = Some(MAX_SIZE_EVM_CONTRACT);
+            ctx.cfg.limit_contract_code_size = Some(max_size_evm_contract);
             let instructions = EthInstructions::new_mainnet();
             let mut evm = Evm::new_with_inspector(
                 ctx,

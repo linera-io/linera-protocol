@@ -844,6 +844,9 @@ pub trait BaseRuntime {
 
     /// Returns true if the corresponding contract uses a zero amount of storage.
     fn has_empty_storage(&mut self, application: ApplicationId) -> Result<bool, ExecutionError>;
+
+    /// Returns the maximum blob size from the ResourceControlPolicy.
+    fn maximum_blob_size(&mut self) -> Result<u64, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
