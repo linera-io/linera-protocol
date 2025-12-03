@@ -2015,7 +2015,12 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
 
         ClientCommand::Completion { shell } => {
             let mut cmd = <ClientOptions as clap::CommandFactory>::command();
-            generate(*shell, &mut cmd, "linera", &mut std::io::stdout());
+            generate(
+                *shell,
+                &mut cmd,
+                env!("CARGO_BIN_NAME"),
+                &mut std::io::stdout(),
+            );
             Ok(0)
         }
 
