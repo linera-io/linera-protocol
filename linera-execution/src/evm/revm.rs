@@ -66,6 +66,10 @@ const GET_DEPLOYED_BYTECODE_SELECTOR: &[u8] = &[21, 34, 55, 89];
 /// The json serialization of a trivial vector.
 const JSON_EMPTY_VECTOR: &[u8] = &[91, 93];
 
+/// The maximum size of a deployed EVM contract
+/// Note: The limit of Etherem contract is 24576.
+const MAX_SIZE_EVM_CONTRACT: usize = 10000000;
+
 #[cfg(with_metrics)]
 mod metrics {
     use std::sync::LazyLock;
@@ -1522,7 +1526,7 @@ where
         };
         let nonce = self.db.get_nonce(&caller)?;
         let result = {
-            let ctx: revm_context::Context<
+            let mut ctx: revm_context::Context<
                 BlockEnv,
                 _,
                 _,
@@ -1534,6 +1538,7 @@ where
                 SpecId::PRAGUE,
             )
             .with_block(block_env);
+            ctx.cfg.limit_contract_code_size = Some(MAX_SIZE_EVM_CONTRACT);
             let instructions = EthInstructions::new_mainnet();
             let mut evm = Evm::new_with_inspector(
                 ctx,
@@ -1687,7 +1692,7 @@ where
         };
         let nonce = self.db.get_nonce(&caller)?;
         let result_state = {
-            let ctx: revm_context::Context<
+            let mut ctx: revm_context::Context<
                 BlockEnv,
                 _,
                 _,
@@ -1699,6 +1704,7 @@ where
                 SpecId::PRAGUE,
             )
             .with_block(block_env);
+            ctx.cfg.limit_contract_code_size = Some(MAX_SIZE_EVM_CONTRACT);
             let instructions = EthInstructions::new_mainnet();
             let mut evm = Evm::new_with_inspector(
                 ctx,
