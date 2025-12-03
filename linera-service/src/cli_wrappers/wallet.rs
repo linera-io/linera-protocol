@@ -109,6 +109,7 @@ impl ClientWrapper {
             testing_prng_seed,
             id,
             on_drop,
+            10_000,
             vec!["--wait-for-outgoing-messages".to_string()],
         )
     }
@@ -119,6 +120,7 @@ impl ClientWrapper {
         testing_prng_seed: Option<u64>,
         id: usize,
         on_drop: OnClientDrop,
+        max_pending_message_bundles: usize,
         extra_args: Vec<String>,
     ) -> Self {
         let storage = format!(
@@ -134,7 +136,7 @@ impl ClientWrapper {
             storage,
             wallet,
             keystore,
-            max_pending_message_bundles: 10_000,
+            max_pending_message_bundles,
             network,
             path_provider,
             on_drop,
