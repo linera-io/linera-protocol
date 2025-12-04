@@ -2,6 +2,11 @@
 # Stage 1: Build the frontend
 FROM node:18-alpine AS frontend-builder
 
+# Build argument for API base URL (injected at build time)
+ARG VITE_API_BASE_URL=http://localhost:3002/api
+
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app
 
 # Copy package files
@@ -18,7 +23,8 @@ RUN npm ci
 # Copy source code
 COPY linera-explorer-new/src ./src
 
-# Build frontend
+# Build frontend with the API URL baked in
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN npm run build
 
 # Stage 2: Setup backend dependencies
@@ -31,13 +37,14 @@ COPY linera-explorer-new/server ./server
 COPY linera-explorer-new/package*.json ./
 
 # Install backend dependencies (including better-sqlite3)
-RUN npm ci --only=production
+RUN apk add --no-cache python3 make g++
+RUN npm ci --omit=dev
 
 # Stage 3: Production runtime
 FROM node:18-alpine
 
-# Install sqlite3 for database operations
-RUN apk add --no-cache sqlite
+# Install postgresql-client for database connectivity (SQLite support via better-sqlite3 npm package)
+RUN apk add --no-cache postgresql-client
 
 WORKDIR /app
 
@@ -49,9 +56,6 @@ COPY --from=backend-builder /app/server ./server
 COPY --from=backend-builder /app/node_modules ./node_modules
 COPY --from=backend-builder /app/package.json ./package.json
 
-# Create data directory for database
-RUN mkdir -p /data
-
 # Copy startup script
 COPY docker/explorer-entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
@@ -61,7 +65,8 @@ EXPOSE 3001 3002
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV DB_PATH=/data/indexer.db
+# DATABASE_URL should be set via docker-compose for PostgreSQL
+# DB_PATH can be set for SQLite (fallback)
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \

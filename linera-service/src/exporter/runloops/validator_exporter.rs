@@ -152,8 +152,8 @@ where
                 Err(e) => Err(e),
                 Ok(blob) => {
                     tracing::info!(
-                        "dispatching blob with id: {:#?} from linera exporter",
-                        blob.id()
+                        blob_id=?blob.id(),
+                        "dispatching blob",
                     );
                     #[cfg(with_metrics)]
                     let start = linera_base::time::Instant::now();

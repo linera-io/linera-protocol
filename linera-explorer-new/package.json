@@ -11,20 +11,22 @@
     "start": "concurrently \"npm run server\" \"npm run dev\""
   },
   "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "lucide-react": "^0.263.1",
+    "pg": "^8.16.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.15.0",
-    "lucide-react": "^0.263.1",
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "better-sqlite3": "^8.7.0"
+    "react-router-dom": "^6.15.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.4",
+    "@types/cors": "^2.8.13",
+    "@types/express": "^4.17.17",
+    "@types/pg": "^8.15.6",
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
-    "@types/better-sqlite3": "^7.6.4",
-    "@types/express": "^4.17.17",
-    "@types/cors": "^2.8.13",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "@vitejs/plugin-react": "^4.0.3",
