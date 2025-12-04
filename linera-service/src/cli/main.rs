@@ -1496,10 +1496,27 @@ impl Runnable for Job {
                 context.update_wallet_from_client(&chain_client).await?;
             }
 
-            Wallet(WalletCommand::FollowChain { chain_id, sync }) => {
+            Wallet(WalletCommand::FollowChain {
+                chain_id,
+                sync,
+                skip_senders,
+            }) => {
                 let mut context =
                     options.create_client_context(storage, wallet, signer.into_value());
                 let start_time = Instant::now();
+                let listening_mode = if skip_senders {
+                    ListeningMode::SkipSenders
+                } else {
+                    ListeningMode::FullChain
+                };
+                // Insert a placeholder chain with the listening mode so that
+                // update_wallet_from_client preserves it.
+                let genesis_config = context.wallet().genesis_config().clone();
+                context.wallet_mut().insert(UserChain::make_other(
+                    chain_id,
+                    genesis_config.timestamp,
+                    listening_mode,
+                ));
                 context.client.track_chain(chain_id);
                 let chain_client = context.make_chain_client(chain_id);
                 if sync {

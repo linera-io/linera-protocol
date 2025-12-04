@@ -90,11 +90,9 @@ pub trait ClientContext {
     }
 
     fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<Self::Environment> {
-        let chain = self
-            .wallet()
-            .get(chain_id)
-            .cloned()
-            .unwrap_or_else(|| UserChain::make_other(chain_id, Timestamp::from(0)));
+        let chain = self.wallet().get(chain_id).cloned().unwrap_or_else(|| {
+            UserChain::make_other(chain_id, Timestamp::from(0), ListeningMode::default())
+        });
         self.client().create_chain_client(
             chain_id,
             chain.block_hash,
@@ -220,22 +218,26 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .make_chain_client(admin_chain_id)
                 .synchronize_chain_state(admin_chain_id)
                 .await?;
-            BTreeMap::from_iter(
-                guard
-                    .wallet()
-                    .chain_ids()
-                    .into_iter()
-                    .chain([admin_chain_id])
-                    .map(|chain_id| (chain_id, ListeningMode::FullChain)),
-            )
+            let wallet = guard.wallet();
+            let mut chain_modes = BTreeMap::new();
+            for (chain_id, user_chain) in &wallet.chains {
+                chain_modes.insert(*chain_id, user_chain.listening_mode.clone());
+            }
+            // Admin chain always uses FullChain.
+            chain_modes.insert(admin_chain_id, ListeningMode::FullChain);
+            chain_modes
         };
 
         // Start background tasks to sync received certificates for each chain,
-        // if enabled.
+        // if enabled. Skip chains with SkipSenders mode.
         if enable_background_sync {
             let context = Arc::clone(&self.context);
             let cancellation_token = self.cancellation_token.clone();
-            for chain_id in chain_ids.keys() {
+            for (chain_id, listening_mode) in &chain_ids {
+                if matches!(listening_mode, ListeningMode::SkipSenders) {
+                    debug!("Skipping background sync for chain {chain_id} due to SkipSenders mode");
+                    continue;
+                }
                 let context = Arc::clone(&context);
                 let cancellation_token = cancellation_token.clone();
                 let chain_id = *chain_id;
@@ -308,7 +310,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             }
             Reason::NewEvents { event_streams, .. } => {
                 let should_process = match listening_mode {
-                    ListeningMode::FullChain => true,
+                    ListeningMode::FullChain | ListeningMode::SkipSenders => true,
                     ListeningMode::EventsOnly(relevant_events) => {
                         relevant_events.intersection(event_streams).count() != 0
                     }
@@ -581,6 +583,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             return Ok(());
         }
         let listening_client = self.listening.get_mut(&chain_id).expect("missing client");
+        if matches!(listening_client.listening_mode, ListeningMode::SkipSenders) {
+            debug!("Not processing inbox for {chain_id:.8} due to SkipSenders mode");
+            return Ok(());
+        }
         if !listening_client.client.is_tracked() {
             debug!("Not processing inbox for non-tracked chain {chain_id:.8}");
             return Ok(());

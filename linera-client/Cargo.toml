@@ -113,6 +113,7 @@ native-fungible.workspace = true
 non-fungible.workspace = true
 proptest.workspace = true
 reqwest = { workspace = true, features = ["json"] }
+serde_json.workspace = true
 social.workspace = true
 tempfile.workspace = true
 test-case.workspace = true

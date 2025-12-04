@@ -239,11 +239,16 @@ pub enum TimingType {
 /// Defines how we listen to a chain:
 /// - do we care about every block notification?
 /// - or do we only care about blocks containing events from some particular streams?
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// - or do we want to skip sender chain synchronization?
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ListeningMode {
-    /// Listen to everything.
+    /// Listen to everything, sync sender chains, process inbox.
+    #[default]
     FullChain,
+    /// Sync the chain's own blocks but skip sender chain synchronization and inbox processing.
+    SkipSenders,
     /// Only listen to blocks which contain events from those streams.
+    #[serde(skip)]
     EventsOnly(BTreeSet<StreamId>),
 }
 
@@ -253,6 +258,9 @@ impl PartialOrd for ListeningMode {
             (ListeningMode::FullChain, ListeningMode::FullChain) => Some(Ordering::Equal),
             (ListeningMode::FullChain, _) => Some(Ordering::Greater),
             (_, ListeningMode::FullChain) => Some(Ordering::Less),
+            (ListeningMode::SkipSenders, ListeningMode::SkipSenders) => Some(Ordering::Equal),
+            (ListeningMode::SkipSenders, ListeningMode::EventsOnly(_)) => Some(Ordering::Greater),
+            (ListeningMode::EventsOnly(_), ListeningMode::SkipSenders) => Some(Ordering::Less),
             (ListeningMode::EventsOnly(events_a), ListeningMode::EventsOnly(events_b)) => {
                 if events_a.is_superset(events_b) {
                     Some(Ordering::Greater)
@@ -273,6 +281,10 @@ impl ListeningMode {
             (ListeningMode::FullChain, _) => (),
             (mode, Some(ListeningMode::FullChain)) => {
                 *mode = ListeningMode::FullChain;
+            }
+            (ListeningMode::SkipSenders, _) => (),
+            (mode, Some(ListeningMode::SkipSenders)) => {
+                *mode = ListeningMode::SkipSenders;
             }
             (
                 ListeningMode::EventsOnly(self_events),
@@ -1678,5 +1690,67 @@ pub async fn create_bytecode_blobs(
             );
             (vec![evm_contract_blob], module_id)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_listening_mode_partial_ord() {
+        // FullChain is greater than everything
+        assert!(ListeningMode::FullChain > ListeningMode::SkipSenders);
+        assert!(ListeningMode::FullChain > ListeningMode::EventsOnly(BTreeSet::new()));
+
+        // SkipSenders is greater than EventsOnly
+        assert!(ListeningMode::SkipSenders > ListeningMode::EventsOnly(BTreeSet::new()));
+        let stream_id = StreamId::system(b"test".to_vec());
+        assert!(ListeningMode::SkipSenders > ListeningMode::EventsOnly([stream_id].into()));
+
+        // SkipSenders equals itself
+        assert_eq!(
+            ListeningMode::SkipSenders.partial_cmp(&ListeningMode::SkipSenders),
+            Some(Ordering::Equal)
+        );
+
+        // FullChain equals itself
+        assert_eq!(
+            ListeningMode::FullChain.partial_cmp(&ListeningMode::FullChain),
+            Some(Ordering::Equal)
+        );
+    }
+
+    #[test]
+    fn test_listening_mode_extend_with_skip_senders() {
+        // FullChain absorbs SkipSenders
+        let mut mode = ListeningMode::FullChain;
+        mode.extend(Some(ListeningMode::SkipSenders));
+        assert_eq!(mode, ListeningMode::FullChain);
+
+        // SkipSenders gets upgraded to FullChain
+        let mut mode = ListeningMode::SkipSenders;
+        mode.extend(Some(ListeningMode::FullChain));
+        assert_eq!(mode, ListeningMode::FullChain);
+
+        // SkipSenders absorbs EventsOnly
+        let mut mode = ListeningMode::SkipSenders;
+        mode.extend(Some(ListeningMode::EventsOnly(BTreeSet::new())));
+        assert_eq!(mode, ListeningMode::SkipSenders);
+
+        // EventsOnly gets upgraded to SkipSenders
+        let mut mode = ListeningMode::EventsOnly(BTreeSet::new());
+        mode.extend(Some(ListeningMode::SkipSenders));
+        assert_eq!(mode, ListeningMode::SkipSenders);
+
+        // SkipSenders stays as is when extended with None
+        let mut mode = ListeningMode::SkipSenders;
+        mode.extend(None);
+        assert_eq!(mode, ListeningMode::SkipSenders);
+    }
+
+    #[test]
+    fn test_listening_mode_default() {
+        assert_eq!(ListeningMode::default(), ListeningMode::FullChain);
     }
 }
