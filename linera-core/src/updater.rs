@@ -42,7 +42,7 @@ use crate::{
 
 /// The default amount of time we wait for additional validators to contribute
 /// to the result, as a fraction of how long it took to reach a quorum.
-pub const DEFAULT_GRACE_PERIOD: f64 = 0.2;
+pub const DEFAULT_QUORUM_GRACE_PERIOD: f64 = 0.2;
 /// The maximum timeout for requests to a stake-weighted quorum if no quorum is reached.
 const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 
@@ -115,16 +115,17 @@ pub enum CommunicationError<E: fmt::Debug> {
 
 /// Executes a sequence of actions in parallel for all validators.
 ///
-/// Tries to stop early when a quorum is reached. If `grace_period` is specified, other validators
-/// are given additional time to contribute to the result. The grace period is calculated as a fraction
-/// (defaulting to `DEFAULT_GRACE_PERIOD`) of the time taken to reach quorum.
+/// Tries to stop early when a quorum is reached. If `quorum_grace_period` is specified, other
+/// validators are given additional time to contribute to the result. The grace period is
+/// calculated as a fraction (defaulting to `DEFAULT_QUORUM_GRACE_PERIOD`) of the time taken to
+/// reach quorum.
 pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
     validator_clients: &'a [RemoteNode<A>],
     committee: &Committee,
     group_by: G,
     execute: F,
-    // Grace period as a fraction of time taken to reach quorum
-    grace_period: f64,
+    // Grace period as a fraction of time taken to reach quorum.
+    quorum_grace_period: f64,
 ) -> Result<(K, Vec<(ValidatorPublicKey, V)>), CommunicationError<NodeError>>
 where
     A: ValidatorNode + Clone + 'static,
@@ -200,7 +201,7 @@ where
         // or error information and then stop.
         if end_time.is_none() && highest_key_score >= committee.quorum_threshold() {
             let time_to_quorum = start_time.elapsed();
-            let grace_duration = time_to_quorum.mul_f64(grace_period);
+            let grace_duration = time_to_quorum.mul_f64(quorum_grace_period);
             end_time = Some(Instant::now() + grace_duration);
             tracing::debug!(
                 time_to_quorum_ms = time_to_quorum.as_millis(),
