@@ -271,10 +271,6 @@ where
         BucketQueueView<C, TimestampedBundleInInbox, TIMESTAMPBUNDLE_BUCKET_SIZE>,
     /// Unskippable bundles that have been removed but are still in the queue.
     pub removed_unskippable_bundles: SetView<C, BundleInInbox>,
-    /// The heights of previous blocks that sent messages to the same recipients.
-    pub previous_message_blocks: MapView<C, ChainId, BlockHeight>,
-    /// The heights of previous blocks that published events to the same streams.
-    pub previous_event_blocks: MapView<C, StreamId, BlockHeight>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, ChainId, OutboxStateView<C>>,
     /// The indices of next events we expect to see per stream (could be ahead of the last
@@ -768,12 +764,9 @@ where
         chain_id = %block.chain_id,
         block_height = %block.height
     ))]
-    #[expect(clippy::too_many_arguments)]
     async fn execute_block_inner(
         chain: &mut ExecutionStateView<C>,
         confirmed_log: &LogView<C, CryptoHash>,
-        previous_message_blocks_view: &MapView<C, ChainId, BlockHeight>,
-        previous_event_blocks_view: &MapView<C, StreamId, BlockHeight>,
         block: &ProposedBlock,
         local_time: Timestamp,
         round: Option<u32>,
@@ -829,7 +822,8 @@ where
         let recipients = block_execution_tracker.recipients();
         let mut recipient_heights = Vec::new();
         let mut indices = Vec::new();
-        for (recipient, height) in previous_message_blocks_view
+        for (recipient, height) in chain
+            .previous_message_blocks
             .multi_get_pairs(recipients)
             .await?
         {
@@ -851,7 +845,7 @@ where
         let streams = block_execution_tracker.event_streams();
         let mut stream_heights = Vec::new();
         let mut indices = Vec::new();
-        for (stream, height) in previous_event_blocks_view.multi_get_pairs(streams).await? {
+        for (stream, height) in chain.previous_event_blocks.multi_get_pairs(streams).await? {
             if let Some(height) = height {
                 let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                 indices.push(index);
@@ -940,8 +934,6 @@ where
         Self::execute_block_inner(
             &mut self.execution_state,
             &self.confirmed_log,
-            &self.previous_message_blocks,
-            &self.previous_event_blocks,
             block,
             local_time,
             round,
@@ -970,11 +962,13 @@ where
         let recipients = self.process_outgoing_messages(block).await?;
 
         for recipient in recipients {
-            self.previous_message_blocks
+            self.execution_state
+                .previous_message_blocks
                 .insert(&recipient, block.header.height)?;
         }
         for event in block.body.events.iter().flatten() {
-            self.previous_event_blocks
+            self.execution_state
+                .previous_event_blocks
                 .insert(&event.stream_id, block.header.height)?;
         }
         // Last, reset the consensus state based on the current ownership.

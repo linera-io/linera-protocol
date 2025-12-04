@@ -12,13 +12,14 @@ use futures::{FutureExt, StreamExt};
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{BlobContent, BlockHeight, StreamUpdate},
-    identifiers::{AccountOwner, BlobId},
+    identifiers::{AccountOwner, BlobId, ChainId, StreamId},
     time::Instant,
 };
 use linera_views::{
     context::Context,
     historical_hash_wrapper::HistoricallyHashableView,
     key_value_store_view::KeyValueStoreView,
+    map_view::MapView,
     reentrant_collection_view::ReentrantCollectionView,
     views::{ClonableView, ReplaceContext, View},
     ViewError,
@@ -51,6 +52,10 @@ pub struct ExecutionStateViewInner<C> {
     pub system: SystemExecutionStateView<C>,
     /// User applications.
     pub users: ReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
+    /// The heights of previous blocks that sent messages to the same recipients.
+    pub previous_message_blocks: MapView<C, ChainId, BlockHeight>,
+    /// The heights of previous blocks that published events to the same streams.
+    pub previous_event_blocks: MapView<C, StreamId, BlockHeight>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateViewInner<C> {
@@ -63,6 +68,8 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateViewInner<C> 
         ExecutionStateViewInner {
             system: self.system.with_context(ctx.clone()).await,
             users: self.users.with_context(ctx.clone()).await,
+            previous_message_blocks: self.previous_message_blocks.with_context(ctx.clone()).await,
+            previous_event_blocks: self.previous_event_blocks.with_context(ctx.clone()).await,
         }
     }
 }
