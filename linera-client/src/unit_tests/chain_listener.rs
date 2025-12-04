@@ -19,7 +19,6 @@ use linera_core::{
 use linera_storage::Storage;
 use tokio_util::sync::CancellationToken;
 
-use super::util::make_genesis_config;
 use crate::{
     chain_listener::{self, ChainListener, ChainListenerConfig, ClientContext as _},
     config::GenesisConfig,
@@ -104,7 +103,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let chain_id0 = client0.chain_id();
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
     // Start a chain listener for chain 0 with a new key.
-    let genesis_config = make_genesis_config(&builder);
+    let genesis_config = GenesisConfig::new_testing(&builder);
     let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
     let epoch0 = client0.chain_info().await?.epoch;
@@ -196,7 +195,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     let storage_builder = MemoryStorageBuilder::default();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
     let client0 = builder.add_root_chain(0, Amount::ONE).await?;
-    let genesis_config = make_genesis_config(&builder);
+    let genesis_config = GenesisConfig::new_testing(&builder);
     let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
 

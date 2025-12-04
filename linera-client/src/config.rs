@@ -205,3 +205,55 @@ impl GenesisConfig {
         }
     }
 }
+
+#[cfg(with_testing)]
+mod test {
+    use linera_base::data_types::Timestamp;
+    use linera_core::test_utils::{MemoryStorageBuilder, TestBuilder};
+    use linera_rpc::{
+        config::{NetworkProtocol, ValidatorPublicNetworkPreConfig},
+        simple::TransportProtocol,
+    };
+
+    use super::*;
+    use crate::config::{CommitteeConfig, GenesisConfig, ValidatorConfig};
+
+    impl GenesisConfig {
+        /// Create a new local `GenesisConfig` for testing.
+        // TODO(TODO) if we move `GenesisConfig` into `linera-core` this can be a method
+        // on `TestBuilder`
+        pub fn new_testing(builder: &TestBuilder<MemoryStorageBuilder>) -> Self {
+            let network = ValidatorPublicNetworkPreConfig {
+                protocol: NetworkProtocol::Simple(TransportProtocol::Tcp),
+                host: "localhost".to_string(),
+                port: 8080,
+            };
+            let validators = builder
+                .initial_committee
+                .validators()
+                .iter()
+                .map(|(public_key, state)| ValidatorConfig {
+                    public_key: *public_key,
+                    network: network.clone(),
+                    account_key: state.account_public_key,
+                })
+                .collect();
+            let mut genesis_chains = builder.genesis_chains().into_iter();
+            let (admin_public_key, admin_balance) = genesis_chains
+                .next()
+                .expect("should have at least one chain");
+            let mut genesis_config = Self::new(
+                CommitteeConfig { validators },
+                Timestamp::from(0),
+                builder.initial_committee.policy().clone(),
+                "test network".to_string(),
+                admin_public_key,
+                admin_balance,
+            );
+            for (public_key, amount) in genesis_chains {
+                genesis_config.add_root_chain(public_key, amount);
+            }
+            genesis_config
+        }
+    }
+}

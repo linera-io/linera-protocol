@@ -13,8 +13,6 @@ use linera_base::{
 use linera_core::{data_types::RoundTimeout, node::NotificationStream, worker::Reason};
 use tokio_stream::StreamExt as _;
 
-pub mod test;
-
 pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
 }

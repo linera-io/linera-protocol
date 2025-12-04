@@ -8,7 +8,7 @@ use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Epoch},
 };
 use linera_chain::data_types::ProposedBlock;
-use linera_client::{client_context::ClientContext, util::test::make_genesis_config};
+use linera_client::{client_context::ClientContext, config::GenesisConfig};
 use linera_core::{
     client::{Client, PendingProposal},
     join_set_ext::JoinSet,
@@ -92,7 +92,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     builder.add_root_chain(0, Amount::ONE).await?;
     let chain_id = builder.admin_id();
 
-    let genesis_config = make_genesis_config(&builder);
+    let genesis_config = GenesisConfig::new_testing(&builder);
 
     let tmp_dir = tempfile::tempdir()?;
     let mut config_dir = tmp_dir.keep();
