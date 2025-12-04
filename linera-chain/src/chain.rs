@@ -76,7 +76,7 @@ pub(crate) mod metrics {
             "block_execution_latency",
             "Block execution latency",
             &[],
-            exponential_bucket_latencies(1000.0),
+            exponential_bucket_interval(50.0_f64, 10_000_000.0),
         )
     });
 
@@ -86,7 +86,7 @@ pub(crate) mod metrics {
             "message_execution_latency",
             "Message execution latency",
             &[],
-            exponential_bucket_latencies(50.0),
+            exponential_bucket_interval(0.1_f64, 50_000.0),
         )
     });
 
@@ -95,7 +95,7 @@ pub(crate) mod metrics {
             "operation_execution_latency",
             "Operation execution latency",
             &[],
-            exponential_bucket_latencies(50.0),
+            exponential_bucket_interval(0.1_f64, 50_000.0),
         )
     });
 
@@ -734,7 +734,7 @@ where
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
         #[cfg(with_metrics)]
-        let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency();
+        let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency_us();
         chain.system.timestamp.set(block.timestamp);
 
         let policy = chain
