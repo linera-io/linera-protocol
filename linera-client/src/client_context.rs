@@ -366,6 +366,7 @@ impl<Env: Environment> ClientContext<Env> {
         .map_err(Error::wallet)
     }
 
+    // TODO(TODO) this should match the `NodeProvider` from the `Environment`
     pub fn make_node_provider(&self) -> NodeProvider {
         NodeProvider::new(self.make_node_options())
     }

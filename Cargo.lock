@@ -2321,6 +2321,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7fc6734af48458f72f5a3fa7b840903606427d98a710256e808f76a965047d9"
 dependencies = [
  "cfg-if",
+ "clap",
  "is-terminal",
  "libc",
  "tempfile",
@@ -5881,6 +5882,7 @@ dependencies = [
  "mini-moka",
  "native-fungible",
  "non-fungible",
+ "nonzero_lit",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
@@ -5920,6 +5922,7 @@ dependencies = [
  "tracing-chrome",
  "tracing-opentelemetry",
  "tracing-subscriber 0.3.19",
+ "url",
 ]
 
 [[package]]
@@ -6681,6 +6684,12 @@ dependencies = [
  "serde",
  "sha3",
 ]
+
+[[package]]
+name = "nonzero_lit"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30a9e0365849b8ce3d067218268d6c523c1c14f539f7e9157d635d8adfb308fa"
 
 [[package]]
 name = "ntapi"

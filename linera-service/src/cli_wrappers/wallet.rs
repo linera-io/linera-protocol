@@ -1079,13 +1079,17 @@ impl ClientWrapper {
             let account_key = AccountPublicKey::from_str(account_key_str)
                 .with_context(|| format!("Invalid account public key: {}", account_key_str))?;
 
-            let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
+            let address = format!("{}:127.0.0.1:{}", self.network.short(), port)
+                .parse()
+                .unwrap();
 
             // Create ValidatorChange struct
-            let change = crate::cli::validator::ValidatorChange {
+            let change = crate::cli::validator::Change {
                 account_key,
-                network_address: address,
-                votes: std::num::NonZero::new(*votes as u64).context("Votes must be non-zero")?,
+                address,
+                votes: crate::cli::validator::Votes(
+                    std::num::NonZero::new(*votes as u64).context("Votes must be non-zero")?,
+                ),
             };
 
             changes.insert(public_key, Some(change));

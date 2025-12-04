@@ -31,7 +31,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use clap_complete::generate;
 use colored::Colorize;
-use futures::{lock::Mutex, FutureExt as _, StreamExt as _};
+use futures::{FutureExt as _, StreamExt as _};
 use linera_base::{
     crypto::{InMemorySigner, Signer},
     data_types::{ApplicationPermissions, Timestamp},
@@ -66,7 +66,7 @@ use linera_service::{
             BenchmarkCommand, BenchmarkOptions, ChainCommand, ClientCommand, DatabaseToolCommand,
             NetCommand, ProjectCommand, WalletCommand,
         },
-        net_up_utils, validator,
+        net_up_utils,
     },
     cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     node_service::NodeService,
@@ -517,14 +517,12 @@ impl Runnable for Job {
                 info!("Starting operations to change resource control policy");
 
                 let time_start = Instant::now();
-                let context = options
+                let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
 
-                let context = Arc::new(Mutex::new(context));
-                let mut context = context.lock().await;
                 // ResourceControlPolicy doesn't need version checks
-                let admin_id = context.wallet.genesis_admin_chain();
+                let admin_id = context.wallet().genesis_config().admin_id();
                 let chain_client = context.make_chain_client(admin_id).await?;
                 // Synchronize the chain state to make sure we're applying the changes to the
                 // latest committee.
@@ -1494,7 +1492,7 @@ impl Runnable for Job {
 
                 let description = cli_wrappers::Faucet::new(faucet_url).claim(&owner).await?;
 
-                if !description.config().ownership.verify_owner(&owner) {
+                if !description.config().ownership.is_owner(&owner) {
                     anyhow::bail!(
                         "The chain with the ID returned by the faucet is not owned by you. \
                          Please make sure you are connecting to a genuine faucet."
@@ -1607,16 +1605,13 @@ impl Runnable for Job {
             }
 
             Validator(validator_command) => {
-                validator::handle_command(
-                    options.context_options.clone(),
-                    storage,
-                    wallet,
-                    signer.into_value(),
-                    options.block_cache_size,
-                    options.execution_state_cache_size,
-                    validator_command.clone(),
-                )
-                .await?;
+                validator_command
+                    .run(
+                        &mut options
+                            .create_client_context(storage, wallet, signer.into_value())
+                            .await?,
+                    )
+                    .await?;
             }
 
             CreateGenesisConfig { .. }
