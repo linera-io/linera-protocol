@@ -179,9 +179,12 @@ impl Runnable for Job {
 
                         let chain_client = chain_client.clone();
                         async move {
-                            chain_client
-                                .open_chain(ownership, ApplicationPermissions::default(), balance)
-                                .await
+                            Box::pin(chain_client.open_chain(
+                                ownership,
+                                ApplicationPermissions::default(),
+                                balance,
+                            ))
+                            .await
                         }
                     })
                     .await
@@ -230,9 +233,12 @@ impl Runnable for Job {
                         let application_permissions = application_permissions.clone();
                         let chain_client = chain_client.clone();
                         async move {
-                            chain_client
-                                .open_chain(ownership, application_permissions, balance)
-                                .await
+                            Box::pin(chain_client.open_chain(
+                                ownership,
+                                application_permissions,
+                                balance,
+                            ))
+                            .await
                         }
                     })
                     .await

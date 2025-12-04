@@ -502,14 +502,13 @@ where
     let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     // Open the new chain.
-    let (new_description, _certificate) = sender
-        .open_chain(
-            ChainOwnership::single(new_public_key.into()),
-            ApplicationPermissions::default(),
-            Amount::ZERO,
-        )
-        .await
-        .unwrap_ok_committed();
+    let (new_description, _certificate) = Box::pin(sender.open_chain(
+        ChainOwnership::single(new_public_key.into()),
+        ApplicationPermissions::default(),
+        Amount::ZERO,
+    ))
+    .await
+    .unwrap_ok_committed();
     let new_id = new_description.id();
 
     assert_eq!(
@@ -613,14 +612,13 @@ where
         .await
         .unwrap();
     // Open the new chain.
-    let (new_description2, certificate) = parent
-        .open_chain(
-            ChainOwnership::single(new_public_key.into()),
-            ApplicationPermissions::default(),
-            Amount::ZERO,
-        )
-        .await
-        .unwrap_ok_committed();
+    let (new_description2, certificate) = Box::pin(parent.open_chain(
+        ChainOwnership::single(new_public_key.into()),
+        ApplicationPermissions::default(),
+        Amount::ZERO,
+    ))
+    .await
+    .unwrap_ok_committed();
     let new_id2 = new_description2.id();
     assert_eq!(new_id, new_id2);
     assert_eq!(
@@ -690,10 +688,10 @@ where
     // Open the new chain. We are both regular and super owner.
     let ownership = ChainOwnership::single(new_public_key.into())
         .with_regular_owner(new_public_key.into(), 100);
-    let (new_description, _creation_certificate) = sender
-        .open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO)
-        .await
-        .unwrap_ok_committed();
+    let (new_description, _creation_certificate) =
+        Box::pin(sender.open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO))
+            .await
+            .unwrap_ok_committed();
     let new_id = new_description.id();
     // Transfer after creating the chain.
     sender
@@ -2889,14 +2887,13 @@ where
     client1.process_inbox().await.unwrap();
 
     // Open a chain
-    let (new_chain_desc, certificate1) = client1
-        .open_chain(
-            ChainOwnership::single(new_public_key.into()),
-            ApplicationPermissions::default(),
-            Amount::from_tokens(10),
-        )
-        .await
-        .unwrap_ok_committed();
+    let (new_chain_desc, certificate1) = Box::pin(client1.open_chain(
+        ChainOwnership::single(new_public_key.into()),
+        ApplicationPermissions::default(),
+        Amount::from_tokens(10),
+    ))
+    .await
+    .unwrap_ok_committed();
 
     // Check that the epoch has been migrated.
     assert_eq!(certificate1.block().header.epoch, Epoch::from(1));

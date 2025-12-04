@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, HashMap, VecDeque},
     sync::Arc,
 };
 
@@ -11,7 +11,7 @@ use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, Epoch},
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, ChainId, StreamId},
 };
 use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
@@ -280,17 +280,21 @@ where
     ) -> Result<BTreeMap<ChainId, BlockHeight>, LocalNodeError> {
         let futures =
             FuturesUnordered::from_iter(chain_ids.into_iter().map(|chain_id| async move {
-                let chain = match self.chain_state_view(*chain_id).await {
-                    Ok(chain) => chain,
+                let (next_block_height, next_height_to_schedule) = match self
+                    .get_tip_state_and_outbox_info(*chain_id, receiver_id)
+                    .await
+                {
+                    Ok(info) => info,
                     Err(LocalNodeError::BlobsNotFound(_) | LocalNodeError::InactiveChain(_)) => {
                         return Ok((*chain_id, BlockHeight::ZERO))
                     }
                     Err(err) => Err(err)?,
                 };
-                let mut next_height = chain.tip_state.get().next_block_height;
-                if let Some(outbox) = chain.outboxes.try_load_entry(&receiver_id).await? {
-                    next_height = next_height.max(*outbox.next_height_to_schedule.get());
-                }
+                let next_height = if let Some(scheduled_height) = next_height_to_schedule {
+                    next_block_height.max(scheduled_height)
+                } else {
+                    next_block_height
+                };
                 Ok::<_, LocalNodeError>((*chain_id, next_height))
             }));
         futures.try_collect().await
@@ -331,6 +335,91 @@ where
             .state
             .get_inbox_next_height(chain_id, origin)
             .await?)
+    }
+
+    /// Gets block hashes for the given heights.
+    pub async fn get_block_hashes(
+        &self,
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    ) -> Result<Vec<CryptoHash>, LocalNodeError> {
+        Ok(self.node.state.get_block_hashes(chain_id, heights).await?)
+    }
+
+    /// Gets proposed blobs from the manager for specified blob IDs.
+    pub async fn get_proposed_blobs(
+        &self,
+        chain_id: ChainId,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<Vec<Blob>, LocalNodeError> {
+        Ok(self
+            .node
+            .state
+            .get_proposed_blobs(chain_id, blob_ids)
+            .await?)
+    }
+
+    /// Gets event subscriptions from the chain.
+    pub async fn get_event_subscriptions(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<crate::worker::EventSubscriptionsResult, LocalNodeError> {
+        Ok(self.node.state.get_event_subscriptions(chain_id).await?)
+    }
+
+    /// Gets the stream event count for a stream.
+    pub async fn get_stream_event_count(
+        &self,
+        chain_id: ChainId,
+        stream_id: StreamId,
+    ) -> Result<Option<u32>, LocalNodeError> {
+        Ok(self
+            .node
+            .state
+            .get_stream_event_count(chain_id, stream_id)
+            .await?)
+    }
+
+    /// Gets received certificate trackers.
+    pub async fn get_received_certificate_trackers(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<HashMap<ValidatorPublicKey, u64>, LocalNodeError> {
+        Ok(self
+            .node
+            .state
+            .get_received_certificate_trackers(chain_id)
+            .await?)
+    }
+
+    /// Gets tip state and outbox info for next_outbox_heights calculation.
+    pub async fn get_tip_state_and_outbox_info(
+        &self,
+        chain_id: ChainId,
+        receiver_id: ChainId,
+    ) -> Result<(BlockHeight, Option<BlockHeight>), LocalNodeError> {
+        Ok(self
+            .node
+            .state
+            .get_tip_state_and_outbox_info(chain_id, receiver_id)
+            .await?)
+    }
+
+    /// Gets the next height to preprocess.
+    pub async fn get_next_height_to_preprocess(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<BlockHeight, LocalNodeError> {
+        Ok(self
+            .node
+            .state
+            .get_next_height_to_preprocess(chain_id)
+            .await?)
+    }
+
+    /// Gets the chain manager's seed for leader election.
+    pub async fn get_manager_seed(&self, chain_id: ChainId) -> Result<u64, LocalNodeError> {
+        Ok(self.node.state.get_manager_seed(chain_id).await?)
     }
 }
 
