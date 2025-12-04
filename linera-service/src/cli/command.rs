@@ -731,8 +731,8 @@ pub enum ClientCommand {
 
         /// A controller to execute a dynamic set of applications running on a dynamic set of
         /// chains.
-        #[arg(long = "controller-application-id")]
-        controller_id: Option<ApplicationId>,
+        #[arg(long = "controller-id")]
+        controller_application_id: Option<ApplicationId>,
 
         /// Supported operators and their binary paths.
         /// Format: `name=path` or just `name` (uses name as path).

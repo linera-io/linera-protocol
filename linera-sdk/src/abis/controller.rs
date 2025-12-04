@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use async_graphql::{scalar, Request, Response, SimpleObject};
 use linera_sdk_derive::GraphQLMutationRootInCrate;
 use serde::{Deserialize, Serialize};
