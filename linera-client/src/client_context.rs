@@ -337,6 +337,8 @@ where
 }
 
 impl<Env: Environment> ClientContext<Env> {
+    // TODO(TODO) this (and other injected dependencies) should not be re-exposed by the
+    // client interface
     /// Returns a reference to the wallet.
     pub fn wallet(&self) -> &Env::Wallet {
         self.client.wallet()

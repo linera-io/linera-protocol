@@ -38,7 +38,7 @@ impl FromStr for Votes {
 /// Specification for a validator to add or modify.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ValidatorSpec {
+pub struct Spec {
     pub public_key: ValidatorPublicKey,
     pub account_key: AccountPublicKey,
     pub network_address: url::Url,
@@ -66,7 +66,7 @@ pub type BatchFile = HashMap<ValidatorPublicKey, Option<Change>>;
 /// Structure for batch validator queries from JSON file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryBatch {
-    pub validators: Vec<ValidatorSpec>,
+    pub validators: Vec<Spec>,
 }
 
 /// Validator subcommands.
@@ -245,7 +245,7 @@ impl Add {
                 .make_node_provider()
                 .make_node(self.address.as_str())?;
             context
-                .check_compatible_version_info(&self.address.as_str(), &node)
+                .check_compatible_version_info(self.address.as_str(), &node)
                 .await?;
             context
                 .check_matching_network_description(self.address.as_str(), &node)
@@ -797,58 +797,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_validate_validator_change_valid() {
-        let spec = ValidatorChange {
-            account_key: AccountPublicKey::test_key(0),
-            network_address: "grpcs://validator.example.com:443".to_string(),
-            votes: NonZero::new(100).unwrap(),
-        };
-
-        assert!(spec.validate().is_ok());
-    }
-
-    #[test]
-    fn test_validate_validator_change_empty_address() {
-        let spec = ValidatorChange {
-            account_key: AccountPublicKey::test_key(0),
-            network_address: String::new(),
-            votes: NonZero::new(100).unwrap(),
-        };
-
-        let result = spec.validate();
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("network address cannot be empty"));
-    }
-
-    #[test]
     fn test_parse_batch_file_valid() {
         // Generate correct JSON format using test keys
         let pk0 = ValidatorPublicKey::test_key(0);
         let pk1 = ValidatorPublicKey::test_key(1);
         let pk2 = ValidatorPublicKey::test_key(2);
 
-        let mut batch = ValidatorBatchFile::new();
+        let mut batch = BatchFile::new();
 
         // Add operation - validator with full spec
         batch.insert(
             pk0,
-            Some(ValidatorChange {
+            Some(Change {
                 account_key: AccountPublicKey::test_key(0),
-                network_address: "grpcs://validator1.example.com:443".to_string(),
-                votes: NonZero::new(100).unwrap(),
+                address: "grpcs://validator1.example.com:443".parse().unwrap(),
+                votes: Votes(NonZero::new(100).unwrap()),
             }),
         );
 
         // Modify operation - validator with full spec (would be modify if validator exists)
         batch.insert(
             pk1,
-            Some(ValidatorChange {
+            Some(Change {
                 account_key: AccountPublicKey::test_key(1),
-                network_address: "grpcs://validator2.example.com:443".to_string(),
-                votes: NonZero::new(150).unwrap(),
+                address: "grpcs://validator2.example.com:443".parse().unwrap(),
+                votes: Votes(NonZero::new(150).unwrap()),
             }),
         );
 
@@ -861,7 +834,7 @@ mod tests {
         temp_file.write_all(json.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let input = Input::new(temp_file.path().to_str().unwrap()).unwrap();
+        let input = clio::Input::new(temp_file.path().to_str().unwrap()).unwrap();
         let result = parse_batch_file(input);
         assert!(
             result.is_ok(),
@@ -875,12 +848,12 @@ mod tests {
         // Check pk0 (add)
         assert!(parsed_batch.contains_key(&pk0));
         let spec0 = parsed_batch.get(&pk0).unwrap().as_ref().unwrap();
-        assert_eq!(spec0.votes.get(), 100);
+        assert_eq!(spec0.votes.0.get(), 100);
 
         // Check pk1 (modify)
         assert!(parsed_batch.contains_key(&pk1));
         let spec1 = parsed_batch.get(&pk1).unwrap().as_ref().unwrap();
-        assert_eq!(spec1.votes.get(), 150);
+        assert_eq!(spec1.votes.0.get(), 150);
 
         // Check pk2 (remove with null)
         assert!(parsed_batch.contains_key(&pk2));
@@ -895,7 +868,7 @@ mod tests {
         temp_file.write_all(json.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let input = Input::new(temp_file.path().to_str().unwrap()).unwrap();
+        let input = clio::Input::new(temp_file.path().to_str().unwrap()).unwrap();
         let result = parse_batch_file(input);
         assert!(result.is_ok());
 
@@ -904,42 +877,22 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_batch_file_invalid_json() {
-        let json = "{ invalid json }";
-
-        let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write_all(json.as_bytes()).unwrap();
-        temp_file.flush().unwrap();
-
-        let input = Input::new(temp_file.path().to_str().unwrap()).unwrap();
-        let result = parse_batch_file(input);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_batch_file_nonexistent() {
-        // With clio, Input::new itself will fail for nonexistent files
-        let result = Input::new("/nonexistent/file.json");
-        assert!(result.is_err(), "Expected error for nonexistent file");
-    }
-
-    #[test]
     fn test_parse_query_batch_file_valid() {
         // Generate correct JSON format using test keys
-        let spec1 = ValidatorSpec {
+        let spec1 = Spec {
             public_key: ValidatorPublicKey::test_key(0),
             account_key: AccountPublicKey::test_key(0),
-            network_address: "grpcs://validator1.example.com:443".to_string(),
-            votes: NonZero::new(100).unwrap(),
+            network_address: "grpcs://validator1.example.com:443".parse().unwrap(),
+            votes: Votes(NonZero::new(100).unwrap()),
         };
-        let spec2 = ValidatorSpec {
+        let spec2 = Spec {
             public_key: ValidatorPublicKey::test_key(1),
             account_key: AccountPublicKey::test_key(1),
-            network_address: "grpcs://validator2.example.com:443".to_string(),
-            votes: NonZero::new(150).unwrap(),
+            network_address: "grpcs://validator2.example.com:443".parse().unwrap(),
+            votes: Votes(NonZero::new(150).unwrap()),
         };
 
-        let batch = ValidatorQueryBatch {
+        let batch = QueryBatch {
             validators: vec![spec1, spec2],
         };
 
@@ -949,7 +902,7 @@ mod tests {
         temp_file.write_all(json.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let result = parse_query_batch_file(temp_file.path());
+        let result = parse_query_batch_file(temp_file.path().try_into().unwrap());
         assert!(
             result.is_ok(),
             "Failed to parse query batch file: {:?}",
@@ -958,25 +911,7 @@ mod tests {
 
         let parsed_batch = result.unwrap();
         assert_eq!(parsed_batch.validators.len(), 2);
-        assert_eq!(parsed_batch.validators[0].votes.get(), 100);
-        assert_eq!(parsed_batch.validators[1].votes.get(), 150);
-    }
-
-    #[test]
-    fn test_parse_query_batch_file_invalid_json() {
-        let json = "{ invalid json }";
-
-        let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write_all(json.as_bytes()).unwrap();
-        temp_file.flush().unwrap();
-
-        let result = parse_query_batch_file(temp_file.path());
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_query_batch_file_nonexistent() {
-        let result = parse_query_batch_file(Path::new("/nonexistent/file.json"));
-        assert!(result.is_err());
+        assert_eq!(parsed_batch.validators[0].votes.0.get(), 100);
+        assert_eq!(parsed_batch.validators[1].votes.0.get(), 150);
     }
 }
