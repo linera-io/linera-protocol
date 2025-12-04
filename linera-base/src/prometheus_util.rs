@@ -197,6 +197,14 @@ pub fn linear_bucket_interval(start_value: f64, width: f64, end_value: f64) -> O
     Some(buckets)
 }
 
+/// The unit of measurement for latency metrics.
+enum MeasurementUnit {
+    /// Measure latency in milliseconds.
+    Milliseconds,
+    /// Measure latency in microseconds.
+    Microseconds,
+}
+
 /// A guard for an active latency measurement.
 ///
 /// Finishes the measurement when dropped, and then updates the `Metric`.
@@ -206,6 +214,7 @@ where
 {
     start: Instant,
     metric: Option<&'metric Metric>,
+    unit: MeasurementUnit,
 }
 
 impl<Metric> ActiveMeasurementGuard<'_, Metric>
@@ -213,17 +222,23 @@ where
     Metric: MeasureLatency,
 {
     /// Finishes the measurement, updates the `Metric` and returns the measured latency in
-    /// milliseconds.
+    /// the unit specified when the measurement was started.
     pub fn finish(mut self) -> f64 {
         self.finish_by_ref()
     }
 
     /// Finishes the measurement without taking ownership of this [`ActiveMeasurementGuard`],
-    /// updates the `Metric` and returns the measured latency in milliseconds.
+    /// updates the `Metric` and returns the measured latency in the unit specified when
+    /// the measurement was started.
     fn finish_by_ref(&mut self) -> f64 {
         match self.metric.take() {
             Some(metric) => {
-                let latency = self.start.elapsed().as_secs_f64() * 1000.0;
+                let latency = match self.unit {
+                    MeasurementUnit::Milliseconds => self.start.elapsed().as_secs_f64() * 1000.0,
+                    MeasurementUnit::Microseconds => {
+                        self.start.elapsed().as_secs_f64() * 1_000_000.0
+                    }
+                };
                 metric.finish_measurement(latency);
                 latency
             }
@@ -247,9 +262,13 @@ where
 
 /// An extension trait for metrics that can be used to measure latencies.
 pub trait MeasureLatency: Sized {
-    /// Starts measuring the latency, finishing when the returned
+    /// Starts measuring the latency in milliseconds, finishing when the returned
     /// [`ActiveMeasurementGuard`] is dropped.
     fn measure_latency(&self) -> ActiveMeasurementGuard<'_, Self>;
+
+    /// Starts measuring the latency in microseconds, finishing when the returned
+    /// [`ActiveMeasurementGuard`] is dropped.
+    fn measure_latency_us(&self) -> ActiveMeasurementGuard<'_, Self>;
 
     /// Updates the metric with measured latency in `milliseconds`.
     fn finish_measurement(&self, milliseconds: f64);
@@ -260,6 +279,15 @@ impl MeasureLatency for HistogramVec {
         ActiveMeasurementGuard {
             start: Instant::now(),
             metric: Some(self),
+            unit: MeasurementUnit::Milliseconds,
+        }
+    }
+
+    fn measure_latency_us(&self) -> ActiveMeasurementGuard<'_, Self> {
+        ActiveMeasurementGuard {
+            start: Instant::now(),
+            metric: Some(self),
+            unit: MeasurementUnit::Microseconds,
         }
     }
 
@@ -273,6 +301,15 @@ impl MeasureLatency for Histogram {
         ActiveMeasurementGuard {
             start: Instant::now(),
             metric: Some(self),
+            unit: MeasurementUnit::Milliseconds,
+        }
+    }
+
+    fn measure_latency_us(&self) -> ActiveMeasurementGuard<'_, Self> {
+        ActiveMeasurementGuard {
+            start: Instant::now(),
+            metric: Some(self),
+            unit: MeasurementUnit::Microseconds,
         }
     }
 
