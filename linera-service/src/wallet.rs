@@ -1,6 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    iter::IntoIterator,
+    sync::{Arc, RwLock},
+};
+
 use futures::{stream, Stream};
 use linera_base::{
     data_types::{ChainDescription, ChainOrigin},
@@ -9,9 +14,6 @@ use linera_base::{
 use linera_client::config::GenesisConfig;
 use linera_core::wallet;
 use linera_persistent as persistent;
-
-use std::iter::IntoIterator;
-use std::sync::{Arc, RwLock};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Data {

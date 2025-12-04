@@ -20,7 +20,9 @@ pub trait Environment: AutoTraits {
     type ValidatorNode: crate::node::ValidatorNode + AutoTraits + Clone;
     // TODO(#5064): we shouldn't hard-code `Send` + `Sync` here
     type StorageContext: linera_views::context::Context<Extra: linera_execution::ExecutionRuntimeContext>
-        + Send + Sync + 'static;
+        + Send
+        + Sync
+        + 'static;
 
     fn storage(&self) -> &Self::Storage;
     fn network(&self) -> &Self::Network;

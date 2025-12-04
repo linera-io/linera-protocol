@@ -151,11 +151,7 @@ impl Faucet {
     /// # Panics
     /// If an error occurs in the chain listener task.
     #[wasm_bindgen(js_name = claimChain)]
-    pub async fn claim_chain(
-        &self,
-        wallet: &mut Wallet,
-        owner: JsValue,
-    ) -> JsResult<String> {
+    pub async fn claim_chain(&self, wallet: &mut Wallet, owner: JsValue) -> JsResult<String> {
         let account_owner: AccountOwner = serde_wasm_bindgen::from_value(owner)?;
         tracing::info!(
             "Requesting a new chain for owner {} using the faucet at address {}",
@@ -164,10 +160,13 @@ impl Faucet {
         );
         let description = self.0.claim(&account_owner).await?;
         let chain_id = description.id();
-        wallet.chains.insert(chain_id, wallet::Chain {
-            owner: Some(account_owner),
-            ..description.into()
-        });
+        wallet.chains.insert(
+            chain_id,
+            wallet::Chain {
+                owner: Some(account_owner),
+                ..description.into()
+            },
+        );
         if wallet.default.is_none() {
             wallet.default = Some(chain_id);
         }
@@ -220,7 +219,8 @@ impl Client {
             wallet.genesis_config,
             BLOCK_CACHE_SIZE,
             EXECUTION_STATE_CACHE_SIZE,
-        ).await?;
+        )
+        .await?;
         client_context.default_chain = wallet.default;
         // The `Arc` here is useless, but it is required by the `ChainListener` API.
         #[expect(clippy::arc_with_non_send_sync)]
@@ -281,8 +281,7 @@ impl Client {
 
     async fn default_chain_client(&self) -> Result<ChainClient, JsError> {
         let client_context = self.client_context.lock().await;
-        let chain_id = client_context
-            .default_chain();
+        let chain_id = client_context.default_chain();
         Ok(client_context.make_chain_client(chain_id).await?)
     }
 
