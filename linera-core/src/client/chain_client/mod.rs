@@ -90,7 +90,7 @@ pub struct Options {
     pub cross_chain_message_delivery: CrossChainMessageDelivery,
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
     /// as a fraction of time taken to reach quorum.
-    pub grace_period: f64,
+    pub quorum_grace_period: f64,
     /// The delay when downloading a blob, after which we try a second validator.
     pub blob_download_timeout: Duration,
     /// The delay when downloading a batch of certificates, after which we try a second validator.
@@ -111,13 +111,13 @@ impl Options {
         use super::{
             DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         };
-        use crate::DEFAULT_GRACE_PERIOD;
+        use crate::DEFAULT_QUORUM_GRACE_PERIOD;
 
         Options {
             max_pending_message_bundles: 10,
             message_policy: MessagePolicy::new_accept_all(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
-            grace_period: DEFAULT_GRACE_PERIOD,
+            quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
             blob_download_timeout: Duration::from_secs(1),
             certificate_batch_download_timeout: Duration::from_secs(1),
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
@@ -831,7 +831,7 @@ impl<Env: Environment> ChainClient<Env> {
                     Ok(())
                 })
             },
-            self.options.grace_period,
+            self.options.quorum_grace_period,
         )
         .await;
 

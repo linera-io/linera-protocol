@@ -226,11 +226,14 @@ pub enum WorkerError {
         computed: Box<BlockExecutionOutcome>,
         submitted: Box<BlockExecutionOutcome>,
     },
-    #[error("Block timestamp ({block_timestamp}) is further in the future from local time ({local_time}) than grace period ({grace_period:?})")]
+    #[error(
+        "Block timestamp ({block_timestamp}) is further in the future from local time \
+        ({local_time}) than block time grace period ({block_time_grace_period:?})"
+    )]
     InvalidTimestamp {
         block_timestamp: Timestamp,
         local_time: Timestamp,
-        grace_period: Duration,
+        block_time_grace_period: Duration,
     },
     #[error("We don't have the value for the certificate.")]
     MissingCertificateValue,
@@ -468,13 +471,13 @@ where
         self
     }
 
-    /// Returns an instance with the specified grace period.
+    /// Returns an instance with the specified block time grace period.
     ///
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
     #[instrument(level = "trace", skip(self))]
-    pub fn with_grace_period(mut self, grace_period: Duration) -> Self {
-        self.chain_worker_config.grace_period = grace_period;
+    pub fn with_block_time_grace_period(mut self, block_time_grace_period: Duration) -> Self {
+        self.chain_worker_config.block_time_grace_period = block_time_grace_period;
         self
     }
 

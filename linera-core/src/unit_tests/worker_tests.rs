@@ -168,7 +168,7 @@ where
             .with_allow_inactive_chains(is_client)
             .with_allow_messages_from_deprecated_epochs(is_client)
             .with_long_lived_services(has_long_lived_services)
-            .with_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS))
+            .with_block_time_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS))
         };
 
         let worker = make_worker(ValidatorKeypair::generate()).await;

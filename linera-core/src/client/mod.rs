@@ -774,7 +774,7 @@ impl<Env: Environment> Client<Env> {
                         .await
                 })
             },
-            self.options.grace_period,
+            self.options.quorum_grace_period,
         )
         .await?;
         Ok(())
@@ -806,7 +806,7 @@ impl<Env: Environment> Client<Env> {
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })
             },
-            self.options.grace_period,
+            self.options.quorum_grace_period,
         )
         .await?;
         ensure!(
@@ -1222,7 +1222,7 @@ impl<Env: Environment> Client<Env> {
                 self.synchronize_chain_state_from(&remote_node, chain_id)
                     .await
             },
-            self.options.grace_period,
+            self.options.quorum_grace_period,
         )
         .await?;
 

@@ -15,7 +15,7 @@ use linera_core::{
         DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
-    DEFAULT_GRACE_PERIOD,
+    DEFAULT_QUORUM_GRACE_PERIOD,
 };
 use linera_execution::ResourceControlPolicy;
 
@@ -157,8 +157,8 @@ pub struct ClientContextOptions {
 
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
     /// as a fraction of time taken to reach quorum.
-    #[arg(long, default_value_t = DEFAULT_GRACE_PERIOD)]
-    pub grace_period: f64,
+    #[arg(long, default_value_t = DEFAULT_QUORUM_GRACE_PERIOD)]
+    pub quorum_grace_period: f64,
 
     /// The delay when downloading a blob, after which we try a second validator, in milliseconds.
     #[arg(
@@ -267,7 +267,7 @@ impl ClientContextOptions {
             max_pending_message_bundles: self.max_pending_message_bundles,
             message_policy,
             cross_chain_message_delivery,
-            grace_period: self.grace_period,
+            quorum_grace_period: self.quorum_grace_period,
             blob_download_timeout: self.blob_download_timeout,
             certificate_batch_download_timeout: self.certificate_batch_download_timeout,
             certificate_download_batch_size: self.certificate_download_batch_size,
