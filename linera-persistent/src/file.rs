@@ -4,7 +4,6 @@
 use std::{
     io::{self, BufRead as _, Write as _},
     path::Path,
-    sync::Mutex,
 };
 
 use fs4::FileExt;
@@ -81,7 +80,7 @@ impl Drop for Lock {
 /// happen, and writes are saved to a staging file before being moved over the old file,
 /// an operation that is atomic on all Unixes.
 pub struct File<T> {
-    lock: Mutex<Lock>,
+    _lock: Lock,
     path: std::path::PathBuf,
     value: T,
 }
@@ -115,16 +114,14 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
     /// Creates a new persistent file at `path` containing `value`.
     pub fn new(path: &Path, value: T) -> Result<Self, Error> {
         let this = Self {
-            lock: Mutex::new(
-                Lock::new(
-                    fs_err::OpenOptions::new()
-                        .read(true)
-                        .write(true)
-                        .create(true)
-                        .open(path)?,
-                )
-                .with_context(|| format!("locking path {}", path.display()))?,
-            ),
+            _lock: Lock::new(
+                fs_err::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .open(path)?,
+            )
+            .with_context(|| format!("locking path {}", path.display()))?,
             path: path.into(),
             value,
         };
@@ -160,7 +157,7 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
                 serde_json::from_reader(reader)?
             },
             path: path.into(),
-            lock: Mutex::new(lock),
+            _lock: lock,
         })
     }
 
@@ -168,8 +165,7 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
         let mut temp_file_path = self.path.clone();
         temp_file_path.set_extension("json.new");
         let temp_file = open_options().open(&temp_file_path)?;
-        let lock = Lock::new(temp_file)?;
-        let mut temp_file_writer = std::io::BufWriter::new(&lock.0);
+        let mut temp_file_writer = std::io::BufWriter::new(temp_file);
 
         let remove_temp_file = || fs_err::remove_file(&temp_file_path);
 
@@ -182,7 +178,6 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
             .or_cleanup(remove_temp_file)?;
         drop(temp_file_writer);
         fs_err::rename(&temp_file_path, &self.path)?;
-        *self.lock.lock().unwrap() = lock;
         Ok(())
     }
 }
