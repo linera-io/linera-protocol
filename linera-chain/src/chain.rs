@@ -827,6 +827,9 @@ where
             .multi_get_pairs(recipients)
             .await?
         {
+            chain
+                .previous_message_blocks
+                .insert(&recipient, block.height)?;
             if let Some(height) = height {
                 let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                 indices.push(index);
@@ -846,6 +849,7 @@ where
         let mut stream_heights = Vec::new();
         let mut indices = Vec::new();
         for (stream, height) in chain.previous_event_blocks.multi_get_pairs(streams).await? {
+            chain.previous_event_blocks.insert(&stream, block.height)?;
             if let Some(height) = height {
                 let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                 indices.push(index);
@@ -859,16 +863,6 @@ where
                 ChainError::InternalError("missing entry in confirmed_log".into())
             })?;
             previous_event_blocks.insert(stream, (hash, height));
-        }
-
-        // Update the execution state with the new block's recipients and event streams.
-        for recipient in block_execution_tracker.recipients() {
-            chain
-                .previous_message_blocks
-                .insert(&recipient, block.height)?;
-        }
-        for stream in block_execution_tracker.event_streams() {
-            chain.previous_event_blocks.insert(&stream, block.height)?;
         }
 
         let state_hash = {
