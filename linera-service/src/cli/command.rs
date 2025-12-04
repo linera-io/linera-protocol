@@ -729,6 +729,11 @@ pub enum ClientCommand {
         #[arg(long = "operator-application-ids")]
         operator_application_ids: Vec<ApplicationId>,
 
+        /// A controller to execute a dynamic set of applications running on a dynamic set of
+        /// chains.
+        #[arg(long = "controller-application-id")]
+        controller_id: Option<ApplicationId>,
+
         /// Supported operators and their binary paths.
         /// Format: `name=path` or just `name` (uses name as path).
         /// Example: `--operators my-operator=/path/to/binary`

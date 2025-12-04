@@ -910,7 +910,7 @@ where
         port: NonZeroU16,
         #[cfg(with_metrics)] metrics_port: NonZeroU16,
         default_chain: Option<ChainId>,
-        context: C,
+        context: Arc<Mutex<C>>,
     ) -> Self {
         Self {
             config,
@@ -918,7 +918,7 @@ where
             #[cfg(with_metrics)]
             metrics_port,
             default_chain,
-            context: Arc::new(Mutex::new(context)),
+            context,
         }
     }
 

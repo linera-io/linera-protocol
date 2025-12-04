@@ -75,6 +75,7 @@ use linera_service::{
         net_up_utils,
     },
     cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
+    controller::Controller,
     node_service::NodeService,
     project::{self, Project},
     storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig},
@@ -1144,6 +1145,7 @@ impl Runnable for Job {
                 metrics_port,
                 operator_application_ids,
                 operators,
+                controller_id,
             } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -1153,26 +1155,50 @@ impl Runnable for Job {
                 let chain_id =
                     default_chain.expect("Service requires a default chain in the wallet");
 
+                assert!(
+                    operator_application_ids.is_empty() || controller_id.is_none(),
+                    "Cannot run a static list of applications when a controller is given."
+                );
+
                 let cancellation_token = CancellationToken::new();
                 tokio::spawn(listen_for_shutdown_signals(cancellation_token.clone()));
 
+                let operators: BTreeMap<String, PathBuf> = operators.into_iter().collect();
+                for (name, path) in &operators {
+                    info!("Operator '{}' -> {}", name, path.display());
+                }
+                let operators = Arc::new(operators);
+
                 // Start the task processor if operator applications are specified.
                 if !operator_application_ids.is_empty() {
-                    let operators: BTreeMap<String, PathBuf> = operators.into_iter().collect();
-                    for (name, path) in &operators {
-                        info!("Operator '{}' -> {}", name, path.display());
-                    }
-                    let operators = Arc::new(operators);
-
                     let chain_client = context.make_chain_client(chain_id);
                     let processor = TaskProcessor::new(
                         chain_id,
                         operator_application_ids,
                         chain_client,
                         cancellation_token.clone(),
-                        operators,
+                        operators.clone(),
+                        None,
                     );
                     tokio::spawn(processor.run());
+                }
+
+                let context = Arc::new(Mutex::new(context));
+
+                if let Some(controller_id) = controller_id {
+                    // For the controller case, we share the context via Arc so the
+                    // controller can spawn new processors for different chains.
+                    let chain_client = context.lock().await.make_chain_client(chain_id);
+                    let controller = Controller::new(
+                        chain_id,
+                        controller_id,
+                        context.clone(),
+                        chain_client,
+                        cancellation_token.clone(),
+                        operators,
+                    );
+
+                    tokio::spawn(controller.run());
                 }
 
                 let service = NodeService::new(
