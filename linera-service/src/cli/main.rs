@@ -1145,7 +1145,7 @@ impl Runnable for Job {
                 metrics_port,
                 operator_application_ids,
                 operators,
-                controller_id,
+                controller_application_id,
             } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -1156,7 +1156,7 @@ impl Runnable for Job {
                     default_chain.expect("Service requires a default chain in the wallet");
 
                 assert!(
-                    operator_application_ids.is_empty() || controller_id.is_none(),
+                    operator_application_ids.is_empty() || controller_application_id.is_none(),
                     "Cannot run a static list of applications when a controller is given."
                 );
 
@@ -1185,7 +1185,7 @@ impl Runnable for Job {
 
                 let context = Arc::new(Mutex::new(context));
 
-                if let Some(controller_id) = controller_id {
+                if let Some(controller_id) = controller_application_id {
                     // For the controller case, we share the context via Arc so the
                     // controller can spawn new processors for different chains.
                     let chain_client = context.lock().await.make_chain_client(chain_id);
