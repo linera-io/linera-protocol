@@ -59,7 +59,6 @@ linera-storage.workspace = true
 linera-version = { workspace = true }
 linera-views.workspace = true
 num-format.workspace = true
-papaya.workspace = true
 prometheus-parse.workspace = true
 rand.workspace = true
 reqwest.workspace = true
