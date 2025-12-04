@@ -1017,7 +1017,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             let deployed_bytecode: Vec<u8> =
                 runtime.try_call_application(false, created_application_id, argument)?;
             let result = InterpreterResult {
-                result: InstructionResult::Return, // Only possibility if no error occured.
+                result: InstructionResult::Return, // Only possibility if no error occurred.
                 output: Bytes::from(deployed_bytecode),
                 gas: Gas::new(inputs.gas_limit),
             };
