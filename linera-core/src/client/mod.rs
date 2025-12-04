@@ -364,13 +364,13 @@ impl<Env: Environment> Client<Env> {
         self.environment.network()
     }
 
-    /// Returns a reference to the [`Signer`] of the client.
+    /// Returns a reference to the client's [`Signer`][crate::environment::Signer].
     #[instrument(level = "trace", skip(self))]
     pub fn signer(&self) -> &Env::Signer {
         self.environment.signer()
     }
 
-    /// Returns a reference to the [`Wallet`] of the client.
+    /// Returns a reference to the client's [`Wallet`][crate::environment::Wallet].
     pub fn wallet(&self) -> &Env::Wallet {
         self.environment.wallet()
     }
