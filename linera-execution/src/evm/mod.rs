@@ -51,6 +51,8 @@ pub enum EvmExecutionError {
     MissingBytecode,
     #[error("Contracts cannot call themselves")]
     NoSelfCall,
+    #[error("Incorrect ApplicationId")]
+    IncorrectApplicationId,
     #[error("Transact error {0}")]
     TransactError(String),
     #[error("Impossible to create contracts in services")]
@@ -59,6 +61,10 @@ pub enum EvmExecutionError {
     TransactCommitError(String),
     #[error("Precompile error: {0}")]
     PrecompileError(String),
+    #[error("Missing account info")]
+    MissingAccountInfo,
+    #[error("Non local storage access")]
+    NonLocalStorageAccess,
     #[error("The operation was reverted with {gas_used} gas used and output {output:?}")]
     Revert {
         gas_used: u64,

@@ -264,4 +264,10 @@ mod tests {
         let selector = &keccak256("instantiate(bytes)".as_bytes())[..4];
         assert_eq!(selector, INSTANTIATE_SELECTOR);
     }
+
+    #[test]
+    fn check_set_up_part_a2() {
+        let selector = &keccak256("set_up_part_a2()".as_bytes())[..4];
+        assert_eq!(selector, &[100, 8, 176, 177]);
+    }
 }
