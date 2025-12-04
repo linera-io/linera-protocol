@@ -204,12 +204,14 @@ impl ValidatorQueryResults {
 
 pub struct ClientContext<Env: Environment> {
     pub client: Arc<Client<Env>>,
+    // TODO(TODO) move this into the `Wallet` trait
     pub genesis_config: crate::config::GenesisConfig,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
     pub retry_delay: Duration,
     pub max_retries: u32,
     pub chain_listeners: JoinSet,
+    // TODO(TODO) move this into the upstream UI layers (maybe just the CLI)
     pub default_chain: Option<ChainId>,
     #[cfg(not(web))]
     pub client_metrics: Option<ClientMetrics>,

@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::iter::IntoIterator;
-
 use futures::{stream, Stream};
 use linera_base::{
     data_types::{ChainDescription, ChainOrigin},
@@ -12,10 +10,13 @@ use linera_client::config::GenesisConfig;
 use linera_core::wallet;
 use linera_persistent as persistent;
 
+use std::iter::IntoIterator;
+use std::sync::{Arc, RwLock};
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Data {
     pub chains: wallet::Memory,
-    default: Option<ChainId>,
+    default: Arc<RwLock<Option<ChainId>>>,
     genesis_config: GenesisConfig,
 }
 
@@ -33,7 +34,7 @@ impl ChainDetails {
             panic!("Chain {} not found.", chain_id);
         };
         ChainDetails {
-            is_default: Some(chain_id) == wallet.default,
+            is_default: Some(chain_id) == *wallet.default.read().unwrap(),
             is_admin: chain_id == wallet.genesis_config.admin_id(),
             chain_id,
             origin: wallet
@@ -153,14 +154,22 @@ impl Wallet {
         self.0.chains.items()
     }
 
+    fn try_set_default(&self, id: ChainId) {
+        let mut guard = self.0.default.write().unwrap();
+        if guard.is_none() {
+            *guard = Some(id);
+        }
+    }
+
     pub fn insert(
         &self,
         id: ChainId,
         chain: wallet::Chain,
     ) -> Result<Option<wallet::Chain>, persistent::file::Error> {
-        let chain = self.0.chains.insert(id, chain);
+        let old_chain = self.0.chains.insert(id, chain);
+        self.try_set_default(id);
         self.0.save()?;
-        Ok(chain)
+        Ok(old_chain)
     }
 
     pub fn try_insert(
@@ -169,6 +178,7 @@ impl Wallet {
         chain: wallet::Chain,
     ) -> Result<Option<wallet::Chain>, persistent::file::Error> {
         let chain = self.0.chains.try_insert(id, chain);
+        self.try_set_default(id);
         self.0.save()?;
         Ok(chain)
     }
@@ -181,7 +191,7 @@ impl Wallet {
             path,
             Data {
                 chains: wallet::Memory::default(),
-                default: None,
+                default: Arc::new(RwLock::new(None)),
                 genesis_config,
             },
         )?))
@@ -202,7 +212,7 @@ impl Wallet {
     // TODO(TODO): now that wallets only store chains, there's not much point in allowing
     // wallets with no default chain (i.e. no chains)
     pub fn default_chain(&self) -> Option<ChainId> {
-        self.0.default
+        *self.0.default.read().unwrap()
     }
 
     pub fn pretty_print(&self, chain_ids: Vec<ChainId>) {
@@ -234,7 +244,7 @@ impl Wallet {
 
     pub fn set_default_chain(&mut self, id: ChainId) -> Result<(), persistent::file::Error> {
         assert!(self.0.chains.get(id).is_some());
-        self.0.default = Some(id);
+        *self.0.default.write().unwrap() = Some(id);
         self.0.save()
     }
 
