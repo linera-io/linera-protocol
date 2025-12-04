@@ -40,3 +40,4 @@ linera-web/**/*-lock.json
 .claude
 CLAUDE.md
 .serena
+docs/

@@ -141,7 +141,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     .track_block_size_of(&operation)
                     .with_execution_context(chain_execution_context)?;
                 #[cfg(with_metrics)]
-                let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency();
+                let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency_us();
                 let context = OperationContext {
                     chain_id: self.chain_id,
                     height: self.block_height,
@@ -196,7 +196,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         C::Extra: ExecutionRuntimeContext,
     {
         #[cfg(with_metrics)]
-        let _message_latency = metrics::MESSAGE_EXECUTION_LATENCY.measure_latency();
+        let _message_latency = metrics::MESSAGE_EXECUTION_LATENCY.measure_latency_us();
         let context = MessageContext {
             chain_id: self.chain_id,
             origin: incoming_bundle.origin,
