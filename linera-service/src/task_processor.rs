@@ -8,7 +8,7 @@
 
 use std::{
     cmp::Reverse,
-    collections::{BTreeMap, BinaryHeap},
+    collections::{BTreeMap, BTreeSet, BinaryHeap},
     path::PathBuf,
     sync::Arc,
 };
@@ -25,6 +25,8 @@ use serde_json::json;
 use tokio::{io::AsyncWriteExt, process::Command, select, sync::mpsc};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
+
+use crate::controller::Update;
 
 /// A map from operator names to their binary paths.
 pub type OperatorMap = Arc<BTreeMap<String, PathBuf>>;
@@ -93,6 +95,7 @@ pub struct TaskProcessor<Env: linera_core::Environment> {
     notifications: NotificationStream,
     outcome_sender: mpsc::UnboundedSender<(ApplicationId, TaskOutcome)>,
     outcome_receiver: mpsc::UnboundedReceiver<(ApplicationId, TaskOutcome)>,
+    update_receiver: mpsc::UnboundedReceiver<Update>,
     deadlines: BinaryHeap<Deadline>,
     operators: OperatorMap,
 }
@@ -105,9 +108,11 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         chain_client: ChainClient<Env>,
         cancellation_token: CancellationToken,
         operators: OperatorMap,
+        update_receiver: Option<mpsc::UnboundedReceiver<Update>>,
     ) -> Self {
         let notifications = chain_client.subscribe().expect("client subscription");
         let (outcome_sender, outcome_receiver) = mpsc::unbounded_channel();
+        let update_receiver = update_receiver.unwrap_or_else(|| mpsc::unbounded_channel().1);
         Self {
             chain_id,
             application_ids,
@@ -119,6 +124,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             notifications,
             deadlines: BinaryHeap::new(),
             operators,
+            update_receiver,
         }
     }
 
@@ -130,7 +136,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             select! {
                 Some(notification) = self.notifications.next() => {
                     if let Reason::NewBlock { .. } = notification.reason {
-                        debug!("Processing notification");
+                        debug!(%self.chain_id, "Processing notification");
                         self.process_actions(self.application_ids.clone()).await;
                     }
                 }
@@ -143,6 +149,9 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     if let Err(e) = self.submit_task_outcome(application_id, &outcome).await {
                         error!("Error while processing task outcome {outcome:?}: {e}");
                     }
+                }
+                Some(update) = self.update_receiver.recv() => {
+                    self.apply_update(update).await;
                 }
                 _ = self.cancellation_token.cancelled().fuse() => {
                     break;
@@ -158,6 +167,34 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             .map_or(tokio::time::Duration::MAX, |Reverse((x, _))| {
                 x.delta_since(Timestamp::now()).as_duration()
             })
+    }
+
+    async fn apply_update(&mut self, update: Update) {
+        info!(
+            "Applying update for chain {}: {:?}",
+            self.chain_id, update.application_ids
+        );
+
+        let new_app_set: BTreeSet<_> = update.application_ids.iter().cloned().collect();
+        let old_app_set: BTreeSet<_> = self.application_ids.iter().cloned().collect();
+
+        // Retain only last_requested_callbacks for applications that are still active
+        self.last_requested_callbacks
+            .retain(|app_id, _| new_app_set.contains(app_id));
+
+        // Update the application_ids
+        self.application_ids = update.application_ids;
+
+        // Process actions for newly added applications
+        let new_apps: Vec<_> = self
+            .application_ids
+            .iter()
+            .filter(|app_id| !old_app_set.contains(app_id))
+            .cloned()
+            .collect();
+        if !new_apps.is_empty() {
+            self.process_actions(new_apps).await;
+        }
     }
 
     fn process_events(&mut self) -> Vec<ApplicationId> {
