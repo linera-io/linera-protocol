@@ -4,7 +4,7 @@
 //! An actor that runs a chain worker.
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt,
     sync::{self, Arc, RwLock},
 };
@@ -15,7 +15,8 @@ use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     hashed::Hashed,
-    identifiers::{ApplicationId, BlobId, ChainId},
+    identifiers::{ApplicationId, BlobId, ChainId, StreamId},
+    time::Instant,
 };
 use linera_chain::{
     data_types::{BlockProposal, MessageBundle, ProposedBlock},
@@ -23,8 +24,8 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    ExecutionStateView, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint,
-    ServiceSyncRuntime,
+    system::EventSubscriptions, ExecutionStateView, Query, QueryContext, QueryOutcome,
+    ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::context::InactiveContext;
@@ -38,6 +39,25 @@ use crate::{
     value_cache::ValueCache,
     worker::{NetworkActions, WorkerError},
 };
+
+/// Type alias for event subscriptions result.
+pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscriptions)>;
+
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{exponential_bucket_interval, register_histogram};
+    use prometheus::Histogram;
+
+    pub static CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "chain_worker_request_queue_wait_time",
+            "Time (ms) a chain worker request waits in queue before being processed",
+            exponential_bucket_interval(0.1_f64, 10_000.0),
+        )
+    });
+}
 
 /// A request for the [`ChainWorkerActor`].
 #[derive(Debug)]
@@ -181,12 +201,50 @@ where
         callback: oneshot::Sender<Result<Option<Vec<Blob>>, WorkerError>>,
     },
 
-    /// Read a range from the confirmed log.
-    ReadConfirmedLog {
-        start: BlockHeight,
-        end: BlockHeight,
+    /// Get block hashes for specified heights.
+    GetBlockHashes {
+        heights: Vec<BlockHeight>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<Vec<CryptoHash>, WorkerError>>,
+    },
+
+    /// Get proposed blobs from the manager for specified blob IDs.
+    GetProposedBlobs {
+        blob_ids: Vec<BlobId>,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<Vec<Blob>, WorkerError>>,
+    },
+
+    /// Get event subscriptions as a list of ((ChainId, StreamId), EventSubscriptions).
+    GetEventSubscriptions {
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<EventSubscriptionsResult, WorkerError>>,
+    },
+
+    /// Get the next expected event index for a stream.
+    GetNextExpectedEvent {
+        stream_id: StreamId,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<Option<u32>, WorkerError>>,
+    },
+
+    /// Get received certificate trackers.
+    GetReceivedCertificateTrackers {
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<HashMap<ValidatorPublicKey, u64>, WorkerError>>,
+    },
+
+    /// Get tip state info for next_outbox_heights calculation.
+    GetTipStateAndOutboxInfo {
+        receiver_id: ChainId,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<(BlockHeight, Option<BlockHeight>), WorkerError>>,
+    },
+
+    /// Get the next height to preprocess.
+    GetNextHeightToPreprocess {
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<BlockHeight, WorkerError>>,
     },
 }
 
@@ -261,6 +319,7 @@ where
         incoming_requests: mpsc::UnboundedReceiver<(
             ChainWorkerRequest<StorageClient::Context>,
             tracing::Span,
+            Instant,
         )>,
         is_tracked: bool,
     ) {
@@ -302,11 +361,19 @@ where
         mut incoming_requests: mpsc::UnboundedReceiver<(
             ChainWorkerRequest<StorageClient::Context>,
             tracing::Span,
+            Instant,
         )>,
     ) -> Result<(), WorkerError> {
         trace!("Starting `ChainWorkerActor`");
 
-        while let Some((request, span)) = incoming_requests.recv().await {
+        while let Some((request, span, _queued_at)) = incoming_requests.recv().await {
+            // Record how long the request waited in queue (in milliseconds)
+            #[cfg(with_metrics)]
+            {
+                let queue_wait_time_ms = _queued_at.elapsed().as_secs_f64() * 1000.0;
+                metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
+            }
+
             let (_service_runtime_thread, service_runtime_task, service_runtime_endpoint) =
                 if self.config.long_lived_services {
                     let actor = ServiceRuntimeActor::spawn(self.chain_id).await;
@@ -337,9 +404,17 @@ where
                 futures::select! {
                     () = self.sleep_until_timeout().fuse() => break,
                     maybe_request = incoming_requests.recv().fuse() => {
-                        let Some((request, span)) = maybe_request else {
+                        let Some((request, span, _queued_at)) = maybe_request else {
                             break; // Request sender was dropped.
                         };
+
+                        // Record how long the request waited in queue (in milliseconds)
+                        #[cfg(with_metrics)]
+                        {
+                            let queue_wait_time_ms = _queued_at.elapsed().as_secs_f64() * 1000.0;
+                            metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
+                        }
+
                         Box::pin(worker.handle_request(request)).instrument(span).await;
                     }
                 }

@@ -17,23 +17,24 @@ use consts::{
 };
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, BlockHeight, Event, OracleResponse, Timestamp},
+    data_types::{BlockHeight, Event, OracleResponse, Timestamp},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
     block::Block,
     data_types::{IncomingBundle, MessageAction, PostedMessage},
 };
-use linera_execution::{
-    Message, MessageKind, Operation, OutgoingMessage, SystemMessage, SystemOperation,
-};
+use linera_execution::{Message, Operation, OutgoingMessage, SystemOperation};
 use sqlx::{
     sqlite::{SqlitePool, SqlitePoolOptions},
     Row, Sqlite, Transaction,
 };
 use thiserror::Error;
 
-use crate::db::{DatabaseTransaction, IncomingBundleInfo, IndexerDatabase, PostedMessageInfo};
+use crate::db::{
+    common::{classify_message, message_kind_to_string, parse_message_kind},
+    IncomingBundleInfo, IndexerDatabase, PostedMessageInfo,
+};
 
 #[derive(Error, Debug)]
 pub enum SqliteError {
@@ -49,19 +50,6 @@ pub enum SqliteError {
 
 pub struct SqliteDatabase {
     pool: SqlitePool,
-}
-
-/// Classification result for a Message with denormalized SystemMessage fields
-#[derive(Debug)]
-struct MessageClassification {
-    message_type: String,
-    application_id: Option<String>,
-    system_message_type: Option<String>,
-    system_target: Option<String>,
-    system_amount: Option<Amount>,
-    system_source: Option<String>,
-    system_owner: Option<String>,
-    system_recipient: Option<String>,
 }
 
 impl SqliteDatabase {
@@ -343,9 +331,9 @@ impl SqliteDatabase {
         let block_hash_str = block_hash.to_string();
         let destination_chain_id_str = message.destination.to_string();
         let authenticated_owner_str = message.authenticated_owner.map(|s| s.to_string());
-        let message_kind_str = Self::message_kind_to_string(&message.kind);
+        let message_kind_str = message_kind_to_string(&message.kind);
 
-        let classification = Self::classify_message(&message.message);
+        let classification = classify_message(&message.message);
         let data = Self::serialize_message(&message.message)?;
 
         sqlx::query(
@@ -525,9 +513,9 @@ impl SqliteDatabase {
     ) -> Result<(), SqliteError> {
         let authenticated_owner_str = message.authenticated_owner.map(|s| s.to_string());
         let refund_grant_to = message.refund_grant_to.as_ref().map(|s| format!("{s}"));
-        let message_kind_str = Self::message_kind_to_string(&message.kind);
+        let message_kind_str = message_kind_to_string(&message.kind);
 
-        let classification = Self::classify_message(&message.message);
+        let classification = classify_message(&message.message);
         let message_data = Self::serialize_message(&message.message)?;
 
         sqlx::query(
@@ -854,7 +842,7 @@ impl SqliteDatabase {
             let grant = linera_base::data_types::Amount::from_str(grant_amount.as_str())
                 .map_err(|_| SqliteError::Serialization("Invalid grant amount".to_string()))?;
             let kind_str: String = row.get("message_kind");
-            let kind = Self::parse_message_kind(kind_str.as_str())?;
+            let kind = parse_message_kind(kind_str.as_str()).map_err(SqliteError::Serialization)?;
             let message_bytes: Vec<u8> = row.get("data");
             let message = Self::deserialize_message(message_bytes.as_slice())?;
 
@@ -1009,68 +997,6 @@ impl SqliteDatabase {
         }
     }
 
-    /// Classify a Message into database fields with denormalized SystemMessage fields
-    fn classify_message(message: &Message) -> MessageClassification {
-        match message {
-            Message::System(sys_msg) => {
-                let (
-                    sys_msg_type,
-                    system_target,
-                    system_amount,
-                    system_source,
-                    system_owner,
-                    system_recipient,
-                ) = match sys_msg {
-                    SystemMessage::Credit {
-                        target,
-                        amount,
-                        source,
-                    } => (
-                        "Credit",
-                        Some(target.to_string()),
-                        Some(*amount),
-                        Some(source.to_string()),
-                        None,
-                        None,
-                    ),
-                    SystemMessage::Withdraw {
-                        owner,
-                        amount,
-                        recipient,
-                    } => (
-                        "Withdraw",
-                        None,
-                        Some(*amount),
-                        None,
-                        Some(owner.to_string()),
-                        Some(recipient.to_string()),
-                    ),
-                };
-
-                MessageClassification {
-                    message_type: "System".to_string(),
-                    application_id: None,
-                    system_message_type: Some(sys_msg_type.to_string()),
-                    system_target,
-                    system_amount,
-                    system_source,
-                    system_owner,
-                    system_recipient,
-                }
-            }
-            Message::User { application_id, .. } => MessageClassification {
-                message_type: "User".to_string(),
-                application_id: Some(application_id.to_string()),
-                system_message_type: None,
-                system_target: None,
-                system_amount: None,
-                system_source: None,
-                system_owner: None,
-                system_recipient: None,
-            },
-        }
-    }
-
     /// Serialize a Message with consistent error handling
     fn serialize_message(message: &Message) -> Result<Vec<u8>, SqliteError> {
         bincode::serialize(message)
@@ -1081,25 +1007,6 @@ impl SqliteDatabase {
         bincode::deserialize(data).map_err(|e| {
             SqliteError::Serialization(format!("Failed to deserialize message: {}", e))
         })
-    }
-
-    /// Parse MessageKind from string
-    fn parse_message_kind(kind_str: &str) -> Result<MessageKind, SqliteError> {
-        match kind_str {
-            "Simple" => Ok(MessageKind::Simple),
-            "Tracked" => Ok(MessageKind::Tracked),
-            "Bouncing" => Ok(MessageKind::Bouncing),
-            "Protected" => Ok(MessageKind::Protected),
-            _ => Err(SqliteError::Serialization(format!(
-                "Unknown message kind: {}",
-                kind_str
-            ))),
-        }
-    }
-
-    /// Convert MessageKind to string
-    fn message_kind_to_string(kind: &MessageKind) -> String {
-        format!("{:?}", kind)
     }
 }
 
@@ -1123,13 +1030,15 @@ pub struct BlockSummary {
 impl IndexerDatabase for SqliteDatabase {
     type Error = SqliteError;
 
-    async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, SqliteError> {
+    type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
+
+    async fn begin_transaction(&self) -> Result<Self::Transaction<'_>, SqliteError> {
         self.begin_transaction().await
     }
 
     async fn insert_blob_tx(
         &self,
-        tx: &mut DatabaseTransaction<'_>,
+        tx: &mut Self::Transaction<'_>,
         blob_id: &BlobId,
         data: &[u8],
     ) -> Result<(), SqliteError> {
@@ -1138,7 +1047,7 @@ impl IndexerDatabase for SqliteDatabase {
 
     async fn insert_block_tx(
         &self,
-        tx: &mut DatabaseTransaction<'_>,
+        tx: &mut Self::Transaction<'_>,
         hash: &CryptoHash,
         chain_id: &ChainId,
         height: BlockHeight,
@@ -1149,7 +1058,7 @@ impl IndexerDatabase for SqliteDatabase {
             .await
     }
 
-    async fn commit_transaction(&self, tx: DatabaseTransaction<'_>) -> Result<(), SqliteError> {
+    async fn commit_transaction(&self, tx: Self::Transaction<'_>) -> Result<(), SqliteError> {
         self.commit_transaction(tx).await
     }
 

@@ -30,7 +30,7 @@ use linera_views::{
     reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
     register_view::RegisterView,
     set_view::SetView,
-    views::{ClonableView, CryptoHashView, RootView, View},
+    views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
@@ -76,7 +76,7 @@ pub(crate) mod metrics {
             "block_execution_latency",
             "Block execution latency",
             &[],
-            exponential_bucket_latencies(1000.0),
+            exponential_bucket_interval(50.0_f64, 10_000_000.0),
         )
     });
 
@@ -86,7 +86,7 @@ pub(crate) mod metrics {
             "message_execution_latency",
             "Message execution latency",
             &[],
-            exponential_bucket_latencies(50.0),
+            exponential_bucket_interval(0.1_f64, 50_000.0),
         )
     });
 
@@ -95,7 +95,7 @@ pub(crate) mod metrics {
             "operation_execution_latency",
             "Operation execution latency",
             &[],
-            exponential_bucket_latencies(50.0),
+            exponential_bucket_interval(0.1_f64, 50_000.0),
         )
     });
 
@@ -271,10 +271,6 @@ where
         BucketQueueView<C, TimestampedBundleInInbox, TIMESTAMPBUNDLE_BUCKET_SIZE>,
     /// Unskippable bundles that have been removed but are still in the queue.
     pub removed_unskippable_bundles: SetView<C, BundleInInbox>,
-    /// The heights of previous blocks that sent messages to the same recipients.
-    pub previous_message_blocks: MapView<C, ChainId, BlockHeight>,
-    /// The heights of previous blocks that published events to the same streams.
-    pub previous_event_blocks: MapView<C, StreamId, BlockHeight>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, ChainId, OutboxStateView<C>>,
     /// The indices of next events we expect to see per stream (could be ahead of the last
@@ -491,11 +487,12 @@ where
 
     /// Initializes the chain if it is not active yet.
     pub async fn initialize_if_needed(&mut self, local_time: Timestamp) -> Result<(), ChainError> {
+        let chain_id = self.chain_id();
         // Initialize ourselves.
         if self
             .execution_state
             .system
-            .initialize_chain(self.chain_id())
+            .initialize_chain(chain_id)
             .await
             .with_execution_context(ChainExecutionContext::Block)?
         {
@@ -767,12 +764,9 @@ where
         chain_id = %block.chain_id,
         block_height = %block.height
     ))]
-    #[expect(clippy::too_many_arguments)]
     async fn execute_block_inner(
         chain: &mut ExecutionStateView<C>,
         confirmed_log: &LogView<C, CryptoHash>,
-        previous_message_blocks_view: &MapView<C, ChainId, BlockHeight>,
-        previous_event_blocks_view: &MapView<C, StreamId, BlockHeight>,
         block: &ProposedBlock,
         local_time: Timestamp,
         round: Option<u32>,
@@ -780,7 +774,7 @@ where
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
-        let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency();
+        let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency_us();
         chain.system.timestamp.set(block.timestamp);
 
         let policy = chain
@@ -828,7 +822,8 @@ where
         let recipients = block_execution_tracker.recipients();
         let mut recipient_heights = Vec::new();
         let mut indices = Vec::new();
-        for (recipient, height) in previous_message_blocks_view
+        for (recipient, height) in chain
+            .previous_message_blocks
             .multi_get_pairs(recipients)
             .await?
         {
@@ -850,7 +845,7 @@ where
         let streams = block_execution_tracker.event_streams();
         let mut stream_heights = Vec::new();
         let mut indices = Vec::new();
-        for (stream, height) in previous_event_blocks_view.multi_get_pairs(streams).await? {
+        for (stream, height) in chain.previous_event_blocks.multi_get_pairs(streams).await? {
             if let Some(height) = height {
                 let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                 indices.push(index);
@@ -939,8 +934,6 @@ where
         Self::execute_block_inner(
             &mut self.execution_state,
             &self.confirmed_log,
-            &self.previous_message_blocks,
-            &self.previous_event_blocks,
             block,
             local_time,
             round,
@@ -969,11 +962,13 @@ where
         let recipients = self.process_outgoing_messages(block).await?;
 
         for recipient in recipients {
-            self.previous_message_blocks
+            self.execution_state
+                .previous_message_blocks
                 .insert(&recipient, block.header.height)?;
         }
         for event in block.body.events.iter().flatten() {
-            self.previous_event_blocks
+            self.execution_state
+                .previous_event_blocks
                 .insert(&event.stream_id, block.header.height)?;
         }
         // Last, reset the consensus state based on the current ownership.

@@ -125,8 +125,6 @@ query Chain(
   $chainId: ChainId!,
   $inboxesInput: MapInput_ChainId_37f83aa9,
   $outboxesInput: MapInput_ChainId_37f83aa9,
-  $previousMessageBlocksInput: MapInput_ChainId_37f83aa9,
-  $previousEventBlocksInput: MapInput_StreamIdInput_b7c3909d,
 ) {
   chain(chainId: $chainId) {
     chainId
@@ -273,26 +271,6 @@ query Chain(
       }
     }
     outboxCounters
-    previousMessageBlocks {
-      keys
-      entries(input: $previousMessageBlocksInput) {
-        key
-        value
-      }
-    }
-    previousEventBlocks {
-      keys {
-        applicationId
-        streamName
-      }
-      entries(input: $previousEventBlocksInput) {
-        key {
-          applicationId
-          streamName
-        }
-        value
-      }
-    }
   }
 }
 
@@ -433,6 +411,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
                   owner
                   weight
                 }
+                firstLeader
                 multiLeaderRounds
                 openMultiLeaderRounds
                 timeoutConfig {
@@ -610,6 +589,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
                   owner
                   weight
                 }
+                firstLeader
                 multiLeaderRounds
                 openMultiLeaderRounds
                 timeoutConfig {

@@ -432,6 +432,7 @@ where
         let operation = SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
             owners: Vec::new(),
+            first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
@@ -451,6 +452,9 @@ where
             desc = "Whether multi-leader rounds are unrestricted, that is not limited to chain owners."
         )]
         open_multi_leader_rounds: bool,
+        #[graphql(desc = "The leader of the first single-leader round. \
+                          If not set, this is random like other rounds.")]
+        first_leader: Option<AccountOwner>,
         #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
         fast_round_ms: Option<u64>,
         #[graphql(
@@ -474,6 +478,7 @@ where
         let operation = SystemOperation::ChangeOwnership {
             super_owners: Vec::new(),
             owners: new_owners.into_iter().zip(new_weights).collect(),
+            first_leader,
             multi_leader_rounds,
             open_multi_leader_rounds,
             timeout_config: TimeoutConfig {

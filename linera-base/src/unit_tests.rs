@@ -144,6 +144,7 @@ fn chain_ownership_test_case() -> ChainOwnership {
 
     ChainOwnership {
         super_owners,
+        first_leader: Some(AccountOwner::from(CryptoHash::test_hash("Fred"))),
         owners,
         multi_leader_rounds: 5,
         open_multi_leader_rounds: false,

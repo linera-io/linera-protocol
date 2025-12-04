@@ -649,7 +649,7 @@ where
             .map_err(|e| RuntimeError::Custom(e.into()))
     }
 
-    /// Returns the round in which this block was validated.
+    /// Returns the multi-leader round in which this block was validated.
     fn validation_round(caller: &mut Caller) -> Result<Option<u32>, RuntimeError> {
         caller
             .user_data_mut()

@@ -511,6 +511,46 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
+/// Regression test: A super owner should be able to propose even without multi-leader rounds.
+async fn test_super_owner_in_single_leader_round<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let regular_owner = signer.generate_new().into();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let super_owner = sender.identity().await?;
+
+    // Configure chain with one super owner and one regular owner, no multi-leader rounds.
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
+        super_owners: vec![super_owner],
+        owners: vec![(regular_owner, 100)],
+        first_leader: None,
+        multi_leader_rounds: 0,
+        open_multi_leader_rounds: false,
+        timeout_config: TimeoutConfig::default(),
+    });
+    sender.execute_operation(owner_change_op).await.unwrap();
+
+    // The super owner can still burn tokens since that doesn't use the validation round oracle.
+    sender
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
+        .await
+        .unwrap();
+    assert_eq!(
+        sender.local_balance().await.unwrap(),
+        Amount::from_tokens(2)
+    );
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
 async fn test_open_chain_then_close_it<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
@@ -1097,7 +1137,7 @@ where
         Some(cert2)
     );
     client1
-        .communicate_chain_updates(&builder.initial_committee)
+        .communicate_chain_updates(&builder.initial_committee, None)
         .await
         .unwrap();
     // Client2 does not know about the money yet.
@@ -1635,6 +1675,7 @@ where
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner2_a, 50), (owner2_b, 50)],
+        first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
@@ -1758,6 +1799,7 @@ where
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner1, 50), (owner2, 50)],
+        first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
@@ -1845,6 +1887,7 @@ where
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner3_a, 50), (owner3_b, 50), (owner3_c, 50)],
+        first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
@@ -2585,6 +2628,7 @@ where
     let ownership = ChainOwnership {
         super_owners: BTreeSet::from_iter([owner0]),
         owners: BTreeMap::from_iter([(owner1, 100)]),
+        first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
         timeout_config,
@@ -2697,7 +2741,8 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Ignore, None);
+    receiver.options_mut().message_policy =
+        MessagePolicy::new(BlanketMessagePolicy::Ignore, None, None, None);
     receiver.synchronize_from_validators().await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
@@ -2708,7 +2753,8 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Reject, None);
+    receiver.options_mut().message_policy =
+        MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None);
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     sender.synchronize_from_validators().await?;
@@ -2742,6 +2788,8 @@ where
     receiver.options_mut().message_policy = MessagePolicy::new(
         BlanketMessagePolicy::Accept,
         Some([sender.chain_id()].into_iter().collect()),
+        None,
+        None,
     );
     receiver.synchronize_from_validators().await?;
     let certs = receiver.process_inbox().await?.0;
@@ -2750,7 +2798,8 @@ where
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ONE);
 
     // Let's accept the other one, too.
-    receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Accept, None);
+    receiver.options_mut().message_policy =
+        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None);
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     assert_eq!(
@@ -2978,7 +3027,7 @@ where
 
     // Update the validators on the chain.
     // If it works, it means the validator has been correctly updated.
-    client2.update_validators(None).await.unwrap();
+    client2.update_validators(None, None).await.unwrap();
 
     client2
         .transfer(
@@ -3121,7 +3170,7 @@ where
             None,
             BlockHeight::ZERO,
             chain_client::Options {
-                message_policy: MessagePolicy::new(BlanketMessagePolicy::Reject, None),
+                message_policy: MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None),
                 ..chain_client::Options::test_default()
             },
         )

@@ -345,7 +345,8 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     }
 
     /// If any new chains were created by the given block, and we have a key pair for them,
-    /// add them to the wallet and start listening for notifications.
+    /// add them to the wallet and start listening for notifications. (This is not done for
+    /// fallback owners, as those would have to monitor all chains anyway.)
     async fn add_new_chains(&mut self, hash: CryptoHash) -> Result<(), Error> {
         let block = self
             .storage
@@ -359,8 +360,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 if blob_id.blob_type == BlobType::ChainDescription {
                     let chain_desc: ChainDescription = bcs::from_bytes(blob.content().bytes())
                         .expect("ChainDescription should deserialize correctly");
-                    let owners = chain_desc.config().ownership.all_owners().cloned();
-                    Some((ChainId(blob_id.hash), owners.collect::<Vec<_>>()))
+                    Some((ChainId(blob_id.hash), chain_desc))
                 } else {
                     None
                 }
@@ -371,19 +371,19 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         }
         let mut new_ids = BTreeMap::new();
         let mut context_guard = self.context.lock().await;
-        for (new_chain_id, owners) in new_chains {
-            for chain_owner in owners {
+        for (new_chain_id, chain_desc) in new_chains {
+            for chain_owner in chain_desc.config().ownership.all_owners() {
                 if context_guard
                     .client()
                     .signer()
-                    .contains_key(&chain_owner)
+                    .contains_key(chain_owner)
                     .await
                     .map_err(chain_client::Error::signer_failure)?
                 {
                     context_guard
                         .update_wallet_for_new_chain(
                             new_chain_id,
-                            Some(chain_owner),
+                            Some(*chain_owner),
                             block.header.timestamp,
                             block.header.epoch,
                         )
@@ -559,7 +559,16 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     async fn update_validators(&self, notification: &Notification) -> Result<(), Error> {
         let chain_id = notification.chain_id;
         let listening_client = self.listening.get(&chain_id).expect("missing client");
-        if let Err(error) = listening_client.client.update_validators(None).await {
+        let latest_block = if let Reason::NewBlock { hash, .. } = &notification.reason {
+            listening_client.client.read_certificate(*hash).await.ok()
+        } else {
+            None
+        };
+        if let Err(error) = listening_client
+            .client
+            .update_validators(None, latest_block)
+            .await
+        {
             warn!(
                 "Failed to update validators about the local chain after \
                  receiving {notification:?} with error: {error:?}"

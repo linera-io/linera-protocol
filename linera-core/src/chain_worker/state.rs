@@ -11,6 +11,8 @@ use std::{
 };
 
 use futures::future::Either;
+#[cfg(with_metrics)]
+use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
@@ -18,7 +20,7 @@ use linera_base::{
     },
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, StreamId},
 };
 use linera_chain::{
     data_types::{
@@ -30,7 +32,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
-    system::EPOCH_STREAM_NAME, Committee, ExecutionStateView, Query, QueryContext, QueryOutcome,
+    Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
     ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
@@ -41,12 +43,28 @@ use linera_views::{
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
 use tracing::{debug, instrument, trace, warn};
 
-use super::{ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier};
+use super::{ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier, EventSubscriptionsResult};
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
     worker::{NetworkActions, Notification, Reason, WorkerError},
 };
+
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram};
+    use prometheus::Histogram;
+
+    pub static CREATE_NETWORK_ACTIONS_LATENCY: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "create_network_actions_latency",
+            "Time (ms) to create network actions",
+            exponential_bucket_latencies(10_000.0),
+        )
+    });
+}
 
 /// The state of the chain worker.
 pub(crate) struct ChainWorkerState<StorageClient>
@@ -225,12 +243,32 @@ where
             ChainWorkerRequest::GetLockingBlobs { blob_ids, callback } => callback
                 .send(self.get_locking_blobs(blob_ids).await)
                 .is_ok(),
-            ChainWorkerRequest::ReadConfirmedLog {
-                start,
-                end,
+            ChainWorkerRequest::GetBlockHashes { heights, callback } => {
+                callback.send(self.get_block_hashes(heights).await).is_ok()
+            }
+            ChainWorkerRequest::GetProposedBlobs { blob_ids, callback } => callback
+                .send(self.get_proposed_blobs(blob_ids).await)
+                .is_ok(),
+            ChainWorkerRequest::GetEventSubscriptions { callback } => {
+                callback.send(self.get_event_subscriptions().await).is_ok()
+            }
+            ChainWorkerRequest::GetNextExpectedEvent {
+                stream_id,
                 callback,
             } => callback
-                .send(self.read_confirmed_log(start, end).await)
+                .send(self.get_next_expected_event(stream_id).await)
+                .is_ok(),
+            ChainWorkerRequest::GetReceivedCertificateTrackers { callback } => callback
+                .send(self.get_received_certificate_trackers().await)
+                .is_ok(),
+            ChainWorkerRequest::GetTipStateAndOutboxInfo {
+                receiver_id,
+                callback,
+            } => callback
+                .send(self.get_tip_state_and_outbox_info(receiver_id).await)
+                .is_ok(),
+            ChainWorkerRequest::GetNextHeightToPreprocess { callback } => callback
+                .send(self.get_next_height_to_preprocess().await)
                 .is_ok(),
         };
 
@@ -419,6 +457,8 @@ where
         &self,
         old_round: Option<Round>,
     ) -> Result<NetworkActions, WorkerError> {
+        #[cfg(with_metrics)]
+        let _latency = metrics::CREATE_NETWORK_ACTIONS_LATENCY.measure_latency();
         let mut heights_by_recipient = BTreeMap::<_, Vec<_>>::new();
         let mut targets = self.chain.nonempty_outbox_chain_ids();
         if let Some(tracked_chains) = self.tracked_chains.as_ref() {
@@ -666,6 +706,14 @@ where
         // Check that the chain is active and ready for this validated block.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         self.initialize_and_save_if_needed().await?;
+        let tip_state = self.chain.tip_state.get();
+        ensure!(
+            header.height == tip_state.next_block_height,
+            ChainError::UnexpectedBlockHeight {
+                expected_block_height: tip_state.next_block_height,
+                found_block_height: header.height,
+            }
+        );
         let (epoch, committee) = self.chain.current_committee()?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(committee)?;
@@ -754,21 +802,23 @@ where
         {
             certificate.check(committee)?;
         } else {
-            let committees = self.storage.committees_for(epoch..=epoch).await?;
-            let Some(committee) = committees.get(&epoch) else {
-                let net_description = self
-                    .storage
-                    .read_network_description()
-                    .await?
-                    .ok_or_else(|| WorkerError::MissingNetworkDescription)?;
-                return Err(WorkerError::EventsNotFound(vec![EventId {
-                    chain_id: net_description.admin_chain_id,
-                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                    index: epoch.0,
-                }]));
-            };
-            // This line is duplicated, but this avoids cloning and a lifetimes error.
-            certificate.check(committee)?;
+            let committee = self
+                .chain
+                .execution_state
+                .context()
+                .extra()
+                .get_committees(epoch..=epoch)
+                .await
+                .map_err(|error| {
+                    ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
+                })?
+                .remove(&epoch)
+                .ok_or_else(|| {
+                    ChainError::InternalError(format!(
+                        "missing committee for epoch {epoch}; this is a bug"
+                    ))
+                })?;
+            certificate.check(&committee)?;
         }
 
         // Certificate check passed - which means the blobs the block requires are legitimate and
@@ -852,17 +902,6 @@ where
             .iter()
             .filter_map(|blob_id| blobs.remove(blob_id))
             .collect::<Vec<_>>();
-
-        // If height is zero, we haven't initialized the chain state or verified the epoch before -
-        // do it now.
-        // This will fail if the chain description blob is still missing - but that's alright,
-        // because we already wrote the blob state above, so the client can now upload the
-        // blob, which will get accepted, and retry.
-        if height == BlockHeight::ZERO {
-            self.initialize_and_save_if_needed().await?;
-            let (epoch, _) = self.chain.current_committee()?;
-            check_block_epoch(epoch, chain_id, block.header.epoch)?;
-        }
 
         // Execute the block and update inboxes.
         let local_time = self.storage.clock().current_time();
@@ -1103,45 +1142,89 @@ where
         &self,
         blob_ids: Vec<BlobId>,
     ) -> Result<Option<Vec<Blob>>, WorkerError> {
-        let mut blobs = Vec::new();
-        for blob_id in blob_ids {
-            match self.chain.manager.locking_blobs.get(&blob_id).await? {
-                None => return Ok(None),
-                Some(blob) => blobs.push(blob),
-            }
-        }
-        Ok(Some(blobs))
+        let results = self
+            .chain
+            .manager
+            .locking_blobs
+            .multi_get(&blob_ids)
+            .await?;
+        Ok(results.into_iter().collect())
     }
 
-    /// Reads a range from the confirmed log.
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        start = %start,
-        end = %end
-    ))]
-    async fn read_confirmed_log(
+    /// Gets block hashes for specified heights.
+    async fn get_block_hashes(
         &self,
-        start: BlockHeight,
-        end: BlockHeight,
+        heights: Vec<BlockHeight>,
     ) -> Result<Vec<CryptoHash>, WorkerError> {
-        let start_usize = usize::try_from(start)?;
-        let end_usize = usize::try_from(end)?;
-        let log_heights: Vec<_> = (start_usize..end_usize).collect();
-        let hashes = self
+        Ok(self.chain.block_hashes(heights).await?)
+    }
+
+    /// Gets proposed blobs from the manager for specified blob IDs.
+    async fn get_proposed_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<Blob>, WorkerError> {
+        let results = self
             .chain
-            .confirmed_log
-            .multi_get(log_heights.clone())
+            .manager
+            .proposed_blobs
+            .multi_get(&blob_ids)
+            .await?;
+        let mut blobs = Vec::with_capacity(blob_ids.len());
+        let mut missing = Vec::new();
+        for (blob_id, maybe_blob) in blob_ids.into_iter().zip(results) {
+            match maybe_blob {
+                Some(blob) => blobs.push(blob),
+                None => missing.push(blob_id),
+            }
+        }
+        if !missing.is_empty() {
+            return Err(WorkerError::BlobsNotFound(missing));
+        }
+        Ok(blobs)
+    }
+
+    /// Gets event subscriptions.
+    async fn get_event_subscriptions(&self) -> Result<EventSubscriptionsResult, WorkerError> {
+        Ok(self
+            .chain
+            .execution_state
+            .system
+            .event_subscriptions
+            .index_values()
+            .await?)
+    }
+
+    /// Gets the next expected event index for a stream.
+    async fn get_next_expected_event(
+        &self,
+        stream_id: StreamId,
+    ) -> Result<Option<u32>, WorkerError> {
+        Ok(self.chain.next_expected_events.get(&stream_id).await?)
+    }
+
+    /// Gets received certificate trackers.
+    async fn get_received_certificate_trackers(
+        &self,
+    ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
+        Ok(self.chain.received_certificate_trackers.get().clone())
+    }
+
+    /// Gets tip state and outbox info for next_outbox_heights calculation.
+    async fn get_tip_state_and_outbox_info(
+        &self,
+        receiver_id: ChainId,
+    ) -> Result<(BlockHeight, Option<BlockHeight>), WorkerError> {
+        let next_block_height = self.chain.tip_state.get().next_block_height;
+        let next_height_to_schedule = self
+            .chain
+            .outboxes
+            .try_load_entry(&receiver_id)
             .await?
-            .into_iter()
-            .enumerate()
-            .map(|(i, maybe_hash)| {
-                maybe_hash.ok_or_else(|| WorkerError::ConfirmedLogEntryNotFound {
-                    height: BlockHeight(u64::try_from(start_usize + i).unwrap_or(u64::MAX)),
-                    chain_id: self.chain_id(),
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(hashes)
+            .map(|outbox| *outbox.next_height_to_schedule.get());
+        Ok((next_block_height, next_height_to_schedule))
+    }
+
+    /// Gets the next height to preprocess.
+    async fn get_next_height_to_preprocess(&self) -> Result<BlockHeight, WorkerError> {
+        Ok(self.chain.next_height_to_preprocess().await?)
     }
 
     /// Attempts to vote for a leader timeout, if possible.
@@ -1392,6 +1475,8 @@ where
         } = &proposal;
         let block = &content.block;
         let chain = &self.chain;
+        // Check if the chain is ready for this new block proposal.
+        chain.tip_state.get().verify_block_chaining(block)?;
         // Check the epoch.
         let (epoch, committee) = chain.current_committee()?;
         check_block_epoch(epoch, block.chain_id, block.epoch)?;
@@ -1399,7 +1484,7 @@ where
         block.check_proposal_size(policy.maximum_block_proposal_size)?;
         // Check the authentication of the block.
         ensure!(
-            chain.manager.verify_owner(&owner, proposal.content.round)?,
+            chain.manager.can_propose(&owner, proposal.content.round),
             WorkerError::InvalidOwner
         );
         let old_round = self.chain.manager.current_round();
@@ -1441,8 +1526,6 @@ where
                 original_proposal.check_signature()?;
             }
         }
-        // Check if the chain is ready for this new block proposal.
-        chain.tip_state.get().verify_block_chaining(block)?;
         if chain.manager.check_proposed_block(&proposal)? == manager::Outcome::Skip {
             // We already voted for this block.
             return Ok((self.chain_info_response(), NetworkActions::default()));
@@ -1466,10 +1549,14 @@ where
             outcome,
         } = content;
 
-        ensure!(
-            block.timestamp.duration_since(local_time) <= self.config.grace_period,
-            WorkerError::InvalidTimestamp
-        );
+        if block.timestamp.duration_since(local_time) > self.config.grace_period {
+            return Err(WorkerError::InvalidTimestamp {
+                local_time,
+                block_timestamp: block.timestamp,
+                grace_period: self.config.grace_period,
+            });
+        }
+
         self.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.storage.clock().current_time();
 

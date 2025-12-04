@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::HashMap,
     future::{Future, IntoFuture},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
+use linera_base::crypto::CryptoHash;
 use linera_execution::committee::Committee;
 use linera_service::config::DestinationId;
 use linera_storage::Storage;
@@ -27,6 +29,10 @@ where
     storage: BlockProcessorStorage<T>,
     new_block_queue: NewBlockQueue,
     committee_destination_update: bool,
+    // Temporary solution.
+    // Tracks certificates that failed to be read from storage
+    // along with the time of the failure to avoid retrying for too long.
+    retried_certs: HashMap<CryptoHash, (u8, Instant)>,
 }
 
 impl<S, T> BlockProcessor<S, T>
@@ -46,6 +52,7 @@ where
             exporters_tracker,
             committee_destination_update,
             new_block_queue,
+            retried_certs: HashMap::new(),
         }
     }
 
@@ -81,21 +88,28 @@ where
                 Some(next_block_notification) = self.new_block_queue.recv() => {
                     let walker = Walker::new(&mut self.storage);
                     match walker.walk(next_block_notification).await {
-                        Ok(maybe_new_committee) if self.committee_destination_update => {
-                            tracing::trace!("new committee blob found, updating the committee destination.");
-                            if let Some(blob_id) = maybe_new_committee {
-                                let blob = match self.storage.get_blob(blob_id).await {
+                        Ok(Some(new_committee_blob)) if self.committee_destination_update => {
+                            tracing::info!(?new_committee_blob, "new committee blob found, updating the committee destination.");
+                                let blob = match self.storage.get_blob(new_committee_blob).await {
                                     Ok(blob) => blob,
                                     Err(error) => {
-                                        tracing::error!("unable to get the committee blob: {:?} from storage, , received error: {:?}", blob_id, error);
+                                        tracing::error!(
+                                            blob_id=?new_committee_blob,
+                                            ?error,
+                                            "failed to read the committee blob from storage"
+                                        );
                                         return Err(error);
                                     },
                                 };
 
                                 let committee: Committee = match bcs::from_bytes(blob.bytes()) {
                                     Ok(committee) => committee,
-                                    Err(e) => {
-                                        tracing::error!("unable to serialize the committee blob: {:?}, received error: {:?}", blob_id, e);
+                                    Err(error) => {
+                                        tracing::error!(
+                                            blob_id=?new_committee_blob,
+                                            ?error,
+                                            "failed to deserialize the committee blob"
+                                        );
                                         continue;
                                     }
                                 };
@@ -104,12 +118,15 @@ where
                                 self.exporters_tracker.shutdown_old_committee(committee_destinations.clone());
                                 self.storage.new_committee(committee_destinations.clone());
                                 self.exporters_tracker.start_committee_exporters(committee_destinations.clone());
-                            }
                         },
 
-                        Ok(_) => {
+                        Ok(Some(_)) => {
                             tracing::info!(block=?next_block_notification, "New committee blob found but exporter is not configured \
                              to update the committee destination, skipping.");
+                        },
+
+                        Ok(None) => {
+                            // No committee blob found, continue processing.
                         },
 
                         // this error variant is safe to retry as this block is already confirmed so this error will
@@ -120,16 +137,44 @@ where
                             self.new_block_queue.push_back(next_block_notification);
                         },
 
-                        Err(e @ (ExporterError::UnprocessedChain
+                        Err(ExporterError::ReadCertificateError(hash)) => {
+                            match self.retried_certs.remove(&hash) {
+                                // We retry only if the time elapsed since the first attempt is
+                                // less than 1 second. The assumption is that Scylla cannot
+                                // be inconsistent for too long.
+                                Some((retries, first_attempt)) => {
+                                    let elapsed = Instant::now().duration_since(first_attempt);
+                                    if retries < 3 || elapsed < Duration::from_secs(1) {
+                                        tracing::warn!(?hash, retry=retries+1, "retrying to read certificate");
+                                        self.retried_certs.insert(hash, (retries + 1, first_attempt));
+                                        self.new_block_queue.push_back(next_block_notification);
+                                    } else {
+                                        tracing::error!(?hash, "certificate is missing from the database");
+                                        return Err(ExporterError::ReadCertificateError(hash));
+                                    }
+                                },
+                                None => {
+                                    tracing::warn!(?hash, retry=1, "retrying to read certificate");
+                                    self.retried_certs.insert(hash, (1, Instant::now()));
+                                    self.new_block_queue.push_back(next_block_notification);
+                                }
+                            }
+                        },
+
+                        Err(error @ (ExporterError::UnprocessedChain
                                 | ExporterError::BadInitialization
                                 | ExporterError::ChainAlreadyExists(_))
                             ) => {
-                            tracing::error!("error {:?} when resolving block with hash: {}", e, next_block_notification.hash)
+                            tracing::error!(
+                                ?error,
+                                block_hash=?next_block_notification.hash,
+                                "error when resolving block with hash"
+                            );
                         },
 
-                        Err(e) => {
-                            tracing::error!("unexpected error: {:?}", e);
-                            return Err(e);
+                        Err(error) => {
+                            tracing::error!(?error, "unexpected error");
+                            return Err(error);
                         }
                     }
                 },

@@ -401,14 +401,6 @@ type ChainStateExtendedView {
 	"""
 	removedUnskippableBundles: SetView_BundleInInbox_092a4377!
 	"""
-	The heights of previous blocks that sent messages to the same recipients.
-	"""
-	previousMessageBlocks: MapView_ChainId_BlockHeight_f2e56e12!
-	"""
-	The heights of previous blocks that published events to the same streams.
-	"""
-	previousEventBlocks: MapView_StreamId_BlockHeight_e6657ad9!
-	"""
 	Mailboxes used to send messages, indexed by their target.
 	"""
 	outboxes: ReentrantCollectionView_ChainId_OutboxStateView_06c2376d!
@@ -476,6 +468,7 @@ Change ownership operation metadata.
 type ChangeOwnershipOperationMetadata {
 	superOwners: [AccountOwner!]!
 	owners: [OwnerWithWeight!]!
+	firstLeader: AccountOwner
 	multiLeaderRounds: Int!
 	openMultiLeaderRounds: Boolean!
 	timeoutConfig: TimeoutConfigMetadata!
@@ -508,7 +501,8 @@ input Committee {
 	"""
 	quorumThreshold: Int!
 	"""
-	The threshold to prove the validity of a statement.
+	The threshold to prove the validity of a statement. I.e. the assumption is that strictly
+	less than `validity_threshold` are faulty.
 	"""
 	validityThreshold: Int!
 	"""
@@ -595,14 +589,6 @@ type Entry_BlockHeight_CryptoHash_74e16b71 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_ChainId_BlockHeight_2fe78645 {
-	key: ChainId!
-	value: BlockHeight
-}
-
-"""
-A GraphQL-visible map item, complete with key.
-"""
 type Entry_ChainId_InboxStateView_a9e4d828 {
 	key: ChainId!
 	value: InboxStateView!
@@ -614,14 +600,6 @@ A GraphQL-visible map item, complete with key.
 type Entry_ChainId_OutboxStateView_855dcf53 {
 	key: ChainId!
 	value: OutboxStateView!
-}
-
-"""
-A GraphQL-visible map item, complete with key.
-"""
-type Entry_StreamId_BlockHeight_50cd702e {
-	key: StreamId!
-	value: BlockHeight
 }
 
 """
@@ -811,20 +789,6 @@ type MapView_BlockHeight_CryptoHash_1bae6d76 {
 	count: Int!
 	entry(key: BlockHeight!): Entry_BlockHeight_CryptoHash_74e16b71!
 	entries(input: MapInput_BlockHeight_e824a938): [Entry_BlockHeight_CryptoHash_74e16b71!]!
-}
-
-type MapView_ChainId_BlockHeight_f2e56e12 {
-	keys(count: Int): [ChainId!]!
-	count: Int!
-	entry(key: ChainId!): Entry_ChainId_BlockHeight_2fe78645!
-	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_BlockHeight_2fe78645!]!
-}
-
-type MapView_StreamId_BlockHeight_e6657ad9 {
-	keys(count: Int): [StreamId!]!
-	count: Int!
-	entry(key: StreamIdInput!): Entry_StreamId_BlockHeight_50cd702e!
-	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_BlockHeight_50cd702e!]!
 }
 
 type MapView_StreamId_Int_3d7f5335 {
@@ -1093,6 +1057,10 @@ type MutationRoot {
 		Whether multi-leader rounds are unrestricted, that is not limited to chain owners.
 		"""
 		openMultiLeaderRounds: Boolean!,
+		"""
+		The leader of the first single-leader round. If not set, this is random like other rounds.
+		"""
+		firstLeader: AccountOwner,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""

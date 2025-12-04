@@ -24,17 +24,12 @@ pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0
 #[export_name = "_rjem_malloc_conf"]
 pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    env,
-    path::PathBuf,
-    process,
-    sync::Arc,
-};
+use std::{collections::BTreeSet, env, path::PathBuf, process, sync::Arc};
 
 use anyhow::{anyhow, bail, ensure, Context, Error};
 use async_trait::async_trait;
 use chrono::Utc;
+use clap_complete::generate;
 use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt as _};
 use linera_base::{
@@ -60,10 +55,7 @@ use linera_core::{
     worker::Reason,
     JoinSetExt as _, LocalNodeError,
 };
-use linera_execution::{
-    committee::{Committee, ValidatorState},
-    WasmRuntime, WithWasmDefault as _,
-};
+use linera_execution::{committee::Committee, WasmRuntime, WithWasmDefault as _};
 use linera_faucet_server::{FaucetConfig, FaucetService};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
@@ -74,7 +66,7 @@ use linera_service::{
             BenchmarkCommand, BenchmarkOptions, ChainCommand, ClientCommand, DatabaseToolCommand,
             NetCommand, ProjectCommand, WalletCommand,
         },
-        net_up_utils,
+        net_up_utils, validator,
     },
     cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     node_service::NodeService,
@@ -97,6 +89,48 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
 
 struct Job(ClientOptions);
+
+/// Check if an error is retryable (HTTP 502, 503, 504, timeouts, connection errors)
+fn is_retryable_error(err: &anyhow::Error) -> bool {
+    // Check for reqwest errors in the error chain
+    if let Some(reqwest_err) = err.downcast_ref::<reqwest::Error>() {
+        // Check for retryable HTTP status codes (502, 503, 504)
+        if let Some(status) = reqwest_err.status() {
+            return status == reqwest::StatusCode::BAD_GATEWAY
+                || status == reqwest::StatusCode::SERVICE_UNAVAILABLE
+                || status == reqwest::StatusCode::GATEWAY_TIMEOUT;
+        }
+        // Check for connection errors or timeouts
+        return reqwest_err.is_timeout() || reqwest_err.is_connect();
+    }
+    false
+}
+
+/// Retry a faucet operation with exponential backoff
+async fn retry_faucet_operation<F, Fut, T>(operation: F) -> anyhow::Result<T>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<T>>,
+{
+    let max_retries = 5;
+    let mut attempt = 0;
+
+    loop {
+        attempt += 1;
+        match operation().await {
+            Ok(result) => return Ok(result),
+            Err(err) if attempt < max_retries && is_retryable_error(&err) => {
+                let backoff_ms = 100 * 2_u64.pow(attempt - 1);
+                warn!(
+                    "Faucet operation failed with retryable error (attempt {}/{}): {:?}. Retrying after {}ms",
+                    attempt, max_retries, err, backoff_ms
+                );
+                tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+            }
+            Err(err) => return Err(err),
+        }
+    }
+}
 
 fn read_json(string: Option<String>, path: Option<PathBuf>) -> anyhow::Result<Vec<u8>> {
     let value = match (string, path) {
@@ -443,103 +477,6 @@ impl Runnable for Job {
                 );
             }
 
-            QueryValidator {
-                address,
-                chain_id,
-                public_key,
-            } => {
-                let context = options
-                    .create_client_context(storage, wallet, signer.into_value())
-                    .await?;
-                let node = context.make_node_provider().make_node(&address)?;
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                println!("Querying validator about chain {chain_id}.\n");
-                let results = context
-                    .query_validator(&address, &node, chain_id, public_key.as_ref())
-                    .await;
-
-                for error in results.errors() {
-                    error!("{}", error);
-                }
-
-                results.print(public_key.as_ref(), Some(&address), None, None);
-
-                if !results.errors().is_empty() {
-                    bail!("Found one or several issue(s) while querying validator {address}");
-                }
-            }
-
-            QueryValidators {
-                chain_id,
-                min_votes,
-            } => {
-                let context = options
-                    .create_client_context(storage, wallet, signer.into_value())
-                    .await?;
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                println!("Querying validators about chain {chain_id}.\n");
-                let local_results = context.query_local_node(chain_id).await?;
-                let chain_client = context.make_chain_client(chain_id).await?;
-                info!("Querying validators about chain {}", chain_id);
-                let result = chain_client.local_committee().await;
-                context.update_wallet_from_client(&chain_client).await?;
-                let committee = result.context("Failed to get local committee")?;
-                info!(
-                    "Using the local set of validators: {:?}",
-                    committee.validators()
-                );
-                let node_provider = context.make_node_provider();
-                let mut validator_results = Vec::new();
-                for (name, state) in committee.validators() {
-                    if min_votes.is_some_and(|votes| state.votes < votes) {
-                        continue; // Skip validator with little voting weight.
-                    }
-                    let address = &state.network_address;
-                    let node = node_provider.make_node(address)?;
-                    let results = context
-                        .query_validator(address, &node, chain_id, Some(name))
-                        .await;
-                    validator_results.push((name, address, state.votes, results));
-                }
-
-                let mut faulty_validators = BTreeMap::<_, Vec<_>>::new();
-                for (name, address, _votes, results) in &validator_results {
-                    for error in results.errors() {
-                        error!("{}", error);
-                        faulty_validators
-                            .entry((*name, *address))
-                            .or_default()
-                            .push(error);
-                    }
-                }
-
-                // Print local node results first (everything)
-                println!("Local Node:");
-                local_results.print(None, None, None, None);
-                println!();
-
-                // Print validator results (only differences from local node)
-                for (name, address, votes, results) in &validator_results {
-                    results.print(
-                        Some(name),
-                        Some(address),
-                        Some(*votes),
-                        Some(&local_results),
-                    );
-                    println!();
-                }
-
-                let num_ok_validators = committee.validators().len() - faulty_validators.len();
-                if !faulty_validators.is_empty() {
-                    println!("{:#?}", faulty_validators);
-                }
-                info!(
-                    "{}/{} validators are OK.",
-                    num_ok_validators,
-                    committee.validators().len()
-                );
-            }
-
             QueryShardInfo { chain_id } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -576,81 +513,9 @@ impl Runnable for Job {
                 }
             }
 
-            SyncValidator {
-                address,
-                mut chains,
-            } => {
-                let time_start = Instant::now();
-                let context = options
-                    .create_client_context(storage, wallet, signer.into_value())
-                    .await?;
+            command @ ResourceControlPolicy { .. } => {
+                info!("Starting operations to change resource control policy");
 
-                if chains.is_empty() {
-                    chains.push(context.default_chain());
-                }
-
-                let validator = context.make_node_provider().make_node(&address)?;
-
-                for chain_id in chains {
-                    let chain = context.make_chain_client(chain_id).await?;
-
-                    Box::pin(chain.sync_validator(validator.clone())).await?;
-                }
-                let time_total = time_start.elapsed();
-                info!(
-                    "Syncing with validator {address} in {} ms",
-                    time_total.as_millis()
-                );
-            }
-
-            SyncAllValidators { mut chains } => {
-                let time_start = Instant::now();
-                let context = Arc::new(
-                    options
-                        .create_client_context(storage, wallet, signer.into_value())
-                        .await?,
-                );
-
-                if chains.is_empty() {
-                    chains.push(context.default_chain());
-                }
-
-                let committee = context.wallet().genesis_config().committee.clone();
-
-                // Parallelize the validator loop - sync all validators concurrently
-                let tasks = committee
-                    .validator_addresses()
-                    .map(|(_validator_name, network_address)| {
-                        let context = context.clone();
-                        let chains = chains.clone();
-                        async move {
-                            let validator =
-                                context.make_node_provider().make_node(network_address)?;
-                            // For each validator, sync all chains sequentially
-                            for chain_id in &chains {
-                                let chain = context.make_chain_client(*chain_id).await?;
-                                Box::pin(chain.sync_validator(validator.clone())).await?;
-                            }
-                            anyhow::Result::<()>::Ok(())
-                        }
-                    })
-                    .collect::<Vec<_>>();
-
-                // Wait for all validator sync tasks to complete
-                futures::future::try_join_all(tasks).await?;
-
-                let time_total = time_start.elapsed();
-                info!(
-                    "Syncing with all validators in {} ms",
-                    time_total.as_millis()
-                );
-            }
-
-            command @ (SetValidator { .. }
-            | RemoveValidator { .. }
-            | ChangeValidators { .. }
-            | ResourceControlPolicy { .. }) => {
-                info!("Starting operations to change validator set");
                 let time_start = Instant::now();
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -658,42 +523,8 @@ impl Runnable for Job {
 
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
-                match &command {
-                    SetValidator {
-                        public_key: _,
-                        account_key: _,
-                        address,
-                        votes: _,
-                        skip_online_check: false,
-                    } => {
-                        let node = context.make_node_provider().make_node(address)?;
-                        context
-                            .check_compatible_version_info(address, &node)
-                            .await?;
-                        context
-                            .check_matching_network_description(address, &node)
-                            .await?;
-                    }
-                    ChangeValidators {
-                        add_validators,
-                        modify_validators,
-                        remove_validators: _,
-                        skip_online_check: false,
-                    } => {
-                        for validator in add_validators.iter().chain(modify_validators.iter()) {
-                            let node =
-                                context.make_node_provider().make_node(&validator.address)?;
-                            context
-                                .check_compatible_version_info(&validator.address, &node)
-                                .await?;
-                            context
-                                .check_matching_network_description(&validator.address, &node)
-                                .await?;
-                        }
-                    }
-                    _ => {}
-                }
-                let admin_id = context.wallet().genesis_admin_chain();
+                // ResourceControlPolicy doesn't need version checks
+                let admin_id = context.wallet.genesis_admin_chain();
                 let chain_client = context.make_chain_client(admin_id).await?;
                 // Synchronize the chain state to make sure we're applying the changes to the
                 // latest committee.
@@ -703,110 +534,11 @@ impl Runnable for Job {
                         let chain_client = chain_client.clone();
                         let command = command.clone();
                         async move {
-                            // Create the new committee.
+                            // Update resource control policy
                             let mut committee = chain_client.local_committee().await.unwrap();
                             let mut policy = committee.policy().clone();
-                            let mut validators = committee.validators().clone();
+                            let validators = committee.validators().clone();
                             match command {
-                                SetValidator {
-                                    public_key,
-                                    account_key,
-                                    address,
-                                    votes,
-                                    skip_online_check: _,
-                                } => {
-                                    validators.insert(
-                                        public_key,
-                                        ValidatorState {
-                                            network_address: address,
-                                            votes,
-                                            account_public_key: account_key,
-                                        },
-                                    );
-                                }
-                                RemoveValidator { public_key } => {
-                                    if validators.remove(&public_key).is_none() {
-                                        error!("Validator {public_key} does not exist; aborting.");
-                                        return Ok(ClientOutcome::Committed(None));
-                                    }
-                                }
-                                ChangeValidators {
-                                    add_validators,
-                                    modify_validators,
-                                    remove_validators,
-                                    skip_online_check: _,
-                                } => {
-                                    // Validate that all validators to add do not already exist.
-                                    for validator in &add_validators {
-                                        if validators.contains_key(&validator.public_key) {
-                                            error!(
-                                                "Cannot add existing validator: {}. Aborting operation.",
-                                                validator.public_key
-                                            );
-                                            return Ok(ClientOutcome::Committed(None));
-                                        }
-                                    }
-                                    // Validate that all validators to modify already exist and are actually modified.
-                                    for validator in &modify_validators {
-                                        match validators.get(&validator.public_key) {
-                                            None => {
-                                                error!(
-                                                    "Cannot modify nonexistent validator: {}. Aborting operation.",
-                                                    validator.public_key
-                                                );
-                                                return Ok(ClientOutcome::Committed(None));
-                                            }
-                                            Some(existing) => {
-                                                // Check that at least one field is different.
-                                                if existing.network_address == validator.address
-                                                    && existing.account_public_key == validator.account_key
-                                                    && existing.votes == validator.votes
-                                                {
-                                                    error!(
-                                                        "Validator {} is not being modified. Aborting operation.",
-                                                        validator.public_key
-                                                    );
-                                                    return Ok(ClientOutcome::Committed(None));
-                                                }
-                                            }
-                                        }
-                                    }
-                                    // Validate that all validators to remove exist.
-                                    for public_key in &remove_validators {
-                                        if !validators.contains_key(public_key) {
-                                            error!(
-                                                "Cannot remove nonexistent validator: {public_key}. Aborting operation."
-                                            );
-                                            return Ok(ClientOutcome::Committed(None));
-                                        }
-                                    }
-                                    // Add validators
-                                    for validator in add_validators {
-                                        validators.insert(
-                                            validator.public_key,
-                                            ValidatorState {
-                                                network_address: validator.address,
-                                                votes: validator.votes,
-                                                account_public_key: validator.account_key,
-                                            },
-                                        );
-                                    }
-                                    // Modify validators
-                                    for validator in modify_validators {
-                                        validators.insert(
-                                            validator.public_key,
-                                            ValidatorState {
-                                                network_address: validator.address,
-                                                votes: validator.votes,
-                                                account_public_key: validator.account_key,
-                                            },
-                                        );
-                                    }
-                                    // Remove validators
-                                    for public_key in remove_validators {
-                                        validators.remove(&public_key);
-                                    }
-                                }
                                 ResourceControlPolicy {
                                     wasm_fuel_unit,
                                     evm_fuel_unit,
@@ -1138,8 +870,12 @@ impl Runnable for Job {
                             let client = client.clone();
                             let faucet_client = faucet_client.clone();
                             join_set.spawn(async move {
-                                client.wallet_init(Some(&faucet_client)).await?;
-                                client.request_chain(&faucet_client, true).await?;
+                                retry_faucet_operation(|| client.wallet_init(Some(&faucet_client)))
+                                    .await?;
+                                retry_faucet_operation(|| {
+                                    client.request_chain(&faucet_client, true)
+                                })
+                                .await?;
                                 Ok::<_, anyhow::Error>(())
                             });
                         }
@@ -1202,8 +938,12 @@ impl Runnable for Job {
                         for client in clients.clone() {
                             let faucet_client = faucet_client.clone();
                             join_set.spawn(async move {
-                                client.wallet_init(Some(&faucet_client)).await?;
-                                client.request_chain(&faucet_client, true).await?;
+                                retry_faucet_operation(|| client.wallet_init(Some(&faucet_client)))
+                                    .await?;
+                                retry_faucet_operation(|| {
+                                    client.request_chain(&faucet_client, true)
+                                })
+                                .await?;
                                 Ok::<_, anyhow::Error>(())
                             });
                         }
@@ -1866,13 +1606,27 @@ impl Runnable for Job {
                 println!("{:#?}", description);
             }
 
+            Validator(validator_command) => {
+                validator::handle_command(
+                    options.context_options.clone(),
+                    storage,
+                    wallet,
+                    signer.into_value(),
+                    options.block_cache_size,
+                    options.execution_state_cache_size,
+                    validator_command.clone(),
+                )
+                .await?;
+            }
+
             CreateGenesisConfig { .. }
             | Keygen
             | Net(_)
             | Storage { .. }
             | Wallet(_)
             | ExtractScriptFromMarkdown { .. }
-            | HelpMarkdown => {
+            | HelpMarkdown
+            | Completion { .. } => {
                 unreachable!()
             }
         }
@@ -2265,6 +2019,8 @@ fn main() -> anyhow::Result<process::ExitCode> {
         builder
     };
 
+    // The default stack size 2 MiB causes some stack overflows in ValidatorUpdater methods.
+    runtime.thread_stack_size(4 << 20);
     if let Some(blocking_threads) = options.tokio_blocking_threads {
         runtime.max_blocking_threads(blocking_threads);
     }
@@ -2312,6 +2068,17 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 pause_after_linera_service,
                 pause_after_gql_mutations,
             )?;
+            Ok(0)
+        }
+
+        ClientCommand::Completion { shell } => {
+            let mut cmd = <ClientOptions as clap::CommandFactory>::command();
+            generate(
+                *shell,
+                &mut cmd,
+                env!("CARGO_BIN_NAME"),
+                &mut std::io::stdout(),
+            );
             Ok(0)
         }
 
@@ -2742,6 +2509,11 @@ Make sure to use a Linera client compatible with this network.
                 Ok(0)
             }
         },
+
+        ClientCommand::Validator(_) => {
+            options.run_with_storage(Job(options.clone())).await??;
+            Ok(0)
+        }
 
         _ => {
             options.run_with_storage(Job(options.clone())).await??;

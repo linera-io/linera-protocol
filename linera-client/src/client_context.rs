@@ -123,7 +123,7 @@ impl ValidatorQueryResults {
                     println!("GraphQL API hash: {}", version_info.graphql_hash);
                 }
                 if ref_version.is_none_or(|ref_v| ref_v.wit_hash != version_info.wit_hash) {
-                    println!("WIT API hash: v{}", version_info.wit_hash);
+                    println!("WIT API hash: {}", version_info.wit_hash);
                 }
                 if ref_version.is_none_or(|ref_v| {
                     (&ref_v.git_commit, ref_v.git_dirty)
@@ -472,7 +472,7 @@ impl<Env: Environment> ClientContext<Env> {
         let chain_description = client.get_chain_description().await?;
         let config = chain_description.config();
 
-        if !config.ownership.verify_owner(&owner) {
+        if !config.ownership.is_owner(&owner) {
             tracing::error!(
                 "The chain with the ID returned by the faucet is not owned by you. \
                 Please make sure you are connecting to a genuine faucet."

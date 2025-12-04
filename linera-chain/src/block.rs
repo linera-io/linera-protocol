@@ -587,6 +587,38 @@ impl Block {
             && *previous_block_hash == self.header.previous_block_hash
     }
 
+    /// Returns whether the outcomes of the block's execution match the passed values.
+    #[cfg(with_testing)]
+    #[expect(clippy::too_many_arguments)]
+    pub fn outcome_matches(
+        &self,
+        expected_messages: Vec<Vec<OutgoingMessage>>,
+        expected_previous_message_blocks: BTreeMap<ChainId, (CryptoHash, BlockHeight)>,
+        expected_previous_event_blocks: BTreeMap<StreamId, (CryptoHash, BlockHeight)>,
+        expected_oracle_responses: Vec<Vec<OracleResponse>>,
+        expected_events: Vec<Vec<Event>>,
+        expected_blobs: Vec<Vec<Blob>>,
+        expected_operation_results: Vec<OperationResult>,
+    ) -> bool {
+        let BlockBody {
+            transactions: _,
+            messages,
+            previous_message_blocks,
+            previous_event_blocks,
+            oracle_responses,
+            events,
+            blobs,
+            operation_results,
+        } = &self.body;
+        *messages == expected_messages
+            && *previous_message_blocks == expected_previous_message_blocks
+            && *previous_event_blocks == expected_previous_event_blocks
+            && *oracle_responses == expected_oracle_responses
+            && *events == expected_events
+            && *blobs == expected_blobs
+            && *operation_results == expected_operation_results
+    }
+
     pub fn into_proposal(self) -> (ProposedBlock, BlockExecutionOutcome) {
         let proposed_block = ProposedBlock {
             chain_id: self.header.chain_id,

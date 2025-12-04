@@ -5,7 +5,7 @@ use std::{collections::HashSet, fmt, iter, path::PathBuf};
 
 use linera_base::{
     data_types::{ApplicationPermissions, TimeDelta},
-    identifiers::{AccountOwner, ApplicationId, ChainId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, GenericApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
     time::Duration,
 };
@@ -127,6 +127,16 @@ pub struct ClientContextOptions {
     #[arg(long, value_parser = util::parse_chain_set)]
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 
+    /// A set of application IDs. If specified, only bundles with at least one message from one of
+    /// these applications will be accepted.
+    #[arg(long, value_parser = util::parse_app_set)]
+    pub reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
+
+    /// A set of application IDs. If specified, only bundles where all messages are from one of
+    /// these applications will be accepted.
+    #[arg(long, value_parser = util::parse_app_set)]
+    pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
+
     /// Enable timing reports during operations
     #[cfg(not(web))]
     #[arg(long)]
@@ -239,6 +249,9 @@ impl ClientContextOptions {
         let message_policy = MessagePolicy::new(
             self.blanket_message_policy,
             self.restrict_chain_ids_to.clone(),
+            self.reject_message_bundles_without_application_ids.clone(),
+            self.reject_message_bundles_with_other_application_ids
+                .clone(),
         );
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
@@ -288,6 +301,10 @@ pub struct ChainOwnershipConfig {
     /// The new regular owners.
     #[arg(long, num_args(0..))]
     pub owners: Vec<AccountOwner>,
+
+    /// The leader of the first single-leader round. If not set, this is random like other rounds.
+    #[arg(long)]
+    pub first_leader: Option<AccountOwner>,
 
     /// Weights for the new owners.
     ///
@@ -345,6 +362,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
         let ChainOwnershipConfig {
             super_owners,
             owners,
+            first_leader,
             owner_weights,
             multi_leader_rounds,
             fast_round_duration,
@@ -374,6 +392,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
         Ok(ChainOwnership {
             super_owners,
             owners,
+            first_leader,
             multi_leader_rounds,
             open_multi_leader_rounds,
             timeout_config,

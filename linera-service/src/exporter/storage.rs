@@ -333,7 +333,7 @@ where
         committee_destinations.into_iter().for_each(|id| {
             let state = match self.shared_storage.destination_states.get(&id) {
                 None => {
-                    tracing::trace!(id=?id, "adding new committee member");
+                    tracing::info!(id=?id, "adding new committee member");
                     #[cfg(with_metrics)]
                     {
                         metrics::DESTINATION_STATE_COUNTER

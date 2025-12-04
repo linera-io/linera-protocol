@@ -1516,13 +1516,15 @@ where
             error: Arc::new(Mutex::new(None)),
         };
         let block_env = self.db.get_contract_block_env()?;
-        let gas_limit = {
+        let (max_size_evm_contract, gas_limit) = {
             let mut runtime = self.db.runtime.lock().unwrap();
-            runtime.remaining_fuel(VmRuntime::Evm)?
+            let gas_limit = runtime.remaining_fuel(VmRuntime::Evm)?;
+            let max_size_evm_contract = runtime.maximum_blob_size()? as usize;
+            (max_size_evm_contract, gas_limit)
         };
         let nonce = self.db.get_nonce(&caller)?;
         let result = {
-            let ctx: revm_context::Context<
+            let mut ctx: revm_context::Context<
                 BlockEnv,
                 _,
                 _,
@@ -1534,6 +1536,7 @@ where
                 SpecId::PRAGUE,
             )
             .with_block(block_env);
+            ctx.cfg.limit_contract_code_size = Some(max_size_evm_contract);
             let instructions = EthInstructions::new_mainnet();
             let mut evm = Evm::new_with_inspector(
                 ctx,
@@ -1685,9 +1688,13 @@ where
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
         };
+        let max_size_evm_contract = {
+            let mut runtime = self.db.runtime.lock().unwrap();
+            runtime.maximum_blob_size()? as usize
+        };
         let nonce = self.db.get_nonce(&caller)?;
         let result_state = {
-            let ctx: revm_context::Context<
+            let mut ctx: revm_context::Context<
                 BlockEnv,
                 _,
                 _,
@@ -1699,6 +1706,7 @@ where
                 SpecId::PRAGUE,
             )
             .with_block(block_env);
+            ctx.cfg.limit_contract_code_size = Some(max_size_evm_contract);
             let instructions = EthInstructions::new_mainnet();
             let mut evm = Evm::new_with_inspector(
                 ctx,

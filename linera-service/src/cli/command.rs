@@ -20,6 +20,8 @@ use linera_client::{
 };
 use linera_rpc::config::CrossChainConfig;
 
+use crate::cli::validator;
+
 const DEFAULT_TOKENS_PER_CHAIN: Amount = Amount::from_millis(100);
 const DEFAULT_TRANSACTIONS_PER_BLOCK: usize = 1;
 const DEFAULT_WRAP_UP_MAX_IN_FLIGHT: usize = 5;
@@ -360,117 +362,10 @@ pub enum ClientCommand {
         chain_id: Option<ChainId>,
     },
 
-    /// Show the version and genesis config hash of a new validator, and print a warning if it is
-    /// incompatible. Also print some information about the given chain while we are at it.
-    QueryValidator {
-        /// The new validator's address.
-        address: String,
-        /// The chain to query. If omitted, query the default chain of the wallet.
-        chain_id: Option<ChainId>,
-        /// The public key of the validator. If given, the signature of the chain query
-        /// info will be checked.
-        #[arg(long)]
-        public_key: Option<ValidatorPublicKey>,
-    },
-
-    /// Show the current set of validators for a chain. Also print some information about
-    /// the given chain while we are at it.
-    QueryValidators {
-        /// The chain to query. If omitted, query the default chain of the wallet.
-        chain_id: Option<ChainId>,
-        /// Skip validators with less voting weight that this.
-        #[arg(long)]
-        min_votes: Option<u64>,
-    },
-
     /// Query validators for shard information about a specific chain.
     QueryShardInfo {
         /// The chain to query shard information for.
         chain_id: ChainId,
-    },
-
-    /// Synchronizes a validator with the local state of chains.
-    SyncValidator {
-        /// The public address of the validator to synchronize.
-        address: String,
-
-        /// The chains to synchronize, or the default chain if empty.
-        #[arg(long, num_args = 0..)]
-        chains: Vec<ChainId>,
-    },
-
-    /// Synchronizes all validators with the local state of chains.
-    SyncAllValidators {
-        /// The chains to synchronize, or the default chain if empty.
-        #[arg(long, num_args = 0..)]
-        chains: Vec<ChainId>,
-    },
-
-    /// Add or modify a validator (admin only)
-    ///
-    /// Deprecated: Use change-validators instead, which allows adding, changing and removing
-    /// any number of validators in a single operation.
-    SetValidator {
-        /// The public key of the validator.
-        #[arg(long)]
-        public_key: ValidatorPublicKey,
-
-        /// The public key of the account controlled by the validator.
-        #[arg(long)]
-        account_key: AccountPublicKey,
-
-        /// Network address
-        #[arg(long)]
-        address: String,
-
-        /// Voting power
-        #[arg(long, default_value = "1")]
-        votes: u64,
-
-        /// Skip the version and genesis config checks.
-        #[arg(long)]
-        skip_online_check: bool,
-    },
-
-    /// Remove a validator (admin only)
-    ///
-    /// Deprecated: Use change-validators instead, which allows adding, changing and removing
-    /// any number of validators in a single operation.
-    RemoveValidator {
-        /// The public key of the validator.
-        #[arg(long)]
-        public_key: ValidatorPublicKey,
-    },
-
-    /// Add, modify, and/or remove multiple validators in a single epoch (admin only)
-    ///
-    /// This command allows you to make multiple validator changes (additions, modifications,
-    /// and removals) in a single new epoch, avoiding the creation of unnecessary short-lived epochs.
-    ChangeValidators {
-        /// Validators to add, specified as "public_key,account_key,address,votes".
-        /// Fails if the validator already exists in the committee.
-        /// Can be specified multiple times.
-        /// Example: --add "public_key1,account_key1,address1,1"
-        #[arg(long = "add", value_name = "VALIDATOR_SPEC")]
-        add_validators: Vec<ValidatorToAdd>,
-
-        /// Validators to modify, specified as "public_key,account_key,address,votes".
-        /// Fails if the validator does not exist in the committee.
-        /// Can be specified multiple times.
-        /// Example: --modify "public_key1,account_key1,address1,2"
-        #[arg(long = "modify", value_name = "VALIDATOR_SPEC")]
-        modify_validators: Vec<ValidatorToAdd>,
-
-        /// Validators to remove, specified by their public key.
-        /// Fails if the validator does not exist in the committee.
-        /// Can be specified multiple times.
-        /// Example: --remove public_key1 --remove public_key2
-        #[arg(long = "remove")]
-        remove_validators: Vec<ValidatorPublicKey>,
-
-        /// Skip the version and genesis config checks for added and modified validators.
-        #[arg(long)]
-        skip_online_check: bool,
     },
 
     /// Deprecates all committees up to and including the specified one.
@@ -1025,6 +920,10 @@ pub enum ClientCommand {
     #[command(subcommand)]
     Net(NetCommand),
 
+    /// Manage validators in the committee.
+    #[command(subcommand)]
+    Validator(validator::ValidatorCommand),
+
     /// Operation on the storage.
     #[command(subcommand)]
     Storage(DatabaseToolCommand),
@@ -1048,6 +947,13 @@ pub enum ClientCommand {
         #[arg(long, default_value = DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, value_parser = util::parse_secs)]
         pause_after_gql_mutations: Duration,
     },
+
+    /// Generate shell completion scripts
+    Completion {
+        /// The shell to generate completions for
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
 }
 
 impl ClientCommand {
@@ -1068,14 +974,7 @@ impl ClientCommand {
             | ClientCommand::SyncBalance { .. }
             | ClientCommand::Sync { .. }
             | ClientCommand::ProcessInbox { .. }
-            | ClientCommand::QueryValidator { .. }
-            | ClientCommand::QueryValidators { .. }
             | ClientCommand::QueryShardInfo { .. }
-            | ClientCommand::SyncValidator { .. }
-            | ClientCommand::SyncAllValidators { .. }
-            | ClientCommand::SetValidator { .. }
-            | ClientCommand::RemoveValidator { .. }
-            | ClientCommand::ChangeValidators { .. }
             | ClientCommand::ResourceControlPolicy { .. }
             | ClientCommand::RevokeEpochs { .. }
             | ClientCommand::CreateGenesisConfig { .. }
@@ -1089,6 +988,7 @@ impl ClientCommand {
             | ClientCommand::Assign { .. }
             | ClientCommand::Wallet { .. }
             | ClientCommand::Chain { .. }
+            | ClientCommand::Validator { .. }
             | ClientCommand::RetryPendingBlock { .. } => "client".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Single { .. }) => "single-benchmark".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Multi { .. }) => "multi-benchmark".into(),
@@ -1098,9 +998,9 @@ impl ClientCommand {
             ClientCommand::Storage { .. } => "storage".into(),
             ClientCommand::Service { port, .. } => format!("service-{port}").into(),
             ClientCommand::Faucet { .. } => "faucet".into(),
-            ClientCommand::HelpMarkdown | ClientCommand::ExtractScriptFromMarkdown { .. } => {
-                "tool".into()
-            }
+            ClientCommand::HelpMarkdown
+            | ClientCommand::ExtractScriptFromMarkdown { .. }
+            | ClientCommand::Completion { .. } => "tool".into(),
         }
     }
 }
