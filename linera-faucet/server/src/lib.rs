@@ -847,10 +847,7 @@ where
     C: ClientContext + 'static,
 {
     /// Creates a new instance of the faucet service.
-    pub async fn new(
-        config: FaucetConfig,
-        context: C,
-    ) -> anyhow::Result<Self> {
+    pub async fn new(config: FaucetConfig, context: C) -> anyhow::Result<Self> {
         let storage = context.storage().clone();
         let client = context.make_chain_client(config.chain_id).await?;
         let context = Arc::new(Mutex::new(context));
