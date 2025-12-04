@@ -93,7 +93,7 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
         linera_core::client::DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     chain_worker_ttl: Duration::from_secs(30),
     sender_chain_worker_ttl: Duration::from_millis(200),
-    grace_period: linera_core::DEFAULT_GRACE_PERIOD,
+    quorum_grace_period: linera_core::DEFAULT_QUORUM_GRACE_PERIOD,
     max_joined_tasks: 100,
     max_accepted_latency_ms: linera_core::client::requests_scheduler::MAX_ACCEPTED_LATENCY_MS,
     cache_ttl_ms: linera_core::client::requests_scheduler::CACHE_TTL_MS,

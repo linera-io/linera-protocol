@@ -1549,11 +1549,11 @@ where
             outcome,
         } = content;
 
-        if block.timestamp.duration_since(local_time) > self.config.grace_period {
+        if block.timestamp.duration_since(local_time) > self.config.block_time_grace_period {
             return Err(WorkerError::InvalidTimestamp {
                 local_time,
                 block_timestamp: block.timestamp,
-                grace_period: self.config.grace_period,
+                block_time_grace_period: self.config.block_time_grace_period,
             });
         }
 
