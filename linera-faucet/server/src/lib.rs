@@ -836,7 +836,7 @@ pub struct FaucetConfig {
     pub chain_id: ChainId,
     pub amount: Amount,
     pub end_timestamp: Timestamp,
-    pub genesis_config: Arc<GenesisConfig>,
+    pub genesis_config: std::sync::Arc<GenesisConfig>,
     pub chain_listener_config: ChainListenerConfig,
     pub storage_path: PathBuf,
     pub max_batch_size: usize,
@@ -850,8 +850,8 @@ where
     pub async fn new(
         config: FaucetConfig,
         context: C,
-        storage: <C::Environment as linera_core::Environment>::Storage,
     ) -> anyhow::Result<Self> {
+        let storage = context.storage().clone();
         let client = context.make_chain_client(config.chain_id).await?;
         let context = Arc::new(Mutex::new(context));
         let start_timestamp = client.storage_client().clock().current_time();
@@ -879,11 +879,11 @@ where
 
         Ok(Self {
             chain_id: config.chain_id,
+            storage,
             context,
             client,
             genesis_config: config.genesis_config,
             config: config.chain_listener_config,
-            storage,
             port: config.port,
             #[cfg(feature = "metrics")]
             metrics_port: config.metrics_port,

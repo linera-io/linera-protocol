@@ -27,7 +27,6 @@ use crate::{
 
 struct ClientContext {
     client: Arc<Client<environment::Test>>,
-    genesis_config: GenesisConfig,
 }
 
 impl chain_listener::ClientContext for ClientContext {
@@ -39,10 +38,6 @@ impl chain_listener::ClientContext for ClientContext {
 
     fn storage(&self) -> &environment::TestStorage {
         self.client.storage_client()
-    }
-
-    fn genesis_config(&self) -> &GenesisConfig {
-        &self.genesis_config
     }
 
     fn client(&self) -> &Arc<linera_core::client::Client<Self::Environment>> {
@@ -128,7 +123,6 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             10_000,
             linera_core::client::RequestsSchedulerConfig::default(),
         )),
-        genesis_config,
     };
     context
         .update_wallet_for_new_chain(chain_id0, Some(owner), clock.current_time(), epoch0)
@@ -200,7 +194,6 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     let storage = builder.make_storage().await?;
 
     let context = ClientContext {
-        genesis_config,
         client: Arc::new(Client::new(
             environment::Impl {
                 storage: storage.clone(),

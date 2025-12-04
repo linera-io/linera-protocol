@@ -522,7 +522,7 @@ impl Runnable for Job {
                     .await?;
 
                 // ResourceControlPolicy doesn't need version checks
-                let admin_id = context.wallet().genesis_config().admin_id();
+                let admin_id = context.admin_chain();
                 let chain_client = context.make_chain_client(admin_id).await?;
                 // Synchronize the chain state to make sure we're applying the changes to the
                 // latest committee.
@@ -1165,8 +1165,10 @@ impl Runnable for Job {
                 storage_path,
                 max_batch_size,
             } => {
+                let genesis_config = wallet.genesis_config().clone();
+
                 let context = options
-                    .create_client_context(storage.clone(), wallet, signer.into_value())
+                    .create_client_context(storage, wallet, signer.into_value())
                     .await?;
 
                 let chain_id = if let Some(chain_id) = chain_id {
@@ -1180,7 +1182,6 @@ impl Runnable for Job {
                         u64::try_from(et.timestamp_micros()).expect("End timestamp before 1970");
                     Timestamp::from(micros)
                 });
-                let genesis_config = Arc::new(context.wallet().genesis_config().clone());
                 let config = FaucetConfig {
                     port,
                     #[cfg(with_metrics)]
@@ -1188,12 +1189,12 @@ impl Runnable for Job {
                     chain_id,
                     amount,
                     end_timestamp,
-                    genesis_config,
+                    genesis_config: Arc::new(genesis_config),
                     chain_listener_config: config,
                     storage_path,
                     max_batch_size,
                 };
-                let faucet = FaucetService::new(config, context, storage).await?;
+                let faucet = FaucetService::new(config, context).await?;
                 let cancellation_token = CancellationToken::new();
                 let child_token = cancellation_token.child_token();
                 tokio::spawn(listen_for_shutdown_signals(cancellation_token));

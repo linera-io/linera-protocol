@@ -350,6 +350,11 @@ impl<Env: Environment> Client<Env> {
         }
     }
 
+    /// Returns the chain ID of the admin chain.
+    pub fn admin_chain(&self) -> ChainId {
+        self.admin_id
+    }
+
     /// Returns the storage client used by this client's local node.
     pub fn storage_client(&self) -> &Env::Storage {
         self.environment.storage()

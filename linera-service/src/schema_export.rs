@@ -17,7 +17,6 @@ use linera_chain::{
 };
 use linera_client::{
     chain_listener::{ChainListenerConfig, ClientContext},
-    config::GenesisConfig,
     Error,
 };
 use linera_core::{
@@ -200,10 +199,6 @@ impl ClientContext for DummyContext {
         linera_base::crypto::InMemorySigner,
         linera_core::wallet::Memory,
     >;
-
-    fn genesis_config(&self) -> &GenesisConfig {
-        unimplemented!()
-    }
 
     fn wallet(&self) -> &linera_core::wallet::Memory {
         unimplemented!()

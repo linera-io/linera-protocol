@@ -220,10 +220,6 @@ pub struct ClientContext<Env: Environment> {
 impl<Env: Environment> chain_listener::ClientContext for ClientContext<Env> {
     type Environment = Env;
 
-    fn genesis_config(&self) -> &GenesisConfig {
-        &self.genesis_config
-    }
-
     fn wallet(&self) -> &Env::Wallet {
         self.client.wallet()
     }
@@ -344,6 +340,11 @@ impl<Env: Environment> ClientContext<Env> {
         self.client.wallet()
     }
 
+    /// Returns the ID of the admin chain.
+    pub fn admin_chain(&self) -> ChainId {
+        self.client.admin_chain()
+    }
+
     /// Retrieve the default account. Current this is the common account of the default
     /// chain.
     pub fn default_account(&self) -> Account {
@@ -357,7 +358,7 @@ impl<Env: Environment> ClientContext<Env> {
     }
 
     pub async fn first_non_admin_chain(&self) -> Result<ChainId, Error> {
-        let admin_id = self.genesis_config.admin_id();
+        let admin_id = self.admin_chain();
         std::pin::pin!(self
             .wallet()
             .chain_ids()

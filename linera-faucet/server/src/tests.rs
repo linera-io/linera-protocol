@@ -11,7 +11,7 @@ use linera_base::{
     data_types::{Amount, Epoch, Timestamp},
     identifiers::{AccountOwner, ChainId},
 };
-use linera_client::{chain_listener, config::GenesisConfig};
+use linera_client::chain_listener;
 use linera_core::{
     client::ChainClient,
     environment,
@@ -33,10 +33,6 @@ impl chain_listener::ClientContext for ClientContext {
     type Environment = environment::Test;
 
     fn wallet(&self) -> &environment::TestWallet {
-        unimplemented!()
-    }
-
-    fn genesis_config(&self) -> &GenesisConfig {
         unimplemented!()
     }
 
