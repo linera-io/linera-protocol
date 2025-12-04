@@ -861,6 +861,16 @@ where
             previous_event_blocks.insert(stream, (hash, height));
         }
 
+        // Update the execution state with the new block's recipients and event streams.
+        for recipient in block_execution_tracker.recipients() {
+            chain
+                .previous_message_blocks
+                .insert(&recipient, block.height)?;
+        }
+        for stream in block_execution_tracker.event_streams() {
+            chain.previous_event_blocks.insert(&stream, block.height)?;
+        }
+
         let state_hash = {
             #[cfg(with_metrics)]
             let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
@@ -959,18 +969,8 @@ where
         let block = block.inner().inner();
         self.execution_state_hash.set(Some(block.header.state_hash));
         let updated_streams = self.process_emitted_events(block).await?;
-        let recipients = self.process_outgoing_messages(block).await?;
+        self.process_outgoing_messages(block).await?;
 
-        for recipient in recipients {
-            self.execution_state
-                .previous_message_blocks
-                .insert(&recipient, block.header.height)?;
-        }
-        for event in block.body.events.iter().flatten() {
-            self.execution_state
-                .previous_event_blocks
-                .insert(&event.stream_id, block.header.height)?;
-        }
         // Last, reset the consensus state based on the current ownership.
         self.reset_chain_manager(block.header.height.try_add_one()?, local_time)?;
 
