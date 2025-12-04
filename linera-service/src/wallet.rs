@@ -100,7 +100,7 @@ impl ChainDetails {
 
 pub struct Wallet(persistent::File<Data>);
 
-// TODO(TODO): `persistent` is no longer necessary here, we can move the locking
+// TODO(#5081): `persistent` is no longer necessary here, we can move the locking
 // logic right here
 
 impl linera_core::Wallet for Wallet {
@@ -211,8 +211,8 @@ impl Wallet {
         self.0.genesis_config.admin_id()
     }
 
-    // TODO(TODO): now that wallets only store chains, there's not much point in allowing
-    // wallets with no default chain (i.e. no chains)
+    // TODO(#5082): now that wallets only store chains, not keys, there's not much point in
+    // allowing wallets with no default chain (i.e. no chains)
     pub fn default_chain(&self) -> Option<ChainId> {
         *self.0.default.read().unwrap()
     }

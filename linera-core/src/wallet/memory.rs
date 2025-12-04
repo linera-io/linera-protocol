@@ -6,6 +6,11 @@ use linera_base::identifiers::ChainId;
 
 use super::{Chain, Wallet};
 
+/// A basic implementation of `Wallet` that doesn't persist anything and merely tracks the
+/// chains in memory.
+///
+/// This can be used as-is as an ephemeral wallet for testing or ephemeral clients, or as
+/// a building block for more complex wallets that layer persistence on top of it.
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Memory(papaya::HashMap<ChainId, Chain>);
 

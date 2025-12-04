@@ -68,8 +68,7 @@ impl Chain {
     }
 }
 
-// TODO(TODO) the boundary between this and `linera_service::Wallet` is malleable
-// TODO(TODO) document
+/// A trait for the wallet (i.e. set of chain states) tracked by the client.
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait Wallet {
     type Error: std::error::Error + Send + Sync;

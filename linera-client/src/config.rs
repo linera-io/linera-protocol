@@ -220,8 +220,6 @@ mod test {
 
     impl GenesisConfig {
         /// Create a new local `GenesisConfig` for testing.
-        // TODO(TODO) if we move `GenesisConfig` into `linera-core` this can be a method
-        // on `TestBuilder`
         pub fn new_testing(builder: &TestBuilder<MemoryStorageBuilder>) -> Self {
             let network = ValidatorPublicNetworkPreConfig {
                 protocol: NetworkProtocol::Simple(TransportProtocol::Tcp),

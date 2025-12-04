@@ -204,14 +204,14 @@ impl ValidatorQueryResults {
 
 pub struct ClientContext<Env: Environment> {
     pub client: Arc<Client<Env>>,
-    // TODO(TODO) move this into the `Wallet` trait
+    // TODO(#5083): this doesn't really need to be stored
     pub genesis_config: crate::config::GenesisConfig,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
     pub retry_delay: Duration,
     pub max_retries: u32,
     pub chain_listeners: JoinSet,
-    // TODO(TODO) move this into the upstream UI layers (maybe just the CLI)
+    // TODO(#5082): move this into the upstream UI layers (maybe just the CLI)
     pub default_chain: Option<ChainId>,
     #[cfg(not(web))]
     pub client_metrics: Option<ClientMetrics>,
@@ -333,7 +333,7 @@ where
 }
 
 impl<Env: Environment> ClientContext<Env> {
-    // TODO(TODO) this (and other injected dependencies) should not be re-exposed by the
+    // TODO(#5084) this (and other injected dependencies) should not be re-exposed by the
     // client interface
     /// Returns a reference to the wallet.
     pub fn wallet(&self) -> &Env::Wallet {
@@ -369,7 +369,7 @@ impl<Env: Environment> ClientContext<Env> {
         .map_err(Error::wallet)
     }
 
-    // TODO(TODO) this should match the `NodeProvider` from the `Environment`
+    // TODO(#5084) this should match the `NodeProvider` from the `Environment`
     pub fn make_node_provider(&self) -> NodeProvider {
         NodeProvider::new(self.make_node_options())
     }
