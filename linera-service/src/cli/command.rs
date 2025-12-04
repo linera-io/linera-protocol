@@ -934,6 +934,13 @@ pub enum ClientCommand {
         #[arg(long, default_value = DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, value_parser = util::parse_secs)]
         pause_after_gql_mutations: Duration,
     },
+
+    /// Generate shell completion scripts
+    Completion {
+        /// The shell to generate completions for
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
 }
 
 impl ClientCommand {
@@ -977,9 +984,9 @@ impl ClientCommand {
             ClientCommand::Storage { .. } => "storage".into(),
             ClientCommand::Service { port, .. } => format!("service-{port}").into(),
             ClientCommand::Faucet { .. } => "faucet".into(),
-            ClientCommand::HelpMarkdown | ClientCommand::ExtractScriptFromMarkdown { .. } => {
-                "tool".into()
-            }
+            ClientCommand::HelpMarkdown
+            | ClientCommand::ExtractScriptFromMarkdown { .. }
+            | ClientCommand::Completion { .. } => "tool".into(),
         }
     }
 }
