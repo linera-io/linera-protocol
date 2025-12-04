@@ -721,14 +721,14 @@ impl<Env: Environment> ChainClient<Env> {
         let update_validators_start = linera_base::time::Instant::now();
         // Communicate the new certificate now.
         if let Some(old_committee) = old_committee {
-            self.communicate_chain_updates(old_committee, latest_certificate.clone())
+            Box::pin(self.communicate_chain_updates(old_committee, latest_certificate.clone()))
                 .await?
         };
         if let Ok(new_committee) = self.local_committee().await {
             if Some(&new_committee) != old_committee {
                 // If the configuration just changed, communicate to the new committee as well.
                 // (This is actually more important that updating the previous committee.)
-                self.communicate_chain_updates(&new_committee, latest_certificate)
+                Box::pin(self.communicate_chain_updates(&new_committee, latest_certificate))
                     .await?;
             }
         }
@@ -1603,7 +1603,7 @@ impl<Env: Environment> ChainClient<Env> {
         amount: Amount,
         account: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
-        self.transfer(from, amount, account).await
+        Box::pin(self.transfer(from, amount, account)).await
     }
 
     /// Burns tokens (transfer to a special address).
@@ -1615,7 +1615,7 @@ impl<Env: Environment> ChainClient<Env> {
         amount: Amount,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
         let recipient = Account::burn_address(self.chain_id);
-        self.transfer(owner, amount, recipient).await
+        Box::pin(self.transfer(owner, amount, recipient)).await
     }
 
     #[instrument(level = "trace")]
@@ -1762,21 +1762,24 @@ impl<Env: Environment> ChainClient<Env> {
         let submit_block_proposal_start = linera_base::time::Instant::now();
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
-            self.client
-                .submit_block_proposal(&committee, proposal, hashed_value)
-                .await?
+            Box::pin(
+                self.client
+                    .submit_block_proposal(&committee, proposal, hashed_value),
+            )
+            .await?
         } else {
             let hashed_value = ValidatedBlock::new(block);
-            let certificate = self
-                .client
-                .submit_block_proposal(&committee, proposal, hashed_value.clone())
-                .await?;
-            self.client.finalize_block(&committee, certificate).await?
+            let certificate = Box::pin(self.client.submit_block_proposal(
+                &committee,
+                proposal,
+                hashed_value.clone(),
+            ))
+            .await?;
+            Box::pin(self.client.finalize_block(&committee, certificate)).await?
         };
         self.send_timing(submit_block_proposal_start, TimingType::SubmitBlockProposal);
         debug!(round = %certificate.round, "Sending confirmed block to validators");
-        self.update_validators(Some(&committee), Some(certificate.clone()))
-            .await?;
+        Box::pin(self.update_validators(Some(&committee), Some(certificate.clone()))).await?;
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
@@ -1826,12 +1829,9 @@ impl<Env: Environment> ChainClient<Env> {
             "Finalizing locking block"
         );
         let committee = self.local_committee().await?;
-        let certificate = self
-            .client
-            .finalize_block(&committee, certificate.clone())
-            .await?;
-        self.update_validators(Some(&committee), Some(certificate.clone()))
-            .await?;
+        let certificate =
+            Box::pin(self.client.finalize_block(&committee, certificate.clone())).await?;
+        Box::pin(self.update_validators(Some(&committee), Some(certificate.clone()))).await?;
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
@@ -2025,7 +2025,7 @@ impl<Env: Environment> ChainClient<Env> {
                 application_permissions: application_permissions.clone(),
             };
             let operation = Operation::system(SystemOperation::OpenChain(config));
-            let certificate = match self.execute_block(vec![operation], vec![]).await? {
+            let certificate = match Box::pin(self.execute_block(vec![operation], vec![])).await? {
                 ExecuteBlockOutcome::Executed(certificate) => certificate,
                 ExecuteBlockOutcome::Conflict(_) => continue,
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
@@ -2145,15 +2145,14 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<ClientOutcome<(ApplicationId<A>, ConfirmedBlockCertificate)>, Error> {
         let instantiation_argument = serde_json::to_vec(instantiation_argument)?;
         let parameters = serde_json::to_vec(parameters)?;
-        Ok(self
-            .create_application_untyped(
-                module_id.forget_abi(),
-                parameters,
-                instantiation_argument,
-                required_application_ids,
-            )
-            .await?
-            .map(|(app_id, cert)| (app_id.with_abi(), cert)))
+        Ok(Box::pin(self.create_application_untyped(
+            module_id.forget_abi(),
+            parameters,
+            instantiation_argument,
+            required_application_ids,
+        ))
+        .await?
+        .map(|(app_id, cert)| (app_id.with_abi(), cert)))
     }
 
     /// Creates an application by instantiating some bytecode.
