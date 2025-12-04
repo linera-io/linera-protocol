@@ -827,6 +827,9 @@ where
             .multi_get_pairs(recipients)
             .await?
         {
+            chain
+                .previous_message_blocks
+                .insert(&recipient, block.height)?;
             if let Some(height) = height {
                 let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                 indices.push(index);
@@ -846,6 +849,7 @@ where
         let mut stream_heights = Vec::new();
         let mut indices = Vec::new();
         for (stream, height) in chain.previous_event_blocks.multi_get_pairs(streams).await? {
+            chain.previous_event_blocks.insert(&stream, block.height)?;
             if let Some(height) = height {
                 let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                 indices.push(index);
@@ -959,18 +963,8 @@ where
         let block = block.inner().inner();
         self.execution_state_hash.set(Some(block.header.state_hash));
         let updated_streams = self.process_emitted_events(block).await?;
-        let recipients = self.process_outgoing_messages(block).await?;
+        self.process_outgoing_messages(block).await?;
 
-        for recipient in recipients {
-            self.execution_state
-                .previous_message_blocks
-                .insert(&recipient, block.header.height)?;
-        }
-        for event in block.body.events.iter().flatten() {
-            self.execution_state
-                .previous_event_blocks
-                .insert(&event.stream_id, block.header.height)?;
-        }
         // Last, reset the consensus state based on the current ownership.
         self.reset_chain_manager(block.header.height.try_add_one()?, local_time)?;
 
