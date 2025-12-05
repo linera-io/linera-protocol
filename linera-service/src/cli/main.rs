@@ -88,7 +88,7 @@ use tempfile::NamedTempFile;
 use tokio::{
     io::AsyncWriteExt,
     process::{ChildStdin, Command},
-    sync::oneshot,
+    sync::{mpsc, oneshot},
     task::JoinSet,
     time,
 };
@@ -777,6 +777,7 @@ impl Runnable for Job {
                         shared_context.clone(),
                         storage.clone(),
                         shutdown_notifier.clone(),
+                        mpsc::unbounded_channel().1,
                     );
                     linera_client::benchmark::Benchmark::run_benchmark(
                         bps,
@@ -1160,6 +1161,8 @@ impl Runnable for Job {
 
                 let context = Arc::new(Mutex::new(context));
 
+                let (command_sender, command_receiver) = mpsc::unbounded_channel();
+
                 if let Some(controller_id) = controller_application_id {
                     // For the controller case, we share the context via Arc so the
                     // controller can spawn new processors for different chains.
@@ -1171,6 +1174,7 @@ impl Runnable for Job {
                         chain_client,
                         cancellation_token.clone(),
                         operators,
+                        command_sender,
                     );
 
                     tokio::spawn(controller.run());
@@ -1184,7 +1188,7 @@ impl Runnable for Job {
                     Some(chain_id),
                     context,
                 );
-                service.run(cancellation_token).await?;
+                service.run(cancellation_token, command_receiver).await?;
             }
 
             Faucet {
