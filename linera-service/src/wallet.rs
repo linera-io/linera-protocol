@@ -131,13 +131,17 @@ impl linera_core::Wallet for Wallet {
         id: ChainId,
         chain: wallet::Chain,
     ) -> Result<Option<wallet::Chain>, Self::Error> {
-        self.try_insert(id, chain)
+        let chain = self.try_insert(id, chain);
+        self.save()?;
+        Ok(chain)
     }
 }
 
 impl Extend<(ChainId, wallet::Chain)> for Wallet {
     fn extend<It: IntoIterator<Item = (ChainId, wallet::Chain)>>(&mut self, chains: It) {
-        self.0.chains.extend(chains);
+        for (id, chain) in chains {
+            let _chain = self.try_insert(id, chain);
+        }
     }
 }
 
@@ -148,6 +152,12 @@ impl Wallet {
 
     pub fn remove(&self, id: ChainId) -> Result<Option<wallet::Chain>, persistent::file::Error> {
         let chain = self.0.chains.remove(id);
+        {
+            let mut default = self.0.default.write().unwrap();
+            if *default == Some(id) {
+                *default = None;
+            }
+        }
         self.0.save()?;
         Ok(chain)
     }
@@ -168,8 +178,11 @@ impl Wallet {
         id: ChainId,
         chain: wallet::Chain,
     ) -> Result<Option<wallet::Chain>, persistent::file::Error> {
-        let old_chain = self.0.chains.insert(id, chain);
-        self.try_set_default(id);
+        let has_owner = chain.owner.is_some();
+        let old_chain = self.0.chains.insert(id, chain.clone());
+        if has_owner {
+            self.try_set_default(id);
+        }
         self.0.save()?;
         Ok(old_chain)
     }
@@ -178,11 +191,12 @@ impl Wallet {
         &self,
         id: ChainId,
         chain: wallet::Chain,
-    ) -> Result<Option<wallet::Chain>, persistent::file::Error> {
+    ) -> Option<wallet::Chain> {
         let chain = self.0.chains.try_insert(id, chain);
-        self.try_set_default(id);
-        self.0.save()?;
-        Ok(chain)
+        if chain.is_none() {
+            self.try_set_default(id);
+        }
+        chain
     }
 
     pub fn create(
