@@ -3,5 +3,6 @@
 
 //! Common ABIs that may have multiple implementations.
 
+pub mod controller;
 pub mod evm;
 pub mod fungible;

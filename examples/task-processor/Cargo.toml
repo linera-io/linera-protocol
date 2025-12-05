@@ -1,0 +1,21 @@
+[package]
+name = "task-processor"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+async-graphql.workspace = true
+linera-sdk.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+linera-sdk = { workspace = true, features = ["test"] }
+
+[[bin]]
+name = "task_processor_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "task_processor_service"
+path = "src/service.rs"
