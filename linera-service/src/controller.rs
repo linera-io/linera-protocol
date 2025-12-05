@@ -1,15 +1,25 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use futures::{lock::Mutex, stream::StreamExt, FutureExt};
 use linera_base::identifiers::{ApplicationId, ChainId};
-use linera_client::chain_listener::ClientContext;
-use linera_core::{client::ChainClient, node::NotificationStream, worker::Reason};
+use linera_client::chain_listener::{ClientContext, ListenerCommand};
+use linera_core::{
+    client::{ChainClient, ListeningMode},
+    node::NotificationStream,
+    worker::Reason,
+};
 use linera_sdk::abis::controller::{LocalWorkerState, Operation, WorkerCommand};
 use serde_json::json;
-use tokio::{select, sync::mpsc};
+use tokio::{
+    select,
+    sync::mpsc::{self, UnboundedSender},
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
@@ -34,6 +44,7 @@ pub struct Controller<Ctx: ClientContext> {
     notifications: NotificationStream,
     operators: OperatorMap,
     processors: BTreeMap<ChainId, ProcessorHandle>,
+    command_sender: UnboundedSender<ListenerCommand>,
 }
 
 impl<Ctx> Controller<Ctx>
@@ -49,6 +60,7 @@ where
         chain_client: ChainClient<Ctx::Environment>,
         cancellation_token: CancellationToken,
         operators: OperatorMap,
+        command_sender: UnboundedSender<ListenerCommand>,
     ) -> Self {
         let notifications = chain_client.subscribe().expect("client subscription");
         Self {
@@ -60,6 +72,7 @@ where
             notifications,
             operators,
             processors: BTreeMap::new(),
+            command_sender,
         }
     }
 
@@ -115,6 +128,8 @@ where
                 .push(service.application_id);
         }
 
+        let old_chains: BTreeSet<_> = self.processors.keys().cloned().collect();
+
         // Update or spawn processors for each chain
         for (service_chain_id, application_ids) in chain_apps {
             self.update_or_spawn_processor(service_chain_id, application_ids)
@@ -125,25 +140,41 @@ where
         // This effectively tells them to stop processing applications
         let active_chains: std::collections::BTreeSet<_> =
             state.local_services.iter().map(|s| s.chain_id).collect();
-        let stale_chains: Vec<_> = self
+        let stale_chains: BTreeSet<_> = self
             .processors
             .keys()
             .filter(|chain_id| !active_chains.contains(chain_id))
             .cloned()
             .collect();
-        for chain_id in stale_chains {
-            if let Some(handle) = self.processors.get(&chain_id) {
+        for chain_id in &stale_chains {
+            if let Some(handle) = self.processors.get(chain_id) {
                 let update = Update {
                     application_ids: Vec::new(),
                 };
                 if handle.update_sender.send(update).is_err() {
                     // Processor has stopped, remove it
-                    self.processors.remove(&chain_id);
+                    self.processors.remove(chain_id);
                 }
             }
         }
 
-        // TODO: modify the chains followed by this wallet to match state.local_chains.
+        let new_chains: BTreeMap<_, _> = active_chains
+            .difference(&old_chains)
+            .map(|chain_id| (*chain_id, ListeningMode::FullChain))
+            .collect();
+
+        if let Err(err) = self
+            .command_sender
+            .send(ListenerCommand::Listen(new_chains))
+        {
+            error!(%err, "error sending a command to chain listener");
+        }
+        if let Err(err) = self
+            .command_sender
+            .send(ListenerCommand::StopListening(stale_chains))
+        {
+            error!(%err, "error sending a command to chain listener");
+        }
     }
 
     async fn register_worker(&mut self) {

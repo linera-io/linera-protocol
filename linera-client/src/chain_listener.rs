@@ -29,8 +29,9 @@ use linera_core::{
     Environment, Wallet,
 };
 use linera_storage::{Clock as _, Storage as _};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, instrument, warn, Instrument as _};
+use tracing::{debug, error, info, instrument, warn, Instrument as _};
 
 use crate::error::{self, Error};
 
@@ -186,6 +187,14 @@ impl<C: ClientContext> ListeningClient<C> {
     }
 }
 
+/// Commands to the chain listener.
+pub enum ListenerCommand {
+    /// Command: start listening to the given chains, using specified listening modes.
+    Listen(BTreeMap<ChainId, ListeningMode>),
+    /// Command: stop listening to the given chains.
+    StopListening(BTreeSet<ChainId>),
+}
+
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
 /// appropriately.
 pub struct ChainListener<C: ClientContext> {
@@ -197,6 +206,8 @@ pub struct ChainListener<C: ClientContext> {
     /// Events emitted on the _publishing chain_ are of interest to the _subscriber chains_.
     event_subscribers: BTreeMap<ChainId, BTreeSet<ChainId>>,
     cancellation_token: CancellationToken,
+    /// The channel through which the listener can receive commands.
+    command_receiver: UnboundedReceiver<ListenerCommand>,
 }
 
 impl<C: ClientContext + 'static> ChainListener<C> {
@@ -206,6 +217,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         context: Arc<Mutex<C>>,
         storage: <C::Environment as Environment>::Storage,
         cancellation_token: CancellationToken,
+        command_receiver: UnboundedReceiver<ListenerCommand>,
     ) -> Self {
         Self {
             storage,
@@ -214,6 +226,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             listening: Default::default(),
             event_subscribers: Default::default(),
             cancellation_token,
+            command_receiver,
         }
     }
 
@@ -534,11 +547,38 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 () = self.storage.clock().sleep_until(timeout).fuse() => {
                     return Ok(Action::ProcessInbox(timeout_chain_id));
                 }
+                maybe_command = self.command_receiver.recv().fuse() => {
+                    let Some(command) = maybe_command else {
+                        debug!("command_receiver closed");
+                        continue;
+                    };
+                    match command {
+                        ListenerCommand::Listen(new_chains) => {
+                            debug!(?new_chains, "received command to listen to new chains");
+                            self.listen_recursively(new_chains).await?;
+                        }
+                        ListenerCommand::StopListening(chains) => {
+                            debug!(?chains, "received command to stop listening to chains");
+                            for chain_id in chains {
+                                debug!(%chain_id, "stopping the listener for chain");
+                                let Some(listening_client) = self.listening.remove(&chain_id) else {
+                                    error!(%chain_id, "attempted to drop a non-existent listener");
+                                    continue;
+                                };
+                                listening_client.stop().await;
+                            }
+                        }
+                    }
+                }
                 (maybe_notification, index, _) = select_all(notification_futures).fuse() => {
                     let Some(notification) = maybe_notification else {
                         let chain_id = *self.listening.keys().nth(index).unwrap();
-                        self.listening.remove(&chain_id);
                         warn!("Notification stream for {chain_id} closed");
+                        let Some(listening_client) = self.listening.remove(&chain_id) else {
+                            error!(%chain_id, "attempted to drop a non-existent listener");
+                            continue;
+                        };
+                        listening_client.stop().await;
                         continue;
                     };
                     return Ok(Action::Notification(notification));
