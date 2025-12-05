@@ -1539,15 +1539,17 @@ where
             outcome,
         } = content;
 
-        if block.timestamp.duration_since(local_time) > self.config.block_time_grace_period {
-            return Err(WorkerError::InvalidTimestamp {
-                local_time,
-                block_timestamp: block.timestamp,
-                block_time_grace_period: self.config.block_time_grace_period,
-            });
-        }
+        if self.config.key_pair().is_some() {
+            if block.timestamp.duration_since(local_time) > self.config.block_time_grace_period {
+                return Err(WorkerError::InvalidTimestamp {
+                    local_time,
+                    block_timestamp: block.timestamp,
+                    block_time_grace_period: self.config.block_time_grace_period,
+                });
+            }
 
-        self.storage.clock().sleep_until(block.timestamp).await;
+            self.storage.clock().sleep_until(block.timestamp).await;
+        }
         let local_time = self.storage.clock().current_time();
 
         self.chain
