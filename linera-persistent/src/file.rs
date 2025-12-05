@@ -150,7 +150,7 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
         let mut reader = io::BufReader::new(&lock.0);
         let file_is_empty = reader.fill_buf()?.is_empty();
 
-        Ok(Self {
+        let me = Self {
             value: if file_is_empty {
                 value()?
             } else {
@@ -158,7 +158,11 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
             },
             path: path.into(),
             _lock: lock,
-        })
+        };
+
+        me.save()?;
+
+        Ok(me)
     }
 
     pub fn save(&self) -> Result<(), Error> {
