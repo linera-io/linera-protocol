@@ -540,14 +540,20 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     Box::pin(async move { stream.lock().await.next().await })
                 })
                 .collect::<Vec<_>>();
-            tokio::select! {
+            futures::select! {
                 () = self.cancellation_token.cancelled().fuse() => {
                     return Ok(Action::Stop);
                 }
                 () = self.storage.clock().sleep_until(timeout).fuse() => {
                     return Ok(Action::ProcessInbox(timeout_chain_id));
                 }
-                Some(command) = self.command_receiver.recv() => {
+                command = self.command_receiver.recv().then(async |maybe_command| {
+                    if let Some(command) = maybe_command {
+                        command
+                    } else {
+                        std::future::pending().await
+                    }
+                }).fuse() => {
                     match command {
                         ListenerCommand::Listen(new_chains) => {
                             debug!(?new_chains, "received command to listen to new chains");
