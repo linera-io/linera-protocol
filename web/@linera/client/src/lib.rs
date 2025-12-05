@@ -218,12 +218,12 @@ impl Client {
             wallet.chains,
             signer,
             OPTIONS,
+            wallet.default_chain,
             wallet.genesis_config,
             BLOCK_CACHE_SIZE,
             EXECUTION_STATE_CACHE_SIZE,
         )
         .await?;
-        client_context.default_chain = wallet.default;
         // The `Arc` here is useless, but it is required by the `ChainListener` API.
         #[expect(clippy::arc_with_non_send_sync)]
         let client_context = Arc::new(AsyncMutex::new(client_context));

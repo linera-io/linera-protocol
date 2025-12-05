@@ -269,6 +269,7 @@ where
         wallet: W,
         signer: Si,
         options: ClientContextOptions,
+        default_chain: Option<ChainId>,
         genesis_config: GenesisConfig,
         block_cache_size: usize,
         execution_state_cache_size: usize,
@@ -319,7 +320,7 @@ where
 
         Ok(ClientContext {
             client: Arc::new(client),
-            default_chain: None,
+            default_chain,
             genesis_config,
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
