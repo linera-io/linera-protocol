@@ -542,6 +542,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     let mut height = 0;
     client2.wallet_init(None).await?;
     client2.follow_chain(chain, false).await?;
+    client2.set_default_chain(chain).await?;
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let port = get_node_port().await;
