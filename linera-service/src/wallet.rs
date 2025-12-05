@@ -187,11 +187,7 @@ impl Wallet {
         Ok(old_chain)
     }
 
-    pub fn try_insert(
-        &self,
-        id: ChainId,
-        chain: wallet::Chain,
-    ) -> Option<wallet::Chain> {
+    pub fn try_insert(&self, id: ChainId, chain: wallet::Chain) -> Option<wallet::Chain> {
         let chain = self.0.chains.try_insert(id, chain);
         if chain.is_none() {
             self.try_set_default(id);
