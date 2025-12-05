@@ -19,6 +19,7 @@
 //! time the data in a block are written, the journal header is updated in the same
 //! transaction to mark the block as processed.
 
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use static_assertions as sa;
 use thiserror::Error;
@@ -144,6 +145,13 @@ where
         keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         self.store.read_multi_values_bytes(keys).await
+    }
+
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+        self.store.read_multi_values_bytes_iter(keys)
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {

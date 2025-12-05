@@ -3,6 +3,7 @@
 
 //! Adds support for large values to a given store by splitting them between several keys.
 
+use futures::stream::{Stream, StreamExt};
 use linera_base::ensure;
 use thiserror::Error;
 
@@ -87,7 +88,7 @@ where
 
 impl<S> ReadableKeyValueStore for ValueSplittingStore<S>
 where
-    S: ReadableKeyValueStore,
+    S: ReadableKeyValueStore + Clone,
     S::Error: 'static,
 {
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE - 4;
@@ -200,6 +201,84 @@ where
             }
         }
         Ok(big_values)
+    }
+
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+        // Create big_keys (keys with [0,0,0,0] suffix) for the first segments
+        let big_keys = keys
+            .iter()
+            .map(|key| {
+                let mut big_key = key.clone();
+                big_key.extend(&[0, 0, 0, 0]);
+                big_key
+            })
+            .collect::<Vec<_>>();
+
+        let store = self.store.clone();
+        let mut first_segments_stream = Box::pin(self.store.read_multi_values_bytes_iter(big_keys));
+
+        async_stream::stream! {
+            for key in keys {
+                // Get the next value from the first segments stream
+                let value_result = first_segments_stream.next().await
+                    .expect("keys and first_segments should have same length");
+
+                let value = match value_result {
+                    Ok(v) => v,
+                    Err(e) => {
+                        yield Err(ValueSplittingError::InnerStoreError(e));
+                        return;
+                    }
+                };
+
+                let Some(value) = value else {
+                    yield Ok(None);
+                    continue;
+                };
+
+                // Read the count from the first segment
+                let count = ValueSplittingStore::<S>::read_count_from_value(&value)?;
+
+                let mut big_value = value[4..].to_vec();
+
+                if count == 1 {
+                    yield Ok(Some(big_value));
+                    continue;
+                }
+
+                // Need to fetch additional segments
+                let mut segment_keys = Vec::new();
+                for i in 1..count {
+                    let segment_key = ValueSplittingStore::<S>::get_segment_key(&key, i)?;
+                    segment_keys.push(segment_key);
+                }
+
+                let segments = match store.read_multi_values_bytes(&segment_keys).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        yield Err(ValueSplittingError::InnerStoreError(e));
+                        return;
+                    }
+                };
+
+                for segment in segments {
+                    match segment {
+                        None => {
+                            yield Err(ValueSplittingError::MissingSegment);
+                            return;
+                        }
+                        Some(segment) => {
+                            big_value.extend(segment);
+                        }
+                    }
+                }
+
+                yield Ok(Some(big_value));
+            }
+        }
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
@@ -453,6 +532,13 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
         keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, MemoryStoreError> {
         self.inner.read_multi_values_bytes(keys).await
+    }
+
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+        self.inner.read_multi_values_bytes_iter(keys)
     }
 
     async fn find_keys_by_prefix(

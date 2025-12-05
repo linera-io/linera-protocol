@@ -27,6 +27,7 @@ path = "src/server.rs"
 [dependencies]
 anyhow.workspace = true
 async-lock.workspace = true
+async-stream.workspace = true
 bcs.workspace = true
 clap.workspace = true
 futures.workspace = true
