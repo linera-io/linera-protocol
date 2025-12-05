@@ -4,7 +4,6 @@ echo "Building linera images..."
 docker build -f ./Dockerfile.indexer -t linera-indexer ..
 docker build -f ./Dockerfile.exporter -t linera-exporter ..
 docker build -f ./Dockerfile -t linera-test ..
-docker build -f ./Dockerfile.storage-service -t linera-storage-service ..
 docker build -f ./Dockerfile.explorer -t linera-explorer-new ..
 
 echo "Done building images"
