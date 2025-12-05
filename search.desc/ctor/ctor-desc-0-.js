@@ -1,0 +1,1 @@
+searchState.loadedDescShard("ctor", 0, "Procedural macro for defining global …\nMarks a function or static variable as a …\nMarks a function as a library/executable destructor. This …")

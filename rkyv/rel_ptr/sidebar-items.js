@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["OffsetError","RelPtrError"],"fn":["signed_offset"],"struct":["RawRelPtr","RelPtr"],"trait":["Offset"],"type":["RawRelPtrI16","RawRelPtrI32","RawRelPtrI64","RawRelPtrI8","RawRelPtrU16","RawRelPtrU32","RawRelPtrU64","RawRelPtrU8"]};

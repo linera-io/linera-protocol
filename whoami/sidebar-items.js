@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Arch","Country","DesktopEnv","Language","Platform","Width"],"fn":["arch","desktop_env","devicename","devicename_os","distro","distro_os","hostname","hostname_os","lang","langs","platform","realname","realname_os","username","username_os"],"mod":["fallible"],"type":["Result"]};

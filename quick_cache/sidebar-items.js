@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["sync","unsync"],"struct":["Options","OptionsBuilder","UnitWeighter"],"trait":["Equivalent","Lifecycle","Weighter"],"type":["DefaultHashBuilder"]};

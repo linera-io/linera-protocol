@@ -1,0 +1,719 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/regex-automata-0.4.9/src/util/prefilter/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">regex_automata/util/prefilter/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">/*!
+<a href=#2 id=2 data-nosnippet>2</a>Defines a prefilter for accelerating regex searches.
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a>A prefilter can be created by building a [`Prefilter`] value.
+<a href=#5 id=5 data-nosnippet>5</a>
+<a href=#6 id=6 data-nosnippet>6</a>A prefilter represents one of the most important optimizations available for
+<a href=#7 id=7 data-nosnippet>7</a>accelerating regex searches. The idea of a prefilter is to very quickly find
+<a href=#8 id=8 data-nosnippet>8</a>candidate locations in a haystack where a regex _could_ match. Once a candidate
+<a href=#9 id=9 data-nosnippet>9</a>is found, it is then intended for the regex engine to run at that position to
+<a href=#10 id=10 data-nosnippet>10</a>determine whether the candidate is a match or a false positive.
+<a href=#11 id=11 data-nosnippet>11</a>
+<a href=#12 id=12 data-nosnippet>12</a>In the aforementioned description of the prefilter optimization also lay its
+<a href=#13 id=13 data-nosnippet>13</a>demise. Namely, if a prefilter has a high false positive rate and it produces
+<a href=#14 id=14 data-nosnippet>14</a>lots of candidates, then a prefilter can overall make a regex search slower.
+<a href=#15 id=15 data-nosnippet>15</a>It can run more slowly because more time is spent ping-ponging between the
+<a href=#16 id=16 data-nosnippet>16</a>prefilter search and the regex engine attempting to confirm each candidate as
+<a href=#17 id=17 data-nosnippet>17</a>a match. This ping-ponging has overhead that adds up, and is exacerbated by
+<a href=#18 id=18 data-nosnippet>18</a>a high false positive rate.
+<a href=#19 id=19 data-nosnippet>19</a>
+<a href=#20 id=20 data-nosnippet>20</a>Nevertheless, the optimization is still generally worth performing in most
+<a href=#21 id=21 data-nosnippet>21</a>cases. Particularly given just how much throughput can be improved. (It is not
+<a href=#22 id=22 data-nosnippet>22</a>uncommon for prefilter optimizations to improve throughput by one or two orders
+<a href=#23 id=23 data-nosnippet>23</a>of magnitude.)
+<a href=#24 id=24 data-nosnippet>24</a>
+<a href=#25 id=25 data-nosnippet>25</a>Typically a prefilter is used to find occurrences of literal prefixes from a
+<a href=#26 id=26 data-nosnippet>26</a>regex pattern, but this isn't required. A prefilter can be used to look for
+<a href=#27 id=27 data-nosnippet>27</a>suffixes or even inner literals.
+<a href=#28 id=28 data-nosnippet>28</a>
+<a href=#29 id=29 data-nosnippet>29</a>Note that as of now, prefilters throw away information about which pattern
+<a href=#30 id=30 data-nosnippet>30</a>each literal comes from. In other words, when a prefilter finds a match,
+<a href=#31 id=31 data-nosnippet>31</a>there's no way to know which pattern (or patterns) it came from. Therefore,
+<a href=#32 id=32 data-nosnippet>32</a>in order to confirm a match, you'll have to check all of the patterns by
+<a href=#33 id=33 data-nosnippet>33</a>running the full regex engine.
+<a href=#34 id=34 data-nosnippet>34</a>*/
+<a href=#35 id=35 data-nosnippet>35</a>
+<a href=#36 id=36 data-nosnippet>36</a></span><span class="kw">mod </span>aho_corasick;
+<a href=#37 id=37 data-nosnippet>37</a><span class="kw">mod </span>byteset;
+<a href=#38 id=38 data-nosnippet>38</a><span class="kw">mod </span>memchr;
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">mod </span>memmem;
+<a href=#40 id=40 data-nosnippet>40</a><span class="kw">mod </span>teddy;
+<a href=#41 id=41 data-nosnippet>41</a>
+<a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span>core::{
+<a href=#43 id=43 data-nosnippet>43</a>    borrow::Borrow,
+<a href=#44 id=44 data-nosnippet>44</a>    fmt::Debug,
+<a href=#45 id=45 data-nosnippet>45</a>    panic::{RefUnwindSafe, UnwindSafe},
+<a href=#46 id=46 data-nosnippet>46</a>};
+<a href=#47 id=47 data-nosnippet>47</a>
+<a href=#48 id=48 data-nosnippet>48</a><span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#49 id=49 data-nosnippet>49</a></span><span class="kw">use </span>alloc::sync::Arc;
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a><span class="attr">#[cfg(feature = <span class="string">"syntax"</span>)]
+<a href=#52 id=52 data-nosnippet>52</a></span><span class="kw">use </span>regex_syntax::hir::{literal, Hir};
+<a href=#53 id=53 data-nosnippet>53</a>
+<a href=#54 id=54 data-nosnippet>54</a><span class="kw">use </span><span class="kw">crate</span>::util::search::{MatchKind, Span};
+<a href=#55 id=55 data-nosnippet>55</a>
+<a href=#56 id=56 data-nosnippet>56</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span><span class="kw">crate</span>::util::prefilter::{
+<a href=#57 id=57 data-nosnippet>57</a>    aho_corasick::AhoCorasick,
+<a href=#58 id=58 data-nosnippet>58</a>    byteset::ByteSet,
+<a href=#59 id=59 data-nosnippet>59</a>    memchr::{Memchr, Memchr2, Memchr3},
+<a href=#60 id=60 data-nosnippet>60</a>    memmem::Memmem,
+<a href=#61 id=61 data-nosnippet>61</a>    teddy::Teddy,
+<a href=#62 id=62 data-nosnippet>62</a>};
+<a href=#63 id=63 data-nosnippet>63</a>
+<a href=#64 id=64 data-nosnippet>64</a><span class="doccomment">/// A prefilter for accelerating regex searches.
+<a href=#65 id=65 data-nosnippet>65</a>///
+<a href=#66 id=66 data-nosnippet>66</a>/// If you already have your literals that you want to search with,
+<a href=#67 id=67 data-nosnippet>67</a>/// then the vanilla [`Prefilter::new`] constructor is for you. But
+<a href=#68 id=68 data-nosnippet>68</a>/// if you have an [`Hir`] value from the `regex-syntax` crate, then
+<a href=#69 id=69 data-nosnippet>69</a>/// [`Prefilter::from_hir_prefix`] might be more convenient. Namely, it uses
+<a href=#70 id=70 data-nosnippet>70</a>/// the [`regex-syntax::hir::literal`](regex_syntax::hir::literal) module to
+<a href=#71 id=71 data-nosnippet>71</a>/// extract literal prefixes for you, optimize them and then select and build a
+<a href=#72 id=72 data-nosnippet>72</a>/// prefilter matcher.
+<a href=#73 id=73 data-nosnippet>73</a>///
+<a href=#74 id=74 data-nosnippet>74</a>/// A prefilter must have **zero false negatives**. However, by its very
+<a href=#75 id=75 data-nosnippet>75</a>/// nature, it may produce false positives. That is, a prefilter will never
+<a href=#76 id=76 data-nosnippet>76</a>/// skip over a position in the haystack that corresponds to a match of the
+<a href=#77 id=77 data-nosnippet>77</a>/// original regex pattern, but it *may* produce a match for a position
+<a href=#78 id=78 data-nosnippet>78</a>/// in the haystack that does *not* correspond to a match of the original
+<a href=#79 id=79 data-nosnippet>79</a>/// regex pattern. If you use either the [`Prefilter::from_hir_prefix`] or
+<a href=#80 id=80 data-nosnippet>80</a>/// [`Prefilter::from_hirs_prefix`] constructors, then this guarantee is
+<a href=#81 id=81 data-nosnippet>81</a>/// upheld for you automatically. This guarantee is not preserved if you use
+<a href=#82 id=82 data-nosnippet>82</a>/// [`Prefilter::new`] though, since it is up to the caller to provide correct
+<a href=#83 id=83 data-nosnippet>83</a>/// literal strings with respect to the original regex pattern.
+<a href=#84 id=84 data-nosnippet>84</a>///
+<a href=#85 id=85 data-nosnippet>85</a>/// # Cloning
+<a href=#86 id=86 data-nosnippet>86</a>///
+<a href=#87 id=87 data-nosnippet>87</a>/// It is an API guarantee that cloning a prefilter is cheap. That is, cloning
+<a href=#88 id=88 data-nosnippet>88</a>/// it will not duplicate whatever heap memory is used to represent the
+<a href=#89 id=89 data-nosnippet>89</a>/// underlying matcher.
+<a href=#90 id=90 data-nosnippet>90</a>///
+<a href=#91 id=91 data-nosnippet>91</a>/// # Example
+<a href=#92 id=92 data-nosnippet>92</a>///
+<a href=#93 id=93 data-nosnippet>93</a>/// This example shows how to attach a `Prefilter` to the
+<a href=#94 id=94 data-nosnippet>94</a>/// [`PikeVM`](crate::nfa::thompson::pikevm::PikeVM) in order to accelerate
+<a href=#95 id=95 data-nosnippet>95</a>/// searches.
+<a href=#96 id=96 data-nosnippet>96</a>///
+<a href=#97 id=97 data-nosnippet>97</a>/// ```
+<a href=#98 id=98 data-nosnippet>98</a>/// use regex_automata::{
+<a href=#99 id=99 data-nosnippet>99</a>///     nfa::thompson::pikevm::PikeVM,
+<a href=#100 id=100 data-nosnippet>100</a>///     util::prefilter::Prefilter,
+<a href=#101 id=101 data-nosnippet>101</a>///     Match, MatchKind,
+<a href=#102 id=102 data-nosnippet>102</a>/// };
+<a href=#103 id=103 data-nosnippet>103</a>///
+<a href=#104 id=104 data-nosnippet>104</a>/// let pre = Prefilter::new(MatchKind::LeftmostFirst, &amp;["Bruce "])
+<a href=#105 id=105 data-nosnippet>105</a>///     .expect("a prefilter");
+<a href=#106 id=106 data-nosnippet>106</a>/// let re = PikeVM::builder()
+<a href=#107 id=107 data-nosnippet>107</a>///     .configure(PikeVM::config().prefilter(Some(pre)))
+<a href=#108 id=108 data-nosnippet>108</a>///     .build(r"Bruce \w+")?;
+<a href=#109 id=109 data-nosnippet>109</a>/// let mut cache = re.create_cache();
+<a href=#110 id=110 data-nosnippet>110</a>/// assert_eq!(
+<a href=#111 id=111 data-nosnippet>111</a>///     Some(Match::must(0, 6..23)),
+<a href=#112 id=112 data-nosnippet>112</a>///     re.find(&amp;mut cache, "Hello Bruce Springsteen!"),
+<a href=#113 id=113 data-nosnippet>113</a>/// );
+<a href=#114 id=114 data-nosnippet>114</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#115 id=115 data-nosnippet>115</a>/// ```
+<a href=#116 id=116 data-nosnippet>116</a>///
+<a href=#117 id=117 data-nosnippet>117</a>/// But note that if you get your prefilter incorrect, it could lead to an
+<a href=#118 id=118 data-nosnippet>118</a>/// incorrect result!
+<a href=#119 id=119 data-nosnippet>119</a>///
+<a href=#120 id=120 data-nosnippet>120</a>/// ```
+<a href=#121 id=121 data-nosnippet>121</a>/// use regex_automata::{
+<a href=#122 id=122 data-nosnippet>122</a>///     nfa::thompson::pikevm::PikeVM,
+<a href=#123 id=123 data-nosnippet>123</a>///     util::prefilter::Prefilter,
+<a href=#124 id=124 data-nosnippet>124</a>///     Match, MatchKind,
+<a href=#125 id=125 data-nosnippet>125</a>/// };
+<a href=#126 id=126 data-nosnippet>126</a>///
+<a href=#127 id=127 data-nosnippet>127</a>/// // This prefilter is wrong!
+<a href=#128 id=128 data-nosnippet>128</a>/// let pre = Prefilter::new(MatchKind::LeftmostFirst, &amp;["Patti "])
+<a href=#129 id=129 data-nosnippet>129</a>///     .expect("a prefilter");
+<a href=#130 id=130 data-nosnippet>130</a>/// let re = PikeVM::builder()
+<a href=#131 id=131 data-nosnippet>131</a>///     .configure(PikeVM::config().prefilter(Some(pre)))
+<a href=#132 id=132 data-nosnippet>132</a>///     .build(r"Bruce \w+")?;
+<a href=#133 id=133 data-nosnippet>133</a>/// let mut cache = re.create_cache();
+<a href=#134 id=134 data-nosnippet>134</a>/// // We find no match even though the regex does match.
+<a href=#135 id=135 data-nosnippet>135</a>/// assert_eq!(
+<a href=#136 id=136 data-nosnippet>136</a>///     None,
+<a href=#137 id=137 data-nosnippet>137</a>///     re.find(&amp;mut cache, "Hello Bruce Springsteen!"),
+<a href=#138 id=138 data-nosnippet>138</a>/// );
+<a href=#139 id=139 data-nosnippet>139</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#140 id=140 data-nosnippet>140</a>/// ```
+<a href=#141 id=141 data-nosnippet>141</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#142 id=142 data-nosnippet>142</a></span><span class="kw">pub struct </span>Prefilter {
+<a href=#143 id=143 data-nosnippet>143</a>    <span class="attr">#[cfg(not(feature = <span class="string">"alloc"</span>))]
+<a href=#144 id=144 data-nosnippet>144</a>    </span>_unused: (),
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#146 id=146 data-nosnippet>146</a>    </span>pre: Arc&lt;<span class="kw">dyn </span>PrefilterI&gt;,
+<a href=#147 id=147 data-nosnippet>147</a>    <span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#148 id=148 data-nosnippet>148</a>    </span>is_fast: bool,
+<a href=#149 id=149 data-nosnippet>149</a>    <span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#150 id=150 data-nosnippet>150</a>    </span>max_needle_len: usize,
+<a href=#151 id=151 data-nosnippet>151</a>}
+<a href=#152 id=152 data-nosnippet>152</a>
+<a href=#153 id=153 data-nosnippet>153</a><span class="kw">impl </span>Prefilter {
+<a href=#154 id=154 data-nosnippet>154</a>    <span class="doccomment">/// Create a new prefilter from a sequence of needles and a corresponding
+<a href=#155 id=155 data-nosnippet>155</a>    /// match semantics.
+<a href=#156 id=156 data-nosnippet>156</a>    ///
+<a href=#157 id=157 data-nosnippet>157</a>    /// This may return `None` for a variety of reasons, for example, if
+<a href=#158 id=158 data-nosnippet>158</a>    /// a suitable prefilter could not be constructed. That might occur
+<a href=#159 id=159 data-nosnippet>159</a>    /// if they are unavailable (e.g., the `perf-literal-substring` and
+<a href=#160 id=160 data-nosnippet>160</a>    /// `perf-literal-multisubstring` features aren't enabled), or it might
+<a href=#161 id=161 data-nosnippet>161</a>    /// occur because of heuristics or other artifacts of how the prefilter
+<a href=#162 id=162 data-nosnippet>162</a>    /// works.
+<a href=#163 id=163 data-nosnippet>163</a>    ///
+<a href=#164 id=164 data-nosnippet>164</a>    /// Note that if you have an [`Hir`] expression, it may be more convenient
+<a href=#165 id=165 data-nosnippet>165</a>    /// to use [`Prefilter::from_hir_prefix`]. It will automatically handle the
+<a href=#166 id=166 data-nosnippet>166</a>    /// task of extracting prefix literals for you.
+<a href=#167 id=167 data-nosnippet>167</a>    ///
+<a href=#168 id=168 data-nosnippet>168</a>    /// # Example
+<a href=#169 id=169 data-nosnippet>169</a>    ///
+<a href=#170 id=170 data-nosnippet>170</a>    /// This example shows how match semantics can impact the matching
+<a href=#171 id=171 data-nosnippet>171</a>    /// algorithm used by the prefilter. For this reason, it is important to
+<a href=#172 id=172 data-nosnippet>172</a>    /// ensure that the match semantics given here are consistent with the
+<a href=#173 id=173 data-nosnippet>173</a>    /// match semantics intended for the regular expression that the literals
+<a href=#174 id=174 data-nosnippet>174</a>    /// were extracted from.
+<a href=#175 id=175 data-nosnippet>175</a>    ///
+<a href=#176 id=176 data-nosnippet>176</a>    /// ```
+<a href=#177 id=177 data-nosnippet>177</a>    /// use regex_automata::{
+<a href=#178 id=178 data-nosnippet>178</a>    ///     util::{prefilter::Prefilter, syntax},
+<a href=#179 id=179 data-nosnippet>179</a>    ///     MatchKind, Span,
+<a href=#180 id=180 data-nosnippet>180</a>    /// };
+<a href=#181 id=181 data-nosnippet>181</a>    ///
+<a href=#182 id=182 data-nosnippet>182</a>    /// let hay = "Hello samwise";
+<a href=#183 id=183 data-nosnippet>183</a>    ///
+<a href=#184 id=184 data-nosnippet>184</a>    /// // With leftmost-first, we find 'samwise' here because it comes
+<a href=#185 id=185 data-nosnippet>185</a>    /// // before 'sam' in the sequence we give it..
+<a href=#186 id=186 data-nosnippet>186</a>    /// let pre = Prefilter::new(MatchKind::LeftmostFirst, &amp;["samwise", "sam"])
+<a href=#187 id=187 data-nosnippet>187</a>    ///     .expect("a prefilter");
+<a href=#188 id=188 data-nosnippet>188</a>    /// assert_eq!(
+<a href=#189 id=189 data-nosnippet>189</a>    ///     Some(Span::from(6..13)),
+<a href=#190 id=190 data-nosnippet>190</a>    ///     pre.find(hay.as_bytes(), Span::from(0..hay.len())),
+<a href=#191 id=191 data-nosnippet>191</a>    /// );
+<a href=#192 id=192 data-nosnippet>192</a>    /// // Still with leftmost-first but with the literals reverse, now 'sam'
+<a href=#193 id=193 data-nosnippet>193</a>    /// // will match instead!
+<a href=#194 id=194 data-nosnippet>194</a>    /// let pre = Prefilter::new(MatchKind::LeftmostFirst, &amp;["sam", "samwise"])
+<a href=#195 id=195 data-nosnippet>195</a>    ///     .expect("a prefilter");
+<a href=#196 id=196 data-nosnippet>196</a>    /// assert_eq!(
+<a href=#197 id=197 data-nosnippet>197</a>    ///     Some(Span::from(6..9)),
+<a href=#198 id=198 data-nosnippet>198</a>    ///     pre.find(hay.as_bytes(), Span::from(0..hay.len())),
+<a href=#199 id=199 data-nosnippet>199</a>    /// );
+<a href=#200 id=200 data-nosnippet>200</a>    ///
+<a href=#201 id=201 data-nosnippet>201</a>    /// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#202 id=202 data-nosnippet>202</a>    /// ```
+<a href=#203 id=203 data-nosnippet>203</a>    </span><span class="kw">pub fn </span>new&lt;B: AsRef&lt;[u8]&gt;&gt;(
+<a href=#204 id=204 data-nosnippet>204</a>        kind: MatchKind,
+<a href=#205 id=205 data-nosnippet>205</a>        needles: <span class="kw-2">&amp;</span>[B],
+<a href=#206 id=206 data-nosnippet>206</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Prefilter&gt; {
+<a href=#207 id=207 data-nosnippet>207</a>        Choice::new(kind, needles).and_then(|choice| {
+<a href=#208 id=208 data-nosnippet>208</a>            <span class="kw">let </span>max_needle_len =
+<a href=#209 id=209 data-nosnippet>209</a>                needles.iter().map(|b| b.as_ref().len()).max().unwrap_or(<span class="number">0</span>);
+<a href=#210 id=210 data-nosnippet>210</a>            Prefilter::from_choice(choice, max_needle_len)
+<a href=#211 id=211 data-nosnippet>211</a>        })
+<a href=#212 id=212 data-nosnippet>212</a>    }
+<a href=#213 id=213 data-nosnippet>213</a>
+<a href=#214 id=214 data-nosnippet>214</a>    <span class="doccomment">/// This turns a prefilter selection into a `Prefilter`. That is, in turns
+<a href=#215 id=215 data-nosnippet>215</a>    /// the enum given into a trait object.
+<a href=#216 id=216 data-nosnippet>216</a>    </span><span class="kw">fn </span>from_choice(
+<a href=#217 id=217 data-nosnippet>217</a>        choice: Choice,
+<a href=#218 id=218 data-nosnippet>218</a>        max_needle_len: usize,
+<a href=#219 id=219 data-nosnippet>219</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Prefilter&gt; {
+<a href=#220 id=220 data-nosnippet>220</a>        <span class="attr">#[cfg(not(feature = <span class="string">"alloc"</span>))]
+<a href=#221 id=221 data-nosnippet>221</a>        </span>{
+<a href=#222 id=222 data-nosnippet>222</a>            <span class="prelude-val">None
+<a href=#223 id=223 data-nosnippet>223</a>        </span>}
+<a href=#224 id=224 data-nosnippet>224</a>        <span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#225 id=225 data-nosnippet>225</a>        </span>{
+<a href=#226 id=226 data-nosnippet>226</a>            <span class="kw">let </span>pre: Arc&lt;<span class="kw">dyn </span>PrefilterI&gt; = <span class="kw">match </span>choice {
+<a href=#227 id=227 data-nosnippet>227</a>                Choice::Memchr(p) =&gt; Arc::new(p),
+<a href=#228 id=228 data-nosnippet>228</a>                Choice::Memchr2(p) =&gt; Arc::new(p),
+<a href=#229 id=229 data-nosnippet>229</a>                Choice::Memchr3(p) =&gt; Arc::new(p),
+<a href=#230 id=230 data-nosnippet>230</a>                Choice::Memmem(p) =&gt; Arc::new(p),
+<a href=#231 id=231 data-nosnippet>231</a>                Choice::Teddy(p) =&gt; Arc::new(p),
+<a href=#232 id=232 data-nosnippet>232</a>                Choice::ByteSet(p) =&gt; Arc::new(p),
+<a href=#233 id=233 data-nosnippet>233</a>                Choice::AhoCorasick(p) =&gt; Arc::new(p),
+<a href=#234 id=234 data-nosnippet>234</a>            };
+<a href=#235 id=235 data-nosnippet>235</a>            <span class="kw">let </span>is_fast = pre.is_fast();
+<a href=#236 id=236 data-nosnippet>236</a>            <span class="prelude-val">Some</span>(Prefilter { pre, is_fast, max_needle_len })
+<a href=#237 id=237 data-nosnippet>237</a>        }
+<a href=#238 id=238 data-nosnippet>238</a>    }
+<a href=#239 id=239 data-nosnippet>239</a>
+<a href=#240 id=240 data-nosnippet>240</a>    <span class="doccomment">/// This attempts to extract prefixes from the given `Hir` expression for
+<a href=#241 id=241 data-nosnippet>241</a>    /// the given match semantics, and if possible, builds a prefilter for
+<a href=#242 id=242 data-nosnippet>242</a>    /// them.
+<a href=#243 id=243 data-nosnippet>243</a>    ///
+<a href=#244 id=244 data-nosnippet>244</a>    /// # Example
+<a href=#245 id=245 data-nosnippet>245</a>    ///
+<a href=#246 id=246 data-nosnippet>246</a>    /// This example shows how to build a prefilter directly from an [`Hir`]
+<a href=#247 id=247 data-nosnippet>247</a>    /// expression, and use to find an occurrence of a prefix from the regex
+<a href=#248 id=248 data-nosnippet>248</a>    /// pattern.
+<a href=#249 id=249 data-nosnippet>249</a>    ///
+<a href=#250 id=250 data-nosnippet>250</a>    /// ```
+<a href=#251 id=251 data-nosnippet>251</a>    /// use regex_automata::{
+<a href=#252 id=252 data-nosnippet>252</a>    ///     util::{prefilter::Prefilter, syntax},
+<a href=#253 id=253 data-nosnippet>253</a>    ///     MatchKind, Span,
+<a href=#254 id=254 data-nosnippet>254</a>    /// };
+<a href=#255 id=255 data-nosnippet>255</a>    ///
+<a href=#256 id=256 data-nosnippet>256</a>    /// let hir = syntax::parse(r"(Bruce|Patti) \w+")?;
+<a href=#257 id=257 data-nosnippet>257</a>    /// let pre = Prefilter::from_hir_prefix(MatchKind::LeftmostFirst, &amp;hir)
+<a href=#258 id=258 data-nosnippet>258</a>    ///     .expect("a prefilter");
+<a href=#259 id=259 data-nosnippet>259</a>    /// let hay = "Hello Patti Scialfa!";
+<a href=#260 id=260 data-nosnippet>260</a>    /// assert_eq!(
+<a href=#261 id=261 data-nosnippet>261</a>    ///     Some(Span::from(6..12)),
+<a href=#262 id=262 data-nosnippet>262</a>    ///     pre.find(hay.as_bytes(), Span::from(0..hay.len())),
+<a href=#263 id=263 data-nosnippet>263</a>    /// );
+<a href=#264 id=264 data-nosnippet>264</a>    ///
+<a href=#265 id=265 data-nosnippet>265</a>    /// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#266 id=266 data-nosnippet>266</a>    /// ```
+<a href=#267 id=267 data-nosnippet>267</a>    </span><span class="attr">#[cfg(feature = <span class="string">"syntax"</span>)]
+<a href=#268 id=268 data-nosnippet>268</a>    </span><span class="kw">pub fn </span>from_hir_prefix(kind: MatchKind, hir: <span class="kw-2">&amp;</span>Hir) -&gt; <span class="prelude-ty">Option</span>&lt;Prefilter&gt; {
+<a href=#269 id=269 data-nosnippet>269</a>        Prefilter::from_hirs_prefix(kind, <span class="kw-2">&amp;</span>[hir])
+<a href=#270 id=270 data-nosnippet>270</a>    }
+<a href=#271 id=271 data-nosnippet>271</a>
+<a href=#272 id=272 data-nosnippet>272</a>    <span class="doccomment">/// This attempts to extract prefixes from the given `Hir` expressions for
+<a href=#273 id=273 data-nosnippet>273</a>    /// the given match semantics, and if possible, builds a prefilter for
+<a href=#274 id=274 data-nosnippet>274</a>    /// them.
+<a href=#275 id=275 data-nosnippet>275</a>    ///
+<a href=#276 id=276 data-nosnippet>276</a>    /// Note that as of now, prefilters throw away information about which
+<a href=#277 id=277 data-nosnippet>277</a>    /// pattern each literal comes from. In other words, when a prefilter finds
+<a href=#278 id=278 data-nosnippet>278</a>    /// a match, there's no way to know which pattern (or patterns) it came
+<a href=#279 id=279 data-nosnippet>279</a>    /// from. Therefore, in order to confirm a match, you'll have to check all
+<a href=#280 id=280 data-nosnippet>280</a>    /// of the patterns by running the full regex engine.
+<a href=#281 id=281 data-nosnippet>281</a>    ///
+<a href=#282 id=282 data-nosnippet>282</a>    /// # Example
+<a href=#283 id=283 data-nosnippet>283</a>    ///
+<a href=#284 id=284 data-nosnippet>284</a>    /// This example shows how to build a prefilter directly from multiple
+<a href=#285 id=285 data-nosnippet>285</a>    /// `Hir` expressions expression, and use it to find an occurrence of a
+<a href=#286 id=286 data-nosnippet>286</a>    /// prefix from the regex patterns.
+<a href=#287 id=287 data-nosnippet>287</a>    ///
+<a href=#288 id=288 data-nosnippet>288</a>    /// ```
+<a href=#289 id=289 data-nosnippet>289</a>    /// use regex_automata::{
+<a href=#290 id=290 data-nosnippet>290</a>    ///     util::{prefilter::Prefilter, syntax},
+<a href=#291 id=291 data-nosnippet>291</a>    ///     MatchKind, Span,
+<a href=#292 id=292 data-nosnippet>292</a>    /// };
+<a href=#293 id=293 data-nosnippet>293</a>    ///
+<a href=#294 id=294 data-nosnippet>294</a>    /// let hirs = syntax::parse_many(&amp;[
+<a href=#295 id=295 data-nosnippet>295</a>    ///     r"(Bruce|Patti) \w+",
+<a href=#296 id=296 data-nosnippet>296</a>    ///     r"Mrs?\. Doubtfire",
+<a href=#297 id=297 data-nosnippet>297</a>    /// ])?;
+<a href=#298 id=298 data-nosnippet>298</a>    /// let pre = Prefilter::from_hirs_prefix(MatchKind::LeftmostFirst, &amp;hirs)
+<a href=#299 id=299 data-nosnippet>299</a>    ///     .expect("a prefilter");
+<a href=#300 id=300 data-nosnippet>300</a>    /// let hay = "Hello Mrs. Doubtfire";
+<a href=#301 id=301 data-nosnippet>301</a>    /// assert_eq!(
+<a href=#302 id=302 data-nosnippet>302</a>    ///     Some(Span::from(6..20)),
+<a href=#303 id=303 data-nosnippet>303</a>    ///     pre.find(hay.as_bytes(), Span::from(0..hay.len())),
+<a href=#304 id=304 data-nosnippet>304</a>    /// );
+<a href=#305 id=305 data-nosnippet>305</a>    ///
+<a href=#306 id=306 data-nosnippet>306</a>    /// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#307 id=307 data-nosnippet>307</a>    /// ```
+<a href=#308 id=308 data-nosnippet>308</a>    </span><span class="attr">#[cfg(feature = <span class="string">"syntax"</span>)]
+<a href=#309 id=309 data-nosnippet>309</a>    </span><span class="kw">pub fn </span>from_hirs_prefix&lt;H: Borrow&lt;Hir&gt;&gt;(
+<a href=#310 id=310 data-nosnippet>310</a>        kind: MatchKind,
+<a href=#311 id=311 data-nosnippet>311</a>        hirs: <span class="kw-2">&amp;</span>[H],
+<a href=#312 id=312 data-nosnippet>312</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Prefilter&gt; {
+<a href=#313 id=313 data-nosnippet>313</a>        prefixes(kind, hirs)
+<a href=#314 id=314 data-nosnippet>314</a>            .literals()
+<a href=#315 id=315 data-nosnippet>315</a>            .and_then(|lits| Prefilter::new(kind, lits))
+<a href=#316 id=316 data-nosnippet>316</a>    }
+<a href=#317 id=317 data-nosnippet>317</a>
+<a href=#318 id=318 data-nosnippet>318</a>    <span class="doccomment">/// Run this prefilter on `haystack[span.start..end]` and return a matching
+<a href=#319 id=319 data-nosnippet>319</a>    /// span if one exists.
+<a href=#320 id=320 data-nosnippet>320</a>    ///
+<a href=#321 id=321 data-nosnippet>321</a>    /// The span returned is guaranteed to have a start position greater than
+<a href=#322 id=322 data-nosnippet>322</a>    /// or equal to the one given, and an end position less than or equal to
+<a href=#323 id=323 data-nosnippet>323</a>    /// the one given.
+<a href=#324 id=324 data-nosnippet>324</a>    ///
+<a href=#325 id=325 data-nosnippet>325</a>    /// # Example
+<a href=#326 id=326 data-nosnippet>326</a>    ///
+<a href=#327 id=327 data-nosnippet>327</a>    /// This example shows how to build a prefilter directly from an [`Hir`]
+<a href=#328 id=328 data-nosnippet>328</a>    /// expression, and use it to find an occurrence of a prefix from the regex
+<a href=#329 id=329 data-nosnippet>329</a>    /// pattern.
+<a href=#330 id=330 data-nosnippet>330</a>    ///
+<a href=#331 id=331 data-nosnippet>331</a>    /// ```
+<a href=#332 id=332 data-nosnippet>332</a>    /// use regex_automata::{
+<a href=#333 id=333 data-nosnippet>333</a>    ///     util::{prefilter::Prefilter, syntax},
+<a href=#334 id=334 data-nosnippet>334</a>    ///     MatchKind, Span,
+<a href=#335 id=335 data-nosnippet>335</a>    /// };
+<a href=#336 id=336 data-nosnippet>336</a>    ///
+<a href=#337 id=337 data-nosnippet>337</a>    /// let hir = syntax::parse(r"Bruce \w+")?;
+<a href=#338 id=338 data-nosnippet>338</a>    /// let pre = Prefilter::from_hir_prefix(MatchKind::LeftmostFirst, &amp;hir)
+<a href=#339 id=339 data-nosnippet>339</a>    ///     .expect("a prefilter");
+<a href=#340 id=340 data-nosnippet>340</a>    /// let hay = "Hello Bruce Springsteen!";
+<a href=#341 id=341 data-nosnippet>341</a>    /// assert_eq!(
+<a href=#342 id=342 data-nosnippet>342</a>    ///     Some(Span::from(6..12)),
+<a href=#343 id=343 data-nosnippet>343</a>    ///     pre.find(hay.as_bytes(), Span::from(0..hay.len())),
+<a href=#344 id=344 data-nosnippet>344</a>    /// );
+<a href=#345 id=345 data-nosnippet>345</a>    ///
+<a href=#346 id=346 data-nosnippet>346</a>    /// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#347 id=347 data-nosnippet>347</a>    /// ```
+<a href=#348 id=348 data-nosnippet>348</a>    </span><span class="attr">#[inline]
+<a href=#349 id=349 data-nosnippet>349</a>    </span><span class="kw">pub fn </span>find(<span class="kw-2">&amp;</span><span class="self">self</span>, haystack: <span class="kw-2">&amp;</span>[u8], span: Span) -&gt; <span class="prelude-ty">Option</span>&lt;Span&gt; {
+<a href=#350 id=350 data-nosnippet>350</a>        <span class="attr">#[cfg(not(feature = <span class="string">"alloc"</span>))]
+<a href=#351 id=351 data-nosnippet>351</a>        </span>{
+<a href=#352 id=352 data-nosnippet>352</a>            <span class="macro">unreachable!</span>()
+<a href=#353 id=353 data-nosnippet>353</a>        }
+<a href=#354 id=354 data-nosnippet>354</a>        <span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#355 id=355 data-nosnippet>355</a>        </span>{
+<a href=#356 id=356 data-nosnippet>356</a>            <span class="self">self</span>.pre.find(haystack, span)
+<a href=#357 id=357 data-nosnippet>357</a>        }
+<a href=#358 id=358 data-nosnippet>358</a>    }
+<a href=#359 id=359 data-nosnippet>359</a>
+<a href=#360 id=360 data-nosnippet>360</a>    <span class="doccomment">/// Returns the span of a prefix of `haystack[span.start..span.end]` if
+<a href=#361 id=361 data-nosnippet>361</a>    /// the prefilter matches.
+<a href=#362 id=362 data-nosnippet>362</a>    ///
+<a href=#363 id=363 data-nosnippet>363</a>    /// The span returned is guaranteed to have a start position equivalent to
+<a href=#364 id=364 data-nosnippet>364</a>    /// the one given, and an end position less than or equal to the one given.
+<a href=#365 id=365 data-nosnippet>365</a>    ///
+<a href=#366 id=366 data-nosnippet>366</a>    /// # Example
+<a href=#367 id=367 data-nosnippet>367</a>    ///
+<a href=#368 id=368 data-nosnippet>368</a>    /// This example shows how to build a prefilter directly from an [`Hir`]
+<a href=#369 id=369 data-nosnippet>369</a>    /// expression, and use it to find an occurrence of a prefix from the regex
+<a href=#370 id=370 data-nosnippet>370</a>    /// pattern that begins at the start of a haystack only.
+<a href=#371 id=371 data-nosnippet>371</a>    ///
+<a href=#372 id=372 data-nosnippet>372</a>    /// ```
+<a href=#373 id=373 data-nosnippet>373</a>    /// use regex_automata::{
+<a href=#374 id=374 data-nosnippet>374</a>    ///     util::{prefilter::Prefilter, syntax},
+<a href=#375 id=375 data-nosnippet>375</a>    ///     MatchKind, Span,
+<a href=#376 id=376 data-nosnippet>376</a>    /// };
+<a href=#377 id=377 data-nosnippet>377</a>    ///
+<a href=#378 id=378 data-nosnippet>378</a>    /// let hir = syntax::parse(r"Bruce \w+")?;
+<a href=#379 id=379 data-nosnippet>379</a>    /// let pre = Prefilter::from_hir_prefix(MatchKind::LeftmostFirst, &amp;hir)
+<a href=#380 id=380 data-nosnippet>380</a>    ///     .expect("a prefilter");
+<a href=#381 id=381 data-nosnippet>381</a>    /// let hay = "Hello Bruce Springsteen!";
+<a href=#382 id=382 data-nosnippet>382</a>    /// // Nothing is found here because 'Bruce' does
+<a href=#383 id=383 data-nosnippet>383</a>    /// // not occur at the beginning of our search.
+<a href=#384 id=384 data-nosnippet>384</a>    /// assert_eq!(
+<a href=#385 id=385 data-nosnippet>385</a>    ///     None,
+<a href=#386 id=386 data-nosnippet>386</a>    ///     pre.prefix(hay.as_bytes(), Span::from(0..hay.len())),
+<a href=#387 id=387 data-nosnippet>387</a>    /// );
+<a href=#388 id=388 data-nosnippet>388</a>    /// // But if we change where we start the search
+<a href=#389 id=389 data-nosnippet>389</a>    /// // to begin where 'Bruce ' begins, then a
+<a href=#390 id=390 data-nosnippet>390</a>    /// // match will be found.
+<a href=#391 id=391 data-nosnippet>391</a>    /// assert_eq!(
+<a href=#392 id=392 data-nosnippet>392</a>    ///     Some(Span::from(6..12)),
+<a href=#393 id=393 data-nosnippet>393</a>    ///     pre.prefix(hay.as_bytes(), Span::from(6..hay.len())),
+<a href=#394 id=394 data-nosnippet>394</a>    /// );
+<a href=#395 id=395 data-nosnippet>395</a>    ///
+<a href=#396 id=396 data-nosnippet>396</a>    /// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#397 id=397 data-nosnippet>397</a>    /// ```
+<a href=#398 id=398 data-nosnippet>398</a>    </span><span class="attr">#[inline]
+<a href=#399 id=399 data-nosnippet>399</a>    </span><span class="kw">pub fn </span>prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, haystack: <span class="kw-2">&amp;</span>[u8], span: Span) -&gt; <span class="prelude-ty">Option</span>&lt;Span&gt; {
+<a href=#400 id=400 data-nosnippet>400</a>        <span class="attr">#[cfg(not(feature = <span class="string">"alloc"</span>))]
+<a href=#401 id=401 data-nosnippet>401</a>        </span>{
+<a href=#402 id=402 data-nosnippet>402</a>            <span class="macro">unreachable!</span>()
+<a href=#403 id=403 data-nosnippet>403</a>        }
+<a href=#404 id=404 data-nosnippet>404</a>        <span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#405 id=405 data-nosnippet>405</a>        </span>{
+<a href=#406 id=406 data-nosnippet>406</a>            <span class="self">self</span>.pre.prefix(haystack, span)
+<a href=#407 id=407 data-nosnippet>407</a>        }
+<a href=#408 id=408 data-nosnippet>408</a>    }
+<a href=#409 id=409 data-nosnippet>409</a>
+<a href=#410 id=410 data-nosnippet>410</a>    <span class="doccomment">/// Returns the heap memory, in bytes, used by the underlying prefilter.
+<a href=#411 id=411 data-nosnippet>411</a>    </span><span class="attr">#[inline]
+<a href=#412 id=412 data-nosnippet>412</a>    </span><span class="kw">pub fn </span>memory_usage(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#413 id=413 data-nosnippet>413</a>        <span class="attr">#[cfg(not(feature = <span class="string">"alloc"</span>))]
+<a href=#414 id=414 data-nosnippet>414</a>        </span>{
+<a href=#415 id=415 data-nosnippet>415</a>            <span class="macro">unreachable!</span>()
+<a href=#416 id=416 data-nosnippet>416</a>        }
+<a href=#417 id=417 data-nosnippet>417</a>        <span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#418 id=418 data-nosnippet>418</a>        </span>{
+<a href=#419 id=419 data-nosnippet>419</a>            <span class="self">self</span>.pre.memory_usage()
+<a href=#420 id=420 data-nosnippet>420</a>        }
+<a href=#421 id=421 data-nosnippet>421</a>    }
+<a href=#422 id=422 data-nosnippet>422</a>
+<a href=#423 id=423 data-nosnippet>423</a>    <span class="doccomment">/// Return the length of the longest needle
+<a href=#424 id=424 data-nosnippet>424</a>    /// in this Prefilter
+<a href=#425 id=425 data-nosnippet>425</a>    </span><span class="attr">#[inline]
+<a href=#426 id=426 data-nosnippet>426</a>    </span><span class="kw">pub fn </span>max_needle_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#427 id=427 data-nosnippet>427</a>        <span class="attr">#[cfg(not(feature = <span class="string">"alloc"</span>))]
+<a href=#428 id=428 data-nosnippet>428</a>        </span>{
+<a href=#429 id=429 data-nosnippet>429</a>            <span class="macro">unreachable!</span>()
+<a href=#430 id=430 data-nosnippet>430</a>        }
+<a href=#431 id=431 data-nosnippet>431</a>        <span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#432 id=432 data-nosnippet>432</a>        </span>{
+<a href=#433 id=433 data-nosnippet>433</a>            <span class="self">self</span>.max_needle_len
+<a href=#434 id=434 data-nosnippet>434</a>        }
+<a href=#435 id=435 data-nosnippet>435</a>    }
+<a href=#436 id=436 data-nosnippet>436</a>
+<a href=#437 id=437 data-nosnippet>437</a>    <span class="doccomment">/// Implementations might return true here if they believe themselves to
+<a href=#438 id=438 data-nosnippet>438</a>    /// be "fast." The concept of "fast" is deliberately left vague, but in
+<a href=#439 id=439 data-nosnippet>439</a>    /// practice this usually corresponds to whether it's believed that SIMD
+<a href=#440 id=440 data-nosnippet>440</a>    /// will be used.
+<a href=#441 id=441 data-nosnippet>441</a>    ///
+<a href=#442 id=442 data-nosnippet>442</a>    /// Why do we care about this? Well, some prefilter tricks tend to come
+<a href=#443 id=443 data-nosnippet>443</a>    /// with their own bits of overhead, and so might only make sense if we
+<a href=#444 id=444 data-nosnippet>444</a>    /// know that a scan will be *much* faster than the regex engine itself.
+<a href=#445 id=445 data-nosnippet>445</a>    /// Otherwise, the trick may not be worth doing. Whether something is
+<a href=#446 id=446 data-nosnippet>446</a>    /// "much" faster than the regex engine generally boils down to whether
+<a href=#447 id=447 data-nosnippet>447</a>    /// SIMD is used. (But not always. Even a SIMD matcher with a high false
+<a href=#448 id=448 data-nosnippet>448</a>    /// positive rate can become quite slow.)
+<a href=#449 id=449 data-nosnippet>449</a>    ///
+<a href=#450 id=450 data-nosnippet>450</a>    /// Even if this returns true, it is still possible for the prefilter to
+<a href=#451 id=451 data-nosnippet>451</a>    /// be "slow." Remember, prefilters are just heuristics. We can't really
+<a href=#452 id=452 data-nosnippet>452</a>    /// *know* a prefilter will be fast without actually trying the prefilter.
+<a href=#453 id=453 data-nosnippet>453</a>    /// (Which of course we cannot afford to do.)
+<a href=#454 id=454 data-nosnippet>454</a>    </span><span class="attr">#[inline]
+<a href=#455 id=455 data-nosnippet>455</a>    </span><span class="kw">pub fn </span>is_fast(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#456 id=456 data-nosnippet>456</a>        <span class="attr">#[cfg(not(feature = <span class="string">"alloc"</span>))]
+<a href=#457 id=457 data-nosnippet>457</a>        </span>{
+<a href=#458 id=458 data-nosnippet>458</a>            <span class="macro">unreachable!</span>()
+<a href=#459 id=459 data-nosnippet>459</a>        }
+<a href=#460 id=460 data-nosnippet>460</a>        <span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#461 id=461 data-nosnippet>461</a>        </span>{
+<a href=#462 id=462 data-nosnippet>462</a>            <span class="self">self</span>.is_fast
+<a href=#463 id=463 data-nosnippet>463</a>        }
+<a href=#464 id=464 data-nosnippet>464</a>    }
+<a href=#465 id=465 data-nosnippet>465</a>}
+<a href=#466 id=466 data-nosnippet>466</a>
+<a href=#467 id=467 data-nosnippet>467</a><span class="doccomment">/// A trait for abstracting over prefilters. Basically, a prefilter is
+<a href=#468 id=468 data-nosnippet>468</a>/// something that do an unanchored *and* an anchored search in a haystack
+<a href=#469 id=469 data-nosnippet>469</a>/// within a given span.
+<a href=#470 id=470 data-nosnippet>470</a>///
+<a href=#471 id=471 data-nosnippet>471</a>/// This exists pretty much only so that we can use prefilters as a trait
+<a href=#472 id=472 data-nosnippet>472</a>/// object (which is what `Prefilter` is). If we ever move off of trait objects
+<a href=#473 id=473 data-nosnippet>473</a>/// and to an enum, then it's likely this trait could be removed.
+<a href=#474 id=474 data-nosnippet>474</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">trait </span>PrefilterI:
+<a href=#475 id=475 data-nosnippet>475</a>    Debug + Send + Sync + RefUnwindSafe + UnwindSafe + <span class="lifetime">'static
+<a href=#476 id=476 data-nosnippet>476</a></span>{
+<a href=#477 id=477 data-nosnippet>477</a>    <span class="doccomment">/// Run this prefilter on `haystack[span.start..end]` and return a matching
+<a href=#478 id=478 data-nosnippet>478</a>    /// span if one exists.
+<a href=#479 id=479 data-nosnippet>479</a>    ///
+<a href=#480 id=480 data-nosnippet>480</a>    /// The span returned is guaranteed to have a start position greater than
+<a href=#481 id=481 data-nosnippet>481</a>    /// or equal to the one given, and an end position less than or equal to
+<a href=#482 id=482 data-nosnippet>482</a>    /// the one given.
+<a href=#483 id=483 data-nosnippet>483</a>    </span><span class="kw">fn </span>find(<span class="kw-2">&amp;</span><span class="self">self</span>, haystack: <span class="kw-2">&amp;</span>[u8], span: Span) -&gt; <span class="prelude-ty">Option</span>&lt;Span&gt;;
+<a href=#484 id=484 data-nosnippet>484</a>
+<a href=#485 id=485 data-nosnippet>485</a>    <span class="doccomment">/// Returns the span of a prefix of `haystack[span.start..span.end]` if
+<a href=#486 id=486 data-nosnippet>486</a>    /// the prefilter matches.
+<a href=#487 id=487 data-nosnippet>487</a>    ///
+<a href=#488 id=488 data-nosnippet>488</a>    /// The span returned is guaranteed to have a start position equivalent to
+<a href=#489 id=489 data-nosnippet>489</a>    /// the one given, and an end position less than or equal to the one given.
+<a href=#490 id=490 data-nosnippet>490</a>    </span><span class="kw">fn </span>prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, haystack: <span class="kw-2">&amp;</span>[u8], span: Span) -&gt; <span class="prelude-ty">Option</span>&lt;Span&gt;;
+<a href=#491 id=491 data-nosnippet>491</a>
+<a href=#492 id=492 data-nosnippet>492</a>    <span class="doccomment">/// Returns the heap memory, in bytes, used by the underlying prefilter.
+<a href=#493 id=493 data-nosnippet>493</a>    </span><span class="kw">fn </span>memory_usage(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+<a href=#494 id=494 data-nosnippet>494</a>
+<a href=#495 id=495 data-nosnippet>495</a>    <span class="doccomment">/// Implementations might return true here if they believe themselves to
+<a href=#496 id=496 data-nosnippet>496</a>    /// be "fast." See [`Prefilter::is_fast`] for more details.
+<a href=#497 id=497 data-nosnippet>497</a>    </span><span class="kw">fn </span>is_fast(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
+<a href=#498 id=498 data-nosnippet>498</a>}
+<a href=#499 id=499 data-nosnippet>499</a>
+<a href=#500 id=500 data-nosnippet>500</a><span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#501 id=501 data-nosnippet>501</a></span><span class="kw">impl</span>&lt;P: PrefilterI + <span class="question-mark">?</span>Sized&gt; PrefilterI <span class="kw">for </span>Arc&lt;P&gt; {
+<a href=#502 id=502 data-nosnippet>502</a>    <span class="attr">#[cfg_attr(feature = <span class="string">"perf-inline"</span>, inline(always))]
+<a href=#503 id=503 data-nosnippet>503</a>    </span><span class="kw">fn </span>find(<span class="kw-2">&amp;</span><span class="self">self</span>, haystack: <span class="kw-2">&amp;</span>[u8], span: Span) -&gt; <span class="prelude-ty">Option</span>&lt;Span&gt; {
+<a href=#504 id=504 data-nosnippet>504</a>        (<span class="kw-2">&amp;**</span><span class="self">self</span>).find(haystack, span)
+<a href=#505 id=505 data-nosnippet>505</a>    }
+<a href=#506 id=506 data-nosnippet>506</a>
+<a href=#507 id=507 data-nosnippet>507</a>    <span class="attr">#[cfg_attr(feature = <span class="string">"perf-inline"</span>, inline(always))]
+<a href=#508 id=508 data-nosnippet>508</a>    </span><span class="kw">fn </span>prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, haystack: <span class="kw-2">&amp;</span>[u8], span: Span) -&gt; <span class="prelude-ty">Option</span>&lt;Span&gt; {
+<a href=#509 id=509 data-nosnippet>509</a>        (<span class="kw-2">&amp;**</span><span class="self">self</span>).prefix(haystack, span)
+<a href=#510 id=510 data-nosnippet>510</a>    }
+<a href=#511 id=511 data-nosnippet>511</a>
+<a href=#512 id=512 data-nosnippet>512</a>    <span class="attr">#[cfg_attr(feature = <span class="string">"perf-inline"</span>, inline(always))]
+<a href=#513 id=513 data-nosnippet>513</a>    </span><span class="kw">fn </span>memory_usage(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#514 id=514 data-nosnippet>514</a>        (<span class="kw-2">&amp;**</span><span class="self">self</span>).memory_usage()
+<a href=#515 id=515 data-nosnippet>515</a>    }
+<a href=#516 id=516 data-nosnippet>516</a>
+<a href=#517 id=517 data-nosnippet>517</a>    <span class="attr">#[cfg_attr(feature = <span class="string">"perf-inline"</span>, inline(always))]
+<a href=#518 id=518 data-nosnippet>518</a>    </span><span class="kw">fn </span>is_fast(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#519 id=519 data-nosnippet>519</a>        (<span class="kw-2">&amp;**</span><span class="self">self</span>).is_fast()
+<a href=#520 id=520 data-nosnippet>520</a>    }
+<a href=#521 id=521 data-nosnippet>521</a>}
+<a href=#522 id=522 data-nosnippet>522</a>
+<a href=#523 id=523 data-nosnippet>523</a><span class="doccomment">/// A type that encapsulates the selection of a prefilter algorithm from a
+<a href=#524 id=524 data-nosnippet>524</a>/// sequence of needles.
+<a href=#525 id=525 data-nosnippet>525</a>///
+<a href=#526 id=526 data-nosnippet>526</a>/// The existence of this type is a little tricky, because we don't (currently)
+<a href=#527 id=527 data-nosnippet>527</a>/// use it for performing a search. Instead, we really only consume it by
+<a href=#528 id=528 data-nosnippet>528</a>/// converting the underlying prefilter into a trait object, whether that be
+<a href=#529 id=529 data-nosnippet>529</a>/// `dyn PrefilterI` or `dyn Strategy` (for the meta regex engine). In order
+<a href=#530 id=530 data-nosnippet>530</a>/// to avoid re-copying the prefilter selection logic, we isolate it here, and
+<a href=#531 id=531 data-nosnippet>531</a>/// then force anything downstream that wants to convert it to a trait object
+<a href=#532 id=532 data-nosnippet>532</a>/// to do trivial case analysis on it.
+<a href=#533 id=533 data-nosnippet>533</a>///
+<a href=#534 id=534 data-nosnippet>534</a>/// One wonders whether we *should* use an enum instead of a trait object.
+<a href=#535 id=535 data-nosnippet>535</a>/// At time of writing, I chose trait objects based on instinct because 1) I
+<a href=#536 id=536 data-nosnippet>536</a>/// knew I wasn't going to inline anything and 2) there would potentially be
+<a href=#537 id=537 data-nosnippet>537</a>/// many different choices. However, as of time of writing, I haven't actually
+<a href=#538 id=538 data-nosnippet>538</a>/// compared the trait object approach to the enum approach. That probably
+<a href=#539 id=539 data-nosnippet>539</a>/// should be litigated, but I ran out of steam.
+<a href=#540 id=540 data-nosnippet>540</a>///
+<a href=#541 id=541 data-nosnippet>541</a>/// Note that if the `alloc` feature is disabled, then values of this type
+<a href=#542 id=542 data-nosnippet>542</a>/// are (and should) never be constructed. Also, in practice, for any of the
+<a href=#543 id=543 data-nosnippet>543</a>/// prefilters to be selected, you'll need at least one of the `perf-literal-*`
+<a href=#544 id=544 data-nosnippet>544</a>/// features enabled.
+<a href=#545 id=545 data-nosnippet>545</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#546 id=546 data-nosnippet>546</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Choice {
+<a href=#547 id=547 data-nosnippet>547</a>    Memchr(Memchr),
+<a href=#548 id=548 data-nosnippet>548</a>    Memchr2(Memchr2),
+<a href=#549 id=549 data-nosnippet>549</a>    Memchr3(Memchr3),
+<a href=#550 id=550 data-nosnippet>550</a>    Memmem(Memmem),
+<a href=#551 id=551 data-nosnippet>551</a>    Teddy(Teddy),
+<a href=#552 id=552 data-nosnippet>552</a>    ByteSet(ByteSet),
+<a href=#553 id=553 data-nosnippet>553</a>    AhoCorasick(AhoCorasick),
+<a href=#554 id=554 data-nosnippet>554</a>}
+<a href=#555 id=555 data-nosnippet>555</a>
+<a href=#556 id=556 data-nosnippet>556</a><span class="kw">impl </span>Choice {
+<a href=#557 id=557 data-nosnippet>557</a>    <span class="doccomment">/// Select what is believed to be the best prefilter algorithm for the
+<a href=#558 id=558 data-nosnippet>558</a>    /// match semantics and sequence of needles given.
+<a href=#559 id=559 data-nosnippet>559</a>    ///
+<a href=#560 id=560 data-nosnippet>560</a>    /// This selection algorithm uses the needles as given without any
+<a href=#561 id=561 data-nosnippet>561</a>    /// modification. For example, if `[bar]` is given, then this doesn't
+<a href=#562 id=562 data-nosnippet>562</a>    /// try to select `memchr` for `b`. Instead, it would select `memmem`
+<a href=#563 id=563 data-nosnippet>563</a>    /// for `bar`. If callers would want `memchr` selected for `[bar]`, then
+<a href=#564 id=564 data-nosnippet>564</a>    /// callers should massages the literals themselves. That is, callers are
+<a href=#565 id=565 data-nosnippet>565</a>    /// responsible for heuristics surrounding which sequence of literals is
+<a href=#566 id=566 data-nosnippet>566</a>    /// best.
+<a href=#567 id=567 data-nosnippet>567</a>    ///
+<a href=#568 id=568 data-nosnippet>568</a>    /// What this selection algorithm does is attempt to use the fastest
+<a href=#569 id=569 data-nosnippet>569</a>    /// prefilter that works for the literals given. So if `[a, b]`, is given,
+<a href=#570 id=570 data-nosnippet>570</a>    /// then `memchr2` is selected.
+<a href=#571 id=571 data-nosnippet>571</a>    ///
+<a href=#572 id=572 data-nosnippet>572</a>    /// Of course, which prefilter is selected is also subject to what
+<a href=#573 id=573 data-nosnippet>573</a>    /// is available. For example, if `alloc` isn't enabled, then
+<a href=#574 id=574 data-nosnippet>574</a>    /// that limits which prefilters can be selected. Similarly, if
+<a href=#575 id=575 data-nosnippet>575</a>    /// `perf-literal-substring` isn't enabled, then nothing from the `memchr`
+<a href=#576 id=576 data-nosnippet>576</a>    /// crate can be returned.
+<a href=#577 id=577 data-nosnippet>577</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new&lt;B: AsRef&lt;[u8]&gt;&gt;(
+<a href=#578 id=578 data-nosnippet>578</a>        kind: MatchKind,
+<a href=#579 id=579 data-nosnippet>579</a>        needles: <span class="kw-2">&amp;</span>[B],
+<a href=#580 id=580 data-nosnippet>580</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Choice&gt; {
+<a href=#581 id=581 data-nosnippet>581</a>        <span class="comment">// An empty set means the regex matches nothing, so no sense in
+<a href=#582 id=582 data-nosnippet>582</a>        // building a prefilter.
+<a href=#583 id=583 data-nosnippet>583</a>        </span><span class="kw">if </span>needles.len() == <span class="number">0 </span>{
+<a href=#584 id=584 data-nosnippet>584</a>            <span class="macro">debug!</span>(<span class="string">"prefilter building failed: found empty set of literals"</span>);
+<a href=#585 id=585 data-nosnippet>585</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#586 id=586 data-nosnippet>586</a>        }
+<a href=#587 id=587 data-nosnippet>587</a>        <span class="comment">// If the regex can match the empty string, then the prefilter
+<a href=#588 id=588 data-nosnippet>588</a>        // will by definition match at every position. This is obviously
+<a href=#589 id=589 data-nosnippet>589</a>        // completely ineffective.
+<a href=#590 id=590 data-nosnippet>590</a>        </span><span class="kw">if </span>needles.iter().any(|n| n.as_ref().is_empty()) {
+<a href=#591 id=591 data-nosnippet>591</a>            <span class="macro">debug!</span>(<span class="string">"prefilter building failed: literals match empty string"</span>);
+<a href=#592 id=592 data-nosnippet>592</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#593 id=593 data-nosnippet>593</a>        }
+<a href=#594 id=594 data-nosnippet>594</a>        <span class="comment">// BREADCRUMBS: Perhaps the literal optimizer should special case
+<a href=#595 id=595 data-nosnippet>595</a>        // sequences of length two or three if the leading bytes of each are
+<a href=#596 id=596 data-nosnippet>596</a>        // "rare"? Or perhaps, if there are two or three total possible leading
+<a href=#597 id=597 data-nosnippet>597</a>        // bytes, regardless of the number of literals, and all are rare...
+<a href=#598 id=598 data-nosnippet>598</a>        // Then well, perhaps we should use memchr2 or memchr3 in those cases?
+<a href=#599 id=599 data-nosnippet>599</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(pre) = Memchr::new(kind, needles) {
+<a href=#600 id=600 data-nosnippet>600</a>            <span class="macro">debug!</span>(<span class="string">"prefilter built: memchr"</span>);
+<a href=#601 id=601 data-nosnippet>601</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(Choice::Memchr(pre));
+<a href=#602 id=602 data-nosnippet>602</a>        }
+<a href=#603 id=603 data-nosnippet>603</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(pre) = Memchr2::new(kind, needles) {
+<a href=#604 id=604 data-nosnippet>604</a>            <span class="macro">debug!</span>(<span class="string">"prefilter built: memchr2"</span>);
+<a href=#605 id=605 data-nosnippet>605</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(Choice::Memchr2(pre));
+<a href=#606 id=606 data-nosnippet>606</a>        }
+<a href=#607 id=607 data-nosnippet>607</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(pre) = Memchr3::new(kind, needles) {
+<a href=#608 id=608 data-nosnippet>608</a>            <span class="macro">debug!</span>(<span class="string">"prefilter built: memchr3"</span>);
+<a href=#609 id=609 data-nosnippet>609</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(Choice::Memchr3(pre));
+<a href=#610 id=610 data-nosnippet>610</a>        }
+<a href=#611 id=611 data-nosnippet>611</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(pre) = Memmem::new(kind, needles) {
+<a href=#612 id=612 data-nosnippet>612</a>            <span class="macro">debug!</span>(<span class="string">"prefilter built: memmem"</span>);
+<a href=#613 id=613 data-nosnippet>613</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(Choice::Memmem(pre));
+<a href=#614 id=614 data-nosnippet>614</a>        }
+<a href=#615 id=615 data-nosnippet>615</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(pre) = Teddy::new(kind, needles) {
+<a href=#616 id=616 data-nosnippet>616</a>            <span class="macro">debug!</span>(<span class="string">"prefilter built: teddy"</span>);
+<a href=#617 id=617 data-nosnippet>617</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(Choice::Teddy(pre));
+<a href=#618 id=618 data-nosnippet>618</a>        }
+<a href=#619 id=619 data-nosnippet>619</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(pre) = ByteSet::new(kind, needles) {
+<a href=#620 id=620 data-nosnippet>620</a>            <span class="macro">debug!</span>(<span class="string">"prefilter built: byteset"</span>);
+<a href=#621 id=621 data-nosnippet>621</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(Choice::ByteSet(pre));
+<a href=#622 id=622 data-nosnippet>622</a>        }
+<a href=#623 id=623 data-nosnippet>623</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(pre) = AhoCorasick::new(kind, needles) {
+<a href=#624 id=624 data-nosnippet>624</a>            <span class="macro">debug!</span>(<span class="string">"prefilter built: aho-corasick"</span>);
+<a href=#625 id=625 data-nosnippet>625</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(Choice::AhoCorasick(pre));
+<a href=#626 id=626 data-nosnippet>626</a>        }
+<a href=#627 id=627 data-nosnippet>627</a>        <span class="macro">debug!</span>(<span class="string">"prefilter building failed: no strategy could be found"</span>);
+<a href=#628 id=628 data-nosnippet>628</a>        <span class="prelude-val">None
+<a href=#629 id=629 data-nosnippet>629</a>    </span>}
+<a href=#630 id=630 data-nosnippet>630</a>}
+<a href=#631 id=631 data-nosnippet>631</a>
+<a href=#632 id=632 data-nosnippet>632</a><span class="doccomment">/// Extracts all of the prefix literals from the given HIR expressions into a
+<a href=#633 id=633 data-nosnippet>633</a>/// single `Seq`. The literals in the sequence are ordered with respect to the
+<a href=#634 id=634 data-nosnippet>634</a>/// order of the given HIR expressions and consistent with the match semantics
+<a href=#635 id=635 data-nosnippet>635</a>/// given.
+<a href=#636 id=636 data-nosnippet>636</a>///
+<a href=#637 id=637 data-nosnippet>637</a>/// The sequence returned is "optimized." That is, they may be shrunk or even
+<a href=#638 id=638 data-nosnippet>638</a>/// truncated according to heuristics with the intent of making them more
+<a href=#639 id=639 data-nosnippet>639</a>/// useful as a prefilter. (Which translates to both using faster algorithms
+<a href=#640 id=640 data-nosnippet>640</a>/// and minimizing the false positive rate.)
+<a href=#641 id=641 data-nosnippet>641</a>///
+<a href=#642 id=642 data-nosnippet>642</a>/// Note that this erases any connection between the literals and which pattern
+<a href=#643 id=643 data-nosnippet>643</a>/// (or patterns) they came from.
+<a href=#644 id=644 data-nosnippet>644</a>///
+<a href=#645 id=645 data-nosnippet>645</a>/// The match kind given must correspond to the match semantics of the regex
+<a href=#646 id=646 data-nosnippet>646</a>/// that is represented by the HIRs given. The match semantics may change the
+<a href=#647 id=647 data-nosnippet>647</a>/// literal sequence returned.
+<a href=#648 id=648 data-nosnippet>648</a></span><span class="attr">#[cfg(feature = <span class="string">"syntax"</span>)]
+<a href=#649 id=649 data-nosnippet>649</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>prefixes&lt;H&gt;(kind: MatchKind, hirs: <span class="kw-2">&amp;</span>[H]) -&gt; literal::Seq
+<a href=#650 id=650 data-nosnippet>650</a><span class="kw">where
+<a href=#651 id=651 data-nosnippet>651</a>    </span>H: core::borrow::Borrow&lt;Hir&gt;,
+<a href=#652 id=652 data-nosnippet>652</a>{
+<a href=#653 id=653 data-nosnippet>653</a>    <span class="kw">let </span><span class="kw-2">mut </span>extractor = literal::Extractor::new();
+<a href=#654 id=654 data-nosnippet>654</a>    extractor.kind(literal::ExtractKind::Prefix);
+<a href=#655 id=655 data-nosnippet>655</a>
+<a href=#656 id=656 data-nosnippet>656</a>    <span class="kw">let </span><span class="kw-2">mut </span>prefixes = literal::Seq::empty();
+<a href=#657 id=657 data-nosnippet>657</a>    <span class="kw">for </span>hir <span class="kw">in </span>hirs {
+<a href=#658 id=658 data-nosnippet>658</a>        prefixes.union(<span class="kw-2">&amp;mut </span>extractor.extract(hir.borrow()));
+<a href=#659 id=659 data-nosnippet>659</a>    }
+<a href=#660 id=660 data-nosnippet>660</a>    <span class="macro">debug!</span>(
+<a href=#661 id=661 data-nosnippet>661</a>        <span class="string">"prefixes (len={:?}, exact={:?}) extracted before optimization: {:?}"</span>,
+<a href=#662 id=662 data-nosnippet>662</a>        prefixes.len(),
+<a href=#663 id=663 data-nosnippet>663</a>        prefixes.is_exact(),
+<a href=#664 id=664 data-nosnippet>664</a>        prefixes
+<a href=#665 id=665 data-nosnippet>665</a>    );
+<a href=#666 id=666 data-nosnippet>666</a>    <span class="kw">match </span>kind {
+<a href=#667 id=667 data-nosnippet>667</a>        MatchKind::All =&gt; {
+<a href=#668 id=668 data-nosnippet>668</a>            prefixes.sort();
+<a href=#669 id=669 data-nosnippet>669</a>            prefixes.dedup();
+<a href=#670 id=670 data-nosnippet>670</a>        }
+<a href=#671 id=671 data-nosnippet>671</a>        MatchKind::LeftmostFirst =&gt; {
+<a href=#672 id=672 data-nosnippet>672</a>            prefixes.optimize_for_prefix_by_preference();
+<a href=#673 id=673 data-nosnippet>673</a>        }
+<a href=#674 id=674 data-nosnippet>674</a>    }
+<a href=#675 id=675 data-nosnippet>675</a>    <span class="macro">debug!</span>(
+<a href=#676 id=676 data-nosnippet>676</a>        <span class="string">"prefixes (len={:?}, exact={:?}) extracted after optimization: {:?}"</span>,
+<a href=#677 id=677 data-nosnippet>677</a>        prefixes.len(),
+<a href=#678 id=678 data-nosnippet>678</a>        prefixes.is_exact(),
+<a href=#679 id=679 data-nosnippet>679</a>        prefixes
+<a href=#680 id=680 data-nosnippet>680</a>    );
+<a href=#681 id=681 data-nosnippet>681</a>    prefixes
+<a href=#682 id=682 data-nosnippet>682</a>}
+<a href=#683 id=683 data-nosnippet>683</a>
+<a href=#684 id=684 data-nosnippet>684</a><span class="doccomment">/// Like `prefixes`, but for all suffixes of all matches for the given HIRs.
+<a href=#685 id=685 data-nosnippet>685</a></span><span class="attr">#[cfg(feature = <span class="string">"syntax"</span>)]
+<a href=#686 id=686 data-nosnippet>686</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>suffixes&lt;H&gt;(kind: MatchKind, hirs: <span class="kw-2">&amp;</span>[H]) -&gt; literal::Seq
+<a href=#687 id=687 data-nosnippet>687</a><span class="kw">where
+<a href=#688 id=688 data-nosnippet>688</a>    </span>H: core::borrow::Borrow&lt;Hir&gt;,
+<a href=#689 id=689 data-nosnippet>689</a>{
+<a href=#690 id=690 data-nosnippet>690</a>    <span class="kw">let </span><span class="kw-2">mut </span>extractor = literal::Extractor::new();
+<a href=#691 id=691 data-nosnippet>691</a>    extractor.kind(literal::ExtractKind::Suffix);
+<a href=#692 id=692 data-nosnippet>692</a>
+<a href=#693 id=693 data-nosnippet>693</a>    <span class="kw">let </span><span class="kw-2">mut </span>suffixes = literal::Seq::empty();
+<a href=#694 id=694 data-nosnippet>694</a>    <span class="kw">for </span>hir <span class="kw">in </span>hirs {
+<a href=#695 id=695 data-nosnippet>695</a>        suffixes.union(<span class="kw-2">&amp;mut </span>extractor.extract(hir.borrow()));
+<a href=#696 id=696 data-nosnippet>696</a>    }
+<a href=#697 id=697 data-nosnippet>697</a>    <span class="macro">debug!</span>(
+<a href=#698 id=698 data-nosnippet>698</a>        <span class="string">"suffixes (len={:?}, exact={:?}) extracted before optimization: {:?}"</span>,
+<a href=#699 id=699 data-nosnippet>699</a>        suffixes.len(),
+<a href=#700 id=700 data-nosnippet>700</a>        suffixes.is_exact(),
+<a href=#701 id=701 data-nosnippet>701</a>        suffixes
+<a href=#702 id=702 data-nosnippet>702</a>    );
+<a href=#703 id=703 data-nosnippet>703</a>    <span class="kw">match </span>kind {
+<a href=#704 id=704 data-nosnippet>704</a>        MatchKind::All =&gt; {
+<a href=#705 id=705 data-nosnippet>705</a>            suffixes.sort();
+<a href=#706 id=706 data-nosnippet>706</a>            suffixes.dedup();
+<a href=#707 id=707 data-nosnippet>707</a>        }
+<a href=#708 id=708 data-nosnippet>708</a>        MatchKind::LeftmostFirst =&gt; {
+<a href=#709 id=709 data-nosnippet>709</a>            suffixes.optimize_for_suffix_by_preference();
+<a href=#710 id=710 data-nosnippet>710</a>        }
+<a href=#711 id=711 data-nosnippet>711</a>    }
+<a href=#712 id=712 data-nosnippet>712</a>    <span class="macro">debug!</span>(
+<a href=#713 id=713 data-nosnippet>713</a>        <span class="string">"suffixes (len={:?}, exact={:?}) extracted after optimization: {:?}"</span>,
+<a href=#714 id=714 data-nosnippet>714</a>        suffixes.len(),
+<a href=#715 id=715 data-nosnippet>715</a>        suffixes.is_exact(),
+<a href=#716 id=716 data-nosnippet>716</a>        suffixes
+<a href=#717 id=717 data-nosnippet>717</a>    );
+<a href=#718 id=718 data-nosnippet>718</a>    suffixes
+<a href=#719 id=719 data-nosnippet>719</a>}</code></pre></div></section></main></body></html>

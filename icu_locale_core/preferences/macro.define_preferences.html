@@ -1,0 +1,47 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A macro to facilitate generation of preferences struct."><title>define_preferences in icu_locale_core::preferences - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="icu_locale_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../icu_locale_core/index.html">icu_<wbr>locale_<wbr>core</a><span class="version">2.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">define_<wbr>preferences</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In icu_<wbr>locale_<wbr>core::<wbr>preferences</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">icu_locale_core</a>::<wbr><a href="index.html">preferences</a></div><h1>Macro <span class="macro">define_preferences</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/icu_locale_core/preferences/mod.rs.html#464-569">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! define_preferences {
+    (
+        $(#[$doc:meta])*
+        $([$derive_attrs:ty])?
+        $name:ident,
+        {
+            $(
+                $(#[$key_doc:meta])*
+                $key:ident: $pref:ty
+            ),*
+        }
+     ) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A macro to facilitate generation of preferences struct.</p>
+<p>The generated preferences struct provides methods for merging and converting between <a href="../struct.Locale.html" title="struct icu_locale_core::Locale"><code>Locale</code></a> and
+the preference bag. See <a href="index.html" title="mod icu_locale_core::preferences"><code>preferences</code></a> for use cases.</p>
+<p>In the example below, the input argument is the generated preferences struct which
+can be auto-converted from a Locale, or combined from a Locale and Preferences Bag.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>icu::locale::{
+    preferences::{
+        define_preferences,
+        extensions::unicode::keywords::HourCycle
+    },
+    locale,
+};
+
+<span class="macro">define_preferences!</span>(
+    [Copy]
+    NoCalendarFormatterPreferences,
+    {
+        hour_cycle: HourCycle
+    }
+);
+
+<span class="kw">struct </span>NoCalendarFormatter {}
+
+<span class="kw">impl </span>NoCalendarFormatter {
+    <span class="kw">pub fn </span>try_new(prefs: NoCalendarFormatterPreferences) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, ()&gt; {
+        <span class="comment">// load data and set struct fields based on the prefs input
+        </span><span class="prelude-val">Ok</span>(<span class="self">Self </span>{})
+    }
+}
+
+<span class="kw">let </span>loc = <span class="macro">locale!</span>(<span class="string">"en-US"</span>);
+
+<span class="kw">let </span>tf = NoCalendarFormatter::try_new(loc.into());</code></pre></div>
+</div></details></section></div></main></body></html>

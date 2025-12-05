@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["RootView","View"],"enum":["ViewError"],"struct":["KeyValueStore"],"trait":["CustomSerialize","RootView","View"],"type":["ByteCollectionView","ByteMapView","ByteSetView","CollectionView","CustomCollectionView","CustomMapView","CustomSetView","LogView","MapView","QueueView","ReadGuardedView","RegisterView","SetView","ViewStorageContext"]};

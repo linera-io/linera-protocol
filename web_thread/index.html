@@ -1,0 +1,61 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`web-thread`"><title>web_thread - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="web_thread" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../web_thread/index.html">web_<wbr>thread</a><span class="version">0.2.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#web-thread" title="`web-thread`"><code>web-thread</code></a><ul><li><a href="#requirements" title="Requirements">Requirements</a></li><li><a href="#linking-the-binary" title="Linking the binary">Linking the binary</a></li></ul></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>web_thread</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/web_thread/lib.rs.html#4-305">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="web-thread"><a class="doc-anchor" href="#web-thread">§</a><code>web-thread</code></h2>
+<p>A crate for long-running, shared-memory threads in a browser context
+for use with
+<a href="https://github.com/wasm-bindgen/wasm-bindgen"><code>wasm-bindgen</code></a>.
+Supports sending non-<code>Send</code> data across the boundary using
+<code>postMessage</code> and
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects">transfer</a>.</p>
+<h3 id="requirements"><a class="doc-anchor" href="#requirements">§</a>Requirements</h3>
+<p>Like all Web threading solutions, this crate requires Wasm atomics,
+bulk memory, and mutable globals:</p>
+<p><code>.cargo/config.toml</code></p>
+<div class="example-wrap"><pre class="language-toml"><code>[target.wasm32-unknown-unknown]
+rustflags = [
+    &quot;-C&quot;, &quot;target-feature=+atomics,+bulk-memory,+mutable-globals&quot;,
+]</code></pre></div>
+<p>as well as cross-origin isolation on the serving Web page in order to
+<a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#security_requirements">enable the use of
+<code>SharedArrayBuffer</code></a>,
+i.e. the HTTP headers</p>
+<div class="example-wrap"><pre class="language-text"><code>Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp</code></pre></div>
+<p>The <code>credentialless</code> value for <code>Cross-Origin-Embedder-Policy</code> should
+also work, but at the time of writing is not supported in Safari.</p>
+<h3 id="linking-the-binary"><a class="doc-anchor" href="#linking-the-binary">§</a>Linking the binary</h3>
+<p>Since this crate can’t know the location of your shim script and Wasm
+binary ahead of time, you must make the module identifier
+<code>web-thread:wasm-shim</code> resolve to the path of your <code>wasm-bindgen</code> shim
+script.  This can be done with a bundler such as
+<a href="https://vite.dev/">Vite</a> or <a href="https://webpack.js.org/">Webpack</a>, or by
+using a source-transformation tool such as
+<a href="https://www.npmjs.com/package/tsc-alias?activeTab=readme"><code>tsc-alias</code></a>:</p>
+<p><code>tsconfig.json</code></p>
+<div class="example-wrap"><pre class="language-json"><code>{
+    &quot;compilerOptions&quot;: {
+        &quot;baseUrl&quot;: &quot;./&quot;,
+        &quot;paths&quot;: {
+            &quot;web-thread:wasm-shim&quot;: [&quot;./src/wasm/my-library.js&quot;]
+        }
+    },
+    &quot;tsc-alias&quot;: {
+        &quot;resolveFullPaths&quot;: true
+    }
+}</code></pre></div>
+<p>Turbopack is currently not supported due to an open issue when
+processing cyclic dependencies.  See the following discussions for
+more information:</p>
+<ul>
+<li><a href="https://github.com/vercel/next.js/issues/85119">Turbopack: dynamic cyclical import causes infinite loop (#85119)</a></li>
+<li><a href="https://github.com/vercel/next.js/discussions/77102">Next.js v15.2.2 Turbopack Dev server stuck in compiling + extreme CPU/memory usage (#77102)</a></li>
+<li><a href="https://github.com/emscripten-core/emscripten/issues/20580">Eliminate the circular dependency between the main loader and the worker (#20580)</a></li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.SendTask.html" title="struct web_thread::SendTask">Send<wbr>Task</a></dt><dd>A <a href="struct.Task.html" title="struct web_thread::Task"><code>Task</code></a> with a <code>Send</code> output.
+See <a href="struct.Thread.html#method.run_send" title="method web_thread::Thread::run_send"><code>Thread::run_send</code></a> for usage.</dd><dt><a class="struct" href="struct.Task.html" title="struct web_thread::Task">Task</a></dt><dd>A task that’s been spawned on a <a href="struct.Thread.html" title="struct web_thread::Thread"><code>Thread</code></a>.</dd><dt><a class="struct" href="struct.Thread.html" title="struct web_thread::Thread">Thread</a></dt><dd>A representation of a JavaScript thread (Web worker with shared memory).</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.AsJs.html" title="trait web_thread::AsJs">AsJs</a></dt><dd>An object-safe version of
+<code>std::convert::TryInto</code>/<code>std::convert::TryFrom</code>, relying on the
+JavaScript GC.</dd><dt><a class="trait" href="trait.Post.html" title="trait web_thread::Post">Post</a></dt><dd>Objects that can be sent via <code>postMessage</code>.  A type that is <code>Post</code>
+supports being serialized into a JavaScript object that can be
+sent using <code>postMessage</code>, and also getting an array of subobjects
+that must be
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects">transferred</a>.</dd><dt><a class="trait" href="trait.PostExt.html" title="trait web_thread::PostExt">PostExt</a></dt><dd>Convenience trait for something that can have messages posted to
+it, including
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects">transferables</a>.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.Error.html" title="type web_thread::Error">Error</a></dt><dd>The type of errors that can be thrown in the course of executing a thread.</dd><dt><a class="type" href="type.Result.html" title="type web_thread::Result">Result</a></dt></dl></section></div></main></body></html>
