@@ -482,6 +482,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
                     next_block_height: BlockHeight::ZERO,
                     pending_proposal: None,
                     epoch: Some(epoch),
+                    listening_mode: ListeningMode::FullChain,
                 })
             })
             .await?;

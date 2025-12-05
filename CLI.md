@@ -1007,6 +1007,7 @@ Add a new followed chain (i.e. a chain without keypair) to the wallet
 ###### **Options:**
 
 * `--sync` — Synchronize the new chain and download all its blocks from the validators
+* `--skip-senders` — Skip syncing sender chains and inbox processing. Only sync the chain's own blocks
 
 
 

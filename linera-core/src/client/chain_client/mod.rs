@@ -2469,6 +2469,13 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<(), Error> {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
+                if matches!(listening_mode, ListeningMode::SkipSenders) {
+                    debug!(
+                        chain_id = %self.chain_id,
+                        "NewIncomingBundle: skipping sender sync due to SkipSenders mode"
+                    );
+                    return Ok(());
+                }
                 if self.local_next_height_to_receive(origin).await? > height {
                     debug!(
                         chain_id = %self.chain_id,
@@ -2505,7 +2512,7 @@ impl<Env: Environment> ChainClient<Env> {
                     return Ok(());
                 }
                 match listening_mode {
-                    ListeningMode::FullChain => {
+                    ListeningMode::FullChain | ListeningMode::SkipSenders => {
                         self.client
                             .synchronize_chain_state_from(&remote_node, chain_id)
                             .await?;
@@ -2548,7 +2555,7 @@ impl<Env: Environment> ChainClient<Env> {
                     return Ok(());
                 }
                 let should_process = match listening_mode {
-                    ListeningMode::FullChain => true,
+                    ListeningMode::FullChain | ListeningMode::SkipSenders => true,
                     ListeningMode::EventsOnly(relevant_events) => relevant_events
                         .intersection(&event_streams)
                         .next()
