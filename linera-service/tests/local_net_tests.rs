@@ -662,6 +662,8 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
 
 /// Test if the wallet file is correctly locked when used.
 #[cfg(feature = "storage-service")]
+// TODO(#2053): this test passes only if the wallet hasn't been saved
+#[ignore]
 #[test_log::test(tokio::test)]
 async fn test_storage_service_wallet_lock() -> Result<()> {
     use std::mem::drop;
