@@ -112,7 +112,7 @@ Now, we publish and deploy the Matching Engine application:
 ```bash
 MATCHING_ENGINE=$(linera --wait-for-outgoing-messages \
     project publish-and-create examples/matching-engine \
-    --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""]}" \
+    --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""], \"price_decimals\": 2}" \
     --required-application-ids $FUN1_APP_ID $FUN2_APP_ID)
 ```
 
@@ -137,12 +137,12 @@ To create a `Bid` order as owner 1, offering to buy 1 FUN1 for 5 FUN2:
 mutation {
   executeOrder(
     order: {
-        Insert : {
+      Insert : {
         owner: "$OWNER_1",
-        amount: "1",
+        quantity: "1",
         nature: Bid,
         price: {
-            price:5
+            price: 500
         }
       }
     }
@@ -231,10 +231,10 @@ mutation {
     order: {
       Insert : {
         owner: "$OWNER_2",
-        amount: "2",
+        quantity: "2",
         nature: Ask,
         price: {
-            price:5
+            price: 500
         }
       }
     }
