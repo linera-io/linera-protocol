@@ -213,12 +213,12 @@ impl Client {
             .genesis_config
             .initialize_storage(&mut storage)
             .await?;
-        let mut client_context = ClientContext::new(
+        let client_context = ClientContext::new(
             storage.clone(),
             wallet.chains,
             signer,
             OPTIONS,
-            wallet.default_chain,
+            wallet.default,
             wallet.genesis_config,
             BLOCK_CACHE_SIZE,
             EXECUTION_STATE_CACHE_SIZE,
