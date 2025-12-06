@@ -14,7 +14,6 @@ pub mod client_options;
 pub mod config;
 mod error;
 pub mod util;
-pub mod wallet;
 
 #[cfg(not(web))]
 pub mod benchmark;

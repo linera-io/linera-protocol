@@ -7,9 +7,6 @@ This crate handles persisting data types to disk with a variety of backends.
 
 #![allow(async_fn_in_trait)]
 
-mod dirty;
-use dirty::Dirty;
-
 cfg_if::cfg_if! {
     if #[cfg(with_indexed_db)] {
         pub mod indexed_db;

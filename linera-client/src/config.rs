@@ -17,7 +17,6 @@ use linera_execution::{
     committee::{Committee, ValidatorState},
     ResourceControlPolicy,
 };
-use linera_persistent as persistent;
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
@@ -28,21 +27,11 @@ pub enum Error {
     IoError(#[from] std::io::Error),
     #[error("chain error: {0}")]
     Chain(#[from] linera_chain::ChainError),
-    #[error("persistence error: {0}")]
-    Persistence(Box<dyn std::error::Error + Send + Sync>),
     #[error("storage is already initialized: {0:?}")]
     StorageIsAlreadyInitialized(Box<NetworkDescription>),
     #[error("no admin chain configured")]
     NoAdminChain,
 }
-
-use crate::util;
-
-util::impl_from_dynamic!(Error:Persistence, persistent::memory::Error);
-#[cfg(web)]
-util::impl_from_dynamic!(Error:Persistence, persistent::indexed_db::Error);
-#[cfg(feature = "fs")]
-util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
 
 /// The public configuration of a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -213,6 +202,56 @@ impl GenesisConfig {
             genesis_timestamp: self.timestamp,
             genesis_committee_blob_hash: self.committee_blob().id().hash,
             admin_chain_id: self.admin_id(),
+        }
+    }
+}
+
+#[cfg(with_testing)]
+mod test {
+    use linera_base::data_types::Timestamp;
+    use linera_core::test_utils::{MemoryStorageBuilder, TestBuilder};
+    use linera_rpc::{
+        config::{NetworkProtocol, ValidatorPublicNetworkPreConfig},
+        simple::TransportProtocol,
+    };
+
+    use super::*;
+    use crate::config::{CommitteeConfig, GenesisConfig, ValidatorConfig};
+
+    impl GenesisConfig {
+        /// Create a new local `GenesisConfig` for testing.
+        pub fn new_testing(builder: &TestBuilder<MemoryStorageBuilder>) -> Self {
+            let network = ValidatorPublicNetworkPreConfig {
+                protocol: NetworkProtocol::Simple(TransportProtocol::Tcp),
+                host: "localhost".to_string(),
+                port: 8080,
+            };
+            let validators = builder
+                .initial_committee
+                .validators()
+                .iter()
+                .map(|(public_key, state)| ValidatorConfig {
+                    public_key: *public_key,
+                    network: network.clone(),
+                    account_key: state.account_public_key,
+                })
+                .collect();
+            let mut genesis_chains = builder.genesis_chains().into_iter();
+            let (admin_public_key, admin_balance) = genesis_chains
+                .next()
+                .expect("should have at least one chain");
+            let mut genesis_config = Self::new(
+                CommitteeConfig { validators },
+                Timestamp::from(0),
+                builder.initial_committee.policy().clone(),
+                "test network".to_string(),
+                admin_public_key,
+                admin_balance,
+            );
+            for (public_key, amount) in genesis_chains {
+                genesis_config.add_root_chain(public_key, amount);
+            }
+            genesis_config
         }
     }
 }

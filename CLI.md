@@ -1270,8 +1270,6 @@ Adds a new validator with the specified public key, account key, network address
 * `--account-key <ACCOUNT_KEY>` — Account public key for receiving payments and rewards
 * `--address <ADDRESS>` — Network address where the validator can be reached (e.g., grpcs://host:port)
 * `--votes <VOTES>` — Voting weight for consensus (default: 1)
-
-  Default value: `1`
 * `--skip-online-check` — Skip online connectivity verification before adding
 
 

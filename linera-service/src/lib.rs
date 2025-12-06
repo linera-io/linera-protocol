@@ -13,3 +13,4 @@ pub mod storage;
 pub mod tracing;
 pub mod util;
 pub mod wallet;
+pub use wallet::Wallet;

@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Duration};
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner},
-    data_types::{Amount, BlockHeight, Epoch, TimeDelta, Timestamp},
+    data_types::{Amount, Epoch, TimeDelta, Timestamp},
     identifiers::{Account, AccountOwner, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -14,27 +14,26 @@ use linera_core::{
     client::{chain_client, ChainClient, Client},
     environment,
     test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
+    wallet,
 };
 use linera_storage::Storage;
 use tokio_util::sync::CancellationToken;
 
-use super::util::make_genesis_config;
 use crate::{
     chain_listener::{self, ChainListener, ChainListenerConfig, ClientContext as _},
-    wallet::{UserChain, Wallet},
+    config::GenesisConfig,
     Error,
 };
 
 struct ClientContext {
-    wallet: Wallet,
     client: Arc<Client<environment::Test>>,
 }
 
 impl chain_listener::ClientContext for ClientContext {
     type Environment = environment::Test;
 
-    fn wallet(&self) -> &Wallet {
-        &self.wallet
+    fn wallet(&self) -> &environment::TestWallet {
+        self.client.wallet()
     }
 
     fn storage(&self) -> &environment::TestStorage {
@@ -58,18 +57,9 @@ impl chain_listener::ClientContext for ClientContext {
         timestamp: Timestamp,
         epoch: Epoch,
     ) -> Result<(), Error> {
-        if self.wallet.get(chain_id).is_none() {
-            self.wallet.insert(UserChain {
-                chain_id,
-                owner,
-                block_hash: None,
-                timestamp,
-                next_block_height: BlockHeight::ZERO,
-                pending_proposal: None,
-                epoch: Some(epoch),
-            });
-        }
-
+        let _ = self
+            .wallet()
+            .try_insert(chain_id, wallet::Chain::new(owner, epoch, timestamp));
         Ok(())
     }
 
@@ -80,8 +70,14 @@ impl chain_listener::ClientContext for ClientContext {
         let info = client.chain_info().await?;
         let client_owner = client.preferred_owner();
         let pending_proposal = client.pending_proposal().clone();
-        self.wallet
-            .update_from_info(pending_proposal, client_owner, &info);
+        self.wallet().insert(
+            info.chain_id,
+            wallet::Chain {
+                pending_proposal,
+                owner: client_owner,
+                ..info.as_ref().into()
+            },
+        );
         Ok(())
     }
 }
@@ -102,19 +98,19 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let chain_id0 = client0.chain_id();
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
     // Start a chain listener for chain 0 with a new key.
-    let genesis_config = make_genesis_config(&builder);
+    let genesis_config = GenesisConfig::new_testing(&builder);
     let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
     let epoch0 = client0.chain_info().await?.epoch;
     let epoch1 = client1.chain_info().await?.epoch;
 
     let mut context = ClientContext {
-        wallet: Wallet::new(genesis_config),
         client: Arc::new(Client::new(
             environment::Impl {
                 storage: storage.clone(),
                 network: builder.make_node_provider(),
                 signer,
+                wallet: environment::TestWallet::default(),
             },
             admin_id,
             false,
@@ -193,17 +189,17 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     let storage_builder = MemoryStorageBuilder::default();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
     let client0 = builder.add_root_chain(0, Amount::ONE).await?;
-    let genesis_config = make_genesis_config(&builder);
+    let genesis_config = GenesisConfig::new_testing(&builder);
     let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
 
     let context = ClientContext {
-        wallet: Wallet::new(genesis_config),
         client: Arc::new(Client::new(
             environment::Impl {
                 storage: storage.clone(),
                 network: builder.make_node_provider(),
                 signer,
+                wallet: environment::TestWallet::default(),
             },
             admin_id,
             false,

@@ -5,9 +5,12 @@
 //! This module defines the core Linera protocol.
 
 #![recursion_limit = "256"]
+// We conditionally add autotraits to the traits here.
+#![allow(async_fn_in_trait)]
 
 mod chain_worker;
 pub mod client;
+pub use client::Client;
 pub mod data_types;
 pub mod join_set_ext;
 mod local_node;
@@ -29,6 +32,9 @@ pub use crate::join_set_ext::{JoinSetExt, TaskHandle};
 
 pub mod environment;
 pub use environment::Environment;
+
+pub mod wallet;
+pub use wallet::Wallet;
 
 /// The maximum number of entries in a `received_log` included in a `ChainInfo` response.
 // TODO(#4638): Revisit the number.

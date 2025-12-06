@@ -68,7 +68,7 @@ linera-storage.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
 lru.workspace = true
-papaya.workspace = true
+papaya = { workspace = true, features = ["serde"] }
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 rand = { workspace = true, features = ["std_rng"] }
@@ -82,7 +82,7 @@ tokio-stream.workspace = true
 tokio-util.workspace = true
 tonic.workspace = true
 tracing.workspace = true
-trait-set = "0.3.0"
+trait-set.workspace = true
 trait-variant.workspace = true
 wasm-bindgen-futures = { workspace = true, optional = true }
 web-thread.workspace = true

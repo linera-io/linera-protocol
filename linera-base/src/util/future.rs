@@ -1,6 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/*!
+Utilities for working with `Future`s.
+*/
+
 use std::{future::Future, pin::Pin};
 
 use sync_wrapper::SyncFuture;

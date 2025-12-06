@@ -922,7 +922,7 @@ pub enum ClientCommand {
 
     /// Manage validators in the committee.
     #[command(subcommand)]
-    Validator(validator::ValidatorCommand),
+    Validator(validator::Command),
 
     /// Operation on the storage.
     #[command(subcommand)]

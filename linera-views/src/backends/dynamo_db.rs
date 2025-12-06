@@ -33,7 +33,7 @@ use aws_sdk_dynamodb::{
 };
 use aws_smithy_types::error::operation::BuildError;
 use futures::future::join_all;
-use linera_base::ensure;
+use linera_base::{ensure, util::future::FutureSyncExt as _};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -51,7 +51,6 @@ use crate::{
         WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
-    FutureSyncExt as _,
 };
 
 /// Name of the environment variable with the address to a DynamoDB local instance.
