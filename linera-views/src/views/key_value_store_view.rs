@@ -1283,6 +1283,19 @@ impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
         Ok(view.multi_get(keys).await?)
     }
 
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl futures::stream::Stream<Item = Result<Option<Vec<u8>>, ViewContainerError>> {
+        let store = self.clone();
+        async_stream::stream! {
+            let values = store.read_multi_values_bytes(&keys).await?;
+            for value in values {
+                yield Ok(value);
+            }
+        }
+    }
+
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],

@@ -36,6 +36,7 @@ allocative.workspace = true
 anyhow.workspace = true
 async-graphql.workspace = true
 async-lock.workspace = true
+async-stream.workspace = true
 aws-config = { workspace = true, optional = true }
 aws-sdk-dynamodb = { workspace = true, optional = true }
 aws-smithy-types = { workspace = true, optional = true }

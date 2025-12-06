@@ -14,7 +14,7 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use futures::{future::join_all, StreamExt as _};
+use futures::{future::join_all, stream::Stream, StreamExt as _};
 use linera_base::ensure;
 use scylla::{
     client::{
@@ -671,6 +671,32 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
             .into_iter()
             .collect::<Result<_, _>>()?;
         Ok(results.into_iter().flatten().collect())
+    }
+
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+        let batches = keys
+            .chunks(MAX_MULTI_KEYS)
+            .map(|chunk| chunk.to_vec())
+            .collect::<Vec<_>>();
+        let store = self.clone();
+
+        async_stream::stream! {
+            for batch_keys in batches {
+                let vals = {
+                    let store_ref = store.store.deref();
+                    let root_key = store.root_key.clone();
+                    let _guard = store.acquire().await;
+                    Box::pin(store_ref.read_multi_values_internal(&root_key, batch_keys)).await?
+                };
+
+                for value in vals {
+                    yield Ok(value);
+                }
+            }
+        }
     }
 
     async fn find_keys_by_prefix(

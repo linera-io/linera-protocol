@@ -44,6 +44,7 @@ use std::{
 };
 
 use allocative::Allocative;
+use futures::stream::StreamExt;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -55,7 +56,7 @@ use crate::{
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
     historical_hash_wrapper::HistoricallyHashableView,
-    store::ReadableKeyValueStore as _,
+    store::{KeyValueStoreError, ReadableKeyValueStore},
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError},
 };
 
@@ -70,6 +71,57 @@ pub struct ByteMapView<C, V> {
     deletion_set: DeletionSet,
     /// Pending changes not yet persisted to storage.
     updates: BTreeMap<Vec<u8>, Update<V>>,
+}
+
+/// State of a value slot in the multi-get iterator.
+enum SlotState<V> {
+    /// Value is already known (from updates or deletions).
+    Cached(Option<V>),
+    /// Value needs to be fetched from store.
+    NeedsFetch,
+}
+
+/// Type alias for the stream used in multi-get operations.
+type MultiGetStream<'a, C> = std::pin::Pin<
+    Box<
+        dyn futures::stream::Stream<
+                Item = Result<
+                    Option<Vec<u8>>,
+                    <<C as Context>::Store as crate::store::WithError>::Error,
+                >,
+            > + Send
+            + Sync
+            + 'a,
+    >,
+>;
+
+/// Iterator for multi-get operations on map views.
+pub struct MapViewMultiGet<V, I> {
+    cached_iter: std::vec::IntoIter<SlotState<V>>,
+    store_iter: I,
+}
+
+impl<V, I> MapViewMultiGet<V, I> {
+    /// Returns the next value, or None if iteration is complete.
+    pub async fn next<E>(&mut self) -> Result<Option<Option<V>>, ViewError>
+    where
+        V: DeserializeOwned,
+        I: futures::stream::Stream<Item = Result<Option<Vec<u8>>, E>> + Unpin,
+        E: KeyValueStoreError,
+    {
+        match self.cached_iter.next() {
+            None => Ok(None),
+            Some(SlotState::Cached(value)) => Ok(Some(value)),
+            Some(SlotState::NeedsFetch) => {
+                let value_bytes = self.store_iter.next().await.transpose()?;
+                let value = match value_bytes {
+                    Some(bytes) => from_bytes_option(&bytes)?,
+                    None => None,
+                };
+                Ok(Some(value))
+            }
+        }
+    }
 }
 
 impl<C: Context, C2: Context, V> ReplaceContext<C2> for ByteMapView<C, V>
@@ -382,6 +434,58 @@ where
             results[i] = from_bytes_option(&value)?;
         }
         Ok(results)
+    }
+
+    /// Returns an iterator over the key-value pairs at the given positions.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::map_view::ByteMapView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// let mut iter = map.multi_get_iter(vec![vec![0, 1], vec![0, 2]]);
+    /// let value1 = iter.next().await.unwrap().unwrap();
+    /// assert_eq!(value1, Some(String::from("Hello")));
+    /// assert!(iter.next().await.unwrap().unwrap().is_none());
+    /// assert!(iter.next().await.unwrap().is_none());
+    /// # })
+    /// ```
+    pub fn multi_get_iter(
+        &self,
+        short_keys: Vec<Vec<u8>>,
+    ) -> MapViewMultiGet<V, MultiGetStream<'_, C>> {
+        let size = short_keys.len();
+        let mut vector_query = Vec::new();
+        let mut cached = Vec::with_capacity(size);
+
+        for short_key in short_keys.iter() {
+            if let Some(update) = self.updates.get(short_key) {
+                let value = match update {
+                    Update::Removed => None,
+                    Update::Set(value) => Some(value.clone()),
+                };
+                cached.push(SlotState::Cached(value));
+            } else if self.deletion_set.contains_prefix_of(short_key) {
+                cached.push(SlotState::Cached(None));
+            } else {
+                cached.push(SlotState::NeedsFetch);
+                let key = self.context.base_key().base_index(short_key);
+                vector_query.push(key);
+            }
+        }
+
+        let store_iter = Box::pin(
+            self.context
+                .store()
+                .read_multi_values_bytes_iter(vector_query),
+        );
+
+        MapViewMultiGet {
+            cached_iter: cached.into_iter(),
+            store_iter,
+        }
     }
 
     /// Reads the key-value pairs at the given positions, if any.
@@ -1234,6 +1338,22 @@ where
         self.map.multi_get(short_keys).await
     }
 
+    /// Returns an iterator for reading multiple values at the given indices.
+    pub fn multi_get_iter<'a, Q>(
+        &self,
+        indices: impl IntoIterator<Item = &'a Q>,
+    ) -> Result<MapViewMultiGet<V, MultiGetStream<'_, C>>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + 'a,
+    {
+        let short_keys = indices
+            .into_iter()
+            .map(|index| BaseKey::derive_short_key(index))
+            .collect::<Result<_, _>>()?;
+        Ok(self.map.multi_get_iter(short_keys))
+    }
+
     /// Reads the index-value pairs at the given positions, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1786,6 +1906,22 @@ where
             .map(|index| index.to_custom_bytes())
             .collect::<Result<_, _>>()?;
         self.map.multi_get(short_keys).await
+    }
+
+    /// Returns an iterator for reading multiple values at the given indices.
+    pub fn multi_get_iter<'a, Q>(
+        &self,
+        indices: impl IntoIterator<Item = &'a Q>,
+    ) -> Result<MapViewMultiGet<V, MultiGetStream<'_, C>>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + 'a,
+    {
+        let short_keys = indices
+            .into_iter()
+            .map(|index| index.to_custom_bytes())
+            .collect::<Result<_, _>>()?;
+        Ok(self.map.multi_get_iter(short_keys))
     }
 
     /// Read index-value pairs at several positions, if any.

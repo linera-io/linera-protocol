@@ -820,6 +820,20 @@ impl LruPrefixCache {
         }
     }
 
+    /// Returns whether the cache can decide if a key is present or not.
+    pub(crate) fn test_key_presence(&self, key: &[u8]) -> bool {
+        // First, query the value map
+        if matches!(self.value_map.get(key), Some(ValueEntry::Value(_))) {
+            return true;
+        }
+        if self.has_exclusive_access {
+            // Now trying the FindKeyValues map.
+            self.get_existing_find_key_values_entry(key).is_some()
+        } else {
+            false
+        }
+    }
+
     /// Returns the cached value, or `Some(None)` if the entry does not exist in the
     /// database. If `None` is returned, the entry might exist in the database but is
     /// not in the cache.

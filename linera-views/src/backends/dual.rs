@@ -3,6 +3,7 @@
 
 //! Implements [`crate::store::KeyValueStore`] by combining two existing stores.
 
+use futures::stream::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -160,6 +161,28 @@ where
                 .map_err(DualStoreError::Second)?,
         };
         Ok(result)
+    }
+
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+        async_stream::stream! {
+            match self {
+                Self::First(store) => {
+                    let mut stream = Box::pin(store.read_multi_values_bytes_iter(keys));
+                    while let Some(result) = stream.next().await {
+                        yield result.map_err(DualStoreError::First);
+                    }
+                }
+                Self::Second(store) => {
+                    let mut stream = Box::pin(store.read_multi_values_bytes_iter(keys));
+                    while let Some(result) = stream.next().await {
+                        yield result.map_err(DualStoreError::Second);
+                    }
+                }
+            }
+        }
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {

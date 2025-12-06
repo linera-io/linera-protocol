@@ -6,6 +6,7 @@
 #[cfg(with_testing)]
 use std::sync::Arc;
 
+use futures::stream::Stream;
 use linera_base::ensure;
 use linera_views::{
     batch::Batch,
@@ -150,6 +151,21 @@ impl ReadableKeyValueStore for KeyValueStore {
         let promise = self.wit_api.read_multi_values_bytes_new(keys);
         yield_once().await;
         Ok(self.wit_api.read_multi_values_bytes_wait(promise))
+    }
+
+    fn read_multi_values_bytes_iter(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> impl Stream<Item = Result<Option<Vec<u8>>, Self::Error>> {
+        let store = self.clone();
+
+        async_stream::stream! {
+            // Fetch all values at once
+            let values = store.read_multi_values_bytes(&keys).await?;
+            for value in values {
+                yield Ok(value);
+            }
+        }
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, KeyValueStoreError> {
