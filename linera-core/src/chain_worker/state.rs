@@ -871,6 +871,13 @@ where
 
         // Execute the block and update inboxes.
         let local_time = self.storage.clock().current_time();
+        if block.header.timestamp.duration_since(local_time) > self.config.block_time_grace_period {
+            warn!(
+                block_timestamp = %block.header.timestamp,
+                %local_time,
+                "Confirmed block has a timestamp in the future beyond the block time grace period"
+            );
+        }
         let chain = &mut self.chain;
         chain
             .remove_bundles_from_inboxes(
@@ -1532,15 +1539,17 @@ where
             outcome,
         } = content;
 
-        if block.timestamp.duration_since(local_time) > self.config.grace_period {
-            return Err(WorkerError::InvalidTimestamp {
-                local_time,
-                block_timestamp: block.timestamp,
-                grace_period: self.config.grace_period,
-            });
-        }
+        if self.config.key_pair().is_some() {
+            if block.timestamp.duration_since(local_time) > self.config.block_time_grace_period {
+                return Err(WorkerError::InvalidTimestamp {
+                    local_time,
+                    block_timestamp: block.timestamp,
+                    block_time_grace_period: self.config.block_time_grace_period,
+                });
+            }
 
-        self.storage.clock().sleep_until(block.timestamp).await;
+            self.storage.clock().sleep_until(block.timestamp).await;
+        }
         let local_time = self.storage.clock().current_time();
 
         self.chain

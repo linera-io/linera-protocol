@@ -23,7 +23,7 @@ pub(crate) mod updater;
 mod value_cache;
 
 pub use local_node::LocalNodeError;
-pub use updater::DEFAULT_GRACE_PERIOD;
+pub use updater::DEFAULT_QUORUM_GRACE_PERIOD;
 
 pub use crate::join_set_ext::{JoinSetExt, TaskHandle};
 
