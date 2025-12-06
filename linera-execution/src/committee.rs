@@ -72,7 +72,9 @@ pub struct Committee {
     /// less than `validity_threshold` are faulty.
     validity_threshold: u64,
     /// The policy agreed on for this epoch.
-    policy: ResourceControlPolicy,
+    // Boxed to reduce the size of `Committee` from 464 to ~56 bytes, which significantly
+    // reduces async future sizes throughout the codebase.
+    policy: Box<ResourceControlPolicy>,
 }
 
 impl Serialize for Committee {
@@ -167,7 +169,7 @@ impl<'a> From<&'a Committee> for CommitteeFull<'a> {
             total_votes: *total_votes,
             quorum_threshold: *quorum_threshold,
             validity_threshold: *validity_threshold,
-            policy: Cow::Borrowed(policy),
+            policy: Cow::Borrowed(policy.as_ref()),
         }
     }
 }
@@ -190,7 +192,7 @@ impl<'a> From<&'a Committee> for CommitteeMinimal<'a> {
         } = committee;
         CommitteeMinimal {
             validators: Cow::Borrowed(validators),
-            policy: Cow::Borrowed(policy),
+            policy: Cow::Borrowed(policy.as_ref()),
         }
     }
 }
@@ -233,7 +235,7 @@ impl Committee {
             total_votes,
             quorum_threshold,
             validity_threshold,
-            policy,
+            policy: Box::new(policy),
         }
     }
 
