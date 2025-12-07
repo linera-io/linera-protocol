@@ -64,9 +64,8 @@ linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
 Create the user wallet and add chains to it:
 
 ```bash
-export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
-export LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json"
-export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
+# Set the home directory for future wallets.
+export LINERA_HOME="$LINERA_TMP_DIR"
 
 linera wallet init --faucet $FAUCET_URL
 

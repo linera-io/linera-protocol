@@ -93,10 +93,8 @@ FAUCET_URL=http://localhost:8080
 #   LINERA_TMP_DIR=$(mktemp -d)
 #   FAUCET_URL=https://faucet.testnet-XXX.linera.net  # for some value XXX
 
-# Set the path of the future wallet.
-export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
-export LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json"
-export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
+# Set the home directory for future wallets.
+export LINERA_HOME="$LINERA_TMP_DIR"
 
 # Initialize a new user wallet.
 linera wallet init --faucet $FAUCET_URL
