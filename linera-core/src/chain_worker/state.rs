@@ -6,7 +6,6 @@
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    iter,
     sync::{self, Arc},
 };
 
@@ -387,35 +386,59 @@ where
         blob_ids: impl IntoIterator<Item = BlobId>,
         created_blobs: Option<&BTreeMap<BlobId, Blob>>,
     ) -> Result<BTreeMap<BlobId, Option<Blob>>, WorkerError> {
-        let mut maybe_blobs = BTreeMap::from_iter(blob_ids.into_iter().zip(iter::repeat(None)));
+        let maybe_blobs = blob_ids.into_iter().collect::<BTreeSet<_>>();
+        let mut maybe_blobs = maybe_blobs
+            .into_iter()
+            .map(|x| (x, None))
+            .collect::<Vec<(BlobId, Option<Blob>)>>();
 
-        for (blob_id, maybe_blob) in &mut maybe_blobs {
-            if let Some(blob) = created_blobs.and_then(|blob_map| blob_map.get(blob_id)) {
-                *maybe_blob = Some(blob.clone());
-            } else if let Some(blob) = self.chain.manager.pending_blob(blob_id).await? {
-                *maybe_blob = Some(blob);
-            } else if let Some(blob) = self.chain.pending_validated_blobs.get(blob_id).await? {
-                *maybe_blob = Some(blob);
-            } else {
-                for (_, pending_blobs) in self
-                    .chain
-                    .pending_proposed_blobs
-                    .try_load_all_entries()
-                    .await?
-                {
-                    if let Some(blob) = pending_blobs.get(blob_id).await? {
-                        *maybe_blob = Some(blob);
+        if let Some(blob_map) = created_blobs {
+            for (blob_id, value) in &mut maybe_blobs {
+                if let Some(blob) = blob_map.get(blob_id) {
+                    *value = Some(blob.clone());
+                }
+            }
+        }
+
+        let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
+        let second_block_blobs = self.chain.manager.pending_blobs(&missing_blob_ids).await?;
+        for (index, blob) in missing_indices.into_iter().zip(second_block_blobs) {
+            maybe_blobs[index].1 = blob;
+        }
+
+        let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
+        let third_block_blobs = self
+            .chain
+            .pending_validated_blobs
+            .multi_get(&missing_blob_ids)
+            .await?;
+        for (index, blob) in missing_indices.into_iter().zip(third_block_blobs) {
+            maybe_blobs[index].1 = blob;
+        }
+
+        let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
+        if !missing_indices.is_empty() {
+            let all_entries_pending_blobs = self
+                .chain
+                .pending_proposed_blobs
+                .try_load_all_entries()
+                .await?;
+            for (index, blob_id) in missing_indices.into_iter().zip(missing_blob_ids) {
+                for (_, pending_blobs) in &all_entries_pending_blobs {
+                    if let Some(blob) = pending_blobs.get(&blob_id).await? {
+                        maybe_blobs[index].1 = Some(blob);
                         break;
                     }
                 }
             }
         }
-        let missing_blob_ids = missing_blob_ids(&maybe_blobs);
-        let blobs_from_storage = self.storage.read_blobs(&missing_blob_ids).await?;
-        for (blob_id, maybe_blob) in missing_blob_ids.into_iter().zip(blobs_from_storage) {
-            maybe_blobs.insert(blob_id, maybe_blob);
+
+        let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
+        let fourth_block_blobs = self.storage.read_blobs(&missing_blob_ids).await?;
+        for (index, blob) in missing_indices.into_iter().zip(fourth_block_blobs) {
+            maybe_blobs[index].1 = blob;
         }
-        Ok(maybe_blobs)
+        Ok(maybe_blobs.into_iter().collect())
     }
 
     /// Adds any newly created chains to the set of `tracked_chains`, if the parent chain is
@@ -1773,10 +1796,25 @@ where
     }
 }
 
+/// Returns the missing indices and corresponding blob_ids.
+fn missing_indices_blob_ids(maybe_blobs: &[(BlobId, Option<Blob>)]) -> (Vec<usize>, Vec<BlobId>) {
+    let mut missing_indices = Vec::new();
+    let mut missing_blob_ids = Vec::new();
+    for (index, (blob_id, blob)) in maybe_blobs.iter().enumerate() {
+        if blob.is_none() {
+            missing_indices.push(index);
+            missing_blob_ids.push(*blob_id);
+        }
+    }
+    (missing_indices, missing_blob_ids)
+}
+
 /// Returns the keys whose value is `None`.
-fn missing_blob_ids(maybe_blobs: &BTreeMap<BlobId, Option<Blob>>) -> Vec<BlobId> {
+fn missing_blob_ids<'a>(
+    maybe_blobs: impl IntoIterator<Item = (&'a BlobId, &'a Option<Blob>)>,
+) -> Vec<BlobId> {
     maybe_blobs
-        .iter()
+        .into_iter()
         .filter(|(_, maybe_blob)| maybe_blob.is_none())
         .map(|(blob_id, _)| *blob_id)
         .collect()
