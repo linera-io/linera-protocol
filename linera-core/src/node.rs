@@ -9,7 +9,9 @@ use futures::stream::LocalBoxStream as BoxStream;
 use futures::stream::Stream;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
-    data_types::{ArithmeticError, Blob, BlobContent, BlockHeight, NetworkDescription, Round},
+    data_types::{
+        ArithmeticError, Blob, BlobContent, BlockHeight, NetworkDescription, Round, Timestamp,
+    },
     identifiers::{BlobId, ChainId, EventId},
 };
 use linera_chain::{
@@ -322,6 +324,16 @@ pub enum NodeError {
         chain_id: ChainId,
         remote_node: Box<ValidatorPublicKey>,
     },
+
+    #[error(
+        "Block timestamp ({block_timestamp}) is further in the future from local time \
+        ({local_time}) than block time grace period ({block_time_grace_period_ms} ms)"
+    )]
+    InvalidTimestamp {
+        block_timestamp: Timestamp,
+        local_time: Timestamp,
+        block_time_grace_period_ms: u64,
+    },
 }
 
 impl From<tonic::Status> for NodeError {
@@ -421,6 +433,15 @@ impl From<WorkerError> for NodeError {
             } => NodeError::UnexpectedBlockHeight {
                 expected_block_height,
                 found_block_height,
+            },
+            WorkerError::InvalidTimestamp {
+                block_timestamp,
+                local_time,
+                block_time_grace_period,
+            } => NodeError::InvalidTimestamp {
+                block_timestamp,
+                local_time,
+                block_time_grace_period_ms: block_time_grace_period.as_millis() as u64,
             },
             error => Self::WorkerError {
                 error: error.to_string(),

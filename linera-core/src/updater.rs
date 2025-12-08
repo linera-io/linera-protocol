@@ -16,7 +16,7 @@ use futures::{
 };
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{BlockHeight, Round},
+    data_types::{BlockHeight, Round, TimeDelta},
     ensure,
     identifiers::{BlobId, BlobType, ChainId, StreamId},
     time::{timer::timeout, Duration, Instant},
@@ -27,7 +27,7 @@ use linera_chain::{
     types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
-use linera_storage::{ResultReadCertificates, Storage};
+use linera_storage::{Clock, ResultReadCertificates, Storage};
 use thiserror::Error;
 use tracing::{instrument, Level};
 
@@ -580,6 +580,30 @@ where
                         CrossChainMessageDelivery::NonBlocking,
                     )
                     .await?;
+                }
+                Err(NodeError::InvalidTimestamp {
+                    block_timestamp,
+                    local_time,
+                    ..
+                }) => {
+                    // The validator's clock is behind the block's timestamp. We need to
+                    // wait for two things:
+                    // 1. Our clock to reach block_timestamp (in case the block timestamp
+                    //    is in the future from our perspective too).
+                    // 2. The validator's clock to catch up (in case of clock skew between
+                    //    us and the validator).
+                    let wait_for_skew =
+                        TimeDelta::from_duration(block_timestamp.duration_since(local_time));
+                    tracing::debug!(
+                        remote_node = self.remote_node.address(),
+                        %chain_id,
+                        %block_timestamp,
+                        ?wait_for_skew,
+                        "validator's clock is behind; waiting and retrying",
+                    );
+                    let storage = self.client.local_node.storage_client();
+                    storage.clock().sleep_until(block_timestamp).await;
+                    storage.clock().sleep(wait_for_skew).await;
                 }
                 // Fail immediately on other errors.
                 Err(err) => return Err(err.into()),
