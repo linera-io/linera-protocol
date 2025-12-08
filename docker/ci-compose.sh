@@ -67,7 +67,7 @@ linera-server generate --validators "$CONF_DIR/validator.toml" --committee commi
 linera --wallet wallet.json --keystore keystore.json --storage rocksdb:linera.db create-genesis-config 10 --genesis genesis.json --initial-funding 10 --committee committee.json --testing-prng-seed 2
 
 if [ "${DOCKER_COMPOSE_WAIT:-false}" = "true" ]; then
-    docker compose up --wait
+    docker compose up --wait --wait-timeout 180
 else
     docker compose up
 fi
