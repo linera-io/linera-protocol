@@ -2623,26 +2623,6 @@ impl<Env: Environment> ChainClient<Env> {
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
-        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
-
-        if transactions.is_empty() {
-            return Err(ChainClientError::LocalNodeError(
-                LocalNodeError::WorkerError(WorkerError::ChainError(Box::new(
-                    ChainError::EmptyBlock,
-                ))),
-            ));
-        }
-
-        self.execute_prepared_transactions(transactions, blobs)
-            .await
-    }
-
-    #[instrument(level = "trace", skip(transactions, blobs))]
-    async fn execute_prepared_transactions(
-        &self,
-        transactions: Vec<Transaction>,
-        blobs: Vec<Blob>,
-    ) -> Result<ExecuteBlockOutcome, ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
 
@@ -2651,9 +2631,9 @@ impl<Env: Environment> ChainClient<Env> {
         let _guard = mutex.lock_owned().await;
         tracing::debug!(
             lock_wait_ms = lock_start.elapsed().as_millis(),
-            "acquired client_mutex in execute_prepared_transactions"
+            "acquired client_mutex in execute_block"
         );
-        // TOOD: We shouldn't need to call this explicitly.
+        // TODO(#5092): We shouldn't need to call this explicitly.
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
@@ -2662,6 +2642,19 @@ impl<Env: Environment> ChainClient<Env> {
                 return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
             }
             ClientOutcome::Committed(None) => {}
+        }
+
+        // Collect pending messages and epoch changes after acquiring the lock to avoid
+        // race conditions where messages valid for one block height are proposed at a
+        // different height.
+        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
+
+        if transactions.is_empty() {
+            return Err(ChainClientError::LocalNodeError(
+                LocalNodeError::WorkerError(WorkerError::ChainError(Box::new(
+                    ChainError::EmptyBlock,
+                ))),
+            ));
         }
 
         let block = self.new_pending_block(transactions, blobs).await?;
@@ -3688,19 +3681,17 @@ impl<Env: Environment> ChainClient<Env> {
             // We provide no operations - this means that the only operations executed
             // will be epoch changes, receiving messages and processing event stream
             // updates, if any are pending.
-            let transactions = self.prepend_epochs_messages_and_events(vec![]).await?;
-            // Nothing in the inbox and no stream updates to be processed.
-            if transactions.is_empty() {
-                return Ok((certificates, None));
-            }
-            match self
-                .execute_prepared_transactions(transactions, vec![])
-                .await
-            {
+            match self.execute_block(vec![], vec![]).await {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
                 | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
                     return Ok((certificates, Some(timeout)));
+                }
+                // Nothing in the inbox and no stream updates to be processed.
+                Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+                    WorkerError::ChainError(chain_error),
+                ))) if matches!(*chain_error, ChainError::EmptyBlock) => {
+                    return Ok((certificates, None));
                 }
                 Err(error) => return Err(error),
             };
