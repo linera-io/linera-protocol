@@ -53,19 +53,21 @@ where
             .await
             .map_err(ExporterError::StateError)?;
 
-        let destinations_len = destinations.len();
+        let stored_destinations: Vec<DestinationId> = {
+            let pinned = view.destination_states.get().states.pin();
+            pinned.iter().map(|(id, _)| id).cloned().collect::<Vec<_>>()
+        };
+
+        tracing::info!(
+            init_destinations=?destinations,
+            ?stored_destinations,
+            "initialized exporter state with destinations",
+        );
 
         if view.destination_states.get().states.is_empty() {
             let states = DestinationStates::new(destinations);
             view.destination_states.set(states);
         }
-
-        ensure!(
-            view.destination_states.get().states.len() == destinations_len,
-            ExporterError::GenericError(
-                "inconsistent number of destinations in the toml file".into()
-            )
-        );
 
         let states = view.destination_states.get().clone();
         let canonical_state = view.canonical_state.clone_unchecked()?;
