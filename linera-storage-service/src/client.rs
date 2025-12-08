@@ -11,7 +11,7 @@ use std::{
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use futures::future::join_all;
-use linera_base::ensure;
+use linera_base::{ensure, util::future::FutureSyncExt as _};
 #[cfg(with_metrics)]
 use linera_views::metering::MeteredDatabase;
 #[cfg(with_testing)]
@@ -20,7 +20,6 @@ use linera_views::{
     batch::{Batch, WriteOperation},
     lru_caching::LruCachingDatabase,
     store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
-    FutureSyncExt as _,
 };
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};

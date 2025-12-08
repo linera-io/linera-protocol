@@ -8,10 +8,10 @@ use std::{collections::VecDeque, sync::Arc};
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, InMemorySigner, TestString},
-    data_types::{Amount, Timestamp},
+    data_types::{Amount, Epoch, Timestamp},
     identifiers::{AccountOwner, ChainId},
 };
-use linera_client::{chain_listener, wallet::Wallet};
+use linera_client::chain_listener;
 use linera_core::{
     client::ChainClient,
     environment,
@@ -32,7 +32,7 @@ struct ClientContext {
 impl chain_listener::ClientContext for ClientContext {
     type Environment = environment::Test;
 
-    fn wallet(&self) -> &Wallet {
+    fn wallet(&self) -> &environment::TestWallet {
         unimplemented!()
     }
 
@@ -50,9 +50,12 @@ impl chain_listener::ClientContext for ClientContext {
         None
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<environment::Test> {
+    async fn make_chain_client(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainClient<environment::Test>, linera_client::Error> {
         assert_eq!(chain_id, self.client.chain_id());
-        self.client.clone()
+        Ok(self.client.clone())
     }
 
     async fn update_wallet_for_new_chain(
@@ -60,6 +63,7 @@ impl chain_listener::ClientContext for ClientContext {
         _: ChainId,
         _: Option<AccountOwner>,
         _: Timestamp,
+        _: Epoch,
     ) -> Result<(), linera_client::Error> {
         self.update_calls += 1;
         Ok(())

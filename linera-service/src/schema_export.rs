@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlobContent, BlockHeight, NetworkDescription, Timestamp},
+    data_types::{BlobContent, BlockHeight, Epoch, NetworkDescription, Timestamp},
     identifiers::{AccountOwner, BlobId, ChainId},
 };
 use linera_chain::{
@@ -17,7 +17,6 @@ use linera_chain::{
 };
 use linera_client::{
     chain_listener::{ChainListenerConfig, ClientContext},
-    wallet::Wallet,
     Error,
 };
 use linera_core::{
@@ -191,9 +190,10 @@ impl ClientContext for DummyContext {
         DbStorage<MemoryDatabase>,
         DummyValidatorNodeProvider,
         linera_base::crypto::InMemorySigner,
+        linera_core::wallet::Memory,
     >;
 
-    fn wallet(&self) -> &Wallet {
+    fn wallet(&self) -> &linera_core::wallet::Memory {
         unimplemented!()
     }
 
@@ -216,6 +216,7 @@ impl ClientContext for DummyContext {
         _: ChainId,
         _: Option<AccountOwner>,
         _: Timestamp,
+        _: Epoch,
     ) -> Result<(), Error> {
         Ok(())
     }

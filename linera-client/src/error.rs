@@ -5,7 +5,6 @@ use linera_base::{
     crypto::ValidatorPublicKey, data_types::NetworkDescription, identifiers::ChainId,
 };
 use linera_core::node::NodeError;
-use linera_persistent as persistent;
 use linera_version::VersionInfo;
 use thiserror_context::Context;
 
@@ -16,6 +15,8 @@ use crate::util;
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub(crate) enum Inner {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
     #[error("chain error: {0}")]
@@ -24,14 +25,10 @@ pub(crate) enum Inner {
     ChainClient(#[from] linera_core::client::ChainClientError),
     #[error("options error: {0}")]
     Options(#[from] crate::client_options::Error),
-    #[error("persistence error: {0}")]
-    Persistence(#[source] Box<dyn std::error::Error + Send + Sync>),
+    #[error("wallet error: {0}")]
+    Wallet(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("view error: {0}")]
     View(#[from] linera_views::ViewError),
-    #[error("non-existent chain: {0:?}")]
-    NonexistentChain(linera_base::identifiers::ChainId),
-    #[error("no keypair found for chain: {0:?}")]
-    NonexistentKeypair(linera_base::identifiers::ChainId),
     #[error("error on the local node: {0}")]
     LocalNode(#[from] linera_core::LocalNodeError),
     #[error("remote node operation failed: {0}")]
@@ -73,10 +70,18 @@ pub(crate) enum Inner {
     },
 }
 
+impl Inner {
+    pub fn wallet(error: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Self::Wallet(Box::new(error) as _)
+    }
+}
+
 thiserror_context::impl_context!(Error(Inner));
 
-util::impl_from_dynamic!(Inner:Persistence, persistent::memory::Error);
-#[cfg(feature = "fs")]
-util::impl_from_dynamic!(Inner:Persistence, persistent::file::Error);
-#[cfg(web)]
-util::impl_from_dynamic!(Inner:Persistence, persistent::indexed_db::Error);
+impl Error {
+    pub(crate) fn wallet(error: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Inner::wallet(error).into()
+    }
+}
+
+util::impl_from_infallible!(Error);
