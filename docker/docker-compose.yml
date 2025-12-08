@@ -65,7 +65,7 @@ services:
     labels:
       com.centurylinklabs.watchtower.enable: "true"
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 19100 || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
