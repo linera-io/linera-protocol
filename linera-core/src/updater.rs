@@ -16,7 +16,7 @@ use futures::{
 };
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{BlockHeight, Round, TimeDelta},
+    data_types::{BlockHeight, Round},
     ensure,
     identifiers::{BlobId, BlobType, ChainId, StreamId},
     time::{timer::timeout, Duration, Instant},
@@ -439,7 +439,9 @@ where
         let chain_id = proposal.content.block.chain_id;
         let mut sent_cross_chain_updates = BTreeMap::new();
         let mut publisher_chain_ids_sent = BTreeSet::new();
+        let storage = self.client.local_node.storage_client();
         loop {
+            let local_time = storage.clock().current_time();
             match self
                 .remote_node
                 .handle_block_proposal(proposal.clone())
@@ -583,7 +585,7 @@ where
                 }
                 Err(NodeError::InvalidTimestamp {
                     block_timestamp,
-                    local_time,
+                    local_time: validator_local_time,
                     ..
                 }) => {
                     // The validator's clock is behind the block's timestamp. We need to
@@ -592,18 +594,18 @@ where
                     //    is in the future from our perspective too).
                     // 2. The validator's clock to catch up (in case of clock skew between
                     //    us and the validator).
-                    let wait_for_skew =
-                        TimeDelta::from_duration(block_timestamp.duration_since(local_time));
+                    let clock_skew = local_time.delta_since(validator_local_time);
                     tracing::debug!(
                         remote_node = self.remote_node.address(),
                         %chain_id,
                         %block_timestamp,
-                        ?wait_for_skew,
+                        ?clock_skew,
                         "validator's clock is behind; waiting and retrying",
                     );
-                    let storage = self.client.local_node.storage_client();
-                    storage.clock().sleep_until(block_timestamp).await;
-                    storage.clock().sleep(wait_for_skew).await;
+                    storage
+                        .clock()
+                        .sleep_until(block_timestamp.saturating_add(clock_skew))
+                        .await;
                 }
                 // Fail immediately on other errors.
                 Err(err) => return Err(err.into()),
