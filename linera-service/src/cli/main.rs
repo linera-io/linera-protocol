@@ -1512,6 +1512,13 @@ impl Runnable for Job {
                     wallet.set_default_chain(description.id())?;
                 }
 
+                let context = options
+                    .create_client_context(storage, wallet, signer.into_value())
+                    .await?;
+                let chain_client = context.make_chain_client(description.id()).await?;
+                chain_client.synchronize_from_validators().await?;
+                context.update_wallet_from_client(&chain_client).await?;
+
                 // print this only after adding the chain to the wallet
                 println!("{}", description.id());
                 println!("{owner}");
@@ -1545,6 +1552,7 @@ impl Runnable for Job {
                     .synchronize_chain_state_from_committee(committee)
                     .await?;
                 context.update_wallet_from_client(&chain_client).await?;
+                dbg!(context.wallet().chain_ids());
             }
 
             Wallet(WalletCommand::FollowChain { chain_id, sync }) => {
