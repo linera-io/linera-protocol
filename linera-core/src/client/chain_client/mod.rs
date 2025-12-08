@@ -1236,7 +1236,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mutex = self.client_mutex();
         let _guard = mutex.lock_owned().await;
-        // TODO: We shouldn't need to call this explicitly.
+        // TODO(#5092): We shouldn't need to call this explicitly.
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
