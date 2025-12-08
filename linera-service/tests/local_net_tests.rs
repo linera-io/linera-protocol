@@ -30,7 +30,6 @@ use linera_service::{
     },
     test_name,
     util::eventually,
-    Wallet,
 };
 use test_case::test_case;
 #[cfg(feature = "ethereum")]
@@ -674,7 +673,7 @@ async fn test_storage_service_wallet_lock() -> Result<()> {
 
     let (mut net, client) = config.instantiate().await?;
 
-    let wallet = Wallet::read(&client.wallet_path())?;
+    let wallet = linera_service::Wallet::read(&client.wallet_path())?;
 
     let chain_id = wallet.default_chain().unwrap();
 
