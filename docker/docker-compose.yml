@@ -38,6 +38,12 @@ services:
       - "0"
       - "--overprovisioned"
       - "1"
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe cluster' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
     depends_on:
       scylla-setup:
         condition: service_completed_successfully
@@ -58,9 +64,17 @@ services:
       - .:/config
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     depends_on:
       shard-init:
         condition: service_completed_successfully
+      scylla:
+        condition: service_healthy
 
   shard:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:latest}"
