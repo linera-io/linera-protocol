@@ -37,7 +37,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use clap_complete::generate;
 use colored::Colorize;
-use futures::{FutureExt as _, StreamExt as _};
+use futures::{lock::Mutex, FutureExt as _, StreamExt as _};
 use linera_base::{
     crypto::{InMemorySigner, Signer},
     data_types::{ApplicationPermissions, Timestamp},
@@ -1172,7 +1172,7 @@ impl Runnable for Job {
 
                 // Start the task processor if operator applications are specified.
                 if !operator_application_ids.is_empty() {
-                    let chain_client = context.make_chain_client(chain_id);
+                    let chain_client = context.make_chain_client(chain_id).await?;
                     let processor = TaskProcessor::new(
                         chain_id,
                         operator_application_ids,
@@ -1191,7 +1191,7 @@ impl Runnable for Job {
                 if let Some(controller_id) = controller_application_id {
                     // For the controller case, we share the context via Arc so the
                     // controller can spawn new processors for different chains.
-                    let chain_client = context.lock().await.make_chain_client(chain_id);
+                    let chain_client = context.lock().await.make_chain_client(chain_id).await?;
                     let controller = Controller::new(
                         chain_id,
                         controller_id,

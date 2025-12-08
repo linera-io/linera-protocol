@@ -132,8 +132,13 @@ where
 
         // Update or spawn processors for each chain
         for (service_chain_id, application_ids) in chain_apps {
-            self.update_or_spawn_processor(service_chain_id, application_ids)
-                .await;
+            if let Err(err) = self
+                .update_or_spawn_processor(service_chain_id, application_ids)
+                .await
+            {
+                error!("Error updating or spawning processor: {err}");
+                return;
+            }
         }
 
         // Send empty updates to processors for chains no longer in the state
@@ -204,7 +209,7 @@ where
         &mut self,
         service_chain_id: ChainId,
         application_ids: Vec<ApplicationId>,
-    ) {
+    ) -> Result<(), anyhow::Error> {
         if let Some(handle) = self.processors.get(&service_chain_id) {
             // Processor exists, send update
             let update = Update {
@@ -214,20 +219,21 @@ where
                 // Processor has stopped, remove and respawn
                 self.processors.remove(&service_chain_id);
                 self.spawn_processor(service_chain_id, application_ids)
-                    .await;
+                    .await?;
             }
         } else {
             // No processor for this chain, spawn one
             self.spawn_processor(service_chain_id, application_ids)
-                .await;
+                .await?;
         }
+        Ok(())
     }
 
     async fn spawn_processor(
         &mut self,
         service_chain_id: ChainId,
         application_ids: Vec<ApplicationId>,
-    ) {
+    ) -> Result<(), anyhow::Error> {
         info!(
             "Spawning TaskProcessor for chain {} with applications {:?}",
             service_chain_id, application_ids
@@ -239,7 +245,8 @@ where
             .context
             .lock()
             .await
-            .make_chain_client(service_chain_id);
+            .make_chain_client(service_chain_id)
+            .await?;
         let processor = TaskProcessor::new(
             service_chain_id,
             application_ids,
@@ -253,6 +260,8 @@ where
 
         self.processors
             .insert(service_chain_id, ProcessorHandle { update_sender });
+
+        Ok(())
     }
 
     async fn query_controller_state(&mut self) -> Result<LocalWorkerState, anyhow::Error> {
