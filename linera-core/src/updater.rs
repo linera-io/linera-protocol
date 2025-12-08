@@ -16,7 +16,7 @@ use futures::{
 };
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{BlockHeight, Round},
+    data_types::{BlockHeight, Round, TimeDelta},
     ensure,
     identifiers::{BlobId, BlobType, ChainId, StreamId},
     time::{timer::timeout, Duration, Instant},
@@ -29,6 +29,7 @@ use linera_chain::{
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{Clock, ResultReadCertificates, Storage};
 use thiserror::Error;
+use tokio::sync::mpsc;
 use tracing::{instrument, Level};
 
 use crate::{
@@ -43,6 +44,9 @@ use crate::{
 /// The default amount of time we wait for additional validators to contribute
 /// to the result, as a fraction of how long it took to reach a quorum.
 pub const DEFAULT_QUORUM_GRACE_PERIOD: f64 = 0.2;
+
+/// A report of clock skew from a validator, sent before retrying due to `InvalidTimestamp`.
+pub type ClockSkewReport = (ValidatorPublicKey, TimeDelta);
 /// The maximum timeout for requests to a stake-weighted quorum if no quorum is reached.
 const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 
@@ -52,6 +56,8 @@ pub enum CommunicateAction {
     SubmitBlock {
         proposal: Box<BlockProposal>,
         blob_ids: Vec<BlobId>,
+        /// Channel to report clock skew before sleeping, so the caller can aggregate reports.
+        clock_skew_sender: mpsc::UnboundedSender<ClockSkewReport>,
     },
     FinalizeBlock {
         certificate: Box<ValidatedBlockCertificate>,
@@ -435,6 +441,7 @@ where
         &mut self,
         proposal: Box<BlockProposal>,
         mut blob_ids: Vec<BlobId>,
+        clock_skew_sender: mpsc::UnboundedSender<ClockSkewReport>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let chain_id = proposal.content.block.chain_id;
         let mut sent_cross_chain_updates = BTreeMap::new();
@@ -602,6 +609,8 @@ where
                         ?clock_skew,
                         "validator's clock is behind; waiting and retrying",
                     );
+                    // Report the clock skew before sleeping so the caller can aggregate.
+                    let _ = clock_skew_sender.send((self.remote_node.public_key, clock_skew));
                     storage
                         .clock()
                         .sleep_until(block_timestamp.saturating_add(clock_skew))
@@ -807,8 +816,14 @@ where
         };
         // Send the block proposal, certificate or timeout request and return a vote.
         let vote = match action {
-            CommunicateAction::SubmitBlock { proposal, blob_ids } => {
-                let info = self.send_block_proposal(proposal, blob_ids).await?;
+            CommunicateAction::SubmitBlock {
+                proposal,
+                blob_ids,
+                clock_skew_sender,
+            } => {
+                let info = self
+                    .send_block_proposal(proposal, blob_ids, clock_skew_sender)
+                    .await?;
                 info.manager.pending.ok_or_else(|| {
                     NodeError::MissingVoteInValidatorResponse("submit a block proposal".into())
                 })?
