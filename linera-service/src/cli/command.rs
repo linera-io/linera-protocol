@@ -1201,6 +1201,9 @@ pub enum WalletCommand {
         /// Synchronize the new chain and download all its blocks from the validators.
         #[arg(long)]
         sync: bool,
+        /// Skip syncing sender chains and inbox processing. Only sync the chain's own blocks.
+        #[arg(long)]
+        skip_senders: bool,
     },
 
     /// Forgets the specified chain's keys. The chain will still be followed by the

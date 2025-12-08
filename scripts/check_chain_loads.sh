@@ -27,6 +27,11 @@ sed -i -e '/linera-core\/src\/unit_tests\/test_utils\.rs/d' "$USAGES_FILE"
 # Client tests load chains to verify certain conditions
 sed -i -e '/linera-core\/src\/unit_tests\/wasm_client_tests\.rs/d' "$USAGES_FILE"
 
+# Chain listener tests load chains to verify we didn't add a new block
+if [ "$(grep 'linera-client/src/unit_tests/chain_listener.rs' "$USAGES_FILE" | wc -l)" -eq 1 ]; then
+    sed -i -e '/linera-client\/src\/unit_tests\/chain_listener\.rs/d' "$USAGES_FILE"
+fi
+
 # The SDK integration test framework uses `create_chain` to create a dummy admin chain before the
 # test (and the workers) start
 if [ "$(grep 'linera-sdk/src/test/validator.rs' "$USAGES_FILE" | wc -l)" -eq 1 ]; then

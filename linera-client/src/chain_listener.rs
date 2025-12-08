@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
     sync::Arc,
     time::Duration,
 };
@@ -19,7 +19,7 @@ use linera_base::{
     task::NonBlockingFuture,
 };
 use linera_core::{
-    client::{AbortOnDrop, ChainClient, ChainClientError},
+    client::{AbortOnDrop, ChainClient, ChainClientError, ListeningMode},
     node::NotificationStream,
     worker::{Notification, Reason},
     Environment,
@@ -87,11 +87,9 @@ pub trait ClientContext {
     }
 
     fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<Self::Environment> {
-        let chain = self
-            .wallet()
-            .get(chain_id)
-            .cloned()
-            .unwrap_or_else(|| UserChain::make_other(chain_id, Timestamp::from(0)));
+        let chain = self.wallet().get(chain_id).cloned().unwrap_or_else(|| {
+            UserChain::make_other(chain_id, Timestamp::from(0), ListeningMode::default())
+        });
         self.client().create_chain_client(
             chain_id,
             chain.block_hash,
@@ -142,6 +140,8 @@ struct ListeningClient<C: ClientContext> {
     notification_stream: Arc<Mutex<NotificationStream>>,
     /// This is only `< u64::MAX` when the client is waiting for a timeout to process the inbox.
     timeout: Timestamp,
+    /// The mode of listening to this chain.
+    listening_mode: ListeningMode,
 }
 
 impl<C: ClientContext> ListeningClient<C> {
@@ -150,6 +150,7 @@ impl<C: ClientContext> ListeningClient<C> {
         abort_handle: AbortOnDrop,
         join_handle: NonBlockingFuture<()>,
         notification_stream: NotificationStream,
+        listening_mode: ListeningMode,
     ) -> Self {
         Self {
             client,
@@ -158,6 +159,7 @@ impl<C: ClientContext> ListeningClient<C> {
             #[allow(clippy::arc_with_non_send_sync)] // Only `Send` with `futures-util/alloc`.
             notification_stream: Arc::new(Mutex::new(notification_stream)),
             timeout: Timestamp::from(u64::MAX),
+            listening_mode,
         }
     }
 
@@ -212,21 +214,29 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .make_chain_client(admin_chain_id)
                 .synchronize_chain_state(admin_chain_id)
                 .await?;
-            BTreeSet::from_iter(
-                guard
-                    .wallet()
-                    .chain_ids()
-                    .into_iter()
-                    .chain([admin_chain_id]),
-            )
+            let wallet = guard.wallet();
+            let mut chain_modes = BTreeMap::new();
+            for (chain_id, user_chain) in &wallet.chains {
+                chain_modes.insert(*chain_id, user_chain.listening_mode.clone());
+            }
+            // Admin chain always uses FullChain.
+            chain_modes.insert(admin_chain_id, ListeningMode::FullChain);
+            chain_modes
         };
 
         // Start background tasks to sync received certificates for each chain,
-        // if enabled.
+        // if enabled. Skip chains with SkipSenders mode.
         if enable_background_sync {
             let context = Arc::clone(&self.context);
             let cancellation_token = self.cancellation_token.clone();
-            for chain_id in &chain_ids {
+            for (chain_id, listening_mode) in &chain_ids {
+                if matches!(listening_mode, ListeningMode::SkipSenders) {
+                    debug!(
+                        ?chain_id,
+                        "skipping background sync for chain due to SkipSenders mode"
+                    );
+                    continue;
+                }
                 let context = Arc::clone(&context);
                 let cancellation_token = cancellation_token.clone();
                 let chain_id = *chain_id;
@@ -302,8 +312,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 if blob_id.blob_type == BlobType::ChainDescription {
                     let chain_desc: ChainDescription = bcs::from_bytes(blob.content().bytes())
                         .expect("ChainDescription should deserialize correctly");
-                    let owners = chain_desc.config().ownership.all_owners().cloned();
-                    Some((ChainId(blob_id.hash), owners.collect::<Vec<_>>()))
+                    Some((ChainId(blob_id.hash), chain_desc))
                 } else {
                     None
                 }
@@ -312,25 +321,25 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         if new_chains.is_empty() {
             return Ok(());
         }
-        let mut new_ids = BTreeSet::new();
+        let mut new_ids = BTreeMap::new();
         let mut context_guard = self.context.lock().await;
-        for (new_chain_id, owners) in new_chains {
-            for chain_owner in owners {
+        for (new_chain_id, chain_desc) in new_chains {
+            for chain_owner in chain_desc.config().ownership.all_owners() {
                 if context_guard
                     .client()
                     .signer()
-                    .contains_key(&chain_owner)
+                    .contains_key(chain_owner)
                     .await
                     .map_err(ChainClientError::signer_failure)?
                 {
                     context_guard
                         .update_wallet_for_new_chain(
                             new_chain_id,
-                            Some(chain_owner),
+                            Some(*chain_owner),
                             block.header.timestamp,
                         )
                         .await?;
-                    new_ids.insert(new_chain_id);
+                    new_ids.insert(new_chain_id, ListeningMode::FullChain);
                 }
             }
         }
@@ -352,9 +361,21 @@ impl<C: ClientContext + 'static> ChainListener<C> {
 
     /// Starts listening for notifications about the given chains, and any chains that publish
     /// event streams those chains are subscribed to.
-    async fn listen_recursively(&mut self, mut chain_ids: BTreeSet<ChainId>) -> Result<(), Error> {
-        while let Some(chain_id) = chain_ids.pop_first() {
-            chain_ids.extend(self.listen(chain_id).await?);
+    async fn listen_recursively(
+        &mut self,
+        mut chain_ids: BTreeMap<ChainId, ListeningMode>,
+    ) -> Result<(), Error> {
+        while let Some((chain_id, listening_mode)) = chain_ids.pop_first() {
+            for (new_chain_id, new_listening_mode) in self.listen(chain_id, listening_mode).await? {
+                match chain_ids.entry(new_chain_id) {
+                    Entry::Vacant(vacant) => {
+                        vacant.insert(new_listening_mode);
+                    }
+                    Entry::Occupied(mut occupied) => {
+                        occupied.get_mut().extend(Some(new_listening_mode));
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -379,15 +400,34 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     /// Starts listening for notifications about the given chain.
     ///
     /// Returns all publishing chains, that we also need to listen to.
-    async fn listen(&mut self, chain_id: ChainId) -> Result<BTreeSet<ChainId>, Error> {
-        if self.listening.contains_key(&chain_id) {
-            return Ok(BTreeSet::new());
+    async fn listen(
+        &mut self,
+        chain_id: ChainId,
+        mut listening_mode: ListeningMode,
+    ) -> Result<BTreeMap<ChainId, ListeningMode>, Error> {
+        if self
+            .listening
+            .get(&chain_id)
+            .is_some_and(|existing_client| existing_client.listening_mode >= listening_mode)
+        {
+            return Ok(BTreeMap::new());
         }
+        listening_mode.extend(
+            self.listening
+                .get(&chain_id)
+                .map(|existing_client| existing_client.listening_mode.clone()),
+        );
         let client = self.context.lock().await.make_chain_client(chain_id);
-        let (listener, abort_handle, notification_stream) = client.listen().await?;
+        let (listener, abort_handle, notification_stream) =
+            client.listen(listening_mode.clone()).await?;
         let join_handle = linera_base::task::spawn(listener.in_current_span());
-        let listening_client =
-            ListeningClient::new(client, abort_handle, join_handle, notification_stream);
+        let listening_client = ListeningClient::new(
+            client,
+            abort_handle,
+            join_handle,
+            notification_stream,
+            listening_mode,
+        );
         self.listening.insert(chain_id, listening_client);
         let publishing_chains = self.update_event_subscriptions(chain_id).await?;
         self.maybe_process_inbox(chain_id).await?;
@@ -398,13 +438,19 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     async fn update_event_subscriptions(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<BTreeSet<ChainId>, Error> {
+    ) -> Result<BTreeMap<ChainId, ListeningMode>, Error> {
         let listening_client = self.listening.get_mut(&chain_id).expect("missing client");
         if !listening_client.client.is_tracked() {
-            return Ok(BTreeSet::new());
+            return Ok(BTreeMap::new());
         }
-        let publishing_chains = listening_client.client.event_stream_publishers().await?;
-        for publisher_id in &publishing_chains {
+        let publishing_chains: BTreeMap<_, _> = listening_client
+            .client
+            .event_stream_publishers()
+            .await?
+            .into_iter()
+            .map(|chain_id| (chain_id, ListeningMode::FullChain))
+            .collect();
+        for publisher_id in publishing_chains.keys() {
             self.event_subscribers
                 .entry(*publisher_id)
                 .or_default()
@@ -501,6 +547,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             return Ok(());
         }
         let listening_client = self.listening.get_mut(&chain_id).expect("missing client");
+        if matches!(listening_client.listening_mode, ListeningMode::SkipSenders) {
+            debug!("Not processing inbox for {chain_id:.8} due to SkipSenders mode");
+            return Ok(());
+        }
         if !listening_client.client.is_tracked() {
             debug!("Not processing inbox for non-tracked chain {chain_id:.8}");
             return Ok(());

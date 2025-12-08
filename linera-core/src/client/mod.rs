@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cmp::Ordering,
     collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
@@ -144,6 +145,42 @@ mod metrics {
             exponential_bucket_latencies(500.0),
         )
     });
+}
+
+/// Defines how we listen to a chain:
+/// - do we care about every block notification?
+/// - or do we want to skip sender chain synchronization?
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ListeningMode {
+    /// Listen to everything, sync sender chains, process inbox.
+    #[default]
+    FullChain,
+    /// Sync the chain's own blocks but skip sender chain synchronization and inbox processing.
+    SkipSenders,
+}
+
+impl PartialOrd for ListeningMode {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (ListeningMode::FullChain, ListeningMode::FullChain) => Some(Ordering::Equal),
+            (ListeningMode::FullChain, ListeningMode::SkipSenders) => Some(Ordering::Greater),
+            (ListeningMode::SkipSenders, ListeningMode::FullChain) => Some(Ordering::Less),
+            (ListeningMode::SkipSenders, ListeningMode::SkipSenders) => Some(Ordering::Equal),
+        }
+    }
+}
+
+impl ListeningMode {
+    pub fn extend(&mut self, other: Option<ListeningMode>) {
+        match (self, other) {
+            (_, None) => (),
+            (ListeningMode::FullChain, _) => (),
+            (mode, Some(ListeningMode::FullChain)) => {
+                *mode = ListeningMode::FullChain;
+            }
+            (ListeningMode::SkipSenders, Some(ListeningMode::SkipSenders)) => (),
+        }
+    }
 }
 
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
@@ -3903,9 +3940,17 @@ impl<Env: Environment> ChainClient<Env> {
         remote_node: RemoteNode<Env::ValidatorNode>,
         mut local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
+        listening_mode: &ListeningMode,
     ) -> Result<(), ChainClientError> {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
+                if matches!(listening_mode, ListeningMode::SkipSenders) {
+                    debug!(
+                        chain_id = %self.chain_id,
+                        "NewIncomingBundle: skipping sender sync due to SkipSenders mode"
+                    );
+                    return Ok(());
+                }
                 if self.local_next_height_to_receive(origin).await? > height {
                     debug!(
                         chain_id = %self.chain_id,
@@ -4001,6 +4046,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace", fields(chain_id = ?self.chain_id))]
     pub async fn listen(
         &self,
+        listening_mode: ListeningMode,
     ) -> Result<(impl Future<Output = ()>, AbortOnDrop, NotificationStream), ChainClientError> {
         use future::FutureExt as _;
 
@@ -4030,7 +4076,10 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mut process_notifications = FuturesUnordered::new();
 
-        match self.update_notification_streams(&mut senders).await {
+        match self
+            .update_notification_streams(&mut senders, &listening_mode)
+            .await
+        {
             Ok(handler) => process_notifications.push(handler),
             Err(error) => error!("Failed to update committee: {error}"),
         };
@@ -4045,7 +4094,8 @@ impl<Env: Environment> ChainClient<Env> {
             {
                 if let Reason::NewBlock { .. } = notification.reason {
                     match Box::pin(await_while_polling(
-                        this.update_notification_streams(&mut senders).fuse(),
+                        this.update_notification_streams(&mut senders, &listening_mode)
+                            .fuse(),
                         &mut process_notifications,
                     ))
                     .await
@@ -4071,6 +4121,7 @@ impl<Env: Environment> ChainClient<Env> {
     async fn update_notification_streams(
         &self,
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
+        listening_mode: &ListeningMode,
     ) -> Result<impl Future<Output = ()>, ChainClientError> {
         let (nodes, local_node) = {
             let committee = self.local_committee().await?;
@@ -4126,6 +4177,7 @@ impl<Env: Environment> ChainClient<Env> {
             let this = self.clone();
             let local_node = local_node.clone();
             let remote_node = RemoteNode { public_key, node };
+            let listening_mode_cloned = listening_mode.clone();
             validator_tasks.push(async move {
                 while let Some(notification) = stream.next().await {
                     if let Err(error) = this
@@ -4133,6 +4185,7 @@ impl<Env: Environment> ChainClient<Env> {
                             remote_node.clone(),
                             local_node.clone(),
                             notification.clone(),
+                            &listening_mode_cloned,
                         )
                         .await
                     {
@@ -4280,9 +4333,14 @@ impl<Env: Environment> ChainClient<Env> {
         let (public_key, node) = node_list.next().unwrap();
         let remote_node = RemoteNode { node, public_key };
         let local_node = self.client.local_node.clone();
-        self.process_notification(remote_node, local_node, notification)
-            .await
-            .unwrap();
+        self.process_notification(
+            remote_node,
+            local_node,
+            notification,
+            &ListeningMode::FullChain,
+        )
+        .await
+        .unwrap();
     }
 }
 
@@ -4367,5 +4425,54 @@ pub async fn create_bytecode_blobs(
             );
             (vec![evm_contract_blob], module_id)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_listening_mode_partial_ord() {
+        // FullChain is greater than SkipSenders
+        assert!(ListeningMode::FullChain > ListeningMode::SkipSenders);
+
+        // SkipSenders is less than FullChain
+        assert!(ListeningMode::SkipSenders < ListeningMode::FullChain);
+
+        // SkipSenders equals itself
+        assert_eq!(
+            ListeningMode::SkipSenders.partial_cmp(&ListeningMode::SkipSenders),
+            Some(Ordering::Equal)
+        );
+
+        // FullChain equals itself
+        assert_eq!(
+            ListeningMode::FullChain.partial_cmp(&ListeningMode::FullChain),
+            Some(Ordering::Equal)
+        );
+    }
+
+    #[test]
+    fn test_listening_mode_extend_with_skip_senders() {
+        // FullChain absorbs SkipSenders
+        let mut mode = ListeningMode::FullChain;
+        mode.extend(Some(ListeningMode::SkipSenders));
+        assert_eq!(mode, ListeningMode::FullChain);
+
+        // SkipSenders gets upgraded to FullChain
+        let mut mode = ListeningMode::SkipSenders;
+        mode.extend(Some(ListeningMode::FullChain));
+        assert_eq!(mode, ListeningMode::FullChain);
+
+        // SkipSenders stays as is when extended with None
+        let mut mode = ListeningMode::SkipSenders;
+        mode.extend(None);
+        assert_eq!(mode, ListeningMode::SkipSenders);
+    }
+
+    #[test]
+    fn test_listening_mode_default() {
+        assert_eq!(ListeningMode::default(), ListeningMode::FullChain);
     }
 }

@@ -11,7 +11,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
-    client::{ChainClient, ChainClientOptions, Client},
+    client::{ChainClient, ChainClientOptions, Client, ListeningMode},
     environment,
     test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
 };
@@ -65,6 +65,8 @@ impl chain_listener::ClientContext for ClientContext {
                 timestamp,
                 next_block_height: BlockHeight::ZERO,
                 pending_proposal: None,
+                epoch: None,
+                listening_mode: ListeningMode::FullChain,
             });
         }
 
@@ -232,6 +234,137 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             panic!("Failed to learn about new block.");
         }
     }
+
+    cancellation_token.cancel();
+    handle.await;
+
+    Ok(())
+}
+
+/// Tests that a chain followed with `SkipSenders` mode does NOT process its inbox.
+/// This verifies that the chain_listener correctly respects the SkipSenders mode.
+#[test_log::test(tokio::test)]
+async fn test_chain_listener_skip_senders_no_inbox_processing() -> anyhow::Result<()> {
+    // Create two chains.
+    let mut signer = InMemorySigner::new(Some(42));
+    let key_pair = signer.generate_new();
+    let owner: AccountOwner = key_pair.into();
+    let config = ChainListenerConfig::default();
+    let storage_builder = MemoryStorageBuilder::default();
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
+    let client0 = builder.add_root_chain(0, Amount::ONE).await?;
+    let chain_id0 = client0.chain_id();
+    let client1 = builder.add_root_chain(1, Amount::from_tokens(2)).await?;
+    // Start a chain listener for chain 0 with SkipSenders mode.
+    let genesis_config = make_genesis_config(&builder);
+    let admin_id = genesis_config.admin_id();
+    let listener_storage = builder.make_storage().await?;
+    let epoch0 = client0.chain_info().await?.epoch;
+
+    let mut context = ClientContext {
+        wallet: Wallet::new(genesis_config),
+        client: Arc::new(Client::new(
+            environment::Impl {
+                storage: listener_storage.clone(),
+                network: builder.make_node_provider(),
+                signer,
+            },
+            admin_id,
+            false,
+            [chain_id0],
+            format!("Client node for {:.8}", chain_id0),
+            Duration::from_secs(30),
+            Duration::from_secs(1),
+            ChainClientOptions::test_default(),
+            linera_core::client::RequestsSchedulerConfig::default(),
+        )),
+    };
+
+    // Add chain 0 with SkipSenders listening mode.
+    context.wallet.insert(UserChain {
+        chain_id: chain_id0,
+        owner: Some(owner),
+        block_hash: None,
+        timestamp: clock.current_time(),
+        next_block_height: BlockHeight::ZERO,
+        pending_proposal: None,
+        epoch: Some(epoch0),
+        listening_mode: ListeningMode::SkipSenders,
+    });
+
+    // Create a block on chain 0 (change ownership). This certificate should be synced.
+    let owners = [(owner, 1), (AccountPublicKey::test_key(1).into(), 9)];
+    let timeout_config = TimeoutConfig {
+        base_timeout: TimeDelta::from_secs(1),
+        timeout_increment: TimeDelta::ZERO,
+        ..TimeoutConfig::default()
+    };
+    let chain0_cert = client0
+        .change_ownership(ChainOwnership::multiple(owners, 0, timeout_config))
+        .await?
+        .unwrap();
+    let chain0_cert_hash = chain0_cert.hash();
+
+    // Create a chain listener that follows chain 0 in SkipSenders mode.
+    let context = Arc::new(Mutex::new(context));
+    let cancellation_token = CancellationToken::new();
+    let child_token = cancellation_token.child_token();
+    let chain_listener = ChainListener::new(config, context, listener_storage.clone(), child_token)
+        .run(false) // Disable background sync to test core SkipSenders behavior
+        .await
+        .unwrap();
+    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+
+    // Verify that the followed chain's block (chain 0) WAS synced.
+    // This confirms the listener is working and syncing chain0's blocks.
+    let chain0_cert_in_storage = listener_storage.read_certificate(chain0_cert_hash).await?;
+    assert!(
+        chain0_cert_in_storage.is_some(),
+        "Chain 0's certificate should be synced even in SkipSenders mode"
+    );
+
+    // Transfer one token from chain 1 to chain 0. This creates a block on chain 1.
+    let recipient0 = Account::chain(chain_id0);
+    client1
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient0)
+        .await?
+        .unwrap();
+
+    // Wait for the listener to potentially process notifications
+    for i in 0.. {
+        clock.add(TimeDelta::from_secs(1));
+        // Give async tasks time to run
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        client1.synchronize_from_validators().boxed().await?;
+        let balance = client1.local_balance().await?;
+        if balance == Amount::ONE {
+            break;
+        }
+        clock.add(TimeDelta::from_secs(1));
+        if i == 30 {
+            panic!("Unexpected local balance: {}", balance);
+        }
+    }
+
+    let chain_balance = client0.query_balance().await?;
+    assert_eq!(
+        chain_balance,
+        Amount::ONE,
+        "Chain 0's balance should remain unchanged as the inbox is not processed in SkipSenders mode"
+    );
+
+    // Verify that inbox was NOT processed by checking the listener's view of chain0.
+    // In SkipSenders mode, the listener should not process incoming messages,
+    // so the chain state should remain at height 1 (just the ownership change block).
+    let chain0_state = listener_storage.load_chain(chain_id0).await?;
+    let chain0_tip = chain0_state.tip_state.get();
+    assert_eq!(
+        chain0_tip.next_block_height,
+        BlockHeight::from(1),
+        "Chain 0 should be at height 0 (only the ownership change block). \
+         If next_block_height > 1, the inbox was incorrectly processed in SkipSenders mode."
+    );
 
     cancellation_token.cancel();
     handle.await;

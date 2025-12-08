@@ -5,11 +5,14 @@ use std::{collections::BTreeMap, iter::IntoIterator};
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, ChainDescription, Timestamp},
+    data_types::{BlockHeight, ChainDescription, Epoch, Timestamp},
     ensure,
     identifiers::{AccountOwner, ChainId},
 };
-use linera_core::{client::PendingProposal, data_types::ChainInfo};
+use linera_core::{
+    client::{ListeningMode, PendingProposal},
+    data_types::ChainInfo,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{config::GenesisConfig, error, Error};
@@ -117,6 +120,8 @@ impl Wallet {
             timestamp,
             next_block_height: BlockHeight(0),
             pending_proposal: None,
+            epoch: None,
+            listening_mode: ListeningMode::FullChain,
         };
         self.insert(user_chain);
         Ok(())
@@ -137,6 +142,12 @@ impl Wallet {
         owner: Option<AccountOwner>,
         info: &ChainInfo,
     ) {
+        // Preserve the existing listening mode if the chain is already in the wallet.
+        let listening_mode = self
+            .chains
+            .get(&info.chain_id)
+            .map(|c| c.listening_mode.clone())
+            .unwrap_or_default();
         self.insert(UserChain {
             chain_id: info.chain_id,
             owner,
@@ -144,6 +155,8 @@ impl Wallet {
             next_block_height: info.next_block_height,
             timestamp: info.timestamp,
             pending_proposal,
+            epoch: Some(info.epoch),
+            listening_mode,
         });
     }
 
@@ -165,6 +178,10 @@ pub struct UserChain {
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
     pub pending_proposal: Option<PendingProposal>,
+    pub epoch: Option<Epoch>,
+    /// How to listen to this chain. Defaults to `FullChain` for backward compatibility.
+    #[serde(default)]
+    pub listening_mode: ListeningMode,
 }
 
 impl Clone for UserChain {
@@ -176,6 +193,8 @@ impl Clone for UserChain {
             timestamp: self.timestamp,
             next_block_height: self.next_block_height,
             pending_proposal: self.pending_proposal.clone(),
+            epoch: self.epoch,
+            listening_mode: self.listening_mode.clone(),
         }
     }
 }
@@ -194,12 +213,18 @@ impl UserChain {
             timestamp,
             next_block_height: BlockHeight::ZERO,
             pending_proposal: None,
+            epoch: None,
+            listening_mode: ListeningMode::FullChain,
         }
     }
 
     /// Creates an entry for a chain that we don't own. The timestamp must be the genesis
-    /// timestamp or earlier.
-    pub fn make_other(chain_id: ChainId, timestamp: Timestamp) -> Self {
+    /// timestamp or earlier. The Epoch is `None`.
+    pub fn make_other(
+        chain_id: ChainId,
+        timestamp: Timestamp,
+        listening_mode: ListeningMode,
+    ) -> Self {
         Self {
             chain_id,
             owner: None,
@@ -207,6 +232,101 @@ impl UserChain {
             timestamp,
             next_block_height: BlockHeight::ZERO,
             pending_proposal: None,
+            epoch: None,
+            listening_mode,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_base::{
+        data_types::{BlockHeight, Epoch, Timestamp},
+        identifiers::ChainId,
+    };
+    use linera_core::client::ListeningMode;
+
+    use super::UserChain;
+
+    /// Tests that wallet.json files created before the `listening_mode` field was added
+    /// can still be deserialized, with `listening_mode` defaulting to `FullChain`.
+    #[test]
+    fn test_user_chain_backwards_compatibility_without_listening_mode() {
+        // JSON representing a UserChain from before the listening_mode field was added
+        // Note: epoch serializes as a string in human-readable JSON format
+        let old_format_json = r#"{
+            "chain_id": "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+            "owner": null,
+            "block_hash": null,
+            "timestamp": 0,
+            "next_block_height": 0,
+            "pending_proposal": null,
+            "epoch": "0"
+        }"#;
+
+        let user_chain: UserChain =
+            serde_json::from_str(old_format_json).expect("Should deserialize old format");
+
+        // Verify the listening_mode defaults to FullChain - this is the key backwards compatibility test
+        assert_eq!(
+            user_chain.listening_mode,
+            ListeningMode::FullChain,
+            "Missing listening_mode field should default to FullChain for backwards compatibility"
+        );
+
+        // Verify a few other fields were parsed correctly
+        assert_eq!(user_chain.owner, None);
+        assert_eq!(user_chain.timestamp, Timestamp::from(0));
+        assert_eq!(user_chain.next_block_height, BlockHeight::ZERO);
+        assert_eq!(user_chain.epoch, Some(Epoch::ZERO));
+    }
+
+    /// Tests that a UserChain with an explicit listening_mode is deserialized correctly.
+    #[test]
+    fn test_user_chain_with_listening_mode() {
+        // JSON with explicit SkipSenders listening_mode
+        let json_with_skip_senders = r#"{
+            "chain_id": "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+            "owner": null,
+            "block_hash": null,
+            "timestamp": 0,
+            "next_block_height": 0,
+            "pending_proposal": null,
+            "epoch": "0",
+            "listening_mode": "SkipSenders"
+        }"#;
+
+        let user_chain: UserChain = serde_json::from_str(json_with_skip_senders)
+            .expect("Should deserialize with SkipSenders");
+
+        assert_eq!(
+            user_chain.listening_mode,
+            ListeningMode::SkipSenders,
+            "Explicit SkipSenders should be preserved"
+        );
+    }
+
+    /// Tests round-trip serialization preserves listening_mode.
+    #[test]
+    fn test_user_chain_serialization_round_trip() {
+        let original = UserChain {
+            chain_id: ChainId::default(),
+            owner: None,
+            block_hash: None,
+            timestamp: Timestamp::from(12345),
+            next_block_height: BlockHeight::from(10),
+            pending_proposal: None,
+            epoch: Some(Epoch::from(1)),
+            listening_mode: ListeningMode::SkipSenders,
+        };
+
+        let json = serde_json::to_string(&original).expect("Should serialize");
+        let deserialized: UserChain = serde_json::from_str(&json).expect("Should deserialize");
+
+        assert_eq!(deserialized.chain_id, original.chain_id);
+        assert_eq!(deserialized.listening_mode, ListeningMode::SkipSenders);
+        assert_eq!(deserialized.timestamp, original.timestamp);
+        assert_eq!(deserialized.next_block_height, original.next_block_height);
+        assert_eq!(deserialized.epoch, original.epoch);
     }
 }

@@ -49,8 +49,10 @@ use linera_client::{
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
-    client::ChainClientError, data_types::ClientOutcome, worker::Reason, JoinSetExt as _,
-    LocalNodeError,
+    client::{ChainClientError, ListeningMode},
+    data_types::ClientOutcome,
+    worker::Reason,
+    JoinSetExt as _, LocalNodeError,
 };
 use linera_execution::{committee::Committee, WasmRuntime, WithWasmDefault as _};
 use linera_faucet_server::{FaucetConfig, FaucetService};
@@ -1093,7 +1095,8 @@ impl Runnable for Job {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
                 info!("Watching for notifications for chain {:?}", chain_id);
-                let (listener, _listen_handle, mut notifications) = chain_client.listen().await?;
+                let (listener, _listen_handle, mut notifications) =
+                    chain_client.listen(ListeningMode::FullChain).await?;
                 join_set.spawn_task(listener);
                 while let Some(notification) = notifications.next().await {
                     if let Reason::NewBlock { .. } = notification.reason {
@@ -1543,7 +1546,11 @@ impl Runnable for Job {
                 context.update_wallet_from_client(&chain_client).await?;
             }
 
-            Wallet(WalletCommand::FollowChain { chain_id, sync }) => {
+            Wallet(WalletCommand::FollowChain {
+                chain_id,
+                sync,
+                skip_senders,
+            }) => {
                 let mut context = ClientContext::new(
                     storage,
                     options.context_options.clone(),
@@ -1551,6 +1558,19 @@ impl Runnable for Job {
                     signer.into_value(),
                 );
                 let start_time = Instant::now();
+                let listening_mode = if skip_senders {
+                    ListeningMode::SkipSenders
+                } else {
+                    ListeningMode::FullChain
+                };
+                // Insert a placeholder chain with the listening mode so that
+                // update_wallet_from_client preserves it.
+                let genesis_config = context.wallet().genesis_config().clone();
+                context.wallet_mut().insert(UserChain::make_other(
+                    chain_id,
+                    genesis_config.timestamp,
+                    listening_mode,
+                ));
                 context.client.track_chain(chain_id);
                 let chain_client = context.make_chain_client(chain_id);
                 if sync {
