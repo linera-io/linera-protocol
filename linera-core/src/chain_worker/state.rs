@@ -376,15 +376,16 @@ where
 
         let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
         if !missing_indices.is_empty() {
-            let pending_blobs = self
+            let all_entries_pending_blobs = self
                 .chain
                 .pending_proposed_blobs
                 .try_load_all_entries()
                 .await?;
             for (index, blob_id) in missing_indices.into_iter().zip(missing_blob_ids) {
-                for (_, pending_blob) in &pending_blobs {
-                    if let Some(blob) = pending_blob.get(&blob_id).await? {
+                for (_, pending_blobs) in &all_entries_pending_blobs {
+                    if let Some(blob) = pending_blobs.get(&blob_id).await? {
                         maybe_blobs[index].1 = Some(blob);
+                        break;
                     }
                 }
             }
