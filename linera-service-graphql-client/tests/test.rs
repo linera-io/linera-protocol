@@ -60,10 +60,11 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) -> anyhow::Result
     let (mut net, client) = config.instantiate().await?;
     let owner = client.get_owner().unwrap();
 
-    let node_chains = {
+    let mut node_chains = {
         let wallet = client.load_wallet()?;
         (wallet.default_chain(), wallet.chain_ids())
     };
+    node_chains.1.sort();
     let chain0 = node_chains.0.unwrap();
 
     // publishing an application
@@ -97,9 +98,10 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) -> anyhow::Result
     }
 
     // check chains query
-    let chains = request::<Chains, _>(req_client, url, chains::Variables)
+    let mut chains = request::<Chains, _>(req_client, url, chains::Variables)
         .await?
         .chains;
+    chains.list.sort();
     assert_eq!((chains.default, chains.list), node_chains);
 
     // check blocks query
