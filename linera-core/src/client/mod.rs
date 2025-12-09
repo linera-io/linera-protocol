@@ -16,7 +16,7 @@ use futures::{
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
-    crypto::{CryptoHash, Signer, ValidatorPublicKey},
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, TimeDelta},
     ensure,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, GenericApplicationId, StreamId},
@@ -350,6 +350,11 @@ impl<Env: Environment> Client<Env> {
         }
     }
 
+    /// Returns the chain ID of the admin chain.
+    pub fn admin_chain(&self) -> ChainId {
+        self.admin_id
+    }
+
     /// Returns the storage client used by this client's local node.
     pub fn storage_client(&self) -> &Env::Storage {
         self.environment.storage()
@@ -359,10 +364,15 @@ impl<Env: Environment> Client<Env> {
         self.environment.network()
     }
 
-    /// Returns a reference to the [`Signer`] of the client.
+    /// Returns a reference to the client's [`Signer`][crate::environment::Signer].
     #[instrument(level = "trace", skip(self))]
-    pub fn signer(&self) -> &impl Signer {
+    pub fn signer(&self) -> &Env::Signer {
         self.environment.signer()
+    }
+
+    /// Returns a reference to the client's [`Wallet`][crate::environment::Wallet].
+    pub fn wallet(&self) -> &Env::Wallet {
+        self.environment.wallet()
     }
 
     /// Adds a chain to the set of chains tracked by the local node.

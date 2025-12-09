@@ -80,10 +80,6 @@ pub mod lru_prefix_cache;
 mod error;
 pub use error::ViewError;
 
-mod future_sync_ext;
-#[doc(hidden)]
-pub use future_sync_ext::FutureSyncExt;
-
 /// Elementary data-structures implementing the [`views::View`] trait.
 pub mod views;
 

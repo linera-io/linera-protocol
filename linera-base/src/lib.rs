@@ -37,6 +37,7 @@ pub mod task;
 pub mod time;
 #[cfg(test)]
 mod unit_tests;
+pub mod util;
 pub mod vm;
 
 pub use graphql::BcsHexParseError;

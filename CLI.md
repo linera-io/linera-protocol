@@ -738,6 +738,9 @@ Run a GraphQL service to explore and extend the chains of the wallet
 
   Default value: `0`
 * `--port <PORT>` — The port on which to run the server
+* `--operator-application-ids <OPERATOR_APPLICATION_IDS>` — Application IDs of operator applications to watch. When specified, a task processor is started alongside the node service
+* `--controller-id <CONTROLLER_APPLICATION_ID>` — A controller to execute a dynamic set of applications running on a dynamic set of chains
+* `--operators <OPERATORS>` — Supported operators and their binary paths. Format: `name=path` or just `name` (uses name as path). Example: `--operators my-operator=/path/to/binary`
 
 
 
@@ -1270,8 +1273,6 @@ Adds a new validator with the specified public key, account key, network address
 * `--account-key <ACCOUNT_KEY>` — Account public key for receiving payments and rewards
 * `--address <ADDRESS>` — Network address where the validator can be reached (e.g., grpcs://host:port)
 * `--votes <VOTES>` — Voting weight for consensus (default: 1)
-
-  Default value: `1`
 * `--skip-online-check` — Skip online connectivity verification before adding
 
 

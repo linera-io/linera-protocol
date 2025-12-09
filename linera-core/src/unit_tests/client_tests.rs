@@ -474,7 +474,6 @@ where
     // the next round to succeed.
     builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
     client.synchronize_from_validators().await.unwrap();
-    client.process_inbox().await.unwrap();
     assert_eq!(
         client.local_balance().await.unwrap(),
         Amount::from_tokens(2)
