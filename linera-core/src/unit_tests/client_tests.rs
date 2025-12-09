@@ -3239,30 +3239,23 @@ where
     follower.synchronize_from_validators().await?;
 
     // The follower should have downloaded the receiver's blocks.
-    {
-        let chain = follower
-            .storage_client()
-            .load_chain(receiver.chain_id())
-            .await?;
-        assert_eq!(
-            chain.tip_state.get().next_block_height,
-            BlockHeight::from(1),
-            "Follower should have downloaded the receiver's block"
-        );
-    }
+    assert_eq!(
+        follower.chain_info().await?.next_block_height,
+        BlockHeight::from(1),
+        "Follower should have downloaded the receiver's block"
+    );
 
     // The follower should NOT have downloaded the sender's blocks.
-    {
-        let chain = follower
-            .storage_client()
-            .load_chain(sender.chain_id())
-            .await?;
-        assert_eq!(
-            chain.tip_state.get().next_block_height,
-            BlockHeight::ZERO,
-            "Follower should not have downloaded the sender's blocks"
-        );
-    }
+    let sender_info = follower
+        .client
+        .local_node
+        .chain_info(sender.chain_id())
+        .await?;
+    assert_eq!(
+        sender_info.next_block_height,
+        BlockHeight::ZERO,
+        "Follower should not have downloaded the sender's blocks"
+    );
 
     Ok(())
 }
