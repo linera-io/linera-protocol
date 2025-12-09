@@ -516,19 +516,33 @@ impl<Env: Environment> ClientContext<Env> {
             return Err(error::Inner::ChainOwnership.into());
         }
 
-        self.wallet()
-            .insert(
-                chain_id,
-                wallet::Chain {
-                    owner: Some(owner),
-                    timestamp: chain_description.timestamp(),
-                    epoch: Some(chain_description.config().epoch),
-                    ..Default::default()
-                },
-            )
+        // Try to modify existing chain entry, setting the owner and disabling follow-only mode.
+        let timestamp = chain_description.timestamp();
+        let epoch = chain_description.config().epoch;
+        let modified = self
+            .wallet()
+            .modify(chain_id, |chain| {
+                chain.owner = Some(owner);
+                chain.follow_only = false;
+            })
             .await
-            .map_err(error::Inner::wallet)
-            .context("assigning new chain")?;
+            .map_err(error::Inner::wallet)?;
+        // If the chain didn't exist, insert a new entry.
+        if modified.is_none() {
+            self.wallet()
+                .insert(
+                    chain_id,
+                    wallet::Chain {
+                        owner: Some(owner),
+                        timestamp,
+                        epoch: Some(epoch),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .map_err(error::Inner::wallet)
+                .context("assigning new chain")?;
+        }
         Ok(())
     }
 
