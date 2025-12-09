@@ -944,6 +944,15 @@ where
     fn maximum_blob_size(&mut self) -> Result<u64, ExecutionError> {
         Ok(self.inner().resource_controller.policy().maximum_blob_size)
     }
+
+    fn allow_contract_logs(&mut self) -> Result<bool, ExecutionError> {
+        let this = self.inner();
+        let allowed = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::ContractLogsAllowed { callback })?
+            .recv_response()?;
+        Ok(allowed)
+    }
 }
 
 /// An extension trait to determine in compile time the different behaviors between contract and

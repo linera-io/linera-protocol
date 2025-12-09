@@ -561,8 +561,10 @@ async fn run(options: ServerOptions) {
             let store_config = storage_config
                 .add_common_storage_options(&common_storage_options)
                 .unwrap();
+            // Validators should not output contract logs.
+            let allow_contract_logs = false;
             store_config
-                .run_with_storage(wasm_runtime, job)
+                .run_with_storage(wasm_runtime, allow_contract_logs, job)
                 .boxed()
                 .await
                 .unwrap()

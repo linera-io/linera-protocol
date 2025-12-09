@@ -689,6 +689,16 @@ where
                 };
                 callback.respond(result);
             }
+
+            ContractLogsAllowed { callback } => {
+                let allowed = self
+                    .state
+                    .context()
+                    .extra()
+                    .execution_runtime_config()
+                    .allow_contract_logs;
+                callback.respond(allowed);
+            }
         }
 
         Ok(())
@@ -750,7 +760,7 @@ where
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
     ) -> Result<(), ExecutionError> {
-        let ExecutionRuntimeConfig {} = self.state.context().extra().execution_runtime_config();
+        let ExecutionRuntimeConfig { .. } = self.state.context().extra().execution_runtime_config();
         self.run_user_action_with_runtime(application_id, action, refund_grant_to, grant)
             .await
     }
@@ -1302,5 +1312,10 @@ pub enum ExecutionRequest {
         application: ApplicationId,
         #[debug(skip)]
         callback: Sender<(u32, u32)>,
+    },
+
+    ContractLogsAllowed {
+        #[debug(skip)]
+        callback: Sender<bool>,
     },
 }

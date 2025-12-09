@@ -183,7 +183,12 @@ impl ExporterOptions {
                 .storage_config
                 .add_common_storage_options(&self.common_storage_options)
                 .unwrap();
-            store_config.run_with_storage(None, context).boxed().await
+            // Exporters are part of validator infrastructure and should not output contract logs.
+            let allow_contract_logs = false;
+            store_config
+                .run_with_storage(None, allow_contract_logs, context)
+                .boxed()
+                .await
         };
 
         runtime.block_on(future)?.map_err(|e| e.into())
