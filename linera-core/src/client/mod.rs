@@ -453,6 +453,15 @@ impl<Env: Environment> Client<Env> {
             .is_some_and(|state| state.follow_only())
     }
 
+    /// Sets whether the given chain is in follow-only mode.
+    pub fn set_chain_follow_only(&self, chain_id: ChainId, follow_only: bool) {
+        self.chains.pin().update(chain_id, |state| {
+            let mut state = state.clone_for_update_unchecked();
+            state.set_follow_only(follow_only);
+            state
+        });
+    }
+
     /// Fetches the chain description blob if needed, and returns the chain info.
     async fn fetch_chain_info(
         &self,

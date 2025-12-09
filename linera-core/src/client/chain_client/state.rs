@@ -52,6 +52,11 @@ impl State {
         self.follow_only
     }
 
+    /// Sets whether this chain is in follow-only mode.
+    pub fn set_follow_only(&mut self, follow_only: bool) {
+        self.follow_only = follow_only;
+    }
+
     pub fn pending_proposal(&self) -> &Option<PendingProposal> {
         &self.pending_proposal
     }
