@@ -599,6 +599,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     let mut height = 0;
     client2.wallet_init(None).await?;
     client2.follow_chain(chain, false).await?;
+    client2.set_default_chain(chain).await?;
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let port = get_node_port().await;
@@ -1293,4 +1294,96 @@ impl EthereumTrackerApp {
         let mutation = format!("update(toBlock: {})", to_block);
         self.0.mutate(mutation).await.unwrap();
     }
+}
+
+/// Test that the node service can start with task processor options.
+/// This is a basic smoke test that verifies the CLI arguments are accepted
+/// and the service starts correctly with task processor configuration.
+#[cfg(feature = "storage-service")]
+#[test_log::test(tokio::test)]
+async fn test_node_service_with_task_processor() -> Result<()> {
+    use std::{io::Write, os::unix::fs::PermissionsExt};
+
+    use linera_base::{abi::ContractAbi, identifiers::ApplicationId};
+
+    // Dummy ABI type for the task-processor application.
+    // The actual ABI doesn't matter for the GraphQL interface.
+    struct TaskProcessorAbi;
+
+    impl ContractAbi for TaskProcessorAbi {
+        type Operation = ();
+        type Response = ();
+    }
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
+
+    // Publish and create the task-processor example application.
+    let example_dir = ClientWrapper::example_path("task-processor")?;
+    let app_id_str = client
+        .project_publish(example_dir, vec![], None, &())
+        .await?;
+    let app_id: ApplicationId = app_id_str.trim().parse()?;
+
+    // Create an echo operator script that reads stdin and writes it to stdout.
+    let tmp_dir = tempfile::tempdir()?;
+    let operator_path = tmp_dir.path().join("echo-operator");
+    {
+        let mut file = std::fs::File::create(&operator_path)?;
+        writeln!(file, "#!/bin/sh")?;
+        writeln!(file, "cat")?;
+    }
+    std::fs::set_permissions(&operator_path, std::fs::Permissions::from_mode(0o755))?;
+
+    // Start the node service with task processor options.
+    let port = get_node_port().await;
+    let operators = vec![("echo".to_string(), operator_path)];
+    let mut node_service = client
+        .run_node_service_with_options(port, ProcessInbox::Skip, &[app_id], &operators)
+        .await?;
+
+    node_service.ensure_is_running()?;
+
+    // Subscribe to notifications for the chain.
+    let mut notifications = Box::pin(node_service.notifications(chain).await?);
+
+    // Query the initial task count (should be 0).
+    let app = node_service.make_application(&chain, &app_id.with_abi::<TaskProcessorAbi>())?;
+    let task_count: u64 = app.query_json("taskCount").await?;
+    assert_eq!(task_count, 0);
+
+    // Submit a mutation to request a task.
+    // This creates a block with the RequestTask operation.
+    app.mutate(r#"requestTask(operator: "echo", input: "hello world")"#)
+        .await?;
+
+    // Wait for the block containing the RequestTask operation.
+    notifications.wait_for_block(None).await?;
+
+    // The task should now be pending. Query nextActions to verify.
+    let response = app.query("nextActions(now: 0)").await?;
+    let actions = &response["nextActions"];
+    assert!(
+        actions["execute_tasks"]
+            .as_array()
+            .is_some_and(|arr| !arr.is_empty()),
+        "Expected at least one task in execute_tasks, got: {actions}"
+    );
+
+    // The task processor will execute the task and submit a StoreResult operation.
+    // Wait for the block containing the StoreResult operation.
+    notifications.wait_for_block(None).await?;
+
+    // Check that the task was processed (task count should be 1).
+    let task_count: u64 = app.query_json("taskCount").await?;
+    assert_eq!(task_count, 1);
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
 }
