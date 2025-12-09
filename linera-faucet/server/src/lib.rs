@@ -962,6 +962,7 @@ where
             self.context,
             self.storage,
             cancellation_token.clone(),
+            tokio::sync::mpsc::unbounded_channel().1,
         )
         .run(false) // Faucet doesn't receive messages, so no need for background sync
         .await?;

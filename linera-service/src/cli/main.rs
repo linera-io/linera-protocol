@@ -24,14 +24,20 @@ pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0
 #[export_name = "_rjem_malloc_conf"]
 pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
 
-use std::{collections::BTreeSet, env, path::PathBuf, process, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    env,
+    path::PathBuf,
+    process,
+    sync::Arc,
+};
 
 use anyhow::{anyhow, bail, ensure, Context, Error};
 use async_trait::async_trait;
 use chrono::Utc;
 use clap_complete::generate;
 use colored::Colorize;
-use futures::{FutureExt as _, StreamExt as _};
+use futures::{lock::Mutex, FutureExt as _, StreamExt as _};
 use linera_base::{
     crypto::{InMemorySigner, Signer},
     data_types::{ApplicationPermissions, Timestamp},
@@ -69,9 +75,11 @@ use linera_service::{
         net_up_utils,
     },
     cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
+    controller::Controller,
     node_service::NodeService,
     project::{self, Project},
     storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig},
+    task_processor::TaskProcessor,
     util, Wallet,
 };
 use linera_storage::{DbStorage, Storage};
@@ -81,7 +89,7 @@ use tempfile::NamedTempFile;
 use tokio::{
     io::AsyncWriteExt,
     process::{ChildStdin, Command},
-    sync::oneshot,
+    sync::{mpsc, oneshot},
     task::JoinSet,
     time,
 };
@@ -791,6 +799,7 @@ impl Runnable for Job {
                         shared_context.clone(),
                         storage.clone(),
                         shutdown_notifier.clone(),
+                        mpsc::unbounded_channel().1,
                     );
                     linera_client::benchmark::Benchmark::run_benchmark(
                         bps,
@@ -1135,23 +1144,76 @@ impl Runnable for Job {
                 port,
                 #[cfg(with_metrics)]
                 metrics_port,
+                operator_application_ids,
+                operators,
+                controller_application_id,
             } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
 
                 let default_chain = context.wallet().default_chain();
+                let chain_id =
+                    default_chain.expect("Service requires a default chain in the wallet");
+
+                assert!(
+                    operator_application_ids.is_empty() || controller_application_id.is_none(),
+                    "Cannot run a static list of applications when a controller is given."
+                );
+
+                let cancellation_token = CancellationToken::new();
+                tokio::spawn(listen_for_shutdown_signals(cancellation_token.clone()));
+
+                let operators: BTreeMap<String, PathBuf> = operators.into_iter().collect();
+                for (name, path) in &operators {
+                    info!("Operator '{}' -> {}", name, path.display());
+                }
+                let operators = Arc::new(operators);
+
+                // Start the task processor if operator applications are specified.
+                if !operator_application_ids.is_empty() {
+                    let chain_client = context.make_chain_client(chain_id).await?;
+                    let processor = TaskProcessor::new(
+                        chain_id,
+                        operator_application_ids,
+                        chain_client,
+                        cancellation_token.clone(),
+                        operators.clone(),
+                        None,
+                    );
+                    tokio::spawn(processor.run());
+                }
+
+                let context = Arc::new(Mutex::new(context));
+
+                let (command_sender, command_receiver) = mpsc::unbounded_channel();
+
+                if let Some(controller_id) = controller_application_id {
+                    // For the controller case, we share the context via Arc so the
+                    // controller can spawn new processors for different chains.
+                    let chain_client = context.lock().await.make_chain_client(chain_id).await?;
+                    let controller = Controller::new(
+                        chain_id,
+                        controller_id,
+                        context.clone(),
+                        chain_client,
+                        cancellation_token.clone(),
+                        operators,
+                        command_sender,
+                    );
+
+                    tokio::spawn(controller.run());
+                }
+
                 let service = NodeService::new(
                     config,
                     port,
                     #[cfg(with_metrics)]
                     metrics_port,
-                    default_chain,
+                    Some(chain_id),
                     context,
                 );
-                let cancellation_token = CancellationToken::new();
-                tokio::spawn(listen_for_shutdown_signals(cancellation_token.clone()));
-                service.run(cancellation_token).await?;
+                service.run(cancellation_token, command_receiver).await?;
             }
 
             Faucet {
