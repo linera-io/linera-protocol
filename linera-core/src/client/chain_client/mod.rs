@@ -2460,6 +2460,10 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<(), Error> {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
+                if !matches!(listening_mode, ListeningMode::FullChain) {
+                    debug!("NewIncomingBundle: ignoring notification due to listening mode");
+                    return Ok(());
+                }
                 if self.local_next_height_to_receive(origin).await? > height {
                     debug!(
                         chain_id = %self.chain_id,
@@ -2496,7 +2500,7 @@ impl<Env: Environment> ChainClient<Env> {
                     return Ok(());
                 }
                 match listening_mode {
-                    ListeningMode::FullChain => {
+                    ListeningMode::FullChain | ListeningMode::FollowChain => {
                         self.client
                             .synchronize_chain_state_from(&remote_node, chain_id)
                             .await?;
@@ -2540,6 +2544,7 @@ impl<Env: Environment> ChainClient<Env> {
                 }
                 let should_process = match listening_mode {
                     ListeningMode::FullChain => true,
+                    ListeningMode::FollowChain => false,
                     ListeningMode::EventsOnly(relevant_events) => relevant_events
                         .intersection(&event_streams)
                         .next()
@@ -2573,7 +2578,7 @@ impl<Env: Environment> ChainClient<Env> {
                     .await?;
             }
             Reason::NewRound { height, round } => {
-                if matches!(listening_mode, ListeningMode::EventsOnly(_)) {
+                if !matches!(listening_mode, ListeningMode::FullChain) {
                     debug!("NewRound: ignoring a notification due to listening mode");
                     return Ok(());
                 }

@@ -241,8 +241,13 @@ pub enum TimingType {
 /// - or do we only care about blocks containing events from some particular streams?
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ListeningMode {
-    /// Listen to everything.
+    /// Listen to everything: all blocks for the chain and all blocks from sender chains,
+    /// and participate in rounds.
     FullChain,
+    /// Listen to all blocks for the chain, but don't download sender chain blocks or participate
+    /// in rounds. Use this when interested in the chain's state but not intending to propose
+    /// blocks (e.g., because we're not a chain owner).
+    FollowChain,
     /// Only listen to blocks which contain events from those streams.
     EventsOnly(BTreeSet<StreamId>),
 }
@@ -253,6 +258,9 @@ impl PartialOrd for ListeningMode {
             (ListeningMode::FullChain, ListeningMode::FullChain) => Some(Ordering::Equal),
             (ListeningMode::FullChain, _) => Some(Ordering::Greater),
             (_, ListeningMode::FullChain) => Some(Ordering::Less),
+            (ListeningMode::FollowChain, ListeningMode::FollowChain) => Some(Ordering::Equal),
+            (ListeningMode::FollowChain, ListeningMode::EventsOnly(_)) => Some(Ordering::Greater),
+            (ListeningMode::EventsOnly(_), ListeningMode::FollowChain) => Some(Ordering::Less),
             (ListeningMode::EventsOnly(events_a), ListeningMode::EventsOnly(events_b)) => {
                 if events_a.is_superset(events_b) {
                     Some(Ordering::Greater)
@@ -273,6 +281,10 @@ impl ListeningMode {
             (ListeningMode::FullChain, _) => (),
             (mode, Some(ListeningMode::FullChain)) => {
                 *mode = ListeningMode::FullChain;
+            }
+            (ListeningMode::FollowChain, _) => (),
+            (mode, Some(ListeningMode::FollowChain)) => {
+                *mode = ListeningMode::FollowChain;
             }
             (
                 ListeningMode::EventsOnly(self_events),

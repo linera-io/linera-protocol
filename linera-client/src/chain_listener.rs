@@ -317,28 +317,41 @@ impl<C: ClientContext + 'static> ChainListener<C> {
 
         match &notification.reason {
             Reason::NewIncomingBundle { .. } => {
+                if !matches!(listening_mode, ListeningMode::FullChain) {
+                    debug!("ChainListener::process_notification: ignoring NewIncomingBundle due to listening mode");
+                    return Ok(());
+                }
                 self.maybe_process_inbox(notification.chain_id).await?;
             }
-            Reason::NewRound { .. } => self.update_validators(&notification).await?,
+            Reason::NewRound { .. } => {
+                if !matches!(listening_mode, ListeningMode::FullChain) {
+                    debug!("ChainListener::process_notification: ignoring NewRound due to listening mode");
+                    return Ok(());
+                }
+                self.update_validators(&notification).await?;
+            }
             Reason::NewBlock { hash, .. } => {
                 if matches!(listening_mode, ListeningMode::EventsOnly(_)) {
-                    debug!("ChainListener::process_notification: ignoring notification due to listening mode");
+                    debug!("ChainListener::process_notification: ignoring NewBlock due to listening mode");
                     return Ok(());
                 }
                 self.update_wallet(notification.chain_id).await?;
-                self.add_new_chains(*hash).await?;
-                let publishers = self
-                    .update_event_subscriptions(notification.chain_id)
-                    .await?;
-                if !publishers.is_empty() {
-                    self.listen_recursively(publishers).await?;
-                    self.maybe_process_inbox(notification.chain_id).await?;
+                if matches!(listening_mode, ListeningMode::FullChain) {
+                    self.add_new_chains(*hash).await?;
+                    let publishers = self
+                        .update_event_subscriptions(notification.chain_id)
+                        .await?;
+                    if !publishers.is_empty() {
+                        self.listen_recursively(publishers).await?;
+                        self.maybe_process_inbox(notification.chain_id).await?;
+                    }
+                    self.process_new_events(notification.chain_id).await?;
                 }
-                self.process_new_events(notification.chain_id).await?;
             }
             Reason::NewEvents { event_streams, .. } => {
                 let should_process = match listening_mode {
                     ListeningMode::FullChain => true,
+                    ListeningMode::FollowChain => false,
                     ListeningMode::EventsOnly(relevant_events) => {
                         relevant_events.intersection(event_streams).count() != 0
                     }
