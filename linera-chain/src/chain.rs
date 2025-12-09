@@ -23,10 +23,10 @@ use linera_execution::{
     ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
-    bucket_queue_view::BucketQueueView,
     context::Context,
     log_view::LogView,
     map_view::MapView,
+    queue_view::QueueView,
     reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
     register_view::RegisterView,
     set_view::SetView,
@@ -224,10 +224,6 @@ impl BundleInInbox {
     }
 }
 
-// The `TimestampedBundleInInbox` is a relatively small type, so a total
-// of 100 seems reasonable for the storing of the data.
-const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
-
 /// A view accessing the state of a chain.
 #[cfg_attr(
     with_graphql,
@@ -267,8 +263,7 @@ where
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, ChainId, InboxStateView<C>>,
     /// A queue of unskippable bundles, with the timestamp when we added them to the inbox.
-    pub unskippable_bundles:
-        BucketQueueView<C, TimestampedBundleInInbox, TIMESTAMPBUNDLE_BUCKET_SIZE>,
+    pub unskippable_bundles: QueueView<C, TimestampedBundleInInbox>,
     /// Unskippable bundles that have been removed but are still in the queue.
     pub removed_unskippable_bundles: SetView<C, BundleInInbox>,
     /// Mailboxes used to send messages, indexed by their target.
@@ -715,10 +710,10 @@ where
         }
         if !removed_unskippable.is_empty() {
             // Delete all removed bundles from the front of the unskippable queue.
-            let maybe_front = self.unskippable_bundles.front();
+            let maybe_front = self.unskippable_bundles.front().await?;
             if maybe_front.is_some_and(|ts_entry| removed_unskippable.remove(&ts_entry.entry)) {
-                self.unskippable_bundles.delete_front().await?;
-                while let Some(ts_entry) = self.unskippable_bundles.front() {
+                self.unskippable_bundles.delete_front();
+                while let Some(ts_entry) = self.unskippable_bundles.front().await? {
                     if !removed_unskippable.remove(&ts_entry.entry) {
                         if !self
                             .removed_unskippable_bundles
@@ -729,7 +724,7 @@ where
                         }
                         self.removed_unskippable_bundles.remove(&ts_entry.entry)?;
                     }
-                    self.unskippable_bundles.delete_front().await?;
+                    self.unskippable_bundles.delete_front();
                 }
             }
             for entry in removed_unskippable {
