@@ -53,7 +53,7 @@ where
             .await
             .map_err(ExporterError::StateError)?;
 
-        let stored_destinations: Vec<DestinationId> = {
+        let stored_destinations = {
             let pinned = view.destination_states.get().states.pin();
             pinned.iter().map(|(id, _)| id).cloned().collect::<Vec<_>>()
         };
