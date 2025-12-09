@@ -1648,6 +1648,10 @@ struct ClientOptions {
     #[arg(long)]
     wasm_runtime: Option<WasmRuntime>,
 
+    /// Output log messages from contract execution.
+    #[arg(long)]
+    contract_logs: bool,
+
     /// The number of Tokio worker threads to use.
     #[arg(long, env = "LINERA_CLIENT_TOKIO_THREADS")]
     tokio_threads: Option<usize>,
@@ -1675,9 +1679,12 @@ impl ClientOptions {
             .clone()
             .run_with_store(StorageMigration)
             .await?;
-        let output =
-            Box::pin(store_config.run_with_storage(self.wasm_runtime.with_wasm_default(), job))
-                .await?;
+        let output = Box::pin(store_config.run_with_storage(
+            self.wasm_runtime.with_wasm_default(),
+            self.contract_logs,
+            job,
+        ))
+        .await?;
         Ok(output)
     }
 

@@ -548,8 +548,10 @@ async fn run(options: ServerOptions) {
                 .run_with_store(AssertStorageV1)
                 .await
                 .unwrap();
+            // Validators should not output contract logs.
+            let allow_contract_logs = false;
             store_config
-                .run_with_storage(wasm_runtime, job)
+                .run_with_storage(wasm_runtime, allow_contract_logs, job)
                 .boxed()
                 .await
                 .unwrap()
