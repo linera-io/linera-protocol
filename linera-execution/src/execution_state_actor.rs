@@ -689,16 +689,6 @@ where
                 };
                 callback.respond(result);
             }
-
-            ContractLogsAllowed { callback } => {
-                let allowed = self
-                    .state
-                    .context()
-                    .extra()
-                    .execution_runtime_config()
-                    .allow_contract_logs;
-                callback.respond(allowed);
-            }
         }
 
         Ok(())
@@ -838,6 +828,13 @@ where
         let (codes, descriptions): (Vec<_>, Vec<_>) =
             self.contract_and_dependencies(application_id).await?;
 
+        let allow_contract_logs = self
+            .state
+            .context()
+            .extra()
+            .execution_runtime_config()
+            .allow_contract_logs;
+
         let contract_runtime_task = self
             .state
             .context()
@@ -850,6 +847,7 @@ where
                     refund_grant_to,
                     controller,
                     &action,
+                    allow_contract_logs,
                 );
 
                 for (code, description) in codes.0.into_iter().zip(descriptions) {
@@ -1312,10 +1310,5 @@ pub enum ExecutionRequest {
         application: ApplicationId,
         #[debug(skip)]
         callback: Sender<(u32, u32)>,
-    },
-
-    ContractLogsAllowed {
-        #[debug(skip)]
-        callback: Sender<bool>,
     },
 }

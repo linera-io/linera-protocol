@@ -130,6 +130,8 @@ pub struct SyncRuntimeInternal<UserInstance: WithContext> {
     resource_controller: ResourceController,
     /// Additional context for the runtime.
     user_context: UserInstance::UserContext,
+    /// Whether contract log messages should be output.
+    allow_contract_logs: bool,
 }
 
 /// The runtime status of an application.
@@ -317,6 +319,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         user_context: UserInstance::UserContext,
+        allow_contract_logs: bool,
     ) -> Self {
         Self {
             chain_id,
@@ -336,6 +339,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
             resource_controller,
             scheduled_operations: Vec::new(),
             user_context,
+            allow_contract_logs,
         }
     }
 
@@ -946,12 +950,7 @@ where
     }
 
     fn allow_contract_logs(&mut self) -> Result<bool, ExecutionError> {
-        let this = self.inner();
-        let allowed = this
-            .execution_state_sender
-            .send_request(|callback| ExecutionRequest::ContractLogsAllowed { callback })?
-            .recv_response()?;
-        Ok(allowed)
+        Ok(self.inner().allow_contract_logs)
     }
 }
 
@@ -987,6 +986,7 @@ impl ContractSyncRuntime {
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: &UserAction,
+        allow_contract_logs: bool,
     ) -> Self {
         SyncRuntime(Some(ContractSyncRuntimeHandle::from(
             SyncRuntimeInternal::new(
@@ -1003,6 +1003,7 @@ impl ContractSyncRuntime {
                 refund_grant_to,
                 resource_controller,
                 action.timestamp(),
+                allow_contract_logs,
             ),
         )))
     }
@@ -1621,6 +1622,7 @@ impl ServiceSyncRuntime {
                 None,
                 ResourceController::default(),
                 (),
+                false, // Services don't output contract logs
             )
             .into(),
         ));
