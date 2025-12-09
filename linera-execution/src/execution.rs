@@ -39,9 +39,8 @@ use super::{execution_state_actor::ExecutionRequest, runtime::ServiceRuntimeRequ
 use crate::{
     execution_state_actor::ExecutionStateActor, resources::ResourceController,
     system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ExecutionError,
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, JsVec, MessageContext, OperationContext,
-    ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime, Timestamp,
-    TransactionTracker,
+    ExecutionRuntimeContext, JsVec, MessageContext, OperationContext, ProcessStreamsContext, Query,
+    QueryContext, QueryOutcome, ServiceSyncRuntime, Timestamp, TransactionTracker,
 };
 
 /// An inner view accessing the execution state of a chain, for hashing purposes.
@@ -269,8 +268,6 @@ where
                 application_id,
                 bytes,
             } => {
-                let ExecutionRuntimeConfig { .. } =
-                    self.context().extra().execution_runtime_config();
                 let outcome = match endpoint {
                     Some(endpoint) => {
                         self.query_user_application_with_long_lived_service(

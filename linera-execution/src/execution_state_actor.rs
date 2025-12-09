@@ -28,11 +28,10 @@ use crate::{
     runtime::ContractSyncRuntime,
     system::{CreateApplicationResult, OpenChainConfig},
     util::{OracleResponseExt as _, RespondExt as _},
-    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, ExecutionStateView, JsVec, Message, MessageContext, MessageKind,
-    ModuleId, Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext,
-    QueryOutcome, ResourceController, SystemMessage, TransactionTracker, UserContractCode,
-    UserServiceCode,
+    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
+    ExecutionStateView, JsVec, Message, MessageContext, MessageKind, ModuleId, Operation,
+    OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext, QueryOutcome,
+    ResourceController, SystemMessage, TransactionTracker, UserContractCode, UserServiceCode,
 };
 
 /// Actor for handling requests to the execution state.
@@ -750,7 +749,6 @@ where
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
     ) -> Result<(), ExecutionError> {
-        let ExecutionRuntimeConfig { .. } = self.state.context().extra().execution_runtime_config();
         self.run_user_action_with_runtime(application_id, action, refund_grant_to, grant)
             .await
     }
