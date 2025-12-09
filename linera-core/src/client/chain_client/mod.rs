@@ -2458,12 +2458,16 @@ impl<Env: Environment> ChainClient<Env> {
         notification: Notification,
         listening_mode: &ListeningMode,
     ) -> Result<(), Error> {
+        if !listening_mode.is_relevant(&notification.reason) {
+            debug!(
+                chain_id = %self.chain_id,
+                reason = ?notification.reason,
+                "Ignoring notification due to listening mode"
+            );
+            return Ok(());
+        }
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
-                if !matches!(listening_mode, ListeningMode::FullChain) {
-                    debug!("NewIncomingBundle: ignoring notification due to listening mode");
-                    return Ok(());
-                }
                 if self.local_next_height_to_receive(origin).await? > height {
                     debug!(
                         chain_id = %self.chain_id,
@@ -2499,38 +2503,23 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                match listening_mode {
-                    ListeningMode::FullChain | ListeningMode::FollowChain => {
-                        self.client
-                            .synchronize_chain_state_from(&remote_node, chain_id)
-                            .await?;
-                        if self
-                            .local_next_block_height(chain_id, &mut local_node)
-                            .await?
-                            <= height
-                        {
-                            info!("NewBlock: Fail to synchronize new block after notification");
-                        }
-                        trace!(
-                            chain_id = %self.chain_id,
-                            %height,
-                            "NewBlock: processed notification",
-                        );
-                    }
-                    ListeningMode::EventsOnly(_) => {
-                        debug!(
-                            chain_id = %self.chain_id,
-                            %height,
-                            "NewBlock: ignoring notification due to listening in EventsOnly mode"
-                        );
-                    }
+                self.client
+                    .synchronize_chain_state_from(&remote_node, chain_id)
+                    .await?;
+                if self
+                    .local_next_block_height(chain_id, &mut local_node)
+                    .await?
+                    <= height
+                {
+                    info!("NewBlock: Fail to synchronize new block after notification");
                 }
+                trace!(
+                    chain_id = %self.chain_id,
+                    %height,
+                    "NewBlock: processed notification",
+                );
             }
-            Reason::NewEvents {
-                height,
-                hash,
-                event_streams,
-            } => {
+            Reason::NewEvents { height, hash, .. } => {
                 if self
                     .local_next_block_height(notification.chain_id, &mut local_node)
                     .await?
@@ -2542,22 +2531,6 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                let should_process = match listening_mode {
-                    ListeningMode::FullChain => true,
-                    ListeningMode::FollowChain => false,
-                    ListeningMode::EventsOnly(relevant_events) => relevant_events
-                        .intersection(&event_streams)
-                        .next()
-                        .is_some(),
-                };
-                if !should_process {
-                    debug!(
-                        chain_id = %self.chain_id,
-                        %height,
-                        "NewEvents: got a notification, but no relevant event streams in it"
-                    );
-                    return Ok(());
-                }
                 trace!(
                     chain_id = %self.chain_id,
                     %height,
@@ -2565,7 +2538,7 @@ impl<Env: Environment> ChainClient<Env> {
                 );
                 let mut certificates = remote_node.node.download_certificates(vec![hash]).await?;
                 // download_certificates ensures that we will get exactly one
-                // certificate in the result
+                // certificate in the result.
                 let certificate = certificates
                     .pop()
                     .expect("download_certificates should have returned one certificate");
@@ -2578,10 +2551,6 @@ impl<Env: Environment> ChainClient<Env> {
                     .await?;
             }
             Reason::NewRound { height, round } => {
-                if !matches!(listening_mode, ListeningMode::FullChain) {
-                    debug!("NewRound: ignoring a notification due to listening mode");
-                    return Ok(());
-                }
                 let chain_id = notification.chain_id;
                 if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await? {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {

@@ -315,26 +315,21 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             return Ok(());
         };
 
+        if !listening_mode.is_relevant(&notification.reason) {
+            debug!(
+                reason = ?notification.reason,
+                "ChainListener: ignoring notification due to listening mode"
+            );
+            return Ok(());
+        }
         match &notification.reason {
             Reason::NewIncomingBundle { .. } => {
-                if !matches!(listening_mode, ListeningMode::FullChain) {
-                    debug!("ChainListener::process_notification: ignoring NewIncomingBundle due to listening mode");
-                    return Ok(());
-                }
                 self.maybe_process_inbox(notification.chain_id).await?;
             }
             Reason::NewRound { .. } => {
-                if !matches!(listening_mode, ListeningMode::FullChain) {
-                    debug!("ChainListener::process_notification: ignoring NewRound due to listening mode");
-                    return Ok(());
-                }
                 self.update_validators(&notification).await?;
             }
             Reason::NewBlock { hash, .. } => {
-                if matches!(listening_mode, ListeningMode::EventsOnly(_)) {
-                    debug!("ChainListener::process_notification: ignoring NewBlock due to listening mode");
-                    return Ok(());
-                }
                 self.update_wallet(notification.chain_id).await?;
                 if matches!(listening_mode, ListeningMode::FullChain) {
                     self.add_new_chains(*hash).await?;
@@ -348,22 +343,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     self.process_new_events(notification.chain_id).await?;
                 }
             }
-            Reason::NewEvents { event_streams, .. } => {
-                let should_process = match listening_mode {
-                    ListeningMode::FullChain => true,
-                    ListeningMode::FollowChain => false,
-                    ListeningMode::EventsOnly(relevant_events) => {
-                        relevant_events.intersection(event_streams).count() != 0
-                    }
-                };
-                if !should_process {
-                    debug!(
-                        ?notification,
-                        ?listening_mode,
-                        "ChainListener::process_notification: ignoring notification due to no relevant events",
-                    );
-                    return Ok(());
-                }
+            Reason::NewEvents { .. } => {
                 self.process_new_events(notification.chain_id).await?;
             }
             Reason::BlockExecuted { .. } => {}

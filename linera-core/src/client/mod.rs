@@ -275,6 +275,23 @@ impl PartialOrd for ListeningMode {
 }
 
 impl ListeningMode {
+    /// Returns whether a notification with this reason should be processed under this listening
+    /// mode.
+    pub fn is_relevant(&self, reason: &Reason) -> bool {
+        match (reason, self) {
+            // FullChain processes everything.
+            (_, ListeningMode::FullChain) => true,
+            // FollowChain only processes new blocks on the chain itself.
+            (Reason::NewBlock { .. }, ListeningMode::FollowChain) => true,
+            (_, ListeningMode::FollowChain) => false,
+            // EventsOnly only processes events from relevant streams.
+            (Reason::NewEvents { event_streams, .. }, ListeningMode::EventsOnly(relevant)) => {
+                relevant.intersection(event_streams).next().is_some()
+            }
+            (_, ListeningMode::EventsOnly(_)) => false,
+        }
+    }
+
     pub fn extend(&mut self, other: Option<ListeningMode>) {
         match (self, other) {
             (_, None) => (),
