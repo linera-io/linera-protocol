@@ -21,6 +21,11 @@ pub struct Chain {
     pub timestamp: Timestamp,
     pub pending_proposal: Option<PendingProposal>,
     pub epoch: Option<Epoch>,
+    /// If true, we only follow this chain's blocks without downloading sender chain blocks
+    /// or participating in consensus rounds. Use this for chains we're interested in observing
+    /// but don't intend to propose blocks for.
+    #[serde(default)]
+    pub follow_only: bool,
 }
 
 impl From<&ChainInfo> for Chain {
@@ -32,6 +37,7 @@ impl From<&ChainInfo> for Chain {
             timestamp: info.timestamp,
             pending_proposal: None,
             epoch: Some(info.epoch),
+            follow_only: false,
         }
     }
 }
@@ -64,6 +70,7 @@ impl Chain {
             next_block_height: BlockHeight::ZERO,
             pending_proposal: None,
             epoch: Some(current_epoch),
+            follow_only: false,
         }
     }
 }
@@ -86,4 +93,11 @@ pub trait Wallet {
         self.items()
             .try_filter_map(|(id, chain)| async move { Ok(chain.owner.map(|_| id)) })
     }
+
+    /// Modifies a chain in the wallet. Returns `Ok(None)` if the chain doesn't exist.
+    async fn modify(
+        &self,
+        id: ChainId,
+        f: impl FnMut(&mut Chain) + Send,
+    ) -> Result<Option<()>, Self::Error>;
 }

@@ -244,20 +244,33 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .await?
                 .synchronize_chain_state(admin_chain_id)
                 .await?;
-            guard
+            let mut chain_ids: BTreeMap<_, _> = guard
                 .wallet()
-                .chain_ids()
+                .items()
                 .collect::<Vec<_>>()
                 .await
                 .into_iter()
-                .chain([Ok(admin_chain_id)])
-                .map(|chain_id| Ok((chain_id?, ListeningMode::FullChain)))
+                .map(|result| {
+                    let (chain_id, chain) = result?;
+                    let mode = if chain.follow_only {
+                        ListeningMode::FollowChain
+                    } else {
+                        ListeningMode::FullChain
+                    };
+                    Ok((chain_id, mode))
+                })
                 .collect::<Result<BTreeMap<_, _>, _>>()
                 .map_err(
                     |e: <<C::Environment as Environment>::Wallet as Wallet>::Error| {
                         crate::error::Inner::Wallet(Box::new(e) as _)
                     },
-                )?
+                )?;
+            // If the admin chain is not in the wallet, add it as follow-only since we
+            // typically don't own it.
+            chain_ids
+                .entry(admin_chain_id)
+                .or_insert(ListeningMode::FollowChain);
+            chain_ids
         };
 
         // Start background tasks to sync received certificates for each chain,
