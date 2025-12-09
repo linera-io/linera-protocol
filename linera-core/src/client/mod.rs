@@ -281,8 +281,10 @@ impl ListeningMode {
         match (reason, self) {
             // FullChain processes everything.
             (_, ListeningMode::FullChain) => true,
-            // FollowChain only processes new blocks on the chain itself.
+            // FollowChain processes new blocks on the chain itself, including blocks that
+            // produced events.
             (Reason::NewBlock { .. }, ListeningMode::FollowChain) => true,
+            (Reason::NewEvents { .. }, ListeningMode::FollowChain) => true,
             (_, ListeningMode::FollowChain) => false,
             // EventsOnly only processes events from relevant streams.
             (Reason::NewEvents { event_streams, .. }, ListeningMode::EventsOnly(relevant)) => {
