@@ -270,7 +270,8 @@ impl QueryContext {
         let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
 
         thread::spawn(move || {
-            ServiceSyncRuntime::new(execution_state_sender, self).run(runtime_request_receiver)
+            ServiceSyncRuntime::new(execution_state_sender, self, true)
+                .run(runtime_request_receiver)
         });
 
         ServiceRuntimeEndpoint {
