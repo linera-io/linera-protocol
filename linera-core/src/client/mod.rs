@@ -429,7 +429,7 @@ impl<Env: Environment> Client<Env> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
         self.chains.pin().get_or_insert_with(chain_id, || {
-            chain_client::State::new(pending_proposal.clone())
+            chain_client::State::new(pending_proposal.clone(), follow_only)
         });
 
         ChainClient::new(
@@ -440,8 +440,15 @@ impl<Env: Environment> Client<Env> {
             next_block_height,
             preferred_owner,
             timing_sender,
-            follow_only,
         )
+    }
+
+    /// Returns whether the given chain is in follow-only mode.
+    fn is_chain_follow_only(&self, chain_id: ChainId) -> bool {
+        self.chains
+            .pin()
+            .get(&chain_id)
+            .is_some_and(|state| state.follow_only())
     }
 
     /// Fetches the chain description blob if needed, and returns the chain info.
@@ -749,7 +756,6 @@ impl<Env: Environment> Client<Env> {
         self: &Arc<Self>,
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
-        follow_only: bool,
     ) -> Result<ConfirmedBlockCertificate, chain_client::Error> {
         debug!(round = %certificate.round, "Submitting block for confirmation");
         let hashed_value = ConfirmedBlock::new(certificate.inner().block().clone());
@@ -758,7 +764,7 @@ impl<Env: Environment> Client<Env> {
             delivery: self.options.cross_chain_message_delivery,
         };
         let certificate = self
-            .communicate_chain_action(committee, finalize_action, hashed_value, follow_only)
+            .communicate_chain_action(committee, finalize_action, hashed_value)
             .await?;
         self.receive_certificate_with_checked_signatures(certificate.clone())
             .await?;
@@ -772,7 +778,6 @@ impl<Env: Environment> Client<Env> {
         committee: &Committee,
         proposal: Box<BlockProposal>,
         value: T,
-        follow_only: bool,
     ) -> Result<GenericCertificate<T>, chain_client::Error> {
         debug!(
             round = %proposal.content.round,
@@ -783,7 +788,7 @@ impl<Env: Environment> Client<Env> {
             blob_ids: value.required_blob_ids().into_iter().collect(),
         };
         let certificate = self
-            .communicate_chain_action(committee, submit_action, value, follow_only)
+            .communicate_chain_action(committee, submit_action, value)
             .await?;
         self.process_certificate(Box::new(certificate.clone()))
             .await?;
@@ -799,7 +804,6 @@ impl<Env: Environment> Client<Env> {
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
         latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
-        follow_only: bool,
     ) -> Result<(), chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
         communicate_with_quorum(
@@ -811,7 +815,6 @@ impl<Env: Environment> Client<Env> {
                     remote_node,
                     client: self.clone(),
                     admin_id: self.admin_id,
-                    follow_only,
                 };
                 let certificate = latest_certificate.clone();
                 Box::pin(async move {
@@ -837,7 +840,6 @@ impl<Env: Environment> Client<Env> {
         committee: &Committee,
         action: CommunicateAction,
         value: T,
-        follow_only: bool,
     ) -> Result<GenericCertificate<T>, chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
@@ -849,7 +851,6 @@ impl<Env: Environment> Client<Env> {
                     remote_node,
                     client: self.clone(),
                     admin_id: self.admin_id,
-                    follow_only,
                 };
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })
@@ -1239,44 +1240,30 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Downloads and processes any certificates we are missing for the given chain.
+    ///
+    /// Whether manager values are fetched depends on the chain's follow-only state.
     #[instrument(level = "trace", skip_all)]
     async fn synchronize_chain_state(
         &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let (_, committee) = self.admin_committee().await?;
-        self.synchronize_chain_from_committee(chain_id, committee, true)
-            .await
-    }
-
-    /// Downloads any certificates we are missing for the given chain, without fetching
-    /// manager values.
-    ///
-    /// Use this for follow-only chains where we only want to track the chain's blocks
-    /// without participating in consensus.
-    #[instrument(level = "trace", skip_all)]
-    pub async fn synchronize_chain_blocks(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<Box<ChainInfo>, chain_client::Error> {
-        let (_, committee) = self.admin_committee().await?;
-        self.synchronize_chain_from_committee(chain_id, committee, false)
+        self.synchronize_chain_from_committee(chain_id, committee)
             .await
     }
 
     /// Downloads certificates for the given chain from the given committee.
     ///
-    /// If `with_manager_values` is true, also fetches and processes manager values
+    /// If the chain is not in follow-only mode, also fetches and processes manager values
     /// (timeout certificates, proposals, locking blocks) for consensus participation.
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn synchronize_chain_from_committee(
         &self,
         chain_id: ChainId,
         committee: Committee,
-        with_manager_values: bool,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         #[cfg(with_metrics)]
-        let _latency = if with_manager_values {
+        let _latency = if !self.is_chain_follow_only(chain_id) {
             Some(metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency())
         } else {
             None
@@ -1289,7 +1276,7 @@ impl<Env: Environment> Client<Env> {
             &committee,
             |_: &()| (),
             |remote_node| async move {
-                self.synchronize_chain_state_from(&remote_node, chain_id, with_manager_values)
+                self.synchronize_chain_state_from(&remote_node, chain_id)
                     .await
             },
             self.options.quorum_grace_period,
@@ -1305,18 +1292,15 @@ impl<Env: Environment> Client<Env> {
     /// Downloads any certificates from the specified validator that we are missing for the given
     /// chain.
     ///
-    /// If `with_manager_values` is true, also fetches and processes manager values
+    /// If the chain is not in follow-only mode, also fetches and processes manager values
     /// (timeout certificates, proposals, locking blocks) for consensus participation.
-    #[instrument(
-        level = "trace",
-        skip(self, remote_node, chain_id, with_manager_values)
-    )]
+    #[instrument(level = "trace", skip(self, remote_node, chain_id))]
     pub(crate) async fn synchronize_chain_state_from(
         &self,
         remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
-        with_manager_values: bool,
     ) -> Result<(), chain_client::Error> {
+        let with_manager_values = !self.is_chain_follow_only(chain_id);
         let query = if with_manager_values {
             ChainInfoQuery::new(chain_id).with_manager_values()
         } else {
