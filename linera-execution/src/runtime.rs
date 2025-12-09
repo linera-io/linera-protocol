@@ -932,15 +932,6 @@ where
             .recv_response()?;
         Ok(())
     }
-
-    fn allow_contract_logs(&mut self) -> Result<bool, ExecutionError> {
-        let this = self.inner();
-        let allowed = this
-            .execution_state_sender
-            .send_request(|callback| ExecutionRequest::ContractLogsAllowed { callback })?
-            .recv_response()?;
-        Ok(allowed)
-    }
 }
 
 /// An extension trait to determine in compile time the different behaviors between contract and

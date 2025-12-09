@@ -629,7 +629,6 @@ impl StoreConfig {
     pub async fn run_with_storage<Job>(
         self,
         wasm_runtime: Option<WasmRuntime>,
-        allow_contract_logs: bool,
         job: Job,
     ) -> Result<Job::Output, anyhow::Error>
     where
@@ -646,8 +645,7 @@ impl StoreConfig {
                     &namespace,
                     wasm_runtime,
                 )
-                .await?
-                .with_allow_contract_logs(allow_contract_logs);
+                .await?;
                 let genesis_config = crate::util::read_json::<GenesisConfig>(genesis_path)?;
                 // Memory storage must be initialized every time.
                 genesis_config.initialize_storage(&mut storage).await?;
@@ -660,32 +658,28 @@ impl StoreConfig {
                     &namespace,
                     wasm_runtime,
                 )
-                .await?
-                .with_allow_contract_logs(allow_contract_logs);
+                .await?;
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb { config, namespace } => {
                 let storage =
                     DbStorage::<RocksDbDatabase, _>::connect(&config, &namespace, wasm_runtime)
-                        .await?
-                        .with_allow_contract_logs(allow_contract_logs);
+                        .await?;
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "dynamodb")]
             StoreConfig::DynamoDb { config, namespace } => {
                 let storage =
                     DbStorage::<DynamoDbDatabase, _>::connect(&config, &namespace, wasm_runtime)
-                        .await?
-                        .with_allow_contract_logs(allow_contract_logs);
+                        .await?;
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb { config, namespace } => {
                 let storage =
                     DbStorage::<ScyllaDbDatabase, _>::connect(&config, &namespace, wasm_runtime)
-                        .await?
-                        .with_allow_contract_logs(allow_contract_logs);
+                        .await?;
                 Ok(job.run(storage).await)
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
@@ -694,8 +688,7 @@ impl StoreConfig {
                     DualDatabase<RocksDbDatabase, ScyllaDbDatabase, ChainStatesFirstAssignment>,
                     _,
                 >::connect(&config, &namespace, wasm_runtime)
-                .await?
-                .with_allow_contract_logs(allow_contract_logs);
+                .await?;
                 Ok(job.run(storage).await)
             }
         }

@@ -232,23 +232,14 @@ where
     }
 
     /// Logs a `message` with the provided information `level`.
-    fn log(caller: &mut Caller, message: String, level: log::Level) -> Result<(), RuntimeError> {
-        let allowed = caller
-            .user_data_mut()
-            .runtime
-            .allow_contract_logs()
-            .map_err(|error| RuntimeError::Custom(error.into()))?;
-
-        if allowed {
-            match level {
-                log::Level::Trace => tracing::trace!("{message}"),
-                log::Level::Debug => tracing::debug!("{message}"),
-                log::Level::Info => tracing::info!("{message}"),
-                log::Level::Warn => tracing::warn!("{message}"),
-                log::Level::Error => tracing::error!("{message}"),
-            }
+    fn log(_caller: &mut Caller, message: String, level: log::Level) {
+        match level {
+            log::Level::Trace => tracing::trace!("{message}"),
+            log::Level::Debug => tracing::debug!("{message}"),
+            log::Level::Info => tracing::info!("{message}"),
+            log::Level::Warn => tracing::warn!("{message}"),
+            log::Level::Error => tracing::error!("{message}"),
         }
-        Ok(())
     }
 
     /// Creates a new promise to check if the `key` is in storage.

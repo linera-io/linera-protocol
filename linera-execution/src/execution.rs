@@ -241,8 +241,7 @@ where
                 application_id,
                 bytes,
             } => {
-                let ExecutionRuntimeConfig { .. } =
-                    self.context().extra().execution_runtime_config();
+                let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
                 let outcome = match endpoint {
                     Some(endpoint) => {
                         self.query_user_application_with_long_lived_service(
