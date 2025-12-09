@@ -14,7 +14,8 @@ use futures::future::Either;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, TimeDelta,
+        Timestamp,
     },
     ensure,
     hashed::Hashed,
@@ -1251,21 +1252,16 @@ where
     ))]
     pub(super) async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
         let chain = &mut self.chain;
-        if let (epoch, Some(entry)) = (
-            chain.execution_state.system.epoch.get(),
-            chain.unskippable_bundles.front(),
-        ) {
-            let elapsed = self.storage.clock().current_time().delta_since(entry.seen);
-            if elapsed >= chain.ownership().timeout_config.fallback_duration {
-                let chain_id = chain.chain_id();
-                let height = chain.tip_state.get().next_block_height;
-                let key_pair = self.config.key_pair();
-                if chain
-                    .manager
-                    .vote_fallback(chain_id, height, *epoch, key_pair)
-                {
-                    self.save().await?;
-                }
+        let epoch = chain.execution_state.system.epoch.get();
+        if chain.ownership().timeout_config.fallback_duration == TimeDelta::ZERO {
+            let chain_id = chain.chain_id();
+            let height = chain.tip_state.get().next_block_height;
+            let key_pair = self.config.key_pair();
+            if chain
+                .manager
+                .vote_fallback(chain_id, height, *epoch, key_pair)
+            {
+                self.save().await?;
             }
         }
         Ok(())
