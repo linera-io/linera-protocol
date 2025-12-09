@@ -111,6 +111,7 @@ pub trait ClientContext {
                 chain.pending_proposal,
                 chain.owner,
                 self.timing_sender(),
+                chain.follow_only,
             ))
         }
     }

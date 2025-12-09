@@ -473,6 +473,16 @@ impl Runnable for Job {
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let follow_only = context
+                    .wallet()
+                    .get(chain_id)
+                    .is_some_and(|chain| chain.follow_only);
+                if follow_only {
+                    anyhow::bail!(
+                        "Cannot process inbox for follow-only chain {chain_id}. \
+                         Use `linera assign` to take ownership of the chain first."
+                    );
+                }
                 let chain_client = context.make_chain_client(chain_id).await?;
                 info!("Processing the inbox of chain {}", chain_id);
                 let time_start = Instant::now();

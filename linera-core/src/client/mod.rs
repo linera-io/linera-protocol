@@ -414,6 +414,7 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Creates a new `ChainClient`.
+    #[expect(clippy::too_many_arguments)]
     #[instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
     pub fn create_chain_client(
         self: &Arc<Self>,
@@ -423,6 +424,7 @@ impl<Env: Environment> Client<Env> {
         pending_proposal: Option<PendingProposal>,
         preferred_owner: Option<AccountOwner>,
         timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
+        follow_only: bool,
     ) -> ChainClient<Env> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
@@ -438,6 +440,7 @@ impl<Env: Environment> Client<Env> {
             next_block_height,
             preferred_owner,
             timing_sender,
+            follow_only,
         )
     }
 
@@ -742,10 +745,11 @@ impl<Env: Environment> Client<Env> {
 
     /// Submits a validated block for finalization and returns the confirmed block certificate.
     #[instrument(level = "trace", skip_all)]
-    async fn finalize_block(
+    pub(crate) async fn finalize_block(
         self: &Arc<Self>,
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
+        follow_only: bool,
     ) -> Result<ConfirmedBlockCertificate, chain_client::Error> {
         debug!(round = %certificate.round, "Submitting block for confirmation");
         let hashed_value = ConfirmedBlock::new(certificate.inner().block().clone());
@@ -754,7 +758,7 @@ impl<Env: Environment> Client<Env> {
             delivery: self.options.cross_chain_message_delivery,
         };
         let certificate = self
-            .communicate_chain_action(committee, finalize_action, hashed_value)
+            .communicate_chain_action(committee, finalize_action, hashed_value, follow_only)
             .await?;
         self.receive_certificate_with_checked_signatures(certificate.clone())
             .await?;
@@ -763,11 +767,12 @@ impl<Env: Environment> Client<Env> {
 
     /// Submits a block proposal to the validators.
     #[instrument(level = "trace", skip_all)]
-    async fn submit_block_proposal<T: ProcessableCertificate>(
+    pub(crate) async fn submit_block_proposal<T: ProcessableCertificate>(
         self: &Arc<Self>,
         committee: &Committee,
         proposal: Box<BlockProposal>,
         value: T,
+        follow_only: bool,
     ) -> Result<GenericCertificate<T>, chain_client::Error> {
         debug!(
             round = %proposal.content.round,
@@ -778,7 +783,7 @@ impl<Env: Environment> Client<Env> {
             blob_ids: value.required_blob_ids().into_iter().collect(),
         };
         let certificate = self
-            .communicate_chain_action(committee, submit_action, value)
+            .communicate_chain_action(committee, submit_action, value, follow_only)
             .await?;
         self.process_certificate(Box::new(certificate.clone()))
             .await?;
@@ -794,6 +799,7 @@ impl<Env: Environment> Client<Env> {
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
         latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
+        follow_only: bool,
     ) -> Result<(), chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
         communicate_with_quorum(
@@ -805,6 +811,7 @@ impl<Env: Environment> Client<Env> {
                     remote_node,
                     client: self.clone(),
                     admin_id: self.admin_id,
+                    follow_only,
                 };
                 let certificate = latest_certificate.clone();
                 Box::pin(async move {
@@ -830,6 +837,7 @@ impl<Env: Environment> Client<Env> {
         committee: &Committee,
         action: CommunicateAction,
         value: T,
+        follow_only: bool,
     ) -> Result<GenericCertificate<T>, chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
@@ -841,6 +849,7 @@ impl<Env: Environment> Client<Env> {
                     remote_node,
                     client: self.clone(),
                     admin_id: self.admin_id,
+                    follow_only,
                 };
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })
@@ -1236,20 +1245,42 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let (_, committee) = self.admin_committee().await?;
-        self.synchronize_chain_state_from_committee(chain_id, committee)
+        self.synchronize_chain_from_committee(chain_id, committee, true)
             .await
     }
 
-    /// Downloads and processes any certificates we are missing for the given chain, from the given
-    /// committee.
+    /// Downloads any certificates we are missing for the given chain, without fetching
+    /// manager values.
+    ///
+    /// Use this for follow-only chains where we only want to track the chain's blocks
+    /// without participating in consensus.
     #[instrument(level = "trace", skip_all)]
-    pub async fn synchronize_chain_state_from_committee(
+    pub async fn synchronize_chain_blocks(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
+        let (_, committee) = self.admin_committee().await?;
+        self.synchronize_chain_from_committee(chain_id, committee, false)
+            .await
+    }
+
+    /// Downloads certificates for the given chain from the given committee.
+    ///
+    /// If `with_manager_values` is true, also fetches and processes manager values
+    /// (timeout certificates, proposals, locking blocks) for consensus participation.
+    #[instrument(level = "trace", skip_all)]
+    pub(crate) async fn synchronize_chain_from_committee(
         &self,
         chain_id: ChainId,
         committee: Committee,
+        with_manager_values: bool,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         #[cfg(with_metrics)]
-        let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
+        let _latency = if with_manager_values {
+            Some(metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency())
+        } else {
+            None
+        };
 
         let validators = self.make_nodes(&committee)?;
         Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;
@@ -1258,7 +1289,7 @@ impl<Env: Environment> Client<Env> {
             &committee,
             |_: &()| (),
             |remote_node| async move {
-                self.synchronize_chain_state_from(&remote_node, chain_id)
+                self.synchronize_chain_state_from(&remote_node, chain_id, with_manager_values)
                     .await
             },
             self.options.quorum_grace_period,
@@ -1272,29 +1303,49 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Downloads any certificates from the specified validator that we are missing for the given
-    /// chain, and processes them.
-    #[instrument(level = "trace", skip(self, remote_node, chain_id))]
+    /// chain.
+    ///
+    /// If `with_manager_values` is true, also fetches and processes manager values
+    /// (timeout certificates, proposals, locking blocks) for consensus participation.
+    #[instrument(
+        level = "trace",
+        skip(self, remote_node, chain_id, with_manager_values)
+    )]
     pub(crate) async fn synchronize_chain_state_from(
         &self,
         remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
+        with_manager_values: bool,
     ) -> Result<(), chain_client::Error> {
-        let mut local_info = self.local_node.chain_info(chain_id).await?;
-        let query = ChainInfoQuery::new(chain_id).with_manager_values();
-        let remote_info = remote_node.handle_chain_info_query(query).await?;
-        if let Some(new_info) = self
-            .download_certificates_from(remote_node, chain_id, remote_info.next_block_height)
-            .await?
-        {
-            local_info = new_info;
+        let query = if with_manager_values {
+            ChainInfoQuery::new(chain_id).with_manager_values()
+        } else {
+            ChainInfoQuery::new(chain_id)
         };
+        let remote_info = remote_node.handle_chain_info_query(query).await?;
+        let local_info = self
+            .download_certificates_from(remote_node, chain_id, remote_info.next_block_height)
+            .await?;
+
+        if !with_manager_values {
+            return Ok(());
+        }
 
         // If we are at the same height as the remote node, we also update our chain manager.
-        if local_info.next_block_height != remote_info.next_block_height {
+        let local_height = match local_info {
+            Some(info) => info.next_block_height,
+            None => {
+                self.local_node
+                    .chain_info(chain_id)
+                    .await?
+                    .next_block_height
+            }
+        };
+        if local_height != remote_info.next_block_height {
             debug!(
                 remote_node = remote_node.address(),
                 remote_height = %remote_info.next_block_height,
-                local_height = %local_info.next_block_height,
+                local_height = %local_height,
                 "synced from validator, but remote height and local height are different",
             );
             return Ok(());
@@ -1322,7 +1373,7 @@ impl<Env: Environment> Client<Env> {
                         debug!(
                             remote_node = remote_node.address(),
                             %hash,
-                            height = %local_info.next_block_height,
+                            height = %local_height,
                             %error,
                             "skipping locked block from validator",
                         );
@@ -1351,7 +1402,7 @@ impl<Env: Environment> Client<Env> {
                                 Err(error) => {
                                     info!(
                                         remote_node = remote_node.address(),
-                                        height = %local_info.next_block_height,
+                                        height = %local_height,
                                         proposer = %owner,
                                         %blob_id,
                                         %error,
@@ -1426,7 +1477,7 @@ impl<Env: Environment> Client<Env> {
                 debug!(
                     remote_node = remote_node.address(),
                     proposer = %owner,
-                    height = %local_info.next_block_height,
+                    height = %local_height,
                     error = %err,
                     "skipping proposal from validator",
                 );

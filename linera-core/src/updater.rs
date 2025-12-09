@@ -82,6 +82,8 @@ where
     pub remote_node: RemoteNode<Env::ValidatorNode>,
     pub client: Arc<Client<Env>>,
     pub admin_id: ChainId,
+    /// If true, only download blocks without fetching manager values when syncing.
+    pub follow_only: bool,
 }
 
 impl<Env: Environment> Clone for ValidatorUpdater<Env> {
@@ -90,6 +92,7 @@ impl<Env: Environment> Clone for ValidatorUpdater<Env> {
             remote_node: self.remote_node.clone(),
             client: self.client.clone(),
             admin_id: self.admin_id,
+            follow_only: self.follow_only,
         }
     }
 }
@@ -362,7 +365,7 @@ where
                     "validator is at a higher round; synchronizing",
                 );
                 self.client
-                    .synchronize_chain_state_from(&self.remote_node, chain_id)
+                    .synchronize_chain_state_from(&self.remote_node, chain_id, !self.follow_only)
                     .await?;
             }
             NodeError::UnexpectedBlockHeight {
@@ -377,7 +380,7 @@ where
                     "validator is at a higher height; synchronizing",
                 );
                 self.client
-                    .synchronize_chain_state_from(&self.remote_node, chain_id)
+                    .synchronize_chain_state_from(&self.remote_node, chain_id, !self.follow_only)
                     .await?;
             }
             NodeError::WrongRound(validator_round) if *validator_round < round => {

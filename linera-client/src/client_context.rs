@@ -1118,6 +1118,7 @@ impl<Env: Environment> ClientContext<Env> {
                         None,
                         Some(owner),
                         self.timing_sender(),
+                        false,
                     );
                     chain_client.set_preferred_owner(owner);
                     chain_client.process_inbox().await?;

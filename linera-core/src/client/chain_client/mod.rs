@@ -151,6 +151,10 @@ pub struct ChainClient<Env: Environment> {
     initial_block_hash: Option<CryptoHash>,
     /// Optional timing sender for benchmarking.
     timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
+    /// If true, only download blocks for this chain without fetching manager values or
+    /// sender/publisher chains. Use this for chains we're interested in observing but
+    /// don't intend to propose blocks for.
+    follow_only: bool,
 }
 
 impl<Env: Environment> Clone for ChainClient<Env> {
@@ -163,6 +167,7 @@ impl<Env: Environment> Clone for ChainClient<Env> {
             initial_next_block_height: self.initial_next_block_height,
             initial_block_hash: self.initial_block_hash,
             timing_sender: self.timing_sender.clone(),
+            follow_only: self.follow_only,
         }
     }
 }
@@ -282,6 +287,7 @@ impl Error {
 }
 
 impl<Env: Environment> ChainClient<Env> {
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         client: Arc<Client<Env>>,
         chain_id: ChainId,
@@ -290,6 +296,7 @@ impl<Env: Environment> ChainClient<Env> {
         initial_next_block_height: BlockHeight,
         preferred_owner: Option<AccountOwner>,
         timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
+        follow_only: bool,
     ) -> Self {
         ChainClient {
             client,
@@ -299,6 +306,7 @@ impl<Env: Environment> ChainClient<Env> {
             initial_block_hash,
             initial_next_block_height,
             timing_sender,
+            follow_only,
         }
     }
 
@@ -752,6 +760,7 @@ impl<Env: Environment> ChainClient<Env> {
                 height,
                 delivery,
                 latest_certificate,
+                self.follow_only,
             )
             .await
     }
@@ -1128,7 +1137,7 @@ impl<Env: Environment> ChainClient<Env> {
         let value = Timeout::new(chain_id, height, info.epoch);
         let certificate = Box::new(
             self.client
-                .communicate_chain_action(committee, action, value)
+                .communicate_chain_action(committee, action, value, self.follow_only)
                 .await?,
         );
         self.client.process_certificate(certificate.clone()).await?;
@@ -1140,6 +1149,7 @@ impl<Env: Environment> ChainClient<Env> {
                 height,
                 CrossChainMessageDelivery::NonBlocking,
                 None,
+                self.follow_only,
             )
             .await?;
         Ok(*certificate)
@@ -1162,7 +1172,7 @@ impl<Env: Environment> ChainClient<Env> {
         committee: Committee,
     ) -> Result<Box<ChainInfo>, Error> {
         self.client
-            .synchronize_chain_state_from_committee(self.chain_id, committee)
+            .synchronize_chain_from_committee(self.chain_id, committee, !self.follow_only)
             .await
     }
 
@@ -1624,12 +1634,28 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// To create a block that actually executes the messages in the inbox,
     /// `process_inbox` must be called separately.
+    ///
+    /// If `follow_only` is set, this only downloads blocks for this chain without
+    /// fetching manager values or sender/publisher chains.
     #[instrument(level = "trace")]
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, Error> {
+        if self.follow_only {
+            return self.synchronize_chain_state_only().await;
+        }
         let info = self.prepare_chain().await?;
         self.synchronize_publisher_chains().await?;
         self.find_received_certificates(None).await?;
         Ok(info)
+    }
+
+    /// Synchronizes only this chain's blocks from validators, without downloading sender
+    /// or publisher chain blocks, and without fetching manager values.
+    ///
+    /// Use this for follow-only chains where we only want to track the chain's blocks
+    /// without participating in consensus or downloading related chains.
+    #[instrument(level = "trace")]
+    pub async fn synchronize_chain_state_only(&self) -> Result<Box<ChainInfo>, Error> {
+        self.client.synchronize_chain_blocks(self.chain_id).await
     }
 
     /// Processes the last pending block
@@ -1756,15 +1782,17 @@ impl<Env: Environment> ChainClient<Env> {
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
             self.client
-                .submit_block_proposal(&committee, proposal, hashed_value)
+                .submit_block_proposal(&committee, proposal, hashed_value, self.follow_only)
                 .await?
         } else {
             let hashed_value = ValidatedBlock::new(block);
             let certificate = self
                 .client
-                .submit_block_proposal(&committee, proposal, hashed_value.clone())
+                .submit_block_proposal(&committee, proposal, hashed_value.clone(), self.follow_only)
                 .await?;
-            self.client.finalize_block(&committee, certificate).await?
+            self.client
+                .finalize_block(&committee, certificate, self.follow_only)
+                .await?
         };
         self.send_timing(submit_block_proposal_start, TimingType::SubmitBlockProposal);
         debug!(round = %certificate.round, "Sending confirmed block to validators");
@@ -1821,7 +1849,7 @@ impl<Env: Environment> ChainClient<Env> {
         let committee = self.local_committee().await?;
         let certificate = self
             .client
-            .finalize_block(&committee, certificate.clone())
+            .finalize_block(&committee, certificate.clone(), self.follow_only)
             .await?;
         self.update_validators(Some(&committee), Some(certificate.clone()))
             .await?;
@@ -2504,7 +2532,7 @@ impl<Env: Environment> ChainClient<Env> {
                     return Ok(());
                 }
                 self.client
-                    .synchronize_chain_state_from(&remote_node, chain_id)
+                    .synchronize_chain_state_from(&remote_node, chain_id, !self.follow_only)
                     .await?;
                 if self
                     .local_next_block_height(chain_id, &mut local_node)
@@ -2562,7 +2590,7 @@ impl<Env: Environment> ChainClient<Env> {
                     }
                 }
                 self.client
-                    .synchronize_chain_state_from(&remote_node, chain_id)
+                    .synchronize_chain_state_from(&remote_node, chain_id, !self.follow_only)
                     .await?;
                 let Some(info) = self.local_chain_info(chain_id, &mut local_node).await? else {
                     error!(
@@ -2708,7 +2736,11 @@ impl<Env: Environment> ChainClient<Env> {
                     // notifications since the last time we synchronized.
                     let remote_node = RemoteNode { public_key, node };
                     this.client
-                        .synchronize_chain_state_from(&remote_node, this.chain_id)
+                        .synchronize_chain_state_from(
+                            &remote_node,
+                            this.chain_id,
+                            !this.follow_only,
+                        )
                         .await?;
                     Ok::<_, Error>(stream)
                 }
