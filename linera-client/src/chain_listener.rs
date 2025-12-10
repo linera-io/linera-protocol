@@ -107,6 +107,7 @@ pub trait ClientContext {
                 chain.pending_proposal,
                 chain.owner,
                 self.timing_sender(),
+                chain.follow_only,
             ))
         }
     }
@@ -154,7 +155,6 @@ struct ListeningClient<C: ClientContext> {
     /// This is only `< u64::MAX` when the client is waiting for a timeout to process the inbox.
     timeout: Timestamp,
     /// The mode of listening to this chain.
-    #[allow(dead_code)]
     listening_mode: ListeningMode,
 }
 
@@ -229,22 +229,33 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .await?
                 .synchronize_chain_state(admin_chain_id)
                 .await?;
-            guard
+            let mut chain_ids: BTreeMap<_, _> = guard
                 .wallet()
-                .chain_ids()
+                .items()
                 .collect::<Vec<_>>()
                 .await
                 .into_iter()
-                .chain([Ok(admin_chain_id)])
-                .map(|maybe_chain_id| {
-                    maybe_chain_id.map(|chain_id| (chain_id, ListeningMode::FullChain))
+                .map(|result| {
+                    let (chain_id, chain) = result?;
+                    let mode = if chain.follow_only {
+                        ListeningMode::FollowChain
+                    } else {
+                        ListeningMode::FullChain
+                    };
+                    Ok((chain_id, mode))
                 })
                 .collect::<Result<BTreeMap<_, _>, _>>()
                 .map_err(
                     |e: <<C::Environment as Environment>::Wallet as Wallet>::Error| {
                         crate::error::Inner::Wallet(Box::new(e) as _)
                     },
-                )?
+                )?;
+            // If the admin chain is not in the wallet, add it as follow-only since we
+            // typically don't own it.
+            chain_ids
+                .entry(admin_chain_id)
+                .or_insert(ListeningMode::FollowChain);
+            chain_ids
         };
 
         // Start background tasks to sync received certificates for each chain,
@@ -276,8 +287,9 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             loop {
                 match self.next_action().await? {
                     Action::ProcessInbox(chain_id) => self.maybe_process_inbox(chain_id).await?,
-                    Action::Notification(notification) => {
-                        self.process_notification(notification).await?
+                    Action::Notification(notification, listening_mode) => {
+                        self.process_notification(notification, &listening_mode)
+                            .await?
                     }
                     Action::Stop => break,
                 }
@@ -288,24 +300,39 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     }
 
     /// Processes a notification, updating local chains and validators as needed.
-    async fn process_notification(&mut self, notification: Notification) -> Result<(), Error> {
+    async fn process_notification(
+        &mut self,
+        notification: Notification,
+        listening_mode: &ListeningMode,
+    ) -> Result<(), Error> {
+        if !listening_mode.is_relevant(&notification.reason) {
+            debug!(
+                reason = ?notification.reason,
+                "ChainListener: ignoring notification due to listening mode"
+            );
+            return Ok(());
+        }
         Self::sleep(self.config.delay_before_ms).await;
         match &notification.reason {
             Reason::NewIncomingBundle { .. } => {
                 self.maybe_process_inbox(notification.chain_id).await?;
             }
-            Reason::NewRound { .. } => self.update_validators(&notification).await?,
+            Reason::NewRound { .. } => {
+                self.update_validators(&notification).await?;
+            }
             Reason::NewBlock { hash, .. } => {
                 self.update_wallet(notification.chain_id).await?;
-                self.add_new_chains(*hash).await?;
-                let publishers = self
-                    .update_event_subscriptions(notification.chain_id)
-                    .await?;
-                if !publishers.is_empty() {
-                    self.listen_recursively(publishers).await?;
-                    self.maybe_process_inbox(notification.chain_id).await?;
+                if matches!(listening_mode, ListeningMode::FullChain) {
+                    self.add_new_chains(*hash).await?;
+                    let publishers = self
+                        .update_event_subscriptions(notification.chain_id)
+                        .await?;
+                    if !publishers.is_empty() {
+                        self.listen_recursively(publishers).await?;
+                        self.maybe_process_inbox(notification.chain_id).await?;
+                    }
+                    self.process_new_events(notification.chain_id).await?;
                 }
-                self.process_new_events(notification.chain_id).await?;
             }
             Reason::BlockExecuted { .. } => {}
         }
@@ -509,7 +536,14 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                         warn!("Notification stream for {chain_id} closed");
                         continue;
                     };
-                    return Ok(Action::Notification(notification));
+                    let listening_mode = self
+                        .listening
+                        .values()
+                        .nth(index)
+                        .expect("missing listening client")
+                        .listening_mode
+                        .clone();
+                    return Ok(Action::Notification(notification, listening_mode));
                 }
             }
         }
@@ -579,6 +613,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             debug!("Not processing inbox for non-owned chain {chain_id:.8}");
             return Ok(());
         }
+        if listening_client.client.is_follow_only() {
+            debug!("Not processing inbox for follow-only chain {chain_id:.8}");
+            return Ok(());
+        }
         debug!("Processing inbox for {chain_id:.8}");
         listening_client.timeout = Timestamp::from(u64::MAX);
         match listening_client
@@ -622,6 +660,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
 
 enum Action {
     ProcessInbox(ChainId),
-    Notification(Notification),
+    Notification(Notification, ListeningMode),
     Stop,
 }

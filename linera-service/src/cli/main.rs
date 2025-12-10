@@ -429,6 +429,9 @@ impl Runnable for Job {
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                if context.client.is_chain_follow_only(chain_id) {
+                    bail!("chain {chain_id} is in follow-only mode");
+                }
                 let chain_client = context.make_chain_client(chain_id).await?;
                 info!("Processing the inbox of chain {}", chain_id);
                 let time_start = Instant::now();
@@ -1307,6 +1310,8 @@ impl Runnable for Job {
                     {owner}",
                 );
                 context.assign_new_chain_to_key(chain_id, owner).await?;
+                // Clear follow-only mode since we now have a key for this chain.
+                context.set_follow_only(chain_id, false).await?;
                 info!(
                     "Chain linked to owner in {} ms",
                     start_time.elapsed().as_millis()
@@ -1482,6 +1487,8 @@ impl Runnable for Job {
                     chain_client.fetch_chain_info().await?;
                 }
                 context.update_wallet_from_client(&chain_client).await?;
+                // Mark the chain as follow-only since we don't have keys for it.
+                context.set_follow_only(chain_id, true).await?;
                 info!(
                     "Chain followed and added in {} ms",
                     start_time.elapsed().as_millis()
