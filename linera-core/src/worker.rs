@@ -23,7 +23,7 @@ use linera_base::{
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, ProposedBlock},
+    data_types::{BlockExecutionOutcome, BlockProposal, ProposedBlock},
     types::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
@@ -42,7 +42,8 @@ use tracing::{error, instrument, trace, warn};
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier,
+        BlockOutcome, ChainActorReceivers, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest,
+        ConfirmUpdatedRecipientRequest, CrossChainUpdateRequest, DeliveryNotifier,
     },
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
@@ -408,12 +409,60 @@ where
     }
 }
 
-/// The sender endpoint for [`ChainWorkerRequest`]s.
-type ChainActorEndpoint<StorageClient> = mpsc::UnboundedSender<(
-    ChainWorkerRequest<<StorageClient as Storage>::Context>,
-    tracing::Span,
-    Instant,
-)>;
+/// The sender endpoints for communicating with a [`ChainWorkerActor`].
+struct ChainActorEndpoint<StorageClient>
+where
+    StorageClient: Storage,
+{
+    /// Endpoint for regular chain worker requests.
+    requests: mpsc::UnboundedSender<(
+        ChainWorkerRequest<<StorageClient as Storage>::Context>,
+        tracing::Span,
+    )>,
+    /// Endpoint for cross-chain update requests.
+    cross_chain_updates: mpsc::UnboundedSender<(CrossChainUpdateRequest, tracing::Span)>,
+    /// Endpoint for confirmation requests.
+    confirmations: mpsc::UnboundedSender<(ConfirmUpdatedRecipientRequest, tracing::Span)>,
+}
+
+impl<StorageClient> Clone for ChainActorEndpoint<StorageClient>
+where
+    StorageClient: Storage,
+{
+    fn clone(&self) -> Self {
+        Self {
+            requests: self.requests.clone(),
+            cross_chain_updates: self.cross_chain_updates.clone(),
+            confirmations: self.confirmations.clone(),
+        }
+    }
+}
+
+impl<StorageClient> ChainActorEndpoint<StorageClient>
+where
+    StorageClient: Storage,
+{
+    /// Creates a new pair of endpoint (senders) and receivers for a chain worker actor.
+    fn new() -> (Self, ChainActorReceivers<StorageClient::Context>) {
+        let (requests_sender, requests_receiver) = mpsc::unbounded_channel();
+        let (cross_chain_sender, cross_chain_receiver) = mpsc::unbounded_channel();
+        let (confirmations_sender, confirmations_receiver) = mpsc::unbounded_channel();
+
+        let endpoint = Self {
+            requests: requests_sender,
+            cross_chain_updates: cross_chain_sender,
+            confirmations: confirmations_sender,
+        };
+
+        let receivers = ChainActorReceivers {
+            requests: requests_receiver,
+            cross_chain_updates: cross_chain_receiver,
+            confirmations: confirmations_receiver,
+        };
+
+        (endpoint, receivers)
+    }
+}
 
 pub(crate) type DeliveryNotifiers = HashMap<ChainId, DeliveryNotifier>;
 
@@ -527,6 +576,30 @@ where
         }
         self.chain_worker_config.chain_info_max_received_log_entries =
             chain_info_max_received_log_entries;
+        self
+    }
+
+    /// Returns an instance with the specified regular request batch size.
+    ///
+    /// Maximum number of regular requests to handle per round in the rotation.
+    /// The worker rotates between regular requests, cross-chain updates, and confirmations,
+    /// processing up to this many regular requests per turn.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_regular_request_batch_size(mut self, regular_request_batch_size: usize) -> Self {
+        self.chain_worker_config.regular_request_batch_size = regular_request_batch_size;
+        self
+    }
+
+    /// Returns an instance with the specified cross-chain update batch size.
+    ///
+    /// Maximum number of cross-chain updates to batch together in a single processing round.
+    /// Higher values improve throughput but increase latency for individual updates.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_cross_chain_update_batch_size(
+        mut self,
+        cross_chain_update_batch_size: usize,
+    ) -> Self {
+        self.chain_worker_config.cross_chain_update_batch_size = cross_chain_update_batch_size;
         self
     }
 
@@ -774,28 +847,6 @@ where
         .await
     }
 
-    #[instrument(level = "trace", skip(self, origin, recipient, bundles), fields(
-        nickname = %self.nickname,
-        origin = %origin,
-        recipient = %recipient,
-        num_bundles = %bundles.len()
-    ))]
-    async fn process_cross_chain_update(
-        &self,
-        origin: ChainId,
-        recipient: ChainId,
-        bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
-        self.query_chain_worker(recipient, move |callback| {
-            ChainWorkerRequest::ProcessCrossChainUpdate {
-                origin,
-                bundles,
-                callback,
-            }
-        })
-        .await
-    }
-
     /// Returns a stored [`ConfirmedBlockCertificate`] for a chain's block.
     #[instrument(level = "trace", skip(self, chain_id, height), fields(
         nickname = %self.nickname,
@@ -845,102 +896,162 @@ where
             oneshot::Sender<Result<Response, WorkerError>>,
         ) -> ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<Response, WorkerError> {
-        // Build the request.
         let (callback, response) = oneshot::channel();
         let request = request_builder(callback);
 
-        // Call the endpoint, possibly a new one.
-        let new_receiver = self.call_and_maybe_create_chain_worker_endpoint(chain_id, request)?;
+        self.send_chain_worker_request(chain_id, |endpoint| {
+            endpoint.requests.send((request, tracing::Span::current()))
+        })?;
 
-        // We just created an endpoint: spawn the actor.
-        if let Some(receiver) = new_receiver {
-            let delivery_notifier = self
-                .delivery_notifiers
-                .lock()
-                .unwrap()
-                .entry(chain_id)
-                .or_default()
-                .clone();
-
-            let is_tracked = self
-                .tracked_chains
-                .as_ref()
-                .is_some_and(|tracked_chains| tracked_chains.read().unwrap().contains(&chain_id));
-
-            let actor_task = ChainWorkerActor::run(
-                self.chain_worker_config.clone(),
-                self.storage.clone(),
-                self.block_cache.clone(),
-                self.execution_state_cache.clone(),
-                self.tracked_chains.clone(),
-                delivery_notifier,
+        response
+            .await
+            .map_err(|e| WorkerError::ChainActorRecvError {
                 chain_id,
-                receiver,
-                is_tracked,
-            );
-
-            self.chain_worker_tasks
-                .lock()
-                .unwrap()
-                .spawn_task(actor_task);
-        }
-
-        // Finally, wait a response.
-        match response.await {
-            Err(e) => {
-                // The actor endpoint was dropped. Better luck next time!
-                Err(WorkerError::ChainActorRecvError {
-                    chain_id,
-                    error: Box::new(e),
-                })
-            }
-            Ok(response) => response,
-        }
+                error: Box::new(e),
+            })?
     }
 
-    /// Find an endpoint and call it. Create the endpoint if necessary.
-    #[instrument(level = "trace", skip(self), fields(
+    /// Sends a request to a chain worker, creating the worker if necessary.
+    ///
+    /// This method holds the lock on the chain workers map while sending to ensure that
+    /// if the send fails (because the actor was dropped), no other thread can get a stale
+    /// endpoint. The endpoint is removed before sending and only re-inserted on success.
+    #[instrument(level = "trace", skip(self, send_fn), fields(
         nickname = %self.nickname,
         chain_id = %chain_id
     ))]
-    #[expect(clippy::type_complexity)]
-    fn call_and_maybe_create_chain_worker_endpoint(
+    fn send_chain_worker_request<T: Send + Sync + 'static>(
         &self,
         chain_id: ChainId,
-        request: ChainWorkerRequest<StorageClient::Context>,
-    ) -> Result<
-        Option<
-            mpsc::UnboundedReceiver<(
-                ChainWorkerRequest<StorageClient::Context>,
-                tracing::Span,
-                Instant,
-            )>,
-        >,
-        WorkerError,
-    > {
+        send_fn: impl FnOnce(
+            &ChainActorEndpoint<StorageClient>,
+        ) -> Result<(), mpsc::error::SendError<T>>,
+    ) -> Result<(), WorkerError> {
         let mut chain_workers = self.chain_workers.lock().unwrap();
 
-        let (sender, new_receiver) = if let Some(endpoint) = chain_workers.remove(&chain_id) {
+        // Remove the endpoint from the map. If the send fails, we don't want other threads
+        // to get a stale endpoint.
+        let (endpoint, receivers) = if let Some(endpoint) = chain_workers.remove(&chain_id) {
             (endpoint, None)
         } else {
-            let (sender, receiver) = mpsc::unbounded_channel();
-            (sender, Some(receiver))
+            let (endpoint, receivers) = ChainActorEndpoint::new();
+            (endpoint, Some(receivers))
         };
 
-        if let Err(e) = sender.send((request, tracing::Span::current(), Instant::now())) {
-            // The actor was dropped. Give up without (re-)inserting the endpoint in the cache.
+        // Try to send the request.
+        if let Err(e) = send_fn(&endpoint) {
+            // The actor was dropped. Don't re-insert the endpoint.
             return Err(WorkerError::ChainActorSendError {
                 chain_id,
                 error: Box::new(e),
             });
         }
 
-        // Put back the sender in the cache for next time.
-        chain_workers.insert(chain_id, sender);
+        // Send succeeded. Re-insert the endpoint.
+        chain_workers.insert(chain_id, endpoint);
         #[cfg(with_metrics)]
         metrics::CHAIN_WORKER_ENDPOINTS_CACHED.set(chain_workers.len() as i64);
 
-        Ok(new_receiver)
+        // If this is a new worker, spawn the actor (after releasing the lock).
+        if let Some(receivers) = receivers {
+            drop(chain_workers);
+            self.spawn_chain_worker_actor(chain_id, receivers);
+        }
+
+        Ok(())
+    }
+
+    /// Spawns a new chain worker actor.
+    fn spawn_chain_worker_actor(
+        &self,
+        chain_id: ChainId,
+        receivers: ChainActorReceivers<StorageClient::Context>,
+    ) {
+        let delivery_notifier = self
+            .delivery_notifiers
+            .lock()
+            .unwrap()
+            .entry(chain_id)
+            .or_default()
+            .clone();
+
+        let is_tracked = self
+            .tracked_chains
+            .as_ref()
+            .is_some_and(|tracked_chains| tracked_chains.read().unwrap().contains(&chain_id));
+
+        let actor_task = ChainWorkerActor::run(
+            self.chain_worker_config.clone(),
+            self.storage.clone(),
+            self.block_cache.clone(),
+            self.execution_state_cache.clone(),
+            self.tracked_chains.clone(),
+            delivery_notifier,
+            chain_id,
+            receivers,
+            is_tracked,
+        );
+
+        self.chain_worker_tasks
+            .lock()
+            .unwrap()
+            .spawn_task(actor_task);
+    }
+
+    /// Processes a cross-chain update.
+    async fn process_cross_chain_update(
+        &self,
+        recipient: ChainId,
+        origin: ChainId,
+        bundles: Vec<(Epoch, linera_chain::data_types::MessageBundle)>,
+    ) -> Result<Option<BlockHeight>, WorkerError> {
+        let (callback, response) = oneshot::channel();
+        let request = CrossChainUpdateRequest {
+            origin,
+            bundles,
+            callback,
+        };
+
+        self.send_chain_worker_request(recipient, |endpoint| {
+            endpoint
+                .cross_chain_updates
+                .send((request, tracing::Span::current()))
+        })?;
+
+        response
+            .await
+            .map_err(|e| WorkerError::ChainActorRecvError {
+                chain_id: recipient,
+                error: Box::new(e),
+            })?
+    }
+
+    /// Processes a cross-chain update confirmation.
+    async fn process_cross_chain_confirmation(
+        &self,
+        sender: ChainId,
+        recipient: ChainId,
+        latest_height: BlockHeight,
+    ) -> Result<(), WorkerError> {
+        let (callback, response) = oneshot::channel();
+        let request = ConfirmUpdatedRecipientRequest {
+            recipient,
+            latest_height,
+            callback,
+        };
+
+        self.send_chain_worker_request(sender, |endpoint| {
+            endpoint
+                .confirmations
+                .send((request, tracing::Span::current()))
+        })?;
+
+        response
+            .await
+            .map_err(|e| WorkerError::ChainActorRecvError {
+                chain_id: sender,
+                error: Box::new(e),
+            })?
     }
 
     #[instrument(skip_all, fields(
@@ -1210,7 +1321,7 @@ where
                 let mut actions = NetworkActions::default();
                 let origin = sender;
                 let Some(height) = self
-                    .process_cross_chain_update(origin, recipient, bundles)
+                    .process_cross_chain_update(recipient, origin, bundles)
                     .await?
                 else {
                     return Ok(actions);
@@ -1233,14 +1344,8 @@ where
                 recipient,
                 latest_height,
             } => {
-                self.query_chain_worker(sender, move |callback| {
-                    ChainWorkerRequest::ConfirmUpdatedRecipient {
-                        recipient,
-                        latest_height,
-                        callback,
-                    }
-                })
-                .await?;
+                self.process_cross_chain_confirmation(sender, recipient, latest_height)
+                    .await?;
                 Ok(NetworkActions::default())
             }
         }

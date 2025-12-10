@@ -194,23 +194,6 @@ where
                         .await,
                 )
                 .is_ok(),
-            ChainWorkerRequest::ProcessCrossChainUpdate {
-                origin,
-                bundles,
-                callback,
-            } => callback
-                .send(self.process_cross_chain_update(origin, bundles).await)
-                .is_ok(),
-            ChainWorkerRequest::ConfirmUpdatedRecipient {
-                recipient,
-                latest_height,
-                callback,
-            } => callback
-                .send(
-                    self.confirm_updated_recipient(recipient, latest_height)
-                        .await,
-                )
-                .is_ok(),
             ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
                 .send(self.handle_chain_info_query(query).await)
                 .is_ok(),
@@ -617,35 +600,47 @@ where
         Ok(cross_chain_requests)
     }
 
-    /// Returns true if there are no more outgoing messages in flight up to the given
-    /// block height.
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        height = %height
-    ))]
-    async fn all_messages_to_tracked_chains_delivered_up_to(
+    /// Returns the lowest block height for which we don't know that all outgoing messages to
+    /// tracked chains have been delivered.
+    ///
+    /// If `tracked_chains` is `None` (validator mode), this returns the lowest height
+    /// for which delivery of all outgoing messages is now known to be complete.
+    #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
+    async fn min_height_with_undelivered_messages_to_tracked_chains(
         &self,
-        height: BlockHeight,
-    ) -> Result<bool, WorkerError> {
-        if self.chain.all_messages_delivered_up_to(height) {
-            return Ok(true);
-        }
+    ) -> Result<BlockHeight, WorkerError> {
+        // Get the global max delivered height from outbox_counters.
+        let global_height = self.chain.min_height_with_undelivered_messages();
+
         let Some(tracked_chains) = self.tracked_chains.as_ref() else {
-            return Ok(false);
+            return Ok(global_height); // Validator mode: All chains are tracked.
         };
+
+        let next_height = self.chain.tip_state.get().next_block_height;
+
+        if global_height == next_height {
+            return Ok(global_height);
+        }
+
+        // Client mode: check only outboxes to tracked chains.
         let mut targets = self.chain.nonempty_outbox_chain_ids();
         {
             let tracked_chains = tracked_chains.read().unwrap();
             targets.retain(|target| tracked_chains.contains(target));
         }
-        let outboxes = self.chain.load_outboxes(&targets).await?;
-        for outbox in outboxes {
-            let front = outbox.queue.front().await?;
-            if front.is_some_and(|key| key <= height) {
-                return Ok(false);
-            }
+
+        if targets.is_empty() {
+            return Ok(next_height); // No pending messages to tracked chains.
         }
-        Ok(true)
+
+        let outboxes = self.chain.load_outboxes(&targets).await?;
+
+        // Find the minimum pending height across all tracked outboxes.
+        Ok(outboxes
+            .iter()
+            .filter_map(|outbox| outbox.queue.front())
+            .min()
+            .map_or(next_height, |height| (*height).min(next_height)))
     }
 
     /// Processes a leader timeout issued for this multi-owner chain.
@@ -1061,80 +1056,104 @@ where
         }
     }
 
-    /// Updates the chain's inboxes, receiving messages from a cross-chain update.
-    #[instrument(level = "trace", skip(self, bundles))]
-    async fn process_cross_chain_update(
+    /// Processes a batch of cross-chain updates efficiently with a single save operation.
+    /// Takes a map from origin chain to bundles (already deduplicated by caller).
+    /// Returns a map from origin chain to the last updated height (if any).
+    #[instrument(level = "trace", skip(self, updates))]
+    pub(super) async fn process_cross_chain_update(
         &mut self,
-        origin: ChainId,
-        bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
-        // Only process certificates with relevant heights and epochs.
-        let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
-        let last_anticipated_block_height =
-            self.chain.last_anticipated_block_height(&origin).await?;
-        let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
+        updates: BTreeMap<ChainId, Vec<(Epoch, MessageBundle)>>,
+    ) -> Result<BTreeMap<ChainId, Option<BlockHeight>>, WorkerError> {
         let recipient = self.chain_id();
-        let bundles = helper.select_message_bundles(
-            &origin,
-            recipient,
-            next_height_to_receive,
-            last_anticipated_block_height,
-            bundles,
-        )?;
-        let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
-            return Ok(None);
-        };
-        // Process the received messages in certificates.
+        let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
+
+        // Load all inbox metadata concurrently.
+        let inbox_info = self
+            .chain
+            .inbox_info_for_origins(updates.keys().copied())
+            .await?;
+
+        // Filter bundles and prepare for batch processing, grouped by origin.
+        let mut bundles_by_origin = BTreeMap::<ChainId, BTreeMap<_, _>>::new();
+        let mut last_height_by_origin = BTreeMap::new();
+
+        for (origin, bundles) in updates {
+            let (next_height_to_receive, last_anticipated_block_height) = inbox_info
+                .get(&origin)
+                .copied()
+                .unwrap_or((BlockHeight::ZERO, None));
+
+            let filtered_bundles = helper.select_message_bundles(
+                &origin,
+                recipient,
+                next_height_to_receive,
+                last_anticipated_block_height,
+                bundles,
+            )?;
+
+            let last_updated_height = filtered_bundles.last().map(|bundle| bundle.height);
+            last_height_by_origin.insert(origin, last_updated_height);
+
+            if !filtered_bundles.is_empty() {
+                let origin_bundles = bundles_by_origin.entry(origin).or_default();
+                for bundle in filtered_bundles {
+                    origin_bundles.insert((bundle.height, bundle.transaction_index), bundle);
+                }
+            }
+        }
+
+        if bundles_by_origin.is_empty() {
+            return Ok(last_height_by_origin);
+        }
+
+        // Try to initialize the chain (may read chain description blob).
         let local_time = self.storage.clock().current_time();
-        let mut previous_height = None;
-        for bundle in bundles {
-            let add_to_received_log = previous_height != Some(bundle.height);
-            previous_height = Some(bundle.height);
-            // Update the staged chain state with the received block.
-            self.chain
-                .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
-                .await?;
-        }
+        self.chain.initialize_if_needed(local_time).await.ok();
+
+        // Check if the chain is still inactive.
         if !self.config.allow_inactive_chains && !self.chain.is_active() {
-            // Refuse to create a chain state if the chain is still inactive by
-            // now. Accordingly, do not send a confirmation, so that the
-            // cross-chain update is retried later.
-            warn!(
-                "Refusing to deliver messages to {recipient:?} from {origin:?} \
-                at height {last_updated_height} because the recipient is still inactive",
-            );
-            return Ok(None);
+            for origin in last_height_by_origin.keys() {
+                warn!(
+                    "Refusing to deliver messages to {recipient:?} from {origin:?} \
+                    because the recipient is still inactive",
+                );
+            }
+            return Ok(last_height_by_origin
+                .keys()
+                .map(|origin| (*origin, None))
+                .collect());
         }
-        // Save the chain.
+
+        // Process all bundles via ChainStateView's batch method.
+        self.chain
+            .receive_message_bundles(bundles_by_origin, local_time)
+            .await?;
+
+        // Save the chain once for all updates.
         self.save().await?;
-        Ok(Some(last_updated_height))
+        Ok(last_height_by_origin)
     }
 
-    /// Handles the cross-chain request confirming that the recipient was updated.
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        recipient = %recipient,
-        latest_height = %latest_height
-    ))]
-    async fn confirm_updated_recipient(
+    /// Handles a batch of cross-chain confirmation requests efficiently with a single save operation.
+    /// Takes a map from recipient to the maximum confirmed height.
+    #[instrument(level = "trace", skip(self, confirmations))]
+    pub(super) async fn confirm_updated_recipient(
         &mut self,
-        recipient: ChainId,
-        latest_height: BlockHeight,
+        confirmations: BTreeMap<ChainId, BlockHeight>,
     ) -> Result<(), WorkerError> {
-        let fully_delivered = self
-            .chain
-            .mark_messages_as_received(&recipient, latest_height)
-            .await?
-            && self
-                .all_messages_to_tracked_chains_delivered_up_to(latest_height)
-                .await?;
+        let has_updates = self.chain.mark_messages_as_received(confirmations).await?;
 
-        self.save().await?;
-
-        if fully_delivered {
-            self.delivery_notifier.notify(latest_height);
+        if has_updates {
+            if let Ok(delivered_height) = self
+                .min_height_with_undelivered_messages_to_tracked_chains()
+                .await?
+                .try_sub_one()
+            {
+                self.delivery_notifier.notify(delivered_height);
+            }
         }
 
+        self.save().await?;
         Ok(())
     }
 
