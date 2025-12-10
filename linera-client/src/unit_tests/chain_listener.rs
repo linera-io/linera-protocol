@@ -261,10 +261,17 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     let context = Arc::new(Mutex::new(context));
     let cancellation_token = CancellationToken::new();
     let child_token = cancellation_token.child_token();
-    let chain_listener = ChainListener::new(config, context.clone(), storage.clone(), child_token)
-        .run(false) // Unit test doesn't need background sync
-        .await
-        .unwrap();
+    let (_command_sender, command_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let chain_listener = ChainListener::new(
+        config,
+        context.clone(),
+        storage.clone(),
+        child_token,
+        command_receiver,
+    )
+    .run(false) // Unit test doesn't need background sync
+    .await
+    .unwrap();
 
     let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
 
