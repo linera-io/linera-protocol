@@ -185,7 +185,7 @@ where
         None,
         resource_controller,
         Default::default(),
-        false,
+        true,
     );
 
     (runtime, execution_state_receiver)
