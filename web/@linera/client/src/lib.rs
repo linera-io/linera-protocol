@@ -35,9 +35,7 @@ use linera_core::{
     node::{ValidatorNode as _, ValidatorNodeProvider as _},
     wallet,
 };
-use linera_faucet_client::Faucet;
-use linera_persistent as persistent;
-use linera_views::store::WithError;
+use linera_views::ViewError;
 use serde::ser::Serialize as _;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
