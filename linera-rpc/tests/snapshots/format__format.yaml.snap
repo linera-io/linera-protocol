@@ -812,6 +812,14 @@ NodeError:
               TYPENAME: ChainId
           - remote_node:
               TYPENAME: Secp256k1PublicKey
+    31:
+      InvalidTimestamp:
+        STRUCT:
+          - block_timestamp:
+              TYPENAME: Timestamp
+          - local_time:
+              TYPENAME: Timestamp
+          - block_time_grace_period_ms: U64
 OpenChainConfig:
   STRUCT:
     - ownership:

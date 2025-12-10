@@ -3259,3 +3259,68 @@ where
 
     Ok(())
 }
+
+/// Tests that transfers succeed even when the block timestamp is in the future relative
+/// to the validators' clock (using auto-advance on the test clock to simulate time passing).
+///
+/// This test verifies that the system handles the case where a block's timestamp
+/// (which must be >= the previous block's timestamp) is ahead of the current time.
+/// The validators will accept such blocks after their clocks catch up.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_transfer_with_validator_timestamp_retry<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let clock = storage_builder.clock().clone();
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+        .await?
+        .with_policy(ResourceControlPolicy::only_fuel());
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    // Set the clock to a future time and make the first transfer.
+    // This creates a block with timestamp = future_time.
+    let future_time = Timestamp::from(2_000_000); // 2 seconds
+    clock.set(future_time);
+
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(1),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap();
+
+    // Reset the clock to 0 (simulating validator clocks being behind).
+    // The next block must have timestamp >= future_time (previous block's time),
+    // but validators will initially see current_time = 0.
+    clock.set(Timestamp::from(0));
+
+    // Auto-advance for sleeps targeting future_time or later. The InvalidTimestamp
+    // retry does two sleeps: sleep_until(block_timestamp) and sleep(skew_duration).
+    // In this test, both target future_time initially, but subsequent sleeps may
+    // target later times as the clock advances.
+    clock.set_sleep_callback(move |target| target >= future_time);
+
+    // Try another transfer. The new block's timestamp must be >= future_time
+    // (because it must be >= the previous block's timestamp).
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(1),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .expect("Transfer should succeed after retrying with advanced clock");
+
+    // Verify the clock advanced to allow the block timestamp.
+    assert!(
+        clock.current_time() >= future_time,
+        "Clock should have advanced to at least the block timestamp"
+    );
+
+    Ok(())
+}

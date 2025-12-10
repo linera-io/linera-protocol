@@ -639,8 +639,8 @@ where
         }
         let outboxes = self.chain.load_outboxes(&targets).await?;
         for outbox in outboxes {
-            let front = outbox.queue.front();
-            if front.is_some_and(|key| *key <= height) {
+            let front = outbox.queue.front().await?;
+            if front.is_some_and(|key| key <= height) {
                 return Ok(false);
             }
         }
@@ -1319,10 +1319,8 @@ where
     ))]
     async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
         let chain = &mut self.chain;
-        if let (epoch, Some(entry)) = (
-            chain.execution_state.system.epoch.get(),
-            chain.unskippable_bundles.front(),
-        ) {
+        let epoch = chain.execution_state.system.epoch.get();
+        if let Some(entry) = chain.unskippable_bundles.front().await? {
             let elapsed = self.storage.clock().current_time().delta_since(entry.seen);
             if elapsed >= chain.ownership().timeout_config.fallback_duration {
                 let chain_id = chain.chain_id();
