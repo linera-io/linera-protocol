@@ -48,8 +48,11 @@ use linera_client::{
     config::{CommitteeConfig, GenesisConfig},
 };
 use linera_core::{
-    client::ChainClientError, data_types::ClientOutcome, wallet, worker::Reason, JoinSetExt as _,
-    LocalNodeError,
+    client::{ChainClientError, ListeningMode},
+    data_types::ClientOutcome,
+    wallet,
+    worker::Reason,
+    JoinSetExt as _, LocalNodeError,
 };
 use linera_execution::{committee::Committee, WasmRuntime, WithWasmDefault as _};
 use linera_faucet_server::{FaucetConfig, FaucetService};
@@ -1032,7 +1035,8 @@ impl Runnable for Job {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id).await?;
                 info!("Watching for notifications for chain {:?}", chain_id);
-                let (listener, _listen_handle, mut notifications) = chain_client.listen().await?;
+                let (listener, _listen_handle, mut notifications) =
+                    chain_client.listen(ListeningMode::FullChain).await?;
                 join_set.spawn_task(listener);
                 while let Some(notification) = notifications.next().await {
                     if let Reason::NewBlock { .. } = notification.reason {
