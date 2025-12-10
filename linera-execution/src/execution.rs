@@ -319,12 +319,12 @@ where
             futures::channel::mpsc::unbounded();
         let mut txn_tracker = TransactionTracker::default().with_blobs(created_blobs);
         let mut resource_controller = ResourceController::default();
+        let thread_pool = self.context().extra().thread_pool().clone();
         let mut actor = ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller);
 
         let (codes, descriptions) = actor.service_and_dependencies(application_id).await?;
 
-        let thread = web_thread::Thread::new();
-        let service_runtime_task = thread.run_send(JsVec(codes), move |codes| async move {
+        let service_runtime_task = thread_pool.run_send(JsVec(codes), move |codes| async move {
             let mut runtime =
                 ServiceSyncRuntime::new_with_deadline(execution_state_sender, context, deadline);
 
@@ -333,7 +333,7 @@ where
             }
 
             runtime.run_query(application_id, query)
-        });
+        }).await;
 
         while let Some(request) = execution_state_receiver.next().await {
             actor.handle_request(request).await?;

@@ -828,8 +828,7 @@ where
         let (codes, descriptions): (Vec<_>, Vec<_>) =
             self.contract_and_dependencies(application_id).await?;
 
-        let thread = web_thread::Thread::new();
-        let contract_runtime_task = thread.run_send(JsVec(codes), move |codes| async move {
+        let contract_runtime_task = self.state.context().extra().thread_pool().run_send(JsVec(codes), move |codes| async move {
             let runtime = ContractSyncRuntime::new(
                 execution_state_sender,
                 chain_id,
@@ -843,7 +842,7 @@ where
             }
 
             runtime.run_action(application_id, chain_id, action)
-        });
+        }).await;
 
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;

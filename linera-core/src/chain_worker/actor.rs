@@ -264,8 +264,7 @@ where
 }
 
 struct ServiceRuntimeActor {
-    thread: web_thread::Thread,
-    task: web_thread::Task<()>,
+    task: web_thread_pool::Task<()>,
     endpoint: ServiceRuntimeEndpoint,
 }
 
@@ -273,19 +272,17 @@ impl ServiceRuntimeActor {
     /// Spawns a blocking task to execute the service runtime actor.
     ///
     /// Returns the task handle and the endpoints to interact with the actor.
-    async fn spawn(chain_id: ChainId) -> Self {
+    async fn spawn(chain_id: ChainId, thread_pool: &linera_execution::ThreadPool) -> Self {
         let (execution_state_sender, incoming_execution_requests) =
             futures::channel::mpsc::unbounded();
         let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
-
-        let thread = web_thread::Thread::new();
 
         Self {
             endpoint: ServiceRuntimeEndpoint {
                 incoming_execution_requests,
                 runtime_request_sender,
             },
-            task: thread.run((), move |()| async move {
+            task: thread_pool.run((), move |()| async move {
                 ServiceSyncRuntime::new(
                     execution_state_sender,
                     QueryContext {
@@ -295,8 +292,7 @@ impl ServiceRuntimeActor {
                     },
                 )
                 .run(runtime_request_receiver)
-            }),
-            thread,
+            }).await,
         }
     }
 }
@@ -374,12 +370,12 @@ where
                 metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
             }
 
-            let (_service_runtime_thread, service_runtime_task, service_runtime_endpoint) =
+            let (service_runtime_task, service_runtime_endpoint) =
                 if self.config.long_lived_services {
-                    let actor = ServiceRuntimeActor::spawn(self.chain_id).await;
-                    (Some(actor.thread), Some(actor.task), Some(actor.endpoint))
+                    let actor = ServiceRuntimeActor::spawn(self.chain_id, self.storage.thread_pool()).await;
+                    (Some(actor.task), Some(actor.endpoint))
                 } else {
-                    (None, None, None)
+                    (None, None)
                 };
 
             trace!("Loading chain state of {}", self.chain_id);

@@ -332,6 +332,7 @@ impl MultiPartitionBatch {
 pub struct DbStorage<Database, Clock = WallClock> {
     database: Arc<Database>,
     clock: Clock,
+    thread_pool: Arc<linera_execution::ThreadPool>,
     wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
@@ -554,6 +555,10 @@ where
         &self.clock
     }
 
+    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool> {
+        &self.thread_pool
+    }
+
     #[instrument(level = "trace", skip_all, fields(chain_id = %chain_id))]
     async fn load_chain(
         &self,
@@ -563,6 +568,7 @@ where
         let _metric = metrics::LOAD_CHAIN_LATENCY.measure_latency();
         let runtime_context = ChainRuntimeContext {
             storage: self.clone(),
+            thread_pool: self.thread_pool.clone(),
             chain_id,
             execution_runtime_config: self.execution_runtime_config,
             user_contracts: self.user_contracts.clone(),
@@ -1081,6 +1087,7 @@ impl<Database, C> DbStorage<Database, C> {
         Self {
             database: Arc::new(database),
             clock,
+            thread_pool: Arc::new(linera_execution::ThreadPool::new(20)),
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),

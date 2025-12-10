@@ -3563,6 +3563,9 @@ name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+dependencies = [
+ "getrandom 0.2.16",
+]
 
 [[package]]
 name = "fastrlp"
@@ -3668,6 +3671,18 @@ version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
 dependencies = [
+ "futures-core",
+ "futures-sink",
+ "spin",
+]
+
+[[package]]
+name = "flume"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e139bc46ca777eb5efaf62df0ab8cc5fd400866427e56c68b22e414e53bd3be"
+dependencies = [
+ "fastrand",
  "futures-core",
  "futures-sink",
  "spin",
@@ -5423,7 +5438,7 @@ dependencies = [
  "trait-set",
  "trait-variant",
  "wasm-bindgen-futures",
- "web-thread-select",
+ "web-thread-pool",
 ]
 
 [[package]]
@@ -5501,7 +5516,7 @@ dependencies = [
  "tracing-subscriber 0.3.19",
  "url",
  "wasmtime",
- "web-thread-select",
+ "web-thread-pool",
 ]
 
 [[package]]
@@ -5974,7 +5989,7 @@ dependencies = [
  "test-log",
  "tokio",
  "tracing",
- "web-thread-select",
+ "web-thread-pool",
 ]
 
 [[package]]
@@ -9761,7 +9776,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2d12fe70b2c1b4401038055f90f151b78208de1f9f89a7dbfd41587a10c3eea"
 dependencies = [
  "atoi",
- "flume",
+ "flume 0.11.1",
  "futures-channel",
  "futures-core",
  "futures-executor",
@@ -11594,36 +11609,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "web-thread"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "060cfc12637ebaf48b344331cea64fe6d13fed9a1381fb6cce10c3c7495778b4"
+name = "web-thread-pool"
+version = "0.1.0"
+source = "git+https://github.com/linera-io/web-thread?branch=pool#640adf2419c145cdc3bcfc7e42a264414f4eace1"
 dependencies = [
- "futures",
+ "flume 0.12.0",
  "pin-project-lite",
- "serde",
- "serde-wasm-bindgen 0.6.5",
- "thiserror 2.0.17",
- "wasm-bindgen-futures",
- "web-sys",
+ "web-thread-select",
 ]
 
 [[package]]
 name = "web-thread-select"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27c3f98861caac815f0aa966995e564b0b2db9abc259700ddee544fbdaf236b3"
+source = "git+https://github.com/linera-io/web-thread?branch=pool#640adf2419c145cdc3bcfc7e42a264414f4eace1"
 dependencies = [
  "cfg-if",
- "web-thread",
  "web-thread-shim",
 ]
 
 [[package]]
 name = "web-thread-shim"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "535507b55b73bb78d37bbc732c8bf8ebbc7b26902ab06fbf356fc3b46ad4b06c"
+source = "git+https://github.com/linera-io/web-thread?branch=pool#640adf2419c145cdc3bcfc7e42a264414f4eace1"
 dependencies = [
  "futures",
  "thiserror 2.0.17",

@@ -60,6 +60,8 @@ pub trait Storage: Sized {
     /// Returns the current wall clock time.
     fn clock(&self) -> &Self::Clock;
 
+    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool>;
+
     /// Loads the view of a chain state.
     ///
     /// # Notes
@@ -226,10 +228,11 @@ pub trait Storage: Sized {
             compressed_bytes: content.into_arc_bytes(),
         };
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
-        let contract_bytecode = web_thread::Thread::new()
+        let contract_bytecode = self.thread_pool()
             .run_send((), move |()| async move {
                 compressed_contract_bytecode.decompress()
             })
+            .await
             .await??;
         match application_description.module_id.vm_runtime {
             VmRuntime::Wasm => {
@@ -290,10 +293,11 @@ pub trait Storage: Sized {
             compressed_bytes: content.into_arc_bytes(),
         };
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
-        let service_bytecode = web_thread::Thread::new()
+        let service_bytecode = self.thread_pool()
             .run_send((), move |()| async move {
                 compressed_service_bytecode.decompress()
             })
+            .await
             .await??;
         match application_description.module_id.vm_runtime {
             VmRuntime::Wasm => {
@@ -379,6 +383,7 @@ impl ResultReadCertificates {
 pub struct ChainRuntimeContext<S> {
     storage: S,
     chain_id: ChainId,
+    thread_pool: Arc<linera_execution::ThreadPool>,
     execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
@@ -392,6 +397,10 @@ where
 {
     fn chain_id(&self) -> ChainId {
         self.chain_id
+    }
+
+    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool> {
+        &self.thread_pool
     }
 
     fn execution_runtime_config(&self) -> linera_execution::ExecutionRuntimeConfig {

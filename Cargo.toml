@@ -346,9 +346,9 @@ default-features = false
 features = ["rt-tokio", "rustls"]
 version = "1.88.0"
 
-[workspace.dependencies.web-thread]
-package = "web-thread-select"
-version = "0.2.0"
+[workspace.dependencies.web-thread-pool]
+git = "https://github.com/linera-io/web-thread"
+branch = "pool"
 
 [profile.release]
 lto = "thin"
