@@ -1611,6 +1611,13 @@ impl ServiceSyncRuntime {
         context: QueryContext,
         deadline: Option<Instant>,
     ) -> Self {
+        // Query the allow_contract_logs setting from the execution state.
+        let allow_contract_logs = execution_state_sender
+            .send_request(|callback| ExecutionRequest::AllowContractLogs { callback })
+            .ok()
+            .and_then(|receiver| receiver.recv_response().ok())
+            .unwrap_or(false);
+
         let runtime = SyncRuntime(Some(
             SyncRuntimeInternal::new(
                 context.chain_id,
@@ -1622,7 +1629,7 @@ impl ServiceSyncRuntime {
                 None,
                 ResourceController::default(),
                 (),
-                false, // Services don't output contract logs
+                allow_contract_logs,
             )
             .into(),
         ));

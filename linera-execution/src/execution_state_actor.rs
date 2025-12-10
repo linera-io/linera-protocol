@@ -688,6 +688,16 @@ where
                 };
                 callback.respond(result);
             }
+
+            AllowContractLogs { callback } => {
+                let allow = self
+                    .state
+                    .context()
+                    .extra()
+                    .execution_runtime_config()
+                    .allow_contract_logs;
+                callback.respond(allow);
+            }
         }
 
         Ok(())
@@ -1308,5 +1318,10 @@ pub enum ExecutionRequest {
         application: ApplicationId,
         #[debug(skip)]
         callback: Sender<(u32, u32)>,
+    },
+
+    AllowContractLogs {
+        #[debug(skip)]
+        callback: Sender<bool>,
     },
 }
