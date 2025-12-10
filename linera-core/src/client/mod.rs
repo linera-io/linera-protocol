@@ -23,7 +23,7 @@ use linera_base::{
     crypto::{signer, AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, Epoch, Round, Timestamp,
+        ChainDescription, Epoch, Round, TimeDelta, Timestamp,
     },
     ensure,
     identifiers::{
@@ -567,13 +567,60 @@ impl<Env: Environment> Client<Env> {
             round = %proposal.content.round,
             "Submitting block proposal to validators"
         );
+
+        // Check if the block timestamp is in the future and log INFO.
+        let block_timestamp = proposal.content.block.timestamp;
+        let local_time = self.local_node.storage_client().clock().current_time();
+        if block_timestamp > local_time {
+            info!(
+                chain_id = %proposal.content.block.chain_id,
+                %block_timestamp,
+                %local_time,
+                "Block timestamp is in the future; waiting for validators",
+            );
+        }
+
+        // Create channel for clock skew reports from validators.
+        let (clock_skew_sender, mut clock_skew_receiver) = mpsc::unbounded_channel();
         let submit_action = CommunicateAction::SubmitBlock {
             proposal,
             blob_ids: value.required_blob_ids().into_iter().collect(),
+            clock_skew_sender,
         };
+
+        // Spawn a task to monitor clock skew reports and warn if threshold is reached.
+        let validity_threshold = committee.validity_threshold();
+        let committee_clone = committee.clone();
+        let clock_skew_check_handle = linera_base::task::spawn(async move {
+            let mut skew_weight = 0u64;
+            let mut min_skew = TimeDelta::MAX;
+            let mut max_skew = TimeDelta::ZERO;
+            while let Some((public_key, clock_skew)) = clock_skew_receiver.recv().await {
+                if clock_skew.as_micros() > 0 {
+                    skew_weight += committee_clone.weight(&public_key);
+                    min_skew = min_skew.min(clock_skew);
+                    max_skew = max_skew.max(clock_skew);
+                    if skew_weight >= validity_threshold {
+                        warn!(
+                            skew_weight,
+                            validity_threshold,
+                            min_skew_ms = min_skew.as_micros() / 1000,
+                            max_skew_ms = max_skew.as_micros() / 1000,
+                            "A validity threshold of validators reported clock skew; \
+                             consider checking your system clock",
+                        );
+                        return;
+                    }
+                }
+            }
+        });
+
         let certificate = self
             .communicate_chain_action(committee, submit_action, value)
             .await?;
+
+        clock_skew_check_handle.await;
+
         self.process_certificate(Box::new(certificate.clone()))
             .await?;
         Ok(certificate)

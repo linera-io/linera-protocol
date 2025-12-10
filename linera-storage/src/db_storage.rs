@@ -497,6 +497,9 @@ impl Clock for WallClock {
 struct TestClockInner {
     time: Timestamp,
     sleeps: BTreeMap<Reverse<Timestamp>, Vec<oneshot::Sender<()>>>,
+    /// Optional callback that decides whether to auto-advance for a given target timestamp.
+    /// Returns `true` if the clock should auto-advance to that time.
+    sleep_callback: Option<Box<dyn Fn(Timestamp) -> bool + Send + Sync>>,
 }
 
 #[cfg(with_testing)]
@@ -510,12 +513,21 @@ impl TestClockInner {
     }
 
     fn add_sleep(&mut self, delta: TimeDelta) -> Receiver<()> {
-        self.add_sleep_until(self.time.saturating_add(delta))
+        let target_time = self.time.saturating_add(delta);
+        self.add_sleep_until(target_time)
     }
 
     fn add_sleep_until(&mut self, time: Timestamp) -> Receiver<()> {
         let (sender, receiver) = oneshot::channel();
-        if self.time >= time {
+        let should_auto_advance = self
+            .sleep_callback
+            .as_ref()
+            .is_some_and(|callback| callback(time));
+        if should_auto_advance && time > self.time {
+            // Auto-advance mode: immediately advance the clock and complete the sleep.
+            self.set(time);
+            let _ = sender.send(());
+        } else if self.time >= time {
             let _ = sender.send(());
         } else {
             self.sleeps.entry(Reverse(time)).or_default().push(sender);
@@ -574,6 +586,22 @@ impl TestClock {
     /// Returns the current time according to the test clock.
     pub fn current_time(&self) -> Timestamp {
         self.lock().time
+    }
+
+    /// Sets a callback that decides whether to auto-advance for each sleep call.
+    ///
+    /// The callback receives the target timestamp and should return `true` if the clock
+    /// should auto-advance to that time, or `false` if the sleep should block normally.
+    pub fn set_sleep_callback<F>(&self, callback: F)
+    where
+        F: Fn(Timestamp) -> bool + Send + Sync + 'static,
+    {
+        self.lock().sleep_callback = Some(Box::new(callback));
+    }
+
+    /// Clears the sleep callback.
+    pub fn clear_sleep_callback(&self) {
+        self.lock().sleep_callback = None;
     }
 
     fn lock(&self) -> std::sync::MutexGuard<TestClockInner> {
