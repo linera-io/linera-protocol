@@ -87,7 +87,7 @@ where
     type Store: ReadableKeyValueStore + WritableKeyValueStore + WithError<Error = Self::Error>;
 
     /// User-provided data to be carried along.
-    type Extra: Clone + Send + Sync;
+    type Extra: Clone + linera_base::util::traits::AutoTraits;
 
     /// The type of errors that may be returned by operations on the `Store`, a
     /// convenience alias for `<Self::Store as WithError>::Error`.
@@ -180,7 +180,7 @@ impl<E, S> ViewContext<E, S> {
 
 impl<E, S> Context for ViewContext<E, S>
 where
-    E: Clone + Send + Sync,
+    E: Clone + linera_base::util::traits::AutoTraits,
     S: ReadableKeyValueStore + WritableKeyValueStore + Clone,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
 {

@@ -69,7 +69,7 @@ mod metrics {
 #[allocative(bound = "C")]
 pub struct InboxStateView<C>
 where
-    C: Clone + Context + Send + Sync,
+    C: Clone + Context,
 {
     /// We have already added all the messages below this height and index.
     pub next_cursor_to_add: RegisterView<C, Cursor>,
@@ -181,7 +181,7 @@ impl From<(ChainId, ChainId, InboxError)> for ChainError {
 
 impl<C> InboxStateView<C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
 {
     /// Converts the internal cursor for added bundles into an externally-visible block height.
     /// This makes sense because the rest of the system always adds bundles one block at a time.

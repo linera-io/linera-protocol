@@ -313,7 +313,7 @@ pub struct CreateApplicationResult {
 
 impl<C> SystemExecutionStateView<C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     /// Invariant for the states of active chains.

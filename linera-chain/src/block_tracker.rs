@@ -113,7 +113,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         chain: &mut ExecutionStateView<C>,
     ) -> Result<(), ChainError>
     where
-        C: Context + Clone + Send + Sync + 'static,
+        C: Context + Clone + 'static,
         C::Extra: ExecutionRuntimeContext,
     {
         let chain_execution_context = self.chain_execution_context(transaction);
@@ -193,7 +193,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ChainError>
     where
-        C: Context + Clone + Send + Sync + 'static,
+        C: Context + Clone + 'static,
         C::Extra: ExecutionRuntimeContext,
     {
         #[cfg(with_metrics)]
@@ -283,7 +283,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         context: ChainExecutionContext,
     ) -> Result<(), ChainError>
     where
-        C: Context + Clone + Send + Sync + 'static,
+        C: Context + Clone + 'static,
     {
         let mut resource_controller = self.resource_controller.with_state(view).await?;
 

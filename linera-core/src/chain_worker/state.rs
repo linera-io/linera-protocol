@@ -51,7 +51,7 @@ use crate::{
 /// The state of the chain worker.
 pub struct ChainWorkerState<StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage + Clone + 'static,
 {
     config: ChainWorkerConfig,
     storage: StorageClient,
@@ -74,7 +74,7 @@ pub enum BlockOutcome {
 
 impl<StorageClient> ChainWorkerState<StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage + Clone + 'static,
 {
     /// Creates a new [`ChainWorkerState`] using the provided `storage` client.
     #[instrument(skip_all, fields(
@@ -1776,7 +1776,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
     /// Creates a new [`CrossChainUpdateHelper`].
     pub fn new<C>(config: &ChainWorkerConfig, chain: &'a ChainStateView<C>) -> Self
     where
-        C: Context + Clone + Send + Sync + 'static,
+        C: Context + Clone + 'static,
     {
         CrossChainUpdateHelper {
             allow_messages_from_deprecated_epochs: config.allow_messages_from_deprecated_epochs,
