@@ -144,7 +144,7 @@ impl LockingBlock {
 #[allocative(bound = "C")]
 pub struct ChainManager<C>
 where
-    C: Clone + Context + Send + Sync + 'static,
+    C: Clone + Context + 'static,
 {
     /// The public keys, weights and types of the chain's owners.
     pub ownership: RegisterView<C, ChainOwnership>,
@@ -209,7 +209,7 @@ where
 #[async_graphql::ComplexObject]
 impl<C> ChainManager<C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
 {
     /// Returns the lowest round where we can still vote to validate or confirm a block. This is
     /// the round to which the timeout applies.
@@ -225,7 +225,7 @@ where
 
 impl<C> ChainManager<C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
 {
     /// Replaces `self` with a new chain manager.
     pub fn reset<'a>(
@@ -809,7 +809,7 @@ pub struct ChainManagerInfo {
 
 impl<C> From<&ChainManager<C>> for ChainManagerInfo
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
 {
     fn from(manager: &ChainManager<C>) -> Self {
         let current_round = manager.current_round();
@@ -846,7 +846,7 @@ impl ChainManagerInfo {
     /// Adds requested certificate values and proposals to the `ChainManagerInfo`.
     pub fn add_values<C>(&mut self, manager: &ChainManager<C>)
     where
-        C: Context + Clone + Send + Sync + 'static,
+        C: Context + Clone + 'static,
         C::Extra: ExecutionRuntimeContext,
     {
         self.requested_signed_proposal = manager.signed_proposal.get().clone().map(Box::new);

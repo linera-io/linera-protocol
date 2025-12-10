@@ -241,6 +241,7 @@ pub fn add_metering(bytecode: Bytecode) -> Result<Bytecode, WasmExecutionError> 
 #[cfg(web)]
 const _: () = {
     use js_sys::wasm_bindgen::JsValue;
+    use web_thread_select as web_thread;
 
     impl web_thread::AsJs for WasmServiceModule {
         fn to_js(&self) -> Result<JsValue, JsValue> {

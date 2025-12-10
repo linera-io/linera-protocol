@@ -291,6 +291,8 @@ wasmtime = { version = "25.0.0", default-features = false, features = [
     "std",
 ] }
 web-sys = "0.3.69"
+web-thread-pool = "0.1.0"
+web-thread-select = "0.2.0"
 web-time = "1.1.0"
 wit-bindgen = "0.24.0"
 zstd = "0.13.2"
@@ -345,10 +347,6 @@ version = "1.6.3"
 default-features = false
 features = ["rt-tokio", "rustls"]
 version = "1.88.0"
-
-[workspace.dependencies.web-thread]
-package = "web-thread-select"
-version = "0.2.0"
 
 [profile.release]
 lto = "thin"
