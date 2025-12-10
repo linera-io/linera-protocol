@@ -41,6 +41,7 @@ pub mod tracing;
 pub mod tracing_opentelemetry;
 #[cfg(test)]
 mod unit_tests;
+pub mod util;
 pub mod vm;
 
 pub use graphql::BcsHexParseError;

@@ -12,3 +12,4 @@ pub mod project;
 pub mod storage;
 pub mod util;
 pub mod wallet;
+pub use wallet::Wallet;

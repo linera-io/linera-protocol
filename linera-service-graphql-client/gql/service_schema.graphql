@@ -879,7 +879,12 @@ type MutationRoot {
 	"""
 	Retries the pending block that was unsuccessfully proposed earlier.
 	"""
-	retryPendingBlock(chainId: ChainId!): CryptoHash
+	retryPendingBlock(
+		"""
+		The chain on whose block is being retried.
+		"""
+		chainId: ChainId!
+	): CryptoHash
 	"""
 	Transfers `amount` units of value from the given owner's account to the recipient.
 	If no owner is given, try to take the units out of the chain account.

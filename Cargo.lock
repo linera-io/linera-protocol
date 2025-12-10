@@ -2370,6 +2370,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7fc6734af48458f72f5a3fa7b840903606427d98a710256e808f76a965047d9"
 dependencies = [
  "cfg-if",
+ "clap",
  "is-terminal",
  "libc",
  "tempfile",
@@ -5315,6 +5316,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "serde_with",
+ "sync_wrapper 1.0.2",
  "tempfile",
  "test-case",
  "test-strategy",
@@ -5326,6 +5328,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber 0.3.19",
  "tracing-web",
+ "trait-set",
  "trait-variant",
  "wasm-bindgen-futures",
  "web-time",
@@ -5389,7 +5392,6 @@ dependencies = [
  "linera-core",
  "linera-ethereum",
  "linera-execution",
- "linera-persistent",
  "linera-rpc",
  "linera-sdk",
  "linera-storage",
@@ -5399,6 +5401,7 @@ dependencies = [
  "native-fungible",
  "non-fungible",
  "num-format",
+ "papaya",
  "prometheus-parse",
  "proptest",
  "rand 0.8.5",
@@ -5932,6 +5935,7 @@ dependencies = [
  "mini-moka",
  "native-fungible",
  "non-fungible",
+ "nonzero_lit",
  "papaya",
  "pathdiff",
  "port-selector",
@@ -5965,6 +5969,7 @@ dependencies = [
  "tower-http 0.6.6",
  "tracing",
  "tracing-subscriber 0.3.19",
+ "url",
 ]
 
 [[package]]
@@ -6120,7 +6125,6 @@ dependencies = [
  "serde",
  "sha3",
  "static_assertions",
- "sync_wrapper 1.0.2",
  "sysinfo",
  "tempfile",
  "test-case",
@@ -6297,7 +6301,6 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-faucet-client",
- "linera-persistent",
  "linera-rpc",
  "linera-storage",
  "linera-views",
@@ -6733,6 +6736,12 @@ dependencies = [
  "serde",
  "sha3",
 ]
+
+[[package]]
+name = "nonzero_lit"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30a9e0365849b8ce3d067218268d6c523c1c14f539f7e9157d635d8adfb308fa"
 
 [[package]]
 name = "ntapi"
@@ -7261,6 +7270,7 @@ checksum = "aeb8b9616002a83f9779ea70a2a44364fe804f8b532b96989d0790a34ad76479"
 dependencies = [
  "equivalent",
  "seize",
+ "serde",
 ]
 
 [[package]]

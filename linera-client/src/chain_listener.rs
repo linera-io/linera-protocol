@@ -17,21 +17,19 @@ use linera_base::{
     data_types::{ChainDescription, Timestamp},
     identifiers::{AccountOwner, BlobType, ChainId},
     task::NonBlockingFuture,
+    util::future::FutureSyncExt as _,
 };
 use linera_core::{
     client::{AbortOnDrop, ChainClient, ChainClientError},
     node::NotificationStream,
     worker::{Notification, Reason},
-    Environment,
+    Environment, Wallet,
 };
 use linera_storage::{Clock as _, Storage as _};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn, Instrument as _};
 
-use crate::{
-    wallet::{UserChain, Wallet},
-    Error,
-};
+use crate::error::{self, Error};
 
 #[derive(Debug, Default, Clone, clap::Args, serde::Serialize)]
 pub struct ChainListenerConfig {
@@ -62,16 +60,20 @@ pub struct ChainListenerConfig {
 
 type ContextChainClient<C> = ChainClient<<C as ClientContext>::Environment>;
 
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 #[allow(async_fn_in_trait)]
 pub trait ClientContext {
     type Environment: linera_core::Environment;
 
-    fn wallet(&self) -> &Wallet;
+    fn wallet(&self) -> &<Self::Environment as linera_core::Environment>::Wallet;
 
     fn storage(&self) -> &<Self::Environment as linera_core::Environment>::Storage;
 
     fn client(&self) -> &Arc<linera_core::client::Client<Self::Environment>>;
+
+    fn admin_chain(&self) -> ChainId {
+        self.client().admin_chain()
+    }
 
     /// Gets the timing sender for benchmarking, if available.
     #[cfg(not(web))]
@@ -86,20 +88,27 @@ pub trait ClientContext {
         None
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<Self::Environment> {
-        let chain = self
-            .wallet()
-            .get(chain_id)
-            .cloned()
-            .unwrap_or_else(|| UserChain::make_other(chain_id, Timestamp::from(0)));
-        self.client().create_chain_client(
-            chain_id,
-            chain.block_hash,
-            chain.next_block_height,
-            chain.pending_proposal,
-            chain.owner,
-            self.timing_sender(),
-        )
+    fn make_chain_client(
+        &self,
+        chain_id: ChainId,
+    ) -> impl Future<Output = Result<ChainClient<Self::Environment>, Error>> {
+        async move {
+            let chain = self
+                .wallet()
+                .get(chain_id)
+                .make_sync()
+                .await
+                .map_err(error::Inner::wallet)?
+                .unwrap_or_default();
+            Ok(self.client().create_chain_client(
+                chain_id,
+                chain.block_hash,
+                chain.next_block_height,
+                chain.pending_proposal,
+                chain.owner,
+                self.timing_sender(),
+            ))
+        }
     }
 
     async fn update_wallet_for_new_chain(
@@ -107,6 +116,7 @@ pub trait ClientContext {
         chain_id: ChainId,
         owner: Option<AccountOwner>,
         timestamp: Timestamp,
+        epoch: linera_base::data_types::Epoch,
     ) -> Result<(), Error>;
 
     async fn update_wallet(&mut self, client: &ContextChainClient<Self>) -> Result<(), Error>;
@@ -114,13 +124,14 @@ pub trait ClientContext {
 
 #[allow(async_fn_in_trait)]
 pub trait ClientContextExt: ClientContext {
-    fn clients(&self) -> Vec<ContextChainClient<Self>> {
-        let chain_ids = self.wallet().chain_ids();
-        let mut clients = vec![];
-        for chain_id in chain_ids {
-            clients.push(self.make_chain_client(chain_id));
-        }
-        clients
+    async fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
+        use futures::stream::TryStreamExt as _;
+        self.wallet()
+            .chain_ids()
+            .map_err(|e| error::Inner::wallet(e).into())
+            .and_then(|chain_id| self.make_chain_client(chain_id))
+            .try_collect()
+            .await
     }
 }
 
@@ -207,18 +218,25 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     ) -> Result<impl Future<Output = Result<(), Error>>, Error> {
         let chain_ids = {
             let guard = self.context.lock().await;
-            let admin_chain_id = guard.wallet().genesis_admin_chain();
+            let admin_chain_id = guard.admin_chain();
             guard
                 .make_chain_client(admin_chain_id)
+                .await?
                 .synchronize_chain_state(admin_chain_id)
                 .await?;
-            BTreeSet::from_iter(
-                guard
-                    .wallet()
-                    .chain_ids()
-                    .into_iter()
-                    .chain([admin_chain_id]),
-            )
+            guard
+                .wallet()
+                .chain_ids()
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .chain([Ok(admin_chain_id)])
+                .collect::<Result<BTreeSet<_>, _>>()
+                .map_err(
+                    |e: <<C::Environment as Environment>::Wallet as Wallet>::Error| {
+                        crate::error::Inner::Wallet(Box::new(e) as _)
+                    },
+                )?
         };
 
         // Start background tasks to sync received certificates for each chain,
@@ -303,7 +321,8 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     let chain_desc: ChainDescription = bcs::from_bytes(blob.content().bytes())
                         .expect("ChainDescription should deserialize correctly");
                     let owners = chain_desc.config().ownership.all_owners().cloned();
-                    Some((ChainId(blob_id.hash), owners.collect::<Vec<_>>()))
+                    let epoch = chain_desc.config().epoch;
+                    Some((ChainId(blob_id.hash), owners.collect::<Vec<_>>(), epoch))
                 } else {
                     None
                 }
@@ -314,7 +333,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         }
         let mut new_ids = BTreeSet::new();
         let mut context_guard = self.context.lock().await;
-        for (new_chain_id, owners) in new_chains {
+        for (new_chain_id, owners, epoch) in new_chains {
             for chain_owner in owners {
                 if context_guard
                     .client()
@@ -328,6 +347,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                             new_chain_id,
                             Some(chain_owner),
                             block.header.timestamp,
+                            epoch,
                         )
                         .await?;
                     new_ids.insert(new_chain_id);
@@ -369,7 +389,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         cancellation_token: CancellationToken,
     ) -> Result<(), Error> {
         info!("Starting background certificate sync for chain {chain_id}");
-        let client = context.lock().await.make_chain_client(chain_id);
+        let client = context.lock().await.make_chain_client(chain_id).await?;
 
         Ok(client
             .find_received_certificates(Some(cancellation_token))
@@ -383,7 +403,12 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         if self.listening.contains_key(&chain_id) {
             return Ok(BTreeSet::new());
         }
-        let client = self.context.lock().await.make_chain_client(chain_id);
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         let (listener, abort_handle, notification_stream) = client.listen().await?;
         let join_handle = linera_base::task::spawn(listener.in_current_span());
         let listening_client =
