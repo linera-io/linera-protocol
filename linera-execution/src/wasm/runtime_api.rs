@@ -236,7 +236,7 @@ where
         let allowed = caller
             .user_data_mut()
             .runtime
-            .allow_contract_logs()
+            .allow_application_logs()
             .map_err(|error| RuntimeError::Custom(error.into()))?;
 
         if allowed {

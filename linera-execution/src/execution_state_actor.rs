@@ -695,7 +695,7 @@ where
                     .context()
                     .extra()
                     .execution_runtime_config()
-                    .allow_contract_logs;
+                    .allow_application_logs;
                 callback.respond(allow);
             }
         }
@@ -836,12 +836,12 @@ where
         let (codes, descriptions): (Vec<_>, Vec<_>) =
             self.contract_and_dependencies(application_id).await?;
 
-        let allow_contract_logs = self
+        let allow_application_logs = self
             .state
             .context()
             .extra()
             .execution_runtime_config()
-            .allow_contract_logs;
+            .allow_application_logs;
 
         let contract_runtime_task = self
             .state
@@ -855,7 +855,7 @@ where
                     refund_grant_to,
                     controller,
                     &action,
-                    allow_contract_logs,
+                    allow_application_logs,
                 );
 
                 for (code, description) in codes.0.into_iter().zip(descriptions) {

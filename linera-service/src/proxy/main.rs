@@ -507,9 +507,13 @@ impl ProxyOptions {
             .storage_config
             .add_common_storage_options(&self.common_storage_options)?;
         // Proxies are part of validator infrastructure and should not output contract logs.
-        let allow_contract_logs = false;
+        let allow_application_logs = false;
         store_config
-            .run_with_storage(None, allow_contract_logs, ProxyContext::from_options(self)?)
+            .run_with_storage(
+                None,
+                allow_application_logs,
+                ProxyContext::from_options(self)?,
+            )
             .boxed()
             .await?
     }

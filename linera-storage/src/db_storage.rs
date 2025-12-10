@@ -1098,8 +1098,8 @@ impl<Database, C> DbStorage<Database, C> {
     }
 
     /// Sets whether contract log messages should be output.
-    pub fn with_allow_contract_logs(mut self, allow: bool) -> Self {
-        self.execution_runtime_config.allow_contract_logs = allow;
+    pub fn with_allow_application_logs(mut self, allow: bool) -> Self {
+        self.execution_runtime_config.allow_application_logs = allow;
         self
     }
 }
