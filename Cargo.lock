@@ -6308,6 +6308,7 @@ dependencies = [
  "num-traits",
  "serde",
  "serde-wasm-bindgen 0.6.5",
+ "tokio",
  "tokio-util",
  "tracing",
  "wasm-bindgen",

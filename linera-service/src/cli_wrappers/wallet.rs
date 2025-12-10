@@ -474,6 +474,18 @@ impl ClientWrapper {
         port: impl Into<Option<u16>>,
         process_inbox: ProcessInbox,
     ) -> Result<NodeService> {
+        self.run_node_service_with_options(port, process_inbox, &[], &[])
+            .await
+    }
+
+    /// Runs `linera service` with optional task processor configuration.
+    pub async fn run_node_service_with_options(
+        &self,
+        port: impl Into<Option<u16>>,
+        process_inbox: ProcessInbox,
+        operator_application_ids: &[ApplicationId],
+        operators: &[(String, PathBuf)],
+    ) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
         command.arg("service");
@@ -482,6 +494,12 @@ impl ClientWrapper {
         }
         if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
             command.args(var.split_whitespace());
+        }
+        for app_id in operator_application_ids {
+            command.args(["--operator-application-ids", &app_id.to_string()]);
+        }
+        for (name, path) in operators {
+            command.args(["--operators", &format!("{}={}", name, path.display())]);
         }
         let child = command
             .args(["--port".to_string(), port.to_string()])
@@ -939,6 +957,16 @@ impl ClientWrapper {
         let mut command = self.command().await?;
         command
             .args(["wallet", "forget-chain"])
+            .arg(chain_id.to_string());
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
+    /// Runs `linera wallet set-default CHAIN_ID`.
+    pub async fn set_default_chain(&self, chain_id: ChainId) -> Result<()> {
+        let mut command = self.command().await?;
+        command
+            .args(["wallet", "set-default"])
             .arg(chain_id.to_string());
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
