@@ -318,6 +318,41 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
         "Follow-only chain A should not have had its inbox processed"
     );
 
+    // Verify that the listener's wallet still shows chain A at height 0.
+    let wallet_chain_a = context.lock().await.wallet().get(chain_a_id).unwrap();
+    assert_eq!(
+        wallet_chain_a.next_block_height,
+        BlockHeight::ZERO,
+        "Wallet should show chain A at height 0"
+    );
+
+    // Now have the original chain_a client process its inbox, creating a block.
+    chain_a.process_inbox().await?;
+
+    // Wait for the chain listener to see the NewBlock notification and update its wallet.
+    // This verifies that follow-only mode DOES process NewBlock notifications.
+    for i in 0.. {
+        tokio::task::yield_now().await;
+
+        let wallet_chain_a = context.lock().await.wallet().get(chain_a_id).unwrap();
+        if wallet_chain_a.next_block_height >= BlockHeight::from(1) {
+            break;
+        }
+        if i >= 50 {
+            panic!(
+                "Wallet not updated after chain A created a block. Expected height >= 1, got {}",
+                wallet_chain_a.next_block_height
+            );
+        }
+    }
+
+    // Verify the wallet was updated and follow_only is preserved.
+    let wallet_chain_a = context.lock().await.wallet().get(chain_a_id).unwrap();
+    assert!(
+        wallet_chain_a.follow_only,
+        "follow_only flag should be preserved in wallet"
+    );
+
     cancellation_token.cancel();
     handle.await;
 
