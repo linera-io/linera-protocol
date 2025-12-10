@@ -18,6 +18,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
     time::Instant,
+    util::traits::DynError,
 };
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
@@ -264,12 +265,12 @@ pub enum WorkerError {
     #[error("ChainWorkerActor for chain {chain_id} stopped executing unexpectedly: {error}")]
     ChainActorSendError {
         chain_id: ChainId,
-        error: Box<dyn std::error::Error + Send + Sync>,
+        error: Box<dyn DynError>,
     },
     #[error("ChainWorkerActor for chain {chain_id} stopped executing without responding: {error}")]
     ChainActorRecvError {
         chain_id: ChainId,
-        error: Box<dyn std::error::Error + Send + Sync>,
+        error: Box<dyn DynError>,
     },
 
     #[error("thread error: {0}")]
@@ -574,14 +575,14 @@ where
 #[allow(async_fn_in_trait)]
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait ProcessableCertificate: CertificateValue + Sized + 'static {
-    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
+    async fn process_certificate<S: Storage + Clone + 'static>(
         worker: &WorkerState<S>,
         certificate: GenericCertificate<Self>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 }
 
 impl ProcessableCertificate for ConfirmedBlock {
-    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
+    async fn process_certificate<S: Storage + Clone + 'static>(
         worker: &WorkerState<S>,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -590,7 +591,7 @@ impl ProcessableCertificate for ConfirmedBlock {
 }
 
 impl ProcessableCertificate for ValidatedBlock {
-    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
+    async fn process_certificate<S: Storage + Clone + 'static>(
         worker: &WorkerState<S>,
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -599,7 +600,7 @@ impl ProcessableCertificate for ValidatedBlock {
 }
 
 impl ProcessableCertificate for Timeout {
-    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
+    async fn process_certificate<S: Storage + Clone + 'static>(
         worker: &WorkerState<S>,
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -609,7 +610,7 @@ impl ProcessableCertificate for Timeout {
 
 impl<StorageClient> WorkerState<StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage + Clone + 'static,
 {
     #[instrument(level = "trace", skip(self, certificate, notifier))]
     #[inline]

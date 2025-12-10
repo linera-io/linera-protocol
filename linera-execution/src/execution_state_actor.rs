@@ -74,7 +74,7 @@ pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<ExecutionRequest>;
 
 impl<'a, C> ExecutionStateActor<'a, C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     /// Creates a new execution state actor.

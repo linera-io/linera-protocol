@@ -35,7 +35,7 @@ fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
 wasmer = ["dep:wasmer", "wasmer/enable-serde", "linera-witty/wasmer"]
 wasmtime = ["dep:wasmtime", "linera-witty/wasmtime"]
-web = ["linera-base/web", "linera-views/web", "js-sys"]
+web = ["linera-base/web", "linera-views/web", "js-sys", "web-thread-select/web"]
 
 [dependencies]
 allocative.workspace = true

@@ -25,7 +25,7 @@ use crate::ChainError;
 #[allocative(bound = "C")]
 pub struct PendingBlobsView<C>
 where
-    C: Clone + Context + Send + Sync + 'static,
+    C: Clone + Context,
 {
     /// The round in which the block is validated.
     pub round: RegisterView<C, Round>,
@@ -41,7 +41,7 @@ where
 
 impl<C> PendingBlobsView<C>
 where
-    C: Clone + Context + Send + Sync + 'static,
+    C: Clone + Context,
 {
     pub async fn multi_get(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
         Ok(self

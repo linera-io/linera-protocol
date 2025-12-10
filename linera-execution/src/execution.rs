@@ -97,7 +97,7 @@ impl<C> DerefMut for ExecutionStateView<C> {
 
 impl<C> ExecutionStateView<C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     pub async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
@@ -133,7 +133,7 @@ pub struct ServiceRuntimeEndpoint {
 #[cfg(with_testing)]
 impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
 where
-    MemoryContext<TestExecutionRuntimeContext>: Context + Clone + Send + Sync + 'static,
+    MemoryContext<TestExecutionRuntimeContext>: Context + Clone + 'static,
 {
     /// Simulates the instantiation of an application.
     pub async fn simulate_instantiation(
@@ -250,7 +250,7 @@ impl UserAction {
 
 impl<C> ExecutionStateView<C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     pub async fn query_application(

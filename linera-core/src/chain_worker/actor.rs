@@ -63,7 +63,7 @@ mod metrics {
 #[derive(Debug)]
 pub(crate) enum ChainWorkerRequest<Context>
 where
-    Context: linera_views::context::Context + Clone + Send + Sync + 'static,
+    Context: linera_views::context::Context + Clone + 'static,
 {
     /// Reads the certificate for a requested [`BlockHeight`].
     #[cfg(with_testing)]
@@ -251,7 +251,7 @@ where
 /// The actor worker type.
 pub(crate) struct ChainWorkerActor<StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage + Clone + 'static,
 {
     chain_id: ChainId,
     config: ChainWorkerConfig,
@@ -301,7 +301,7 @@ impl ServiceRuntimeActor {
 
 impl<StorageClient> ChainWorkerActor<StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage + Clone + 'static,
 {
     /// Runs the [`ChainWorkerActor`]. The chain state is loaded when the first request
     /// arrives.

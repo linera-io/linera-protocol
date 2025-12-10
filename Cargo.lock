@@ -11609,6 +11609,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "web-thread"
+version = "0.2.2"
+source = "git+https://github.com/linera-io/web-thread?branch=pool#d733fd6b9562ea43e32902d35f73dadd7c9c57f3"
+dependencies = [
+ "futures",
+ "pin-project-lite",
+ "serde",
+ "serde-wasm-bindgen 0.6.5",
+ "thiserror 2.0.17",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "web-thread-pool"
 version = "0.1.0"
 source = "git+https://github.com/linera-io/web-thread?branch=pool#d733fd6b9562ea43e32902d35f73dadd7c9c57f3"
@@ -11624,6 +11638,7 @@ version = "0.2.0"
 source = "git+https://github.com/linera-io/web-thread?branch=pool#d733fd6b9562ea43e32902d35f73dadd7c9c57f3"
 dependencies = [
  "cfg-if",
+ "web-thread",
  "web-thread-shim",
 ]
 

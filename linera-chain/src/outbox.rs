@@ -46,7 +46,7 @@ mod metrics {
 #[allocative(bound = "C")]
 pub struct OutboxStateView<C>
 where
-    C: Context + Send + Sync + 'static,
+    C: Context + 'static,
 {
     /// The minimum block height accepted in the future.
     pub next_height_to_schedule: RegisterView<C, BlockHeight>,
@@ -57,7 +57,7 @@ where
 
 impl<C> OutboxStateView<C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
 {
     /// Schedules a message at the given height if we haven't already.
     /// Returns true if a change was made.

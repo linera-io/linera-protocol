@@ -47,15 +47,15 @@ pub const DEFAULT_NAMESPACE: &str = "default";
 /// Communicate with a persistent storage using the "views" abstraction.
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
-pub trait Storage: Sized {
+pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// The low-level storage implementation in use by the core protocol (chain workers etc).
-    type Context: Context<Extra = ChainRuntimeContext<Self>> + Clone + Send + Sync + 'static;
+    type Context: Context<Extra = ChainRuntimeContext<Self>> + Clone + 'static;
 
     /// The clock type being used.
     type Clock: Clock;
 
     /// The low-level storage implementation in use by the block exporter.
-    type BlockExporterContext: Context<Extra = u32> + Clone + Send + Sync + 'static;
+    type BlockExporterContext: Context<Extra = u32> + Clone;
 
     /// Returns the current wall clock time.
     fn clock(&self) -> &Self::Clock;
@@ -393,10 +393,7 @@ pub struct ChainRuntimeContext<S> {
 
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
-impl<S> ExecutionRuntimeContext for ChainRuntimeContext<S>
-where
-    S: Storage + Send + Sync,
-{
+impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
     fn chain_id(&self) -> ChainId {
         self.chain_id
     }
