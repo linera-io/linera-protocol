@@ -303,7 +303,7 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Returns whether this chain is in follow-only mode.
-    fn is_follow_only(&self) -> bool {
+    pub fn is_follow_only(&self) -> bool {
         self.client.is_chain_follow_only(self.chain_id)
     }
 
