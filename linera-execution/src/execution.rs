@@ -324,16 +324,25 @@ where
 
         let (codes, descriptions) = actor.service_and_dependencies(application_id).await?;
 
-        let service_runtime_task = thread_pool.run_send(JsVec(codes), move |codes| async move {
-            let mut runtime =
-                ServiceSyncRuntime::new_with_deadline(execution_state_sender, context, deadline);
+        let service_runtime_task = thread_pool
+            .run_send(JsVec(codes), move |codes| async move {
+                let mut runtime = ServiceSyncRuntime::new_with_deadline(
+                    execution_state_sender,
+                    context,
+                    deadline,
+                );
 
-            for (code, description) in codes.0.into_iter().zip(descriptions) {
-                runtime.preload_service(ApplicationId::from(&description), code, description)?;
-            }
+                for (code, description) in codes.0.into_iter().zip(descriptions) {
+                    runtime.preload_service(
+                        ApplicationId::from(&description),
+                        code,
+                        description,
+                    )?;
+                }
 
-            runtime.run_query(application_id, query)
-        }).await;
+                runtime.run_query(application_id, query)
+            })
+            .await;
 
         while let Some(request) = execution_state_receiver.next().await {
             actor.handle_request(request).await?;

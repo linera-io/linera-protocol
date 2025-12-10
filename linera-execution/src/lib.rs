@@ -22,9 +22,6 @@ mod wasm;
 
 use std::{any::Any, collections::BTreeMap, fmt, ops::RangeInclusive, str::FromStr, sync::Arc};
 
-pub use web_thread_pool::Pool as ThreadPool;
-use web_thread_pool::web_thread;
-
 use allocative::Allocative;
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
@@ -52,6 +49,8 @@ use linera_views::{batch::Batch, ViewError};
 use serde::{Deserialize, Serialize};
 use system::AdminOperation;
 use thiserror::Error;
+use web_thread_pool::web_thread;
+pub use web_thread_pool::Pool as ThreadPool;
 
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;

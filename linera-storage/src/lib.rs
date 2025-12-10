@@ -228,7 +228,8 @@ pub trait Storage: Sized {
             compressed_bytes: content.into_arc_bytes(),
         };
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
-        let contract_bytecode = self.thread_pool()
+        let contract_bytecode = self
+            .thread_pool()
             .run_send((), move |()| async move {
                 compressed_contract_bytecode.decompress()
             })
@@ -293,7 +294,8 @@ pub trait Storage: Sized {
             compressed_bytes: content.into_arc_bytes(),
         };
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
-        let service_bytecode = self.thread_pool()
+        let service_bytecode = self
+            .thread_pool()
             .run_send((), move |()| async move {
                 compressed_service_bytecode.decompress()
             })

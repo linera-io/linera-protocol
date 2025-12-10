@@ -282,17 +282,19 @@ impl ServiceRuntimeActor {
                 incoming_execution_requests,
                 runtime_request_sender,
             },
-            task: thread_pool.run((), move |()| async move {
-                ServiceSyncRuntime::new(
-                    execution_state_sender,
-                    QueryContext {
-                        chain_id,
-                        next_block_height: BlockHeight(0),
-                        local_time: Timestamp::from(0),
-                    },
-                )
-                .run(runtime_request_receiver)
-            }).await,
+            task: thread_pool
+                .run((), move |()| async move {
+                    ServiceSyncRuntime::new(
+                        execution_state_sender,
+                        QueryContext {
+                            chain_id,
+                            next_block_height: BlockHeight(0),
+                            local_time: Timestamp::from(0),
+                        },
+                    )
+                    .run(runtime_request_receiver)
+                })
+                .await,
         }
     }
 }
@@ -372,7 +374,8 @@ where
 
             let (service_runtime_task, service_runtime_endpoint) =
                 if self.config.long_lived_services {
-                    let actor = ServiceRuntimeActor::spawn(self.chain_id, self.storage.thread_pool()).await;
+                    let actor =
+                        ServiceRuntimeActor::spawn(self.chain_id, self.storage.thread_pool()).await;
                     (Some(actor.task), Some(actor.endpoint))
                 } else {
                     (None, None)
