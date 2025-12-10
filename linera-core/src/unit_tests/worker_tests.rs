@@ -41,7 +41,7 @@ use linera_chain::{
 use linera_execution::{
     committee::Committee,
     system::{
-        AdminOperation, OpenChainConfig, SystemMessage, SystemOperation,
+        AdminOperation, EpochEventData, OpenChainConfig, SystemMessage, SystemOperation,
         EPOCH_STREAM_NAME as NEW_EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
     },
     test_utils::{
@@ -2602,7 +2602,11 @@ where
             vec![Event {
                 stream_id: event_id.stream_id.clone(),
                 index: event_id.index,
-                value: bcs::to_bytes(&blob_hash).unwrap(),
+                value: bcs::to_bytes(&EpochEventData {
+                    blob_hash,
+                    timestamp: Timestamp::from(0),
+                })
+                .unwrap(),
             }],
             vec![],
         ],
@@ -2673,7 +2677,11 @@ where
                         stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                         index: 1,
                     },
-                    bcs::to_bytes(&blob_hash).unwrap(),
+                    bcs::to_bytes(&EpochEventData {
+                        blob_hash,
+                        timestamp: Timestamp::from(0),
+                    })
+                    .unwrap(),
                 ),
                 OracleResponse::Blob(committee_blob.id()),
             ],
@@ -2759,7 +2767,11 @@ where
         vec![vec![Event {
             stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
             index: 1,
-            value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+            value: bcs::to_bytes(&EpochEventData {
+                blob_hash: committee_blob.id().hash,
+                timestamp: Timestamp::from(0),
+            })
+            .unwrap(),
         }]],
         vec![vec![]],
         vec![OperationResult::default()],
@@ -2870,7 +2882,11 @@ where
             vec![Event {
                 stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                 index: 1,
-                value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+                value: bcs::to_bytes(&EpochEventData {
+                    blob_hash: committee_blob.id().hash,
+                    timestamp: Timestamp::from(0),
+                })
+                .unwrap(),
             }],
             vec![Event {
                 stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
@@ -2994,7 +3010,11 @@ where
         vec![vec![Event {
             stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
             index: 2,
-            value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+            value: bcs::to_bytes(&EpochEventData {
+                blob_hash: committee_blob.id().hash,
+                timestamp: Timestamp::from(0),
+            })
+            .unwrap(),
         }]],
         vec![vec![]],
         vec![OperationResult::default()],
@@ -3800,6 +3820,8 @@ where
     Ok(())
 }
 
+/// Tests that fallback mode is triggered when epoch e+1 exists on the admin chain
+/// and is older than the fallback_duration.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
@@ -3811,27 +3833,23 @@ where
 {
     let mut signer = InMemorySigner::new(None);
     let public_key = signer.generate_new();
-    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
     let clock = storage_builder.clock();
+    let committee = env.committee().clone();
+    let admin_id = env.admin_description.id();
+
+    // Create a non-admin chain with fallback_duration configured.
     let balance = Amount::from_tokens(5);
     let mut ownership = ChainOwnership::single(public_key.into());
     // Configure a fallback duration. (The default is `MAX`, i.e. never.)
     ownership.timeout_config.fallback_duration = TimeDelta::from_secs(5);
-    let chain_1_desc = env
+    let chain_desc = env
         .add_root_chain_with_ownership(1, balance, ownership)
         .await;
-    let chain_1 = chain_1_desc.id();
-
-    // Create a second chain for cross-chain transfers with the same ownership config
-    let mut ownership_2 = ChainOwnership::single(public_key.into());
-    ownership_2.timeout_config.fallback_duration = TimeDelta::from_secs(5);
-    let chain_2_desc = env
-        .add_root_chain_with_ownership(2, Amount::ZERO, ownership_2)
-        .await;
-    let chain_2 = chain_2_desc.id();
+    let chain_id = chain_desc.id();
 
     // At time 0 we don't vote for fallback mode.
-    let query = ChainInfoQuery::new(chain_1)
+    let query = ChainInfoQuery::new(chain_id)
         .with_fallback()
         .with_committees();
     let (response, _) = env
@@ -3844,7 +3862,7 @@ where
     assert!(manager.leader.is_none());
     let fallback_duration = manager.ownership.timeout_config.fallback_duration;
 
-    // Even if a long time passes: Without an incoming message there's no fallback mode.
+    // Even if a long time passes: Without a new epoch there's no fallback mode.
     clock.add(fallback_duration);
     let (response, _) = env
         .executing_worker()
@@ -3852,40 +3870,39 @@ where
         .await?;
     assert!(response.info.manager.fallback_vote.is_none());
 
-    // Make a tracked message between chains. This will create a cross-chain message.
-    let proposed_block = make_first_block(chain_1)
-        .with_simple_transfer(chain_2, Amount::ONE)
-        .with_authenticated_owner(Some(public_key.into()));
-    let (block, _) = env
-        .executing_worker()
-        .stage_block_execution(proposed_block, None, vec![])
-        .await?;
-    let value = ConfirmedBlock::new(block);
-    let certificate = env.make_certificate(value);
+    // Reset clock to 0 before creating the epoch, so that the epoch timestamp is 0.
+    clock.set(Timestamp::from(0));
+
+    // Create epoch 1 on the admin chain.
+    let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
+    let blob_hash = committee_blob.id().hash;
+    env.write_blobs(&[committee_blob]).await?;
+    let proposal = make_first_block(admin_id).with_operation(SystemOperation::Admin(
+        AdminOperation::CreateCommittee {
+            epoch: Epoch::from(1),
+            blob_hash,
+        },
+    ));
+    let certificate = env.execute_proposal(proposal, vec![]).await?;
     env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate, &())
         .await?;
 
-    // Now we need to switch the query to check chain_2 since that's where the incoming message is
-    let query_chain_2 = ChainInfoQuery::new(chain_2)
-        .with_fallback()
-        .with_committees();
-
-    // The message only just arrived: No fallback mode.
+    // Epoch was just created at time 0: No fallback mode yet.
     let (response, _) = env
         .executing_worker()
-        .handle_chain_info_query(query_chain_2.clone())
+        .handle_chain_info_query(query.clone())
         .await?;
     assert!(response.info.manager.fallback_vote.is_none());
 
-    // If for a long time the message isn't handled, we vote for fallback mode.
+    // Advance time past the fallback_duration. Now we should vote for fallback.
     clock.add(fallback_duration);
     let (response, _) = env
         .executing_worker()
-        .handle_chain_info_query(query_chain_2.clone())
+        .handle_chain_info_query(query.clone())
         .await?;
     let vote = response.info.manager.fallback_vote.unwrap();
-    let value = Timeout::new(chain_2, BlockHeight(0), Epoch::ZERO);
+    let value = Timeout::new(chain_id, BlockHeight(0), Epoch::ZERO);
     let round = Round::SingleLeader(u32::MAX);
     assert_eq!(vote.value.value_hash, value.hash());
     assert_eq!(vote.round, round);
@@ -3897,7 +3914,7 @@ where
     // Now we are in fallback mode, and the validator is the leader.
     let (response, _) = env
         .executing_worker()
-        .handle_chain_info_query(query_chain_2.clone())
+        .handle_chain_info_query(query.clone())
         .await?;
     let manager = response.info.manager;
     let expected_key = response

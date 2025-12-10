@@ -52,7 +52,7 @@ use thiserror::Error;
 
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;
-use crate::system::EPOCH_STREAM_NAME;
+use crate::system::{EpochEventData, EPOCH_STREAM_NAME};
 #[cfg(with_testing)]
 use crate::test_utils::dummy_chain_description;
 #[cfg(all(with_testing, with_wasm_runtime))]
@@ -509,7 +509,8 @@ pub trait ExecutionRuntimeContext {
                         .get_event(event_id.clone())
                         .await?
                         .ok_or_else(|| ExecutionError::EventsNotFound(vec![event_id]))?;
-                    Ok((epoch, bcs::from_bytes(&event)?))
+                    let event_data: EpochEventData = bcs::from_bytes(&event)?;
+                    Ok((epoch, event_data.blob_hash))
                 }
             }),
         )

@@ -248,20 +248,6 @@ A block height to identify blocks in a chain
 scalar BlockHeight
 
 """
-An origin and cursor of a unskippable bundle that is no longer in our inbox.
-"""
-type BundleInInbox {
-	"""
-	The origin from which we received the bundle.
-	"""
-	origin: ChainId!
-	"""
-	The cursor of the bundle in the inbox.
-	"""
-	cursor: Cursor!
-}
-
-"""
 A module bytecode (WebAssembly or EVM)
 """
 scalar Bytecode
@@ -382,14 +368,6 @@ type ChainStateExtendedView {
 	Mailboxes used to receive messages indexed by their origin.
 	"""
 	inboxes: ReentrantCollectionView_ChainId_InboxStateView_466640be!
-	"""
-	A queue of unskippable bundles, with the timestamp when we added them to the inbox.
-	"""
-	unskippableBundles: QueueView_TimestampedBundleInInbox_5a630c55!
-	"""
-	Unskippable bundles that have been removed but are still in the queue.
-	"""
-	removedUnskippableBundles: SetView_BundleInInbox_092a4377!
 	"""
 	Mailboxes used to send messages, indexed by their target.
 	"""
@@ -1371,11 +1349,6 @@ type QueueView_MessageBundle_f4399f0b {
 	entries(count: Int): [MessageBundle!]!
 }
 
-type QueueView_TimestampedBundleInInbox_5a630c55 {
-	count: Int!
-	entries(count: Int): [TimestampedBundleInInbox!]!
-}
-
 type ReentrantCollectionView_AccountOwner_PendingBlobsView_d58d342d {
 	keys: [AccountOwner!]!
 	count: Int!
@@ -1406,11 +1379,6 @@ scalar ResourceControlPolicyScalar
 A number to identify successive attempts to decide a value in a consensus protocol.
 """
 scalar Round
-
-type SetView_BundleInInbox_092a4377 {
-	elements(count: Int): [BundleInInbox!]!
-	count: Int!
-}
 
 """
 An event stream ID.
@@ -1566,20 +1534,6 @@ type TimeoutConfigMetadata {
 A timestamp, in microseconds since the Unix epoch
 """
 scalar Timestamp
-
-"""
-An origin, cursor and timestamp of a unskippable bundle in our inbox.
-"""
-type TimestampedBundleInInbox {
-	"""
-	The origin and cursor of the bundle.
-	"""
-	entry: BundleInInbox!
-	"""
-	The timestamp when the bundle was added to the inbox.
-	"""
-	seen: Timestamp!
-}
 
 """
 GraphQL-compatible metadata about a transaction.
