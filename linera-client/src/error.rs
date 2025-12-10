@@ -68,6 +68,8 @@ pub(crate) enum Inner {
         chain_id: ChainId,
         error: Box<NodeError>,
     },
+    #[error("Chain {0} not found in wallet")]
+    UnknownChainId(ChainId),
 }
 
 impl Inner {

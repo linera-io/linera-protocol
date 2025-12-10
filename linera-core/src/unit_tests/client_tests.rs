@@ -3172,6 +3172,7 @@ where
                 message_policy: MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None),
                 ..chain_client::Options::test_default()
             },
+            false,
         )
         .await?;
 
@@ -3187,6 +3188,73 @@ where
     assert_matches!(
         &certificates[0].block().body.transactions[0],
         Transaction::ReceiveMessages(bundle) if bundle.action == MessageAction::Reject
+    );
+
+    Ok(())
+}
+
+/// Tests that a follow-only client only downloads the followed chain's blocks,
+/// not blocks from sender chains that sent messages to it.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_follow_chain_mode<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    // Create a follow-only client for the receiver chain.
+    let follower = builder
+        .make_client_with_options(
+            receiver.chain_id(),
+            None,
+            BlockHeight::ZERO,
+            chain_client::Options::test_default(),
+            true,
+        )
+        .await?;
+
+    // The sender transfers tokens to the receiver.
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // The receiver processes its inbox and creates a block.
+    receiver.synchronize_from_validators().await?;
+    receiver.process_inbox().await?;
+
+    // The follower syncs; since it's follow-only, it should only download the receiver's blocks.
+    follower.synchronize_from_validators().await?;
+
+    // The follower should have downloaded the receiver's blocks.
+    assert_eq!(
+        follower.chain_info().await?.next_block_height,
+        BlockHeight::from(1),
+        "Follower should have downloaded the receiver's block"
+    );
+
+    // The follower should NOT have downloaded the sender's blocks.
+    let sender_info = follower
+        .client
+        .local_node
+        .chain_info(sender.chain_id())
+        .await?;
+    assert_eq!(
+        sender_info.next_block_height,
+        BlockHeight::ZERO,
+        "Follower should not have downloaded the sender's blocks"
     );
 
     Ok(())

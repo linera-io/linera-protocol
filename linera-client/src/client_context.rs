@@ -398,20 +398,37 @@ impl<Env: Environment> ClientContext<Env> {
         client: &ChainClient<Env_>,
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
+        let chain_id = info.chain_id;
         let client_owner = client.preferred_owner();
         let pending_proposal = client.pending_proposal().clone();
-        let _old_value = self
+        let new_chain: wallet::Chain = info.as_ref().into();
+        // Try to modify the existing entry, preserving `follow_only`.
+        let modified = self
             .wallet()
-            .insert(
-                info.chain_id,
-                wallet::Chain {
-                    pending_proposal,
-                    owner: client_owner,
-                    ..info.as_ref().into()
-                },
-            )
+            .modify(chain_id, |chain| {
+                chain.block_hash = new_chain.block_hash;
+                chain.next_block_height = new_chain.next_block_height;
+                chain.timestamp = new_chain.timestamp;
+                chain.epoch = new_chain.epoch;
+                chain.owner = client_owner;
+                chain.pending_proposal = pending_proposal.clone();
+            })
             .await
             .map_err(error::Inner::wallet)?;
+        // If the chain didn't exist, insert a new entry.
+        if modified.is_none() {
+            self.wallet()
+                .insert(
+                    chain_id,
+                    wallet::Chain {
+                        pending_proposal,
+                        owner: client_owner,
+                        ..new_chain
+                    },
+                )
+                .await
+                .map_err(error::Inner::wallet)?;
+        }
         Ok(())
     }
 
@@ -431,6 +448,17 @@ impl<Env: Environment> ClientContext<Env> {
             )
             .await
             .map_err(error::Inner::wallet)?;
+        Ok(())
+    }
+
+    /// Sets the `follow_only` flag for a chain in both the wallet and the in-memory client state.
+    pub async fn set_follow_only(&self, chain_id: ChainId, follow_only: bool) -> Result<(), Error> {
+        self.wallet()
+            .modify(chain_id, |chain| chain.follow_only = follow_only)
+            .await
+            .map_err(error::Inner::wallet)?
+            .ok_or_else(|| error::Inner::UnknownChainId(chain_id))?;
+        self.client.set_chain_follow_only(chain_id, follow_only);
         Ok(())
     }
 
@@ -489,19 +517,33 @@ impl<Env: Environment> ClientContext<Env> {
             return Err(error::Inner::ChainOwnership.into());
         }
 
-        self.wallet()
-            .insert(
-                chain_id,
-                wallet::Chain {
-                    owner: Some(owner),
-                    timestamp: chain_description.timestamp(),
-                    epoch: Some(chain_description.config().epoch),
-                    ..Default::default()
-                },
-            )
+        // Try to modify existing chain entry, setting the owner and disabling follow-only mode.
+        let timestamp = chain_description.timestamp();
+        let epoch = chain_description.config().epoch;
+        let modified = self
+            .wallet()
+            .modify(chain_id, |chain| {
+                chain.owner = Some(owner);
+                chain.follow_only = false;
+            })
             .await
-            .map_err(error::Inner::wallet)
-            .context("assigning new chain")?;
+            .map_err(error::Inner::wallet)?;
+        // If the chain didn't exist, insert a new entry.
+        if modified.is_none() {
+            self.wallet()
+                .insert(
+                    chain_id,
+                    wallet::Chain {
+                        owner: Some(owner),
+                        timestamp,
+                        epoch: Some(epoch),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .map_err(error::Inner::wallet)
+                .context("assigning new chain")?;
+        }
         Ok(())
     }
 
@@ -1077,6 +1119,7 @@ impl<Env: Environment> ClientContext<Env> {
                         None,
                         Some(owner),
                         self.timing_sender(),
+                        false,
                     );
                     chain_client.set_preferred_owner(owner);
                     chain_client.process_inbox().await?;

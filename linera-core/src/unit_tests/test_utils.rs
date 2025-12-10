@@ -1048,6 +1048,7 @@ where
         block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
         options: chain_client::Options,
+        follow_only: bool,
     ) -> anyhow::Result<ChainClient<B::Storage>> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
@@ -1078,6 +1079,7 @@ where
             None,
             self.chain_owners.get(&chain_id).copied(),
             None,
+            follow_only,
         ))
     }
 
@@ -1092,6 +1094,7 @@ where
             block_hash,
             block_height,
             chain_client::Options::test_default(),
+            false,
         )
         .await
     }

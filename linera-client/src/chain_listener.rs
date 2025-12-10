@@ -111,6 +111,7 @@ pub trait ClientContext {
                 chain.pending_proposal,
                 chain.owner,
                 self.timing_sender(),
+                chain.follow_only,
             ))
         }
     }
@@ -244,20 +245,33 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .await?
                 .synchronize_chain_state(admin_chain_id)
                 .await?;
-            guard
+            let mut chain_ids: BTreeMap<_, _> = guard
                 .wallet()
-                .chain_ids()
+                .items()
                 .collect::<Vec<_>>()
                 .await
                 .into_iter()
-                .chain([Ok(admin_chain_id)])
-                .map(|chain_id| Ok((chain_id?, ListeningMode::FullChain)))
+                .map(|result| {
+                    let (chain_id, chain) = result?;
+                    let mode = if chain.follow_only {
+                        ListeningMode::FollowChain
+                    } else {
+                        ListeningMode::FullChain
+                    };
+                    Ok((chain_id, mode))
+                })
                 .collect::<Result<BTreeMap<_, _>, _>>()
                 .map_err(
                     |e: <<C::Environment as Environment>::Wallet as Wallet>::Error| {
                         crate::error::Inner::Wallet(Box::new(e) as _)
                     },
-                )?
+                )?;
+            // If the admin chain is not in the wallet, add it as follow-only since we
+            // typically don't own it.
+            chain_ids
+                .entry(admin_chain_id)
+                .or_insert(ListeningMode::FollowChain);
+            chain_ids
         };
 
         // Start background tasks to sync received certificates for each chain,
@@ -315,42 +329,35 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             return Ok(());
         };
 
+        if !listening_mode.is_relevant(&notification.reason) {
+            debug!(
+                reason = ?notification.reason,
+                "ChainListener: ignoring notification due to listening mode"
+            );
+            return Ok(());
+        }
         match &notification.reason {
             Reason::NewIncomingBundle { .. } => {
                 self.maybe_process_inbox(notification.chain_id).await?;
             }
-            Reason::NewRound { .. } => self.update_validators(&notification).await?,
-            Reason::NewBlock { hash, .. } => {
-                if matches!(listening_mode, ListeningMode::EventsOnly(_)) {
-                    debug!("ChainListener::process_notification: ignoring notification due to listening mode");
-                    return Ok(());
-                }
-                self.update_wallet(notification.chain_id).await?;
-                self.add_new_chains(*hash).await?;
-                let publishers = self
-                    .update_event_subscriptions(notification.chain_id)
-                    .await?;
-                if !publishers.is_empty() {
-                    self.listen_recursively(publishers).await?;
-                    self.maybe_process_inbox(notification.chain_id).await?;
-                }
-                self.process_new_events(notification.chain_id).await?;
+            Reason::NewRound { .. } => {
+                self.update_validators(&notification).await?;
             }
-            Reason::NewEvents { event_streams, .. } => {
-                let should_process = match listening_mode {
-                    ListeningMode::FullChain => true,
-                    ListeningMode::EventsOnly(relevant_events) => {
-                        relevant_events.intersection(event_streams).count() != 0
+            Reason::NewBlock { hash, .. } => {
+                self.update_wallet(notification.chain_id).await?;
+                if matches!(listening_mode, ListeningMode::FullChain) {
+                    self.add_new_chains(*hash).await?;
+                    let publishers = self
+                        .update_event_subscriptions(notification.chain_id)
+                        .await?;
+                    if !publishers.is_empty() {
+                        self.listen_recursively(publishers).await?;
+                        self.maybe_process_inbox(notification.chain_id).await?;
                     }
-                };
-                if !should_process {
-                    debug!(
-                        ?notification,
-                        ?listening_mode,
-                        "ChainListener::process_notification: ignoring notification due to no relevant events",
-                    );
-                    return Ok(());
+                    self.process_new_events(notification.chain_id).await?;
                 }
+            }
+            Reason::NewEvents { .. } => {
                 self.process_new_events(notification.chain_id).await?;
             }
             Reason::BlockExecuted { .. } => {}
