@@ -423,8 +423,7 @@ where
     /// Endpoint for cross-chain update requests.
     cross_chain_updates: mpsc::UnboundedSender<(CrossChainUpdateRequest, tracing::Span, Instant)>,
     /// Endpoint for confirmation requests.
-    confirmations:
-        mpsc::UnboundedSender<(ConfirmUpdatedRecipientRequest, tracing::Span, Instant)>,
+    confirmations: mpsc::UnboundedSender<(ConfirmUpdatedRecipientRequest, tracing::Span, Instant)>,
 }
 
 impl<StorageClient> Clone for ChainActorEndpoint<StorageClient>
@@ -602,6 +601,20 @@ where
         cross_chain_update_batch_size: usize,
     ) -> Self {
         self.chain_worker_config.cross_chain_update_batch_size = cross_chain_update_batch_size;
+        self
+    }
+
+    /// Returns an instance with the specified cross-chain confirmation batch size.
+    ///
+    /// Maximum number of cross-chain confirmations to batch together in a single processing round.
+    /// Confirmations are lighter than updates, so this can be set higher.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_cross_chain_confirmation_batch_size(
+        mut self,
+        cross_chain_confirmation_batch_size: usize,
+    ) -> Self {
+        self.chain_worker_config.cross_chain_confirmation_batch_size =
+            cross_chain_confirmation_batch_size;
         self
     }
 

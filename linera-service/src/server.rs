@@ -75,6 +75,7 @@ struct ServerContext {
     chain_info_max_received_log_entries: usize,
     regular_request_batch_size: usize,
     cross_chain_update_batch_size: usize,
+    cross_chain_confirmation_batch_size: usize,
 }
 
 impl ServerContext {
@@ -106,7 +107,8 @@ impl ServerContext {
         .with_chain_worker_ttl(self.chain_worker_ttl)
         .with_chain_info_max_received_log_entries(self.chain_info_max_received_log_entries)
         .with_regular_request_batch_size(self.regular_request_batch_size)
-        .with_cross_chain_update_batch_size(self.cross_chain_update_batch_size);
+        .with_cross_chain_update_batch_size(self.cross_chain_update_batch_size)
+        .with_cross_chain_confirmation_batch_size(self.cross_chain_confirmation_batch_size);
         (state, shard_id, shard.clone())
     }
 
@@ -415,23 +417,28 @@ enum ServerCommand {
         chain_info_max_received_log_entries: usize,
 
         /// Maximum number of regular requests to handle per round in the rotation.
-        /// The worker rotates between regular requests, cross-chain updates, and confirmations,
-        /// processing up to this many regular requests per turn.
         #[arg(
             long,
-            default_value = "1",
+            default_value = "10",
             env = "LINERA_SERVER_REGULAR_REQUEST_BATCH_SIZE"
         )]
         regular_request_batch_size: usize,
 
         /// Maximum number of cross-chain updates to batch together in a single processing round.
-        /// Higher values improve throughput but increase latency for individual updates.
         #[arg(
             long,
             default_value = "1000",
             env = "LINERA_SERVER_CROSS_CHAIN_UPDATE_BATCH_SIZE"
         )]
         cross_chain_update_batch_size: usize,
+
+        /// Maximum number of cross-chain confirmations to batch together in a single processing round.
+        #[arg(
+            long,
+            default_value = "500",
+            env = "LINERA_SERVER_CROSS_CHAIN_CONFIRMATION_BATCH_SIZE"
+        )]
+        cross_chain_confirmation_batch_size: usize,
 
         /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
         #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
@@ -564,6 +571,7 @@ async fn run(options: ServerOptions) {
             chain_info_max_received_log_entries,
             regular_request_batch_size,
             cross_chain_update_batch_size,
+            cross_chain_confirmation_batch_size,
             otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
@@ -583,6 +591,7 @@ async fn run(options: ServerOptions) {
                 chain_info_max_received_log_entries,
                 regular_request_batch_size,
                 cross_chain_update_batch_size,
+                cross_chain_confirmation_batch_size,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let store_config = storage_config

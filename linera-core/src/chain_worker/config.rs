@@ -32,12 +32,11 @@ pub struct ChainWorkerConfig {
     /// The size to truncate receive log entries in chain info responses.
     pub chain_info_max_received_log_entries: usize,
     /// Maximum number of regular requests to handle per round in the rotation.
-    /// The worker rotates between regular requests, cross-chain updates, and confirmations,
-    /// processing up to this many regular requests per turn.
     pub regular_request_batch_size: usize,
     /// Maximum number of cross-chain updates to batch together in a single processing round.
-    /// Higher values improve throughput but increase latency for individual updates.
     pub cross_chain_update_batch_size: usize,
+    /// Maximum number of cross-chain confirmations to batch together in a single processing round.
+    pub cross_chain_confirmation_batch_size: usize,
 }
 
 impl ChainWorkerConfig {
@@ -71,8 +70,9 @@ impl Default for ChainWorkerConfig {
             ttl: Default::default(),
             sender_chain_ttl: Duration::from_secs(1),
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
-            regular_request_batch_size: 1,
+            regular_request_batch_size: 10,
             cross_chain_update_batch_size: 1000,
+            cross_chain_confirmation_batch_size: 500,
         }
     }
 }

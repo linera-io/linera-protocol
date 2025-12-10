@@ -417,7 +417,8 @@ where
         trace!("Starting `ChainWorkerActor`");
 
         let regular_batch_size = self.config.regular_request_batch_size;
-        let cross_chain_batch_size = self.config.cross_chain_update_batch_size;
+        let cross_chain_update_batch_size = self.config.cross_chain_update_batch_size;
+        let confirmation_batch_size = self.config.cross_chain_confirmation_batch_size;
 
         // The first iteration waits indefinitely; subsequent iterations have a timeout.
         let mut first_iteration = true;
@@ -444,12 +445,12 @@ where
         loop {
             // Check which streams have data ready.
             let types = [
-                (RequestType::Confirmation, is_ready(&mut confirmations)),
                 (
                     RequestType::CrossChainUpdate,
                     is_ready(&mut cross_chain_updates),
                 ),
                 (RequestType::Regular, is_ready(&mut requests)),
+                (RequestType::Confirmation, is_ready(&mut confirmations)),
             ];
 
             // Find the next ready queue in rotation order.
@@ -549,7 +550,7 @@ where
                     let mut callbacks_by_origin: CrossChainUpdateCallbacks = BTreeMap::new();
                     let mut count = 0;
 
-                    while count < cross_chain_batch_size {
+                    while count < cross_chain_update_batch_size {
                         match Pin::new(&mut cross_chain_updates).next().now_or_never() {
                             Some(Some((req, _span, _enqueued_at))) => {
                                 #[cfg(with_metrics)]
@@ -611,7 +612,7 @@ where
                     let mut callbacks = Vec::new();
                     let mut count = 0;
 
-                    while count < cross_chain_batch_size {
+                    while count < confirmation_batch_size {
                         match Pin::new(&mut confirmations).next().now_or_never() {
                             Some(Some((req, _span, _enqueued_at))) => {
                                 #[cfg(with_metrics)]
