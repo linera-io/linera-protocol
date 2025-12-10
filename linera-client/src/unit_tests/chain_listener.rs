@@ -76,7 +76,7 @@ impl chain_listener::ClientContext for ClientContext {
             wallet::Chain {
                 pending_proposal,
                 owner: client_owner,
-                follow_only,
+                follow_only: Some(follow_only),
                 ..info.as_ref().into()
             },
         );
@@ -240,7 +240,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             timestamp: clock.current_time(),
             pending_proposal: None,
             epoch: Some(chain_a_info.epoch),
-            follow_only: true,
+            follow_only: Some(true),
         },
     );
 
@@ -254,7 +254,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             timestamp: clock.current_time(),
             pending_proposal: None,
             epoch: Some(chain_b_info.epoch),
-            follow_only: false,
+            follow_only: Some(false),
         },
     );
 
@@ -344,7 +344,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     // Verify the wallet was updated and follow_only is preserved.
     let wallet_chain_a = context.lock().await.wallet().get(chain_a_id).unwrap();
     assert!(
-        wallet_chain_a.follow_only,
+        wallet_chain_a.follow_only(),
         "follow_only flag should be preserved in wallet"
     );
 

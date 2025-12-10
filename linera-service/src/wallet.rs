@@ -60,7 +60,7 @@ impl ChainDetails {
         if self.is_admin {
             tags.push("ADMIN");
         }
-        if self.user_chain.follow_only {
+        if self.user_chain.follow_only() {
             tags.push("FOLLOW-ONLY");
         }
         if !tags.is_empty() {
@@ -286,7 +286,7 @@ impl Wallet {
     pub fn forget_keys(&self, chain_id: ChainId) -> anyhow::Result<AccountOwner> {
         self.mutate(chain_id, |chain| {
             // Without keys we can no longer propose blocks, so switch to follow-only mode.
-            chain.follow_only = true;
+            chain.set_follow_only(true);
             chain.owner.take()
         })
         .ok_or(anyhow::anyhow!("nonexistent chain `{chain_id}`"))??

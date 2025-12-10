@@ -454,7 +454,7 @@ impl<Env: Environment> ClientContext<Env> {
     /// Sets the `follow_only` flag for a chain in both the wallet and the in-memory client state.
     pub async fn set_follow_only(&self, chain_id: ChainId, follow_only: bool) -> Result<(), Error> {
         self.wallet()
-            .modify(chain_id, |chain| chain.follow_only = follow_only)
+            .modify(chain_id, |chain| chain.set_follow_only(follow_only))
             .await
             .map_err(error::Inner::wallet)?
             .ok_or_else(|| error::Inner::UnknownChainId(chain_id))?;

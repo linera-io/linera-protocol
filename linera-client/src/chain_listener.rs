@@ -101,6 +101,7 @@ pub trait ClientContext {
                 .await
                 .map_err(error::Inner::wallet)?
                 .unwrap_or_default();
+            let follow_only = chain.follow_only();
             Ok(self.client().create_chain_client(
                 chain_id,
                 chain.block_hash,
@@ -108,7 +109,7 @@ pub trait ClientContext {
                 chain.pending_proposal,
                 chain.owner,
                 self.timing_sender(),
-                chain.follow_only,
+                follow_only,
             ))
         }
     }
@@ -250,7 +251,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .into_iter()
                 .map(|result| {
                     let (chain_id, chain) = result?;
-                    let mode = if chain.follow_only {
+                    let mode = if chain.follow_only() {
                         ListeningMode::FollowChain
                     } else {
                         ListeningMode::FullChain
