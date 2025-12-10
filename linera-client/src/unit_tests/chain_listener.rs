@@ -196,9 +196,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
 /// should remain unprocessed because it's follow-only (not because of missing ownership).
 #[test_log::test(tokio::test)]
 async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
-    let mut signer = InMemorySigner::new(Some(42));
-    let owner_key = signer.generate_new();
-    let owner: AccountOwner = owner_key.into();
+    let signer = InMemorySigner::new(Some(42));
     let config = ChainListenerConfig::default();
     let storage_builder = MemoryStorageBuilder::default();
     let clock = storage_builder.clock().clone();
@@ -210,15 +208,6 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     let chain_b = builder.add_root_chain(2, Amount::ZERO).await?;
     let chain_a_id = chain_a.chain_id();
     let chain_b_id = chain_b.chain_id();
-
-    // Transfer ownership of both chains to our listener's key.
-    // This ensures that the listener *could* process chain A's inbox if it tried.
-    chain_a
-        .change_ownership(ChainOwnership::single(owner))
-        .await?;
-    chain_b
-        .change_ownership(ChainOwnership::single(owner))
-        .await?;
 
     let genesis_config = GenesisConfig::new_testing(&builder);
     let admin_id = genesis_config.admin_id();
@@ -251,7 +240,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     context.wallet().insert(
         chain_a_id,
         wallet::Chain {
-            owner: Some(owner),
+            owner: chain_a.preferred_owner(),
             block_hash: chain_a_info.block_hash,
             next_block_height: chain_a_info.next_block_height,
             timestamp: clock.current_time(),
@@ -265,7 +254,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     context.wallet().insert(
         chain_b_id,
         wallet::Chain {
-            owner: Some(owner),
+            owner: chain_b.preferred_owner(),
             block_hash: chain_b_info.block_hash,
             next_block_height: chain_b_info.next_block_height,
             timestamp: clock.current_time(),
@@ -308,26 +297,25 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
 
         chain_b.synchronize_from_validators().await?;
         let chain_b_info = chain_b.chain_info().await?;
-        // Chain B should have height 2: one block for ownership change, one for inbox processing.
-        if chain_b_info.next_block_height >= BlockHeight::from(2) {
+        // Chain B should have height 1 after processing its inbox.
+        if chain_b_info.next_block_height >= BlockHeight::from(1) {
             break;
         }
         if i >= 50 {
             panic!(
-                "Chain B's inbox was not processed by the listener. Expected height >= 2, got {}",
+                "Chain B's inbox was not processed by the listener. Expected height >= 1, got {}",
                 chain_b_info.next_block_height
             );
         }
     }
 
     // Now verify that chain A's inbox was NOT processed (follow-only ignores NewIncomingBundle).
-    // Chain A should only have height 1 (from the ownership change), not height 2.
     chain_a.synchronize_from_validators().await?;
     let chain_a_info = chain_a.chain_info().await?;
     assert_eq!(
         chain_a_info.next_block_height,
-        BlockHeight::from(1),
-        "Follow-only chain A should not have had its inbox processed (only ownership change block)"
+        BlockHeight::ZERO,
+        "Follow-only chain A should not have had its inbox processed"
     );
 
     cancellation_token.cancel();
