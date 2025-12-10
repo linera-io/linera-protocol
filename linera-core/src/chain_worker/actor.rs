@@ -551,11 +551,11 @@ where
 
                     while count < cross_chain_batch_size {
                         match Pin::new(&mut cross_chain_updates).next().now_or_never() {
-                            Some(Some((req, _span, enqueued_at))) => {
+                            Some(Some((req, _span, _enqueued_at))) => {
                                 #[cfg(with_metrics)]
                                 metrics::CHAIN_WORKER_QUEUE_WAIT_TIME
                                     .with_label_values(&["cross_chain_updates"])
-                                    .observe(enqueued_at.elapsed().as_millis() as f64);
+                                    .observe(_enqueued_at.elapsed().as_millis() as f64);
                                 updates.entry(req.origin).or_default().extend(req.bundles);
                                 callbacks_by_origin
                                     .entry(req.origin)
@@ -613,11 +613,11 @@ where
 
                     while count < cross_chain_batch_size {
                         match Pin::new(&mut confirmations).next().now_or_never() {
-                            Some(Some((req, _span, enqueued_at))) => {
+                            Some(Some((req, _span, _enqueued_at))) => {
                                 #[cfg(with_metrics)]
                                 metrics::CHAIN_WORKER_QUEUE_WAIT_TIME
                                     .with_label_values(&["confirmations"])
-                                    .observe(enqueued_at.elapsed().as_millis() as f64);
+                                    .observe(_enqueued_at.elapsed().as_millis() as f64);
                                 confirmations_map
                                     .entry(req.recipient)
                                     .and_modify(|h| *h = (*h).max(req.latest_height))
@@ -646,7 +646,7 @@ where
                 }
                 RequestType::Regular => {
                     for _ in 0..regular_batch_size {
-                        let Some(Some((request, span, enqueued_at))) =
+                        let Some(Some((request, span, _enqueued_at))) =
                             Pin::new(&mut requests).next().now_or_never()
                         else {
                             break;
@@ -654,7 +654,7 @@ where
                         #[cfg(with_metrics)]
                         metrics::CHAIN_WORKER_QUEUE_WAIT_TIME
                             .with_label_values(&["regular"])
-                            .observe(enqueued_at.elapsed().as_millis() as f64);
+                            .observe(_enqueued_at.elapsed().as_millis() as f64);
                         Box::pin(worker.handle_request(request))
                             .instrument(span)
                             .await;

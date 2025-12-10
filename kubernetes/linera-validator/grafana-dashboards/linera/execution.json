@@ -1158,8 +1158,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_chain_worker_request_queue_wait_time_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p50",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_chain_worker_queue_wait_time_bucket{validator=~\"$validator\"}[1m])) by (le, queue_type))",
+          "legendFormat": "p50 {{queue_type}}",
           "range": true,
           "refId": "A"
         },
@@ -1169,8 +1169,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_chain_worker_request_queue_wait_time_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p90",
+          "expr": "histogram_quantile(0.90, sum(rate(linera_chain_worker_queue_wait_time_bucket{validator=~\"$validator\"}[1m])) by (le, queue_type))",
+          "legendFormat": "p90 {{queue_type}}",
           "range": true,
           "refId": "B"
         },
@@ -1180,13 +1180,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_chain_worker_request_queue_wait_time_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p99",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_chain_worker_queue_wait_time_bucket{validator=~\"$validator\"}[1m])) by (le, queue_type))",
+          "legendFormat": "p99 {{queue_type}}",
           "range": true,
           "refId": "C"
         }
       ],
-      "title": "Chain Worker Request Queue Wait Time",
+      "title": "Chain Worker Queue Wait Time",
       "type": "timeseries"
     },
     {
