@@ -1087,6 +1087,8 @@ impl<Database, C> DbStorage<Database, C> {
         Self {
             database: Arc::new(database),
             clock,
+            // The `Arc` here is required on native but useless on the Web.
+            #[cfg_attr(web, expect(clippy::arc_with_non_send_sync))]
             thread_pool: Arc::new(linera_execution::ThreadPool::new(20)),
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
