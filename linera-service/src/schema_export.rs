@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use futures::lock::Mutex;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, Epoch, NetworkDescription, Timestamp},
@@ -235,7 +236,7 @@ async fn main() -> std::io::Result<()> {
         #[cfg(with_metrics)]
         std::num::NonZeroU16::new(8081).unwrap(),
         None,
-        DummyContext,
+        Arc::new(Mutex::new(DummyContext)),
     );
     let schema = service.schema().sdl();
     print!("{}", schema);

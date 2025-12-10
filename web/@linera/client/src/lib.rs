@@ -235,6 +235,7 @@ impl Client {
             client_context_clone,
             storage,
             tokio_util::sync::CancellationToken::new(),
+            tokio::sync::mpsc::unbounded_channel().1,
         )
         .run(true) // Enable background sync
         .boxed_local()

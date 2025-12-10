@@ -26,7 +26,9 @@ use linera_chain::{
     types::{ConfirmedBlock, GenericCertificate},
     ChainStateView,
 };
-use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
+use linera_client::chain_listener::{
+    ChainListener, ChainListenerConfig, ClientContext, ListenerCommand,
+};
 use linera_core::{
     client::{ChainClient, ChainClientError},
     data_types::ClientOutcome,
@@ -42,7 +44,7 @@ use linera_metrics::monitoring_server;
 use linera_sdk::linera_base_types::BlobContent;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tokio::sync::OwnedRwLockReadGuard;
+use tokio::sync::{mpsc::UnboundedReceiver, OwnedRwLockReadGuard};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument, trace};
@@ -874,7 +876,7 @@ where
         port: NonZeroU16,
         #[cfg(with_metrics)] metrics_port: NonZeroU16,
         default_chain: Option<ChainId>,
-        context: C,
+        context: Arc<Mutex<C>>,
     ) -> Self {
         Self {
             config,
@@ -882,7 +884,7 @@ where
             #[cfg(with_metrics)]
             metrics_port,
             default_chain,
-            context: Arc::new(Mutex::new(context)),
+            context,
         }
     }
 
@@ -910,7 +912,11 @@ where
 
     /// Runs the node service.
     #[instrument(name = "node_service", level = "info", skip_all, fields(port = ?self.port))]
-    pub async fn run(self, cancellation_token: CancellationToken) -> Result<(), anyhow::Error> {
+    pub async fn run(
+        self,
+        cancellation_token: CancellationToken,
+        command_receiver: UnboundedReceiver<ListenerCommand>,
+    ) -> Result<(), anyhow::Error> {
         let port = self.port.get();
         let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
         let application_handler =
@@ -940,6 +946,7 @@ where
             self.context,
             storage,
             cancellation_token.clone(),
+            command_receiver,
         )
         .run(true)
         .await?;
