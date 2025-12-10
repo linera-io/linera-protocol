@@ -346,9 +346,14 @@ default-features = false
 features = ["rt-tokio", "rustls"]
 version = "1.88.0"
 
-[workspace.dependencies.web-thread-pool]
-git = "https://github.com/linera-io/web-thread"
+
+[workspace.dependencies.web-thread-select]
 branch = "pool"
+git = "https://github.com/linera-io/web-thread"
+
+[workspace.dependencies.web-thread-pool]
+branch = "pool"
+git = "https://github.com/linera-io/web-thread"
 
 [profile.release]
 lto = "thin"

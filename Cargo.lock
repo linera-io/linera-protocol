@@ -5517,6 +5517,7 @@ dependencies = [
  "url",
  "wasmtime",
  "web-thread-pool",
+ "web-thread-select",
 ]
 
 [[package]]
@@ -5989,7 +5990,6 @@ dependencies = [
  "test-log",
  "tokio",
  "tracing",
- "web-thread-pool",
 ]
 
 [[package]]
@@ -11611,7 +11611,7 @@ dependencies = [
 [[package]]
 name = "web-thread-pool"
 version = "0.1.0"
-source = "git+https://github.com/linera-io/web-thread?branch=pool#640adf2419c145cdc3bcfc7e42a264414f4eace1"
+source = "git+https://github.com/linera-io/web-thread?branch=pool#d733fd6b9562ea43e32902d35f73dadd7c9c57f3"
 dependencies = [
  "flume 0.12.0",
  "pin-project-lite",
@@ -11621,7 +11621,7 @@ dependencies = [
 [[package]]
 name = "web-thread-select"
 version = "0.2.0"
-source = "git+https://github.com/linera-io/web-thread?branch=pool#640adf2419c145cdc3bcfc7e42a264414f4eace1"
+source = "git+https://github.com/linera-io/web-thread?branch=pool#d733fd6b9562ea43e32902d35f73dadd7c9c57f3"
 dependencies = [
  "cfg-if",
  "web-thread-shim",
@@ -11630,7 +11630,7 @@ dependencies = [
 [[package]]
 name = "web-thread-shim"
 version = "0.2.0"
-source = "git+https://github.com/linera-io/web-thread?branch=pool#640adf2419c145cdc3bcfc7e42a264414f4eace1"
+source = "git+https://github.com/linera-io/web-thread?branch=pool#d733fd6b9562ea43e32902d35f73dadd7c9c57f3"
 dependencies = [
  "futures",
  "thiserror 2.0.17",

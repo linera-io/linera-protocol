@@ -49,8 +49,8 @@ use linera_views::{batch::Batch, ViewError};
 use serde::{Deserialize, Serialize};
 use system::AdminOperation;
 use thiserror::Error;
-use web_thread_pool::web_thread;
 pub use web_thread_pool::Pool as ThreadPool;
+use web_thread_select as web_thread;
 
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;

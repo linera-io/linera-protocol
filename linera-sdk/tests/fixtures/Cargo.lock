@@ -1329,6 +1329,9 @@ name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+dependencies = [
+ "getrandom 0.2.16",
+]
 
 [[package]]
 name = "ff"
@@ -1351,6 +1354,18 @@ name = "fixedbitset"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
+
+[[package]]
+name = "flume"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e139bc46ca777eb5efaf62df0ab8cc5fd400866427e56c68b22e414e53bd3be"
+dependencies = [
+ "fastrand",
+ "futures-core",
+ "futures-sink",
+ "spin",
+]
 
 [[package]]
 name = "fnv"
@@ -2250,7 +2265,7 @@ dependencies = [
  "tracing",
  "trait-set",
  "trait-variant",
- "web-thread-select",
+ "web-thread-pool",
 ]
 
 [[package]]
@@ -2288,6 +2303,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "web-thread-pool",
  "web-thread-select",
 ]
 
@@ -2351,7 +2367,6 @@ dependencies = [
  "prometheus",
  "serde",
  "tracing",
- "web-thread-select",
 ]
 
 [[package]]
@@ -3934,6 +3949,9 @@ name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+dependencies = [
+ "lock_api",
+]
 
 [[package]]
 name = "spki"
@@ -4872,10 +4890,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "web-thread-pool"
+version = "0.1.0"
+source = "git+https://github.com/linera-io/web-thread?branch=pool#d733fd6b9562ea43e32902d35f73dadd7c9c57f3"
+dependencies = [
+ "flume",
+ "pin-project-lite",
+ "web-thread-select",
+]
+
+[[package]]
 name = "web-thread-select"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27c3f98861caac815f0aa966995e564b0b2db9abc259700ddee544fbdaf236b3"
+source = "git+https://github.com/linera-io/web-thread?branch=pool#d733fd6b9562ea43e32902d35f73dadd7c9c57f3"
 dependencies = [
  "cfg-if",
  "web-thread-shim",
@@ -4884,8 +4911,7 @@ dependencies = [
 [[package]]
 name = "web-thread-shim"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "535507b55b73bb78d37bbc732c8bf8ebbc7b26902ab06fbf356fc3b46ad4b06c"
+source = "git+https://github.com/linera-io/web-thread?branch=pool#d733fd6b9562ea43e32902d35f73dadd7c9c57f3"
 dependencies = [
  "futures",
  "thiserror 2.0.17",

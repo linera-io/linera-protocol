@@ -36,7 +36,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{error, instrument, trace, warn};
-use web_thread_pool::web_thread;
 
 /// Re-export of [`EventSubscriptionsResult`] for use by other crate modules.
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
@@ -274,7 +273,7 @@ pub enum WorkerError {
     },
 
     #[error("thread error: {0}")]
-    Thread(#[from] web_thread::Error),
+    Thread(#[from] web_thread_pool::Error),
 }
 
 impl WorkerError {
