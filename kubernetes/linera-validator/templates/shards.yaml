@@ -125,6 +125,15 @@ spec:
                 {{- if .Values.crossChainQueueSize }}
                 --cross-chain-queue-size {{ .Values.crossChainQueueSize }}
                 {{- end }}
+                {{- if .Values.crossChainUpdateBatchSize }}
+                --cross-chain-update-batch-size {{ .Values.crossChainUpdateBatchSize }}
+                {{- end }}
+                {{- if .Values.crossChainConfirmationBatchSize }}
+                --cross-chain-confirmation-batch-size {{ .Values.crossChainConfirmationBatchSize }}
+                {{- end }}
+                {{- if .Values.regularRequestBatchSize }}
+                --regular-request-batch-size {{ .Values.regularRequestBatchSize }}
+                {{- end }}
                 {{- if .Values.notificationQueueSize }}
                 --notification-queue-size {{ .Values.notificationQueueSize }}
                 {{- end }}
