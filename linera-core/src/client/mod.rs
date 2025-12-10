@@ -576,7 +576,7 @@ impl<Env: Environment> Client<Env> {
                 chain_id = %proposal.content.block.chain_id,
                 %block_timestamp,
                 %local_time,
-                "Block timestamp is in the future; waiting for validators",
+                "Block timestamp is in the future; waiting until it can be proposed",
             );
         }
 
