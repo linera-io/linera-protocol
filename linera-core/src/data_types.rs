@@ -281,7 +281,7 @@ impl CrossChainRequest {
 
 impl<C, S> From<&ChainStateView<C>> for ChainInfo
 where
-    C: Context<Extra = ChainRuntimeContext<S>> + Clone + Send + Sync + 'static,
+    C: Context<Extra = ChainRuntimeContext<S>> + Clone + 'static,
     ChainRuntimeContext<S>: ExecutionRuntimeContext,
 {
     fn from(view: &ChainStateView<C>) -> Self {

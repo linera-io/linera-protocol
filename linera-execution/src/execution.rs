@@ -53,7 +53,7 @@ pub struct ExecutionStateView<C> {
 
 impl<C> ExecutionStateView<C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     pub async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
@@ -105,7 +105,7 @@ pub struct ServiceRuntimeEndpoint {
 #[cfg(with_testing)]
 impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
 where
-    MemoryContext<TestExecutionRuntimeContext>: Context + Clone + Send + Sync + 'static,
+    MemoryContext<TestExecutionRuntimeContext>: Context + Clone + 'static,
 {
     /// Simulates the instantiation of an application.
     pub async fn simulate_instantiation(
@@ -222,7 +222,7 @@ impl UserAction {
 
 impl<C> ExecutionStateView<C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     pub async fn query_application(
@@ -291,21 +291,30 @@ where
             futures::channel::mpsc::unbounded();
         let mut txn_tracker = TransactionTracker::default().with_blobs(created_blobs);
         let mut resource_controller = ResourceController::default();
+        let thread_pool = self.context().extra().thread_pool().clone();
         let mut actor = ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller);
 
         let (codes, descriptions) = actor.service_and_dependencies(application_id).await?;
 
-        let thread = web_thread::Thread::new();
-        let service_runtime_task = thread.run_send(JsVec(codes), move |codes| async move {
-            let mut runtime =
-                ServiceSyncRuntime::new_with_deadline(execution_state_sender, context, deadline);
+        let service_runtime_task = thread_pool
+            .run_send(JsVec(codes), move |codes| async move {
+                let mut runtime = ServiceSyncRuntime::new_with_deadline(
+                    execution_state_sender,
+                    context,
+                    deadline,
+                );
 
-            for (code, description) in codes.0.into_iter().zip(descriptions) {
-                runtime.preload_service(ApplicationId::from(&description), code, description)?;
-            }
+                for (code, description) in codes.0.into_iter().zip(descriptions) {
+                    runtime.preload_service(
+                        ApplicationId::from(&description),
+                        code,
+                        description,
+                    )?;
+                }
 
-            runtime.run_query(application_id, query)
-        });
+                runtime.run_query(application_id, query)
+            })
+            .await;
 
         while let Some(request) = execution_state_receiver.next().await {
             actor.handle_request(request).await?;

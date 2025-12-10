@@ -81,7 +81,7 @@ impl From<WorkerError> for LocalNodeError {
 
 impl<S> LocalNodeClient<S>
 where
-    S: Storage + Clone + Send + Sync + 'static,
+    S: Storage + Clone + 'static,
 {
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_block_proposal(
