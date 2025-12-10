@@ -303,7 +303,7 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Returns whether this chain is in follow-only mode.
-    fn follow_only(&self) -> bool {
+    fn is_follow_only(&self) -> bool {
         self.client.is_chain_follow_only(self.chain_id)
     }
 
@@ -1634,7 +1634,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// fetching manager values or sender/publisher chains.
     #[instrument(level = "trace")]
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, Error> {
-        if self.follow_only() {
+        if self.is_follow_only() {
             return self.client.synchronize_chain_state(self.chain_id).await;
         }
         let info = self.prepare_chain().await?;

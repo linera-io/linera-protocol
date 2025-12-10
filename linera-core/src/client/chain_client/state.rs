@@ -48,7 +48,7 @@ impl State {
     }
 
     /// Returns whether this chain is in follow-only mode.
-    pub fn follow_only(&self) -> bool {
+    pub fn is_follow_only(&self) -> bool {
         self.follow_only
     }
 

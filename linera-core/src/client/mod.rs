@@ -450,7 +450,7 @@ impl<Env: Environment> Client<Env> {
         self.chains
             .pin()
             .get(&chain_id)
-            .is_some_and(|state| state.follow_only())
+            .is_some_and(|state| state.is_follow_only())
     }
 
     /// Sets whether the given chain is in follow-only mode.
