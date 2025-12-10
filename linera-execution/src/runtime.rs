@@ -1613,7 +1613,7 @@ impl ServiceSyncRuntime {
     ) -> Self {
         // Query the allow_application_logs setting from the execution state.
         let allow_application_logs = execution_state_sender
-            .send_request(|callback| ExecutionRequest::AllowContractLogs { callback })
+            .send_request(|callback| ExecutionRequest::AllowApplicationLogs { callback })
             .ok()
             .and_then(|receiver| receiver.recv_response().ok())
             .unwrap_or(false);

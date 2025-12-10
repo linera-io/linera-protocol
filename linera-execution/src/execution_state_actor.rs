@@ -689,7 +689,7 @@ where
                 callback.respond(result);
             }
 
-            AllowContractLogs { callback } => {
+            AllowApplicationLogs { callback } => {
                 let allow = self
                     .state
                     .context()
@@ -1320,7 +1320,7 @@ pub enum ExecutionRequest {
         callback: Sender<(u32, u32)>,
     },
 
-    AllowContractLogs {
+    AllowApplicationLogs {
         #[debug(skip)]
         callback: Sender<bool>,
     },
