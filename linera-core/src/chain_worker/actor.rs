@@ -50,15 +50,17 @@ mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
-        exponential_bucket_interval, register_histogram, register_int_gauge,
+        exponential_bucket_latencies, register_histogram_vec, register_int_gauge,
     };
-    use prometheus::{Histogram, IntGauge};
+    use prometheus::{HistogramVec, IntGauge};
 
-    pub static CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "chain_worker_request_queue_wait_time",
-            "Time (ms) a chain worker request waits in queue before being processed",
-            exponential_bucket_interval(0.1_f64, 10_000.0),
+    /// Time (ms) a request waits in queue before being processed, by queue type.
+    pub static CHAIN_WORKER_QUEUE_WAIT_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "chain_worker_queue_wait_time",
+            "Time (ms) a request waits in queue before being processed",
+            &["queue_type"],
+            exponential_bucket_latencies(10_000.0),
         )
     });
 
@@ -291,11 +293,13 @@ where
     Context: linera_views::context::Context + Clone + Send + Sync + 'static,
 {
     /// Receiver for regular chain worker requests.
-    pub requests: mpsc::UnboundedReceiver<(ChainWorkerRequest<Context>, tracing::Span)>,
+    pub requests: mpsc::UnboundedReceiver<(ChainWorkerRequest<Context>, tracing::Span, Instant)>,
     /// Receiver for cross-chain update requests.
-    pub cross_chain_updates: mpsc::UnboundedReceiver<(CrossChainUpdateRequest, tracing::Span)>,
+    pub cross_chain_updates:
+        mpsc::UnboundedReceiver<(CrossChainUpdateRequest, tracing::Span, Instant)>,
     /// Receiver for confirmation requests.
-    pub confirmations: mpsc::UnboundedReceiver<(ConfirmUpdatedRecipientRequest, tracing::Span)>,
+    pub confirmations:
+        mpsc::UnboundedReceiver<(ConfirmUpdatedRecipientRequest, tracing::Span, Instant)>,
 }
 
 /// The actor worker type.
@@ -547,7 +551,11 @@ where
 
                     while count < cross_chain_batch_size {
                         match Pin::new(&mut cross_chain_updates).next().now_or_never() {
-                            Some(Some((req, _span))) => {
+                            Some(Some((req, _span, enqueued_at))) => {
+                                #[cfg(with_metrics)]
+                                metrics::CHAIN_WORKER_QUEUE_WAIT_TIME
+                                    .with_label_values(&["cross_chain_updates"])
+                                    .observe(enqueued_at.elapsed().as_millis() as f64);
                                 updates.entry(req.origin).or_default().extend(req.bundles);
                                 callbacks_by_origin
                                     .entry(req.origin)
@@ -605,7 +613,11 @@ where
 
                     while count < cross_chain_batch_size {
                         match Pin::new(&mut confirmations).next().now_or_never() {
-                            Some(Some((req, _span))) => {
+                            Some(Some((req, _span, enqueued_at))) => {
+                                #[cfg(with_metrics)]
+                                metrics::CHAIN_WORKER_QUEUE_WAIT_TIME
+                                    .with_label_values(&["confirmations"])
+                                    .observe(enqueued_at.elapsed().as_millis() as f64);
                                 confirmations_map
                                     .entry(req.recipient)
                                     .and_modify(|h| *h = (*h).max(req.latest_height))
@@ -634,11 +646,15 @@ where
                 }
                 RequestType::Regular => {
                     for _ in 0..regular_batch_size {
-                        let Some(Some((request, span))) =
+                        let Some(Some((request, span, enqueued_at))) =
                             Pin::new(&mut requests).next().now_or_never()
                         else {
                             break;
                         };
+                        #[cfg(with_metrics)]
+                        metrics::CHAIN_WORKER_QUEUE_WAIT_TIME
+                            .with_label_values(&["regular"])
+                            .observe(enqueued_at.elapsed().as_millis() as f64);
                         Box::pin(worker.handle_request(request))
                             .instrument(span)
                             .await;

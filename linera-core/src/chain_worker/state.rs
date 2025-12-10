@@ -9,7 +9,7 @@ use std::{
     sync::{self, Arc},
 };
 
-use futures::future::Either;
+use futures::future::{try_join_all, Either};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
@@ -636,11 +636,13 @@ where
         let outboxes = self.chain.load_outboxes(&targets).await?;
 
         // Find the minimum pending height across all tracked outboxes.
-        Ok(outboxes
-            .iter()
-            .filter_map(|outbox| outbox.queue.front())
+        let fronts = try_join_all(outboxes.iter().map(|outbox| outbox.queue.front())).await?;
+        let min_height = fronts
+            .into_iter()
+            .flatten()
             .min()
-            .map_or(next_height, |height| (*height).min(next_height)))
+            .map_or(next_height, |height| height.min(next_height));
+        Ok(min_height)
     }
 
     /// Processes a leader timeout issued for this multi-owner chain.

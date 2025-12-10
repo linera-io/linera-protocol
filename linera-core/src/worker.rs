@@ -418,11 +418,13 @@ where
     requests: mpsc::UnboundedSender<(
         ChainWorkerRequest<<StorageClient as Storage>::Context>,
         tracing::Span,
+        Instant,
     )>,
     /// Endpoint for cross-chain update requests.
-    cross_chain_updates: mpsc::UnboundedSender<(CrossChainUpdateRequest, tracing::Span)>,
+    cross_chain_updates: mpsc::UnboundedSender<(CrossChainUpdateRequest, tracing::Span, Instant)>,
     /// Endpoint for confirmation requests.
-    confirmations: mpsc::UnboundedSender<(ConfirmUpdatedRecipientRequest, tracing::Span)>,
+    confirmations:
+        mpsc::UnboundedSender<(ConfirmUpdatedRecipientRequest, tracing::Span, Instant)>,
 }
 
 impl<StorageClient> Clone for ChainActorEndpoint<StorageClient>
@@ -900,7 +902,9 @@ where
         let request = request_builder(callback);
 
         self.send_chain_worker_request(chain_id, |endpoint| {
-            endpoint.requests.send((request, tracing::Span::current()))
+            endpoint
+                .requests
+                .send((request, tracing::Span::current(), Instant::now()))
         })?;
 
         response
@@ -1015,7 +1019,7 @@ where
         self.send_chain_worker_request(recipient, |endpoint| {
             endpoint
                 .cross_chain_updates
-                .send((request, tracing::Span::current()))
+                .send((request, tracing::Span::current(), Instant::now()))
         })?;
 
         response
@@ -1043,7 +1047,7 @@ where
         self.send_chain_worker_request(sender, |endpoint| {
             endpoint
                 .confirmations
-                .send((request, tracing::Span::current()))
+                .send((request, tracing::Span::current(), Instant::now()))
         })?;
 
         response
