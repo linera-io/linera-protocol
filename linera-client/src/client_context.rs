@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_chain::{manager::LockingBlock, types::ConfirmedBlockCertificate};
 use linera_core::{
-    client::{ChainClient, Client},
+    client::{ChainClient, Client, ListeningMode},
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
     node::ValidatorNode,
@@ -450,7 +450,8 @@ impl<Env: Environment> ClientContext<Env> {
         }
 
         // Start listening for notifications, so we learn about new rounds and blocks.
-        let (listener, _listen_handle, mut notification_stream) = chain_client.listen().await?;
+        let (listener, _listen_handle, mut notification_stream) =
+            chain_client.listen(ListeningMode::FullChain).await?;
         self.chain_listeners.spawn_task(listener);
 
         loop {
@@ -525,7 +526,8 @@ impl<Env: Environment> ClientContext<Env> {
         }
 
         // Start listening for notifications, so we learn about new rounds and blocks.
-        let (listener, _listen_handle, mut notification_stream) = client.listen().await?;
+        let (listener, _listen_handle, mut notification_stream) =
+            client.listen(ListeningMode::FullChain).await?;
         self.chain_listeners.spawn_task(listener);
 
         loop {

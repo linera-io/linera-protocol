@@ -146,6 +146,19 @@ mod metrics {
     });
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ListeningMode {
+    FullChain,
+}
+
+impl ListeningMode {
+    pub fn extend(&mut self, other: Option<ListeningMode>) {
+        match (self, other) {
+            (ListeningMode::FullChain, _) => (),
+        }
+    }
+}
+
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
 pub struct Client<Env: Environment> {
     environment: Env,
@@ -3898,12 +3911,16 @@ impl<Env: Environment> ChainClient<Env> {
             .await?)
     }
 
-    #[instrument(level = "trace", skip(remote_node, local_node, notification))]
+    #[instrument(
+        level = "trace",
+        skip(remote_node, local_node, notification, _listening_mode)
+    )]
     async fn process_notification(
         &self,
         remote_node: RemoteNode<Env::ValidatorNode>,
         mut local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
+        _listening_mode: &ListeningMode,
     ) -> Result<(), ChainClientError> {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
@@ -4002,6 +4019,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace", fields(chain_id = ?self.chain_id))]
     pub async fn listen(
         &self,
+        listening_mode: ListeningMode,
     ) -> Result<(impl Future<Output = ()>, AbortOnDrop, NotificationStream), ChainClientError> {
         use future::FutureExt as _;
 
@@ -4031,7 +4049,10 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mut process_notifications = FuturesUnordered::new();
 
-        match self.update_notification_streams(&mut senders).await {
+        match self
+            .update_notification_streams(&mut senders, &listening_mode)
+            .await
+        {
             Ok(handler) => process_notifications.push(handler),
             Err(error) => error!("Failed to update committee: {error}"),
         };
@@ -4046,7 +4067,8 @@ impl<Env: Environment> ChainClient<Env> {
             {
                 if let Reason::NewBlock { .. } = notification.reason {
                     match Box::pin(await_while_polling(
-                        this.update_notification_streams(&mut senders).fuse(),
+                        this.update_notification_streams(&mut senders, &listening_mode)
+                            .fuse(),
                         &mut process_notifications,
                     ))
                     .await
@@ -4068,10 +4090,11 @@ impl<Env: Environment> ChainClient<Env> {
         Ok((update_streams, AbortOnDrop(abort), notifications))
     }
 
-    #[instrument(level = "trace", skip(senders))]
+    #[instrument(level = "trace", skip(senders, listening_mode))]
     async fn update_notification_streams(
         &self,
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
+        listening_mode: &ListeningMode,
     ) -> Result<impl Future<Output = ()>, ChainClientError> {
         let (nodes, local_node) = {
             let committee = self.local_committee().await?;
@@ -4127,6 +4150,7 @@ impl<Env: Environment> ChainClient<Env> {
             let this = self.clone();
             let local_node = local_node.clone();
             let remote_node = RemoteNode { public_key, node };
+            let listening_mode_cloned = listening_mode.clone();
             validator_tasks.push(async move {
                 while let Some(notification) = stream.next().await {
                     if let Err(error) = this
@@ -4134,6 +4158,7 @@ impl<Env: Environment> ChainClient<Env> {
                             remote_node.clone(),
                             local_node.clone(),
                             notification.clone(),
+                            &listening_mode_cloned,
                         )
                         .await
                     {
@@ -4281,9 +4306,14 @@ impl<Env: Environment> ChainClient<Env> {
         let (public_key, node) = node_list.next().unwrap();
         let remote_node = RemoteNode { node, public_key };
         let local_node = self.client.local_node.clone();
-        self.process_notification(remote_node, local_node, notification)
-            .await
-            .unwrap();
+        self.process_notification(
+            remote_node,
+            local_node,
+            notification,
+            &ListeningMode::FullChain,
+        )
+        .await
+        .unwrap();
     }
 }
 
