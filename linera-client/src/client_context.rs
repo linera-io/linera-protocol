@@ -6,7 +6,7 @@ use std::sync::Arc;
 use futures::{Future, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{BlockHeight, Epoch, Timestamp},
+    data_types::{Epoch, Timestamp},
     identifiers::{Account, AccountOwner, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
@@ -33,7 +33,7 @@ use {
     futures::stream,
     linera_base::{
         crypto::AccountPublicKey,
-        data_types::Amount,
+        data_types::{Amount, BlockHeight},
         identifiers::{ApplicationId, BlobType},
     },
     linera_core::client::ChainClientError,
