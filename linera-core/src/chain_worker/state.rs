@@ -1061,7 +1061,7 @@ where
     /// Takes a map from origin chain to bundles (already deduplicated by caller).
     /// Returns a map from origin chain to the last updated height (if any).
     #[instrument(level = "trace", skip(self, updates))]
-    pub(super) async fn process_cross_chain_update(
+    pub(super) async fn process_cross_chain_updates(
         &mut self,
         updates: BTreeMap<ChainId, Vec<(Epoch, MessageBundle)>>,
     ) -> Result<BTreeMap<ChainId, Option<BlockHeight>>, WorkerError> {
@@ -1138,7 +1138,7 @@ where
     /// Handles a batch of cross-chain confirmation requests efficiently with a single save operation.
     /// Takes a map from recipient to the maximum confirmed height.
     #[instrument(level = "trace", skip(self, confirmations))]
-    pub(super) async fn confirm_updated_recipient(
+    pub(super) async fn confirm_updated_recipients(
         &mut self,
         confirmations: BTreeMap<ChainId, BlockHeight>,
     ) -> Result<(), WorkerError> {

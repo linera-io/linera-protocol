@@ -557,7 +557,7 @@ where
                         });
                     }
 
-                    match Box::pin(worker.process_cross_chain_update(updates)).await {
+                    match Box::pin(worker.process_cross_chain_updates(updates)).await {
                         Ok(heights_by_origin) => {
                             for (origin, height) in heights_by_origin {
                                 if let Some(callbacks) = callbacks_by_origin.remove(&origin) {
@@ -605,7 +605,7 @@ where
                     }
                     trace!("batching {count} confirmations");
 
-                    match Box::pin(worker.confirm_updated_recipient(confirmations_map)).await {
+                    match Box::pin(worker.confirm_updated_recipients(confirmations_map)).await {
                         Ok(()) => {
                             for callback in callbacks {
                                 let _ = callback.send(Ok(()));
