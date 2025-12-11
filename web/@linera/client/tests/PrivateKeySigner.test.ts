@@ -19,7 +19,7 @@ test("constructs signer from mnemonic correctly", async () => {
 test("signs message correctly", async () => {
   const secretKey =
     "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";
-  const signer = new PrivateKeySigner(secretKey);
+  const signer = new linera.signer.PrivateKey(secretKey);
   const cryptoHash =
     "c520e2b24b05e70c39c36d4aa98e9129ac0079ea002d4c382e6996ea11946d1e";
   const owner = signer.address().toLowerCase();
