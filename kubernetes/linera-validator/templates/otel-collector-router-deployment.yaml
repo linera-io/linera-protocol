@@ -26,6 +26,32 @@ spec:
       tolerations:
         {{- toYaml .Values.otelCollector.router.tolerations | nindent 8 }}
       {{- end }}
+      {{- if .Values.nodeLocalDns.enabled }}
+      dnsPolicy: None
+      dnsConfig:
+        nameservers:
+          - {{ .Values.nodeLocalDns.localDnsIp }}
+        searches:
+          - {{ .Release.Namespace }}.svc.cluster.local
+          - svc.cluster.local
+          - cluster.local
+        options:
+          - name: ndots
+            value: "5"
+      {{- end }}
+      initContainers:
+        - name: wait-for-sampler-dns
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for sampler DNS to be resolvable..."
+              until nslookup otel-collector-sampler-headless.{{ .Release.Namespace }}.svc.cluster.local; do
+                echo "DNS not ready, retrying in 2 seconds..."
+                sleep 2
+              done
+              echo "DNS resolution successful!"
       containers:
         - name: otel-collector-router
           image: {{ .Values.otelCollector.router.image }}:{{ .Values.otelCollector.router.imageTag }}
