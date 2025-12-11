@@ -287,8 +287,8 @@ impl<Env: Environment> Client<Env> {
 
     /// Returns whether the given chain is in follow-only mode (no owner key in the wallet).
     ///
-    /// If the chain is not in the wallet, returns `true` since we cannot participate in
-    /// consensus without an owner key.
+    /// If the chain is not in the wallet, returns `true` since we don't have an owner key
+    /// for it.
     async fn is_chain_follow_only(&self, chain_id: ChainId) -> bool {
         match self.wallet().get(chain_id).await {
             Ok(Some(chain)) => chain.owner.is_none(),

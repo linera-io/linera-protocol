@@ -48,6 +48,7 @@ use crate::{
         BlanketMessagePolicy, ChainClient, ChainClientError, ChainClientOptions, ClientOutcome,
         ListeningMode, MessageAction, MessagePolicy,
     },
+    environment::wallet::Chain,
     local_node::LocalNodeError,
     node::{
         NodeError::{self, ClientIoError},
@@ -2024,6 +2025,15 @@ where
     let observer = builder.add_root_chain(2, Amount::ZERO).await?;
     let chain_id = client.chain_id();
     let observer_id = observer.chain_id();
+    // Add chain_id to observer's wallet with a dummy owner so it can fetch manager values when
+    // syncing. (The observer doesn't participate in consensus, but needs to see the round state.)
+    observer.client.wallet().insert(
+        chain_id,
+        Chain {
+            owner: Some(AccountOwner::CHAIN),
+            ..Chain::default()
+        },
+    );
     let owner0 = client.identity().await.unwrap();
     let owner1 = AccountSecretKey::generate().public().into();
 
