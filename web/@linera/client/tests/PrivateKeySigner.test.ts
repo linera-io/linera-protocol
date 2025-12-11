@@ -1,11 +1,11 @@
 import { expect, test } from "vitest";
 import { ethers } from "ethers";
-import { PrivateKeySigner } from "../dist";
+import linera from "../dist";
 
 test("constructs signer from mnemonic correctly", async () => {
   const phrase = "test test test test test test test test test test test junk";
 
-  const signer = PrivateKeySigner.fromMnemonic(phrase);
+  const signer = linera.signer.PrivateKey.fromMnemonic(phrase);
   const expectedWallet = ethers.Wallet.fromPhrase(phrase);
 
   // In Linera EIP-191 compatible wallet, the owner is the wallet address.
