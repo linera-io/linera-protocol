@@ -18,7 +18,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
     time::Instant,
-    util::traits::DynError,
+    util::traits::{AutoTraits, DynError},
 };
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
@@ -913,7 +913,7 @@ where
         nickname = %self.nickname,
         chain_id = %chain_id
     ))]
-    fn send_chain_worker_request<T: Send + Sync + 'static>(
+    fn send_chain_worker_request<T: AutoTraits>(
         &self,
         chain_id: ChainId,
         send_fn: impl FnOnce(

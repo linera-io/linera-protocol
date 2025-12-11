@@ -270,7 +270,7 @@ enum RequestType {
 /// The receiver endpoints for a [`ChainWorkerActor`].
 pub(crate) struct ChainActorReceivers<Context>
 where
-    Context: linera_views::context::Context + Clone + Send + Sync + 'static,
+    Context: linera_views::context::Context + Clone + 'static,
 {
     /// Receiver for regular chain worker requests.
     pub requests: mpsc::UnboundedReceiver<(ChainWorkerRequest<Context>, tracing::Span, Instant)>,
