@@ -386,6 +386,10 @@ where
     /// Takes a map from recipient to the maximum confirmed height.
     ///
     /// Returns `true` if any messages were marked as received.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id(),
+        num_recipients = %max_height_by_recipient.len()
+    ))]
     pub async fn mark_messages_as_received(
         &mut self,
         max_height_by_recipient: BTreeMap<ChainId, BlockHeight>,
@@ -551,6 +555,10 @@ where
     ///
     /// The bundles are provided as a map from origin chain to a map of bundles keyed by
     /// `(height, transaction_index)`. This ensures proper ordering and deduplication.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id(),
+        num_origins = %bundles_by_origin.len()
+    ))]
     pub async fn receive_message_bundles(
         &mut self,
         mut bundles_by_origin: BTreeMap<ChainId, BTreeMap<(BlockHeight, u32), MessageBundle>>,
