@@ -7,8 +7,11 @@
 pub mod cli;
 pub mod cli_wrappers;
 pub mod config;
+pub mod controller;
 pub mod node_service;
 pub mod project;
 pub mod storage;
+pub mod task_processor;
 pub mod util;
 pub mod wallet;
+pub use wallet::Wallet;

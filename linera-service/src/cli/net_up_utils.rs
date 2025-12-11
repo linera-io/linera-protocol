@@ -327,8 +327,8 @@ async fn print_messages_and_create_faucet(
         format!("export LINERA_STORAGE=\"{}\"\n", client.storage_path()).bold()
     );
 
-    let wallet = client.load_wallet()?;
-    let chains = wallet.chain_ids();
+    let wallet: crate::wallet::Wallet = client.load_wallet()?;
+    let chains: Vec<_> = wallet.chain_ids();
 
     // Run the faucet,
     let faucet_service = if with_faucet {

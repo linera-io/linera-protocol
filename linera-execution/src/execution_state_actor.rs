@@ -74,7 +74,7 @@ pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<ExecutionRequest>;
 
 impl<'a, C> ExecutionStateActor<'a, C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     /// Creates a new execution state actor.
@@ -799,22 +799,31 @@ where
         let (codes, descriptions): (Vec<_>, Vec<_>) =
             self.contract_and_dependencies(application_id).await?;
 
-        let thread = web_thread::Thread::new();
-        let contract_runtime_task = thread.run_send(JsVec(codes), move |codes| async move {
-            let runtime = ContractSyncRuntime::new(
-                execution_state_sender,
-                chain_id,
-                refund_grant_to,
-                controller,
-                &action,
-            );
+        let contract_runtime_task = self
+            .state
+            .context()
+            .extra()
+            .thread_pool()
+            .run_send(JsVec(codes), move |codes| async move {
+                let runtime = ContractSyncRuntime::new(
+                    execution_state_sender,
+                    chain_id,
+                    refund_grant_to,
+                    controller,
+                    &action,
+                );
 
-            for (code, description) in codes.0.into_iter().zip(descriptions) {
-                runtime.preload_contract(ApplicationId::from(&description), code, description)?;
-            }
+                for (code, description) in codes.0.into_iter().zip(descriptions) {
+                    runtime.preload_contract(
+                        ApplicationId::from(&description),
+                        code,
+                        description,
+                    )?;
+                }
 
-            runtime.run_action(application_id, chain_id, action)
-        });
+                runtime.run_action(application_id, chain_id, action)
+            })
+            .await;
 
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;

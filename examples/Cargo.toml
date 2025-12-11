@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "amm",
     "call-evm-counter",
+    "controller",
     "counter",
     "counter-no-graphql",
     "crowd-funding",
@@ -18,6 +19,7 @@ members = [
     "non-fungible",
     "rfq",
     "social",
+    "task-processor",
     "time-expiry",
 ]
 

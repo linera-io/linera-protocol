@@ -2370,6 +2370,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7fc6734af48458f72f5a3fa7b840903606427d98a710256e808f76a965047d9"
 dependencies = [
  "cfg-if",
+ "clap",
  "is-terminal",
  "libc",
  "tempfile",
@@ -3610,6 +3611,9 @@ name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+dependencies = [
+ "getrandom 0.2.16",
+]
 
 [[package]]
 name = "fastrlp"
@@ -3715,6 +3719,18 @@ version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
 dependencies = [
+ "futures-core",
+ "futures-sink",
+ "spin",
+]
+
+[[package]]
+name = "flume"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e139bc46ca777eb5efaf62df0ab8cc5fd400866427e56c68b22e414e53bd3be"
+dependencies = [
+ "fastrand",
  "futures-core",
  "futures-sink",
  "spin",
@@ -5315,6 +5331,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "serde_with",
+ "sync_wrapper 1.0.2",
  "tempfile",
  "test-case",
  "test-strategy",
@@ -5326,6 +5343,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber 0.3.19",
  "tracing-web",
+ "trait-set",
  "trait-variant",
  "wasm-bindgen-futures",
  "web-time",
@@ -5389,7 +5407,6 @@ dependencies = [
  "linera-core",
  "linera-ethereum",
  "linera-execution",
- "linera-persistent",
  "linera-rpc",
  "linera-sdk",
  "linera-storage",
@@ -5399,6 +5416,7 @@ dependencies = [
  "native-fungible",
  "non-fungible",
  "num-format",
+ "papaya",
  "prometheus-parse",
  "proptest",
  "rand 0.8.5",
@@ -5475,7 +5493,7 @@ dependencies = [
  "trait-set",
  "trait-variant",
  "wasm-bindgen-futures",
- "web-thread-select",
+ "web-thread-pool",
 ]
 
 [[package]]
@@ -5554,6 +5572,7 @@ dependencies = [
  "tracing-subscriber 0.3.19",
  "url",
  "wasmtime",
+ "web-thread-pool",
  "web-thread-select",
 ]
 
@@ -5932,6 +5951,7 @@ dependencies = [
  "mini-moka",
  "native-fungible",
  "non-fungible",
+ "nonzero_lit",
  "papaya",
  "pathdiff",
  "port-selector",
@@ -5965,6 +5985,7 @@ dependencies = [
  "tower-http 0.6.6",
  "tracing",
  "tracing-subscriber 0.3.19",
+ "url",
 ]
 
 [[package]]
@@ -6017,7 +6038,6 @@ dependencies = [
  "test-log",
  "tokio",
  "tracing",
- "web-thread-select",
 ]
 
 [[package]]
@@ -6120,7 +6140,6 @@ dependencies = [
  "serde",
  "sha3",
  "static_assertions",
- "sync_wrapper 1.0.2",
  "sysinfo",
  "tempfile",
  "test-case",
@@ -6297,7 +6316,6 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-faucet-client",
- "linera-persistent",
  "linera-rpc",
  "linera-storage",
  "linera-views",
@@ -6305,6 +6323,7 @@ dependencies = [
  "num-traits",
  "serde",
  "serde-wasm-bindgen 0.6.5",
+ "tokio",
  "tokio-util",
  "tracing",
  "wasm-bindgen",
@@ -6733,6 +6752,12 @@ dependencies = [
  "serde",
  "sha3",
 ]
+
+[[package]]
+name = "nonzero_lit"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30a9e0365849b8ce3d067218268d6c523c1c14f539f7e9157d635d8adfb308fa"
 
 [[package]]
 name = "ntapi"
@@ -7261,6 +7286,7 @@ checksum = "aeb8b9616002a83f9779ea70a2a44364fe804f8b532b96989d0790a34ad76479"
 dependencies = [
  "equivalent",
  "seize",
+ "serde",
 ]
 
 [[package]]
@@ -9788,7 +9814,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2d12fe70b2c1b4401038055f90f151b78208de1f9f89a7dbfd41587a10c3eea"
 dependencies = [
  "atoi",
- "flume",
+ "flume 0.11.1",
  "futures-channel",
  "futures-core",
  "futures-executor",
@@ -11630,6 +11656,17 @@ dependencies = [
  "thiserror 2.0.17",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "web-thread-pool"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61acb9ce02bf1d1b520049ba93d5454f0ffcd7e8559cd727c83b90b393f64b1d"
+dependencies = [
+ "flume 0.12.0",
+ "pin-project-lite",
+ "web-thread-select",
 ]
 
 [[package]]

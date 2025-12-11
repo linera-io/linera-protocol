@@ -30,7 +30,7 @@ use linera_base::{
     },
     vm::VmRuntime,
 };
-use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
+use linera_client::client_options::ResourceControlPolicyConfig;
 use linera_core::worker::Notification;
 use linera_execution::committee::Committee;
 use linera_faucet_client::Faucet;
@@ -59,6 +59,7 @@ use crate::{
         Network,
     },
     util::{self, ChildExt},
+    wallet::Wallet,
 };
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -473,6 +474,18 @@ impl ClientWrapper {
         port: impl Into<Option<u16>>,
         process_inbox: ProcessInbox,
     ) -> Result<NodeService> {
+        self.run_node_service_with_options(port, process_inbox, &[], &[])
+            .await
+    }
+
+    /// Runs `linera service` with optional task processor configuration.
+    pub async fn run_node_service_with_options(
+        &self,
+        port: impl Into<Option<u16>>,
+        process_inbox: ProcessInbox,
+        operator_application_ids: &[ApplicationId],
+        operators: &[(String, PathBuf)],
+    ) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
         command.arg("service");
@@ -481,6 +494,12 @@ impl ClientWrapper {
         }
         if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
             command.args(var.split_whitespace());
+        }
+        for app_id in operator_application_ids {
+            command.args(["--operator-application-ids", &app_id.to_string()]);
+        }
+        for (name, path) in operators {
+            command.args(["--operators", &format!("{}={}", name, path.display())]);
         }
         let child = command
             .args(["--port".to_string(), port.to_string()])
@@ -943,6 +962,16 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera wallet set-default CHAIN_ID`.
+    pub async fn set_default_chain(&self, chain_id: ChainId) -> Result<()> {
+        let mut command = self.command().await?;
+        command
+            .args(["wallet", "set-default"])
+            .arg(chain_id.to_string());
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
     pub async fn retry_pending_block(
         &self,
         chain_id: Option<ChainId>,
@@ -989,7 +1018,7 @@ impl ClientWrapper {
     }
 
     pub fn load_wallet(&self) -> Result<Wallet> {
-        util::read_json(self.wallet_path())
+        Ok(Wallet::read(&self.wallet_path())?)
     }
 
     pub fn load_keystore(&self) -> Result<InMemorySigner> {
@@ -1010,8 +1039,10 @@ impl ClientWrapper {
 
     pub fn get_owner(&self) -> Option<AccountOwner> {
         let wallet = self.load_wallet().ok()?;
-        let chain_id = wallet.default_chain()?;
-        wallet.get(chain_id)?.owner
+        wallet
+            .get(wallet.default_chain()?)
+            .expect("default chain must be in wallet")
+            .owner
     }
 
     pub fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {
@@ -1075,13 +1106,17 @@ impl ClientWrapper {
             let account_key = AccountPublicKey::from_str(account_key_str)
                 .with_context(|| format!("Invalid account public key: {}", account_key_str))?;
 
-            let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
+            let address = format!("{}:127.0.0.1:{}", self.network.short(), port)
+                .parse()
+                .unwrap();
 
             // Create ValidatorChange struct
-            let change = crate::cli::validator::ValidatorChange {
+            let change = crate::cli::validator::Change {
                 account_key,
-                network_address: address,
-                votes: std::num::NonZero::new(*votes as u64).context("Votes must be non-zero")?,
+                address,
+                votes: crate::cli::validator::Votes(
+                    std::num::NonZero::new(*votes as u64).context("Votes must be non-zero")?,
+                ),
             };
 
             changes.insert(public_key, Some(change));

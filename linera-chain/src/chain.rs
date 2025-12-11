@@ -229,7 +229,7 @@ const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
 #[allocative(bound = "C")]
 pub struct ChainStateView<C>
 where
-    C: Clone + Context + Send + Sync + 'static,
+    C: Clone + Context + 'static,
 {
     /// Execution state, including system and user applications.
     pub execution_state: ExecutionStateView<C>,
@@ -371,7 +371,7 @@ impl ChainTipState {
 
 impl<C> ChainStateView<C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     /// Returns the [`ChainId`] of the chain this [`ChainStateView`] represents.

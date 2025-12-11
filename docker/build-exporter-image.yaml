@@ -1,0 +1,28 @@
+steps:
+  - name: "docker:latest"
+    entrypoint: "docker"
+    args:
+      [
+        "build",
+        "-t",
+        "${_IMAGE_PATH}",
+        "-t",
+        "${_IMAGE_NAME_SHORT_COMMIT}",
+        "-t",
+        "${_IMAGE_NAME_LONG_COMMIT}",
+        "-f",
+        "docker/Dockerfile.exporter",
+        ".",
+        "--build-arg",
+        "git_commit=${_GIT_COMMIT}",
+        "--build-arg",
+        "build_date=${_BUILD_DATE}",
+        "--build-arg",
+        "build_flag=${_BUILD_FLAG}",
+        "--build-arg",
+        "build_folder=${_BUILD_FOLDER}"
+      ]
+images:
+  - "${_IMAGE_PATH}"
+  - "${_IMAGE_NAME_SHORT_COMMIT}"
+  - "${_IMAGE_NAME_LONG_COMMIT}"

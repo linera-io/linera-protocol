@@ -48,18 +48,20 @@ pub const DEFAULT_NAMESPACE: &str = "table_linera";
 /// Communicate with a persistent storage using the "views" abstraction.
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
-pub trait Storage: Sized {
+pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// The low-level storage implementation in use by the core protocol (chain workers etc).
-    type Context: Context<Extra = ChainRuntimeContext<Self>> + Clone + Send + Sync + 'static;
+    type Context: Context<Extra = ChainRuntimeContext<Self>> + Clone + 'static;
 
     /// The clock type being used.
     type Clock: Clock;
 
     /// The low-level storage implementation in use by the block exporter.
-    type BlockExporterContext: Context<Extra = u32> + Clone + Send + Sync + 'static;
+    type BlockExporterContext: Context<Extra = u32> + Clone;
 
     /// Returns the current wall clock time.
     fn clock(&self) -> &Self::Clock;
+
+    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool>;
 
     /// Loads the view of a chain state.
     ///
@@ -227,10 +229,12 @@ pub trait Storage: Sized {
             compressed_bytes: content.into_arc_bytes(),
         };
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
-        let contract_bytecode = web_thread::Thread::new()
+        let contract_bytecode = self
+            .thread_pool()
             .run_send((), move |()| async move {
                 compressed_contract_bytecode.decompress()
             })
+            .await
             .await??;
         match application_description.module_id.vm_runtime {
             VmRuntime::Wasm => {
@@ -291,10 +295,12 @@ pub trait Storage: Sized {
             compressed_bytes: content.into_arc_bytes(),
         };
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
-        let service_bytecode = web_thread::Thread::new()
+        let service_bytecode = self
+            .thread_pool()
             .run_send((), move |()| async move {
                 compressed_service_bytecode.decompress()
             })
+            .await
             .await??;
         match application_description.module_id.vm_runtime {
             VmRuntime::Wasm => {
@@ -371,6 +377,7 @@ impl ResultReadCertificates {
 pub struct ChainRuntimeContext<S> {
     storage: S,
     chain_id: ChainId,
+    thread_pool: Arc<linera_execution::ThreadPool>,
     execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
@@ -378,12 +385,13 @@ pub struct ChainRuntimeContext<S> {
 
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
-impl<S> ExecutionRuntimeContext for ChainRuntimeContext<S>
-where
-    S: Storage + Send + Sync,
-{
+impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
     fn chain_id(&self) -> ChainId {
         self.chain_id
+    }
+
+    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool> {
+        &self.thread_pool
     }
 
     fn execution_runtime_config(&self) -> linera_execution::ExecutionRuntimeConfig {
