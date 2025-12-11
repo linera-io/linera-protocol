@@ -25,10 +25,9 @@ pub use signer::Signer;
 pub mod wallet;
 pub use wallet::Wallet;
 pub mod faucet;
+use std::{collections::HashMap, future::Future, rc::Rc, sync::Arc, time::Duration};
+
 pub use faucet::Faucet;
-
-use std::{collections::HashMap, future::Future, sync::Arc, time::Duration};
-
 use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex, stream::StreamExt};
 use linera_base::identifiers::{AccountOwner, ApplicationId};
 use linera_client::{
@@ -44,14 +43,16 @@ use serde::ser::Serialize as _;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
 
-use std::rc::Rc;
-
 // TODO(#12): convert to IndexedDbStore once we refactor Context
 type WebStorage =
     linera_storage::DbStorage<linera_views::memory::MemoryDatabase, linera_storage::WallClock>;
 
-type WebEnvironment =
-    linera_core::environment::Impl<WebStorage, linera_rpc::node_provider::NodeProvider, Signer, Rc<linera_core::wallet::Memory>>;
+type WebEnvironment = linera_core::environment::Impl<
+    WebStorage,
+    linera_rpc::node_provider::NodeProvider,
+    Signer,
+    Rc<linera_core::wallet::Memory>,
+>;
 
 type JsResult<T> = Result<T, JsError>;
 
@@ -307,9 +308,12 @@ impl Client {
     /// Adds a new owner to the default chain.
     #[wasm_bindgen(js_name = addOwner)]
     pub async fn add_owner(&self, owner: &str) -> JsResult<()> {
-        let owner = owner.parse().map_err(|e| JsError::new(&format!("failed to parse owner: {e}")))?;
+        let owner = owner
+            .parse()
+            .map_err(|e| JsError::new(&format!("failed to parse owner: {e}")))?;
         let chain_client = self.default_chain_client().await?;
-        self.apply_client_command(&chain_client, || chain_client.share_ownership(owner, 100)).await??;
+        self.apply_client_command(&chain_client, || chain_client.share_ownership(owner, 100))
+            .await??;
         Ok(())
     }
 

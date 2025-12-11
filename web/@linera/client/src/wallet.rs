@@ -1,13 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::rc::Rc;
+
 use linera_base::identifiers::ChainId;
 use linera_client::config::GenesisConfig;
 use linera_core::wallet;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
-
-use std::rc::Rc;
 
 use super::JsResult;
 
@@ -26,6 +26,10 @@ impl Wallet {
     pub async fn set_owner(&self, chain_id: JsValue, owner: JsValue) -> JsResult<()> {
         let chain_id = serde_wasm_bindgen::from_value(chain_id)?;
         let owner = serde_wasm_bindgen::from_value(owner)?;
-        self.chains.mutate(chain_id, |chain| chain.owner = Some(owner)).ok_or(JsError::new(&format!("chain {chain_id} doesn't exist in wallet")))
+        self.chains
+            .mutate(chain_id, |chain| chain.owner = Some(owner))
+            .ok_or(JsError::new(&format!(
+                "chain {chain_id} doesn't exist in wallet"
+            )))
     }
 }

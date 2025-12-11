@@ -1,12 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{JsResult, Wallet};
-
 use linera_base::identifiers::AccountOwner;
 use linera_core::wallet;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
+
+use super::{JsResult, Wallet};
 
 #[wasm_bindgen]
 pub struct Faucet(linera_faucet_client::Faucet);

@@ -80,10 +80,7 @@ impl linera_base::crypto::Signer for Signer {
 
     async fn contains_key(&self, owner: &AccountOwner) -> Result<bool, Self::Error> {
         let js_owner = serde_wasm_bindgen::to_value(owner).unwrap();
-        let js_bool = self
-            .contains_key(js_owner)
-            .await
-            .map_err(Error::from)?;
+        let js_bool = self.contains_key(js_owner).await.map_err(Error::from)?;
 
         serde_wasm_bindgen::from_value(js_bool).map_err(|_| Error::JsConversion)
     }
@@ -107,8 +104,8 @@ impl linera_base::crypto::Signer for Signer {
             .map_err(Error::from)?
             .as_string()
             .ok_or(Error::JsConversion)?;
-        let signature = EvmSignature::from_str(&js_signature)
-            .map_err(|_| Error::UnexpectedSignatureFormat)?;
+        let signature =
+            EvmSignature::from_str(&js_signature).map_err(|_| Error::UnexpectedSignatureFormat)?;
         Ok(AccountSignature::EvmSecp256k1 { signature, address })
     }
 }

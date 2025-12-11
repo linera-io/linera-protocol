@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Deref;
+
 use futures::{Stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     crypto::CryptoHash,
@@ -9,8 +11,6 @@ use linera_base::{
 };
 
 use crate::{client::PendingProposal, data_types::ChainInfo};
-
-use std::ops::Deref;
 
 mod memory;
 pub use memory::Memory;
