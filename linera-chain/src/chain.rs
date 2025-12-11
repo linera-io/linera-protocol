@@ -26,10 +26,8 @@ use linera_views::{
     context::Context,
     log_view::LogView,
     map_view::MapView,
-    queue_view::QueueView,
     reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
     register_view::RegisterView,
-    set_view::SetView,
     views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
@@ -42,7 +40,7 @@ use crate::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageBundle, ProposedBlock,
         Transaction,
     },
-    inbox::{Cursor, InboxError, InboxStateView},
+    inbox::{InboxError, InboxStateView},
     manager::ChainManager,
     outbox::OutboxStateView,
     pending_blobs::PendingBlobsView,
@@ -195,35 +193,6 @@ pub(crate) mod metrics {
 /// The BCS-serialized size of an empty [`Block`].
 pub(crate) const EMPTY_BLOCK_SIZE: usize = 94;
 
-/// An origin, cursor and timestamp of a unskippable bundle in our inbox.
-#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
-#[derive(Debug, Clone, Serialize, Deserialize, Allocative)]
-pub struct TimestampedBundleInInbox {
-    /// The origin and cursor of the bundle.
-    pub entry: BundleInInbox,
-    /// The timestamp when the bundle was added to the inbox.
-    pub seen: Timestamp,
-}
-
-/// An origin and cursor of a unskippable bundle that is no longer in our inbox.
-#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize, Allocative)]
-pub struct BundleInInbox {
-    /// The origin from which we received the bundle.
-    pub origin: ChainId,
-    /// The cursor of the bundle in the inbox.
-    pub cursor: Cursor,
-}
-
-impl BundleInInbox {
-    fn new(origin: ChainId, bundle: &MessageBundle) -> Self {
-        BundleInInbox {
-            cursor: Cursor::from(bundle),
-            origin,
-        }
-    }
-}
-
 /// A view accessing the state of a chain.
 #[cfg_attr(
     with_graphql,
@@ -262,10 +231,6 @@ where
 
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, ChainId, InboxStateView<C>>,
-    /// A queue of unskippable bundles, with the timestamp when we added them to the inbox.
-    pub unskippable_bundles: QueueView<C, TimestampedBundleInInbox>,
-    /// Unskippable bundles that have been removed but are still in the queue.
-    pub removed_unskippable_bundles: SetView<C, BundleInInbox>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, ChainId, OutboxStateView<C>>,
     /// The indices of next events we expect to see per stream (could be ahead of the last
@@ -581,15 +546,14 @@ where
 
     /// Processes multiple message bundles from different origins concurrently.
     /// Each inbox is loaded once and all its bundles are processed together.
-    /// Side effects to shared state (`unskippable_bundles`, `received_log`) are collected
-    /// during concurrent processing and applied sequentially at the end.
+    /// Side effects to shared state (`received_log`) are collected during concurrent
+    /// processing and applied sequentially at the end.
     ///
     /// The bundles are provided as a map from origin chain to a map of bundles keyed by
     /// `(height, transaction_index)`. This ensures proper ordering and deduplication.
     pub async fn receive_message_bundles(
         &mut self,
         mut bundles_by_origin: BTreeMap<ChainId, BTreeMap<(BlockHeight, u32), MessageBundle>>,
-        local_time: Timestamp,
     ) -> Result<(), ChainError> {
         if bundles_by_origin.is_empty() {
             return Ok(());
@@ -606,34 +570,26 @@ where
                 let bundles = bundles_by_origin.remove(&origin)?;
 
                 Some(async move {
-                    let mut unskippable_bundles = Vec::new();
                     let mut received_log_heights = BTreeSet::new();
 
                     for bundle in bundles.into_values() {
                         let height = bundle.height;
-                        let entry = BundleInInbox::new(origin, &bundle);
-                        let skippable = bundle.is_skippable();
 
                         // Add bundle to the inbox.
-                        let newly_added =
-                            inbox
-                                .add_bundle(bundle)
-                                .await
-                                .map_err(|error| match error {
-                                    InboxError::ViewError(error) => ChainError::ViewError(error),
-                                    error => ChainError::InternalError(format!(
-                                        "while processing messages in certified block: {error}"
-                                    )),
-                                })?;
+                        inbox
+                            .add_bundle(bundle)
+                            .await
+                            .map_err(|error| match error {
+                                InboxError::ViewError(error) => ChainError::ViewError(error),
+                                error => ChainError::InternalError(format!(
+                                    "while processing messages in certified block: {error}"
+                                )),
+                            })?;
 
-                        // Collect side effects for later application.
-                        if newly_added && !skippable {
-                            unskippable_bundles.push((entry, local_time));
-                        }
                         received_log_heights.insert(height);
                     }
 
-                    Ok::<_, ChainError>((origin, unskippable_bundles, received_log_heights))
+                    Ok::<_, ChainError>((origin, received_log_heights))
                 })
             })
             .collect();
@@ -642,11 +598,7 @@ where
         let processing_results = futures::future::try_join_all(processing_futures).await?;
 
         // Apply side effects to shared state sequentially.
-        for (origin, unskippable_bundles, received_log_heights) in processing_results {
-            for (entry, seen) in unskippable_bundles {
-                self.unskippable_bundles
-                    .push_back(TimestampedBundleInInbox { entry, seen });
-            }
+        for (origin, received_log_heights) in processing_results {
             for height in received_log_heights {
                 self.received_log.push(ChainAndHeight {
                     chain_id: origin,
@@ -719,7 +671,6 @@ where
         }
         let origins = bundles_by_origin.keys().copied().collect::<Vec<_>>();
         let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
-        let mut removed_unskippable = HashSet::new();
         for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
             tracing::trace!(
                 "Removing [{}] from {chain_id:.8}'s inbox for {origin:}",
@@ -745,32 +696,6 @@ where
                         }
                     );
                 }
-                if was_present && !bundle.is_skippable() {
-                    removed_unskippable.insert(BundleInInbox::new(origin, bundle));
-                }
-            }
-        }
-        if !removed_unskippable.is_empty() {
-            // Delete all removed bundles from the front of the unskippable queue.
-            let maybe_front = self.unskippable_bundles.front().await?;
-            if maybe_front.is_some_and(|ts_entry| removed_unskippable.remove(&ts_entry.entry)) {
-                self.unskippable_bundles.delete_front();
-                while let Some(ts_entry) = self.unskippable_bundles.front().await? {
-                    if !removed_unskippable.remove(&ts_entry.entry) {
-                        if !self
-                            .removed_unskippable_bundles
-                            .contains(&ts_entry.entry)
-                            .await?
-                        {
-                            break;
-                        }
-                        self.removed_unskippable_bundles.remove(&ts_entry.entry)?;
-                    }
-                    self.unskippable_bundles.delete_front();
-                }
-            }
-            for entry in removed_unskippable {
-                self.removed_unskippable_bundles.insert(&entry)?;
             }
         }
         #[cfg(with_metrics)]
