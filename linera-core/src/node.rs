@@ -9,7 +9,9 @@ use futures::stream::LocalBoxStream as BoxStream;
 use futures::stream::Stream;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
-    data_types::{ArithmeticError, Blob, BlobContent, BlockHeight, NetworkDescription, Round},
+    data_types::{
+        ArithmeticError, Blob, BlobContent, BlockHeight, NetworkDescription, Round, Timestamp,
+    },
     identifiers::{BlobId, ChainId, EventId},
 };
 use linera_chain::{
@@ -316,6 +318,40 @@ pub enum NodeError {
         chain_id: ChainId,
         remote_node: Box<ValidatorPublicKey>,
     },
+}
+
+/// Parsed data from an `InvalidTimestamp` error.
+#[derive(Debug, Clone, Copy)]
+pub struct InvalidTimestampError {
+    /// The block's timestamp that was rejected.
+    pub block_timestamp: Timestamp,
+    /// The validator's local time when it rejected the block.
+    pub validator_local_time: Timestamp,
+}
+
+impl NodeError {
+    /// If this error is an `InvalidTimestamp` error (wrapped in `WorkerError`), parses and
+    /// returns the timestamps. Returns `None` for other error types.
+    ///
+    /// The error string format is expected to contain `[us:{block_timestamp}:{local_time}]`
+    /// where both values are microseconds since epoch.
+    pub fn parse_invalid_timestamp(&self) -> Option<InvalidTimestampError> {
+        let NodeError::WorkerError { error } = self else {
+            return None;
+        };
+        // Look for the marker pattern [us:BLOCK_TS:LOCAL_TS].
+        let marker_start = error.find("[us:")?;
+        let marker_content = &error[marker_start + 4..];
+        let marker_end = marker_content.find(']')?;
+        let timestamps = &marker_content[..marker_end];
+        let mut parts = timestamps.split(':');
+        let block_timestamp_us: u64 = parts.next()?.parse().ok()?;
+        let local_time_us: u64 = parts.next()?.parse().ok()?;
+        Some(InvalidTimestampError {
+            block_timestamp: Timestamp::from(block_timestamp_us),
+            validator_local_time: Timestamp::from(local_time_us),
+        })
+    }
 }
 
 impl From<tonic::Status> for NodeError {
