@@ -69,6 +69,8 @@ validator:
 # Block Exporter - exports blocks for indexing
 blockExporter:
   enabled: false
+  image: "linera-exporter:latest"
+  imagePullPolicy: "IfNotPresent"
   replicas: 1
   port: 8882
   metricsPort: 9091
