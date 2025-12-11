@@ -28,11 +28,10 @@ use crate::{
     runtime::ContractSyncRuntime,
     system::{CreateApplicationResult, OpenChainConfig},
     util::{OracleResponseExt as _, RespondExt as _},
-    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, ExecutionStateView, JsVec, Message, MessageContext, MessageKind,
-    ModuleId, Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext,
-    QueryOutcome, ResourceController, SystemMessage, TransactionTracker, UserContractCode,
-    UserServiceCode,
+    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
+    ExecutionStateView, JsVec, Message, MessageContext, MessageKind, ModuleId, Operation,
+    OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext, QueryOutcome,
+    ResourceController, SystemMessage, TransactionTracker, UserContractCode, UserServiceCode,
 };
 
 /// Actor for handling requests to the execution state.
@@ -689,6 +688,16 @@ where
                 };
                 callback.respond(result);
             }
+
+            AllowApplicationLogs { callback } => {
+                let allow = self
+                    .state
+                    .context()
+                    .extra()
+                    .execution_runtime_config()
+                    .allow_application_logs;
+                callback.respond(allow);
+            }
         }
 
         Ok(())
@@ -750,7 +759,6 @@ where
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
     ) -> Result<(), ExecutionError> {
-        let ExecutionRuntimeConfig {} = self.state.context().extra().execution_runtime_config();
         self.run_user_action_with_runtime(application_id, action, refund_grant_to, grant)
             .await
     }
@@ -828,6 +836,13 @@ where
         let (codes, descriptions): (Vec<_>, Vec<_>) =
             self.contract_and_dependencies(application_id).await?;
 
+        let allow_application_logs = self
+            .state
+            .context()
+            .extra()
+            .execution_runtime_config()
+            .allow_application_logs;
+
         let contract_runtime_task = self
             .state
             .context()
@@ -840,6 +855,7 @@ where
                     refund_grant_to,
                     controller,
                     &action,
+                    allow_application_logs,
                 );
 
                 for (code, description) in codes.0.into_iter().zip(descriptions) {
@@ -1302,5 +1318,10 @@ pub enum ExecutionRequest {
         application: ApplicationId,
         #[debug(skip)]
         callback: Sender<(u32, u32)>,
+    },
+
+    AllowApplicationLogs {
+        #[debug(skip)]
+        callback: Sender<bool>,
     },
 }

@@ -130,6 +130,8 @@ pub struct SyncRuntimeInternal<UserInstance: WithContext> {
     resource_controller: ResourceController,
     /// Additional context for the runtime.
     user_context: UserInstance::UserContext,
+    /// Whether contract log messages should be output.
+    allow_application_logs: bool,
 }
 
 /// The runtime status of an application.
@@ -317,6 +319,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         user_context: UserInstance::UserContext,
+        allow_application_logs: bool,
     ) -> Self {
         Self {
             chain_id,
@@ -336,6 +339,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
             resource_controller,
             scheduled_operations: Vec::new(),
             user_context,
+            allow_application_logs,
         }
     }
 
@@ -944,6 +948,10 @@ where
     fn maximum_blob_size(&mut self) -> Result<u64, ExecutionError> {
         Ok(self.inner().resource_controller.policy().maximum_blob_size)
     }
+
+    fn allow_application_logs(&mut self) -> Result<bool, ExecutionError> {
+        Ok(self.inner().allow_application_logs)
+    }
 }
 
 /// An extension trait to determine in compile time the different behaviors between contract and
@@ -978,6 +986,7 @@ impl ContractSyncRuntime {
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: &UserAction,
+        allow_application_logs: bool,
     ) -> Self {
         SyncRuntime(Some(ContractSyncRuntimeHandle::from(
             SyncRuntimeInternal::new(
@@ -994,6 +1003,7 @@ impl ContractSyncRuntime {
                 refund_grant_to,
                 resource_controller,
                 action.timestamp(),
+                allow_application_logs,
             ),
         )))
     }
@@ -1601,6 +1611,13 @@ impl ServiceSyncRuntime {
         context: QueryContext,
         deadline: Option<Instant>,
     ) -> Self {
+        // Query the allow_application_logs setting from the execution state.
+        let allow_application_logs = execution_state_sender
+            .send_request(|callback| ExecutionRequest::AllowApplicationLogs { callback })
+            .ok()
+            .and_then(|receiver| receiver.recv_response().ok())
+            .unwrap_or(false);
+
         let runtime = SyncRuntime(Some(
             SyncRuntimeInternal::new(
                 context.chain_id,
@@ -1612,6 +1629,7 @@ impl ServiceSyncRuntime {
                 None,
                 ResourceController::default(),
                 (),
+                allow_application_logs,
             )
             .into(),
         ));

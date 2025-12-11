@@ -454,7 +454,11 @@ pub trait UserService {
 
 /// Configuration options for the execution runtime available to applications.
 #[derive(Clone, Copy, Default)]
-pub struct ExecutionRuntimeConfig {}
+pub struct ExecutionRuntimeConfig {
+    /// Whether contract log messages should be output.
+    /// This is typically enabled for clients but disabled for validators.
+    pub allow_application_logs: bool,
+}
 
 /// Requirements for the `extra` field in our state views (and notably the
 /// [`ExecutionStateView`]).
@@ -851,6 +855,10 @@ pub trait BaseRuntime {
 
     /// Returns the maximum blob size from the `ResourceControlPolicy`.
     fn maximum_blob_size(&mut self) -> Result<u64, ExecutionError>;
+
+    /// Returns whether contract log messages should be output.
+    /// This is typically enabled for clients but disabled for validators.
+    fn allow_application_logs(&mut self) -> Result<bool, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {

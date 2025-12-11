@@ -1096,6 +1096,12 @@ impl<Database, C> DbStorage<Database, C> {
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }
+
+    /// Sets whether contract log messages should be output.
+    pub fn with_allow_application_logs(mut self, allow: bool) -> Self {
+        self.execution_runtime_config.allow_application_logs = allow;
+        self
+    }
 }
 
 impl<Database> DbStorage<Database, WallClock>
