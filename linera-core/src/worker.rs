@@ -222,7 +222,10 @@ pub enum WorkerError {
     },
     #[error(
         "Block timestamp ({block_timestamp}) is further in the future from local time \
-        ({local_time}) than block time grace period ({block_time_grace_period:?})"
+        ({local_time}) than block time grace period ({block_time_grace_period:?}) \
+        [us:{block_timestamp_us}:{local_time_us}]",
+        block_timestamp_us = block_timestamp.micros(),
+        local_time_us = local_time.micros(),
     )]
     InvalidTimestamp {
         block_timestamp: Timestamp,
