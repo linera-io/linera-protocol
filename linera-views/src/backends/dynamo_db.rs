@@ -18,9 +18,11 @@ use aws_sdk_dynamodb::{
     operation::{
         batch_get_item::BatchGetItemError,
         create_table::CreateTableError,
+        delete_item::DeleteItemError,
         delete_table::DeleteTableError,
         get_item::GetItemError,
         list_tables::ListTablesError,
+        put_item::PutItemError,
         query::{QueryError, QueryOutput},
         transact_write_items::TransactWriteItemsError,
     },
@@ -47,8 +49,8 @@ use crate::{
     journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, LeaseConflict,
+        ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -104,6 +106,12 @@ const VALUE_ATTRIBUTE: &str = "item_value";
 
 /// The attribute for obtaining the primary key (used as a sort key) with the stored value.
 const KEY_VALUE_ATTRIBUTE: &str = "item_key, item_value";
+
+/// The attribute name for lease UUID (stored as a string).
+const LEASE_UUID_ATTRIBUTE: &str = "lease_uuid";
+
+/// The attribute name for lease expiration timestamp.
+const LEASE_EXPIRATION_ATTRIBUTE: &str = "lease_expiration";
 
 /// TODO(#1084): The scheme below with the `MAX_VALUE_SIZE` has to be checked
 /// This is the maximum size of a raw value in DynamoDB.
@@ -202,6 +210,37 @@ fn build_key_value(
         (
             VALUE_ATTRIBUTE.to_owned(),
             AttributeValue::B(Blob::new(value)),
+        ),
+    ]
+    .into()
+}
+
+/// Builds a lease item with UUID and expiration as separate attributes for condition expressions.
+fn build_lease_item(
+    start_key: &[u8],
+    key: Vec<u8>,
+    uuid: u64,
+    expiration: u64,
+) -> HashMap<String, AttributeValue> {
+    let mut prefixed_key = vec![1];
+    prefixed_key.extend(key);
+
+    [
+        (
+            PARTITION_ATTRIBUTE.to_owned(),
+            AttributeValue::B(Blob::new(start_key.to_vec())),
+        ),
+        (
+            KEY_ATTRIBUTE.to_owned(),
+            AttributeValue::B(Blob::new(prefixed_key)),
+        ),
+        (
+            LEASE_UUID_ATTRIBUTE.to_owned(),
+            AttributeValue::N(uuid.to_string()),
+        ),
+        (
+            LEASE_EXPIRATION_ATTRIBUTE.to_owned(),
+            AttributeValue::N(expiration.to_string()),
         ),
     ]
     .into()
@@ -937,6 +976,150 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
         }
         Ok(())
     }
+
+    async fn obtain_lease(
+        &self,
+        key: Vec<u8>,
+        uuid: u64,
+        ttl: std::time::Duration,
+    ) -> Result<Result<(), LeaseConflict>, DynamoDbStoreInternalError> {
+        check_key_size(&key)?;
+
+        // Calculate expiration timestamp
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let expiration = now + ttl.as_secs();
+
+        // Build the key_db for potential error handling
+        let key_db = build_key(&self.start_key, key.clone());
+
+        // Build the lease item with separate UUID and expiration attributes
+        let item = build_lease_item(&self.start_key, key, uuid, expiration);
+
+        // Use condition expression to ensure atomic operation:
+        // Allow write if:
+        // 1. Item doesn't exist (attribute_not_exists), OR
+        // 2. UUID matches (:uuid), OR
+        // 3. Expiration has passed (< :now)
+        let condition = format!(
+            "attribute_not_exists({}) OR {} = :uuid OR {} < :now",
+            LEASE_UUID_ATTRIBUTE, LEASE_UUID_ATTRIBUTE, LEASE_EXPIRATION_ATTRIBUTE
+        );
+
+        let result = self
+            .client
+            .put_item()
+            .table_name(&self.namespace)
+            .set_item(Some(item))
+            .condition_expression(condition)
+            .expression_attribute_values(":uuid", AttributeValue::N(uuid.to_string()))
+            .expression_attribute_values(":now", AttributeValue::N(now.to_string()))
+            .send()
+            .boxed_sync()
+            .await;
+
+        // Handle conditional check failure
+        match result {
+            Ok(_) => Ok(Ok(())),
+            Err(err) => {
+                // Check if this is a conditional check failure
+                if let SdkError::ServiceError(ref service_err) = err {
+                    if service_err.err().is_conditional_check_failed_exception() {
+                        // Read the existing lease UUID and expiration for the error message
+                        let response = self
+                            .client
+                            .get_item()
+                            .table_name(&self.namespace)
+                            .set_key(Some(key_db))
+                            .projection_expression(format!(
+                                "{}, {}",
+                                LEASE_UUID_ATTRIBUTE, LEASE_EXPIRATION_ATTRIBUTE
+                            ))
+                            .send()
+                            .boxed_sync()
+                            .await?;
+
+                        let (existing_uuid, expiration) = if let Some(item) = response.item {
+                            let uuid = item
+                                .get(LEASE_UUID_ATTRIBUTE)
+                                .and_then(|attr| {
+                                    if let AttributeValue::N(n) = attr {
+                                        n.parse::<u64>().ok()
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .unwrap_or(0);
+
+                            let exp = item
+                                .get(LEASE_EXPIRATION_ATTRIBUTE)
+                                .and_then(|attr| {
+                                    if let AttributeValue::N(n) = attr {
+                                        n.parse::<u64>().ok()
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .unwrap_or(0);
+
+                            (uuid, exp)
+                        } else {
+                            (0, 0)
+                        };
+
+                        return Ok(Err(LeaseConflict {
+                            uuid: existing_uuid,
+                            timestamp: expiration,
+                        }));
+                    }
+                }
+                Err(err.into())
+            }
+        }
+    }
+
+    async fn discard_lease(
+        &self,
+        key: Vec<u8>,
+        uuid: u64,
+    ) -> Result<(), DynamoDbStoreInternalError> {
+        check_key_size(&key)?;
+
+        // Build the key for deletion
+        let key_db = build_key(&self.start_key, key);
+
+        // Use condition expression to ensure atomic operation:
+        // Only delete if the UUID matches
+        let condition = format!("{} = :uuid", LEASE_UUID_ATTRIBUTE);
+
+        let result = self
+            .client
+            .delete_item()
+            .table_name(&self.namespace)
+            .set_key(Some(key_db.clone()))
+            .condition_expression(condition)
+            .expression_attribute_values(":uuid", AttributeValue::N(uuid.to_string()))
+            .send()
+            .boxed_sync()
+            .await;
+
+        // Handle conditional check failure
+        match result {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                // Check if this is a conditional check failure
+                if let SdkError::ServiceError(ref service_err) = err {
+                    if service_err.err().is_conditional_check_failed_exception() {
+                        tracing::warn!("Failed to discard lease");
+                        return Ok(());
+                    }
+                }
+                Err(err.into())
+            }
+        }
+    }
 }
 
 /// Error when validating a namespace
@@ -969,6 +1152,14 @@ pub enum DynamoDbStoreInternalError {
     /// An error occurred while writing a transaction of items.
     #[error(transparent)]
     TransactWriteItem(#[from] Box<SdkError<TransactWriteItemsError>>),
+
+    /// An error occurred while putting an item.
+    #[error(transparent)]
+    PutItem(#[from] Box<SdkError<PutItemError>>),
+
+    /// An error occurred while deleting an item.
+    #[error(transparent)]
+    DeleteItem(#[from] Box<SdkError<DeleteItemError>>),
 
     /// An error occurred while doing a Query.
     #[error(transparent)]

@@ -61,7 +61,8 @@ static_assertions.workspace = true
 sysinfo.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["rt", "sync"] }
+tokio = { workspace = true, features = ["rt", "sync", "macros"] }
+tokio-util.workspace = true
 tracing.workspace = true
 trait-variant.workspace = true
 
