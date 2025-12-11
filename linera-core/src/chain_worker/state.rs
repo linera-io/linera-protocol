@@ -19,7 +19,7 @@ use linera_base::{
     },
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::{
@@ -31,6 +31,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
+    system::{EpochEventData, EPOCH_STREAM_NAME},
     Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
     ServiceRuntimeEndpoint,
 };
@@ -1314,24 +1315,46 @@ where
     }
 
     /// Votes for falling back to a public chain.
+    ///
+    /// Fallback is triggered when the chain is in epoch `e` and epoch `e+1` has been created
+    /// on the admin chain longer than the configured `fallback_duration` ago.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
         let chain = &mut self.chain;
-        let epoch = chain.execution_state.system.epoch.get();
-        if let Some(entry) = chain.unskippable_bundles.front().await? {
-            let elapsed = self.storage.clock().current_time().delta_since(entry.seen);
-            if elapsed >= chain.ownership().timeout_config.fallback_duration {
-                let chain_id = chain.chain_id();
-                let height = chain.tip_state.get().next_block_height;
-                let key_pair = self.config.key_pair();
-                if chain
-                    .manager
-                    .vote_fallback(chain_id, height, *epoch, key_pair)
-                {
-                    self.save().await?;
-                }
+        let epoch = *chain.execution_state.system.epoch.get();
+        let Some(admin_id) = chain.execution_state.system.admin_id.get() else {
+            return Ok(());
+        };
+
+        // Check if epoch e+1 exists on the admin chain and when it was created.
+        let next_epoch_index = epoch.0.saturating_add(1);
+        let event_id = EventId {
+            chain_id: *admin_id,
+            stream_id: StreamId::system(EPOCH_STREAM_NAME),
+            index: next_epoch_index,
+        };
+
+        let Some(event_bytes) = self.storage.read_event(event_id).await? else {
+            return Ok(()); // Next epoch doesn't exist yet.
+        };
+
+        let event_data: EpochEventData = bcs::from_bytes(&event_bytes)?;
+        let elapsed = self
+            .storage
+            .clock()
+            .current_time()
+            .delta_since(event_data.timestamp);
+        if elapsed >= chain.ownership().timeout_config.fallback_duration {
+            let chain_id = chain.chain_id();
+            let height = chain.tip_state.get().next_block_height;
+            let key_pair = self.config.key_pair();
+            if chain
+                .manager
+                .vote_fallback(chain_id, height, epoch, key_pair)
+            {
+                self.save().await?;
             }
         }
         Ok(())

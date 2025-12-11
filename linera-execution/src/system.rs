@@ -42,6 +42,15 @@ pub static EPOCH_STREAM_NAME: &[u8] = &[0];
 /// The event stream name for removed epochs.
 pub static REMOVED_EPOCH_STREAM_NAME: &[u8] = &[1];
 
+/// The data stored in an epoch creation event.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpochEventData {
+    /// The hash of the committee blob for this epoch.
+    pub blob_hash: CryptoHash,
+    /// The timestamp when the epoch was created on the admin chain.
+    pub timestamp: Timestamp,
+}
+
 /// The number of times the [`SystemOperation::OpenChain`] was executed.
 #[cfg(with_metrics)]
 mod metrics {
@@ -438,10 +447,14 @@ where
                         self.blob_used(txn_tracker, blob_id).await?;
                         self.committees.get_mut().insert(epoch, committee);
                         self.epoch.set(epoch);
+                        let event_data = EpochEventData {
+                            blob_hash,
+                            timestamp: context.timestamp,
+                        };
                         txn_tracker.add_event(
                             StreamId::system(EPOCH_STREAM_NAME),
                             epoch.0,
-                            bcs::to_bytes(&blob_hash)?,
+                            bcs::to_bytes(&event_data)?,
                         );
                     }
                     AdminOperation::RemoveCommittee { epoch } => {
@@ -509,7 +522,8 @@ where
                     })
                     .await?
                     .to_event(&event_id)?;
-                let blob_id = BlobId::new(bcs::from_bytes(&bytes)?, BlobType::Committee);
+                let event_data: EpochEventData = bcs::from_bytes(&bytes)?;
+                let blob_id = BlobId::new(event_data.blob_hash, BlobType::Committee);
                 let committee = bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
                 self.blob_used(txn_tracker, blob_id).await?;
                 self.committees.get_mut().insert(epoch, committee);
