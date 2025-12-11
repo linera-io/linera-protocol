@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { ethers } from "ethers";
-import linera from "../dist";
+import * as linera from "../dist";
 
 test("constructs signer from mnemonic correctly", async () => {
   const phrase = "test test test test test test test test test test test junk";
