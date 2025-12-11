@@ -21,9 +21,11 @@ key directly in memory and uses it to sign.
 #![recursion_limit = "256"]
 
 pub mod signer;
+pub use signer::Signer;
 pub mod wallet;
 pub use wallet::Wallet;
-pub use signer::Signer;
+pub mod faucet;
+pub use faucet::Faucet;
 
 use std::{collections::HashMap, future::Future, sync::Arc, time::Duration};
 
@@ -42,12 +44,14 @@ use serde::ser::Serialize as _;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
 
+use std::rc::Rc;
+
 // TODO(#12): convert to IndexedDbStore once we refactor Context
 type WebStorage =
     linera_storage::DbStorage<linera_views::memory::MemoryDatabase, linera_storage::WallClock>;
 
 type WebEnvironment =
-    linera_core::environment::Impl<WebStorage, linera_rpc::node_provider::NodeProvider, Signer>;
+    linera_core::environment::Impl<WebStorage, linera_rpc::node_provider::NodeProvider, Signer, Rc<linera_core::wallet::Memory>>;
 
 type JsResult<T> = Result<T, JsError>;
 
@@ -138,7 +142,7 @@ impl Client {
     /// unavailable.
     #[wasm_bindgen(constructor)]
     pub async fn new(
-        wallet: Wallet,
+        wallet: &Wallet,
         signer: Signer,
         skip_process_inbox: bool,
     ) -> Result<Client, JsError> {
@@ -149,11 +153,11 @@ impl Client {
             .await?;
         let client_context = ClientContext::new(
             storage.clone(),
-            wallet.chains,
+            wallet.chains.clone(),
             signer,
             OPTIONS,
             wallet.default,
-            wallet.genesis_config,
+            wallet.genesis_config.clone(),
             BLOCK_CACHE_SIZE,
             EXECUTION_STATE_CACHE_SIZE,
         )
@@ -298,6 +302,15 @@ impl Client {
         Ok(serde_wasm_bindgen::to_value(
             &self.default_chain_client().await?.identity().await?,
         )?)
+    }
+
+    /// Adds a new owner to the default chain.
+    #[wasm_bindgen(js_name = addOwner)]
+    pub async fn add_owner(&self, owner: &str) -> JsResult<()> {
+        let owner = owner.parse().map_err(|e| JsError::new(&format!("failed to parse owner: {e}")))?;
+        let chain_client = self.default_chain_client().await?;
+        self.apply_client_command(&chain_client, || chain_client.share_ownership(owner, 100)).await??;
+        Ok(())
     }
 
     /// Gets the version information of the validators of the current network.
