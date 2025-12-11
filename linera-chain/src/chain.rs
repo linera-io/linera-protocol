@@ -588,7 +588,7 @@ where
         metrics::NUM_INBOXES
             .with_label_values(&[])
             .observe(self.inboxes.count().await? as f64);
-        let _newly_added = inbox
+        inbox
             .add_bundle(bundle)
             .await
             .map_err(|error| match error {

@@ -14,8 +14,7 @@ use futures::future::Either;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, TimeDelta,
-        Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
     },
     ensure,
     hashed::Hashed,
@@ -1247,24 +1246,12 @@ where
     }
 
     /// Votes for falling back to a public chain.
+    /// This is disabled on the testnet.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
     pub(super) async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
-        let chain = &mut self.chain;
-        let epoch = chain.execution_state.system.epoch.get();
-        if chain.ownership().timeout_config.fallback_duration == TimeDelta::ZERO {
-            let chain_id = chain.chain_id();
-            let height = chain.tip_state.get().next_block_height;
-            let key_pair = self.config.key_pair();
-            if chain
-                .manager
-                .vote_fallback(chain_id, height, *epoch, key_pair)
-            {
-                self.save().await?;
-            }
-        }
-        Ok(())
+        Err(WorkerError::NoFallbackMode)
     }
 
     #[instrument(skip_all, fields(
