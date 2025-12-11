@@ -49,6 +49,44 @@ spec:
         effect: NoSchedule
       {{- end }}
       initContainers:
+        - name: linera-exporter-initializer
+          image: {{ .Values.lineraImage }}
+          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          command:
+            - bash
+            - -c
+            - |
+              set -euo pipefail
+              while true; do
+                output=$(./linera storage check-existence --storage "{{ .Values.storage }}" 2>&1)
+                status=$?
+                if [ "$status" -eq 0 ]; then
+                  echo "Database already exists, no need to initialize."
+                  exit 0
+                else
+                  if [ "$status" -eq 1 ]; then
+                    echo "Database does not exist, retrying in {{ .Values.blockExporter.initRetryIntervalSeconds | default 5 }} seconds..."
+                  else
+                    echo "An unexpected error occurred (status: $status): $output"
+                    echo "Retrying in {{ .Values.blockExporter.initRetryIntervalSeconds | default 5 }} seconds..."
+                  fi
+                  sleep {{ .Values.blockExporter.initRetryIntervalSeconds | default 5 }}
+                fi
+              done
         - name: config-selector
           image: busybox
           command:
