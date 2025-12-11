@@ -14,9 +14,9 @@ use std::{
 };
 
 use linera_base::ensure;
-use rocksdb::{BlockBasedOptions, Cache, DBCompactionStyle, SliceTransform};
+use rocksdb::{BlockBasedOptions, Cache, DBCompactionStyle, SliceTransform, WriteBufferManager};
 use serde::{Deserialize, Serialize};
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
+use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 use tempfile::TempDir;
 use thiserror::Error;
 
@@ -51,8 +51,25 @@ const MAX_VALUE_SIZE: usize = 3 * 1024 * 1024 * 1024 - 400;
 // For offset reasons we decrease by 400
 const MAX_KEY_SIZE: usize = 8 * 1024 * 1024 - 400;
 
-const WRITE_BUFFER_SIZE: usize = 256 * 1024 * 1024; // 256 MiB
-const MAX_WRITE_BUFFER_NUMBER: i32 = 6;
+// RocksDB defaults - explicitly stated for clarity
+const TARGET_FILE_SIZE_BASE: u64 = 64 * 1024 * 1024; // 64 MiB (RocksDB default)
+const MAX_WRITE_BUFFER_NUMBER: i32 = 4; // RocksDB default is 2, we use 4 for more write buffering
+
+/// Returns the available memory for this process, respecting cgroup limits if running in a container.
+fn get_available_memory(sys: &System) -> usize {
+    // Prefer cgroup limit if running in a container (e.g., Kubernetes)
+    sys.cgroup_limits()
+        .map_or_else(|| sys.total_memory() as usize, |c| c.total_memory as usize)
+}
+
+/// Returns the number of CPUs available to this process, respecting cgroup limits if running in a container.
+/// Uses `std::thread::available_parallelism()` which handles cgroup v2 quota detection automatically.
+fn get_available_cpus() -> i32 {
+    std::thread::available_parallelism()
+        .map(|p| p.get() as i32)
+        .unwrap_or(1)
+}
+
 const HYPER_CLOCK_CACHE_BLOCK_SIZE: usize = 8 * 1024; // 8 KiB
 
 /// The RocksDB client that we use.
@@ -340,32 +357,46 @@ impl RocksDbStoreInternal {
             std::fs::create_dir(path_buf.clone())?;
         }
         let sys = System::new_with_specifics(
-            RefreshKind::nothing()
-                .with_cpu(CpuRefreshKind::everything())
-                .with_memory(MemoryRefreshKind::nothing().with_ram()),
+            RefreshKind::nothing().with_memory(MemoryRefreshKind::nothing().with_ram()),
         );
-        let num_cpus = sys.cpus().len() as i32;
-        let total_ram = sys.total_memory() as usize;
+        // Use cgroup-aware resource detection for containerized environments (e.g., Kubernetes)
+        let num_cpus = get_available_cpus();
+        let total_ram = get_available_memory(&sys);
+
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
         options.create_missing_column_families(true);
-        // Flush in-memory buffer to disk more often
-        options.set_write_buffer_size(WRITE_BUFFER_SIZE);
-        options.set_max_write_buffer_number(MAX_WRITE_BUFFER_NUMBER);
-        options.set_compression_type(rocksdb::DBCompressionType::Lz4);
-        options.set_level_zero_slowdown_writes_trigger(8);
-        options.set_level_zero_stop_writes_trigger(12);
-        options.set_level_zero_file_num_compaction_trigger(2);
-        // We deliberately give RocksDB one background thread *per* CPU so that
-        // flush + (N-1) compactions can hammer the NVMe at full bandwidth while
-        // still leaving enough CPU time for the foreground application threads.
-        options.increase_parallelism(num_cpus);
-        options.set_max_background_jobs(num_cpus);
-        options.set_max_subcompactions(num_cpus as u32);
-        options.set_level_compaction_dynamic_level_bytes(true);
 
-        options.set_compaction_style(DBCompactionStyle::Level);
-        options.set_target_file_size_base(2 * WRITE_BUFFER_SIZE as u64);
+        // Use smaller memtables (64 MiB) to flush more frequently.
+        // This reduces the impact of range tombstone fragmentation on reads,
+        // since tombstones in immutable/flushed memtables are pre-fragmented.
+        let memtable_size = 64 * 1024 * 1024;
+        options.set_write_buffer_size(memtable_size);
+        options.set_max_write_buffer_number(MAX_WRITE_BUFFER_NUMBER);
+        options.set_target_file_size_base(TARGET_FILE_SIZE_BASE);
+        options.set_min_write_buffer_number_to_merge(2);
+        // No compression for L0/L1 (hot, frequently accessed during compaction)
+        // LZ4 for deeper levels (cold data, worth the CPU cost for space savings)
+        options.set_compression_per_level(&[
+            rocksdb::DBCompressionType::None, // L0
+            rocksdb::DBCompressionType::None, // L1
+            rocksdb::DBCompressionType::None, // L2
+            rocksdb::DBCompressionType::None, // L3
+            rocksdb::DBCompressionType::None, // L4
+            rocksdb::DBCompressionType::None, // L5
+            rocksdb::DBCompressionType::None, // L6
+        ]);
+        // Give RocksDB more headroom before throttling writes
+        options.set_level_zero_file_num_compaction_trigger(4);
+        options.set_level_zero_slowdown_writes_trigger(12);
+        options.set_level_zero_stop_writes_trigger(24);
+
+        let max_background_jobs = (num_cpus / 2).max(4);
+        options.increase_parallelism(max_background_jobs);
+        options.set_max_background_jobs(max_background_jobs);
+        options.set_max_subcompactions(4);
+
+        options.set_compaction_style(DBCompactionStyle::Universal);
 
         let mut block_options = BlockBasedOptions::default();
         block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
@@ -376,9 +407,17 @@ impl RocksDbStoreInternal {
         // - Follows common practice for database caching in server environments
         // - Prevents excessive memory pressure that could lead to swapping or OOM conditions
         block_options.set_block_cache(&Cache::new_hyper_clock_cache(
-            total_ram / 4,
+            total_ram / 6,
             HYPER_CLOCK_CACHE_BLOCK_SIZE,
         ));
+
+        // Limit total memtable memory to 1/4 of available RAM across all column families.
+        // When memory exceeds this limit, writers stall until flushes complete.
+        // Smaller limit encourages more frequent flushes, reducing range tombstone
+        // fragmentation overhead on reads.
+        let write_buffer_manager =
+            WriteBufferManager::new_write_buffer_manager(total_ram / 4, true);
+        options.set_write_buffer_manager(&write_buffer_manager);
 
         // Configure bloom filters for prefix iteration optimization
         block_options.set_bloom_filter(10.0, false);
