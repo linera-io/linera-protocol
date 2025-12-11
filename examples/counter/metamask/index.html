@@ -64,10 +64,14 @@
           const chain = await faucet.claimChain(wallet, owner);
           document.getElementById('owner').innerText = owner;
           document.getElementById('chain-id').innerText = chain;
+
+          // add a new local wallet to the chain that can autosign blocks
+          // without prompting every time
           const autosigner = linera.signer.PrivateKey.createRandom();
           const client = await new linera.Client(wallet, new linera.signer.Composite(autosigner, signer));
           await client.addOwner(autosigner.address());
           wallet.setOwner(chain, autosigner.address());
+
           const counter = await client.application(import.meta.env.LINERA_APPLICATION_ID);
           const logs = document.getElementById('logs');
           const incrementButton = document.getElementById('increment-btn');
