@@ -49,6 +49,8 @@ use linera_views::{batch::Batch, ViewError};
 use serde::{Deserialize, Serialize};
 use system::AdminOperation;
 use thiserror::Error;
+pub use web_thread_pool::Pool as ThreadPool;
+use web_thread_select as web_thread;
 
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;
@@ -470,6 +472,8 @@ pub struct ExecutionRuntimeConfig {}
 #[cfg_attr(web, async_trait(?Send))]
 pub trait ExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId;
+
+    fn thread_pool(&self) -> &Arc<ThreadPool>;
 
     fn execution_runtime_config(&self) -> ExecutionRuntimeConfig;
 
@@ -1181,6 +1185,7 @@ impl OperationContext {
 #[derive(Clone)]
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
+    thread_pool: Arc<ThreadPool>,
     execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
@@ -1193,6 +1198,7 @@ impl TestExecutionRuntimeContext {
     pub fn new(chain_id: ChainId, execution_runtime_config: ExecutionRuntimeConfig) -> Self {
         Self {
             chain_id,
+            thread_pool: Arc::new(ThreadPool::new(20)),
             execution_runtime_config,
             user_contracts: Arc::default(),
             user_services: Arc::default(),
@@ -1208,6 +1214,10 @@ impl TestExecutionRuntimeContext {
 impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId {
         self.chain_id
+    }
+
+    fn thread_pool(&self) -> &Arc<ThreadPool> {
+        &self.thread_pool
     }
 
     fn execution_runtime_config(&self) -> ExecutionRuntimeConfig {

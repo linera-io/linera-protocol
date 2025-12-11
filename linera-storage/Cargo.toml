@@ -49,7 +49,6 @@ prometheus.workspace = true
 serde.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-web-thread.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

@@ -1,14 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod wallet;
+
 use linera_base::util::traits::AutoTraits;
 
 trait_set::trait_set! {
     pub trait Network = crate::node::ValidatorNodeProvider + AutoTraits;
     pub trait Signer = linera_base::crypto::Signer + AutoTraits;
     // TODO(#5064): we shouldn't hard-code `Send` + `Sync` here
-    pub trait Storage = linera_storage::Storage + Clone + Send + Sync + 'static;
-    pub trait Wallet = crate::wallet::Wallet + AutoTraits;
+    pub trait Storage = linera_storage::Storage + Clone + AutoTraits;
+    pub trait Wallet = wallet::Wallet + AutoTraits;
 }
 
 pub trait Environment: AutoTraits {
@@ -20,9 +22,7 @@ pub trait Environment: AutoTraits {
     type ValidatorNode: crate::node::ValidatorNode + AutoTraits + Clone;
     // TODO(#5064): we shouldn't hard-code `Send` + `Sync` here
     type StorageContext: linera_views::context::Context<Extra: linera_execution::ExecutionRuntimeContext>
-        + Send
-        + Sync
-        + 'static;
+        + AutoTraits;
 
     fn storage(&self) -> &Self::Storage;
     fn network(&self) -> &Self::Network;
@@ -34,7 +34,7 @@ pub struct Impl<
     Storage,
     Network,
     Signer = linera_base::crypto::InMemorySigner,
-    Wallet = crate::wallet::Memory,
+    Wallet = wallet::Memory,
 > {
     pub storage: Storage,
     pub network: Network,

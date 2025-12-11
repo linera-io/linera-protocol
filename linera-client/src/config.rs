@@ -151,7 +151,7 @@ impl GenesisConfig {
 
     pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), Error>
     where
-        S: Storage + Clone + Send + Sync + 'static,
+        S: Storage + Clone + 'static,
     {
         if let Some(description) = storage
             .read_network_description()

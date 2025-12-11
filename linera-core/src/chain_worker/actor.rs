@@ -16,6 +16,7 @@ use linera_base::{
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, BlobId, ChainId, StreamId},
+    time::Instant,
 };
 use linera_chain::{
     data_types::{BlockProposal, MessageBundle, ProposedBlock},
@@ -39,6 +40,22 @@ use crate::{
     worker::{NetworkActions, WorkerError},
 };
 
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{exponential_bucket_interval, register_histogram};
+    use prometheus::Histogram;
+
+    pub static CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "chain_worker_request_queue_wait_time",
+            "Time (ms) a chain worker request waits in queue before being processed",
+            exponential_bucket_interval(0.1_f64, 10_000.0),
+        )
+    });
+}
+
 /// Type alias for event subscriptions result.
 pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscriptions)>;
 
@@ -46,7 +63,7 @@ pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscr
 #[derive(Debug)]
 pub(crate) enum ChainWorkerRequest<Context>
 where
-    Context: linera_views::context::Context + Clone + Send + Sync + 'static,
+    Context: linera_views::context::Context + Clone + 'static,
 {
     /// Reads the certificate for a requested [`BlockHeight`].
     #[cfg(with_testing)]
@@ -240,7 +257,7 @@ where
 /// The actor worker type.
 pub(crate) struct ChainWorkerActor<StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage + Clone + 'static,
 {
     chain_id: ChainId,
     config: ChainWorkerConfig,
@@ -253,8 +270,7 @@ where
 }
 
 struct ServiceRuntimeActor {
-    thread: web_thread::Thread,
-    task: web_thread::Task<()>,
+    task: web_thread_pool::Task<()>,
     endpoint: ServiceRuntimeEndpoint,
 }
 
@@ -262,37 +278,36 @@ impl ServiceRuntimeActor {
     /// Spawns a blocking task to execute the service runtime actor.
     ///
     /// Returns the task handle and the endpoints to interact with the actor.
-    async fn spawn(chain_id: ChainId) -> Self {
+    async fn spawn(chain_id: ChainId, thread_pool: &linera_execution::ThreadPool) -> Self {
         let (execution_state_sender, incoming_execution_requests) =
             futures::channel::mpsc::unbounded();
         let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
-
-        let thread = web_thread::Thread::new();
 
         Self {
             endpoint: ServiceRuntimeEndpoint {
                 incoming_execution_requests,
                 runtime_request_sender,
             },
-            task: thread.run((), move |()| async move {
-                ServiceSyncRuntime::new(
-                    execution_state_sender,
-                    QueryContext {
-                        chain_id,
-                        next_block_height: BlockHeight(0),
-                        local_time: Timestamp::from(0),
-                    },
-                )
-                .run(runtime_request_receiver)
-            }),
-            thread,
+            task: thread_pool
+                .run((), move |()| async move {
+                    ServiceSyncRuntime::new(
+                        execution_state_sender,
+                        QueryContext {
+                            chain_id,
+                            next_block_height: BlockHeight(0),
+                            local_time: Timestamp::from(0),
+                        },
+                    )
+                    .run(runtime_request_receiver)
+                })
+                .await,
         }
     }
 }
 
 impl<StorageClient> ChainWorkerActor<StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage + Clone + 'static,
 {
     /// Runs the [`ChainWorkerActor`]. The chain state is loaded when the first request
     /// arrives.
@@ -308,6 +323,7 @@ where
         incoming_requests: mpsc::UnboundedReceiver<(
             ChainWorkerRequest<StorageClient::Context>,
             tracing::Span,
+            Instant,
         )>,
         is_tracked: bool,
     ) {
@@ -349,17 +365,26 @@ where
         mut incoming_requests: mpsc::UnboundedReceiver<(
             ChainWorkerRequest<StorageClient::Context>,
             tracing::Span,
+            Instant,
         )>,
     ) -> Result<(), WorkerError> {
         trace!("Starting `ChainWorkerActor`");
 
-        while let Some((request, span)) = incoming_requests.recv().await {
-            let (_service_runtime_thread, service_runtime_task, service_runtime_endpoint) =
+        while let Some((request, span, _queued_at)) = incoming_requests.recv().await {
+            // Record how long the request waited in queue (in milliseconds)
+            #[cfg(with_metrics)]
+            {
+                let queue_wait_time_ms = _queued_at.elapsed().as_secs_f64() * 1000.0;
+                metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
+            }
+
+            let (service_runtime_task, service_runtime_endpoint) =
                 if self.config.long_lived_services {
-                    let actor = ServiceRuntimeActor::spawn(self.chain_id).await;
-                    (Some(actor.thread), Some(actor.task), Some(actor.endpoint))
+                    let actor =
+                        ServiceRuntimeActor::spawn(self.chain_id, self.storage.thread_pool()).await;
+                    (Some(actor.task), Some(actor.endpoint))
                 } else {
-                    (None, None, None)
+                    (None, None)
                 };
 
             trace!("Loading chain state of {}", self.chain_id);
@@ -384,7 +409,7 @@ where
                 futures::select! {
                     () = self.sleep_until_timeout().fuse() => break,
                     maybe_request = incoming_requests.recv().fuse() => {
-                        let Some((request, span)) = maybe_request else {
+                        let Some((request, span, _queued_at)) = maybe_request else {
                             break; // Request sender was dropped.
                         };
                         Box::pin(worker.handle_request(request)).instrument(span).await;
