@@ -3071,7 +3071,6 @@ where
                 message_policy: MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None),
                 ..ChainClientOptions::test_default()
             },
-            false, // follow_only
         )
         .await?;
 
@@ -3109,15 +3108,9 @@ where
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
 
-    // Create a follow-only client for the receiver chain.
+    // Create a follow-only client for the receiver chain (no owner = follow-only mode).
     let follower = builder
-        .make_client_with_options(
-            receiver.chain_id(),
-            None,
-            BlockHeight::ZERO,
-            ChainClientOptions::test_default(),
-            true, // follow_only
-        )
+        .make_follow_only_client(receiver.chain_id(), None, BlockHeight::ZERO)
         .await?;
 
     // The sender transfers tokens to the receiver.

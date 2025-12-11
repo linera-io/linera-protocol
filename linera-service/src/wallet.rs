@@ -285,8 +285,9 @@ impl Wallet {
 
     pub fn forget_keys(&self, chain_id: ChainId) -> anyhow::Result<AccountOwner> {
         self.mutate(chain_id, |chain| {
-            // Without keys we can no longer propose blocks, so switch to follow-only mode.
-            chain.set_follow_only(true);
+            // Without keys we can no longer propose blocks. Since follow_only() is
+            // determined by owner.is_none(), removing the owner automatically puts the
+            // chain in follow-only mode.
             chain.owner.take()
         })
         .ok_or(anyhow::anyhow!("nonexistent chain `{chain_id}`"))??

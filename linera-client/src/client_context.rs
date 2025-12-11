@@ -400,7 +400,7 @@ impl<Env: Environment> ClientContext<Env> {
         let pending_proposal = client.pending_proposal().clone();
         let chain_id = info.chain_id;
 
-        // Use modify if the chain exists to preserve the follow_only flag.
+        // Use modify if the chain exists to preserve any existing chain-specific data.
         let modified = self
             .wallet()
             .modify(chain_id, |chain| {
@@ -448,17 +448,6 @@ impl<Env: Environment> ClientContext<Env> {
             )
             .await
             .map_err(error::Inner::wallet)?;
-        Ok(())
-    }
-
-    /// Sets the `follow_only` flag for a chain in both the wallet and the in-memory client state.
-    pub async fn set_follow_only(&self, chain_id: ChainId, follow_only: bool) -> Result<(), Error> {
-        self.wallet()
-            .modify(chain_id, |chain| chain.set_follow_only(follow_only))
-            .await
-            .map_err(error::Inner::wallet)?
-            .ok_or_else(|| error::Inner::UnknownChainId(chain_id))?;
-        self.client.set_chain_follow_only(chain_id, follow_only);
         Ok(())
     }
 
@@ -1108,7 +1097,6 @@ impl<Env: Environment> ClientContext<Env> {
                         None,
                         Some(owner),
                         self.timing_sender(),
-                        false, // follow_only
                     );
                     chain_client.set_preferred_owner(owner);
                     chain_client.process_inbox().await?;

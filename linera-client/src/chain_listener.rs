@@ -101,7 +101,6 @@ pub trait ClientContext {
                 .await
                 .map_err(error::Inner::wallet)?
                 .unwrap_or_default();
-            let follow_only = chain.follow_only();
             Ok(self.client().create_chain_client(
                 chain_id,
                 chain.block_hash,
@@ -109,7 +108,6 @@ pub trait ClientContext {
                 chain.pending_proposal,
                 chain.owner,
                 self.timing_sender(),
-                follow_only,
             ))
         }
     }

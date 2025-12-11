@@ -295,7 +295,6 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Creates a new `ChainClient`.
-    #[expect(clippy::too_many_arguments)]
     #[instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
     pub fn create_chain_client(
         self: &Arc<Self>,
@@ -305,8 +304,9 @@ impl<Env: Environment> Client<Env> {
         pending_proposal: Option<PendingProposal>,
         preferred_owner: Option<AccountOwner>,
         timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
-        follow_only: bool,
     ) -> ChainClient<Env> {
+        // Follow-only mode is enabled if there's no owner (key pair) associated with the chain.
+        let follow_only = preferred_owner.is_none();
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
         self.chains.pin().get_or_insert_with(chain_id, || {
@@ -330,15 +330,6 @@ impl<Env: Environment> Client<Env> {
             .pin()
             .get(&chain_id)
             .is_some_and(|state| state.is_follow_only())
-    }
-
-    /// Sets whether the given chain is in follow-only mode.
-    pub fn set_chain_follow_only(&self, chain_id: ChainId, follow_only: bool) {
-        self.chains.pin().update(chain_id, |state| {
-            let mut state = state.clone_for_update_unchecked();
-            state.set_follow_only(follow_only);
-            state
-        });
     }
 
     /// Fetches the chain description blob if needed, and returns the chain info.

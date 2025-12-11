@@ -70,13 +70,11 @@ impl chain_listener::ClientContext for ClientContext {
         let info = client.chain_info().await?;
         let client_owner = client.preferred_owner();
         let pending_proposal = client.pending_proposal().clone();
-        let follow_only = client.is_follow_only();
         self.wallet().insert(
             info.chain_id,
             wallet::Chain {
                 pending_proposal,
                 owner: client_owner,
-                follow_only: Some(follow_only),
                 ..info.as_ref().into()
             },
         );
@@ -186,10 +184,10 @@ async fn test_chain_listener() -> anyhow::Result<()> {
 }
 
 /// Tests that a follow-only chain listener does NOT process its inbox when receiving messages.
-/// We set up a listener with two chains: chain A (follow-only but owned) and chain B (FullChain).
+/// We set up a listener with two chains: chain A (follow-only, no owner) and chain B (owned).
 /// The sender sends a message to A first, then to B. Once the listener processes B's inbox
 /// (which we can observe), we know it must have also seen A's notification - but A's inbox
-/// should remain unprocessed because it's follow-only (not because of missing ownership).
+/// should remain unprocessed because it's follow-only (no owner key).
 #[test_log::test(tokio::test)]
 async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     let signer = InMemorySigner::new(Some(42));
@@ -198,7 +196,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
 
-    // Create three chains: sender, chain_a (will be follow-only), chain_b (will be FullChain).
+    // Create three chains: sender, chain_a (will be follow-only), chain_b (will be owned).
     let sender = builder.add_root_chain(0, Amount::from_tokens(10)).await?;
     let chain_a = builder.add_root_chain(1, Amount::ZERO).await?;
     let chain_b = builder.add_root_chain(2, Amount::ZERO).await?;
@@ -230,21 +228,20 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
         )),
     };
 
-    // Add chain A as follow-only. We *do* own it, but follow_only should prevent inbox processing.
+    // Add chain A as follow-only (no owner = follow-only mode).
     context.wallet().insert(
         chain_a_id,
         wallet::Chain {
-            owner: chain_a.preferred_owner(),
+            owner: None, // No owner means follow-only mode
             block_hash: chain_a_info.block_hash,
             next_block_height: chain_a_info.next_block_height,
             timestamp: clock.current_time(),
             pending_proposal: None,
             epoch: Some(chain_a_info.epoch),
-            follow_only: Some(true),
         },
     );
 
-    // Add chain B as FullChain mode.
+    // Add chain B as owned (has owner = not follow-only).
     context.wallet().insert(
         chain_b_id,
         wallet::Chain {
@@ -254,7 +251,6 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             timestamp: clock.current_time(),
             pending_proposal: None,
             epoch: Some(chain_b_info.epoch),
-            follow_only: Some(false),
         },
     );
 
@@ -341,11 +337,11 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
         }
     }
 
-    // Verify the wallet was updated and follow_only is preserved.
+    // Verify the wallet was updated and chain A is still follow-only (no owner).
     let wallet_chain_a = context.lock().await.wallet().get(chain_a_id).unwrap();
     assert!(
         wallet_chain_a.follow_only(),
-        "follow_only flag should be preserved in wallet"
+        "chain A should still be follow-only (no owner)"
     );
 
     cancellation_token.cancel();
