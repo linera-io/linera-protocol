@@ -337,13 +337,6 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
         }
     }
 
-    // Verify the wallet was updated and chain A is still follow-only (no owner).
-    let wallet_chain_a = context.lock().await.wallet().get(chain_a_id).unwrap();
-    assert!(
-        wallet_chain_a.follow_only(),
-        "chain A should still be follow-only (no owner)"
-    );
-
     cancellation_token.cancel();
     handle.await;
 

@@ -398,37 +398,18 @@ impl<Env: Environment> ClientContext<Env> {
         let info = client.chain_info().await?;
         let client_owner = client.preferred_owner();
         let pending_proposal = client.pending_proposal().clone();
-        let chain_id = info.chain_id;
-
-        // Use modify if the chain exists to preserve any existing chain-specific data.
-        let modified = self
+        let _old_value = self
             .wallet()
-            .modify(chain_id, |chain| {
-                chain.owner = client_owner;
-                chain.pending_proposal = pending_proposal.clone();
-                chain.block_hash = info.block_hash;
-                chain.next_block_height = info.next_block_height;
-                chain.timestamp = info.timestamp;
-                chain.epoch = Some(info.epoch);
-            })
+            .insert(
+                info.chain_id,
+                wallet::Chain {
+                    pending_proposal,
+                    owner: client_owner,
+                    ..info.as_ref().into()
+                },
+            )
             .await
             .map_err(error::Inner::wallet)?;
-
-        // If the chain doesn't exist, insert a new one.
-        if modified.is_none() {
-            let _old_value = self
-                .wallet()
-                .insert(
-                    chain_id,
-                    wallet::Chain {
-                        pending_proposal,
-                        owner: client_owner,
-                        ..info.as_ref().into()
-                    },
-                )
-                .await
-                .map_err(error::Inner::wallet)?;
-        }
         Ok(())
     }
 

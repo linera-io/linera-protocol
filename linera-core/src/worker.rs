@@ -271,6 +271,9 @@ pub enum WorkerError {
 
     #[error("thread error: {0}")]
     Thread(#[from] web_thread_pool::Error),
+
+    #[error("Fallback mode is not available on this network")]
+    NoFallbackMode,
 }
 
 impl WorkerError {
@@ -296,6 +299,7 @@ impl WorkerError {
             | WorkerError::InvalidBlockProposal(_)
             | WorkerError::UnexpectedBlob
             | WorkerError::TooManyPublishedBlobs(_)
+            | WorkerError::NoFallbackMode
             | WorkerError::ViewError(ViewError::NotFound(_)) => false,
             WorkerError::BcsError(_)
             | WorkerError::InvalidCrossChainRequest

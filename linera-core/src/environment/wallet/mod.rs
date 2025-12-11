@@ -13,7 +13,6 @@ use crate::{client::PendingProposal, data_types::ChainInfo};
 mod memory;
 pub use memory::Memory;
 
-/// The state of a chain tracked in the wallet.
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Chain {
     pub owner: Option<AccountOwner>,
@@ -67,13 +66,6 @@ impl Chain {
             epoch: Some(current_epoch),
         }
     }
-
-    /// Returns whether this chain is in follow-only mode.
-    ///
-    /// A chain is in follow-only mode if it has no associated key pair (owner).
-    pub fn follow_only(&self) -> bool {
-        self.owner.is_none()
-    }
 }
 
 /// A trait for the wallet (i.e. set of chain states) tracked by the client.
@@ -93,56 +85,5 @@ pub trait Wallet {
     fn owned_chain_ids(&self) -> impl Stream<Item = Result<ChainId, Self::Error>> {
         self.items()
             .try_filter_map(|(id, chain)| async move { Ok(chain.owner.map(|_| id)) })
-    }
-
-    /// Modifies a chain in the wallet. Returns `Ok(None)` if the chain doesn't exist.
-    async fn modify(
-        &self,
-        id: ChainId,
-        f: impl FnMut(&mut Chain) + Send,
-    ) -> Result<Option<()>, Self::Error>;
-}
-
-#[cfg(test)]
-mod tests {
-    use linera_base::{
-        crypto::AccountPublicKey, data_types::BlockHeight, identifiers::AccountOwner,
-    };
-    use serde_json::json;
-
-    use super::Chain;
-
-    /// Test that `follow_only()` returns the correct value based on owner presence.
-    #[test]
-    fn test_chain_follow_only() {
-        // Chain with owner should not be follow-only.
-        let json_with_owner = json!({
-            "owner": AccountOwner::from(AccountPublicKey::test_key(0)),
-            "block_hash": null,
-            "next_block_height": BlockHeight::ZERO,
-            "timestamp": 0,
-            "pending_proposal": null,
-            "epoch": null
-        });
-        let chain: Chain = serde_json::from_value(json_with_owner).unwrap();
-        assert!(
-            !chain.follow_only(),
-            "chain with owner should not be follow-only"
-        );
-
-        // Chain without owner should be follow-only.
-        let json_without_owner = json!({
-            "owner": null,
-            "block_hash": null,
-            "next_block_height": BlockHeight::ZERO,
-            "timestamp": 0,
-            "pending_proposal": null,
-            "epoch": null
-        });
-        let chain: Chain = serde_json::from_value(json_without_owner).unwrap();
-        assert!(
-            chain.follow_only(),
-            "chain without owner should be follow-only"
-        );
     }
 }

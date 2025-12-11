@@ -215,15 +215,6 @@ pub struct BundleInInbox {
     pub cursor: Cursor,
 }
 
-impl BundleInInbox {
-    fn new(origin: ChainId, bundle: &MessageBundle) -> Self {
-        BundleInInbox {
-            cursor: Cursor::from(bundle),
-            origin,
-        }
-    }
-}
-
 // The `TimestampedBundleInInbox` is a relatively small type, so a total
 // of 100 seems reasonable for the storing of the data.
 const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
@@ -597,9 +588,7 @@ where
         metrics::NUM_INBOXES
             .with_label_values(&[])
             .observe(self.inboxes.count().await? as f64);
-        let entry = BundleInInbox::new(*origin, &bundle);
-        let skippable = bundle.is_skippable();
-        let newly_added = inbox
+        inbox
             .add_bundle(bundle)
             .await
             .map_err(|error| match error {
@@ -608,11 +597,6 @@ where
                     "while processing messages in certified block: {error}"
                 )),
             })?;
-        if newly_added && !skippable {
-            let seen = local_time;
-            self.unskippable_bundles
-                .push_back(TimestampedBundleInInbox { entry, seen });
-        }
 
         // Remember the certificate for future validator/client synchronizations.
         if add_to_received_log {
@@ -682,7 +666,6 @@ where
         }
         let origins = bundles_by_origin.keys().copied().collect::<Vec<_>>();
         let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
-        let mut removed_unskippable = HashSet::new();
         for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
             tracing::trace!(
                 "Removing [{}] from {chain_id:.8}'s inbox for {origin:}",
@@ -708,32 +691,6 @@ where
                         }
                     );
                 }
-                if was_present && !bundle.is_skippable() {
-                    removed_unskippable.insert(BundleInInbox::new(origin, bundle));
-                }
-            }
-        }
-        if !removed_unskippable.is_empty() {
-            // Delete all removed bundles from the front of the unskippable queue.
-            let maybe_front = self.unskippable_bundles.front();
-            if maybe_front.is_some_and(|ts_entry| removed_unskippable.remove(&ts_entry.entry)) {
-                self.unskippable_bundles.delete_front().await?;
-                while let Some(ts_entry) = self.unskippable_bundles.front() {
-                    if !removed_unskippable.remove(&ts_entry.entry) {
-                        if !self
-                            .removed_unskippable_bundles
-                            .contains(&ts_entry.entry)
-                            .await?
-                        {
-                            break;
-                        }
-                        self.removed_unskippable_bundles.remove(&ts_entry.entry)?;
-                    }
-                    self.unskippable_bundles.delete_front().await?;
-                }
-            }
-            for entry in removed_unskippable {
-                self.removed_unskippable_bundles.insert(&entry)?;
             }
         }
         #[cfg(with_metrics)]

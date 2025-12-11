@@ -1144,7 +1144,7 @@ impl<Env: Environment> Client<Env> {
 
     /// Downloads and processes any certificates we are missing for the given chain.
     ///
-    /// Whether manager values are fetched depends on the chain's follow-only state.
+    /// If we are an owner of the chain, also synchronizes the consensus state.
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn synchronize_chain_state(
         &self,
@@ -1194,7 +1194,7 @@ impl<Env: Environment> Client<Env> {
     /// Downloads any certificates from the specified validator that we are missing for the given
     /// chain.
     ///
-    /// If the chain is not in follow-only mode, also fetches and processes manager values
+    /// If the chain is owned, also fetches and processes manager values
     /// (timeout certificates, proposals, locking blocks) for consensus participation.
     #[instrument(level = "trace", skip(self, remote_node, chain_id))]
     pub(crate) async fn synchronize_chain_state_from(
@@ -1858,14 +1858,6 @@ impl<Env: Environment> ChainClient<Env> {
             .expect("Chain client constructed for invalid chain")
             .pending_proposal()
             .clone()
-    }
-
-    /// Returns whether this chain is in follow-only mode.
-    ///
-    /// A chain is in follow-only mode if no owner key is associated with it, meaning the client
-    /// will only download blocks but won't participate in consensus.
-    pub fn is_follow_only(&self) -> bool {
-        self.preferred_owner.is_none()
     }
 
     /// Updates the chain's state using a closure.
@@ -3193,7 +3185,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// fetching manager values or sender/publisher chains.
     #[instrument(level = "trace")]
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, ChainClientError> {
-        if self.is_follow_only() {
+        if self.preferred_owner.is_none() {
             return self.client.synchronize_chain_state(self.chain_id).await;
         }
         let info = self.prepare_chain().await?;

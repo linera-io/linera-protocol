@@ -249,10 +249,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .into_iter()
                 .map(|result| {
                     let (chain_id, chain) = result?;
-                    let mode = if chain.follow_only() {
-                        ListeningMode::FollowChain
-                    } else {
+                    let mode = if chain.owner.is_some() {
                         ListeningMode::FullChain
+                    } else {
+                        ListeningMode::FollowChain
                     };
                     Ok((chain_id, mode))
                 })
@@ -651,10 +651,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             return Ok(());
         }
         if listening_client.client.preferred_owner().is_none() {
-            debug!("Not processing inbox for non-owned chain {chain_id:.8}");
-            return Ok(());
-        }
-        if listening_client.client.is_follow_only() {
             debug!("Not processing inbox for follow-only chain {chain_id:.8}");
             return Ok(());
         }
