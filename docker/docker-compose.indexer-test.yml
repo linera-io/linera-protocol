@@ -1,16 +1,18 @@
 services:
-  # 1. Storage Service - starts first
-  linera-storage-service:
-    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
-    container_name: linera-storage-service
+  # 0. PostgreSQL Database - starts first
+  postgres:
+    image: postgres:16-alpine
+    container_name: linera-postgres
     ports:
-      - "${LINERA_STORAGE_SERVICE_PORT:-1235}:${LINERA_STORAGE_SERVICE_PORT:-1235}"
-    command: >
-      sh -c "./linera-storage-server memory --endpoint 0.0.0.0:${LINERA_STORAGE_SERVICE_PORT:-1235}"
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
-      - LINERA_STORAGE_SERVICE_PORT=${LINERA_STORAGE_SERVICE_PORT:-1235}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-linera_indexer}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost ${LINERA_STORAGE_SERVICE_PORT:-1235}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -18,21 +20,63 @@ services:
     networks:
       - linera-network
 
-  # 2. Indexer - starts after storage service is healthy
+  # 1. ScyllaDB - storage backend for linera network and exporter
+  scylla-setup:
+    image: ubuntu:24.04
+    container_name: scylla-setup
+    privileged: true
+    volumes:
+      - /proc:/host/proc
+      - /sys:/host/sys
+      - /etc/sysctl.d:/host/sysctl.d
+      - ./compose-scylla-setup.sh:/setup.sh:ro
+    command: ["/bin/bash", "/setup.sh", "--persist"]
+    restart: "no"
+
+  scylla:
+    image: scylladb/scylla:6.2.3
+    container_name: scylla
+    volumes:
+      - scylla-data:/var/lib/scylla
+    environment:
+      SCYLLA_AUTO_CONF: 1
+    command:
+      - "--developer-mode"
+      - "1"
+      - "--overprovisioned"
+      - "1"
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'SELECT now() FROM system.local' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    depends_on:
+      scylla-setup:
+        condition: service_completed_successfully
+    networks:
+      - linera-network
+
+  # 2. Indexer - starts after scylla is healthy
   linera-indexer:
-    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
+    image: "${LINERA_INDEXER_IMAGE:-linera-indexer}"
     container_name: linera-indexer
     ports:
       - "${INDEXER_PORT:-8081}:${INDEXER_PORT:-8081}"
     command: >
-      sh -c "set -ex; ./linera-indexer-grpc --port ${INDEXER_PORT:-8081} --database-path ${INDEXER_DATABASE_PATH:-/data/indexer.db}"
+      sh -c "set -ex;
+      ./linera-indexer-grpc
+      --port $${INDEXER_PORT:-8081}
+      --postgres postgresql://$${POSTGRES_USER:-postgres}:$${POSTGRES_PASSWORD:-postgres}@postgres:5432/$${POSTGRES_DB:-linera_indexer}"
     environment:
       - INDEXER_PORT=${INDEXER_PORT:-8081}
-      - INDEXER_DATABASE_PATH=${INDEXER_DATABASE_PATH:-/data/indexer.db}
-    volumes:
-      - ./indexer-data:/data
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-linera_indexer}
     depends_on:
-      linera-storage-service:
+      scylla:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost ${INDEXER_PORT:-8081}"]
@@ -43,28 +87,89 @@ services:
     networks:
       - linera-network
 
-  # 3. Block Exporter - starts after indexer is healthy
+  # 3. Network (Validator + Faucet) - initializes storage, connects to exporter
+  linera-network:
+    image: "${LINERA_NETWORK_IMAGE:-linera-test}"
+    container_name: linera-network
+    ports:
+      - "${FAUCET_PORT:-8080}:${FAUCET_PORT:-8080}"
+      - "13001:13001"
+    command: >
+      sh -c "./linera net
+      --storage scylladb:tcp:scylla:9042:table_default
+      up
+      --with-faucet
+      --faucet-port ${FAUCET_PORT:-8080}
+      --with-block-exporter
+      --exporter-address linera-block-exporter
+      --exporter-port ${BLOCK_EXPORTER_PORT:-8882}"
+    environment:
+      - RUST_LOG=linera=info
+      - FAUCET_PORT=${FAUCET_PORT:-8080}
+      - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost ${FAUCET_PORT:-8080}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
+    volumes:
+      - network-data:/data
+    depends_on:
+      linera-indexer:
+        condition: service_healthy
+    networks:
+      - linera-network
+
+  # 4. Storage init - waits for network to initialize storage
+  storage-init:
+    image: "${LINERA_NETWORK_IMAGE:-linera-test}"
+    container_name: storage-init
+    command:
+      - sh
+      - -c
+      - |
+        echo "Waiting for storage namespace to be initialized..."
+        while true; do
+          ./linera storage check-existence --storage scylladb:tcp:scylla:9042:table_default_server_0_db
+          status=$$?
+          if [ $$status -eq 0 ]; then
+            echo "Storage namespace exists, exporter can start."
+            exit 0
+          else
+            echo "Storage not ready (status: $$status), retrying in 5 seconds..."
+            sleep 5
+          fi
+        done
+    depends_on:
+      linera-network:
+        condition: service_started
+      scylla:
+        condition: service_healthy
+    networks:
+      - linera-network
+
+  # 5. Block Exporter - starts after storage is initialized
   linera-block-exporter:
-    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
+    image: "${LINERA_EXPORTER_IMAGE:-linera-exporter}"
     container_name: linera-block-exporter
     ports:
       - "${BLOCK_EXPORTER_PORT:-8882}:${BLOCK_EXPORTER_PORT:-8882}"
       - "${METRICS_PORT:-9091}:${METRICS_PORT:-9091}"
     command: >
-      sh -c "./linera-exporter 
-      --storage service:tcp:linera-storage-service:${LINERA_STORAGE_SERVICE_PORT:-1235}:linera_storage_service_server_0_db 
-      --config-path /exporter-config.toml 
+      sh -c "./linera-exporter
+      --storage scylladb:tcp:scylla:9042:table_default_server_0_db
+      --config-path /exporter-config.toml
       --metrics-port ${METRICS_PORT:-9091}"
     environment:
-      - LINERA_STORAGE_SERVICE_PORT=${LINERA_STORAGE_SERVICE_PORT:-1235}
       - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}
       - METRICS_PORT=${METRICS_PORT:-9091}
     volumes:
       - ./exporter-config.toml:/exporter-config.toml:ro
       - ./exporter-data:/data
     depends_on:
-      linera-indexer:
-        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost ${BLOCK_EXPORTER_PORT:-8882}"]
       interval: 5s
@@ -74,42 +179,7 @@ services:
     networks:
       - linera-network
 
-  # 4. Network (Validator + Faucet) - starts after block exporter
-  linera-network:
-    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
-    container_name: linera-network
-    ports:
-      - "${FAUCET_PORT:-8080}:${FAUCET_PORT:-8080}"
-      - "13001:13001"
-    command: >
-      sh -c "./linera net 
-      --storage service:tcp:linera-storage-service:${LINERA_STORAGE_SERVICE_PORT:-1235}:linera_storage_service
-      up
-      --with-faucet
-      --faucet-port ${FAUCET_PORT:-8080}
-      --with-block-exporter
-      --exporter-address linera-block-exporter
-      --exporter-port ${BLOCK_EXPORTER_PORT:-8882}"
-    environment:
-      - RUST_LOG=linera=info
-      - LINERA_STORAGE_SERVICE_PORT=${LINERA_STORAGE_SERVICE_PORT:-1235}
-      - FAUCET_PORT=${FAUCET_PORT:-8080}
-      - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost ${FAUCET_PORT:-8080}"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 20s
-    volumes:
-      - network-data:/data
-    depends_on:
-      linera-block-exporter:
-        condition: service_healthy
-    networks:
-      - linera-network
-
-  # 5. Explorer - starts last after all services are ready
+  # 6. Explorer - starts last after all services are ready
   linera-explorer:
     image: "${LINERA_EXPLORER_IMAGE:-linera-explorer-new}"
     container_name: linera-explorer
@@ -118,13 +188,14 @@ services:
       - "${EXPLORER_API_PORT:-3002}:3002"
     environment:
       - NODE_ENV=production
-      - DB_PATH=/data/indexer.db
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-linera_indexer}
       - EXPLORER_FRONTEND_PORT=${EXPLORER_FRONTEND_PORT:-3001}
       - EXPLORER_API_PORT=${EXPLORER_API_PORT:-3002}
-    volumes:
-      - ./indexer-data:/data:ro
+      - VITE_API_BASE_URL=http://localhost:${EXPLORER_API_PORT:-3002}/api
     depends_on:
       linera-indexer:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${EXPLORER_API_PORT:-3002}/api/health || exit 1"]
@@ -136,7 +207,9 @@ services:
       - linera-network
 
 volumes:
-  indexer-data:
+  postgres-data:
+    driver: local
+  scylla-data:
     driver: local
   exporter-data:
     driver: local

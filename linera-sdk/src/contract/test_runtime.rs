@@ -1018,7 +1018,7 @@ where
         response
     }
 
-    /// Returns the round in which this block was validated.
+    /// Returns the multi-leader round in which this block was validated.
     pub fn validation_round(&mut self) -> Option<u32> {
         self.round
     }

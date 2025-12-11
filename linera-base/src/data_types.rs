@@ -434,6 +434,11 @@ macro_rules! impl_wrapped_number {
                 Self(val)
             }
 
+            /// Returns the absolute difference between `self` and `other`.
+            pub fn abs_diff(self, other: Self) -> Self {
+                Self(self.0.abs_diff(other.0))
+            }
+
             /// Checked in-place addition.
             pub fn try_add_assign(&mut self, other: Self) -> Result<(), ArithmeticError> {
                 self.0 = self
@@ -659,6 +664,11 @@ impl Round {
         }
     }
 
+    /// Returns whether this is a validator round.
+    pub fn is_validator(&self) -> bool {
+        matches!(self, Round::Validator(_))
+    }
+
     /// Whether the round is the fast round.
     pub fn is_fast(&self) -> bool {
         matches!(self, Round::Fast)
@@ -719,6 +729,11 @@ impl Amount {
     /// Returns an `Amount` corresponding to that many attotokens.
     pub const fn from_attos(attotokens: u128) -> Amount {
         Amount(attotokens)
+    }
+
+    /// Returns the number of attotokens.
+    pub const fn to_attos(self) -> u128 {
+        self.0
     }
 
     /// Helper function to obtain the 64 most significant bits of the balance.

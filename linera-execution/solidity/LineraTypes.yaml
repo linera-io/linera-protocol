@@ -22,6 +22,8 @@ ChainOwnership:
           KEY:
             TYPENAME: AccountOwner
           VALUE: U64
+    - first_leader:
+        TYPENAME: OptionAccountOwner
     - multi_leader_rounds: U32
     - open_multi_leader_rounds: BOOL
     - timeout_config:

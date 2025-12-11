@@ -59,6 +59,12 @@ impl From<SqliteError> for IndexerError {
     }
 }
 
+impl From<crate::db::postgres::PostgresError> for IndexerError {
+    fn from(error: crate::db::postgres::PostgresError) -> Self {
+        Self::Other(Box::new(error).into())
+    }
+}
+
 impl From<async_tungstenite::tungstenite::Error> for IndexerError {
     fn from(error: async_tungstenite::tungstenite::Error) -> Self {
         Box::new(error).into()

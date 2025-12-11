@@ -73,6 +73,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera storage list-blob-ids`↴](#linera-storage-list-blob-ids)
 * [`linera storage list-chain-ids`↴](#linera-storage-list-chain-ids)
 * [`linera storage list-event-ids`↴](#linera-storage-list-event-ids)
+* [`linera completion`↴](#linera-completion)
 
 ## `linera`
 
@@ -119,6 +120,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `net` — Manage a local Linera Network
 * `validator` — Manage validators in the committee
 * `storage` — Operation on the storage
+* `completion` — Generate shell completion scripts
 
 ###### **Options:**
 
@@ -170,7 +172,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `--timing-interval <TIMING_INTERVAL>` — Interval in seconds between timing reports (defaults to 5)
 
   Default value: `5`
-* `--grace-period <GRACE_PERIOD>` — An additional delay, after reaching a quorum, to wait for additional validator signatures, as a fraction of time taken to reach quorum
+* `--quorum-grace-period <QUORUM_GRACE_PERIOD>` — An additional delay, after reaching a quorum, to wait for additional validator signatures, as a fraction of time taken to reach quorum
 
   Default value: `0.2`
 * `--blob-download-timeout-ms <BLOB_DOWNLOAD_TIMEOUT>` — The delay when downloading a blob, after which we try a second validator, in milliseconds
@@ -239,6 +241,7 @@ Client implementation and command-line tool for the Linera blockchain
 
   Default value: `1`
 * `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
+* `--with_application_logs` — Output log messages from contract execution
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
 * `--tokio-blocking-threads <TOKIO_BLOCKING_THREADS>` — The number of Tokio blocking threads to use
 * `--block-cache-size <BLOCK_CACHE_SIZE>` — Size of the block cache (default: 5000)
@@ -295,6 +298,7 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
 * `--super-owners <SUPER_OWNERS>` — The new super owners
 * `--owners <OWNERS>` — The new regular owners
+* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If not set, this is random like other rounds
 * `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners.
 
    If they are specified there must be exactly one weight for each owner. If no weights are given, every owner will have weight 100.
@@ -347,6 +351,7 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 * `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
 * `--super-owners <SUPER_OWNERS>` — The new super owners
 * `--owners <OWNERS>` — The new regular owners
+* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If not set, this is random like other rounds
 * `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners.
 
    If they are specified there must be exactly one weight for each owner. If no weights are given, every owner will have weight 100.
@@ -734,6 +739,9 @@ Run a GraphQL service to explore and extend the chains of the wallet
 
   Default value: `0`
 * `--port <PORT>` — The port on which to run the server
+* `--operator-application-ids <OPERATOR_APPLICATION_IDS>` — Application IDs of operator applications to watch. When specified, a task processor is started alongside the node service
+* `--controller-id <CONTROLLER_APPLICATION_ID>` — A controller to execute a dynamic set of applications running on a dynamic set of chains
+* `--operators <OPERATORS>` — Supported operators and their binary paths. Format: `name=path` or just `name` (uses name as path). Example: `--operators my-operator=/path/to/binary`
 
 
 
@@ -1266,8 +1274,6 @@ Adds a new validator with the specified public key, account key, network address
 * `--account-key <ACCOUNT_KEY>` — Account public key for receiving payments and rewards
 * `--address <ADDRESS>` — Network address where the validator can be reached (e.g., grpcs://host:port)
 * `--votes <VOTES>` — Voting weight for consensus (default: 1)
-
-  Default value: `1`
 * `--skip-online-check` — Skip online connectivity verification before adding
 
 
@@ -1463,6 +1469,21 @@ List the chain IDs in the database
 List the event IDs in the database
 
 **Usage:** `linera storage list-event-ids`
+
+
+
+## `linera completion`
+
+Generate shell completion scripts
+
+**Usage:** `linera completion <SHELL>`
+
+###### **Arguments:**
+
+* `<SHELL>` — The shell to generate completions for
+
+  Possible values: `bash`, `elvish`, `fish`, `powershell`, `zsh`
+
 
 
 

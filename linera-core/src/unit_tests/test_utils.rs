@@ -15,7 +15,7 @@ use futures::{
     Future,
 };
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoHash, InMemorySigner, ValidatorKeypair, ValidatorPublicKey},
+    crypto::{AccountPublicKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey},
     data_types::*,
     identifiers::{AccountOwner, BlobId, ChainId},
     ownership::ChainOwnership,
@@ -50,6 +50,7 @@ use {
 use crate::{
     client::{chain_client, Client},
     data_types::*,
+    environment::{TestSigner, TestWallet},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
@@ -777,7 +778,7 @@ pub struct TestBuilder<B: StorageBuilder> {
     validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
     chain_client_storages: Vec<B::Storage>,
     pub chain_owners: BTreeMap<ChainId, AccountOwner>,
-    pub signer: InMemorySigner,
+    pub signer: TestSigner,
 }
 
 #[async_trait]
@@ -821,8 +822,7 @@ impl GenesisStorageBuilder {
     }
 }
 
-pub type ChainClient<S> =
-    crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>, InMemorySigner>>;
+pub type ChainClient<S> = crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>>>;
 
 impl<S: Storage + Clone + Send + Sync + 'static> ChainClient<S> {
     /// Reads the hashed certificate values in descending order from the given hash.
@@ -853,7 +853,7 @@ where
         mut storage_builder: B,
         count: usize,
         with_faulty_validators: usize,
-        mut signer: InMemorySigner,
+        mut signer: TestSigner,
     ) -> Result<Self, anyhow::Error> {
         let mut validators = Vec::new();
         for _ in 0..count {
@@ -1048,6 +1048,7 @@ where
         block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
         options: chain_client::Options,
+        follow_only: bool,
     ) -> anyhow::Result<ChainClient<B::Storage>> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
@@ -1058,6 +1059,7 @@ where
                 network: self.make_node_provider(),
                 storage,
                 signer: self.signer.clone(),
+                wallet: TestWallet::default(),
             },
             self.admin_id(),
             false,
@@ -1077,6 +1079,7 @@ where
             None,
             self.chain_owners.get(&chain_id).copied(),
             None,
+            follow_only,
         ))
     }
 
@@ -1091,6 +1094,7 @@ where
             block_hash,
             block_height,
             chain_client::Options::test_default(),
+            false,
         )
         .await
     }

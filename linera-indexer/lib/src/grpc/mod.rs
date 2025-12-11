@@ -35,7 +35,9 @@ pub enum ProcessingError {
     #[error("Failed to serialize block: {0}")]
     BlockSerialization(bincode::Error),
     #[error("Database error: {0}")]
-    Database(#[from] SqliteError),
+    DatabaseSqlite(#[from] SqliteError),
+    #[error("Database error: {0}")]
+    DatabasePostgres(#[from] crate::db::postgres::PostgresError),
     #[error("Empty element payload")]
     EmptyPayload,
 }
@@ -235,6 +237,24 @@ impl From<SqliteError> for Status {
     }
 }
 
+impl From<crate::db::postgres::PostgresError> for Status {
+    fn from(error: crate::db::postgres::PostgresError) -> Self {
+        use crate::db::postgres::PostgresError;
+        match error {
+            PostgresError::Database(e) => Status::internal(format!("Database error: {}", e)),
+            PostgresError::Serialization(e) => {
+                Status::invalid_argument(format!("Serialization error: {}", e))
+            }
+            PostgresError::BlockNotFound(hash) => {
+                Status::not_found(format!("Block not found: {}", hash))
+            }
+            PostgresError::BlobNotFound(hash) => {
+                Status::not_found(format!("Blob not found: {}", hash))
+            }
+        }
+    }
+}
+
 impl From<ProcessingError> for Status {
     fn from(error: ProcessingError) -> Self {
         match error {
@@ -250,7 +270,8 @@ impl From<ProcessingError> for Status {
             ProcessingError::BlockSerialization(e) => {
                 Status::internal(format!("Failed to serialize block: {}", e))
             }
-            ProcessingError::Database(e) => e.into(),
+            ProcessingError::DatabaseSqlite(e) => e.into(),
+            ProcessingError::DatabasePostgres(e) => e.into(),
             ProcessingError::EmptyPayload => Status::invalid_argument("Empty element"),
         }
     }

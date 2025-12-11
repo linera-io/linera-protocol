@@ -11,11 +11,14 @@ use std::{
 use futures::future::Either;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
-    data_types::{ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round},
+    data_types::{
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
+    },
     doc_scalar,
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
     time::Instant,
+    util::traits::DynError,
 };
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
@@ -35,6 +38,8 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{error, instrument, trace, warn};
 
+/// Re-export of [`EventSubscriptionsResult`] for use by other crate modules.
+pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
         BlockOutcome, ChainActorReceivers, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest,
@@ -223,8 +228,15 @@ pub enum WorkerError {
         computed: Box<BlockExecutionOutcome>,
         submitted: Box<BlockExecutionOutcome>,
     },
-    #[error("The block timestamp is in the future.")]
-    InvalidTimestamp,
+    #[error(
+        "Block timestamp ({block_timestamp}) is further in the future from local time \
+        ({local_time}) than block time grace period ({block_time_grace_period:?})"
+    )]
+    InvalidTimestamp {
+        block_timestamp: Timestamp,
+        local_time: Timestamp,
+        block_time_grace_period: Duration,
+    },
     #[error("We don't have the value for the certificate.")]
     MissingCertificateValue,
     #[error("The hash certificate doesn't match its value.")]
@@ -254,16 +266,16 @@ pub enum WorkerError {
     #[error("ChainWorkerActor for chain {chain_id} stopped executing unexpectedly: {error}")]
     ChainActorSendError {
         chain_id: ChainId,
-        error: Box<dyn std::error::Error + Send + Sync>,
+        error: Box<dyn DynError>,
     },
     #[error("ChainWorkerActor for chain {chain_id} stopped executing without responding: {error}")]
     ChainActorRecvError {
         chain_id: ChainId,
-        error: Box<dyn std::error::Error + Send + Sync>,
+        error: Box<dyn DynError>,
     },
 
     #[error("thread error: {0}")]
-    Thread(#[from] web_thread::Error),
+    Thread(#[from] web_thread_pool::Error),
 }
 
 impl WorkerError {
@@ -281,7 +293,7 @@ impl WorkerError {
             | WorkerError::EventsNotFound(_)
             | WorkerError::InvalidBlockChaining
             | WorkerError::IncorrectOutcome { .. }
-            | WorkerError::InvalidTimestamp
+            | WorkerError::InvalidTimestamp { .. }
             | WorkerError::MissingCertificateValue
             | WorkerError::InvalidLiteCertificate
             | WorkerError::FastBlockUsingOracles
@@ -510,13 +522,13 @@ where
         self
     }
 
-    /// Returns an instance with the specified grace period.
+    /// Returns an instance with the specified block time grace period.
     ///
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
     #[instrument(level = "trace", skip(self))]
-    pub fn with_grace_period(mut self, grace_period: Duration) -> Self {
-        self.chain_worker_config.grace_period = grace_period;
+    pub fn with_block_time_grace_period(mut self, block_time_grace_period: Duration) -> Self {
+        self.chain_worker_config.block_time_grace_period = block_time_grace_period;
         self
     }
 
@@ -637,14 +649,14 @@ where
 #[allow(async_fn_in_trait)]
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait ProcessableCertificate: CertificateValue + Sized + 'static {
-    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
+    async fn process_certificate<S: Storage + Clone + 'static>(
         worker: &WorkerState<S>,
         certificate: GenericCertificate<Self>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 }
 
 impl ProcessableCertificate for ConfirmedBlock {
-    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
+    async fn process_certificate<S: Storage + Clone + 'static>(
         worker: &WorkerState<S>,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -653,7 +665,7 @@ impl ProcessableCertificate for ConfirmedBlock {
 }
 
 impl ProcessableCertificate for ValidatedBlock {
-    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
+    async fn process_certificate<S: Storage + Clone + 'static>(
         worker: &WorkerState<S>,
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -662,7 +674,7 @@ impl ProcessableCertificate for ValidatedBlock {
 }
 
 impl ProcessableCertificate for Timeout {
-    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
+    async fn process_certificate<S: Storage + Clone + 'static>(
         worker: &WorkerState<S>,
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -672,7 +684,7 @@ impl ProcessableCertificate for Timeout {
 
 impl<StorageClient> WorkerState<StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage + Clone + 'static,
 {
     #[instrument(level = "trace", skip(self, certificate, notifier))]
     #[inline]
@@ -1398,25 +1410,89 @@ where
         .await
     }
 
-    /// Reads a range from the confirmed log.
-    #[instrument(skip_all, fields(
-        nickname = %self.nickname,
-        chain_id = %chain_id,
-        start = %start,
-        end = %end
-    ))]
-    pub async fn read_confirmed_log(
+    /// Gets block hashes for the given heights.
+    pub async fn get_block_hashes(
         &self,
         chain_id: ChainId,
-        start: BlockHeight,
-        end: BlockHeight,
+        heights: Vec<BlockHeight>,
     ) -> Result<Vec<CryptoHash>, WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::ReadConfirmedLog {
-                start,
-                end,
+            ChainWorkerRequest::GetBlockHashes { heights, callback }
+        })
+        .await
+    }
+
+    /// Gets proposed blobs from the manager for specified blob IDs.
+    pub async fn get_proposed_blobs(
+        &self,
+        chain_id: ChainId,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<Vec<Blob>, WorkerError> {
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::GetProposedBlobs { blob_ids, callback }
+        })
+        .await
+    }
+
+    /// Gets event subscriptions from the chain.
+    pub async fn get_event_subscriptions(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<EventSubscriptionsResult, WorkerError> {
+        self.query_chain_worker(chain_id, |callback| {
+            ChainWorkerRequest::GetEventSubscriptions { callback }
+        })
+        .await
+    }
+
+    /// Gets the next expected event index for a stream.
+    pub async fn get_next_expected_event(
+        &self,
+        chain_id: ChainId,
+        stream_id: StreamId,
+    ) -> Result<Option<u32>, WorkerError> {
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::GetNextExpectedEvent {
+                stream_id,
                 callback,
             }
+        })
+        .await
+    }
+
+    /// Gets received certificate trackers.
+    pub async fn get_received_certificate_trackers(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
+        self.query_chain_worker(chain_id, |callback| {
+            ChainWorkerRequest::GetReceivedCertificateTrackers { callback }
+        })
+        .await
+    }
+
+    /// Gets tip state and outbox info for next_outbox_heights calculation.
+    pub async fn get_tip_state_and_outbox_info(
+        &self,
+        chain_id: ChainId,
+        receiver_id: ChainId,
+    ) -> Result<(BlockHeight, Option<BlockHeight>), WorkerError> {
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::GetTipStateAndOutboxInfo {
+                receiver_id,
+                callback,
+            }
+        })
+        .await
+    }
+
+    /// Gets the next height to preprocess.
+    pub async fn get_next_height_to_preprocess(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<BlockHeight, WorkerError> {
+        self.query_chain_worker(chain_id, |callback| {
+            ChainWorkerRequest::GetNextHeightToPreprocess { callback }
         })
         .await
     }

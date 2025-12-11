@@ -9,7 +9,7 @@ use async_graphql::{
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
-use futures::{lock::Mutex, Future, FutureExt as _};
+use futures::{lock::Mutex, Future, FutureExt as _, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{
@@ -26,10 +26,13 @@ use linera_chain::{
     types::{ConfirmedBlock, GenericCertificate},
     ChainStateView,
 };
-use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
+use linera_client::chain_listener::{
+    ChainListener, ChainListenerConfig, ClientContext, ListenerCommand,
+};
 use linera_core::{
     client::chain_client::{self, ChainClient},
     data_types::ClientOutcome,
+    wallet::Wallet as _,
     worker::Notification,
 };
 use linera_execution::{
@@ -41,8 +44,7 @@ use linera_metrics::monitoring_server;
 use linera_sdk::linera_base_types::BlobContent;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use thiserror::Error as ThisError;
-use tokio::sync::OwnedRwLockReadGuard;
+use tokio::sync::{mpsc::UnboundedReceiver, OwnedRwLockReadGuard};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument, trace};
@@ -72,35 +74,30 @@ pub struct MutationRoot<C> {
     context: Arc<Mutex<C>>,
 }
 
-#[derive(Debug, ThisError)]
+#[derive(Debug, thiserror::Error)]
 enum NodeServiceError {
     #[error(transparent)]
-    ChainClientError(#[from] chain_client::Error),
+    ChainClient(#[from] chain_client::Error),
     #[error(transparent)]
-    BcsHexError(#[from] BcsHexParseError),
+    BcsHex(#[from] BcsHexParseError),
     #[error(transparent)]
-    JsonError(#[from] serde_json::Error),
+    Json(#[from] serde_json::Error),
     #[error("malformed chain ID: {0}")]
     InvalidChainId(CryptoError),
+    #[error(transparent)]
+    Client(#[from] linera_client::Error),
 }
 
 impl IntoResponse for NodeServiceError {
     fn into_response(self) -> response::Response {
-        let tuple = match self {
-            NodeServiceError::BcsHexError(e) => (StatusCode::BAD_REQUEST, vec![e.to_string()]),
-            NodeServiceError::ChainClientError(e) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
-            }
-            NodeServiceError::JsonError(e) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
-            }
-            NodeServiceError::InvalidChainId(_) => (
-                StatusCode::BAD_REQUEST,
-                vec!["invalid chain ID".to_string()],
-            ),
+        let status = if let NodeServiceError::InvalidChainId(_) | NodeServiceError::BcsHex(_) = self
+        {
+            StatusCode::BAD_REQUEST
+        } else {
+            StatusCode::INTERNAL_SERVER_ERROR
         };
-        let tuple = (tuple.0, json!({"error": tuple.1}).to_string());
-        tuple.into_response()
+        let body = json!({"error": self.to_string()}).to_string();
+        (status, body).into_response()
     }
 }
 
@@ -114,7 +111,12 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        let client = self.context.lock().await.make_chain_client(chain_id);
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         Ok(client.subscribe()?)
     }
 }
@@ -156,7 +158,12 @@ where
         Fut: Future<Output = (Result<ClientOutcome<T>, Error>, ChainClient<C::Environment>)>,
     {
         loop {
-            let client = self.context.lock().await.make_chain_client(*chain_id);
+            let client = self
+                .context
+                .lock()
+                .await
+                .make_chain_client(*chain_id)
+                .await?;
             let mut stream = client.subscribe()?;
             let (result, client) = f(client).await;
             self.context.lock().await.update_wallet(&client).await?;
@@ -182,7 +189,12 @@ where
     ) -> Result<Vec<CryptoHash>, Error> {
         let mut hashes = Vec::new();
         loop {
-            let client = self.context.lock().await.make_chain_client(chain_id);
+            let client = self
+                .context
+                .lock()
+                .await
+                .make_chain_client(chain_id)
+                .await?;
             let result = client.process_inbox().await;
             self.context.lock().await.update_wallet(&client).await?;
             let (certificates, maybe_timeout) = result?;
@@ -206,7 +218,12 @@ where
         &self,
         #[graphql(desc = "The chain being synchronized.")] chain_id: ChainId,
     ) -> Result<u64, Error> {
-        let client = self.context.lock().await.make_chain_client(chain_id);
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         let info = client.synchronize_from_validators().await?;
         self.context.lock().await.update_wallet(&client).await?;
         Ok(info.next_block_height.0)
@@ -217,7 +234,12 @@ where
         &self,
         #[graphql(desc = "The chain on whose block is being retried.")] chain_id: ChainId,
     ) -> Result<Option<CryptoHash>, Error> {
-        let client = self.context.lock().await.make_chain_client(chain_id);
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         let outcome = client.process_pending_block().await?;
         self.context.lock().await.update_wallet(&client).await?;
         match outcome {
@@ -412,6 +434,7 @@ where
         let operation = SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
             owners: Vec::new(),
+            first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
@@ -431,6 +454,9 @@ where
             desc = "Whether multi-leader rounds are unrestricted, that is not limited to chain owners."
         )]
         open_multi_leader_rounds: bool,
+        #[graphql(desc = "The leader of the first single-leader round. \
+                          If not set, this is random like other rounds.")]
+        first_leader: Option<AccountOwner>,
         #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
         fast_round_ms: Option<u64>,
         #[graphql(
@@ -454,6 +480,7 @@ where
         let operation = SystemOperation::ChangeOwnership {
             super_owners: Vec::new(),
             owners: new_owners.into_iter().zip(new_weights).collect(),
+            first_leader,
             multi_leader_rounds,
             open_multi_leader_rounds,
             timeout_config: TimeoutConfig {
@@ -624,13 +651,23 @@ where
         ChainStateExtendedView<<C::Environment as linera_core::Environment>::StorageContext>,
         Error,
     > {
-        let client = self.context.lock().await.make_chain_client(chain_id);
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         let view = client.chain_state_view().await?;
         Ok(ChainStateExtendedView::new(view))
     }
 
     async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
-        let client = self.context.lock().await.make_chain_client(chain_id);
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         let applications = client
             .chain_state_view()
             .await?
@@ -648,7 +685,14 @@ where
 
     async fn chains(&self) -> Result<Chains, Error> {
         Ok(Chains {
-            list: self.context.lock().await.wallet().chain_ids(),
+            list: self
+                .context
+                .lock()
+                .await
+                .wallet()
+                .chain_ids()
+                .try_collect()
+                .await?,
             default: self.default_chain,
         })
     }
@@ -658,7 +702,12 @@ where
         hash: Option<CryptoHash>,
         chain_id: ChainId,
     ) -> Result<Option<ConfirmedBlock>, Error> {
-        let client = self.context.lock().await.make_chain_client(chain_id);
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         let hash = match hash {
             Some(hash) => Some(hash),
             None => client.chain_info().await?.block_hash,
@@ -682,6 +731,7 @@ where
             .lock()
             .await
             .make_chain_client(chain_id)
+            .await?
             .events_from_index(stream_id, start_index)
             .await?)
     }
@@ -692,7 +742,12 @@ where
         chain_id: ChainId,
         limit: Option<u32>,
     ) -> Result<Vec<ConfirmedBlock>, Error> {
-        let client = self.context.lock().await.make_chain_client(chain_id);
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         let limit = limit.unwrap_or(10);
         let from = match from {
             Some(from) => Some(from),
@@ -857,7 +912,7 @@ where
         port: NonZeroU16,
         #[cfg(with_metrics)] metrics_port: NonZeroU16,
         default_chain: Option<ChainId>,
-        context: C,
+        context: Arc<Mutex<C>>,
     ) -> Self {
         Self {
             config,
@@ -865,7 +920,7 @@ where
             #[cfg(with_metrics)]
             metrics_port,
             default_chain,
-            context: Arc::new(Mutex::new(context)),
+            context,
         }
     }
 
@@ -893,7 +948,11 @@ where
 
     /// Runs the node service.
     #[instrument(name = "node_service", level = "info", skip_all, fields(port = ?self.port))]
-    pub async fn run(self, cancellation_token: CancellationToken) -> Result<(), anyhow::Error> {
+    pub async fn run(
+        self,
+        cancellation_token: CancellationToken,
+        command_receiver: UnboundedReceiver<ListenerCommand>,
+    ) -> Result<(), anyhow::Error> {
         let port = self.port.get();
         let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
         let application_handler =
@@ -923,6 +982,7 @@ where
             self.context,
             storage,
             cancellation_token.clone(),
+            command_receiver,
         )
         .run(true)
         .await?;
@@ -959,7 +1019,12 @@ where
         }
 
         trace!("Query requested a new block with operations: {operations:?}");
-        let client = self.context.lock().await.make_chain_client(chain_id);
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         let hash = loop {
             let timeout = match client
                 .execute_operations(operations.clone(), vec![])
@@ -989,7 +1054,12 @@ where
             application_id,
             bytes,
         };
-        let client = self.context.lock().await.make_chain_client(chain_id);
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         let QueryOutcome {
             response,
             operations,

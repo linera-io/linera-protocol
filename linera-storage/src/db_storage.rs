@@ -332,6 +332,7 @@ impl MultiPartitionBatch {
 pub struct DbStorage<Database, Clock = WallClock> {
     database: Arc<Database>,
     clock: Clock,
+    thread_pool: Arc<linera_execution::ThreadPool>,
     wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
@@ -425,6 +426,9 @@ impl Clock for WallClock {
 struct TestClockInner {
     time: Timestamp,
     sleeps: BTreeMap<Reverse<Timestamp>, Vec<oneshot::Sender<()>>>,
+    /// Optional callback that decides whether to auto-advance for a given target timestamp.
+    /// Returns `true` if the clock should auto-advance to that time.
+    sleep_callback: Option<Box<dyn Fn(Timestamp) -> bool + Send + Sync>>,
 }
 
 #[cfg(with_testing)]
@@ -438,12 +442,21 @@ impl TestClockInner {
     }
 
     fn add_sleep(&mut self, delta: TimeDelta) -> Receiver<()> {
-        self.add_sleep_until(self.time.saturating_add(delta))
+        let target_time = self.time.saturating_add(delta);
+        self.add_sleep_until(target_time)
     }
 
     fn add_sleep_until(&mut self, time: Timestamp) -> Receiver<()> {
         let (sender, receiver) = oneshot::channel();
-        if self.time >= time {
+        let should_auto_advance = self
+            .sleep_callback
+            .as_ref()
+            .is_some_and(|callback| callback(time));
+        if should_auto_advance && time > self.time {
+            // Auto-advance mode: immediately advance the clock and complete the sleep.
+            self.set(time);
+            let _ = sender.send(());
+        } else if self.time >= time {
             let _ = sender.send(());
         } else {
             self.sleeps.entry(Reverse(time)).or_default().push(sender);
@@ -504,6 +517,22 @@ impl TestClock {
         self.lock().time
     }
 
+    /// Sets a callback that decides whether to auto-advance for each sleep call.
+    ///
+    /// The callback receives the target timestamp and should return `true` if the clock
+    /// should auto-advance to that time, or `false` if the sleep should block normally.
+    pub fn set_sleep_callback<F>(&self, callback: F)
+    where
+        F: Fn(Timestamp) -> bool + Send + Sync + 'static,
+    {
+        self.lock().sleep_callback = Some(Box::new(callback));
+    }
+
+    /// Clears the sleep callback.
+    pub fn clear_sleep_callback(&self) {
+        self.lock().sleep_callback = None;
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<TestClockInner> {
         self.0.lock().expect("poisoned TestClock mutex")
     }
@@ -526,6 +555,10 @@ where
         &self.clock
     }
 
+    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool> {
+        &self.thread_pool
+    }
+
     #[instrument(level = "trace", skip_all, fields(chain_id = %chain_id))]
     async fn load_chain(
         &self,
@@ -535,6 +568,7 @@ where
         let _metric = metrics::LOAD_CHAIN_LATENCY.measure_latency();
         let runtime_context = ChainRuntimeContext {
             storage: self.clone(),
+            thread_pool: self.thread_pool.clone(),
             chain_id,
             execution_runtime_config: self.execution_runtime_config,
             user_contracts: self.user_contracts.clone(),
@@ -1053,11 +1087,20 @@ impl<Database, C> DbStorage<Database, C> {
         Self {
             database: Arc::new(database),
             clock,
+            // The `Arc` here is required on native but useless on the Web.
+            #[cfg_attr(web, expect(clippy::arc_with_non_send_sync))]
+            thread_pool: Arc::new(linera_execution::ThreadPool::new(20)),
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
+    }
+
+    /// Sets whether contract log messages should be output.
+    pub fn with_allow_application_logs(mut self, allow: bool) -> Self {
+        self.execution_runtime_config.allow_application_logs = allow;
+        self
     }
 }
 

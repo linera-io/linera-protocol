@@ -4,7 +4,7 @@
 use std::sync::LazyLock;
 
 use linera_base::prometheus_util::{self};
-use prometheus::{Histogram, HistogramVec, IntCounterVec, IntGaugeVec};
+use prometheus::{Histogram, HistogramVec, IntCounterVec, IntGauge, IntGaugeVec};
 
 pub(crate) static GET_BLOB_HISTOGRAM: LazyLock<Histogram> = LazyLock::new(|| {
     prometheus_util::register_histogram(
@@ -69,5 +69,12 @@ pub(crate) static VALIDATOR_EXPORTER_QUEUE_LENGTH: LazyLock<IntGaugeVec> = LazyL
         "validator_exporter_queue_length",
         "Length of the block queue for validator exporters",
         &["destination"],
+    )
+});
+
+pub(crate) static EXPORTER_NOTIFICATION_QUEUE_LENGTH: LazyLock<IntGauge> = LazyLock::new(|| {
+    prometheus_util::register_int_gauge(
+        "exporter_notification_queue_length",
+        "Length of the notification queue for the exporter service",
     )
 });

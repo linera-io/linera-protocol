@@ -68,7 +68,7 @@ struct ServerContext {
     cross_chain_config: CrossChainConfig,
     notification_config: NotificationConfig,
     shard: Option<usize>,
-    grace_period: Duration,
+    block_time_grace_period: Duration,
     chain_worker_ttl: Duration,
     block_cache_size: usize,
     execution_state_cache_size: usize,
@@ -102,7 +102,7 @@ impl ServerContext {
         )
         .with_allow_inactive_chains(false)
         .with_allow_messages_from_deprecated_epochs(false)
-        .with_grace_period(self.grace_period)
+        .with_block_time_grace_period(self.block_time_grace_period)
         .with_chain_worker_ttl(self.chain_worker_ttl)
         .with_chain_info_max_received_log_entries(self.chain_info_max_received_log_entries)
         .with_regular_request_batch_size(self.regular_request_batch_size)
@@ -390,8 +390,8 @@ enum ServerCommand {
 
         /// Blocks with a timestamp this far in the future will still be accepted, but the validator
         /// will wait until that timestamp before voting.
-        #[arg(long = "grace-period-ms", default_value = "500", value_parser = util::parse_millis)]
-        grace_period: Duration,
+        #[arg(long = "block-time-grace-period-ms", default_value = "500", value_parser = util::parse_millis)]
+        block_time_grace_period: Duration,
 
         /// The WebAssembly runtime to use.
         #[arg(long)]
@@ -558,7 +558,7 @@ async fn run(options: ServerOptions) {
             cross_chain_config,
             notification_config,
             shard,
-            grace_period,
+            block_time_grace_period,
             wasm_runtime,
             chain_worker_ttl,
             chain_info_max_received_log_entries,
@@ -576,7 +576,7 @@ async fn run(options: ServerOptions) {
                 cross_chain_config,
                 notification_config,
                 shard,
-                grace_period,
+                block_time_grace_period,
                 chain_worker_ttl,
                 block_cache_size: options.block_cache_size,
                 execution_state_cache_size: options.execution_state_cache_size,
@@ -588,8 +588,10 @@ async fn run(options: ServerOptions) {
             let store_config = storage_config
                 .add_common_storage_options(&common_storage_options)
                 .unwrap();
+            // Validators should not output contract logs.
+            let allow_application_logs = false;
             store_config
-                .run_with_storage(wasm_runtime, job)
+                .run_with_storage(wasm_runtime, allow_application_logs, job)
                 .boxed()
                 .await
                 .unwrap()

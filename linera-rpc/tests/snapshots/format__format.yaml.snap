@@ -377,6 +377,7 @@ ChainManagerInfo:
   STRUCT:
     - ownership:
         TYPENAME: ChainOwnership
+    - seed: U64
     - requested_signed_proposal:
         OPTION:
           TYPENAME: BlockProposal
@@ -435,6 +436,9 @@ ChainOwnership:
           KEY:
             TYPENAME: AccountOwner
           VALUE: U64
+    - first_leader:
+        OPTION:
+          TYPENAME: AccountOwner
     - multi_leader_rounds: U32
     - open_multi_leader_rounds: BOOL
     - timeout_config:
@@ -808,6 +812,14 @@ NodeError:
               TYPENAME: ChainId
           - remote_node:
               TYPENAME: Secp256k1PublicKey
+    31:
+      InvalidTimestamp:
+        STRUCT:
+          - block_timestamp:
+              TYPENAME: Timestamp
+          - local_time:
+              TYPENAME: Timestamp
+          - block_time_grace_period_ms: U64
 OpenChainConfig:
   STRUCT:
     - ownership:
@@ -1231,6 +1243,9 @@ SystemOperation:
                 TUPLE:
                   - TYPENAME: AccountOwner
                   - U64
+          - first_leader:
+              OPTION:
+                TYPENAME: AccountOwner
           - multi_leader_rounds: U32
           - open_multi_leader_rounds: BOOL
           - timeout_config:

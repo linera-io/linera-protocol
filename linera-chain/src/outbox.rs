@@ -6,8 +6,8 @@ use linera_base::data_types::{ArithmeticError, BlockHeight};
 #[cfg(with_testing)]
 use linera_views::context::MemoryContext;
 use linera_views::{
-    bucket_queue_view::BucketQueueView,
     context::Context,
+    queue_view::QueueView,
     register_view::RegisterView,
     views::{ClonableView, View},
     ViewError,
@@ -34,12 +34,6 @@ mod metrics {
     });
 }
 
-// The number of block heights in a bucket
-// The `BlockHeight` has just 8 bytes so the size is constant.
-// This means that by choosing a size of 1000, we have a
-// reasonable size that will not create any memory issues.
-const BLOCK_HEIGHT_BUCKET_SIZE: usize = 1000;
-
 /// The state of an outbox
 /// * An outbox is used to send messages to another chain.
 /// * Internally, this is implemented as a FIFO queue of (increasing) block heights.
@@ -52,18 +46,18 @@ const BLOCK_HEIGHT_BUCKET_SIZE: usize = 1000;
 #[allocative(bound = "C")]
 pub struct OutboxStateView<C>
 where
-    C: Context + Send + Sync + 'static,
+    C: Context + 'static,
 {
     /// The minimum block height accepted in the future.
     pub next_height_to_schedule: RegisterView<C, BlockHeight>,
     /// Keep sending these certified blocks of ours until they are acknowledged by
     /// receivers.
-    pub queue: BucketQueueView<C, BlockHeight, BLOCK_HEIGHT_BUCKET_SIZE>,
+    pub queue: QueueView<C, BlockHeight>,
 }
 
 impl<C> OutboxStateView<C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
 {
     /// Schedules a message at the given height if we haven't already.
     /// Returns true if a change was made.
@@ -84,17 +78,17 @@ where
     }
 
     /// Marks all messages as received up to the given height.
-    /// Returns true if a change was made.
+    /// Returns the heights that were newly marked as received.
     pub(crate) async fn mark_messages_as_received(
         &mut self,
         height: BlockHeight,
     ) -> Result<Vec<BlockHeight>, ViewError> {
         let mut updates = Vec::new();
-        while let Some(h) = self.queue.front().copied() {
+        while let Some(h) = self.queue.front().await? {
             if h > height {
                 break;
             }
-            self.queue.delete_front().await?;
+            self.queue.delete_front();
             updates.push(h);
         }
         #[cfg(with_metrics)]

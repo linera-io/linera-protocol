@@ -112,7 +112,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         chain: &mut ExecutionStateView<C>,
     ) -> Result<(), ChainError>
     where
-        C: Context + Clone + Send + Sync + 'static,
+        C: Context + Clone + 'static,
         C::Extra: ExecutionRuntimeContext,
     {
         let chain_execution_context = self.chain_execution_context(transaction);
@@ -141,7 +141,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     .track_block_size_of(&operation)
                     .with_execution_context(chain_execution_context)?;
                 #[cfg(with_metrics)]
-                let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency();
+                let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency_us();
                 let context = OperationContext {
                     chain_id: self.chain_id,
                     height: self.block_height,
@@ -192,11 +192,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ChainError>
     where
-        C: Context + Clone + Send + Sync + 'static,
+        C: Context + Clone + 'static,
         C::Extra: ExecutionRuntimeContext,
     {
         #[cfg(with_metrics)]
-        let _message_latency = metrics::MESSAGE_EXECUTION_LATENCY.measure_latency();
+        let _message_latency = metrics::MESSAGE_EXECUTION_LATENCY.measure_latency_us();
         let context = MessageContext {
             chain_id: self.chain_id,
             origin: incoming_bundle.origin,
@@ -282,7 +282,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         context: ChainExecutionContext,
     ) -> Result<(), ChainError>
     where
-        C: Context + Clone + Send + Sync + 'static,
+        C: Context + Clone + 'static,
     {
         let mut resource_controller = self.resource_controller.with_state(view).await?;
 

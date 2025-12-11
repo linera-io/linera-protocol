@@ -1,22 +1,30 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, vec};
+use std::{
+    collections::BTreeMap,
+    ops::{Deref, DerefMut},
+    vec,
+};
 
 use allocative::Allocative;
 use futures::{FutureExt, StreamExt};
 use linera_base::{
+    crypto::{BcsHashable, CryptoHash},
     data_types::{BlobContent, BlockHeight, StreamUpdate},
-    identifiers::{AccountOwner, BlobId},
+    identifiers::{AccountOwner, BlobId, ChainId, StreamId},
     time::Instant,
 };
 use linera_views::{
     context::Context,
+    historical_hash_wrapper::HistoricallyHashableView,
     key_value_store_view::KeyValueStoreView,
-    reentrant_collection_view::HashedReentrantCollectionView,
+    map_view::MapView,
+    reentrant_collection_view::ReentrantCollectionView,
     views::{ClonableView, ReplaceContext, View},
+    ViewError,
 };
-use linera_views_derive::CryptoHashView;
+use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
 use {
     crate::{
@@ -31,19 +39,73 @@ use super::{execution_state_actor::ExecutionRequest, runtime::ServiceRuntimeRequ
 use crate::{
     execution_state_actor::ExecutionStateActor, resources::ResourceController,
     system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ExecutionError,
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageContext, OperationContext,
-    ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime, Timestamp,
-    TransactionTracker,
+    ExecutionRuntimeContext, JsVec, MessageContext, OperationContext, ProcessStreamsContext, Query,
+    QueryContext, QueryOutcome, ServiceSyncRuntime, Timestamp, TransactionTracker,
 };
 
-/// A view accessing the execution state of a chain.
-#[derive(Debug, ClonableView, CryptoHashView, Allocative)]
+/// An inner view accessing the execution state of a chain, for hashing purposes.
+#[derive(Debug, ClonableView, View, Allocative)]
 #[allocative(bound = "C")]
-pub struct ExecutionStateView<C> {
+pub struct ExecutionStateViewInner<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
     /// User applications.
-    pub users: HashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
+    pub users: ReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
+    /// The heights of previous blocks that sent messages to the same recipients.
+    pub previous_message_blocks: MapView<C, ChainId, BlockHeight>,
+    /// The heights of previous blocks that published events to the same streams.
+    pub previous_event_blocks: MapView<C, StreamId, BlockHeight>,
+}
+
+impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateViewInner<C> {
+    type Target = ExecutionStateViewInner<C2>;
+
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
+        ExecutionStateViewInner {
+            system: self.system.with_context(ctx.clone()).await,
+            users: self.users.with_context(ctx.clone()).await,
+            previous_message_blocks: self.previous_message_blocks.with_context(ctx.clone()).await,
+            previous_event_blocks: self.previous_event_blocks.with_context(ctx.clone()).await,
+        }
+    }
+}
+
+/// A view accessing the execution state of a chain.
+#[derive(Debug, ClonableView, View, Allocative)]
+#[allocative(bound = "C")]
+pub struct ExecutionStateView<C> {
+    inner: HistoricallyHashableView<C, ExecutionStateViewInner<C>>,
+}
+
+impl<C> Deref for ExecutionStateView<C> {
+    type Target = ExecutionStateViewInner<C>;
+
+    fn deref(&self) -> &ExecutionStateViewInner<C> {
+        self.inner.deref()
+    }
+}
+
+impl<C> DerefMut for ExecutionStateView<C> {
+    fn deref_mut(&mut self) -> &mut ExecutionStateViewInner<C> {
+        self.inner.deref_mut()
+    }
+}
+
+impl<C> ExecutionStateView<C>
+where
+    C: Context + Clone + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    pub async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
+        #[derive(Serialize, Deserialize)]
+        struct ExecutionStateViewHash([u8; 32]);
+        impl BcsHashable<'_> for ExecutionStateViewHash {}
+        let hash = self.inner.historical_hash().await?;
+        Ok(CryptoHash::new(&ExecutionStateViewHash(hash.into())))
+    }
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
@@ -54,8 +116,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
         ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
     ) -> Self::Target {
         ExecutionStateView {
-            system: self.system.with_context(ctx.clone()).await,
-            users: self.users.with_context(ctx.clone()).await,
+            inner: self.inner.with_context(ctx.clone()).await,
         }
     }
 }
@@ -71,7 +132,7 @@ pub struct ServiceRuntimeEndpoint {
 #[cfg(with_testing)]
 impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
 where
-    MemoryContext<TestExecutionRuntimeContext>: Context + Clone + Send + Sync + 'static,
+    MemoryContext<TestExecutionRuntimeContext>: Context + Clone + 'static,
 {
     /// Simulates the instantiation of an application.
     pub async fn simulate_instantiation(
@@ -188,7 +249,7 @@ impl UserAction {
 
 impl<C> ExecutionStateView<C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     pub async fn query_application(
@@ -207,7 +268,6 @@ where
                 application_id,
                 bytes,
             } => {
-                let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
                 let outcome = match endpoint {
                     Some(endpoint) => {
                         self.query_user_application_with_long_lived_service(
@@ -257,16 +317,30 @@ where
             futures::channel::mpsc::unbounded();
         let mut txn_tracker = TransactionTracker::default().with_blobs(created_blobs);
         let mut resource_controller = ResourceController::default();
+        let thread_pool = self.context().extra().thread_pool().clone();
         let mut actor = ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller);
-        let (code, description) = actor.load_service(application_id).await?;
 
-        let thread = web_thread::Thread::new();
-        let service_runtime_task = thread.run_send(code, move |code| async move {
-            let mut runtime =
-                ServiceSyncRuntime::new_with_deadline(execution_state_sender, context, deadline);
-            runtime.preload_service(application_id, code, description)?;
-            runtime.run_query(application_id, query)
-        });
+        let (codes, descriptions) = actor.service_and_dependencies(application_id).await?;
+
+        let service_runtime_task = thread_pool
+            .run_send(JsVec(codes), move |codes| async move {
+                let mut runtime = ServiceSyncRuntime::new_with_deadline(
+                    execution_state_sender,
+                    context,
+                    deadline,
+                );
+
+                for (code, description) in codes.0.into_iter().zip(descriptions) {
+                    runtime.preload_service(
+                        ApplicationId::from(&description),
+                        code,
+                        description,
+                    )?;
+                }
+
+                runtime.run_query(application_id, query)
+            })
+            .await;
 
         while let Some(request) = execution_state_receiver.next().await {
             actor.handle_request(request).await?;

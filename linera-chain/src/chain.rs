@@ -23,14 +23,14 @@ use linera_execution::{
     ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
-    bucket_queue_view::BucketQueueView,
     context::Context,
     log_view::LogView,
     map_view::MapView,
+    queue_view::QueueView,
     reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
     register_view::RegisterView,
     set_view::SetView,
-    views::{ClonableView, CryptoHashView, RootView, View},
+    views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
@@ -76,7 +76,7 @@ pub(crate) mod metrics {
             "block_execution_latency",
             "Block execution latency",
             &[],
-            exponential_bucket_latencies(1000.0),
+            exponential_bucket_interval(50.0_f64, 10_000_000.0),
         )
     });
 
@@ -86,7 +86,7 @@ pub(crate) mod metrics {
             "message_execution_latency",
             "Message execution latency",
             &[],
-            exponential_bucket_latencies(50.0),
+            exponential_bucket_interval(0.1_f64, 50_000.0),
         )
     });
 
@@ -95,7 +95,7 @@ pub(crate) mod metrics {
             "operation_execution_latency",
             "Operation execution latency",
             &[],
-            exponential_bucket_latencies(50.0),
+            exponential_bucket_interval(0.1_f64, 50_000.0),
         )
     });
 
@@ -224,10 +224,6 @@ impl BundleInInbox {
     }
 }
 
-// The `TimestampedBundleInInbox` is a relatively small type, so a total
-// of 100 seems reasonable for the storing of the data.
-const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
-
 /// A view accessing the state of a chain.
 #[cfg_attr(
     with_graphql,
@@ -238,7 +234,7 @@ const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
 #[allocative(bound = "C")]
 pub struct ChainStateView<C>
 where
-    C: Clone + Context + Send + Sync + 'static,
+    C: Clone + Context + 'static,
 {
     /// Execution state, including system and user applications.
     pub execution_state: ExecutionStateView<C>,
@@ -267,14 +263,9 @@ where
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, ChainId, InboxStateView<C>>,
     /// A queue of unskippable bundles, with the timestamp when we added them to the inbox.
-    pub unskippable_bundles:
-        BucketQueueView<C, TimestampedBundleInInbox, TIMESTAMPBUNDLE_BUCKET_SIZE>,
+    pub unskippable_bundles: QueueView<C, TimestampedBundleInInbox>,
     /// Unskippable bundles that have been removed but are still in the queue.
     pub removed_unskippable_bundles: SetView<C, BundleInInbox>,
-    /// The heights of previous blocks that sent messages to the same recipients.
-    pub previous_message_blocks: MapView<C, ChainId, BlockHeight>,
-    /// The heights of previous blocks that published events to the same streams.
-    pub previous_event_blocks: MapView<C, StreamId, BlockHeight>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, ChainId, OutboxStateView<C>>,
     /// The indices of next events we expect to see per stream (could be ahead of the last
@@ -383,7 +374,7 @@ impl ChainTipState {
 
 impl<C> ChainStateView<C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     /// Returns the [`ChainId`] of the chain this [`ChainStateView`] represents.
@@ -517,11 +508,12 @@ where
 
     /// Initializes the chain if it is not active yet.
     pub async fn initialize_if_needed(&mut self, local_time: Timestamp) -> Result<(), ChainError> {
+        let chain_id = self.chain_id();
         // Initialize ourselves.
         if self
             .execution_state
             .system
-            .initialize_chain(self.chain_id())
+            .initialize_chain(chain_id)
             .await
             .with_execution_context(ChainExecutionContext::Block)?
         {
@@ -760,10 +752,10 @@ where
         }
         if !removed_unskippable.is_empty() {
             // Delete all removed bundles from the front of the unskippable queue.
-            let maybe_front = self.unskippable_bundles.front();
+            let maybe_front = self.unskippable_bundles.front().await?;
             if maybe_front.is_some_and(|ts_entry| removed_unskippable.remove(&ts_entry.entry)) {
-                self.unskippable_bundles.delete_front().await?;
-                while let Some(ts_entry) = self.unskippable_bundles.front() {
+                self.unskippable_bundles.delete_front();
+                while let Some(ts_entry) = self.unskippable_bundles.front().await? {
                     if !removed_unskippable.remove(&ts_entry.entry) {
                         if !self
                             .removed_unskippable_bundles
@@ -774,7 +766,7 @@ where
                         }
                         self.removed_unskippable_bundles.remove(&ts_entry.entry)?;
                     }
-                    self.unskippable_bundles.delete_front().await?;
+                    self.unskippable_bundles.delete_front();
                 }
             }
             for entry in removed_unskippable {
@@ -809,12 +801,9 @@ where
         chain_id = %block.chain_id,
         block_height = %block.height
     ))]
-    #[expect(clippy::too_many_arguments)]
     async fn execute_block_inner(
         chain: &mut ExecutionStateView<C>,
         confirmed_log: &LogView<C, CryptoHash>,
-        previous_message_blocks_view: &MapView<C, ChainId, BlockHeight>,
-        previous_event_blocks_view: &MapView<C, StreamId, BlockHeight>,
         block: &ProposedBlock,
         local_time: Timestamp,
         round: Option<u32>,
@@ -822,7 +811,7 @@ where
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
-        let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency();
+        let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency_us();
         chain.system.timestamp.set(block.timestamp);
 
         let policy = chain
@@ -870,10 +859,14 @@ where
         let recipients = block_execution_tracker.recipients();
         let mut recipient_heights = Vec::new();
         let mut indices = Vec::new();
-        for (recipient, height) in previous_message_blocks_view
+        for (recipient, height) in chain
+            .previous_message_blocks
             .multi_get_pairs(recipients)
             .await?
         {
+            chain
+                .previous_message_blocks
+                .insert(&recipient, block.height)?;
             if let Some(height) = height {
                 let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                 indices.push(index);
@@ -892,7 +885,8 @@ where
         let streams = block_execution_tracker.event_streams();
         let mut stream_heights = Vec::new();
         let mut indices = Vec::new();
-        for (stream, height) in previous_event_blocks_view.multi_get_pairs(streams).await? {
+        for (stream, height) in chain.previous_event_blocks.multi_get_pairs(streams).await? {
+            chain.previous_event_blocks.insert(&stream, block.height)?;
             if let Some(height) = height {
                 let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                 indices.push(index);
@@ -981,8 +975,6 @@ where
         Self::execute_block_inner(
             &mut self.execution_state,
             &self.confirmed_log,
-            &self.previous_message_blocks,
-            &self.previous_event_blocks,
             block,
             local_time,
             round,
@@ -1008,16 +1000,8 @@ where
         let block = block.inner().inner();
         self.execution_state_hash.set(Some(block.header.state_hash));
         let updated_streams = self.process_emitted_events(block).await?;
-        let recipients = self.process_outgoing_messages(block).await?;
+        self.process_outgoing_messages(block).await?;
 
-        for recipient in recipients {
-            self.previous_message_blocks
-                .insert(&recipient, block.header.height)?;
-        }
-        for event in block.body.events.iter().flatten() {
-            self.previous_event_blocks
-                .insert(&event.stream_id, block.header.height)?;
-        }
         // Last, reset the consensus state based on the current ownership.
         self.reset_chain_manager(block.header.height.try_add_one()?, local_time)?;
 

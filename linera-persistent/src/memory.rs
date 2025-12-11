@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Dirty, Persist};
+use super::Persist;
 
 pub type Error = std::convert::Infallible;
 
@@ -11,15 +11,11 @@ pub type Error = std::convert::Infallible;
 pub struct Memory<T> {
     #[deref]
     value: T,
-    dirty: Dirty,
 }
 
 impl<T> Memory<T> {
     pub fn new(value: T) -> Self {
-        Self {
-            value,
-            dirty: Dirty::new(true),
-        }
+        Self { value }
     }
 }
 
@@ -27,7 +23,6 @@ impl<T: Send> Persist for Memory<T> {
     type Error = Error;
 
     fn as_mut(&mut self) -> &mut T {
-        *self.dirty = true;
         &mut self.value
     }
 
@@ -36,7 +31,6 @@ impl<T: Send> Persist for Memory<T> {
     }
 
     async fn persist(&mut self) -> Result<(), Error> {
-        *self.dirty = false;
         Ok(())
     }
 }

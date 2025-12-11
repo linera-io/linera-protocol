@@ -40,11 +40,16 @@ jobs:
           echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_ENV
 
+          # Build configuration
+          echo "BUILD_TIMEOUT=3h" >> $GITHUB_ENV
+          echo "BUILD_MACHINE_TYPE=e2-highcpu-32" >> $GITHUB_ENV
+
           # Image registry base
           REGISTRY_BASE="us-docker.pkg.dev/linera-io-dev/linera-public-registry"
           LINERA_IMAGE_NAME="linera"
           INDEXER_IMAGE_NAME="linera-indexer"
           EXPLORER_IMAGE_NAME="linera-explorer"
+          EXPORTER_IMAGE_NAME="linera-exporter"
 
           # Main linera image names
           echo "LINERA_IMAGE_BRANCH=${REGISTRY_BASE}/${LINERA_IMAGE_NAME}:${BRANCH_NAME}" >> $GITHUB_ENV
@@ -61,48 +66,35 @@ jobs:
           echo "EXPLORER_IMAGE_SHORT=${REGISTRY_BASE}/${EXPLORER_IMAGE_NAME}:${GITHUB_SHA:0:7}" >> $GITHUB_ENV
           echo "EXPLORER_IMAGE_LONG=${REGISTRY_BASE}/${EXPLORER_IMAGE_NAME}:${GITHUB_SHA}" >> $GITHUB_ENV
 
+          # Exporter image names
+          echo "EXPORTER_IMAGE_BRANCH=${REGISTRY_BASE}/${EXPORTER_IMAGE_NAME}:${BRANCH_NAME}" >> $GITHUB_ENV
+          echo "EXPORTER_IMAGE_SHORT=${REGISTRY_BASE}/${EXPORTER_IMAGE_NAME}:${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+          echo "EXPORTER_IMAGE_LONG=${REGISTRY_BASE}/${EXPORTER_IMAGE_NAME}:${GITHUB_SHA}" >> $GITHUB_ENV
+
       - name: Build and push all images in parallel using GCP Cloud Build
         run: |
           set -e
 
-          echo "Submitting all three builds to GCP Cloud Build..."
+          # Function to submit a build and return the build ID
+          submit_build() {
+            local CONFIG_FILE=$1
+            local IMAGE_BRANCH=$2
+            local IMAGE_SHORT=$3
+            local IMAGE_LONG=$4
+            local BUILD_NAME=$5
 
-          # Submit main linera image build and capture build ID
-          BUILD_ID_1=$(gcloud builds submit . \
-            --config=docker/build-image.yaml \
-            --substitutions="_IMAGE_PATH=${{ env.LINERA_IMAGE_BRANCH }},_IMAGE_NAME_SHORT_COMMIT=${{ env.LINERA_IMAGE_SHORT }},_IMAGE_NAME_LONG_COMMIT=${{ env.LINERA_IMAGE_LONG }},_GIT_COMMIT=${{ env.GIT_COMMIT_LONG }},_BUILD_DATE=${{ env.BUILD_DATE }},_BUILD_FLAG=--release,_BUILD_FOLDER=release" \
-            --timeout=3h \
-            --machine-type=e2-highcpu-32 \
-            --async \
-            --format="value(id)")
-          echo "Linera build submitted: $BUILD_ID_1"
-
-          # Submit indexer image build and capture build ID
-          BUILD_ID_2=$(gcloud builds submit . \
-            --config=docker/build-indexer-image.yaml \
-            --substitutions="_IMAGE_PATH=${{ env.INDEXER_IMAGE_BRANCH }},_IMAGE_NAME_SHORT_COMMIT=${{ env.INDEXER_IMAGE_SHORT }},_IMAGE_NAME_LONG_COMMIT=${{ env.INDEXER_IMAGE_LONG }},_GIT_COMMIT=${{ env.GIT_COMMIT_LONG }},_BUILD_DATE=${{ env.BUILD_DATE }},_BUILD_FLAG=--release,_BUILD_FOLDER=release" \
-            --timeout=3h \
-            --machine-type=e2-highcpu-32 \
-            --async \
-            --format="value(id)")
-          echo "Indexer build submitted: $BUILD_ID_2"
-
-          # Submit explorer image build and capture build ID
-          BUILD_ID_3=$(gcloud builds submit . \
-            --config=docker/build-explorer-image.yaml \
-            --substitutions="_IMAGE_PATH=${{ env.EXPLORER_IMAGE_BRANCH }},_IMAGE_NAME_SHORT_COMMIT=${{ env.EXPLORER_IMAGE_SHORT }},_IMAGE_NAME_LONG_COMMIT=${{ env.EXPLORER_IMAGE_LONG }},_GIT_COMMIT=${{ env.GIT_COMMIT_LONG }},_BUILD_DATE=${{ env.BUILD_DATE }},_BUILD_FLAG=--release,_BUILD_FOLDER=release" \
-            --timeout=3h \
-            --machine-type=e2-highcpu-32 \
-            --async \
-            --format="value(id)")
-          echo "Explorer build submitted: $BUILD_ID_3"
-
-          echo ""
-          echo "All three builds submitted. Now streaming logs and waiting for completion..."
-          echo ""
+            BUILD_ID=$(gcloud builds submit . \
+              --config="$CONFIG_FILE" \
+              --substitutions="_IMAGE_PATH=${IMAGE_BRANCH},_IMAGE_NAME_SHORT_COMMIT=${IMAGE_SHORT},_IMAGE_NAME_LONG_COMMIT=${IMAGE_LONG},_GIT_COMMIT=${{ env.GIT_COMMIT_LONG }},_BUILD_DATE=${{ env.BUILD_DATE }},_BUILD_FLAG=--release,_BUILD_FOLDER=release" \
+              --timeout="${{ env.BUILD_TIMEOUT }}" \
+              --machine-type="${{ env.BUILD_MACHINE_TYPE }}" \
+              --async \
+              --format="value(id)")
+            echo "$BUILD_NAME build submitted: $BUILD_ID" >&2
+            echo "$BUILD_ID"
+          }
 
           # Function to stream logs and wait for build completion
-          # gcloud builds log --stream waits for the build to complete and returns proper exit codes
           stream_build_logs() {
             local BUILD_ID=$1
             local BUILD_NAME=$2
@@ -111,11 +103,10 @@ jobs:
             echo "Streaming logs for $BUILD_NAME (ID: $BUILD_ID)"
             echo "========================================"
 
-            # Stream logs - this will wait for build completion and return exit code
             gcloud builds log "$BUILD_ID" --stream
 
             local EXIT_CODE=$?
-            if [ $EXIT_CODE -eq 0 ]; then
+            if [[ $EXIT_CODE -eq 0 ]]; then
               echo ""
               echo "$BUILD_NAME completed successfully"
             else
@@ -127,25 +118,47 @@ jobs:
             return $EXIT_CODE
           }
 
-          # Stream all three builds in parallel
-          stream_build_logs "$BUILD_ID_1" "Linera build" &
-          PID1=$!
-          stream_build_logs "$BUILD_ID_2" "Indexer build" &
-          PID2=$!
-          stream_build_logs "$BUILD_ID_3" "Explorer build" &
-          PID3=$!
+          echo "Submitting builds to GCP Cloud Build..."
+
+          # Submit all builds
+          BUILD_ID_LINERA=$(submit_build "docker/build-image.yaml" \
+            "${{ env.LINERA_IMAGE_BRANCH }}" "${{ env.LINERA_IMAGE_SHORT }}" "${{ env.LINERA_IMAGE_LONG }}" "Linera")
+
+          BUILD_ID_INDEXER=$(submit_build "docker/build-indexer-image.yaml" \
+            "${{ env.INDEXER_IMAGE_BRANCH }}" "${{ env.INDEXER_IMAGE_SHORT }}" "${{ env.INDEXER_IMAGE_LONG }}" "Indexer")
+
+          BUILD_ID_EXPLORER=$(submit_build "docker/build-explorer-image.yaml" \
+            "${{ env.EXPLORER_IMAGE_BRANCH }}" "${{ env.EXPLORER_IMAGE_SHORT }}" "${{ env.EXPLORER_IMAGE_LONG }}" "Explorer")
+
+          BUILD_ID_EXPORTER=$(submit_build "docker/build-exporter-image.yaml" \
+            "${{ env.EXPORTER_IMAGE_BRANCH }}" "${{ env.EXPORTER_IMAGE_SHORT }}" "${{ env.EXPORTER_IMAGE_LONG }}" "Exporter")
+
+          echo ""
+          echo "All builds submitted. Now streaming logs and waiting for completion..."
+          echo ""
+
+          # Stream all builds in parallel
+          stream_build_logs "$BUILD_ID_LINERA" "Linera build" &
+          PID_LINERA=$!
+          stream_build_logs "$BUILD_ID_INDEXER" "Indexer build" &
+          PID_INDEXER=$!
+          stream_build_logs "$BUILD_ID_EXPLORER" "Explorer build" &
+          PID_EXPLORER=$!
+          stream_build_logs "$BUILD_ID_EXPORTER" "Exporter build" &
+          PID_EXPORTER=$!
 
           # Wait for all background jobs and check exit codes
           EXIT_CODE=0
-          wait $PID1 || EXIT_CODE=$?
-          wait $PID2 || EXIT_CODE=$?
-          wait $PID3 || EXIT_CODE=$?
+          wait $PID_LINERA || EXIT_CODE=$?
+          wait $PID_INDEXER || EXIT_CODE=$?
+          wait $PID_EXPLORER || EXIT_CODE=$?
+          wait $PID_EXPORTER || EXIT_CODE=$?
 
-          if [ $EXIT_CODE -ne 0 ]; then
+          if [[ $EXIT_CODE -ne 0 ]]; then
             echo ""
             echo "One or more image builds failed"
             exit $EXIT_CODE
           fi
 
           echo ""
-          echo "All three image builds completed successfully!"
+          echo "All image builds completed successfully!"

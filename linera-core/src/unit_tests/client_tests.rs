@@ -474,7 +474,6 @@ where
     // the next round to succeed.
     builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
     client.synchronize_from_validators().await.unwrap();
-    client.process_inbox().await.unwrap();
     assert_eq!(
         client.local_balance().await.unwrap(),
         Amount::from_tokens(2)
@@ -502,6 +501,46 @@ where
     client.synchronize_from_validators().await.unwrap();
     client.process_inbox().await.unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+/// Regression test: A super owner should be able to propose even without multi-leader rounds.
+async fn test_super_owner_in_single_leader_round<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let regular_owner = signer.generate_new().into();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let super_owner = sender.identity().await?;
+
+    // Configure chain with one super owner and one regular owner, no multi-leader rounds.
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
+        super_owners: vec![super_owner],
+        owners: vec![(regular_owner, 100)],
+        first_leader: None,
+        multi_leader_rounds: 0,
+        open_multi_leader_rounds: false,
+        timeout_config: TimeoutConfig::default(),
+    });
+    sender.execute_operation(owner_change_op).await.unwrap();
+
+    // The super owner can still burn tokens since that doesn't use the validation round oracle.
+    sender
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
+        .await
+        .unwrap();
+    assert_eq!(
+        sender.local_balance().await.unwrap(),
+        Amount::from_tokens(2)
+    );
     Ok(())
 }
 
@@ -1635,6 +1674,7 @@ where
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner2_a, 50), (owner2_b, 50)],
+        first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
@@ -1758,6 +1798,7 @@ where
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner1, 50), (owner2, 50)],
+        first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
@@ -1845,6 +1886,7 @@ where
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner3_a, 50), (owner3_b, 50), (owner3_c, 50)],
+        first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
@@ -2585,6 +2627,7 @@ where
     let ownership = ChainOwnership {
         super_owners: BTreeSet::from_iter([owner0]),
         owners: BTreeMap::from_iter([(owner1, 100)]),
+        first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
         timeout_config,
@@ -3129,6 +3172,7 @@ where
                 message_policy: MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None),
                 ..chain_client::Options::test_default()
             },
+            false,
         )
         .await?;
 
@@ -3144,6 +3188,138 @@ where
     assert_matches!(
         &certificates[0].block().body.transactions[0],
         Transaction::ReceiveMessages(bundle) if bundle.action == MessageAction::Reject
+    );
+
+    Ok(())
+}
+
+/// Tests that a follow-only client only downloads the followed chain's blocks,
+/// not blocks from sender chains that sent messages to it.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_follow_chain_mode<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    // Create a follow-only client for the receiver chain.
+    let follower = builder
+        .make_client_with_options(
+            receiver.chain_id(),
+            None,
+            BlockHeight::ZERO,
+            chain_client::Options::test_default(),
+            true,
+        )
+        .await?;
+
+    // The sender transfers tokens to the receiver.
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // The receiver processes its inbox and creates a block.
+    receiver.synchronize_from_validators().await?;
+    receiver.process_inbox().await?;
+
+    // The follower syncs; since it's follow-only, it should only download the receiver's blocks.
+    follower.synchronize_from_validators().await?;
+
+    // The follower should have downloaded the receiver's blocks.
+    assert_eq!(
+        follower.chain_info().await?.next_block_height,
+        BlockHeight::from(1),
+        "Follower should have downloaded the receiver's block"
+    );
+
+    // The follower should NOT have downloaded the sender's blocks.
+    let sender_info = follower
+        .client
+        .local_node
+        .chain_info(sender.chain_id())
+        .await?;
+    assert_eq!(
+        sender_info.next_block_height,
+        BlockHeight::ZERO,
+        "Follower should not have downloaded the sender's blocks"
+    );
+
+    Ok(())
+}
+
+/// Tests that transfers succeed even when the block timestamp is in the future relative
+/// to the validators' clock (using auto-advance on the test clock to simulate time passing).
+///
+/// This test verifies that the system handles the case where a block's timestamp
+/// (which must be >= the previous block's timestamp) is ahead of the current time.
+/// The validators will accept such blocks after their clocks catch up.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_transfer_with_validator_timestamp_retry<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let clock = storage_builder.clock().clone();
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+        .await?
+        .with_policy(ResourceControlPolicy::only_fuel());
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    // Set the clock to a future time and make the first transfer.
+    // This creates a block with timestamp = future_time.
+    let future_time = Timestamp::from(2_000_000); // 2 seconds
+    clock.set(future_time);
+
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(1),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap();
+
+    // Reset the clock to 0 (simulating validator clocks being behind).
+    // The next block must have timestamp >= future_time (previous block's time),
+    // but validators will initially see current_time = 0.
+    clock.set(Timestamp::from(0));
+
+    // Auto-advance for sleeps targeting future_time or later. The InvalidTimestamp
+    // retry does two sleeps: sleep_until(block_timestamp) and sleep(skew_duration).
+    // In this test, both target future_time initially, but subsequent sleeps may
+    // target later times as the clock advances.
+    clock.set_sleep_callback(move |target| target >= future_time);
+
+    // Try another transfer. The new block's timestamp must be >= future_time
+    // (because it must be >= the previous block's timestamp).
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(1),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .expect("Transfer should succeed after retrying with advanced clock");
+
+    // Verify the clock advanced to allow the block timestamp.
+    assert!(
+        clock.current_time() >= future_time,
+        "Clock should have advanced to at least the block timestamp"
     );
 
     Ok(())

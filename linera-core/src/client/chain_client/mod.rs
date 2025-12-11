@@ -90,7 +90,7 @@ pub struct Options {
     pub cross_chain_message_delivery: CrossChainMessageDelivery,
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
     /// as a fraction of time taken to reach quorum.
-    pub grace_period: f64,
+    pub quorum_grace_period: f64,
     /// The delay when downloading a blob, after which we try a second validator.
     pub blob_download_timeout: Duration,
     /// The delay when downloading a batch of certificates, after which we try a second validator.
@@ -111,13 +111,13 @@ impl Options {
         use super::{
             DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         };
-        use crate::DEFAULT_GRACE_PERIOD;
+        use crate::DEFAULT_QUORUM_GRACE_PERIOD;
 
         Options {
             max_pending_message_bundles: 10,
             message_policy: MessagePolicy::new_accept_all(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
-            grace_period: DEFAULT_GRACE_PERIOD,
+            quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
             blob_download_timeout: Duration::from_secs(1),
             certificate_batch_download_timeout: Duration::from_secs(1),
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
@@ -243,8 +243,8 @@ pub enum Error {
     BcsError(#[from] bcs::Error),
 
     #[error(
-        "Unexpected quorum: validators voted for block {hash} in {round}, \
-         expected block {expected_hash} in {expected_round}"
+        "Unexpected quorum: validators voted for block hash {hash} in {round}, \
+         expected block hash {expected_hash} in {expected_round}"
     )]
     UnexpectedQuorum {
         hash: CryptoHash,
@@ -300,6 +300,11 @@ impl<Env: Environment> ChainClient<Env> {
             initial_next_block_height,
             timing_sender,
         }
+    }
+
+    /// Returns whether this chain is in follow-only mode.
+    pub fn is_follow_only(&self) -> bool {
+        self.client.is_chain_follow_only(self.chain_id)
     }
 
     /// Gets the client mutex from the chain's state.
@@ -407,22 +412,18 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn event_stream_publishers(
         &self,
     ) -> Result<BTreeMap<ChainId, BTreeSet<StreamId>>, LocalNodeError> {
-        let mut publishers = self
-            .chain_state_view()
-            .await?
-            .execution_state
-            .system
-            .event_subscriptions
-            .indices()
-            .await?
-            .into_iter()
-            .fold(
-                BTreeMap::<ChainId, BTreeSet<StreamId>>::new(),
-                |mut map, (chain_id, stream_id)| {
-                    map.entry(chain_id).or_default().insert(stream_id);
-                    map
-                },
-            );
+        let subscriptions = self
+            .client
+            .local_node
+            .get_event_subscriptions(self.chain_id)
+            .await?;
+        let mut publishers = subscriptions.into_iter().fold(
+            BTreeMap::<ChainId, BTreeSet<StreamId>>::new(),
+            |mut map, ((chain_id, stream_id), _)| {
+                map.entry(chain_id).or_default().insert(stream_id);
+                map
+            },
+        );
         if self.chain_id != self.client.admin_id {
             publishers.insert(
                 self.client.admin_id,
@@ -533,12 +534,9 @@ impl<Env: Environment> ChainClient<Env> {
     async fn collect_stream_updates(&self) -> Result<Option<Operation>, Error> {
         // Load all our subscriptions.
         let subscription_map = self
-            .chain_state_view()
-            .await?
-            .execution_state
-            .system
-            .event_subscriptions
-            .index_values()
+            .client
+            .local_node
+            .get_event_subscriptions(self.chain_id)
             .await?;
         // Collect the indices of all new events.
         let futures = subscription_map
@@ -553,14 +551,14 @@ impl<Env: Environment> ChainClient<Env> {
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
                 async move {
-                    let chain = client.local_node.chain_state_view(chain_id).await?;
-                    if let Some(next_expected_index) = chain
-                        .next_expected_events
-                        .get(&stream_id)
-                        .await?
+                    let next_expected_index = client
+                        .local_node
+                        .get_next_expected_event(chain_id, stream_id.clone())
+                        .await?;
+                    if let Some(next_index) = next_expected_index
                         .filter(|next_index| *next_index > subscriptions.next_index)
                     {
-                        Ok(Some((chain_id, stream_id, next_expected_index)))
+                        Ok(Some((chain_id, stream_id, next_index)))
                     } else {
                         Ok::<_, Error>(None)
                     }
@@ -628,21 +626,26 @@ impl<Env: Environment> ChainClient<Env> {
             manager.ownership.is_active(),
             LocalNodeError::InactiveChain(self.chain_id)
         );
+        let fallback_owners = if manager.ownership.has_fallback() {
+            self.local_committee()
+                .await?
+                .account_keys_and_weights()
+                .map(|(key, _)| AccountOwner::from(key))
+                .collect()
+        } else {
+            BTreeSet::new()
+        };
 
-        let is_owner = manager
-            .ownership
-            .all_owners()
-            .chain(&manager.leader)
-            .any(|owner| *owner == preferred_owner);
+        let is_owner = manager.ownership.is_owner(&preferred_owner)
+            || fallback_owners.contains(&preferred_owner);
 
         if !is_owner {
-            let accepted_owners = manager
-                .ownership
-                .all_owners()
-                .chain(&manager.leader)
-                .collect::<Vec<_>>();
-            warn!(%self.chain_id, ?accepted_owners, ?preferred_owner,
-                "Chain has multiple owners configured but none is preferred owner",
+            warn!(
+                chain_id = %self.chain_id,
+                ownership = ?manager.ownership,
+                ?fallback_owners,
+                ?preferred_owner,
+                "The preferred owner is not configured as an owner of this chain",
             );
             return Err(Error::NotAnOwner(self.chain_id));
         }
@@ -761,16 +764,14 @@ impl<Env: Environment> ChainClient<Env> {
     /// Synchronizes all chains that any application on this chain subscribes to.
     /// We always consider the admin chain a relevant publishing chain, for new epochs.
     async fn synchronize_publisher_chains(&self) -> Result<(), Error> {
-        let chain_ids = self
-            .chain_state_view()
-            .await?
-            .execution_state
-            .system
-            .event_subscriptions
-            .indices()
-            .await?
+        let subscriptions = self
+            .client
+            .local_node
+            .get_event_subscriptions(self.chain_id)
+            .await?;
+        let chain_ids = subscriptions
             .iter()
-            .map(|(chain_id, _)| *chain_id)
+            .map(|((chain_id, _), _)| *chain_id)
             .chain(iter::once(self.client.admin_id))
             .filter(|chain_id| *chain_id != self.chain_id)
             .collect::<BTreeSet<_>>();
@@ -811,11 +812,8 @@ impl<Env: Environment> ChainClient<Env> {
         let trackers = self
             .client
             .local_node
-            .chain_state_view(chain_id)
-            .await?
-            .received_certificate_trackers
-            .get()
-            .clone();
+            .get_received_certificate_trackers(chain_id)
+            .await?;
 
         trace!("find_received_certificates: read trackers");
 
@@ -838,7 +836,7 @@ impl<Env: Environment> ChainClient<Env> {
                     Ok(())
                 })
             },
-            self.options.grace_period,
+            self.options.quorum_grace_period,
         )
         .await;
 
@@ -1169,7 +1167,7 @@ impl<Env: Environment> ChainClient<Env> {
         committee: Committee,
     ) -> Result<Box<ChainInfo>, Error> {
         self.client
-            .synchronize_chain_state_from_committee(self.chain_id, committee)
+            .synchronize_chain_from_committee(self.chain_id, committee)
             .await
     }
 
@@ -1238,30 +1236,12 @@ impl<Env: Environment> ChainClient<Env> {
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
     ) -> Result<ExecuteBlockOutcome, Error> {
-        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
-
-        if transactions.is_empty() {
-            return Err(Error::LocalNodeError(LocalNodeError::WorkerError(
-                WorkerError::ChainError(Box::new(ChainError::EmptyBlock)),
-            )));
-        }
-
-        self.execute_prepared_transactions(transactions, blobs)
-            .await
-    }
-
-    #[instrument(level = "trace", skip(transactions, blobs))]
-    async fn execute_prepared_transactions(
-        &self,
-        transactions: Vec<Transaction>,
-        blobs: Vec<Blob>,
-    ) -> Result<ExecuteBlockOutcome, Error> {
         #[cfg(with_metrics)]
         let _latency = super::metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
 
         let mutex = self.client_mutex();
         let _guard = mutex.lock_owned().await;
-        // TOOD: We shouldn't need to call this explicitly.
+        // TODO(#5092): We shouldn't need to call this explicitly.
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
@@ -1270,6 +1250,17 @@ impl<Env: Environment> ChainClient<Env> {
                 return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
             }
             ClientOutcome::Committed(None) => {}
+        }
+
+        // Collect pending messages and epoch changes after acquiring the lock to avoid
+        // race conditions where messages valid for one block height are proposed at a
+        // different height.
+        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
+
+        if transactions.is_empty() {
+            return Err(Error::LocalNodeError(LocalNodeError::WorkerError(
+                WorkerError::ChainError(Box::new(ChainError::EmptyBlock)),
+            )));
         }
 
         let block = self.new_pending_block(transactions, blobs).await?;
@@ -1352,14 +1343,7 @@ impl<Env: Environment> ChainClient<Env> {
             timestamp,
         };
 
-        // Use the round number assuming there are oracle responses.
-        // Using the round number during execution counts as an oracle.
-        // Accessing the round number in single-leader rounds where we are not the leader
-        // is not currently supported.
-        let round = match self.round_for_new_proposal(&info, &identity, true).await? {
-            Either::Left(round) => round.multi_leader(),
-            Either::Right(_) => None,
-        };
+        let round = self.round_for_oracle(&info, &identity).await?;
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
         let (block, _) = self
@@ -1645,8 +1629,14 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// To create a block that actually executes the messages in the inbox,
     /// `process_inbox` must be called separately.
+    ///
+    /// If the chain is in follow-only mode, this only downloads blocks for this chain without
+    /// fetching manager values or sender/publisher chains.
     #[instrument(level = "trace")]
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, Error> {
+        if self.is_follow_only() {
+            return self.client.synchronize_chain_state(self.chain_id).await;
+        }
         let info = self.prepare_chain().await?;
         self.synchronize_publisher_chains().await?;
         self.find_received_certificates(None).await?;
@@ -1709,13 +1699,8 @@ impl<Env: Environment> ChainClient<Env> {
             }
         } else if let Some(pending_proposal) = pending_proposal {
             // Otherwise we are free to propose our own pending block.
-            // Use the round number assuming there are oracle responses.
-            // Using the round number during execution counts as an oracle.
             let proposed_block = pending_proposal.block;
-            let round = match self.round_for_new_proposal(&info, &owner, true).await? {
-                Either::Left(round) => round.multi_leader(),
-                Either::Right(_) => None,
-            };
+            let round = self.round_for_oracle(&info, &owner).await?;
             let (block, _) = self
                 .client
                 .stage_block_execution(proposed_block, round, pending_proposal.blobs.clone())
@@ -1854,6 +1839,24 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
+    /// Returns the number for the round number oracle to use when staging a block proposal.
+    async fn round_for_oracle(
+        &self,
+        info: &ChainInfo,
+        identity: &AccountOwner,
+    ) -> Result<Option<u32>, Error> {
+        // Pretend we do use oracles: If we don't, the round number is never read anyway.
+        match self.round_for_new_proposal(info, identity, true).await {
+            // If it is a multi-leader round, use its number for the oracle.
+            Ok(Either::Left(round)) => Ok(round.multi_leader()),
+            // If there is no suitable round with oracles, use None: If it works without oracles,
+            // the block won't read the value. If it returns a timeout, it will be a single-leader
+            // round, in which the oracle returns None.
+            Err(Error::BlockProposalError(_)) | Ok(Either::Right(_)) => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
+
     /// Returns a round in which we can propose a new block or the given one, if possible.
     async fn round_for_new_proposal(
         &self,
@@ -1861,8 +1864,8 @@ impl<Env: Environment> ChainClient<Env> {
         identity: &AccountOwner,
         has_oracle_responses: bool,
     ) -> Result<Either<Round, RoundTimeout>, Error> {
-        let seed = *self.chain_state_view().await?.manager.seed.get();
         let manager = &info.manager;
+        let seed = manager.seed;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         // Similarly, we cannot propose a block that uses oracles in the fast round.
@@ -1894,7 +1897,7 @@ impl<Env: Environment> ChainClient<Env> {
             .values()
             .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
             .collect();
-        if manager.can_propose(identity, round, seed, &current_committee) {
+        if manager.should_propose(identity, round, seed, &current_committee) {
             return Ok(Either::Left(round));
         }
         if let Some(timeout) = info.round_timeout() {
@@ -1932,6 +1935,7 @@ impl<Env: Environment> ChainClient<Env> {
         self.execute_operation(SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
             owners: Vec::new(),
+            first_leader: None,
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
@@ -1958,6 +1962,7 @@ impl<Env: Environment> ChainClient<Env> {
             let operations = vec![Operation::system(SystemOperation::ChangeOwnership {
                 super_owners: Vec::new(),
                 owners,
+                first_leader: ownership.first_leader,
                 multi_leader_rounds: ownership.multi_leader_rounds,
                 open_multi_leader_rounds: ownership.open_multi_leader_rounds,
                 timeout_config: ownership.timeout_config,
@@ -1989,6 +1994,7 @@ impl<Env: Environment> ChainClient<Env> {
         self.execute_operation(SystemOperation::ChangeOwnership {
             super_owners: ownership.super_owners.into_iter().collect(),
             owners: ownership.owners.into_iter().collect(),
+            first_leader: ownership.first_leader,
             multi_leader_rounds: ownership.multi_leader_rounds,
             open_multi_leader_rounds: ownership.open_multi_leader_rounds,
             timeout_config: ownership.timeout_config.clone(),
@@ -2258,19 +2264,17 @@ impl<Env: Environment> ChainClient<Env> {
             // We provide no operations - this means that the only operations executed
             // will be epoch changes, receiving messages and processing event stream
             // updates, if any are pending.
-            let transactions = self.prepend_epochs_messages_and_events(vec![]).await?;
-            // Nothing in the inbox and no stream updates to be processed.
-            if transactions.is_empty() {
-                return Ok((certificates, None));
-            }
-            match self
-                .execute_prepared_transactions(transactions, vec![])
-                .await
-            {
+            match self.execute_block(vec![], vec![]).await {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
                 | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
                     return Ok((certificates, Some(timeout)));
+                }
+                // Nothing in the inbox and no stream updates to be processed.
+                Err(Error::LocalNodeError(LocalNodeError::WorkerError(
+                    WorkerError::ChainError(chain_error),
+                ))) if matches!(*chain_error, ChainError::EmptyBlock) => {
+                    return Ok((certificates, None));
                 }
                 Err(error) => return Err(error),
             };
@@ -2465,6 +2469,14 @@ impl<Env: Environment> ChainClient<Env> {
         notification: Notification,
         listening_mode: &ListeningMode,
     ) -> Result<(), Error> {
+        if !listening_mode.is_relevant(&notification.reason) {
+            debug!(
+                chain_id = %self.chain_id,
+                reason = ?notification.reason,
+                "Ignoring notification due to listening mode"
+            );
+            return Ok(());
+        }
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
                 if self.local_next_height_to_receive(origin).await? > height {
@@ -2502,38 +2514,23 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                match listening_mode {
-                    ListeningMode::FullChain => {
-                        self.client
-                            .synchronize_chain_state_from(&remote_node, chain_id)
-                            .await?;
-                        if self
-                            .local_next_block_height(chain_id, &mut local_node)
-                            .await?
-                            <= height
-                        {
-                            info!("NewBlock: Fail to synchronize new block after notification");
-                        }
-                        trace!(
-                            chain_id = %self.chain_id,
-                            %height,
-                            "NewBlock: processed notification",
-                        );
-                    }
-                    ListeningMode::EventsOnly(_) => {
-                        debug!(
-                            chain_id = %self.chain_id,
-                            %height,
-                            "NewBlock: ignoring notification due to listening in EventsOnly mode"
-                        );
-                    }
+                self.client
+                    .synchronize_chain_state_from(&remote_node, chain_id)
+                    .await?;
+                if self
+                    .local_next_block_height(chain_id, &mut local_node)
+                    .await?
+                    <= height
+                {
+                    info!("NewBlock: Fail to synchronize new block after notification");
                 }
+                trace!(
+                    chain_id = %self.chain_id,
+                    %height,
+                    "NewBlock: processed notification",
+                );
             }
-            Reason::NewEvents {
-                height,
-                hash,
-                event_streams,
-            } => {
+            Reason::NewEvents { height, hash, .. } => {
                 if self
                     .local_next_block_height(notification.chain_id, &mut local_node)
                     .await?
@@ -2545,21 +2542,6 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                let should_process = match listening_mode {
-                    ListeningMode::FullChain => true,
-                    ListeningMode::EventsOnly(relevant_events) => relevant_events
-                        .intersection(&event_streams)
-                        .next()
-                        .is_some(),
-                };
-                if !should_process {
-                    debug!(
-                        chain_id = %self.chain_id,
-                        %height,
-                        "NewEvents: got a notification, but no relevant event streams in it"
-                    );
-                    return Ok(());
-                }
                 trace!(
                     chain_id = %self.chain_id,
                     %height,
@@ -2567,7 +2549,7 @@ impl<Env: Environment> ChainClient<Env> {
                 );
                 let mut certificates = remote_node.node.download_certificates(vec![hash]).await?;
                 // download_certificates ensures that we will get exactly one
-                // certificate in the result
+                // certificate in the result.
                 let certificate = certificates
                     .pop()
                     .expect("download_certificates should have returned one certificate");
@@ -2580,10 +2562,6 @@ impl<Env: Environment> ChainClient<Env> {
                     .await?;
             }
             Reason::NewRound { height, round } => {
-                if matches!(listening_mode, ListeningMode::EventsOnly(_)) {
-                    debug!("NewRound: ignoring a notification due to listening mode");
-                    return Ok(());
-                }
                 let chain_id = notification.chain_id;
                 if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await? {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
@@ -2797,32 +2775,25 @@ impl<Env: Environment> ChainClient<Env> {
             .handle_chain_info_query(ChainInfoQuery::new(self.chain_id))
             .await
         {
-            Ok(info) => info.info.next_block_height.0,
-            Err(NodeError::BlobsNotFound(_)) => 0,
+            Ok(info) => info.info.next_block_height,
+            Err(NodeError::BlobsNotFound(_)) => BlockHeight::ZERO,
             Err(err) => return Err(err.into()),
         };
-        let local_chain_state = self.chain_info().await?;
+        let local_next_block_height = self.chain_info().await?.next_block_height;
 
-        let Some(missing_certificate_count) = local_chain_state
-            .next_block_height
-            .0
-            .checked_sub(validator_next_block_height)
-            .filter(|count| *count > 0)
-        else {
+        if validator_next_block_height >= local_next_block_height {
             debug!("Validator is up-to-date with local state");
             return Ok(());
-        };
+        }
 
-        let missing_certificates_end = usize::try_from(local_chain_state.next_block_height.0)
-            .expect("`usize` should be at least `u64`");
-        let missing_certificates_start = missing_certificates_end
-            - usize::try_from(missing_certificate_count).expect("`usize` should be at least `u64`");
+        let heights: Vec<_> = (validator_next_block_height.0..local_next_block_height.0)
+            .map(BlockHeight)
+            .collect();
 
         let missing_certificate_hashes = self
-            .chain_state_view()
-            .await?
-            .confirmed_log
-            .read(missing_certificates_start..missing_certificates_end)
+            .client
+            .local_node
+            .get_block_hashes(self.chain_id, heights)
             .await?;
 
         let certificates = self

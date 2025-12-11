@@ -286,6 +286,7 @@ mod from {
                             Ok((ow.owner, weight))
                         })
                         .collect::<Result<Vec<_>, ConversionError>>()?,
+                    first_leader: change_ownership.first_leader,
                     multi_leader_rounds: change_ownership.multi_leader_rounds as u32,
                     open_multi_leader_rounds: change_ownership.open_multi_leader_rounds,
                     timeout_config,

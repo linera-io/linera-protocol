@@ -49,6 +49,8 @@ use linera_views::{batch::Batch, ViewError};
 use serde::{Deserialize, Serialize};
 use system::AdminOperation;
 use thiserror::Error;
+pub use web_thread_pool::Pool as ThreadPool;
+use web_thread_select as web_thread;
 
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;
@@ -150,6 +152,8 @@ impl UserContractCode {
     }
 }
 
+pub struct JsVec<T>(pub Vec<T>);
+
 #[cfg(web)]
 const _: () = {
     // TODO(#2775): add a vtable pointer into the JsValue rather than assuming the
@@ -190,6 +194,36 @@ const _: () = {
     impl web_thread::Post for UserServiceCode {
         fn transferables(&self) -> js_sys::Array {
             self.0.transferables()
+        }
+    }
+
+    impl<T: web_thread::AsJs> web_thread::AsJs for JsVec<T> {
+        fn to_js(&self) -> Result<JsValue, JsValue> {
+            let array = self
+                .0
+                .iter()
+                .map(T::to_js)
+                .collect::<Result<js_sys::Array, _>>()?;
+            Ok(array.into())
+        }
+
+        fn from_js(value: JsValue) -> Result<Self, JsValue> {
+            let array = js_sys::Array::from(&value);
+            let v = array
+                .into_iter()
+                .map(T::from_js)
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(JsVec(v))
+        }
+    }
+
+    impl<T: web_thread::Post> web_thread::Post for JsVec<T> {
+        fn transferables(&self) -> js_sys::Array {
+            let mut array = js_sys::Array::new();
+            for x in &self.0 {
+                array = array.concat(&x.transferables());
+            }
+            array
         }
     }
 };
@@ -420,7 +454,11 @@ pub trait UserService {
 
 /// Configuration options for the execution runtime available to applications.
 #[derive(Clone, Copy, Default)]
-pub struct ExecutionRuntimeConfig {}
+pub struct ExecutionRuntimeConfig {
+    /// Whether contract log messages should be output.
+    /// This is typically enabled for clients but disabled for validators.
+    pub allow_application_logs: bool,
+}
 
 /// Requirements for the `extra` field in our state views (and notably the
 /// [`ExecutionStateView`]).
@@ -428,6 +466,8 @@ pub struct ExecutionRuntimeConfig {}
 #[cfg_attr(web, async_trait(?Send))]
 pub trait ExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId;
+
+    fn thread_pool(&self) -> &Arc<ThreadPool>;
 
     fn execution_runtime_config(&self) -> ExecutionRuntimeConfig;
 
@@ -812,6 +852,13 @@ pub trait BaseRuntime {
 
     /// Returns true if the corresponding contract uses a zero amount of storage.
     fn has_empty_storage(&mut self, application: ApplicationId) -> Result<bool, ExecutionError>;
+
+    /// Returns the maximum blob size from the `ResourceControlPolicy`.
+    fn maximum_blob_size(&mut self) -> Result<u64, ExecutionError>;
+
+    /// Returns whether contract log messages should be output.
+    /// This is typically enabled for clients but disabled for validators.
+    fn allow_application_logs(&mut self) -> Result<bool, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
@@ -958,7 +1005,7 @@ pub trait ContractRuntime: BaseRuntime {
         vm_runtime: VmRuntime,
     ) -> Result<ModuleId, ExecutionError>;
 
-    /// Returns the round in which this block was validated.
+    /// Returns the multi-leader round in which this block was validated.
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;
 
     /// Writes a batch of changes.
@@ -1146,6 +1193,7 @@ impl OperationContext {
 #[derive(Clone)]
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
+    thread_pool: Arc<ThreadPool>,
     execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
@@ -1158,6 +1206,7 @@ impl TestExecutionRuntimeContext {
     pub fn new(chain_id: ChainId, execution_runtime_config: ExecutionRuntimeConfig) -> Self {
         Self {
             chain_id,
+            thread_pool: Arc::new(ThreadPool::new(20)),
             execution_runtime_config,
             user_contracts: Arc::default(),
             user_services: Arc::default(),
@@ -1173,6 +1222,10 @@ impl TestExecutionRuntimeContext {
 impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId {
         self.chain_id
+    }
+
+    fn thread_pool(&self) -> &Arc<ThreadPool> {
+        &self.thread_pool
     }
 
     fn execution_runtime_config(&self) -> ExecutionRuntimeConfig {

@@ -23,7 +23,7 @@ pub struct ChainWorkerConfig {
     pub long_lived_services: bool,
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
-    pub grace_period: Duration,
+    pub block_time_grace_period: Duration,
     /// Idle chain workers free their memory after that duration without requests.
     pub ttl: Duration,
     /// TTL for sender chains.
@@ -67,7 +67,7 @@ impl Default for ChainWorkerConfig {
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
             long_lived_services: false,
-            grace_period: Default::default(),
+            block_time_grace_period: Default::default(),
             ttl: Default::default(),
             sender_chain_ttl: Duration::from_secs(1),
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,

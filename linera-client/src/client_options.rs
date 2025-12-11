@@ -15,7 +15,7 @@ use linera_core::{
         DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
-    DEFAULT_GRACE_PERIOD,
+    DEFAULT_QUORUM_GRACE_PERIOD,
 };
 use linera_execution::ResourceControlPolicy;
 
@@ -29,17 +29,9 @@ pub enum Error {
     IoError(#[from] std::io::Error),
     #[error("there are {public_keys} public keys but {weights} weights")]
     MisalignedWeights { public_keys: usize, weights: usize },
-    #[error("persistence error: {0}")]
-    Persistence(#[from] Box<dyn std::error::Error + Send + Sync>),
     #[error("config error: {0}")]
     Config(#[from] crate::config::Error),
 }
-
-#[cfg(feature = "fs")]
-util::impl_from_dynamic!(Error:Persistence, linera_persistent::file::Error);
-
-#[cfg(web)]
-util::impl_from_dynamic!(Error:Persistence, linera_persistent::indexed_db::Error);
 
 util::impl_from_infallible!(Error);
 
@@ -157,8 +149,8 @@ pub struct ClientContextOptions {
 
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
     /// as a fraction of time taken to reach quorum.
-    #[arg(long, default_value_t = DEFAULT_GRACE_PERIOD)]
-    pub grace_period: f64,
+    #[arg(long, default_value_t = DEFAULT_QUORUM_GRACE_PERIOD)]
+    pub quorum_grace_period: f64,
 
     /// The delay when downloading a blob, after which we try a second validator, in milliseconds.
     #[arg(
@@ -267,7 +259,7 @@ impl ClientContextOptions {
             max_pending_message_bundles: self.max_pending_message_bundles,
             message_policy,
             cross_chain_message_delivery,
-            grace_period: self.grace_period,
+            quorum_grace_period: self.quorum_grace_period,
             blob_download_timeout: self.blob_download_timeout,
             certificate_batch_download_timeout: self.certificate_batch_download_timeout,
             certificate_download_batch_size: self.certificate_download_batch_size,
@@ -309,6 +301,10 @@ pub struct ChainOwnershipConfig {
     /// The new regular owners.
     #[arg(long, num_args(0..))]
     pub owners: Vec<AccountOwner>,
+
+    /// The leader of the first single-leader round. If not set, this is random like other rounds.
+    #[arg(long)]
+    pub first_leader: Option<AccountOwner>,
 
     /// Weights for the new owners.
     ///
@@ -366,6 +362,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
         let ChainOwnershipConfig {
             super_owners,
             owners,
+            first_leader,
             owner_weights,
             multi_leader_rounds,
             fast_round_duration,
@@ -395,6 +392,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
         Ok(ChainOwnership {
             super_owners,
             owners,
+            first_leader,
             multi_leader_rounds,
             open_multi_leader_rounds,
             timeout_config,

@@ -159,6 +159,7 @@ pub struct OpenChainOperationMetadata {
 pub struct ChangeOwnershipOperationMetadata {
     pub super_owners: Vec<AccountOwner>,
     pub owners: Vec<OwnerWithWeight>,
+    pub first_leader: Option<AccountOwner>,
     pub multi_leader_rounds: i32,
     pub open_multi_leader_rounds: bool,
     pub timeout_config: TimeoutConfigMetadata,
@@ -303,6 +304,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
             SystemOperation::ChangeOwnership {
                 super_owners,
                 owners,
+                first_leader,
                 multi_leader_rounds,
                 open_multi_leader_rounds,
                 timeout_config,
@@ -316,6 +318,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                             weight: weight.to_string(),
                         })
                         .collect(),
+                    first_leader: *first_leader,
                     multi_leader_rounds: *multi_leader_rounds as i32,
                     open_multi_leader_rounds: *open_multi_leader_rounds,
                     timeout_config: TimeoutConfigMetadata::from(timeout_config),

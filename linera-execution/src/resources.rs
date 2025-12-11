@@ -647,7 +647,7 @@ impl ResourceController<Option<AccountOwner>, ResourceTracker> {
         view: &'a mut SystemExecutionStateView<C>,
     ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
     where
-        C: Context + Clone + Send + Sync + 'static,
+        C: Context + Clone + 'static,
     {
         self.with_state_and_grant(view, None).await
     }
@@ -661,7 +661,7 @@ impl ResourceController<Option<AccountOwner>, ResourceTracker> {
         grant: Option<&'a mut Amount>,
     ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
     where
-        C: Context + Clone + Send + Sync + 'static,
+        C: Context + Clone + 'static,
     {
         let mut sources = Vec::new();
         // First, use the grant (e.g. for messages) and otherwise use the chain account

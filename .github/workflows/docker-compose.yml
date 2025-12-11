@@ -2,14 +2,14 @@ name: Docker Compose
 
 on:
   push:
-    branches: [ 'devnet_*', 'testnet_*' ]
+    branches: ["devnet_*", "testnet_*"]
   pull_request:
   merge_group:
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull requests
 concurrency:
-  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+  group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}"
   cancel-in-progress: true
 
 env:
@@ -23,13 +23,14 @@ env:
   RUSTUP_MAX_RETRIES: 10
   RUST_LOG: warn
   DOCKER_COMPOSE_WAIT: "true"
+  LINERA_IMAGE: linera
 
 permissions:
   contents: read
 
 jobs:
   compose:
-    if: ${{ github.event_name == 'merge_group' }}
+    if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 40
 
@@ -44,7 +45,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       # TODO(#2709): Uncomment once this workflow runs in a custom runner
       # - name: Update aio-max-nr
-        # run: echo 1048576 > /proc/sys/fs/aio-max-nr
+      # run: echo 1048576 > /proc/sys/fs/aio-max-nr
       - name: Build client binary
         run: |
           cargo install --path linera-service --bin linera --bin linera-server --debug
@@ -56,15 +57,23 @@ jobs:
       - name: Run Compose
         run: |
           cd docker
-          ./compose.sh
+          ./ci-compose.sh
       # TODO(#2709): Uncomment once this workflow runs in a custom runner
       # - name: Setup upterm session
-        # uses: lhotari/action-upterm@v1
+      # uses: lhotari/action-upterm@v1
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for proxy to be ready..."
+          timeout 120 bash -c 'until nc -z localhost 19100; do echo "Proxy not ready, waiting..."; sleep 5; done'
+          echo "Proxy port is open"
+          # Give gRPC services time to fully initialize after port is open
+          sleep 10
+          echo "Services should be ready now"
       - name: Sync
         uses: nick-fields/retry@v2
         with:
           # Docker compose can take some time to start
-          max_attempts: 10
-          timeout_minutes: 2
-          retry_wait_seconds: 10
+          max_attempts: 15
+          timeout_minutes: 3
+          retry_wait_seconds: 15
           command: linera --wallet docker/wallet.json --keystore docker/keystore.json --storage rocksdb:docker/linera.db sync-balance

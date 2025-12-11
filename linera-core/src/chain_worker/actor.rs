@@ -4,7 +4,7 @@
 //! An actor that runs a chain worker.
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt,
     pin::Pin,
     sync::{self, Arc, RwLock},
@@ -16,7 +16,7 @@ use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     hashed::Hashed,
-    identifiers::{ApplicationId, BlobId, ChainId},
+    identifiers::{ApplicationId, BlobId, ChainId, StreamId},
     time::Instant,
 };
 use linera_chain::{
@@ -25,8 +25,8 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    ExecutionStateView, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint,
-    ServiceSyncRuntime,
+    system::EventSubscriptions, ExecutionStateView, Query, QueryContext, QueryOutcome,
+    ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::context::InactiveContext;
@@ -41,6 +41,9 @@ use crate::{
     value_cache::ValueCache,
     worker::{NetworkActions, WorkerError},
 };
+
+/// Type alias for event subscriptions result.
+pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscriptions)>;
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -62,7 +65,7 @@ mod metrics {
 #[derive(Debug)]
 pub(crate) enum ChainWorkerRequest<Context>
 where
-    Context: linera_views::context::Context + Clone + Send + Sync + 'static,
+    Context: linera_views::context::Context + Clone + 'static,
 {
     /// Reads the certificate for a requested [`BlockHeight`].
     #[cfg(with_testing)]
@@ -184,12 +187,50 @@ where
         callback: oneshot::Sender<Result<Option<Vec<Blob>>, WorkerError>>,
     },
 
-    /// Read a range from the confirmed log.
-    ReadConfirmedLog {
-        start: BlockHeight,
-        end: BlockHeight,
+    /// Get block hashes for specified heights.
+    GetBlockHashes {
+        heights: Vec<BlockHeight>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<Vec<CryptoHash>, WorkerError>>,
+    },
+
+    /// Get proposed blobs from the manager for specified blob IDs.
+    GetProposedBlobs {
+        blob_ids: Vec<BlobId>,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<Vec<Blob>, WorkerError>>,
+    },
+
+    /// Get event subscriptions as a list of ((ChainId, StreamId), EventSubscriptions).
+    GetEventSubscriptions {
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<EventSubscriptionsResult, WorkerError>>,
+    },
+
+    /// Get the next expected event index for a stream.
+    GetNextExpectedEvent {
+        stream_id: StreamId,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<Option<u32>, WorkerError>>,
+    },
+
+    /// Get received certificate trackers.
+    GetReceivedCertificateTrackers {
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<HashMap<ValidatorPublicKey, u64>, WorkerError>>,
+    },
+
+    /// Get tip state info for next_outbox_heights calculation.
+    GetTipStateAndOutboxInfo {
+        receiver_id: ChainId,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<(BlockHeight, Option<BlockHeight>), WorkerError>>,
+    },
+
+    /// Get the next height to preprocess.
+    GetNextHeightToPreprocess {
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<BlockHeight, WorkerError>>,
     },
 }
 
@@ -244,7 +285,7 @@ where
 /// The actor worker type.
 pub(crate) struct ChainWorkerActor<StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage + Clone + 'static,
 {
     chain_id: ChainId,
     config: ChainWorkerConfig,
@@ -257,8 +298,7 @@ where
 }
 
 struct ServiceRuntimeActor {
-    thread: web_thread::Thread,
-    task: web_thread::Task<()>,
+    task: web_thread_pool::Task<()>,
     endpoint: ServiceRuntimeEndpoint,
 }
 
@@ -266,37 +306,36 @@ impl ServiceRuntimeActor {
     /// Spawns a blocking task to execute the service runtime actor.
     ///
     /// Returns the task handle and the endpoints to interact with the actor.
-    async fn spawn(chain_id: ChainId) -> Self {
+    async fn spawn(chain_id: ChainId, thread_pool: &linera_execution::ThreadPool) -> Self {
         let (execution_state_sender, incoming_execution_requests) =
             futures::channel::mpsc::unbounded();
         let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
-
-        let thread = web_thread::Thread::new();
 
         Self {
             endpoint: ServiceRuntimeEndpoint {
                 incoming_execution_requests,
                 runtime_request_sender,
             },
-            task: thread.run((), move |()| async move {
-                ServiceSyncRuntime::new(
-                    execution_state_sender,
-                    QueryContext {
-                        chain_id,
-                        next_block_height: BlockHeight(0),
-                        local_time: Timestamp::from(0),
-                    },
-                )
-                .run(runtime_request_receiver)
-            }),
-            thread,
+            task: thread_pool
+                .run((), move |()| async move {
+                    ServiceSyncRuntime::new(
+                        execution_state_sender,
+                        QueryContext {
+                            chain_id,
+                            next_block_height: BlockHeight(0),
+                            local_time: Timestamp::from(0),
+                        },
+                    )
+                    .run(runtime_request_receiver)
+                })
+                .await,
         }
     }
 }
 
 impl<StorageClient> ChainWorkerActor<StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage + Clone + 'static,
 {
     /// Runs the [`ChainWorkerActor`]. The chain state is loaded when the first request
     /// arrives.
@@ -360,8 +399,6 @@ where
         // The chain worker state, loaded lazily.
         let mut worker: Option<ChainWorkerState<StorageClient>> = None;
         let mut service_runtime_task = None;
-        #[allow(unused)]
-        let mut service_runtime_thread = None;
 
         // Convert receivers to peekable streams so we can wait without consuming.
         let mut requests = UnboundedReceiverStream::new(receivers.requests).peekable();
@@ -417,7 +454,6 @@ where
                             if let Some(task) = service_runtime_task.take() {
                                 task.await?;
                             }
-                            service_runtime_thread = None;
                             trace!("Done unloading chain state of {}", self.chain_id);
                         }
                         first_iteration = true;
@@ -445,8 +481,9 @@ where
                 Some(w) => w,
                 None => {
                     let service_runtime_endpoint = if self.config.long_lived_services {
-                        let actor = ServiceRuntimeActor::spawn(self.chain_id).await;
-                        service_runtime_thread = Some(actor.thread);
+                        let actor =
+                            ServiceRuntimeActor::spawn(self.chain_id, self.storage.thread_pool())
+                                .await;
                         service_runtime_task = Some(actor.task);
                         Some(actor.endpoint)
                     } else {
@@ -605,7 +642,6 @@ where
             if let Some(task) = service_runtime_task.take() {
                 task.await?;
             }
-            drop(service_runtime_thread);
             trace!("Done unloading chain state of {}", self.chain_id);
         }
 

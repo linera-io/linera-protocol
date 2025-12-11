@@ -1221,7 +1221,7 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
 /// Tests that if a client synchronizes a shared chain from the validators and learns about
 /// a proposal from another owner that it can't successfully execute locally anymore (e.g. due
 /// to validation time-based oracles), it is still able to successfully propose new blocks.
-/// Specifially, it doesn't try to propose in the same round as the failed conflicting proposal.
+/// Specifically, it doesn't try to propose in the same round as the failed conflicting proposal.
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]

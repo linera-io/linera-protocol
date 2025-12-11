@@ -14,7 +14,7 @@ pub(crate) use self::state::CrossChainUpdateHelper;
 pub(crate) use self::{
     actor::{
         ChainActorReceivers, ChainWorkerActor, ChainWorkerRequest, ConfirmUpdatedRecipientRequest,
-        CrossChainUpdateRequest,
+        CrossChainUpdateRequest, EventSubscriptionsResult,
     },
     config::ChainWorkerConfig,
     state::BlockOutcome,

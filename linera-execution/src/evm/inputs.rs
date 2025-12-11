@@ -126,7 +126,7 @@ impl From<StreamUpdate> for InternalStreamUpdate {
 // functionalities accessed from the EVM.
 pub(crate) const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
 
-// This is the zero address used when no address can be obtained from `authenticated_signer`
+// This is the zero address used when no address can be obtained from `authenticated_owner`
 // and `authenticated_caller_id`. This scenario does not occur if an Address20 user calls or
 // if an EVM contract calls another EVM contract.
 pub(crate) const ZERO_ADDRESS: Address = address!("0000000000000000000000000000000000000000");

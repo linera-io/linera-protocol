@@ -20,7 +20,7 @@ use linera_client::{
 };
 use linera_rpc::config::CrossChainConfig;
 
-use crate::cli::validator;
+use crate::{cli::validator, task_processor::parse_operator};
 
 const DEFAULT_TOKENS_PER_CHAIN: Amount = Amount::from_millis(100);
 const DEFAULT_TRANSACTIONS_PER_BLOCK: usize = 1;
@@ -723,6 +723,22 @@ pub enum ClientCommand {
         #[cfg(with_metrics)]
         #[arg(long)]
         metrics_port: NonZeroU16,
+
+        /// Application IDs of operator applications to watch.
+        /// When specified, a task processor is started alongside the node service.
+        #[arg(long = "operator-application-ids")]
+        operator_application_ids: Vec<ApplicationId>,
+
+        /// A controller to execute a dynamic set of applications running on a dynamic set of
+        /// chains.
+        #[arg(long = "controller-id")]
+        controller_application_id: Option<ApplicationId>,
+
+        /// Supported operators and their binary paths.
+        /// Format: `name=path` or just `name` (uses name as path).
+        /// Example: `--operators my-operator=/path/to/binary`
+        #[arg(long = "operators", value_parser = parse_operator)]
+        operators: Vec<(String, PathBuf)>,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.
@@ -922,7 +938,7 @@ pub enum ClientCommand {
 
     /// Manage validators in the committee.
     #[command(subcommand)]
-    Validator(validator::ValidatorCommand),
+    Validator(validator::Command),
 
     /// Operation on the storage.
     #[command(subcommand)]
@@ -946,6 +962,13 @@ pub enum ClientCommand {
         /// Insert a pause of N seconds after GraphQL queries.
         #[arg(long, default_value = DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, value_parser = util::parse_secs)]
         pause_after_gql_mutations: Duration,
+    },
+
+    /// Generate shell completion scripts
+    Completion {
+        /// The shell to generate completions for
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
     },
 }
 
@@ -991,9 +1014,9 @@ impl ClientCommand {
             ClientCommand::Storage { .. } => "storage".into(),
             ClientCommand::Service { port, .. } => format!("service-{port}").into(),
             ClientCommand::Faucet { .. } => "faucet".into(),
-            ClientCommand::HelpMarkdown | ClientCommand::ExtractScriptFromMarkdown { .. } => {
-                "tool".into()
-            }
+            ClientCommand::HelpMarkdown
+            | ClientCommand::ExtractScriptFromMarkdown { .. }
+            | ClientCommand::Completion { .. } => "tool".into(),
         }
     }
 }

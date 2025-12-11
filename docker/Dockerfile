@@ -74,12 +74,9 @@ COPY rust-toolchain* Cargo.* ./
 ENV GIT_COMMIT=${git_commit}
 ENV RUSTFLAGS=${rustflags}
 
-RUN cargo build ${build_flag:+"$build_flag"} \
-    --target "$target" \
-    --bin linera \
-    --bin linera-proxy \
-    --bin linera-server \
-    --features $build_features
+RUN cargo build ${build_flag:+"$build_flag"} --target "$target" --bin linera-proxy --features $build_features
+RUN cargo build ${build_flag:+"$build_flag"} --target "$target" --bin linera-server --features $build_features
+RUN cargo build ${build_flag:+"$build_flag"} --target "$target" --bin linera --features $build_features
 
 RUN mv \
     target/"$target"/"$build_folder"/linera \

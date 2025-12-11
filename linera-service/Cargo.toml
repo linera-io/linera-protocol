@@ -79,7 +79,8 @@ cfg-if.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 clap.workspace = true
 clap-markdown.workspace = true
-clio.workspace = true
+clap_complete.workspace = true
+clio = { workspace = true, features = ["clap-parse"] }
 colored.workspace = true
 convert_case.workspace = true
 current_platform = "0.2.0"
@@ -102,7 +103,7 @@ linera-execution = { workspace = true, features = ["fs"] }
 linera-faucet-client.workspace = true
 linera-faucet-server.workspace = true
 linera-metrics = { workspace = true, optional = true }
-linera-persistent.workspace = true
+linera-persistent = { workspace = true, features = ["fs"] }
 linera-rpc = { workspace = true, features = [
     "server",
     "simple-network",
@@ -114,6 +115,7 @@ linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
 mini-moka.workspace = true
+nonzero_lit.workspace = true
 opentelemetry.workspace = true
 opentelemetry-otlp.workspace = true
 opentelemetry_sdk = { workspace = true, features = ["testing"] }
@@ -155,6 +157,7 @@ tracing.workspace = true
 tracing-chrome.workspace = true
 tracing-opentelemetry.workspace = true
 tracing-subscriber = { workspace = true, features = ["json", "fmt", "ansi"] }
+url = { workspace = true, features = ["serde"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true

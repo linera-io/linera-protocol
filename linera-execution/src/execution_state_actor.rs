@@ -28,11 +28,10 @@ use crate::{
     runtime::ContractSyncRuntime,
     system::{CreateApplicationResult, OpenChainConfig},
     util::{OracleResponseExt as _, RespondExt as _},
-    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, MessageKind, ModuleId,
-    Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext,
-    QueryOutcome, ResourceController, SystemMessage, TransactionTracker, UserContractCode,
-    UserServiceCode,
+    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
+    ExecutionStateView, JsVec, Message, MessageContext, MessageKind, ModuleId, Operation,
+    OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext, QueryOutcome,
+    ResourceController, SystemMessage, TransactionTracker, UserContractCode, UserServiceCode,
 };
 
 /// Actor for handling requests to the execution state.
@@ -74,7 +73,7 @@ pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<ExecutionRequest>;
 
 impl<'a, C> ExecutionStateActor<'a, C>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     /// Creates a new execution state actor.
@@ -689,6 +688,16 @@ where
                 };
                 callback.respond(result);
             }
+
+            AllowApplicationLogs { callback } => {
+                let allow = self
+                    .state
+                    .context()
+                    .extra()
+                    .execution_runtime_config()
+                    .allow_application_logs;
+                callback.respond(allow);
+            }
         }
 
         Ok(())
@@ -750,9 +759,56 @@ where
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
     ) -> Result<(), ExecutionError> {
-        let ExecutionRuntimeConfig {} = self.state.context().extra().execution_runtime_config();
         self.run_user_action_with_runtime(application_id, action, refund_grant_to, grant)
             .await
+    }
+
+    // TODO(#5034): unify with `contract_and_dependencies`
+    pub(crate) async fn service_and_dependencies(
+        &mut self,
+        application: ApplicationId,
+    ) -> Result<(Vec<UserServiceCode>, Vec<ApplicationDescription>), ExecutionError> {
+        // cyclic futures are illegal so we need to either box the frames or keep our own
+        // stack
+        let mut stack = vec![application];
+        let mut codes = vec![];
+        let mut descriptions = vec![];
+
+        while let Some(id) = stack.pop() {
+            let (code, description) = self.load_service(id).await?;
+            stack.extend(description.required_application_ids.iter().rev().copied());
+            codes.push(code);
+            descriptions.push(description);
+        }
+
+        codes.reverse();
+        descriptions.reverse();
+
+        Ok((codes, descriptions))
+    }
+
+    // TODO(#5034): unify with `service_and_dependencies`
+    async fn contract_and_dependencies(
+        &mut self,
+        application: ApplicationId,
+    ) -> Result<(Vec<UserContractCode>, Vec<ApplicationDescription>), ExecutionError> {
+        // cyclic futures are illegal so we need to either box the frames or keep our own
+        // stack
+        let mut stack = vec![application];
+        let mut codes = vec![];
+        let mut descriptions = vec![];
+
+        while let Some(id) = stack.pop() {
+            let (code, description) = self.load_contract(id).await?;
+            stack.extend(description.required_application_ids.iter().rev().copied());
+            codes.push(code);
+            descriptions.push(description);
+        }
+
+        codes.reverse();
+        descriptions.reverse();
+
+        Ok((codes, descriptions))
     }
 
     async fn run_user_action_with_runtime(
@@ -777,20 +833,42 @@ where
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
 
-        let (code, description) = self.load_contract(application_id).await?;
+        let (codes, descriptions): (Vec<_>, Vec<_>) =
+            self.contract_and_dependencies(application_id).await?;
 
-        let thread = web_thread::Thread::new();
-        let contract_runtime_task = thread.run_send(code, move |code| async move {
-            let runtime = ContractSyncRuntime::new(
-                execution_state_sender,
-                chain_id,
-                refund_grant_to,
-                controller,
-                &action,
-            );
-            runtime.preload_contract(application_id, code, description)?;
-            runtime.run_action(application_id, chain_id, action)
-        });
+        let allow_application_logs = self
+            .state
+            .context()
+            .extra()
+            .execution_runtime_config()
+            .allow_application_logs;
+
+        let contract_runtime_task = self
+            .state
+            .context()
+            .extra()
+            .thread_pool()
+            .run_send(JsVec(codes), move |codes| async move {
+                let runtime = ContractSyncRuntime::new(
+                    execution_state_sender,
+                    chain_id,
+                    refund_grant_to,
+                    controller,
+                    &action,
+                    allow_application_logs,
+                );
+
+                for (code, description) in codes.0.into_iter().zip(descriptions) {
+                    runtime.preload_contract(
+                        ApplicationId::from(&description),
+                        code,
+                        description,
+                    )?;
+                }
+
+                runtime.run_action(application_id, chain_id, action)
+            })
+            .await;
 
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
@@ -1240,5 +1318,10 @@ pub enum ExecutionRequest {
         application: ApplicationId,
         #[debug(skip)]
         callback: Sender<(u32, u32)>,
+    },
+
+    AllowApplicationLogs {
+        #[debug(skip)]
+        callback: Sender<bool>,
     },
 }

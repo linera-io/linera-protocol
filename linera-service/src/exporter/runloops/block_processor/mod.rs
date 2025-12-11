@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::HashMap,
     future::{Future, IntoFuture},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
+use linera_base::crypto::CryptoHash;
 use linera_execution::committee::Committee;
 use linera_service::config::DestinationId;
 use linera_storage::Storage;
@@ -27,6 +29,10 @@ where
     storage: BlockProcessorStorage<T>,
     new_block_queue: NewBlockQueue,
     committee_destination_update: bool,
+    // Temporary solution.
+    // Tracks certificates that failed to be read from storage
+    // along with the time of the failure to avoid retrying for too long.
+    retried_certs: HashMap<CryptoHash, (u8, Instant)>,
 }
 
 impl<S, T> BlockProcessor<S, T>
@@ -46,6 +52,7 @@ where
             exporters_tracker,
             committee_destination_update,
             new_block_queue,
+            retried_certs: HashMap::new(),
         }
     }
 
@@ -87,9 +94,9 @@ where
                                     Ok(blob) => blob,
                                     Err(error) => {
                                         tracing::error!(
-                                            ?new_committee_blob,
+                                            blob_id=?new_committee_blob,
                                             ?error,
-                                            "failed to serialize the committee blob"
+                                            "failed to read the committee blob from storage"
                                         );
                                         return Err(error);
                                     },
@@ -99,9 +106,9 @@ where
                                     Ok(committee) => committee,
                                     Err(error) => {
                                         tracing::error!(
-                                            ?new_committee_blob,
+                                            blob_id=?new_committee_blob,
                                             ?error,
-                                            "failed to serialize the committee blob"
+                                            "failed to deserialize the committee blob"
                                         );
                                         continue;
                                     }
@@ -130,16 +137,44 @@ where
                             self.new_block_queue.push_back(next_block_notification);
                         },
 
-                        Err(e @ (ExporterError::UnprocessedChain
+                        Err(ExporterError::ReadCertificateError(hash)) => {
+                            match self.retried_certs.remove(&hash) {
+                                // We retry only if the time elapsed since the first attempt is
+                                // less than 1 second. The assumption is that Scylla cannot
+                                // be inconsistent for too long.
+                                Some((retries, first_attempt)) => {
+                                    let elapsed = Instant::now().duration_since(first_attempt);
+                                    if retries < 3 || elapsed < Duration::from_secs(1) {
+                                        tracing::warn!(?hash, retry=retries+1, "retrying to read certificate");
+                                        self.retried_certs.insert(hash, (retries + 1, first_attempt));
+                                        self.new_block_queue.push_back(next_block_notification);
+                                    } else {
+                                        tracing::error!(?hash, "certificate is missing from the database");
+                                        return Err(ExporterError::ReadCertificateError(hash));
+                                    }
+                                },
+                                None => {
+                                    tracing::warn!(?hash, retry=1, "retrying to read certificate");
+                                    self.retried_certs.insert(hash, (1, Instant::now()));
+                                    self.new_block_queue.push_back(next_block_notification);
+                                }
+                            }
+                        },
+
+                        Err(error @ (ExporterError::UnprocessedChain
                                 | ExporterError::BadInitialization
                                 | ExporterError::ChainAlreadyExists(_))
                             ) => {
-                            tracing::error!("error {:?} when resolving block with hash: {}", e, next_block_notification.hash)
+                            tracing::error!(
+                                ?error,
+                                block_hash=?next_block_notification.hash,
+                                "error when resolving block with hash"
+                            );
                         },
 
-                        Err(e) => {
-                            tracing::error!("unexpected error: {:?}", e);
-                            return Err(e);
+                        Err(error) => {
+                            tracing::error!(?error, "unexpected error");
+                            return Err(error);
                         }
                     }
                 },
