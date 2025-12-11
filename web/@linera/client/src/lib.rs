@@ -145,8 +145,11 @@ impl Client {
         wallet: &Wallet,
         signer: Signer,
         skip_process_inbox: bool,
+        allow_application_logs: bool,
     ) -> Result<Client, JsError> {
-        let mut storage = get_storage().await?;
+        let mut storage = get_storage()
+            .await?
+            .with_allow_application_logs(allow_application_logs);
         wallet
             .genesis_config
             .initialize_storage(&mut storage)

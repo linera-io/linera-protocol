@@ -187,7 +187,12 @@ impl ExporterOptions {
                 .clone()
                 .run_with_store(StorageMigration)
                 .await?;
-            store_config.run_with_storage(None, context).boxed().await
+            // Exporters are part of validator infrastructure and should not output contract logs.
+            let allow_application_logs = false;
+            store_config
+                .run_with_storage(None, allow_application_logs, context)
+                .boxed()
+                .await
         };
 
         runtime.block_on(future)?.map_err(|e| e.into())
