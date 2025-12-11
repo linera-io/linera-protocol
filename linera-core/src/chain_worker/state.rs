@@ -600,27 +600,18 @@ where
         Ok(cross_chain_requests)
     }
 
-    /// Returns the lowest block height for which we don't know that all outgoing messages to
-    /// tracked chains have been delivered.
+    /// Returns the lowest block height for which we have outgoing messages to tracked chains.
     ///
     /// If `tracked_chains` is `None` (validator mode), this returns the lowest height
-    /// for which delivery of all outgoing messages is now known to be complete.
+    /// for which we have any pending outgoing messages.
     #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
     async fn min_height_with_undelivered_messages_to_tracked_chains(
         &self,
-    ) -> Result<BlockHeight, WorkerError> {
-        // Get the global max delivered height from outbox_counters.
-        let global_height = self.chain.min_height_with_undelivered_messages();
-
+    ) -> Result<Option<BlockHeight>, WorkerError> {
         let Some(tracked_chains) = self.tracked_chains.as_ref() else {
-            return Ok(global_height); // Validator mode: All chains are tracked.
+            // Validator mode: all chains are tracked.
+            return Ok(self.chain.min_height_with_undelivered_messages());
         };
-
-        let next_height = self.chain.tip_state.get().next_block_height;
-
-        if global_height == next_height {
-            return Ok(global_height);
-        }
 
         // Client mode: check only outboxes to tracked chains.
         let mut targets = self.chain.nonempty_outbox_chain_ids();
@@ -629,17 +620,11 @@ where
             targets.retain(|target| tracked_chains.contains(target));
         }
 
-        if targets.is_empty() {
-            return Ok(next_height); // No pending messages to tracked chains.
-        }
-
-        let outboxes = self.chain.load_outboxes(&targets).await?;
-
         // Find the minimum pending height across all tracked outboxes.
-        let mut min_height = next_height;
-        for outbox in &outboxes {
+        let mut min_height: Option<BlockHeight> = None;
+        for outbox in self.chain.load_outboxes(&targets).await? {
             if let Some(height) = outbox.queue.front().await? {
-                min_height = min_height.min(height);
+                min_height = Some(min_height.map_or(height, |h| h.min(height)));
             }
         }
         Ok(min_height)
@@ -1146,13 +1131,10 @@ where
         let has_updates = self.chain.mark_messages_as_received(confirmations).await?;
 
         if has_updates {
-            if let Ok(delivered_height) = self
+            let undelivered_height = self
                 .min_height_with_undelivered_messages_to_tracked_chains()
-                .await?
-                .try_sub_one()
-            {
-                self.delivery_notifier.notify(delivered_height);
-            }
+                .await?;
+            self.delivery_notifier.notify(undelivered_height);
         }
 
         self.save().await?;

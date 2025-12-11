@@ -39,21 +39,15 @@ impl DeliveryNotifier {
         notifiers.entry(height).or_default().push(notifier);
     }
 
-    /// Notifies that all messages up to `height` have been delivered.
-    pub(super) fn notify(&mut self, height: BlockHeight) {
+    /// Notifies that all messages up to and excluding `height` have been delivered.
+    pub(super) fn notify(&mut self, undelivered_height: Option<BlockHeight>) {
         let relevant_notifiers = {
             let mut notifiers = self
                 .notifiers
                 .lock()
                 .expect("Panics should never happen while holding a lock to the `notifiers`");
-
-            let pending_notifiers = height
-                .try_add_one()
-                .map(|first_still_undelivered_height| {
-                    notifiers.split_off(&first_still_undelivered_height)
-                })
-                .unwrap_or_default();
-
+            let pending_notifiers = undelivered_height
+                .map_or_else(BTreeMap::new, |height| notifiers.split_off(&height));
             mem::replace(&mut *notifiers, pending_notifiers)
         };
 

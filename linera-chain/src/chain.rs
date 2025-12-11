@@ -455,19 +455,12 @@ where
         Ok(any_updates)
     }
 
-    /// Returns the lowest block height for which we don't know that all outgoing messages have
-    /// been delivered.
-    pub fn min_height_with_undelivered_messages(&self) -> BlockHeight {
-        let next_height = self.tip_state.get().next_block_height;
+    /// Returns the lowest block height for which have pending outgoing messages.
+    pub fn min_height_with_undelivered_messages(&self) -> Option<BlockHeight> {
         let counters = self.outbox_counters.get();
-        tracing::debug!(
-            "Messages left in {:.8}'s outbox: {:?}",
-            self.chain_id(),
-            counters
-        );
-        counters
-            .first_key_value()
-            .map_or(next_height, |(height, _)| (*height).min(next_height))
+        let chain_id = self.chain_id();
+        tracing::debug!("Messages left in {chain_id}'s outbox: {counters:?}",);
+        counters.first_key_value().map(|(height, _)| *height)
     }
 
     /// Invariant for the states of active chains.
