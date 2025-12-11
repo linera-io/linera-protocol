@@ -9,9 +9,10 @@ This module defines the JavaScript bindings to the client API.
 It is compiled to Wasm, with a JavaScript wrapper to inject its imports, and published on
 NPM as `@linera/client`.
 
-There is a supplementary package `@linera/signer`, contained within the `signer`
-subdirectory, that defines signer implementations for different transaction-signing
-policies, including in-memory keys and signing using an existing MetaMask wallet.
+The `signer` subdirectory contains a TypeScript interface specifying the types of objects
+that can be passed as signers — cryptographic integrations used to sign transactions, as
+well as a demo implementation (not recommended for production use) that stores a private
+key directly in memory and uses it to sign.
 */
 
 // We sometimes need functions in this module to be async in order to
@@ -20,36 +21,43 @@ policies, including in-memory keys and signing using an existing MetaMask wallet
 #![recursion_limit = "256"]
 
 pub mod signer;
+pub use signer::Signer;
+pub mod wallet;
+pub use wallet::Wallet;
+pub mod faucet;
+use std::{collections::HashMap, future::Future, rc::Rc, sync::Arc, time::Duration};
 
-use std::{collections::HashMap, future::Future, sync::Arc, time::Duration};
-
+pub use faucet::Faucet;
 use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex, stream::StreamExt};
-use linera_base::identifiers::{AccountOwner, ApplicationId, ChainId};
+use linera_base::identifiers::{AccountOwner, ApplicationId};
 use linera_client::{
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
     client_options::ClientContextOptions,
-    config::GenesisConfig,
 };
 use linera_core::{
     data_types::ClientOutcome,
     node::{ValidatorNode as _, ValidatorNodeProvider as _},
-    wallet,
 };
 use linera_views::store::WithError;
 use serde::ser::Serialize as _;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
 
-use crate::signer::JsSigner;
-
 // TODO(#12): convert to IndexedDbStore once we refactor Context
 type WebStorage =
     linera_storage::DbStorage<linera_views::memory::MemoryDatabase, linera_storage::WallClock>;
 
-type WebEnvironment =
-    linera_core::environment::Impl<WebStorage, linera_rpc::node_provider::NodeProvider, JsSigner>;
+type WebEnvironment = linera_core::environment::Impl<
+    WebStorage,
+    linera_rpc::node_provider::NodeProvider,
+    Signer,
+    Rc<linera_core::wallet::Memory>,
+>;
 
 type JsResult<T> = Result<T, JsError>;
+
+type ClientContext = linera_client::client_context::ClientContext<WebEnvironment>;
+type ChainClient = linera_core::client::ChainClient<WebEnvironment>;
 
 async fn get_storage(
 ) -> Result<WebStorage, <linera_views::memory::MemoryDatabase as WithError>::Error> {
@@ -63,17 +71,6 @@ async fn get_storage(
     )
     .await
 }
-
-/// A wallet that stores the user's chains and keys in memory.
-#[wasm_bindgen]
-pub struct Wallet {
-    chains: wallet::Memory,
-    default: Option<ChainId>,
-    genesis_config: GenesisConfig,
-}
-
-type ClientContext = linera_client::client_context::ClientContext<WebEnvironment>;
-type ChainClient = linera_core::client::ChainClient<WebEnvironment>;
 
 // TODO(#13): get from user
 pub const OPTIONS: ClientContextOptions = ClientContextOptions {
@@ -118,64 +115,6 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
 const BLOCK_CACHE_SIZE: usize = 5000;
 const EXECUTION_STATE_CACHE_SIZE: usize = 10000;
 
-#[wasm_bindgen]
-pub struct Faucet(linera_faucet_client::Faucet);
-
-#[wasm_bindgen]
-impl Faucet {
-    #[wasm_bindgen(constructor)]
-    #[must_use]
-    pub fn new(url: String) -> Faucet {
-        Faucet(linera_faucet_client::Faucet::new(url))
-    }
-
-    /// Creates a new wallet from the faucet.
-    ///
-    /// # Errors
-    /// If we couldn't retrieve the genesis config from the faucet.
-    #[wasm_bindgen(js_name = createWallet)]
-    pub async fn create_wallet(&self) -> JsResult<Wallet> {
-        Ok(Wallet {
-            chains: wallet::Memory::default(),
-            default: None,
-            genesis_config: self.0.genesis_config().await?,
-        })
-    }
-
-    // TODO(#40): figure out a way to alias or specify this string for TypeScript
-    /// Claims a new chain from the faucet, with a new keypair and some tokens.
-    ///
-    /// # Errors
-    /// - if we fail to get the list of current validators from the faucet
-    /// - if we fail to claim the chain from the faucet
-    /// - if we fail to persist the new chain or keypair to the wallet
-    ///
-    /// # Panics
-    /// If an error occurs in the chain listener task.
-    #[wasm_bindgen(js_name = claimChain)]
-    pub async fn claim_chain(&self, wallet: &mut Wallet, owner: JsValue) -> JsResult<String> {
-        let account_owner: AccountOwner = serde_wasm_bindgen::from_value(owner)?;
-        tracing::info!(
-            "Requesting a new chain for owner {} using the faucet at address {}",
-            account_owner,
-            self.0.url(),
-        );
-        let description = self.0.claim(&account_owner).await?;
-        let chain_id = description.id();
-        wallet.chains.insert(
-            chain_id,
-            wallet::Chain {
-                owner: Some(account_owner),
-                ..description.into()
-            },
-        );
-        if wallet.default.is_none() {
-            wallet.default = Some(chain_id);
-        }
-        Ok(chain_id.to_string())
-    }
-}
-
 /// The full client API, exposed to the wallet implementation. Calls
 /// to this API can be trusted to have originated from the user's
 /// request.
@@ -204,8 +143,8 @@ impl Client {
     /// unavailable.
     #[wasm_bindgen(constructor)]
     pub async fn new(
-        wallet: Wallet,
-        signer: JsSigner,
+        wallet: &Wallet,
+        signer: Signer,
         skip_process_inbox: bool,
         allow_application_logs: bool,
     ) -> Result<Client, JsError> {
@@ -218,11 +157,11 @@ impl Client {
             .await?;
         let client_context = ClientContext::new(
             storage.clone(),
-            wallet.chains,
+            wallet.chains.clone(),
             signer,
             OPTIONS,
             wallet.default,
-            wallet.genesis_config,
+            wallet.genesis_config.clone(),
             BLOCK_CACHE_SIZE,
             EXECUTION_STATE_CACHE_SIZE,
         )
@@ -367,6 +306,20 @@ impl Client {
         Ok(serde_wasm_bindgen::to_value(
             &self.default_chain_client().await?.identity().await?,
         )?)
+    }
+
+    /// Adds a new owner to the default chain.
+    ///
+    /// # Errors
+    ///
+    /// If the owner is in the wrong format, or the chain client can't be instantiated.
+    #[wasm_bindgen(js_name = addOwner)]
+    pub async fn add_owner(&self, owner: JsValue) -> JsResult<()> {
+        let owner = serde_wasm_bindgen::from_value(owner)?;
+        let chain_client = self.default_chain_client().await?;
+        self.apply_client_command(&chain_client, || chain_client.share_ownership(owner, 100))
+            .await??;
+        Ok(())
     }
 
     /// Gets the version information of the validators of the current network.

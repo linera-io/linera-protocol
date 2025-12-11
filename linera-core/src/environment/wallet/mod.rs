@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Deref;
+
 use futures::{Stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     crypto::CryptoHash,
@@ -100,4 +102,44 @@ pub trait Wallet {
         id: ChainId,
         f: impl FnMut(&mut Chain) + Send,
     ) -> Result<Option<()>, Self::Error>;
+}
+
+impl<W: Deref<Target: Wallet> + linera_base::util::traits::AutoTraits> Wallet for W {
+    type Error = <W::Target as Wallet>::Error;
+
+    async fn get(&self, id: ChainId) -> Result<Option<Chain>, Self::Error> {
+        self.deref().get(id).await
+    }
+
+    async fn remove(&self, id: ChainId) -> Result<Option<Chain>, Self::Error> {
+        self.deref().remove(id).await
+    }
+
+    fn items(&self) -> impl Stream<Item = Result<(ChainId, Chain), Self::Error>> {
+        self.deref().items()
+    }
+
+    async fn insert(&self, id: ChainId, chain: Chain) -> Result<Option<Chain>, Self::Error> {
+        self.deref().insert(id, chain).await
+    }
+
+    async fn try_insert(&self, id: ChainId, chain: Chain) -> Result<Option<Chain>, Self::Error> {
+        self.deref().try_insert(id, chain).await
+    }
+
+    fn chain_ids(&self) -> impl Stream<Item = Result<ChainId, Self::Error>> {
+        self.deref().chain_ids()
+    }
+
+    fn owned_chain_ids(&self) -> impl Stream<Item = Result<ChainId, Self::Error>> {
+        self.deref().owned_chain_ids()
+    }
+
+    async fn modify(
+        &self,
+        id: ChainId,
+        f: impl FnMut(&mut Chain) + Send,
+    ) -> Result<Option<()>, Self::Error> {
+        self.deref().modify(id, f).await
+    }
 }

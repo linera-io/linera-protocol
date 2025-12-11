@@ -226,7 +226,7 @@
           await linera.initialize();
           const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
           const mnemonic = ethers.Wallet.createRandom().mnemonic.phrase;
-          const signer = linera.PrivateKeySigner.fromMnemonic(mnemonic);
+          const signer = linera.signer.PrivateKey.fromMnemonic(mnemonic);
           const wallet = await faucet.createWallet();
           const owner = signer.address();
           const chainId = await faucet.claimChain(wallet, owner);
