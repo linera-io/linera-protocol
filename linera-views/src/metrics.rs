@@ -44,3 +44,14 @@ pub static SAVE_VIEW_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         &["type", "base_key"],
     )
 });
+
+/// The metric tracking the latency of saving views.
+#[doc(hidden)]
+pub static SAVE_VIEW_LATENCY: LazyLock<prometheus::HistogramVec> = LazyLock::new(|| {
+    prometheus_util::register_histogram_vec(
+        "save_view_latency",
+        "Save view latency in milliseconds",
+        &["type"],
+        exponential_bucket_latencies(1000.0),
+    )
+});
