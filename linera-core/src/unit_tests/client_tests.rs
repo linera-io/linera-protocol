@@ -3109,9 +3109,10 @@ where
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
 
     // Create a follow-only client for the receiver chain (no owner = follow-only mode).
-    let follower = builder
-        .make_follow_only_client(receiver.chain_id(), None, BlockHeight::ZERO)
+    let mut follower = builder
+        .make_client(receiver.chain_id(), None, BlockHeight::ZERO)
         .await?;
+    follower.unset_preferred_owner();
 
     // The sender transfers tokens to the receiver.
     sender

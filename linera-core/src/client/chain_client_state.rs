@@ -22,18 +22,13 @@ pub struct ChainClientState {
     /// A mutex that is held whilst we are performing operations that should not be
     /// attempted by multiple clients at the same time.
     client_mutex: Arc<Mutex<()>>,
-
-    /// If true, only download blocks for this chain without fetching manager values.
-    /// Use this for chains we're interested in observing but don't intend to propose blocks for.
-    follow_only: bool,
 }
 
 impl ChainClientState {
-    pub fn new(pending_proposal: Option<PendingProposal>, follow_only: bool) -> ChainClientState {
+    pub fn new(pending_proposal: Option<PendingProposal>) -> ChainClientState {
         ChainClientState {
             pending_proposal,
             client_mutex: Arc::default(),
-            follow_only,
         }
     }
 
@@ -43,13 +38,7 @@ impl ChainClientState {
         ChainClientState {
             pending_proposal: self.pending_proposal.clone(),
             client_mutex: Arc::clone(&self.client_mutex),
-            follow_only: self.follow_only,
         }
-    }
-
-    /// Returns whether this chain is in follow-only mode.
-    pub fn is_follow_only(&self) -> bool {
-        self.follow_only
     }
 
     pub fn pending_proposal(&self) -> &Option<PendingProposal> {

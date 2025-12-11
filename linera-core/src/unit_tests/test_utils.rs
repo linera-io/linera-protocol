@@ -1081,43 +1081,6 @@ where
         .await
     }
 
-    /// Creates a follow-only client for the given chain (without specifying an owner).
-    /// This is useful for testing follow-only mode where we only want to observe a chain
-    /// without participating in consensus.
-    pub async fn make_follow_only_client(
-        &mut self,
-        chain_id: ChainId,
-        block_hash: Option<CryptoHash>,
-        block_height: BlockHeight,
-    ) -> anyhow::Result<ChainClient<B::Storage>> {
-        let storage = self.make_storage().await?;
-        self.chain_client_storages.push(storage.clone());
-        let client = Arc::new(Client::new(
-            crate::environment::Impl {
-                network: self.make_node_provider(),
-                storage,
-                signer: self.signer.clone(),
-                wallet: TestWallet::default(),
-            },
-            self.admin_id(),
-            false,
-            [chain_id],
-            format!("Client node for {:.8}", chain_id),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
-            ChainClientOptions::test_default(),
-            crate::client::RequestsSchedulerConfig::default(),
-        ));
-        Ok(client.create_chain_client(
-            chain_id,
-            block_hash,
-            block_height,
-            None,
-            None, // No owner = follow-only mode
-            None,
-        ))
-    }
-
     /// Tries to find a (confirmation) certificate for the given chain_id and block height.
     pub async fn check_that_validators_have_certificate(
         &self,

@@ -69,7 +69,7 @@ use validator_trackers::ValidatorTrackers;
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout},
-    environment::Environment,
+    environment::{wallet::Wallet as _, Environment},
     local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
@@ -285,6 +285,18 @@ impl<Env: Environment> Client<Env> {
         self.environment.wallet()
     }
 
+    /// Returns whether the given chain is in follow-only mode (no owner key in the wallet).
+    ///
+    /// If the chain is not in the wallet, returns `true` since we cannot participate in
+    /// consensus without an owner key.
+    async fn is_chain_follow_only(&self, chain_id: ChainId) -> bool {
+        match self.wallet().get(chain_id).await {
+            Ok(Some(chain)) => chain.owner.is_none(),
+            // Chain not in wallet or error: treat as follow-only.
+            Ok(None) | Err(_) => true,
+        }
+    }
+
     /// Adds a chain to the set of chains tracked by the local node.
     #[instrument(level = "trace", skip(self))]
     pub fn track_chain(&self, chain_id: ChainId) {
@@ -305,13 +317,11 @@ impl<Env: Environment> Client<Env> {
         preferred_owner: Option<AccountOwner>,
         timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
     ) -> ChainClient<Env> {
-        // Follow-only mode is enabled if there's no owner (key pair) associated with the chain.
-        let follow_only = preferred_owner.is_none();
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
-        self.chains.pin().get_or_insert_with(chain_id, || {
-            ChainClientState::new(pending_proposal.clone(), follow_only)
-        });
+        self.chains
+            .pin()
+            .get_or_insert_with(chain_id, || ChainClientState::new(pending_proposal.clone()));
 
         ChainClient {
             client: self.clone(),
@@ -322,14 +332,6 @@ impl<Env: Environment> Client<Env> {
             initial_next_block_height: next_block_height,
             timing_sender,
         }
-    }
-
-    /// Returns whether the given chain is in follow-only mode.
-    pub fn is_chain_follow_only(&self, chain_id: ChainId) -> bool {
-        self.chains
-            .pin()
-            .get(&chain_id)
-            .is_some_and(|state| state.is_follow_only())
     }
 
     /// Fetches the chain description blob if needed, and returns the chain info.
@@ -1163,7 +1165,7 @@ impl<Env: Environment> Client<Env> {
         committee: Committee,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
-        let _latency = if !self.is_chain_follow_only(chain_id) {
+        let _latency = if !self.is_chain_follow_only(chain_id).await {
             Some(metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency())
         } else {
             None
@@ -1200,7 +1202,7 @@ impl<Env: Environment> Client<Env> {
         remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
     ) -> Result<(), ChainClientError> {
-        let with_manager_values = !self.is_chain_follow_only(chain_id);
+        let with_manager_values = !self.is_chain_follow_only(chain_id).await;
         let query = if with_manager_values {
             ChainInfoQuery::new(chain_id).with_manager_values()
         } else {
@@ -1859,8 +1861,11 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Returns whether this chain is in follow-only mode.
+    ///
+    /// A chain is in follow-only mode if no owner key is associated with it, meaning the client
+    /// will only download blocks but won't participate in consensus.
     pub fn is_follow_only(&self) -> bool {
-        self.client.is_chain_follow_only(self.chain_id)
+        self.preferred_owner.is_none()
     }
 
     /// Updates the chain's state using a closure.

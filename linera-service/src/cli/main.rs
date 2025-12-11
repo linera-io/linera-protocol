@@ -437,10 +437,10 @@ impl Runnable for Job {
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                if context.client.is_chain_follow_only(chain_id) {
+                let chain_client = context.make_chain_client(chain_id).await?;
+                if chain_client.is_follow_only() {
                     bail!("chain {chain_id} is in follow-only mode");
                 }
-                let chain_client = context.make_chain_client(chain_id).await?;
                 info!("Processing the inbox of chain {}", chain_id);
                 let time_start = Instant::now();
                 let certificates = context.process_inbox(&chain_client).await?;
