@@ -306,11 +306,13 @@ impl Client {
     }
 
     /// Adds a new owner to the default chain.
+    ///
+    /// # Errors
+    ///
+    /// If the owner is in the wrong format, or the chain client can't be instantiated.
     #[wasm_bindgen(js_name = addOwner)]
-    pub async fn add_owner(&self, owner: &str) -> JsResult<()> {
-        let owner = owner
-            .parse()
-            .map_err(|e| JsError::new(&format!("failed to parse owner: {e}")))?;
+    pub async fn add_owner(&self, owner: JsValue) -> JsResult<()> {
+        let owner = serde_wasm_bindgen::from_value(owner)?;
         let chain_client = self.default_chain_client().await?;
         self.apply_client_command(&chain_client, || chain_client.share_ownership(owner, 100))
             .await??;

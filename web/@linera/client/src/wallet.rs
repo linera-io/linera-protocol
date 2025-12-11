@@ -22,6 +22,11 @@ pub struct Wallet {
 
 #[wasm_bindgen]
 impl Wallet {
+    /// Set the owner of a chain (the account used to sign blocks on this chain).
+    ///
+    /// # Errors
+    ///
+    /// If the provided `ChainId` or `AccountOwner` are in the wrong format.
     #[wasm_bindgen(js_name = setOwner)]
     pub async fn set_owner(&self, chain_id: JsValue, owner: JsValue) -> JsResult<()> {
         let chain_id = serde_wasm_bindgen::from_value(chain_id)?;
