@@ -7,7 +7,9 @@ use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use linera_client::config::GenesisConfig;
 use linera_execution::WasmRuntime;
-use linera_storage::{DbStorage, Storage, DEFAULT_NAMESPACE};
+use linera_storage::{
+    DbStorage, Storage, StorageCacheConfig as DbStorageCacheConfig, DEFAULT_NAMESPACE,
+};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
     client::StorageServiceDatabase,
@@ -85,6 +87,18 @@ pub struct CommonStorageOptions {
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1", global = true)]
     pub storage_replication_factor: u32,
+
+    /// Number of blobs to cache (application-level cache).
+    #[arg(long, default_value = "1000", global = true)]
+    pub blob_cache_size: usize,
+
+    /// Number of certificates to cache (application-level cache).
+    #[arg(long, default_value = "1000", global = true)]
+    pub certificate_cache_size: usize,
+
+    /// Number of confirmed blocks to cache (application-level cache).
+    #[arg(long, default_value = "1000", global = true)]
+    pub confirmed_block_cache_size: usize,
 }
 
 impl CommonStorageOptions {
@@ -98,6 +112,14 @@ impl CommonStorageOptions {
             max_cache_value_size: self.storage_max_cache_value_size,
             max_cache_find_keys_size: self.storage_max_cache_find_keys_size,
             max_cache_find_key_values_size: self.storage_max_cache_find_key_values_size,
+        }
+    }
+
+    pub fn db_storage_cache_config(&self) -> DbStorageCacheConfig {
+        DbStorageCacheConfig {
+            blob_cache_size: self.blob_cache_size,
+            certificate_cache_size: self.certificate_cache_size,
+            confirmed_block_cache_size: self.confirmed_block_cache_size,
         }
     }
 }
@@ -629,6 +651,7 @@ impl StoreConfig {
     pub async fn run_with_storage<Job>(
         self,
         wasm_runtime: Option<WasmRuntime>,
+        db_storage_cache_config: DbStorageCacheConfig,
         job: Job,
     ) -> Result<Job::Output, anyhow::Error>
     where
@@ -644,6 +667,7 @@ impl StoreConfig {
                     &config,
                     &namespace,
                     wasm_runtime,
+                    db_storage_cache_config,
                 )
                 .await?;
                 let genesis_config = crate::util::read_json::<GenesisConfig>(genesis_path)?;
@@ -657,29 +681,42 @@ impl StoreConfig {
                     &config,
                     &namespace,
                     wasm_runtime,
+                    db_storage_cache_config,
                 )
                 .await?;
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb { config, namespace } => {
-                let storage =
-                    DbStorage::<RocksDbDatabase, _>::connect(&config, &namespace, wasm_runtime)
-                        .await?;
+                let storage = DbStorage::<RocksDbDatabase, _>::connect(
+                    &config,
+                    &namespace,
+                    wasm_runtime,
+                    db_storage_cache_config,
+                )
+                .await?;
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "dynamodb")]
             StoreConfig::DynamoDb { config, namespace } => {
-                let storage =
-                    DbStorage::<DynamoDbDatabase, _>::connect(&config, &namespace, wasm_runtime)
-                        .await?;
+                let storage = DbStorage::<DynamoDbDatabase, _>::connect(
+                    &config,
+                    &namespace,
+                    wasm_runtime,
+                    db_storage_cache_config,
+                )
+                .await?;
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb { config, namespace } => {
-                let storage =
-                    DbStorage::<ScyllaDbDatabase, _>::connect(&config, &namespace, wasm_runtime)
-                        .await?;
+                let storage = DbStorage::<ScyllaDbDatabase, _>::connect(
+                    &config,
+                    &namespace,
+                    wasm_runtime,
+                    db_storage_cache_config,
+                )
+                .await?;
                 Ok(job.run(storage).await)
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
@@ -687,7 +724,7 @@ impl StoreConfig {
                 let storage = DbStorage::<
                     DualDatabase<RocksDbDatabase, ScyllaDbDatabase, ChainStatesFirstAssignment>,
                     _,
-                >::connect(&config, &namespace, wasm_runtime)
+                >::connect(&config, &namespace, wasm_runtime, db_storage_cache_config)
                 .await?;
                 Ok(job.run(storage).await)
             }
@@ -749,8 +786,13 @@ impl RunnableWithStore for InitializeStorageJob<'_> {
         D::Store: KeyValueStore + Clone + Send + Sync + 'static,
         D::Error: Send + Sync,
     {
-        let mut storage =
-            DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+        let mut storage = DbStorage::<D, _>::maybe_create_and_connect(
+            &config,
+            &namespace,
+            None,
+            DbStorageCacheConfig::default(),
+        )
+        .await?;
         self.0.initialize_storage(&mut storage).await?;
         Ok(())
     }

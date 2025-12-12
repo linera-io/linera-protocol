@@ -3,25 +3,23 @@
 
 //! Concurrent caches for values.
 
-#[cfg(test)]
-#[path = "unit_tests/value_cache_tests.rs"]
-mod unit_tests;
-
 #[cfg(with_metrics)]
 use std::any::type_name;
 use std::{borrow::Cow, hash::Hash, num::NonZeroUsize, sync::Mutex};
 
-use linera_base::{crypto::CryptoHash, hashed::Hashed};
 use lru::LruCache;
 use quick_cache::sync::Cache;
+
+use crate::{crypto::CryptoHash, hashed::Hashed};
 
 /// A counter metric for the number of cache hits in the [`ValueCache`].
 #[cfg(with_metrics)]
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util::register_int_counter_vec;
     use prometheus::IntCounterVec;
+
+    use crate::prometheus_util::register_int_counter_vec;
 
     pub static CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
@@ -65,9 +63,25 @@ where
         }
     }
 
+    /// Inserts a value into the cache with the given key.
+    /// Returns `true` if the value was newly inserted, `false` if it already existed.
+    pub fn insert(&self, key: K, value: V) -> bool {
+        if self.contains_key(&key) {
+            false
+        } else {
+            self.cache.insert(key, value);
+            true
+        }
+    }
+
     /// Returns a `V` from the cache, if present.
     pub fn get(&self, key: &K) -> Option<V> {
         Self::track_cache_usage(self.cache.get(key))
+    }
+
+    /// Returns `true` if the cache contains the given key.
+    pub fn contains_key(&self, key: &K) -> bool {
+        self.cache.get(key).is_some()
     }
 
     fn track_cache_usage(maybe_value: Option<V>) -> Option<V> {
@@ -94,7 +108,7 @@ impl<T: Clone> ValueCache<CryptoHash, Hashed<T>> {
     /// inserted in the cache.
     ///
     /// Returns [`true`] if the value was not already present in the cache.
-    pub fn insert(&self, value: Cow<Hashed<T>>) -> bool {
+    pub fn insert_hashed(&self, value: Cow<Hashed<T>>) -> bool {
         let hash = (*value).hash();
         if self.cache.get(&hash).is_some() {
             false
@@ -108,7 +122,7 @@ impl<T: Clone> ValueCache<CryptoHash, Hashed<T>> {
     ///
     /// The `values` are wrapped in [`Cow`]s so that each `value` is only cloned if it
     /// needs to be inserted in the cache.
-    #[cfg(test)]
+    #[cfg(with_testing)]
     pub fn insert_all<'a>(&self, values: impl IntoIterator<Item = Cow<'a, Hashed<T>>>)
     where
         T: 'a,
@@ -122,7 +136,7 @@ impl<T: Clone> ValueCache<CryptoHash, Hashed<T>> {
     }
 }
 
-#[cfg(test)]
+#[cfg(with_testing)]
 impl<K, V> ValueCache<K, V>
 where
     K: Hash + Eq + Clone,
@@ -136,6 +150,11 @@ where
     /// Returns the number of items in the cache.
     pub fn len(&self) -> usize {
         self.cache.len()
+    }
+
+    /// Returns [`true`] if the cache is empty.
+    pub fn is_empty(&self) -> bool {
+        self.cache.len() == 0
     }
 }
 

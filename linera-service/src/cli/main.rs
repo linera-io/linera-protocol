@@ -82,7 +82,7 @@ use linera_service::{
     task_processor::TaskProcessor,
     util, Wallet,
 };
-use linera_storage::{DbStorage, Storage};
+use linera_storage::{DbStorage, Storage, StorageCacheConfig};
 use linera_views::store::{KeyValueDatabase, KeyValueStore};
 use serde_json::Value;
 use tempfile::NamedTempFile;
@@ -1786,9 +1786,13 @@ impl ClientOptions {
         debug!("Running command using storage configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common_storage_options)?;
-        let output =
-            Box::pin(store_config.run_with_storage(self.wasm_runtime.with_wasm_default(), job))
-                .await?;
+        let db_storage_cache_config = self.common_storage_options.db_storage_cache_config();
+        let output = Box::pin(store_config.run_with_storage(
+            self.wasm_runtime.with_wasm_default(),
+            db_storage_cache_config,
+            job,
+        ))
+        .await?;
         Ok(output)
     }
 
@@ -1968,8 +1972,13 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 genesis_config_path,
             } => {
                 let genesis_config: GenesisConfig = util::read_json(genesis_config_path)?;
-                let mut storage =
-                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let mut storage = DbStorage::<D, _>::maybe_create_and_connect(
+                    &config,
+                    &namespace,
+                    None,
+                    StorageCacheConfig::default(),
+                )
+                .await?;
                 genesis_config.initialize_storage(&mut storage).await?;
                 info!(
                     "Namespace {namespace} was initialized in {} ms",
@@ -1988,8 +1997,13 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 }
             }
             DatabaseToolCommand::ListBlobIds => {
-                let storage =
-                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let storage = DbStorage::<D, _>::maybe_create_and_connect(
+                    &config,
+                    &namespace,
+                    None,
+                    StorageCacheConfig::default(),
+                )
+                .await?;
                 let blob_ids = storage.list_blob_ids().await?;
                 info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
                 info!("The list of blob IDs is:");
@@ -1998,8 +2012,13 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 }
             }
             DatabaseToolCommand::ListChainIds => {
-                let storage =
-                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let storage = DbStorage::<D, _>::maybe_create_and_connect(
+                    &config,
+                    &namespace,
+                    None,
+                    StorageCacheConfig::default(),
+                )
+                .await?;
                 let chain_ids = storage.list_chain_ids().await?;
                 info!(
                     "Chain IDs listed in {} ms",
@@ -2011,8 +2030,13 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 }
             }
             DatabaseToolCommand::ListEventIds => {
-                let storage =
-                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                let storage = DbStorage::<D, _>::maybe_create_and_connect(
+                    &config,
+                    &namespace,
+                    None,
+                    StorageCacheConfig::default(),
+                )
+                .await?;
                 let event_ids = storage.list_event_ids().await?;
                 info!(
                     "Event IDs listed in {} ms",
