@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, fmt, iter, path::PathBuf};
+use std::{collections::HashSet, fmt, iter};
 
 use linera_base::{
     data_types::{ApplicationPermissions, TimeDelta},
@@ -37,21 +37,6 @@ util::impl_from_infallible!(Error);
 
 #[derive(Clone, clap::Parser)]
 pub struct ClientContextOptions {
-    /// Sets the file storing the private state of user chains (an empty one will be created if missing)
-    #[arg(long = "wallet")]
-    pub wallet_state_path: Option<PathBuf>,
-
-    /// Sets the file storing the keystore state.
-    #[arg(long = "keystore")]
-    pub keystore_path: Option<PathBuf>,
-
-    /// Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet
-    /// storage config from the environment variables `LINERA_WALLET_{X}` and
-    /// `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and
-    /// `LINERA_STORAGE`.
-    #[arg(long, short = 'w', value_parser = util::parse_ascii_alphanumeric_string)]
-    pub with_wallet: Option<String>,
-
     /// Timeout for sending queries (milliseconds)
     #[arg(long = "send-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
     pub send_timeout: Duration,
@@ -94,19 +79,6 @@ pub struct ClientContextOptions {
     /// Number of times to retry connecting to a validator.
     #[arg(long, default_value = "10")]
     pub max_retries: u32,
-
-    /// Enable OpenTelemetry Chrome JSON exporter for trace data analysis.
-    #[arg(long)]
-    pub chrome_trace_exporter: bool,
-
-    /// Output file path for Chrome trace JSON format.
-    /// Can be visualized in chrome://tracing or Perfetto UI.
-    #[arg(long, env = "LINERA_CHROME_TRACE_FILE")]
-    pub chrome_trace_file: Option<String>,
-
-    /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
-    #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
-    pub otlp_exporter_endpoint: Option<String>,
 
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.
