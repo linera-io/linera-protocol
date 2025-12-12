@@ -698,6 +698,20 @@ where
                     .allow_application_logs;
                 callback.respond(allow);
             }
+
+            #[cfg(web)]
+            Log { message, level } => {
+                // Output directly to browser console with clean formatting
+                let formatted: js_sys::JsString = format!("[CONTRACT {level}] {message}").into();
+                match level {
+                    tracing::log::Level::Trace | tracing::log::Level::Debug => {
+                        web_sys::console::debug_1(&formatted)
+                    }
+                    tracing::log::Level::Info => web_sys::console::log_1(&formatted),
+                    tracing::log::Level::Warn => web_sys::console::warn_1(&formatted),
+                    tracing::log::Level::Error => web_sys::console::error_1(&formatted),
+                }
+            }
         }
 
         Ok(())
@@ -1323,5 +1337,12 @@ pub enum ExecutionRequest {
     AllowApplicationLogs {
         #[debug(skip)]
         callback: Sender<bool>,
+    },
+
+    /// Log message from contract execution (fire-and-forget, no callback needed).
+    #[cfg(web)]
+    Log {
+        message: String,
+        level: tracing::log::Level,
     },
 }
