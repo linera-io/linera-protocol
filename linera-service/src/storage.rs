@@ -724,7 +724,9 @@ impl StoreConfig {
                 let storage = DbStorage::<
                     DualDatabase<RocksDbDatabase, ScyllaDbDatabase, ChainStatesFirstAssignment>,
                     _,
-                >::connect(&config, &namespace, wasm_runtime, db_storage_cache_config)
+                >::connect(
+                    &config, &namespace, wasm_runtime, db_storage_cache_config
+                )
                 .await?;
                 Ok(job.run(storage).await)
             }

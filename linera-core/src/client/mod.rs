@@ -1156,63 +1156,40 @@ impl<Env: Environment> Client<Env> {
             .get(&sender_chain_id)
             .copied()
             .unwrap_or(BlockHeight::ZERO);
+
+        // Skip if we already have all certificates up to this height.
+        if height < next_outbox_height {
+            return Ok(());
+        }
+
         let (max_epoch, committees) = self.admin_committees().await?;
 
-        // Recursively collect all certificates we need, following
-        // the chain of previous_message_blocks back to next_outbox_height.
-        let mut certificates = BTreeMap::new();
-        let mut current_height = height;
-
-        // Stop if we've reached the height we've already processed.
-        while current_height >= next_outbox_height {
-            // Download the certificate for this height.
-            let downloaded = self
-                .requests_scheduler
-                .download_certificates_by_heights(
-                    remote_node,
-                    sender_chain_id,
-                    vec![current_height],
-                )
-                .await?;
-            let Some(certificate) = downloaded.into_iter().next() else {
-                return Err(chain_client::Error::CannotDownloadMissingSenderBlock {
-                    chain_id: sender_chain_id,
-                    height: current_height,
-                });
-            };
-
-            // Validate the certificate.
-            Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
-                .into_result()?;
-
-            // Check if there's a previous message block to our chain.
-            let block = certificate.block();
-            let next_height = block
-                .body
-                .previous_message_blocks
-                .get(&receiver_chain_id)
-                .map(|(_prev_hash, prev_height)| *prev_height);
-
-            // Store this certificate.
-            certificates.insert(current_height, certificate);
-
-            if let Some(prev_height) = next_height {
-                // Continue with the previous block.
-                current_height = prev_height;
-            } else {
-                // No more dependencies.
-                break;
-            }
-        }
+        // Request the proxy to do the traversal and return the certificates
+        // in ascending height order, ready for processing.
+        let certificates = self
+            .requests_scheduler
+            .download_sender_certificates_for_receiver(
+                remote_node,
+                sender_chain_id,
+                receiver_chain_id,
+                height,
+                next_outbox_height,
+            )
+            .await?;
 
         if certificates.is_empty() {
             self.local_node
                 .retry_pending_cross_chain_requests(sender_chain_id)
                 .await?;
+            return Ok(());
         }
 
-        // Process certificates in ascending block height order (BTreeMap keeps them sorted).
-        for certificate in certificates.into_values() {
+        // Process certificates in ascending block height order (already sorted by proxy).
+        for certificate in certificates {
+            // Validate the certificate.
+            Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
+                .into_result()?;
+
             self.receive_sender_certificate(
                 certificate,
                 ReceiveCertificateMode::AlreadyChecked,

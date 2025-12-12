@@ -347,6 +347,22 @@ pub struct CertificatesByHeightRequest {
     pub heights: Vec<BlockHeight>,
 }
 
+/// Request for downloading sender certificates with their sending ancestors.
+/// The proxy will traverse `previous_message_blocks` to find all certificates
+/// that sent messages to the receiver chain.
+#[derive(Debug, Clone)]
+pub struct SenderCertificatesRequest {
+    /// The chain that sent the messages.
+    pub sender_chain_id: ChainId,
+    /// The chain that receives the messages.
+    pub receiver_chain_id: ChainId,
+    /// The target block height to start from.
+    pub target_height: BlockHeight,
+    /// The height from which to stop traversing (exclusive lower bound).
+    /// This is typically the `next_outbox_height` the client already has.
+    pub start_height: BlockHeight,
+}
+
 /// The outcome of trying to commit a list of operations to the chain.
 #[derive(Debug)]
 pub enum ClientOutcome<T> {

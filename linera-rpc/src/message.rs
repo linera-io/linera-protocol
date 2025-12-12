@@ -50,6 +50,12 @@ pub enum RpcMessage {
     DownloadConfirmedBlock(Box<CryptoHash>),
     DownloadCertificates(Vec<CryptoHash>),
     DownloadCertificatesByHeights(ChainId, Vec<BlockHeight>),
+    DownloadSenderCertificatesForReceiver {
+        sender_chain_id: ChainId,
+        receiver_chain_id: ChainId,
+        target_height: BlockHeight,
+        start_height: BlockHeight,
+    },
     BlobLastUsedBy(Box<BlobId>),
     MissingBlobIds(Vec<BlobId>),
     VersionInfoQuery,
@@ -67,6 +73,7 @@ pub enum RpcMessage {
     DownloadConfirmedBlockResponse(Box<ConfirmedBlock>),
     DownloadCertificatesResponse(Vec<ConfirmedBlockCertificate>),
     DownloadCertificatesByHeightsResponse(Vec<ConfirmedBlockCertificate>),
+    DownloadSenderCertificatesForReceiverResponse(Vec<ConfirmedBlockCertificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
     MissingBlobIdsResponse(Vec<BlobId>),
 
@@ -114,6 +121,8 @@ impl RpcMessage {
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificatesByHeightsResponse(_)
             | DownloadCertificates(_)
+            | DownloadSenderCertificatesForReceiver { .. }
+            | DownloadSenderCertificatesForReceiverResponse(_)
             | BlobLastUsedBy(_)
             | BlobLastUsedByResponse(_)
             | BlobLastUsedByCertificate(_)
@@ -145,7 +154,8 @@ impl RpcMessage {
             | BlobLastUsedByCertificate(_)
             | MissingBlobIds(_)
             | DownloadCertificates(_)
-            | DownloadCertificatesByHeights(_, _) => true,
+            | DownloadCertificatesByHeights(_, _)
+            | DownloadSenderCertificatesForReceiver { .. } => true,
             BlockProposal(_)
             | LiteCertificate(_)
             | TimeoutCertificate(_)
@@ -169,7 +179,8 @@ impl RpcMessage {
             | BlobLastUsedByCertificateResponse(_)
             | MissingBlobIdsResponse(_)
             | DownloadCertificatesResponse(_)
-            | DownloadCertificatesByHeightsResponse(_) => false,
+            | DownloadCertificatesByHeightsResponse(_)
+            | DownloadSenderCertificatesForReceiverResponse(_) => false,
         }
     }
 }
@@ -234,8 +245,11 @@ impl TryFrom<RpcMessage> for Vec<ConfirmedBlockCertificate> {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
-            RpcMessage::DownloadCertificatesResponse(certificates) => Ok(certificates),
-            RpcMessage::DownloadCertificatesByHeightsResponse(certificates) => Ok(certificates),
+            RpcMessage::DownloadCertificatesResponse(certificates)
+            | RpcMessage::DownloadCertificatesByHeightsResponse(certificates)
+            | RpcMessage::DownloadSenderCertificatesForReceiverResponse(certificates) => {
+                Ok(certificates)
+            }
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }

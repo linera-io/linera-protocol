@@ -26,7 +26,8 @@ use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{FutureExt as _, SinkExt, StreamExt};
-use linera_base::listen_for_shutdown_signals;
+use linera_base::{data_types::BlockHeight, identifiers::ChainId, listen_for_shutdown_signals};
+use linera_chain::types::ConfirmedBlockCertificate;
 use linera_client::config::ValidatorServerConfig;
 use linera_core::{node::NodeError, JoinSetExt as _};
 #[cfg(with_metrics)]
@@ -317,6 +318,90 @@ where
         Ok(message)
     }
 
+    /// Downloads sender certificates with their sending ancestors.
+    /// Traverses `previous_message_blocks` to find all certificates from `sender_chain_id`
+    /// that sent messages to `receiver_chain_id`, starting from `target_height` and
+    /// stopping at `start_height`. Returns certificates in ascending height order.
+    async fn download_sender_certificates_for_receiver(
+        &self,
+        sender_chain_id: ChainId,
+        receiver_chain_id: ChainId,
+        target_height: BlockHeight,
+        start_height: BlockHeight,
+    ) -> Result<Vec<ConfirmedBlockCertificate>> {
+        // Skip if we already have all certificates up to this height.
+        if target_height < start_height {
+            return Ok(Vec::new());
+        }
+
+        // Get the certificate hash for target_height only.
+        let shard = self.internal_config.get_shard_for(sender_chain_id).clone();
+        let protocol = self.internal_config.protocol;
+
+        let chain_info_query = RpcMessage::ChainInfoQuery(Box::new(
+            linera_core::data_types::ChainInfoQuery::new(sender_chain_id)
+                .with_sent_certificate_hashes_by_heights(vec![target_height]),
+        ));
+
+        let mut current_hash = match Self::try_proxy_message(
+            chain_info_query,
+            shard,
+            protocol,
+            self.send_timeout,
+            self.recv_timeout,
+        )
+        .await
+        {
+            Ok(Some(RpcMessage::ChainInfoResponse(response))) => response
+                .info
+                .requested_sent_certificate_hashes
+                .into_iter()
+                .next(),
+            _ => bail!("Failed to retrieve certificate hash for target height"),
+        };
+
+        let Some(initial_hash) = current_hash else {
+            return Ok(Vec::new());
+        };
+        current_hash = Some(initial_hash);
+
+        // Traverse previous_message_blocks following the hash chain.
+        let mut certificates_to_return = Vec::new();
+
+        while let Some(hash) = current_hash {
+            // Read the certificate from storage (benefits from the certificate cache).
+            let certificate = self
+                .storage
+                .read_certificate(hash)
+                .await?
+                .ok_or_else(|| anyhow!("Missing certificate {}", hash))?;
+
+            let height = certificate.inner().height();
+            if height < start_height {
+                break;
+            }
+
+            // Get the previous message block entry which contains (hash, height).
+            let prev_entry = certificate
+                .block()
+                .body
+                .previous_message_blocks
+                .get(&receiver_chain_id)
+                .cloned();
+
+            certificates_to_return.push(certificate);
+
+            // Follow the hash chain - previous_message_blocks already has the hash!
+            current_hash = prev_entry
+                .filter(|(_, h)| *h >= start_height)
+                .map(|(h, _)| h);
+        }
+
+        // Return certificates in ascending height order.
+        certificates_to_return.reverse();
+        Ok(certificates_to_return)
+    }
+
     async fn try_local_message(&self, message: RpcMessage) -> Result<Option<RpcMessage>> {
         use RpcMessage::*;
 
@@ -413,6 +498,24 @@ where
                     certificates,
                 )))
             }
+            DownloadSenderCertificatesForReceiver {
+                sender_chain_id,
+                receiver_chain_id,
+                target_height,
+                start_height,
+            } => {
+                let certificates = self
+                    .download_sender_certificates_for_receiver(
+                        sender_chain_id,
+                        receiver_chain_id,
+                        target_height,
+                        start_height,
+                    )
+                    .await?;
+                Ok(Some(
+                    RpcMessage::DownloadSenderCertificatesForReceiverResponse(certificates),
+                ))
+            }
             BlobLastUsedBy(blob_id) => {
                 let blob_state = self.storage.read_blob_state(*blob_id).await?;
                 let blob_state = blob_state.ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
@@ -464,7 +567,8 @@ where
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificatesResponse(_)
             | UploadBlobResponse(_)
-            | DownloadCertificatesByHeightsResponse(_) => {
+            | DownloadCertificatesByHeightsResponse(_)
+            | DownloadSenderCertificatesForReceiverResponse(_) => {
                 Err(anyhow::Error::from(NodeError::UnexpectedMessage))
             }
         }
@@ -508,7 +612,11 @@ impl ProxyOptions {
             .add_common_storage_options(&self.common_storage_options)?;
         let db_storage_cache_config = self.common_storage_options.db_storage_cache_config();
         store_config
-            .run_with_storage(None, db_storage_cache_config, ProxyContext::from_options(self)?)
+            .run_with_storage(
+                None,
+                db_storage_cache_config,
+                ProxyContext::from_options(self)?,
+            )
             .boxed()
             .await?
     }
