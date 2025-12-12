@@ -5572,6 +5572,7 @@ dependencies = [
  "tracing-subscriber 0.3.19",
  "url",
  "wasmtime",
+ "web-sys",
  "web-thread-pool",
  "web-thread-select",
 ]
@@ -6727,6 +6728,7 @@ dependencies = [
  "async-graphql",
  "fungible",
  "linera-sdk",
+ "log",
  "serde",
 ]
 

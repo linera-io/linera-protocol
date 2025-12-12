@@ -230,10 +230,11 @@
           const wallet = await faucet.createWallet();
           const owner = signer.address();
           const chainId = await faucet.claimChain(wallet, owner);
-          const client = await new linera.Client(wallet, signer);
+          const client = await new linera.Client(wallet, signer, false, true);
           document.querySelector('#chain-id').innerText = chainId;
           document.querySelector('#owner').innerText = owner;
 
+          console.log('using application id:', import.meta.env.LINERA_APPLICATION_ID);
           const application = await client.application(import.meta.env.LINERA_APPLICATION_ID);
 
           await updateBalance(application, owner, null);
