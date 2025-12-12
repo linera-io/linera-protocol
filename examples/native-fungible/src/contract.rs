@@ -50,6 +50,8 @@ impl Contract for NativeFungibleTokenContract {
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             NativeFungibleOperation::Balance { owner } => {
+                log::info!("balance check for owner={}", owner);
+
                 let balance = self.runtime.owner_balance(owner);
                 FungibleResponse::Balance(balance)
             }
@@ -69,6 +71,13 @@ impl Contract for NativeFungibleTokenContract {
 
                 let fungible_target_account = target_account;
                 let target_account = self.normalize_account(target_account);
+
+                log::info!(
+                    "transferring tokens from={} to={} amount={}",
+                    owner,
+                    target_account.owner,
+                    amount
+                );
 
                 self.runtime.transfer(owner, target_account, amount);
 

@@ -6727,6 +6727,7 @@ dependencies = [
  "async-graphql",
  "fungible",
  "linera-sdk",
+ "log",
  "serde",
 ]
 

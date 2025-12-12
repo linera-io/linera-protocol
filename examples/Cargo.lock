@@ -4491,6 +4491,7 @@ dependencies = [
  "async-graphql",
  "fungible",
  "linera-sdk",
+ "log",
  "native-fungible",
  "serde",
  "test-log",
