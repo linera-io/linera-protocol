@@ -11,6 +11,7 @@ test = []
 async-graphql.workspace = true
 fungible.workspace = true
 linera-sdk.workspace = true
+log.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
