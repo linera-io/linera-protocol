@@ -15,7 +15,7 @@ use std::{
 
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{future::BoxFuture, FutureExt as _};
+use futures::{future::BoxFuture, stream, stream::BoxStream, stream::StreamExt as _, FutureExt as _};
 use linera_base::identifiers::ChainId;
 use linera_core::{
     data_types::{CertificatesByHeightRequest, ChainInfo, ChainInfoQuery},
@@ -383,7 +383,7 @@ impl<S> ValidatorNode for GrpcProxy<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    type SubscribeStream = UnboundedReceiverStream<Result<Notification, Status>>;
+    type SubscribeStream = BoxStream<'static, Result<Notification, Status>>;
 
     #[instrument(skip_all, err(Display), fields(method = "handle_block_proposal"))]
     async fn handle_block_proposal(
@@ -482,7 +482,9 @@ where
             .0
             .notifier
             .subscribe_with_ack(chain_ids, Ok(Notification::default()));
-        Ok(Response::new(UnboundedReceiverStream::new(rx)))
+        // Flatten the batched notifications into individual items for the gRPC stream
+        let flattened = UnboundedReceiverStream::new(rx).flat_map(stream::iter);
+        Ok(Response::new(Box::pin(flattened)))
     }
 
     #[instrument(skip_all, err(Display))]
@@ -855,13 +857,23 @@ where
         &self,
         request: Request<NotificationBatch>,
     ) -> Result<Response<()>, Status> {
+        // Group notifications by chain_id to send them in batches
+        let mut by_chain: std::collections::HashMap<
+            ChainId,
+            Vec<Result<Notification, Status>>,
+        > = std::collections::HashMap::new();
+
         for notification in request.into_inner().notifications {
             let chain_id = notification
                 .chain_id
                 .clone()
                 .ok_or_else(|| Status::invalid_argument("Missing field: chain_id."))?
                 .try_into()?;
-            self.0.notifier.notify_chain(&chain_id, &Ok(notification));
+            by_chain.entry(chain_id).or_default().push(Ok(notification));
+        }
+
+        for (chain_id, notifications) in by_chain {
+            self.0.notifier.notify_chain(&chain_id, notifications);
         }
         Ok(Response::new(()))
     }
