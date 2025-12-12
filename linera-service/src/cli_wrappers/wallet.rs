@@ -263,6 +263,7 @@ impl ClientWrapper {
         self.required_command_arguments().chain([
             "--max-pending-message-bundles".into(),
             self.max_pending_message_bundles.to_string().into(),
+            "--with-application-logs".into(),
         ])
     }
 
