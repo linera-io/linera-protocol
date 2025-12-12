@@ -183,7 +183,11 @@ impl ExporterOptions {
                 .storage_config
                 .add_common_storage_options(&self.common_storage_options)
                 .unwrap();
-            store_config.run_with_storage(None, context).boxed().await
+            let db_storage_cache_config = self.common_storage_options.db_storage_cache_config();
+            store_config
+                .run_with_storage(None, db_storage_cache_config, context)
+                .boxed()
+                .await
         };
 
         runtime.block_on(future)?.map_err(|e| e.into())

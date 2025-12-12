@@ -10,6 +10,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
+    value_cache::ValueCache,
 };
 use linera_chain::{
     types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
@@ -225,6 +226,30 @@ pub mod metrics {
     });
 }
 
+/// Default cache size for caches.
+const DEFAULT_CACHE_SIZE: usize = 1000;
+
+/// Configuration for storage caches.
+#[derive(Clone, Debug)]
+pub struct StorageCacheConfig {
+    /// Size of the blob cache (keyed by BlobId).
+    pub blob_cache_size: usize,
+    /// Size of the certificate cache (keyed by CryptoHash).
+    pub certificate_cache_size: usize,
+    /// Size of the confirmed block cache (keyed by CryptoHash).
+    pub confirmed_block_cache_size: usize,
+}
+
+impl Default for StorageCacheConfig {
+    fn default() -> Self {
+        Self {
+            blob_cache_size: DEFAULT_CACHE_SIZE,
+            certificate_cache_size: DEFAULT_CACHE_SIZE,
+            confirmed_block_cache_size: DEFAULT_CACHE_SIZE,
+        }
+    }
+}
+
 /// The key used for blobs. The Blob ID itself is contained in the root key.
 const BLOB_KEY: &[u8] = &[0];
 
@@ -336,6 +361,12 @@ pub struct DbStorage<Database, Clock = WallClock> {
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
     execution_runtime_config: ExecutionRuntimeConfig,
+    /// Cache for blobs, keyed by BlobId.
+    blob_cache: Arc<ValueCache<BlobId, Blob>>,
+    /// Cache for certificates, keyed by CryptoHash.
+    certificate_cache: Arc<ValueCache<CryptoHash, ConfirmedBlockCertificate>>,
+    /// Cache for confirmed blocks, keyed by CryptoHash.
+    confirmed_block_cache: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -576,6 +607,10 @@ where
 
     #[instrument(level = "trace", skip_all, fields(%blob_id))]
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
+        // Check cache first
+        if self.blob_cache.contains_key(&blob_id) {
+            return Ok(true);
+        }
         let root_key = RootKey::BlobId(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let test = store.contains_key(BLOB_KEY).await?;
@@ -588,6 +623,10 @@ where
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
         let mut missing_blobs = Vec::new();
         for blob_id in blob_ids {
+            // Check cache first
+            if self.blob_cache.contains_key(blob_id) {
+                continue;
+            }
             let root_key = RootKey::BlobId(*blob_id).bytes();
             let store = self.database.open_shared(&root_key)?;
             if !store.contains_key(BLOB_KEY).await? {
@@ -616,24 +655,46 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlock>, ViewError> {
+        // Check cache first
+        if let Some(block) = self.confirmed_block_cache.get(&hash) {
+            return Ok(Some(block));
+        }
+
         let root_key = RootKey::BlockHash(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let value = store.read_value(BLOCK_KEY).await?;
+        let value: Option<ConfirmedBlock> = store.read_value(BLOCK_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[])
             .inc();
+
+        // Cache the block if found
+        if let Some(ref block) = value {
+            self.confirmed_block_cache.insert(hash, block.clone());
+        }
         Ok(value)
     }
 
     #[instrument(skip_all, fields(%blob_id))]
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
+        // Check cache first
+        if let Some(blob) = self.blob_cache.get(&blob_id) {
+            return Ok(Some(blob));
+        }
+
         let root_key = RootKey::BlobId(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let maybe_blob_bytes = store.read_value_bytes(BLOB_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
-        Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
+
+        // Cache the blob if found
+        let result =
+            maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes));
+        if let Some(ref blob) = result {
+            self.blob_cache.insert(blob_id, blob.clone());
+        }
+        Ok(result)
     }
 
     #[instrument(skip_all, fields(blob_ids_len = %blob_ids.len()))]
@@ -688,6 +749,8 @@ where
         let mut batch = MultiPartitionBatch::new();
         batch.add_blob(blob)?;
         self.write_batch(batch).await?;
+        // Cache the blob after writing
+        self.blob_cache.insert(blob.id(), blob.clone());
         Ok(())
     }
 
@@ -734,6 +797,7 @@ where
         }
         let mut batch = MultiPartitionBatch::new();
         let mut blob_states = Vec::new();
+        let mut blobs_written = Vec::new();
         for blob in blobs {
             let root_key = RootKey::BlobId(blob.id()).bytes();
             let store = self.database.open_shared(&root_key)?;
@@ -741,9 +805,14 @@ where
             blob_states.push(has_state);
             if has_state {
                 batch.add_blob(blob)?;
+                blobs_written.push(blob);
             }
         }
         self.write_batch(batch).await?;
+        // Cache blobs that were written
+        for blob in blobs_written {
+            self.blob_cache.insert(blob.id(), blob.clone());
+        }
         Ok(blob_states)
     }
 
@@ -756,7 +825,12 @@ where
         for blob in blobs {
             batch.add_blob(blob)?;
         }
-        self.write_batch(batch).await
+        self.write_batch(batch).await?;
+        // Cache all blobs after writing
+        for blob in blobs {
+            self.blob_cache.insert(blob.id(), blob.clone());
+        }
+        Ok(())
     }
 
     #[instrument(skip_all, fields(blobs_len = %blobs.len()))]
@@ -770,11 +844,25 @@ where
             batch.add_blob(blob)?;
         }
         batch.add_certificate(certificate)?;
-        self.write_batch(batch).await
+        self.write_batch(batch).await?;
+        // Cache blobs after writing
+        for blob in blobs {
+            self.blob_cache.insert(blob.id(), blob.clone());
+        }
+        // Cache certificate and confirmed block after writing
+        let hash = certificate.hash();
+        self.certificate_cache.insert(hash, certificate.clone());
+        self.confirmed_block_cache
+            .insert(hash, certificate.value().clone());
+        Ok(())
     }
 
     #[instrument(skip_all, fields(%hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
+        // Check cache first
+        if self.certificate_cache.contains_key(&hash) {
+            return Ok(true);
+        }
         let root_key = RootKey::BlockHash(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
         let results = store.contains_keys(&get_block_keys()).await?;
@@ -790,6 +878,11 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
+        // Check cache first
+        if let Some(certificate) = self.certificate_cache.get(&hash) {
+            return Ok(Some(certificate));
+        }
+
         let root_key = RootKey::BlockHash(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
         let values = store.read_multi_values_bytes(&get_block_keys()).await?;
@@ -797,7 +890,15 @@ where
         metrics::READ_CERTIFICATE_COUNTER
             .with_label_values(&[])
             .inc();
-        Self::deserialize_certificate(&values, hash)
+        let result = Self::deserialize_certificate(&values, hash)?;
+
+        // Cache the certificate and confirmed block if found
+        if let Some(ref certificate) = result {
+            self.certificate_cache.insert(hash, certificate.clone());
+            self.confirmed_block_cache
+                .insert(hash, certificate.value().clone());
+        }
+        Ok(result)
     }
 
     #[instrument(skip_all)]
@@ -809,22 +910,52 @@ where
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        let root_keys = Self::get_root_keys_for_certificates(&hashes);
-        let mut values = Vec::new();
-        for root_key in root_keys {
-            let store = self.database.open_shared(&root_key)?;
-            values.extend(store.read_multi_values_bytes(&get_block_keys()).await?);
+
+        // Check cache first, collect hashes that need to be fetched from DB
+        let mut results: Vec<Option<ConfirmedBlockCertificate>> = Vec::with_capacity(hashes.len());
+        let mut missing_indices = Vec::new();
+        let mut missing_hashes = Vec::new();
+
+        for (i, hash) in hashes.iter().enumerate() {
+            if let Some(certificate) = self.certificate_cache.get(hash) {
+                results.push(Some(certificate));
+            } else {
+                results.push(None);
+                missing_indices.push(i);
+                missing_hashes.push(*hash);
+            }
         }
-        #[cfg(with_metrics)]
-        metrics::READ_CERTIFICATES_COUNTER
-            .with_label_values(&[])
-            .inc_by(hashes.len() as u64);
-        let mut certificates = Vec::new();
-        for (pair, hash) in values.chunks_exact(2).zip(hashes) {
-            let certificate = Self::deserialize_certificate(pair, hash)?;
-            certificates.push(certificate);
+
+        // Fetch missing certificates from DB
+        if !missing_hashes.is_empty() {
+            let root_keys = Self::get_root_keys_for_certificates(&missing_hashes);
+            let mut values = Vec::new();
+            for root_key in root_keys {
+                let store = self.database.open_shared(&root_key)?;
+                values.extend(store.read_multi_values_bytes(&get_block_keys()).await?);
+            }
+            #[cfg(with_metrics)]
+            metrics::READ_CERTIFICATES_COUNTER
+                .with_label_values(&[])
+                .inc_by(missing_hashes.len() as u64);
+
+            for ((pair, hash), idx) in values
+                .chunks_exact(2)
+                .zip(missing_hashes.iter())
+                .zip(missing_indices.iter())
+            {
+                let certificate = Self::deserialize_certificate(pair, *hash)?;
+                // Cache if found
+                if let Some(ref cert) = certificate {
+                    self.certificate_cache.insert(*hash, cert.clone());
+                    self.confirmed_block_cache
+                        .insert(*hash, cert.value().clone());
+                }
+                results[*idx] = certificate;
+            }
         }
-        Ok(certificates)
+
+        Ok(results)
     }
 
     /// Reads certificates by hashes.
@@ -833,6 +964,9 @@ where
     /// and the second element is confirmed block.
     ///
     /// It does not check if all hashes all returned.
+    ///
+    /// Note: No application-level caching is done here because the raw bytes
+    /// are already cached by `LruCachingDatabase` at the storage layer.
     #[instrument(skip_all)]
     async fn read_certificates_raw<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
@@ -1077,7 +1211,12 @@ where
 }
 
 impl<Database, C> DbStorage<Database, C> {
-    fn new(database: Database, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
+    fn new(
+        database: Database,
+        wasm_runtime: Option<WasmRuntime>,
+        clock: C,
+        cache_config: StorageCacheConfig,
+    ) -> Self {
         Self {
             database: Arc::new(database),
             clock,
@@ -1085,6 +1224,11 @@ impl<Database, C> DbStorage<Database, C> {
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
+            blob_cache: Arc::new(ValueCache::new(cache_config.blob_cache_size)),
+            certificate_cache: Arc::new(ValueCache::new(cache_config.certificate_cache_size)),
+            confirmed_block_cache: Arc::new(ValueCache::new(
+                cache_config.confirmed_block_cache_size,
+            )),
         }
     }
 }
@@ -1095,22 +1239,26 @@ where
     Database::Error: Send + Sync,
     Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
 {
+    /// Creates a new storage, creating the namespace if necessary.
     pub async fn maybe_create_and_connect(
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
+        cache_config: StorageCacheConfig,
     ) -> Result<Self, Database::Error> {
         let database = Database::maybe_create_and_connect(config, namespace).await?;
-        Ok(Self::new(database, wasm_runtime, WallClock))
+        Ok(Self::new(database, wasm_runtime, WallClock, cache_config))
     }
 
+    /// Connects to existing storage.
     pub async fn connect(
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
+        cache_config: StorageCacheConfig,
     ) -> Result<Self, Database::Error> {
         let database = Database::connect(config, namespace).await?;
-        Ok(Self::new(database, wasm_runtime, WallClock))
+        Ok(Self::new(database, wasm_runtime, WallClock, cache_config))
     }
 }
 
@@ -1121,6 +1269,7 @@ where
     Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
     Database::Error: Send + Sync,
 {
+    /// Creates a test storage with default cache configuration.
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let config = Database::new_test_config().await.unwrap();
         let namespace = generate_test_namespace();
@@ -1134,6 +1283,7 @@ where
         .unwrap()
     }
 
+    /// Creates a test storage with the specified clock.
     pub async fn new_for_testing(
         config: Database::Config,
         namespace: &str,
@@ -1141,7 +1291,12 @@ where
         clock: TestClock,
     ) -> Result<Self, Database::Error> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
-        Ok(Self::new(database, wasm_runtime, clock))
+        Ok(Self::new(
+            database,
+            wasm_runtime,
+            clock,
+            StorageCacheConfig::default(),
+        ))
     }
 }
 

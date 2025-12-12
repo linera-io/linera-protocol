@@ -60,6 +60,7 @@ async fn get_storage(
         },
         "linera",
         Some(linera_execution::WasmRuntime::Wasmer),
+        linera_storage::StorageCacheConfig::default(),
     )
     .await
 }

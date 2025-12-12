@@ -23,7 +23,10 @@ pub mod test_utils;
 pub mod worker;
 
 pub(crate) mod updater;
-mod value_cache;
+
+#[cfg(test)]
+#[path = "unit_tests/value_cache_tests.rs"]
+mod value_cache_tests;
 
 pub use local_node::LocalNodeError;
 pub use updater::DEFAULT_QUORUM_GRACE_PERIOD;
