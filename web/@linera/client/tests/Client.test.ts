@@ -1,5 +1,4 @@
 import { expect, test } from "vitest";
-import { ethers } from "ethers";
 import * as linera from "../dist";
 
 async function getWallet() {
@@ -13,5 +12,5 @@ test("successfully retrieves a wallet from the faucet", async () => {
 });
 
 test("successfully runs the client and connects to the network", async () => {
-  await new linera.Client(await getWallet(), linera.PrivateKeySigner.createRandom());
+  await new linera.Client(await getWallet(), linera.signer.PrivateKey.createRandom());
 });
