@@ -36,7 +36,7 @@ use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier
 use crate::{
     chain_worker::BlockOutcome,
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    value_cache::ValueCache,
+    value_cache::{ParkingCache, ValueCache},
     worker::{NetworkActions, WorkerError},
 };
 
@@ -275,7 +275,7 @@ where
     config: ChainWorkerConfig,
     storage: StorageClient,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache: Arc<ParkingCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
     is_tracked: bool,
@@ -330,7 +330,7 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+        execution_state_cache: Arc<ParkingCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
