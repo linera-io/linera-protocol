@@ -442,9 +442,11 @@ impl<Env: Environment> ChainClient<Env> {
     /// Subscribes to notifications from the specified chain.
     #[instrument(level = "trace")]
     pub fn subscribe_to(&self, chain_id: ChainId) -> Result<NotificationStream, LocalNodeError> {
-        Ok(Box::pin(UnboundedReceiverStream::new(
-            self.client.notifier.subscribe(vec![chain_id]),
-        )))
+        // Flatten the batched notifications into individual items
+        Ok(Box::pin(
+            UnboundedReceiverStream::new(self.client.notifier.subscribe(vec![chain_id]))
+                .flat_map(stream::iter),
+        ))
     }
 
     /// Returns the storage client used by this client's local node.

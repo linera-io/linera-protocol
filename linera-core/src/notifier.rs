@@ -14,8 +14,9 @@ use crate::worker;
 /// A `Notifier` holds references to clients waiting to receive notifications
 /// from the validator.
 /// Clients will be evicted if their connections are terminated.
+/// Notifications are sent in batches (Vec<N>) to reduce channel operations.
 pub struct ChannelNotifier<N> {
-    inner: papaya::HashMap<ChainId, Vec<UnboundedSender<N>>>,
+    inner: papaya::HashMap<ChainId, Vec<UnboundedSender<Vec<N>>>>,
 }
 
 impl<N> Default for ChannelNotifier<N> {
@@ -27,7 +28,7 @@ impl<N> Default for ChannelNotifier<N> {
 }
 
 impl<N> ChannelNotifier<N> {
-    fn add_sender(&self, chain_ids: Vec<ChainId>, sender: &UnboundedSender<N>) {
+    fn add_sender(&self, chain_ids: Vec<ChainId>, sender: &UnboundedSender<Vec<N>>) {
         let pinned = self.inner.pin();
         for id in chain_ids {
             pinned.update_or_insert_with(
@@ -39,18 +40,19 @@ impl<N> ChannelNotifier<N> {
     }
 
     /// Creates a subscription given a collection of chain IDs and a sender to the client.
-    pub fn subscribe(&self, chain_ids: Vec<ChainId>) -> UnboundedReceiver<N> {
+    /// Returns a receiver that yields batches of notifications (Vec<N>).
+    pub fn subscribe(&self, chain_ids: Vec<ChainId>) -> UnboundedReceiver<Vec<N>> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         self.add_sender(chain_ids, &tx);
         rx
     }
 
     /// Creates a subscription given a collection of chain IDs and a sender to the client.
-    /// Immediately posts a first notification as an ACK.
-    pub fn subscribe_with_ack(&self, chain_ids: Vec<ChainId>, ack: N) -> UnboundedReceiver<N> {
+    /// Immediately posts a first notification batch as an ACK.
+    pub fn subscribe_with_ack(&self, chain_ids: Vec<ChainId>, ack: N) -> UnboundedReceiver<Vec<N>> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         self.add_sender(chain_ids, &tx);
-        tx.send(ack)
+        tx.send(vec![ack])
             .expect("pushing to a new channel should succeed");
         rx
     }
@@ -61,7 +63,11 @@ where
     N: Clone,
 {
     /// Notifies all the clients waiting for a notification from a given chain.
-    pub fn notify_chain(&self, chain_id: &ChainId, notification: &N) {
+    /// Sends a batch of notifications to all subscribers of the chain.
+    pub fn notify_chain(&self, chain_id: &ChainId, notifications: Vec<N>) {
+        if notifications.is_empty() {
+            return;
+        }
         self.inner.pin().compute(*chain_id, |senders| {
             let Some((_key, senders)) = senders else {
                 trace!("Chain {chain_id} has no subscribers.");
@@ -69,7 +75,7 @@ where
             };
             let live_senders = senders
                 .iter()
-                .filter(|sender| sender.send(notification.clone()).is_ok())
+                .filter(|sender| sender.send(notifications.clone()).is_ok())
                 .cloned()
                 .collect::<Vec<_>>();
             if live_senders.is_empty() {
@@ -87,8 +93,17 @@ pub trait Notifier: Clone + Send + 'static {
 
 impl Notifier for Arc<ChannelNotifier<worker::Notification>> {
     fn notify(&self, notifications: &[worker::Notification]) {
+        // Group notifications by chain_id to send them in batches
+        let mut by_chain: std::collections::HashMap<ChainId, Vec<worker::Notification>> =
+            std::collections::HashMap::new();
         for notification in notifications {
-            self.notify_chain(&notification.chain_id, notification);
+            by_chain
+                .entry(notification.chain_id)
+                .or_default()
+                .push(notification.clone());
+        }
+        for (chain_id, chain_notifications) in by_chain {
+            self.notify_chain(&chain_id, chain_notifications);
         }
     }
 }
@@ -138,20 +153,20 @@ pub mod tests {
         let notifier = Arc::new(notifier);
 
         std::thread::spawn(move || {
-            while rx_a.blocking_recv().is_some() {
-                a_rec_clone.fetch_add(1, Ordering::Relaxed);
+            while let Some(batch) = rx_a.blocking_recv() {
+                a_rec_clone.fetch_add(batch.len(), Ordering::Relaxed);
             }
         });
 
         std::thread::spawn(move || {
-            while rx_b.blocking_recv().is_some() {
-                b_rec_clone.fetch_add(1, Ordering::Relaxed);
+            while let Some(batch) = rx_b.blocking_recv() {
+                b_rec_clone.fetch_add(batch.len(), Ordering::Relaxed);
             }
         });
 
         std::thread::spawn(move || {
-            while rx_a_b.blocking_recv().is_some() {
-                a_b_rec_clone.fetch_add(1, Ordering::Relaxed);
+            while let Some(batch) = rx_a_b.blocking_recv() {
+                a_b_rec_clone.fetch_add(batch.len(), Ordering::Relaxed);
             }
         });
 
@@ -161,13 +176,13 @@ pub mod tests {
         let a_notifier = notifier.clone();
         let handle_a = std::thread::spawn(move || {
             for _ in 0..NOTIFICATIONS_A {
-                a_notifier.notify_chain(&chain_a, &());
+                a_notifier.notify_chain(&chain_a, vec![()]);
             }
         });
 
         let handle_b = std::thread::spawn(move || {
             for _ in 0..NOTIFICATIONS_B {
-                notifier.notify_chain(&chain_b, &());
+                notifier.notify_chain(&chain_b, vec![()]);
             }
         });
 
@@ -208,22 +223,22 @@ pub mod tests {
         assert_eq!(notifier.inner.len(), 4);
 
         rx_c.close();
-        notifier.notify_chain(&chain_c, &());
+        notifier.notify_chain(&chain_c, vec![()]);
         assert_eq!(notifier.inner.len(), 3);
 
         rx_a.close();
-        notifier.notify_chain(&chain_a, &());
+        notifier.notify_chain(&chain_a, vec![()]);
         assert_eq!(notifier.inner.len(), 3);
 
         rx_b.close();
-        notifier.notify_chain(&chain_b, &());
+        notifier.notify_chain(&chain_b, vec![()]);
         assert_eq!(notifier.inner.len(), 2);
 
-        notifier.notify_chain(&chain_a, &());
+        notifier.notify_chain(&chain_a, vec![()]);
         assert_eq!(notifier.inner.len(), 1);
 
         rx_d.close();
-        notifier.notify_chain(&chain_d, &());
+        notifier.notify_chain(&chain_d, vec![()]);
         assert_eq!(notifier.inner.len(), 0);
     }
 }
