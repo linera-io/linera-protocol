@@ -81,7 +81,7 @@ use linera_service::{
     task_processor::TaskProcessor,
     util,
 };
-use linera_storage::{DbStorage, Storage};
+use linera_storage::{DbStorage, Storage, StorageCacheConfig};
 use linera_views::store::{KeyValueDatabase, KeyValueStore};
 use options::Options;
 use serde_json::Value;
@@ -1776,7 +1776,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
             } => {
                 let genesis_config: GenesisConfig = util::read_json(genesis_config_path)?;
                 let mut storage =
-                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None, StorageCacheConfig::default()).await?;
                 genesis_config.initialize_storage(&mut storage).await?;
                 info!(
                     "Namespace {namespace} was initialized in {} ms",
@@ -1796,7 +1796,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
             }
             DatabaseToolCommand::ListBlobIds => {
                 let storage =
-                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None, StorageCacheConfig::default()).await?;
                 let blob_ids = storage.list_blob_ids().await?;
                 info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
                 info!("The list of blob IDs is:");
@@ -1806,7 +1806,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
             }
             DatabaseToolCommand::ListChainIds => {
                 let storage =
-                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None, StorageCacheConfig::default()).await?;
                 let chain_ids = storage.list_chain_ids().await?;
                 info!(
                     "Chain IDs listed in {} ms",
@@ -1819,7 +1819,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
             }
             DatabaseToolCommand::ListEventIds => {
                 let storage =
-                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None, StorageCacheConfig::default()).await?;
                 let event_ids = storage.list_event_ids().await?;
                 info!(
                     "Event IDs listed in {} ms",

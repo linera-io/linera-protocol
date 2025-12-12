@@ -32,11 +32,12 @@ use linera_views::context::InactiveContext;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{debug, instrument, trace, Instrument as _};
 
+use linera_base::value_cache::{ParkingCache, ValueCache};
+
 use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
 use crate::{
     chain_worker::BlockOutcome,
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    value_cache::{ParkingCache, ValueCache},
     worker::{NetworkActions, WorkerError},
 };
 
