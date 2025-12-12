@@ -8,10 +8,9 @@ use linera_base::{
     data_types::{BlockHeight, Epoch},
     hashed::Hashed,
     identifiers::ChainId,
+    value_cache::ValueCache,
 };
 use linera_chain::types::Timeout;
-
-use super::ValueCache;
 
 /// Test cache size for unit tests.
 const TEST_CACHE_SIZE: usize = 10;
@@ -33,7 +32,7 @@ fn test_insert_single_certificate_value() {
     let value = create_dummy_certificate_value(0);
     let hash = value.hash();
 
-    assert!(cache.insert(Cow::Borrowed(&value)));
+    assert!(cache.insert_hashed(Cow::Borrowed(&value)));
     assert!(cache.contains(&hash));
     assert_eq!(cache.get(&hash), Some(value));
     assert_eq!(cache.len(), 1);
@@ -46,7 +45,7 @@ fn test_insert_many_certificate_values_individually() {
     let values = create_dummy_certificate_values(0..(TEST_CACHE_SIZE as u64)).collect::<Vec<_>>();
 
     for value in &values {
-        assert!(cache.insert(Cow::Borrowed(value)));
+        assert!(cache.insert_hashed(Cow::Borrowed(value)));
     }
 
     for value in &values {
@@ -82,7 +81,7 @@ fn test_reinsertion_of_values() {
     cache.insert_all(values.iter().map(Cow::Borrowed));
 
     for value in &values {
-        assert!(!cache.insert(Cow::Borrowed(value)));
+        assert!(!cache.insert_hashed(Cow::Borrowed(value)));
     }
 
     for value in &values {
@@ -105,7 +104,7 @@ fn test_eviction_occurs() {
         create_dummy_certificate_values(0..((TEST_CACHE_SIZE as u64) * 2)).collect::<Vec<_>>();
 
     for value in &values {
-        cache.insert(Cow::Borrowed(value));
+        cache.insert_hashed(Cow::Borrowed(value));
     }
 
     // Cache size should be bounded by capacity
@@ -175,7 +174,7 @@ fn test_access_affects_eviction() {
             .collect::<Vec<_>>();
 
     for value in &extra_values {
-        cache.insert(Cow::Borrowed(value));
+        cache.insert_hashed(Cow::Borrowed(value));
     }
 
     // The frequently accessed first value should still be present
@@ -195,7 +194,7 @@ fn test_promotion_of_reinsertion() {
     cache.insert_all(values.iter().map(Cow::Borrowed));
 
     // Re-insert the first value (this should "promote" it)
-    assert!(!cache.insert(Cow::Borrowed(&values[0])));
+    assert!(!cache.insert_hashed(Cow::Borrowed(&values[0])));
 
     // Insert additional values to trigger eviction
     let extra_values =
@@ -203,7 +202,7 @@ fn test_promotion_of_reinsertion() {
             .collect::<Vec<_>>();
 
     for value in &extra_values {
-        cache.insert(Cow::Borrowed(value));
+        cache.insert_hashed(Cow::Borrowed(value));
     }
 
     // The re-inserted first value should still be present

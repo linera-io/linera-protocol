@@ -132,8 +132,10 @@ impl Options {
         debug!("Running command using storage configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common_storage_options)?;
+        let db_storage_cache_config = self.common_storage_options.db_storage_cache_config();
         let output = Box::pin(store_config.run_with_storage(
             self.wasm_runtime.with_wasm_default(),
+            db_storage_cache_config,
             self.application_logs,
             job,
         ))
