@@ -5422,6 +5422,7 @@ dependencies = [
  "prometheus",
  "proptest",
  "publish-read-data-blob",
+ "quick_cache",
  "rand 0.8.5",
  "serde",
  "serde_json",

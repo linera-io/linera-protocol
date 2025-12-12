@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A least-recently used cache of values.
+//! Concurrent caches for values.
 
 #[cfg(test)]
 #[path = "unit_tests/value_cache_tests.rs"]
@@ -13,6 +13,7 @@ use std::{borrow::Cow, hash::Hash, num::NonZeroUsize, sync::Mutex};
 
 use linera_base::{crypto::CryptoHash, hashed::Hashed};
 use lru::LruCache;
+use quick_cache::sync::Cache;
 
 /// A counter metric for the number of cache hits in the [`ValueCache`].
 #[cfg(with_metrics)]
@@ -40,51 +41,33 @@ mod metrics {
     });
 }
 
-/// A least-recently used cache of a value.
+/// A concurrent cache of values using S3-FIFO eviction policy.
+/// Thread-safe without explicit locking - uses sharded internal locks for high concurrency.
+/// Requires `V: Clone` because values are cloned on fetch.
 pub struct ValueCache<K, V>
 where
-    K: Hash + Eq + PartialEq + Copy,
+    K: Hash + Eq + Clone,
+    V: Clone,
 {
-    cache: Mutex<LruCache<K, V>>,
+    cache: Cache<K, V>,
 }
 
 impl<K, V> ValueCache<K, V>
 where
-    K: Hash + Eq + PartialEq + Copy,
+    K: Hash + Eq + Clone,
+    V: Clone,
 {
     /// Creates a new `ValueCache` with the given size.
     pub fn new(size: usize) -> Self {
-        let size = NonZeroUsize::try_from(size).expect("Cache size is larger than zero");
+        assert!(size > 0, "Cache size must be larger than zero");
         ValueCache {
-            cache: Mutex::new(LruCache::new(size)),
+            cache: Cache::new(size),
         }
-    }
-
-    /// Inserts a `V` into the cache, if it's not already present.
-    pub fn insert_owned(&self, key: &K, value: V) -> bool {
-        let mut cache = self.cache.lock().unwrap();
-        if cache.contains(key) {
-            // Promote the re-inserted value in the cache, as if it was accessed again.
-            cache.promote(key);
-            false
-        } else {
-            // Cache the value so that clients don't have to send it again.
-            cache.push(*key, value);
-            true
-        }
-    }
-
-    /// Removes a `V` from the cache and returns it, if present.
-    pub fn remove(&self, hash: &K) -> Option<V> {
-        Self::track_cache_usage(self.cache.lock().unwrap().pop(hash))
     }
 
     /// Returns a `V` from the cache, if present.
-    pub fn get(&self, hash: &K) -> Option<V>
-    where
-        V: Clone,
-    {
-        Self::track_cache_usage(self.cache.lock().unwrap().get(hash).cloned())
+    pub fn get(&self, key: &K) -> Option<V> {
+        Self::track_cache_usage(self.cache.get(key))
     }
 
     fn track_cache_usage(maybe_value: Option<V>) -> Option<V> {
@@ -105,7 +88,7 @@ where
 }
 
 impl<T: Clone> ValueCache<CryptoHash, Hashed<T>> {
-    /// Inserts a [`HashedCertificateValue`] into the cache, if it's not already present.
+    /// Inserts a [`Hashed`] value into the cache, if it's not already present.
     ///
     /// The `value` is wrapped in a [`Cow`] so that it is only cloned if it needs to be
     /// inserted in the cache.
@@ -113,20 +96,15 @@ impl<T: Clone> ValueCache<CryptoHash, Hashed<T>> {
     /// Returns [`true`] if the value was not already present in the cache.
     pub fn insert(&self, value: Cow<Hashed<T>>) -> bool {
         let hash = (*value).hash();
-        let mut cache = self.cache.lock().unwrap();
-        if cache.contains(&hash) {
-            // Promote the re-inserted value in the cache, as if it was accessed again.
-            cache.promote(&hash);
+        if self.cache.get(&hash).is_some() {
             false
         } else {
-            // Cache the certificate so that clients don't have to send the value again.
-            cache.push(hash, value.into_owned());
+            self.cache.insert(hash, value.into_owned());
             true
         }
     }
 
-    /// Inserts multiple [`HashedCertificateValue`]s into the cache. If they're not
-    /// already present.
+    /// Inserts multiple [`Hashed`] values into the cache if they're not already present.
     ///
     /// The `values` are wrapped in [`Cow`]s so that each `value` is only cloned if it
     /// needs to be inserted in the cache.
@@ -135,11 +113,10 @@ impl<T: Clone> ValueCache<CryptoHash, Hashed<T>> {
     where
         T: 'a,
     {
-        let mut cache = self.cache.lock().unwrap();
         for value in values {
             let hash = (*value).hash();
-            if !cache.contains(&hash) {
-                cache.push(hash, value.into_owned());
+            if self.cache.get(&hash).is_none() {
+                self.cache.insert(hash, value.into_owned());
             }
         }
     }
@@ -148,24 +125,72 @@ impl<T: Clone> ValueCache<CryptoHash, Hashed<T>> {
 #[cfg(test)]
 impl<K, V> ValueCache<K, V>
 where
-    K: Hash + Eq + PartialEq + Copy,
+    K: Hash + Eq + Clone,
+    V: Clone,
 {
-    /// Returns a `Collection` of the hashes in the cache.
-    pub fn keys<Collection>(&self) -> Collection
-    where
-        Collection: FromIterator<K>,
-    {
-        self.cache
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|(key, _)| *key)
-            .collect()
+    /// Returns [`true`] if the cache contains the `V` with the requested `K`.
+    pub fn contains(&self, key: &K) -> bool {
+        self.cache.get(key).is_some()
     }
 
-    /// Returns [`true`] if the cache contains the `V` with the
-    /// requested `K`.
-    pub fn contains(&self, key: &K) -> bool {
-        self.cache.lock().unwrap().contains(key)
+    /// Returns the number of items in the cache.
+    pub fn len(&self) -> usize {
+        self.cache.len()
+    }
+}
+
+/// A cache for values that need to be "parked" temporarily and taken out for exclusive use.
+/// Uses LRU eviction. Does NOT require `Clone` on `V` since values are moved out, not cloned.
+/// This is useful for caching expensive-to-create objects that will be mutated after retrieval.
+pub struct ParkingCache<K, V>
+where
+    K: Hash + Eq + Copy,
+{
+    cache: Mutex<LruCache<K, V>>,
+}
+
+impl<K, V> ParkingCache<K, V>
+where
+    K: Hash + Eq + Copy,
+{
+    /// Creates a new `ParkingCache` with the given size.
+    pub fn new(size: usize) -> Self {
+        let size = NonZeroUsize::try_from(size).expect("Cache size is larger than zero");
+        ParkingCache {
+            cache: Mutex::new(LruCache::new(size)),
+        }
+    }
+
+    /// Inserts a `V` into the cache, if it's not already present.
+    /// Returns `true` if the value was newly inserted, `false` if it already existed.
+    pub fn insert(&self, key: &K, value: V) -> bool {
+        let mut cache = self.cache.lock().unwrap();
+        if cache.contains(key) {
+            cache.promote(key);
+            false
+        } else {
+            cache.push(*key, value);
+            true
+        }
+    }
+
+    /// Removes a `V` from the cache and returns it, if present.
+    /// This is the primary way to retrieve values - they are removed for exclusive use.
+    pub fn remove(&self, key: &K) -> Option<V> {
+        #[cfg(with_metrics)]
+        {
+            let maybe_value = self.cache.lock().unwrap().pop(key);
+            let metric = if maybe_value.is_some() {
+                &metrics::CACHE_HIT_COUNT
+            } else {
+                &metrics::CACHE_MISS_COUNT
+            };
+            metric
+                .with_label_values(&[type_name::<K>(), type_name::<V>()])
+                .inc();
+            maybe_value
+        }
+        #[cfg(not(with_metrics))]
+        self.cache.lock().unwrap().pop(key)
     }
 }
