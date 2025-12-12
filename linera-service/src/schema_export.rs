@@ -164,6 +164,16 @@ impl ValidatorNode for DummyValidatorNode {
     ) -> Result<linera_core::data_types::ShardInfo, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
+
+    async fn download_sender_certificates_for_receiver(
+        &self,
+        _: ChainId,
+        _: ChainId,
+        _: BlockHeight,
+        _: BlockHeight,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
 }
 
 struct DummyValidatorNodeProvider;

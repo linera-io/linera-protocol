@@ -396,6 +396,35 @@ impl<Env: Environment> RequestsScheduler<Env> {
         .await
     }
 
+    pub async fn download_sender_certificates_for_receiver(
+        &self,
+        peer: &RemoteNode<Env::ValidatorNode>,
+        sender_chain_id: ChainId,
+        receiver_chain_id: ChainId,
+        target_height: BlockHeight,
+        start_height: BlockHeight,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        self.with_peer(
+            RequestKey::SenderCertificates {
+                sender_chain_id,
+                receiver_chain_id,
+                target_height,
+                start_height,
+            },
+            peer.clone(),
+            move |peer| async move {
+                peer.download_sender_certificates_for_receiver(
+                    sender_chain_id,
+                    receiver_chain_id,
+                    target_height,
+                    start_height,
+                )
+                .await
+            },
+        )
+        .await
+    }
+
     pub async fn download_certificate_for_blob(
         &self,
         peer: &RemoteNode<Env::ValidatorNode>,

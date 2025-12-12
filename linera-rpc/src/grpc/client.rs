@@ -19,7 +19,7 @@ use linera_chain::{
     },
 };
 use linera_core::{
-    data_types::{CertificatesByHeightRequest, ChainInfoResponse},
+    data_types::{CertificatesByHeightRequest, ChainInfoResponse, SenderCertificatesRequest},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::Notification,
 };
@@ -482,6 +482,29 @@ impl ValidatorNode for GrpcClient {
         }
 
         Ok(certs_collected)
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    async fn download_sender_certificates_for_receiver(
+        &self,
+        sender_chain_id: ChainId,
+        receiver_chain_id: ChainId,
+        target_height: BlockHeight,
+        start_height: BlockHeight,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        let request = SenderCertificatesRequest {
+            sender_chain_id,
+            receiver_chain_id,
+            target_height,
+            start_height,
+        };
+        let response = client_delegate!(self, download_sender_certificates_for_receiver, request)?;
+        response
+            .certificates
+            .into_iter()
+            .map(|cert| cert.try_into())
+            .collect::<Result<_, _>>()
+            .map_err(|_| NodeError::UnexpectedCertificateValue)
     }
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]

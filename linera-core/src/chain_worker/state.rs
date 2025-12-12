@@ -20,6 +20,7 @@ use linera_base::{
     ensure,
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, StreamId},
+    value_cache::{ParkingCache, ValueCache},
 };
 use linera_chain::{
     data_types::{
@@ -42,8 +43,6 @@ use linera_views::{
 };
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
 use tracing::{debug, instrument, trace, warn};
-
-use linera_base::value_cache::{ParkingCache, ValueCache};
 
 use super::{ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier, EventSubscriptionsResult};
 use crate::{
@@ -590,7 +589,8 @@ where
             for block in blocks {
                 let hashed_block = block.into_inner();
                 let height = hashed_block.inner().header.height;
-                self.block_values.insert_hashed(Cow::Owned(hashed_block.clone()));
+                self.block_values
+                    .insert_hashed(Cow::Owned(hashed_block.clone()));
                 height_to_blocks.insert(height, hashed_block);
             }
         }
@@ -1458,8 +1458,7 @@ where
                     .query_application(context, query, self.service_runtime_endpoint.as_mut())
                     .await
                     .with_execution_context(ChainExecutionContext::Query)?;
-                self.execution_state_cache
-                    .insert(&requested_block, state);
+                self.execution_state_cache.insert(&requested_block, state);
                 Ok(outcome)
             } else {
                 tracing::debug!(requested_block = %requested_block, "requested block hash not found in cache, querying committed state");
