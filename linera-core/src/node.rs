@@ -156,6 +156,19 @@ pub trait ValidatorNode {
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError>;
 
+    /// Downloads sender certificates with their sending ancestors.
+    /// The proxy traverses `previous_message_blocks` to find all certificates
+    /// from `sender_chain_id` that sent messages to `receiver_chain_id`,
+    /// starting from `target_height` and stopping at `start_height`.
+    /// Returns certificates in ascending height order, ready for processing.
+    async fn download_sender_certificates_for_receiver(
+        &self,
+        sender_chain_id: ChainId,
+        receiver_chain_id: ChainId,
+        target_height: BlockHeight,
+        start_height: BlockHeight,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError>;
+
     /// Returns the hash of the `Certificate` that last used a blob.
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError>;
 

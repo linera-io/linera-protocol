@@ -380,7 +380,9 @@ where
             | RpcMessage::UploadBlob(_)
             | RpcMessage::UploadBlobResponse(_)
             | RpcMessage::DownloadCertificatesByHeights(_, _)
-            | RpcMessage::DownloadCertificatesByHeightsResponse(_) => {
+            | RpcMessage::DownloadCertificatesByHeightsResponse(_)
+            | RpcMessage::DownloadSenderCertificatesForReceiver { .. }
+            | RpcMessage::DownloadSenderCertificatesForReceiverResponse(_) => {
                 Err(NodeError::UnexpectedMessage)
             }
         };
