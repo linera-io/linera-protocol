@@ -45,7 +45,7 @@ use tracing::{debug, instrument, trace, warn};
 use super::{ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier, EventSubscriptionsResult};
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    value_cache::ValueCache,
+    value_cache::{ParkingCache, ValueCache},
     worker::{NetworkActions, Notification, Reason, WorkerError},
 };
 
@@ -76,7 +76,7 @@ where
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache: Arc<ParkingCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -102,7 +102,7 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+        execution_state_cache: Arc<ParkingCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -1435,7 +1435,7 @@ where
                     .await
                     .with_execution_context(ChainExecutionContext::Query)?;
                 self.execution_state_cache
-                    .insert_owned(&requested_block, state);
+                    .insert(&requested_block, state);
                 Ok(outcome)
             } else {
                 tracing::debug!(requested_block = %requested_block, "requested block hash not found in cache, querying committed state");
@@ -1751,7 +1751,7 @@ where
             .await?;
         let block = Block::new(block.clone(), outcome);
         let block_hash = CryptoHash::new(&block);
-        self.execution_state_cache.insert_owned(
+        self.execution_state_cache.insert(
             &block_hash,
             Box::pin(
                 self.chain
