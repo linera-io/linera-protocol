@@ -140,6 +140,15 @@ spec:
                 {{- if .Values.notificationQueueSize }}
                 --notification-queue-size {{ .Values.notificationQueueSize }}
                 {{- end }}
+                {{- if .Values.blobCacheSize }}
+                --blob-cache-size {{ .Values.blobCacheSize }}
+                {{- end }}
+                {{- if .Values.certificateCacheSize }}
+                --certificate-cache-size {{ .Values.certificateCacheSize }}
+                {{- end }}
+                {{- if .Values.confirmedBlockCacheSize }}
+                --confirmed-block-cache-size {{ .Values.confirmedBlockCacheSize }}
+                {{- end }}
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
