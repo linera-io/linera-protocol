@@ -1,0 +1,1 @@
+searchState.loadedDescShard("test_log_macros", 0, "Procedural macro powering <code>test-log</code>.")

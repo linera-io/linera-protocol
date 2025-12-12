@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ControllerCommand","Operation","WorkerCommand"],"struct":["ControllerAbi","LocalWorkerState","ManagedService","OperationMutationRoot","Worker"],"type":["ManagedServiceId"]};

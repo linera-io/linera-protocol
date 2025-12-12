@@ -1,0 +1,102 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="clio"><title>clio - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="clio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../clio/index.html">clio</a><span class="version">0.3.5</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#clio" title="clio">clio</a></li><li><a href="#usage" title="Usage">Usage</a></li><li><a href="#alternative-crates" title="Alternative crates">Alternative crates</a><ul><li><a href="#nameless" title="Nameless">Nameless</a></li><li><a href="#patharg" title="Patharg">Patharg</a></li><li><a href="#either" title="Either">Either</a></li></ul></li><li><a href="#features" title="Features">Features</a><ul><li><a href="#clap-parse" title="`clap-parse`"><code>clap-parse</code></a></li><li><a href="#http-client" title="HTTP Client">HTTP Client</a></li></ul></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>clio</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/clio/lib.rs.html#1-364">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="clio"><a class="doc-anchor" href="#clio">§</a>clio</h2>
+<p>clio is a rust library for parsing CLI file names.</p>
+<p>It implements the standard unix conventions of when the file name is <code>"-"</code> then sending the
+data to stdin/stdout as appropriate. With the <a href="#clap-parse"><code>clap-parse</code></a> feature
+it also adds a bunch of useful filters to validate paths from command line parameters,
+e.g. it exists or is/isn’t a directory.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p><a href="struct.Input.html" title="struct clio::Input"><code>Input</code></a>s and <a href="struct.Input.html" title="struct clio::Input"><code>Output</code></a>s can be created directly from args in <a href="https://doc.rust-lang.org/1.86.0/std/env/fn.args_os.html" title="fn std::env::args_os"><code>args_os</code></a>.
+They will error if the file cannot be opened for any reason</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// a cat replacement
+</span><span class="kw">fn </span>main() -&gt; clio::Result&lt;()&gt; {
+    <span class="kw">for </span>arg <span class="kw">in </span>std::env::args_os().skip(<span class="number">1</span>) {
+        <span class="kw">let </span><span class="kw-2">mut </span>input = clio::Input::new(<span class="kw-2">&amp;</span>arg)<span class="question-mark">?</span>;
+        std::io::copy(<span class="kw-2">&amp;mut </span>input, <span class="kw-2">&amp;mut </span>std::io::stdout())<span class="question-mark">?</span>;
+    }
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>If you want to defer opening the file you can use <a href="struct.InputPath.html" title="struct clio::InputPath"><code>InputPath</code></a>s and <a href="struct.OutputPath.html" title="struct clio::OutputPath"><code>OutputPath</code></a>s.
+This avoid leaving empty Output files around if you error out very early.
+These check that the path exists, is a file and could in theory be opened when created to get
+nicer error messages from clap. Since that leaves room for
+<a href="https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use">TOCTTOU</a> bugs, they will
+still return a <a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html#variant.Err" title="variant core::result::Result::Err"><code>Err</code></a> if something has changed when it comes time
+to actually open the file.</p>
+<p>With the <a href="#clap-parse"><code>clap-parse</code></a> feature they are also designed to be used with <a href="https://docs.rs/clap">clap 3.2+</a>.</p>
+<p>See the <a href="https://docs.rs/clio/0.2.2/clio/index.html#usage">older docs</a> for examples of older <a href="https://docs.rs/clap">clap</a>/<a href="https://docs.rs/structopt">structopt</a></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>clap::Parser;
+<span class="kw">use </span>clio::<span class="kw-2">*</span>;
+<span class="kw">use </span>std::io::Write;
+
+<span class="attr">#[derive(Parser)]
+#[clap(name = <span class="string">"cat"</span>)]
+</span><span class="kw">struct </span>Opt {
+    <span class="doccomment">/// Input file, use '-' for stdin
+    </span><span class="attr">#[clap(value_parser, default_value=<span class="string">"-"</span>)]
+    </span>input: Input,
+
+    <span class="doccomment">/// Output file '-' for stdout
+    </span><span class="attr">#[clap(long, short, value_parser, default_value=<span class="string">"-"</span>)]
+    </span>output: Output,
+
+    <span class="doccomment">/// Directory to store log files in
+    </span><span class="attr">#[clap(long, short, value_parser = <span class="macro">clap::value_parser!</span>(ClioPath).exists().is_dir(), default_value = <span class="string">"."</span>)]
+    </span>log_dir: ClioPath,
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>opt = Opt::parse();
+
+    <span class="kw">let </span><span class="kw-2">mut </span>log = opt.log_dir.join(<span class="string">"cat.log"</span>).create().unwrap_or(Output::std_err());
+
+    <span class="kw">match </span>std::io::copy(<span class="kw-2">&amp;mut </span>opt.input, <span class="kw-2">&amp;mut </span>opt.output) {
+        <span class="prelude-val">Ok</span>(len) =&gt; <span class="macro">writeln!</span>(log, <span class="string">"Copied {} bytes"</span>, len),
+        <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">writeln!</span>(log, <span class="string">"Error {:?}"</span>, e),
+    };
+}</code></pre></div>
+<h2 id="alternative-crates"><a class="doc-anchor" href="#alternative-crates">§</a>Alternative crates</h2><h3 id="nameless"><a class="doc-anchor" href="#nameless">§</a>Nameless</h3>
+<p><a href="https://docs.rs/nameless">Nameless</a> is an alternative to clap that provides full-service command-line parsing. This means you just write a main function with arguments with the types you want, add a conventional documentation comment, and it uses the magic of procedural macros to take care of the rest.</p>
+<p>It’s input and output streams have the many of the same features as clio (e.g. ‘-’ for stdin) but also support transparently decompressing inputs, and more remote options such as <code>scp://</code></p>
+<h3 id="patharg"><a class="doc-anchor" href="#patharg">§</a>Patharg</h3>
+<p>If you are as horified as I am by the amount of code in this crate for what feels like it should have been a very simple task, then <a href="https://docs.rs/patharg"><code>patharg</code></a> is a much lighter crate that works with clap for treating ‘-’ as stdin/stdout.</p>
+<p>It does not open the file, or otherwise validate the path until you ask it avoiding <a href="https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use">TOCTTOU</a> issues but in the process looses the nice clap error messages.</p>
+<p>It also avoids a whole pile of complexity for dealing with seeking and guessing up front if the input supports seeking.</p>
+<p>Also watch out patharg has no custom clap ValueParser so older versions of clap will convert via a String so path will need to be valid utf-8 which is not guarnatied by linux nor windows.</p>
+<h3 id="either"><a class="doc-anchor" href="#either">§</a>Either</h3>
+<p>If all you really need is support mapping <code>'-'</code> to <code>stdin()</code> try this lovely function distilled from <a href="https://docs.rs/patharg"><code>patharg</code></a>.</p>
+<p>It works because <a href="https://docs.rs/either">either</a> has helpfully added <code>impl</code>s for many common traits when both sides implement them.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>    <span class="kw">use </span>either::Either;
+    <span class="kw">use </span>std::io;
+    <span class="kw">use </span>std::ffi::OsStr;
+    <span class="kw">use </span>std::fs::File;
+
+    <span class="kw">pub fn </span>open(path: <span class="kw-2">&amp;</span>OsStr) -&gt; io::Result&lt;<span class="kw">impl </span>io::BufRead&gt; {
+        <span class="prelude-val">Ok</span>(<span class="kw">if </span>path == <span class="string">"-" </span>{
+            Either::Left(io::stdin().lock())
+        } <span class="kw">else </span>{
+            Either::Right(io::BufReader::new(File::open(path)<span class="question-mark">?</span>))
+        })
+    }</code></pre></div>
+<p>The corresponding <code>create</code> function is left as an exercise for the reader.</p>
+<h2 id="features"><a class="doc-anchor" href="#features">§</a>Features</h2><h4 id="clap-parse"><a class="doc-anchor" href="#clap-parse">§</a><code>clap-parse</code></h4>
+<p>Implements <a href="https://docs.rs/clap/latest/clap/builder/trait.ValueParserFactory.html"><code>ValueParserFactory</code></a> for all the types and
+adds a bad implementation of <a href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a> to all types as well to keep <code>clap</code> happy.</p>
+<h3 id="http-client"><a class="doc-anchor" href="#http-client">§</a>HTTP Client</h3>
+<p>If a url is passed to <a href="struct.Input.html#method.new" title="associated function clio::Input::new"><code>Input::new</code></a> then it will perform and HTTP <code>GET</code>. This has the advantage vs just piping in the output of curl as you know the input size, and can infer related urls, e.g. get the <code>Cargo.lock</code> to match the <code>Cargo.toml</code>.</p>
+<p>If a url is passed to <a href="struct.Output.html#method.new" title="associated function clio::Output::new"><code>Output::new</code></a> then it will perform and HTTP <code>PUT</code>.
+The main advantage over just piping to curl is you can use <a href="struct.OutputPath.html#method.create_with_len" title="method clio::OutputPath::create_with_len"><code>OutputPath::create_with_len</code></a> to set the size before the upload starts e.g.
+needed if you are sending a file to S3.</p>
+<h4 id="http-ureq"><a class="doc-anchor" href="#http-ureq">§</a><code>http-ureq</code></h4>
+<p>bundles in <a href="https://docs.rs/ureq">ureq</a> as a HTTP client.</p>
+<h4 id="http-curl"><a class="doc-anchor" href="#http-curl">§</a><code>http-curl</code></h4>
+<p>bundles in <a href="https://docs.rs/curl">curl</a> as a HTTP client.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="clapers/index.html" title="mod clio::clapers">clapers</a></dt><dd>implementation of TypedValueParser for clio types so that they can be
+used with clap <code>value_parser</code></dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.CachedInput.html" title="struct clio::CachedInput">Cached<wbr>Input</a></dt><dd>A struct that contains all the components of a command line input stream,
+either std in or a file.</dd><dt><a class="struct" href="struct.ClioPath.html" title="struct clio::ClioPath">Clio<wbr>Path</a></dt><dd>A builder for <a href="struct.Input.html" title="struct clio::Input">Input</a> and <a href="struct.Output.html" title="struct clio::Output">Output</a>.</dd><dt><a class="struct" href="struct.Input.html" title="struct clio::Input">Input</a></dt><dd>An enum that represents a command line input stream,
+either <a href="https://doc.rust-lang.org/1.86.0/std/io/stdio/struct.Stdin.html" title="struct std::io::stdio::Stdin"><code>Stdin</code></a> or <a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File"><code>File</code></a></dd><dt><a class="struct" href="struct.InputPath.html" title="struct clio::InputPath">Input<wbr>Path</a></dt><dd>A builder for <a href="struct.Input.html" title="struct clio::Input">Input</a> that validates the path but
+defers creating it until you call the <a href="struct.InputPath.html#method.open" title="method clio::InputPath::open">open</a> method.</dd><dt><a class="struct" href="struct.Output.html" title="struct clio::Output">Output</a></dt><dd>A struct that represents a command line output stream,
+either <a href="https://doc.rust-lang.org/1.86.0/std/io/stdio/struct.Stdout.html" title="struct std::io::stdio::Stdout"><code>Stdout</code></a> or a <a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File"><code>File</code></a> along with it’s path</dd><dt><a class="struct" href="struct.OutputPath.html" title="struct clio::OutputPath">Output<wbr>Path</a></dt><dd>A builder for <a href="struct.Output.html" title="struct clio::Output">Output</a> that validates the path but
+defers creating it until you call the <a href="struct.OutputPath.html#method.create" title="method clio::OutputPath::create">create</a> method.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Error.html" title="enum clio::Error">Error</a></dt><dd>Any error that happens when opening a stream.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.any_file.html" title="fn clio::any_file">any_<wbr>file</a></dt><dd>A predicate for filtering files that accepts any file</dd><dt><a class="fn" href="fn.has_extension.html" title="fn clio::has_extension">has_<wbr>extension</a></dt><dd>A predicate builder for filtering files based on extension</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.Result.html" title="type clio::Result">Result</a></dt><dd>A result with a <a href="enum.Error.html" title="enum clio::Error"><code>clio::Error</code></a></dd></dl></section></div></main></body></html>

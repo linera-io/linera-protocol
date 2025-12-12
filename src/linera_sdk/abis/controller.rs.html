@@ -1,0 +1,117 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `linera-sdk/src/abis/controller.rs`."><title>controller.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_sdk" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">linera_sdk/abis/</div>controller.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Zefchain Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">use </span>async_graphql::{scalar, Request, Response, SimpleObject};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>linera_sdk_derive::GraphQLMutationRootInCrate;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>serde::{Deserialize, Serialize};
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span><span class="kw">crate</span>::linera_base_types::{
+<a href=#9 id=9 data-nosnippet>9</a>    AccountOwner, ApplicationId, ChainId, ContractAbi, DataBlobHash, ServiceAbi,
+<a href=#10 id=10 data-nosnippet>10</a>};
+<a href=#11 id=11 data-nosnippet>11</a>
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">pub struct </span>ControllerAbi;
+<a href=#13 id=13 data-nosnippet>13</a>
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">impl </span>ContractAbi <span class="kw">for </span>ControllerAbi {
+<a href=#15 id=15 data-nosnippet>15</a>    <span class="kw">type </span>Operation = Operation;
+<a href=#16 id=16 data-nosnippet>16</a>    <span class="kw">type </span>Response = ();
+<a href=#17 id=17 data-nosnippet>17</a>}
+<a href=#18 id=18 data-nosnippet>18</a>
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">impl </span>ServiceAbi <span class="kw">for </span>ControllerAbi {
+<a href=#20 id=20 data-nosnippet>20</a>    <span class="kw">type </span>Query = Request;
+<a href=#21 id=21 data-nosnippet>21</a>    <span class="kw">type </span>QueryResponse = Response;
+<a href=#22 id=22 data-nosnippet>22</a>}
+<a href=#23 id=23 data-nosnippet>23</a>
+<a href=#24 id=24 data-nosnippet>24</a><span class="doccomment">/// Service are identified by the blob ID of the description.
+<a href=#25 id=25 data-nosnippet>25</a></span><span class="kw">pub type </span>ManagedServiceId = DataBlobHash;
+<a href=#26 id=26 data-nosnippet>26</a>
+<a href=#27 id=27 data-nosnippet>27</a><span class="attr">#[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
+<a href=#28 id=28 data-nosnippet>28</a></span><span class="kw">pub enum </span>Operation {
+<a href=#29 id=29 data-nosnippet>29</a>    <span class="doccomment">/// Worker commands
+<a href=#30 id=30 data-nosnippet>30</a>    </span>ExecuteWorkerCommand {
+<a href=#31 id=31 data-nosnippet>31</a>        owner: AccountOwner,
+<a href=#32 id=32 data-nosnippet>32</a>        command: WorkerCommand,
+<a href=#33 id=33 data-nosnippet>33</a>    },
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="doccomment">/// Execute a controller command
+<a href=#35 id=35 data-nosnippet>35</a>    </span>ExecuteControllerCommand {
+<a href=#36 id=36 data-nosnippet>36</a>        admin: AccountOwner,
+<a href=#37 id=37 data-nosnippet>37</a>        command: ControllerCommand,
+<a href=#38 id=38 data-nosnippet>38</a>    },
+<a href=#39 id=39 data-nosnippet>39</a>}
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a><span class="doccomment">/// A worker command
+<a href=#42 id=42 data-nosnippet>42</a></span><span class="attr">#[derive(Clone, Debug, Deserialize, Serialize)]
+<a href=#43 id=43 data-nosnippet>43</a></span><span class="kw">pub enum </span>WorkerCommand {
+<a href=#44 id=44 data-nosnippet>44</a>    <span class="doccomment">/// Executed by workers to register themselves.
+<a href=#45 id=45 data-nosnippet>45</a>    </span>RegisterWorker { capabilities: Vec&lt;String&gt; },
+<a href=#46 id=46 data-nosnippet>46</a>    <span class="doccomment">/// Executed by workers to de-register themselves.
+<a href=#47 id=47 data-nosnippet>47</a>    </span>DeregisterWorker,
+<a href=#48 id=48 data-nosnippet>48</a>}
+<a href=#49 id=49 data-nosnippet>49</a>
+<a href=#50 id=50 data-nosnippet>50</a><span class="macro">scalar!</span>(WorkerCommand);
+<a href=#51 id=51 data-nosnippet>51</a>
+<a href=#52 id=52 data-nosnippet>52</a><span class="doccomment">/// A controller command
+<a href=#53 id=53 data-nosnippet>53</a></span><span class="attr">#[derive(Clone, Debug, Deserialize, Serialize)]
+<a href=#54 id=54 data-nosnippet>54</a></span><span class="kw">pub enum </span>ControllerCommand {
+<a href=#55 id=55 data-nosnippet>55</a>    <span class="doccomment">/// Set the admin owners.
+<a href=#56 id=56 data-nosnippet>56</a>    </span>SetAdmins { admins: <span class="prelude-ty">Option</span>&lt;Vec&lt;AccountOwner&gt;&gt; },
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="doccomment">/// Remove a worker. (This should not usually happen, but some workers may be broken
+<a href=#58 id=58 data-nosnippet>58</a>    /// and need to be cleaned up.)
+<a href=#59 id=59 data-nosnippet>59</a>    </span>RemoveWorker { worker_id: ChainId },
+<a href=#60 id=60 data-nosnippet>60</a>    <span class="doccomment">/// Update the state of a particular service to be running on the specific workers.
+<a href=#61 id=61 data-nosnippet>61</a>    </span>UpdateService {
+<a href=#62 id=62 data-nosnippet>62</a>        service_id: ManagedServiceId,
+<a href=#63 id=63 data-nosnippet>63</a>        workers: Vec&lt;ChainId&gt;,
+<a href=#64 id=64 data-nosnippet>64</a>    },
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="doccomment">/// Remove a service from the map entirely.
+<a href=#66 id=66 data-nosnippet>66</a>    </span>RemoveService { service_id: ManagedServiceId },
+<a href=#67 id=67 data-nosnippet>67</a>    <span class="doccomment">/// Set the states of all services at once, possibly removing some of them.
+<a href=#68 id=68 data-nosnippet>68</a>    </span>UpdateAllServices {
+<a href=#69 id=69 data-nosnippet>69</a>        services: Vec&lt;(ManagedServiceId, Vec&lt;ChainId&gt;)&gt;,
+<a href=#70 id=70 data-nosnippet>70</a>    },
+<a href=#71 id=71 data-nosnippet>71</a>}
+<a href=#72 id=72 data-nosnippet>72</a>
+<a href=#73 id=73 data-nosnippet>73</a><span class="macro">scalar!</span>(ControllerCommand);
+<a href=#74 id=74 data-nosnippet>74</a>
+<a href=#75 id=75 data-nosnippet>75</a><span class="doccomment">/// The description of a service worker.
+<a href=#76 id=76 data-nosnippet>76</a></span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, SimpleObject)]
+<a href=#77 id=77 data-nosnippet>77</a></span><span class="kw">pub struct </span>Worker {
+<a href=#78 id=78 data-nosnippet>78</a>    <span class="doccomment">/// The address used by the worker.
+<a href=#79 id=79 data-nosnippet>79</a>    </span><span class="kw">pub </span>owner: AccountOwner,
+<a href=#80 id=80 data-nosnippet>80</a>    <span class="doccomment">/// Some tags denoting the capabilities of this worker. Each capability has a value
+<a href=#81 id=81 data-nosnippet>81</a>    /// that the worker will read from its local environment and pass to the applications.
+<a href=#82 id=82 data-nosnippet>82</a>    </span><span class="kw">pub </span>capabilities: Vec&lt;String&gt;,
+<a href=#83 id=83 data-nosnippet>83</a>}
+<a href=#84 id=84 data-nosnippet>84</a>
+<a href=#85 id=85 data-nosnippet>85</a><span class="doccomment">/// The description of a service managed by the controller.
+<a href=#86 id=86 data-nosnippet>86</a></span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
+<a href=#87 id=87 data-nosnippet>87</a></span><span class="kw">pub struct </span>ManagedService {
+<a href=#88 id=88 data-nosnippet>88</a>    <span class="doccomment">/// The application ID running the service (e.g. pm-engine)
+<a href=#89 id=89 data-nosnippet>89</a>    </span><span class="kw">pub </span>application_id: ApplicationId,
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="doccomment">/// The role assumed by this service within the application (e.g. engine, event,
+<a href=#91 id=91 data-nosnippet>91</a>    /// market-maker).
+<a href=#92 id=92 data-nosnippet>92</a>    </span><span class="kw">pub </span>name: String,
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="doccomment">/// The chain on which the service is run. Note that this is different from the worker
+<a href=#94 id=94 data-nosnippet>94</a>    /// chains which typically only run the controller application for managing the worker
+<a href=#95 id=95 data-nosnippet>95</a>    /// itself.
+<a href=#96 id=96 data-nosnippet>96</a>    </span><span class="kw">pub </span>chain_id: ChainId,
+<a href=#97 id=97 data-nosnippet>97</a>    <span class="doccomment">/// The required capabilities for a worker to be useful (e.g. some API key).
+<a href=#98 id=98 data-nosnippet>98</a>    /// Concretely, the worker will read its environment variable
+<a href=#99 id=99 data-nosnippet>99</a>    </span><span class="kw">pub </span>requirements: Vec&lt;String&gt;,
+<a href=#100 id=100 data-nosnippet>100</a>}
+<a href=#101 id=101 data-nosnippet>101</a>
+<a href=#102 id=102 data-nosnippet>102</a><span class="macro">scalar!</span>(ManagedService);
+<a href=#103 id=103 data-nosnippet>103</a>
+<a href=#104 id=104 data-nosnippet>104</a><span class="doccomment">/// The local state of a worker.
+<a href=#105 id=105 data-nosnippet>105</a></span><span class="comment">// This is used to facilitate service queries.
+<a href=#106 id=106 data-nosnippet>106</a></span><span class="attr">#[derive(Clone, Debug, Deserialize, Serialize)]
+<a href=#107 id=107 data-nosnippet>107</a></span><span class="kw">pub struct </span>LocalWorkerState {
+<a href=#108 id=108 data-nosnippet>108</a>    <span class="doccomment">/// The description of this worker as we registered it.
+<a href=#109 id=109 data-nosnippet>109</a>    </span><span class="kw">pub </span>local_worker: <span class="prelude-ty">Option</span>&lt;Worker&gt;,
+<a href=#110 id=110 data-nosnippet>110</a>    <span class="doccomment">/// The services currently running locally.
+<a href=#111 id=111 data-nosnippet>111</a>    </span><span class="kw">pub </span>local_services: Vec&lt;ManagedService&gt;,
+<a href=#112 id=112 data-nosnippet>112</a>    <span class="doccomment">/// The chains currently followed locally (besides ours and the active service
+<a href=#113 id=113 data-nosnippet>113</a>    /// chains).
+<a href=#114 id=114 data-nosnippet>114</a>    </span><span class="kw">pub </span>local_chains: Vec&lt;ChainId&gt;,
+<a href=#115 id=115 data-nosnippet>115</a>}
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a><span class="macro">scalar!</span>(LocalWorkerState);</code></pre></div></section></main></body></html>

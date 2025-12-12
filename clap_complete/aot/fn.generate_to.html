@@ -1,0 +1,113 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generate a completions file for a specified shell at compile-time."><title>generate_to in clap_complete::aot - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="clap_complete" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../clap_complete/index.html"><img src="https://raw.githubusercontent.com/clap-rs/clap/master/assets/clap.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../clap_complete/index.html"><img src="https://raw.githubusercontent.com/clap-rs/clap/master/assets/clap.png" alt="logo"></a><h2><a href="../../clap_complete/index.html">clap_<wbr>complete</a><span class="version">4.5.61</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">generate_<wbr>to</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In clap_<wbr>complete::<wbr>aot</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">clap_complete</a>::<wbr><a href="index.html">aot</a></div><h1>Function <span class="fn">generate_to</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/clap_complete/aot/generator/mod.rs.html#235-256">Source</a> </span></div><pre class="rust item-decl"><code>pub fn generate_to&lt;G, S, T&gt;(
+    generator: G,
+    cmd: &amp;mut <a class="struct" href="../../clap_builder/builder/command/struct.Command.html" title="struct clap_builder::builder::command::Command">Command</a>,
+    bin_name: S,
+    out_dir: T,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.86.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf">PathBuf</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;<div class="where">where
+    G: <a class="trait" href="trait.Generator.html" title="trait clap_complete::aot::Generator">Generator</a>,
+    S: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;,
+    T: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.86.0/std/ffi/os_str/struct.OsString.html" title="struct std::ffi::os_str::OsString">OsString</a>&gt;,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generate a completions file for a specified shell at compile-time.</p>
+<div class="warning">
+<p><strong>NOTE:</strong> to generate the file at compile time you must use a <code>build.rs</code> “Build Script” or a
+<a href="https://github.com/matklad/cargo-xtask"><code>cargo-xtask</code></a></p>
+</div>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>The following example generates a bash completion script via a <code>build.rs</code> script. In this
+simple example, we’ll demo a very small application with only a single subcommand and two
+args. Real applications could be many multiple levels deep in subcommands, and have tens or
+potentially hundreds of arguments.</p>
+<p>First, it helps if we separate out our <code>Command</code> definition into a separate file. Whether you
+do this as a function, or bare Command definition is a matter of personal preference.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// src/cli.rs
+</span><span class="kw">pub fn </span>build_cli() -&gt; Command {
+    Command::new(<span class="string">"compl"</span>)
+        .about(<span class="string">"Tests completions"</span>)
+        .arg(Arg::new(<span class="string">"file"</span>)
+            .help(<span class="string">"some input file"</span>))
+        .subcommand(Command::new(<span class="string">"test"</span>)
+            .about(<span class="string">"tests things"</span>)
+            .arg(Arg::new(<span class="string">"case"</span>)
+                .long(<span class="string">"case"</span>)
+                .action(ArgAction::Set)
+                .help(<span class="string">"the case to test"</span>)))
+}</code></pre></div>
+<p>In our regular code, we can simply call this <code>build_cli()</code> function, then call
+<code>get_matches()</code>, or any of the other normal methods directly after. For example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// src/main.rs
+
+</span><span class="kw">mod </span>cli;
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>_m = cli::build_cli().get_matches();
+
+    <span class="comment">// normal logic continues...
+</span>}</code></pre></div>
+<p>Next, we set up our <code>Cargo.toml</code> to use a <code>build.rs</code> build script.</p>
+<div class="example-wrap"><pre class="language-toml"><code># Cargo.toml
+build = &quot;build.rs&quot;
+
+[dependencies]
+clap = &quot;*&quot;
+
+[build-dependencies]
+clap = &quot;*&quot;
+clap_complete = &quot;*&quot;</code></pre></div>
+<p>Next, we place a <code>build.rs</code> in our project root.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>clap_complete::{generate_to, shells::Bash};
+<span class="kw">use </span>std::env;
+<span class="kw">use </span>std::io::Error;
+
+<span class="macro">include!</span>(<span class="string">"src/cli.rs"</span>);
+
+<span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    <span class="kw">let </span>outdir = <span class="kw">match </span>env::var_os(<span class="string">"OUT_DIR"</span>) {
+        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(()),
+        <span class="prelude-val">Some</span>(outdir) =&gt; outdir,
+    };
+
+    <span class="kw">let </span><span class="kw-2">mut </span>cmd = build_cli();
+    <span class="kw">let </span>path = generate_to(
+        Bash,
+        <span class="kw-2">&amp;mut </span>cmd, <span class="comment">// We need to specify what generator to use
+        </span><span class="string">"myapp"</span>,  <span class="comment">// We need to specify the bin name manually
+        </span>outdir,   <span class="comment">// We need to specify where to write to
+    </span>)<span class="question-mark">?</span>;
+
+    <span class="macro">println!</span>(<span class="string">"cargo:warning=completion file is generated: {path:?}"</span>);
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>Now, once we compile there will be a <code>{bin_name}.bash</code> file in the directory.
+Assuming we compiled with debug mode, it would be somewhere similar to
+<code>&lt;project&gt;/target/debug/build/myapp-&lt;hash&gt;/out/myapp.bash</code>.</p>
+<div class="warning">
+<p><strong>NOTE:</strong> Please look at the individual <a href="../shells/index.html" title="mod clap_complete::shells">shells</a>
+to see the name of the files generated.</p>
+</div>
+<p>Using <a href="../../clap_builder/derive/trait.ValueEnum.html#tymethod.value_variants" title="associated function clap_builder::derive::ValueEnum::value_variants"><code>ValueEnum::value_variants()</code></a> you can easily loop over
+all the supported shell variants to generate all the completions at once too.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>clap::ValueEnum;
+<span class="kw">use </span>clap_complete::{generate_to, Shell};
+<span class="kw">use </span>std::env;
+<span class="kw">use </span>std::io::Error;
+
+<span class="macro">include!</span>(<span class="string">"src/cli.rs"</span>);
+
+<span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    <span class="kw">let </span>outdir = <span class="kw">match </span>env::var_os(<span class="string">"OUT_DIR"</span>) {
+        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(()),
+        <span class="prelude-val">Some</span>(outdir) =&gt; outdir,
+    };
+
+    <span class="kw">let </span><span class="kw-2">mut </span>cmd = build_cli();
+    <span class="kw">for </span><span class="kw-2">&amp;</span>shell <span class="kw">in </span>Shell::value_variants() {
+        generate_to(shell, <span class="kw-2">&amp;mut </span>cmd, <span class="string">"myapp"</span>, outdir)<span class="question-mark">?</span>;
+    }
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details></section></div></main></body></html>

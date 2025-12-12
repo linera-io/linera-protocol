@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Command"],"struct":["Add","BatchQuery","Change","List","Query","QueryBatch","Remove","Spec","Sync","Update","Votes"],"type":["BatchFile"]};

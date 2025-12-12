@@ -1,0 +1,454 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/seize-0.4.9/src/collector.rs`."><title>collector.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="seize" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">seize/</div>collector.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">crate</span>::tls::Thread;
+<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use crate</span>::{membarrier, raw, LocalGuard, OwnedGuard};
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>std::cell::UnsafeCell;
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>std::fmt;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>std::num::NonZeroU64;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>std::sync::atomic::{AtomicUsize, Ordering};
+<a href=#8 id=8 data-nosnippet>8</a>
+<a href=#9 id=9 data-nosnippet>9</a><span class="doccomment">/// Fast, efficient, and robust memory reclamation.
+<a href=#10 id=10 data-nosnippet>10</a>///
+<a href=#11 id=11 data-nosnippet>11</a>/// A `Collector` manages the allocation and retirement of concurrent objects.
+<a href=#12 id=12 data-nosnippet>12</a>/// Objects can be safely loaded through *guards*, which can be created using
+<a href=#13 id=13 data-nosnippet>13</a>/// the [`enter`](Collector::enter) or [`enter_owned`](Collector::enter_owned)
+<a href=#14 id=14 data-nosnippet>14</a>/// methods.
+<a href=#15 id=15 data-nosnippet>15</a></span><span class="kw">pub struct </span>Collector {
+<a href=#16 id=16 data-nosnippet>16</a>    id: usize,
+<a href=#17 id=17 data-nosnippet>17</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) raw: raw::Collector,
+<a href=#18 id=18 data-nosnippet>18</a>}
+<a href=#19 id=19 data-nosnippet>19</a>
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">unsafe impl </span>Send <span class="kw">for </span>Collector {}
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">unsafe impl </span>Sync <span class="kw">for </span>Collector {}
+<a href=#22 id=22 data-nosnippet>22</a>
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">impl </span>Collector {
+<a href=#24 id=24 data-nosnippet>24</a>    <span class="kw">const </span>DEFAULT_BATCH_SIZE: usize = <span class="number">64</span>;
+<a href=#25 id=25 data-nosnippet>25</a>    <span class="kw">const </span>DEFAULT_EPOCH_TICK: NonZeroU64 = <span class="kw">unsafe </span>{ NonZeroU64::new_unchecked(<span class="number">110</span>) };
+<a href=#26 id=26 data-nosnippet>26</a>
+<a href=#27 id=27 data-nosnippet>27</a>    <span class="doccomment">/// Creates a new collector.
+<a href=#28 id=28 data-nosnippet>28</a>    </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#29 id=29 data-nosnippet>29</a>        <span class="kw">static </span>ID: AtomicUsize = AtomicUsize::new(<span class="number">0</span>);
+<a href=#30 id=30 data-nosnippet>30</a>
+<a href=#31 id=31 data-nosnippet>31</a>        membarrier::detect();
+<a href=#32 id=32 data-nosnippet>32</a>        <span class="kw">let </span>cpus = std::thread::available_parallelism()
+<a href=#33 id=33 data-nosnippet>33</a>            .map(Into::into)
+<a href=#34 id=34 data-nosnippet>34</a>            .unwrap_or(<span class="number">1</span>);
+<a href=#35 id=35 data-nosnippet>35</a>
+<a href=#36 id=36 data-nosnippet>36</a>        <span class="kw">let </span>batch_size = cpus.min(<span class="self">Self</span>::DEFAULT_BATCH_SIZE);
+<a href=#37 id=37 data-nosnippet>37</a>
+<a href=#38 id=38 data-nosnippet>38</a>        <span class="self">Self </span>{
+<a href=#39 id=39 data-nosnippet>39</a>            raw: raw::Collector::new(cpus, <span class="self">Self</span>::DEFAULT_EPOCH_TICK, batch_size),
+<a href=#40 id=40 data-nosnippet>40</a>            id: ID.fetch_add(<span class="number">1</span>, Ordering::Relaxed),
+<a href=#41 id=41 data-nosnippet>41</a>        }
+<a href=#42 id=42 data-nosnippet>42</a>    }
+<a href=#43 id=43 data-nosnippet>43</a>
+<a href=#44 id=44 data-nosnippet>44</a>    <span class="doccomment">/// Sets the frequency of epoch advancement.
+<a href=#45 id=45 data-nosnippet>45</a>    ///
+<a href=#46 id=46 data-nosnippet>46</a>    /// Seize uses epochs to protect against stalled threads.
+<a href=#47 id=47 data-nosnippet>47</a>    /// The more frequently the epoch is advanced, the faster
+<a href=#48 id=48 data-nosnippet>48</a>    /// stalled threads can be detected. However, it also means
+<a href=#49 id=49 data-nosnippet>49</a>    /// that threads will have to do work to catch up to the
+<a href=#50 id=50 data-nosnippet>50</a>    /// current epoch more often.
+<a href=#51 id=51 data-nosnippet>51</a>    ///
+<a href=#52 id=52 data-nosnippet>52</a>    /// The default epoch frequency is `110`, meaning that
+<a href=#53 id=53 data-nosnippet>53</a>    /// the epoch will advance after every 110 values are
+<a href=#54 id=54 data-nosnippet>54</a>    /// linked to the collector. Benchmarking has shown that
+<a href=#55 id=55 data-nosnippet>55</a>    /// this is a good tradeoff between throughput and memory
+<a href=#56 id=56 data-nosnippet>56</a>    /// efficiency.
+<a href=#57 id=57 data-nosnippet>57</a>    ///
+<a href=#58 id=58 data-nosnippet>58</a>    /// If `None` is passed epoch tracking, and protection
+<a href=#59 id=59 data-nosnippet>59</a>    /// against stalled threads, will be disabled completely.
+<a href=#60 id=60 data-nosnippet>60</a>    </span><span class="kw">pub fn </span>epoch_frequency(<span class="kw-2">mut </span><span class="self">self</span>, n: <span class="prelude-ty">Option</span>&lt;NonZeroU64&gt;) -&gt; <span class="self">Self </span>{
+<a href=#61 id=61 data-nosnippet>61</a>        <span class="self">self</span>.raw.epoch_frequency = n;
+<a href=#62 id=62 data-nosnippet>62</a>        <span class="self">self
+<a href=#63 id=63 data-nosnippet>63</a>    </span>}
+<a href=#64 id=64 data-nosnippet>64</a>
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="doccomment">/// Sets the number of values that must be in a batch
+<a href=#66 id=66 data-nosnippet>66</a>    /// before reclamation is attempted.
+<a href=#67 id=67 data-nosnippet>67</a>    ///
+<a href=#68 id=68 data-nosnippet>68</a>    /// Retired values are added to thread-local *batches*
+<a href=#69 id=69 data-nosnippet>69</a>    /// before starting the reclamation process. After
+<a href=#70 id=70 data-nosnippet>70</a>    /// `batch_size` is hit, values are moved to separate
+<a href=#71 id=71 data-nosnippet>71</a>    /// *retirement lists*, where reference counting kicks
+<a href=#72 id=72 data-nosnippet>72</a>    /// in and batches are eventually reclaimed.
+<a href=#73 id=73 data-nosnippet>73</a>    ///
+<a href=#74 id=74 data-nosnippet>74</a>    /// A larger batch size means that deallocation is done
+<a href=#75 id=75 data-nosnippet>75</a>    /// less frequently, but reclamation also becomes more
+<a href=#76 id=76 data-nosnippet>76</a>    /// expensive due to longer retirement lists needing
+<a href=#77 id=77 data-nosnippet>77</a>    /// to be traversed and freed.
+<a href=#78 id=78 data-nosnippet>78</a>    ///
+<a href=#79 id=79 data-nosnippet>79</a>    /// Note that batch sizes should generally be larger
+<a href=#80 id=80 data-nosnippet>80</a>    /// than the number of threads accessing objects.
+<a href=#81 id=81 data-nosnippet>81</a>    ///
+<a href=#82 id=82 data-nosnippet>82</a>    /// The default batch size is `32`.
+<a href=#83 id=83 data-nosnippet>83</a>    </span><span class="kw">pub fn </span>batch_size(<span class="kw-2">mut </span><span class="self">self</span>, batch_size: usize) -&gt; <span class="self">Self </span>{
+<a href=#84 id=84 data-nosnippet>84</a>        <span class="self">self</span>.raw.batch_size = batch_size;
+<a href=#85 id=85 data-nosnippet>85</a>        <span class="self">self
+<a href=#86 id=86 data-nosnippet>86</a>    </span>}
+<a href=#87 id=87 data-nosnippet>87</a>
+<a href=#88 id=88 data-nosnippet>88</a>    <span class="doccomment">/// Marks the current thread as active, returning a guard
+<a href=#89 id=89 data-nosnippet>89</a>    /// that allows protecting loads of concurrent objects. The thread
+<a href=#90 id=90 data-nosnippet>90</a>    /// will be marked as inactive when the guard is dropped.
+<a href=#91 id=91 data-nosnippet>91</a>    ///
+<a href=#92 id=92 data-nosnippet>92</a>    /// See [the guide](crate::guide#starting-operations) for an
+<a href=#93 id=93 data-nosnippet>93</a>    /// introduction to using guards, or the documentation of [`LocalGuard`]
+<a href=#94 id=94 data-nosnippet>94</a>    /// for more details.
+<a href=#95 id=95 data-nosnippet>95</a>    ///
+<a href=#96 id=96 data-nosnippet>96</a>    /// # Performance
+<a href=#97 id=97 data-nosnippet>97</a>    ///
+<a href=#98 id=98 data-nosnippet>98</a>    /// Creating and destroying a guard is about the same as locking and
+<a href=#99 id=99 data-nosnippet>99</a>    /// unlocking an uncontended `Mutex`, performance-wise. Because of this,
+<a href=#100 id=100 data-nosnippet>100</a>    /// guards should be re-used across multiple operations if possible.
+<a href=#101 id=101 data-nosnippet>101</a>    /// However, note that holding a guard prevents the reclamation of any
+<a href=#102 id=102 data-nosnippet>102</a>    /// concurrent objects retired during it's lifetime, so there is a
+<a href=#103 id=103 data-nosnippet>103</a>    /// tradeoff between performance and memory usage.
+<a href=#104 id=104 data-nosnippet>104</a>    ///
+<a href=#105 id=105 data-nosnippet>105</a>    /// # Examples
+<a href=#106 id=106 data-nosnippet>106</a>    ///
+<a href=#107 id=107 data-nosnippet>107</a>    /// ```rust
+<a href=#108 id=108 data-nosnippet>108</a>    /// # use std::sync::atomic::{AtomicPtr, Ordering};
+<a href=#109 id=109 data-nosnippet>109</a>    /// # let collector = seize::Collector::new();
+<a href=#110 id=110 data-nosnippet>110</a>    /// use seize::{reclaim, Linked, Guard};
+<a href=#111 id=111 data-nosnippet>111</a>    ///
+<a href=#112 id=112 data-nosnippet>112</a>    /// let ptr = AtomicPtr::new(collector.link_boxed(1_usize));
+<a href=#113 id=113 data-nosnippet>113</a>    ///
+<a href=#114 id=114 data-nosnippet>114</a>    /// let guard = collector.enter();
+<a href=#115 id=115 data-nosnippet>115</a>    /// let value = guard.protect(&amp;ptr, Ordering::Acquire);
+<a href=#116 id=116 data-nosnippet>116</a>    /// unsafe { assert_eq!(**value, 1) }
+<a href=#117 id=117 data-nosnippet>117</a>    /// # unsafe { guard.defer_retire(value, reclaim::boxed::&lt;Linked&lt;usize&gt;&gt;) };
+<a href=#118 id=118 data-nosnippet>118</a>    /// ```
+<a href=#119 id=119 data-nosnippet>119</a>    ///
+<a href=#120 id=120 data-nosnippet>120</a>    /// Note that `enter` is reentrant, and it is legal to create
+<a href=#121 id=121 data-nosnippet>121</a>    /// multiple guards on the same thread. The thread will stay
+<a href=#122 id=122 data-nosnippet>122</a>    /// marked as active until the last guard is dropped:
+<a href=#123 id=123 data-nosnippet>123</a>    ///
+<a href=#124 id=124 data-nosnippet>124</a>    /// ```rust
+<a href=#125 id=125 data-nosnippet>125</a>    /// # use std::sync::atomic::{AtomicPtr, Ordering};
+<a href=#126 id=126 data-nosnippet>126</a>    /// # let collector = seize::Collector::new();
+<a href=#127 id=127 data-nosnippet>127</a>    /// use seize::{reclaim, Linked, Guard};
+<a href=#128 id=128 data-nosnippet>128</a>    ///
+<a href=#129 id=129 data-nosnippet>129</a>    /// let ptr = AtomicPtr::new(collector.link_boxed(1_usize));
+<a href=#130 id=130 data-nosnippet>130</a>    ///
+<a href=#131 id=131 data-nosnippet>131</a>    /// let guard1 = collector.enter();
+<a href=#132 id=132 data-nosnippet>132</a>    /// let guard2 = collector.enter();
+<a href=#133 id=133 data-nosnippet>133</a>    ///
+<a href=#134 id=134 data-nosnippet>134</a>    /// let value = guard2.protect(&amp;ptr, Ordering::Acquire);
+<a href=#135 id=135 data-nosnippet>135</a>    /// drop(guard1);
+<a href=#136 id=136 data-nosnippet>136</a>    /// // the first guard is dropped, but `value`
+<a href=#137 id=137 data-nosnippet>137</a>    /// // is still safe to access as a guard still
+<a href=#138 id=138 data-nosnippet>138</a>    /// // exists
+<a href=#139 id=139 data-nosnippet>139</a>    /// unsafe { assert_eq!(**value, 1) }
+<a href=#140 id=140 data-nosnippet>140</a>    /// # unsafe { guard2.defer_retire(value, reclaim::boxed::&lt;Linked&lt;usize&gt;&gt;) };
+<a href=#141 id=141 data-nosnippet>141</a>    /// drop(guard2) // _now_, the thread is marked as inactive
+<a href=#142 id=142 data-nosnippet>142</a>    /// ```
+<a href=#143 id=143 data-nosnippet>143</a>    </span><span class="attr">#[inline]
+<a href=#144 id=144 data-nosnippet>144</a>    </span><span class="kw">pub fn </span>enter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LocalGuard&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#145 id=145 data-nosnippet>145</a>        LocalGuard::enter(<span class="self">self</span>)
+<a href=#146 id=146 data-nosnippet>146</a>    }
+<a href=#147 id=147 data-nosnippet>147</a>
+<a href=#148 id=148 data-nosnippet>148</a>    <span class="doccomment">/// Create an owned guard that protects objects for it's lifetime.
+<a href=#149 id=149 data-nosnippet>149</a>    ///
+<a href=#150 id=150 data-nosnippet>150</a>    /// Unlike local guards created with [`enter`](Collector::enter),
+<a href=#151 id=151 data-nosnippet>151</a>    /// owned guards are independent of the current thread, allowing
+<a href=#152 id=152 data-nosnippet>152</a>    /// them to implement `Send`. See the documentation of [`OwnedGuard`]
+<a href=#153 id=153 data-nosnippet>153</a>    /// for more details.
+<a href=#154 id=154 data-nosnippet>154</a>    </span><span class="attr">#[inline]
+<a href=#155 id=155 data-nosnippet>155</a>    </span><span class="kw">pub fn </span>enter_owned(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OwnedGuard&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#156 id=156 data-nosnippet>156</a>        OwnedGuard::enter(<span class="self">self</span>)
+<a href=#157 id=157 data-nosnippet>157</a>    }
+<a href=#158 id=158 data-nosnippet>158</a>
+<a href=#159 id=159 data-nosnippet>159</a>    <span class="doccomment">/// Create a [`Link`] that can be used to link an object to the collector.
+<a href=#160 id=160 data-nosnippet>160</a>    ///
+<a href=#161 id=161 data-nosnippet>161</a>    /// This method is useful when working with a DST where the [`Linked`]
+<a href=#162 id=162 data-nosnippet>162</a>    /// wrapper cannot be used. See [`AsLink`] for details, or use the
+<a href=#163 id=163 data-nosnippet>163</a>    /// [`link_value`](Collector::link_value)
+<a href=#164 id=164 data-nosnippet>164</a>    /// and [`link_boxed`](Collector::link_boxed) helpers.
+<a href=#165 id=165 data-nosnippet>165</a>    </span><span class="attr">#[inline]
+<a href=#166 id=166 data-nosnippet>166</a>    </span><span class="kw">pub fn </span>link(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Link {
+<a href=#167 id=167 data-nosnippet>167</a>        <span class="comment">// Safety: Accessing the reservation of the current thread is always valid.
+<a href=#168 id=168 data-nosnippet>168</a>        </span><span class="kw">let </span>reservation = <span class="kw">unsafe </span>{ <span class="self">self</span>.raw.reservation(Thread::current()) };
+<a href=#169 id=169 data-nosnippet>169</a>
+<a href=#170 id=170 data-nosnippet>170</a>        Link {
+<a href=#171 id=171 data-nosnippet>171</a>            node: UnsafeCell::new(<span class="self">self</span>.raw.node(reservation)),
+<a href=#172 id=172 data-nosnippet>172</a>        }
+<a href=#173 id=173 data-nosnippet>173</a>    }
+<a href=#174 id=174 data-nosnippet>174</a>
+<a href=#175 id=175 data-nosnippet>175</a>    <span class="doccomment">/// Creates a new `Linked` object with the given value.
+<a href=#176 id=176 data-nosnippet>176</a>    ///
+<a href=#177 id=177 data-nosnippet>177</a>    /// This is equivalent to:
+<a href=#178 id=178 data-nosnippet>178</a>    ///
+<a href=#179 id=179 data-nosnippet>179</a>    /// ```ignore
+<a href=#180 id=180 data-nosnippet>180</a>    /// Linked {
+<a href=#181 id=181 data-nosnippet>181</a>    ///     value,
+<a href=#182 id=182 data-nosnippet>182</a>    ///     link: collector.link()
+<a href=#183 id=183 data-nosnippet>183</a>    /// }
+<a href=#184 id=184 data-nosnippet>184</a>    /// ```
+<a href=#185 id=185 data-nosnippet>185</a>    </span><span class="attr">#[inline]
+<a href=#186 id=186 data-nosnippet>186</a>    </span><span class="kw">pub fn </span>link_value&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, value: T) -&gt; Linked&lt;T&gt; {
+<a href=#187 id=187 data-nosnippet>187</a>        Linked {
+<a href=#188 id=188 data-nosnippet>188</a>            link: <span class="self">self</span>.link(),
+<a href=#189 id=189 data-nosnippet>189</a>            value,
+<a href=#190 id=190 data-nosnippet>190</a>        }
+<a href=#191 id=191 data-nosnippet>191</a>    }
+<a href=#192 id=192 data-nosnippet>192</a>
+<a href=#193 id=193 data-nosnippet>193</a>    <span class="doccomment">/// Links a value to the collector and allocates it with `Box`.
+<a href=#194 id=194 data-nosnippet>194</a>    ///
+<a href=#195 id=195 data-nosnippet>195</a>    /// This is equivalent to:
+<a href=#196 id=196 data-nosnippet>196</a>    ///
+<a href=#197 id=197 data-nosnippet>197</a>    /// ```ignore
+<a href=#198 id=198 data-nosnippet>198</a>    /// Box::into_raw(Box::new(Linked {
+<a href=#199 id=199 data-nosnippet>199</a>    ///     value,
+<a href=#200 id=200 data-nosnippet>200</a>    ///     link: collector.link()
+<a href=#201 id=201 data-nosnippet>201</a>    /// }))
+<a href=#202 id=202 data-nosnippet>202</a>    /// ```
+<a href=#203 id=203 data-nosnippet>203</a>    </span><span class="attr">#[inline]
+<a href=#204 id=204 data-nosnippet>204</a>    </span><span class="kw">pub fn </span>link_boxed&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, value: T) -&gt; <span class="kw-2">*mut </span>Linked&lt;T&gt; {
+<a href=#205 id=205 data-nosnippet>205</a>        Box::into_raw(Box::new(Linked {
+<a href=#206 id=206 data-nosnippet>206</a>            link: <span class="self">self</span>.link(),
+<a href=#207 id=207 data-nosnippet>207</a>            value,
+<a href=#208 id=208 data-nosnippet>208</a>        }))
+<a href=#209 id=209 data-nosnippet>209</a>    }
+<a href=#210 id=210 data-nosnippet>210</a>
+<a href=#211 id=211 data-nosnippet>211</a>    <span class="doccomment">/// Retires a value, running `reclaim` when no threads hold a reference to
+<a href=#212 id=212 data-nosnippet>212</a>    /// it.
+<a href=#213 id=213 data-nosnippet>213</a>    ///
+<a href=#214 id=214 data-nosnippet>214</a>    /// Note that this method is disconnected from any guards on the current
+<a href=#215 id=215 data-nosnippet>215</a>    /// thread, so the pointer may be reclaimed immediately. Use
+<a href=#216 id=216 data-nosnippet>216</a>    /// [`Guard::defer_retire`](crate::Guard::defer_retire) if the pointer
+<a href=#217 id=217 data-nosnippet>217</a>    /// may still be accessed by the current thread.
+<a href=#218 id=218 data-nosnippet>218</a>    ///
+<a href=#219 id=219 data-nosnippet>219</a>    /// # Safety
+<a href=#220 id=220 data-nosnippet>220</a>    ///
+<a href=#221 id=221 data-nosnippet>221</a>    /// The retired object must no longer be accessible to any thread that
+<a href=#222 id=222 data-nosnippet>222</a>    /// enters after it is removed. It also cannot be accessed by the
+<a href=#223 id=223 data-nosnippet>223</a>    /// current thread after `retire` is called.
+<a href=#224 id=224 data-nosnippet>224</a>    ///
+<a href=#225 id=225 data-nosnippet>225</a>    /// Retiring the same pointer twice can cause **undefined behavior**, even
+<a href=#226 id=226 data-nosnippet>226</a>    /// if the reclaimer doesn't free memory.
+<a href=#227 id=227 data-nosnippet>227</a>    ///
+<a href=#228 id=228 data-nosnippet>228</a>    /// Additionally, the pointer must be valid to access as a [`Link`], per the
+<a href=#229 id=229 data-nosnippet>229</a>    /// [`AsLink`] trait, and the reclaimer passed to `retire` must
+<a href=#230 id=230 data-nosnippet>230</a>    /// correctly free values of type `T`.
+<a href=#231 id=231 data-nosnippet>231</a>    ///
+<a href=#232 id=232 data-nosnippet>232</a>    /// # Examples
+<a href=#233 id=233 data-nosnippet>233</a>    ///
+<a href=#234 id=234 data-nosnippet>234</a>    /// Common reclaimers are provided by the [`reclaim`](crate::reclaim)
+<a href=#235 id=235 data-nosnippet>235</a>    /// module.
+<a href=#236 id=236 data-nosnippet>236</a>    ///
+<a href=#237 id=237 data-nosnippet>237</a>    /// ```
+<a href=#238 id=238 data-nosnippet>238</a>    /// # use std::sync::atomic::{AtomicPtr, Ordering};
+<a href=#239 id=239 data-nosnippet>239</a>    /// # let collector = seize::Collector::new();
+<a href=#240 id=240 data-nosnippet>240</a>    /// use seize::{reclaim, Linked};
+<a href=#241 id=241 data-nosnippet>241</a>    ///
+<a href=#242 id=242 data-nosnippet>242</a>    /// let ptr = AtomicPtr::new(collector.link_boxed(1_usize));
+<a href=#243 id=243 data-nosnippet>243</a>    ///
+<a href=#244 id=244 data-nosnippet>244</a>    /// let guard = collector.enter();
+<a href=#245 id=245 data-nosnippet>245</a>    /// // store the new value
+<a href=#246 id=246 data-nosnippet>246</a>    /// let old = ptr.swap(collector.link_boxed(2_usize), Ordering::Release);
+<a href=#247 id=247 data-nosnippet>247</a>    /// // reclaim the old value
+<a href=#248 id=248 data-nosnippet>248</a>    /// // safety: the `swap` above made the old value unreachable for any new threads
+<a href=#249 id=249 data-nosnippet>249</a>    /// unsafe { collector.retire(old, reclaim::boxed::&lt;Linked&lt;usize&gt;&gt;) };
+<a href=#250 id=250 data-nosnippet>250</a>    /// # unsafe { collector.retire(ptr.load(Ordering::Relaxed), reclaim::boxed::&lt;Linked&lt;usize&gt;&gt;) };
+<a href=#251 id=251 data-nosnippet>251</a>    /// ```
+<a href=#252 id=252 data-nosnippet>252</a>    ///
+<a href=#253 id=253 data-nosnippet>253</a>    /// Alternative, a custom reclaimer function can be used:
+<a href=#254 id=254 data-nosnippet>254</a>    ///
+<a href=#255 id=255 data-nosnippet>255</a>    /// ```
+<a href=#256 id=256 data-nosnippet>256</a>    /// # use seize::{Link, Collector, Linked};
+<a href=#257 id=257 data-nosnippet>257</a>    /// # let collector = Collector::new();
+<a href=#258 id=258 data-nosnippet>258</a>    /// let value = collector.link_boxed(1);
+<a href=#259 id=259 data-nosnippet>259</a>    ///
+<a href=#260 id=260 data-nosnippet>260</a>    /// // safety: the value was never shared
+<a href=#261 id=261 data-nosnippet>261</a>    /// unsafe {
+<a href=#262 id=262 data-nosnippet>262</a>    ///     collector.retire(value, |link: *mut Link| unsafe {
+<a href=#263 id=263 data-nosnippet>263</a>    ///         // safety: the value retired was of type *mut Linked&lt;i32&gt;
+<a href=#264 id=264 data-nosnippet>264</a>    ///         let ptr: *mut Linked&lt;i32&gt; = Link::cast(link);
+<a href=#265 id=265 data-nosnippet>265</a>    ///
+<a href=#266 id=266 data-nosnippet>266</a>    ///         // safety: the value was allocated with `link_boxed`
+<a href=#267 id=267 data-nosnippet>267</a>    ///         let value = Box::from_raw(ptr);
+<a href=#268 id=268 data-nosnippet>268</a>    ///         println!("dropping {}", value);
+<a href=#269 id=269 data-nosnippet>269</a>    ///         drop(value);
+<a href=#270 id=270 data-nosnippet>270</a>    ///     });
+<a href=#271 id=271 data-nosnippet>271</a>    /// }
+<a href=#272 id=272 data-nosnippet>272</a>    /// ```
+<a href=#273 id=273 data-nosnippet>273</a>    </span><span class="attr">#[inline]
+<a href=#274 id=274 data-nosnippet>274</a>    </span><span class="kw">pub unsafe fn </span>retire&lt;T: AsLink&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, ptr: <span class="kw-2">*mut </span>T, reclaim: <span class="kw">unsafe fn</span>(<span class="kw-2">*mut </span>Link)) {
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="macro">debug_assert!</span>(!ptr.is_null(), <span class="string">"attempted to retire null pointer"</span>);
+<a href=#276 id=276 data-nosnippet>276</a>
+<a href=#277 id=277 data-nosnippet>277</a>        <span class="comment">// Note that `add` doesn't ever actually reclaim the pointer immediately if
+<a href=#278 id=278 data-nosnippet>278</a>        // the current thread is active. Instead, it adds it to the current thread's
+<a href=#279 id=279 data-nosnippet>279</a>        // reclamation list, but we don't guarantee that publicly.
+<a href=#280 id=280 data-nosnippet>280</a>        </span><span class="kw">unsafe </span>{ <span class="self">self</span>.raw.add(ptr, reclaim, Thread::current()) }
+<a href=#281 id=281 data-nosnippet>281</a>    }
+<a href=#282 id=282 data-nosnippet>282</a>
+<a href=#283 id=283 data-nosnippet>283</a>    <span class="doccomment">/// Reclaim any values that have been retired.
+<a href=#284 id=284 data-nosnippet>284</a>    ///
+<a href=#285 id=285 data-nosnippet>285</a>    /// This method reclaims any objects that have been retired across *all*
+<a href=#286 id=286 data-nosnippet>286</a>    /// threads. After calling this method, any values that were previous
+<a href=#287 id=287 data-nosnippet>287</a>    /// retired, or retired recursively on the current thread during this
+<a href=#288 id=288 data-nosnippet>288</a>    /// call, will have been reclaimed.
+<a href=#289 id=289 data-nosnippet>289</a>    ///
+<a href=#290 id=290 data-nosnippet>290</a>    /// # Safety
+<a href=#291 id=291 data-nosnippet>291</a>    ///
+<a href=#292 id=292 data-nosnippet>292</a>    /// This function is **extremely unsafe** to call. It is only sound when no
+<a href=#293 id=293 data-nosnippet>293</a>    /// threads are currently active, whether accessing values that have
+<a href=#294 id=294 data-nosnippet>294</a>    /// been retired or accessing the collector through any type of guard.
+<a href=#295 id=295 data-nosnippet>295</a>    /// This is akin to having a unique reference to the collector. However,
+<a href=#296 id=296 data-nosnippet>296</a>    /// this method takes a shared reference, as reclaimers to be run by this
+<a href=#297 id=297 data-nosnippet>297</a>    /// thread are allowed to access the collector recursively.
+<a href=#298 id=298 data-nosnippet>298</a>    ///
+<a href=#299 id=299 data-nosnippet>299</a>    /// # Notes
+<a href=#300 id=300 data-nosnippet>300</a>    ///
+<a href=#301 id=301 data-nosnippet>301</a>    /// Note that if reclaimers initialize guards across threads, or initialize
+<a href=#302 id=302 data-nosnippet>302</a>    /// owned guards, objects retired through those guards may not be
+<a href=#303 id=303 data-nosnippet>303</a>    /// reclaimed.
+<a href=#304 id=304 data-nosnippet>304</a>    </span><span class="kw">pub unsafe fn </span>reclaim_all(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#305 id=305 data-nosnippet>305</a>        <span class="kw">unsafe </span>{ <span class="self">self</span>.raw.reclaim_all() };
+<a href=#306 id=306 data-nosnippet>306</a>    }
+<a href=#307 id=307 data-nosnippet>307</a>
+<a href=#308 id=308 data-nosnippet>308</a>    <span class="attr">#[inline]
+<a href=#309 id=309 data-nosnippet>309</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>id_eq(this: <span class="kw-2">&amp;</span>Collector, other: <span class="kw-2">&amp;</span>Collector) -&gt; bool {
+<a href=#310 id=310 data-nosnippet>310</a>        this.id == other.id
+<a href=#311 id=311 data-nosnippet>311</a>    }
+<a href=#312 id=312 data-nosnippet>312</a>}
+<a href=#313 id=313 data-nosnippet>313</a>
+<a href=#314 id=314 data-nosnippet>314</a><span class="kw">impl </span>Clone <span class="kw">for </span>Collector {
+<a href=#315 id=315 data-nosnippet>315</a>    <span class="doccomment">/// Creates a new, independent collector with the same configuration as this
+<a href=#316 id=316 data-nosnippet>316</a>    /// one.
+<a href=#317 id=317 data-nosnippet>317</a>    </span><span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+<a href=#318 id=318 data-nosnippet>318</a>        Collector::new()
+<a href=#319 id=319 data-nosnippet>319</a>            .batch_size(<span class="self">self</span>.raw.batch_size)
+<a href=#320 id=320 data-nosnippet>320</a>            .epoch_frequency(<span class="self">self</span>.raw.epoch_frequency)
+<a href=#321 id=321 data-nosnippet>321</a>    }
+<a href=#322 id=322 data-nosnippet>322</a>}
+<a href=#323 id=323 data-nosnippet>323</a>
+<a href=#324 id=324 data-nosnippet>324</a><span class="kw">impl </span>Default <span class="kw">for </span>Collector {
+<a href=#325 id=325 data-nosnippet>325</a>    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+<a href=#326 id=326 data-nosnippet>326</a>        <span class="self">Self</span>::new()
+<a href=#327 id=327 data-nosnippet>327</a>    }
+<a href=#328 id=328 data-nosnippet>328</a>}
+<a href=#329 id=329 data-nosnippet>329</a>
+<a href=#330 id=330 data-nosnippet>330</a><span class="kw">impl </span>fmt::Debug <span class="kw">for </span>Collector {
+<a href=#331 id=331 data-nosnippet>331</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#332 id=332 data-nosnippet>332</a>        <span class="kw">let </span><span class="kw-2">mut </span>f = f.debug_struct(<span class="string">"Collector"</span>);
+<a href=#333 id=333 data-nosnippet>333</a>
+<a href=#334 id=334 data-nosnippet>334</a>        <span class="kw">if </span><span class="self">self</span>.raw.epoch_frequency.is_some() {
+<a href=#335 id=335 data-nosnippet>335</a>            f.field(<span class="string">"epoch"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.raw.epoch.load(Ordering::Acquire));
+<a href=#336 id=336 data-nosnippet>336</a>        }
+<a href=#337 id=337 data-nosnippet>337</a>
+<a href=#338 id=338 data-nosnippet>338</a>        f.field(<span class="string">"batch_size"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.raw.batch_size)
+<a href=#339 id=339 data-nosnippet>339</a>            .field(<span class="string">"epoch_frequency"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.raw.epoch_frequency)
+<a href=#340 id=340 data-nosnippet>340</a>            .finish()
+<a href=#341 id=341 data-nosnippet>341</a>    }
+<a href=#342 id=342 data-nosnippet>342</a>}
+<a href=#343 id=343 data-nosnippet>343</a>
+<a href=#344 id=344 data-nosnippet>344</a><span class="doccomment">/// A link to the collector.
+<a href=#345 id=345 data-nosnippet>345</a>///
+<a href=#346 id=346 data-nosnippet>346</a>/// Functions passed to [`retire`](Collector::retire) are called with a
+<a href=#347 id=347 data-nosnippet>347</a>/// type-erased `Link` pointer. To extract the underlying value from a link,
+<a href=#348 id=348 data-nosnippet>348</a>/// you can call the [`cast`](Link::cast) method.
+<a href=#349 id=349 data-nosnippet>349</a></span><span class="attr">#[repr(transparent)]
+<a href=#350 id=350 data-nosnippet>350</a></span><span class="kw">pub struct </span>Link {
+<a href=#351 id=351 data-nosnippet>351</a>    <span class="attr">#[allow(dead_code)]
+<a href=#352 id=352 data-nosnippet>352</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) node: UnsafeCell&lt;raw::Node&gt;,
+<a href=#353 id=353 data-nosnippet>353</a>}
+<a href=#354 id=354 data-nosnippet>354</a>
+<a href=#355 id=355 data-nosnippet>355</a><span class="kw">impl </span>Link {
+<a href=#356 id=356 data-nosnippet>356</a>    <span class="doccomment">/// Cast this `link` to it's underlying type.
+<a href=#357 id=357 data-nosnippet>357</a>    ///
+<a href=#358 id=358 data-nosnippet>358</a>    /// Note that while this function is safe, using the returned
+<a href=#359 id=359 data-nosnippet>359</a>    /// pointer is only sound if the link is in fact a type-erased `T`.
+<a href=#360 id=360 data-nosnippet>360</a>    /// This means that when casting a link in a reclaimer, the value
+<a href=#361 id=361 data-nosnippet>361</a>    /// that was retired must be of type `T`.
+<a href=#362 id=362 data-nosnippet>362</a>    </span><span class="attr">#[inline]
+<a href=#363 id=363 data-nosnippet>363</a>    </span><span class="kw">pub fn </span>cast&lt;T: AsLink&gt;(link: <span class="kw-2">*mut </span>Link) -&gt; <span class="kw-2">*mut </span>T {
+<a href=#364 id=364 data-nosnippet>364</a>        link.cast()
+<a href=#365 id=365 data-nosnippet>365</a>    }
+<a href=#366 id=366 data-nosnippet>366</a>}
+<a href=#367 id=367 data-nosnippet>367</a>
+<a href=#368 id=368 data-nosnippet>368</a><span class="doccomment">/// A type that can be pointer-cast to and from a [`Link`].
+<a href=#369 id=369 data-nosnippet>369</a>///
+<a href=#370 id=370 data-nosnippet>370</a>/// Most types can avoid this trait and work instead with the [`Linked`]
+<a href=#371 id=371 data-nosnippet>371</a>/// wrapper type. However, if you want more control over the layout of your
+<a href=#372 id=372 data-nosnippet>372</a>/// type (i.e. are working with a DST), you may need to implement this trait
+<a href=#373 id=373 data-nosnippet>373</a>/// directly.
+<a href=#374 id=374 data-nosnippet>374</a>///
+<a href=#375 id=375 data-nosnippet>375</a>/// # Safety
+<a href=#376 id=376 data-nosnippet>376</a>///
+<a href=#377 id=377 data-nosnippet>377</a>/// Types implementing this trait must be marked `#[repr(C)]`
+<a href=#378 id=378 data-nosnippet>378</a>/// and have a [`Link`] as their **first** field.
+<a href=#379 id=379 data-nosnippet>379</a>///
+<a href=#380 id=380 data-nosnippet>380</a>/// # Examples
+<a href=#381 id=381 data-nosnippet>381</a>///
+<a href=#382 id=382 data-nosnippet>382</a>/// ```rust
+<a href=#383 id=383 data-nosnippet>383</a>/// use seize::{AsLink, Collector, Link};
+<a href=#384 id=384 data-nosnippet>384</a>///
+<a href=#385 id=385 data-nosnippet>385</a>/// #[repr(C)]
+<a href=#386 id=386 data-nosnippet>386</a>/// struct Bytes {
+<a href=#387 id=387 data-nosnippet>387</a>///     // safety invariant: Link must be the first field
+<a href=#388 id=388 data-nosnippet>388</a>///     link: Link,
+<a href=#389 id=389 data-nosnippet>389</a>///     values: [*mut u8; 0],
+<a href=#390 id=390 data-nosnippet>390</a>/// }
+<a href=#391 id=391 data-nosnippet>391</a>///
+<a href=#392 id=392 data-nosnippet>392</a>/// // Safety: Bytes is repr(C) and has Link as it's first field
+<a href=#393 id=393 data-nosnippet>393</a>/// unsafe impl AsLink for Bytes {}
+<a href=#394 id=394 data-nosnippet>394</a>///
+<a href=#395 id=395 data-nosnippet>395</a>/// // Deallocate an `Bytes`.
+<a href=#396 id=396 data-nosnippet>396</a>/// unsafe fn dealloc(ptr: *mut Bytes, collector: &amp;Collector) {
+<a href=#397 id=397 data-nosnippet>397</a>///     collector.retire(ptr, |link| {
+<a href=#398 id=398 data-nosnippet>398</a>///         // safety `ptr` is of type *mut Bytes
+<a href=#399 id=399 data-nosnippet>399</a>///         let link: *mut Bytes = Link::cast(link);
+<a href=#400 id=400 data-nosnippet>400</a>///         // ..
+<a href=#401 id=401 data-nosnippet>401</a>///     });
+<a href=#402 id=402 data-nosnippet>402</a>/// }
+<a href=#403 id=403 data-nosnippet>403</a>/// ```
+<a href=#404 id=404 data-nosnippet>404</a></span><span class="kw">pub unsafe trait </span>AsLink {}
+<a href=#405 id=405 data-nosnippet>405</a>
+<a href=#406 id=406 data-nosnippet>406</a><span class="doccomment">/// A value linked to a collector.
+<a href=#407 id=407 data-nosnippet>407</a>///
+<a href=#408 id=408 data-nosnippet>408</a>/// Objects that may be retired must embed the [`Link`] type. This is a
+<a href=#409 id=409 data-nosnippet>409</a>/// convenience wrapper for linked values that can be created with the
+<a href=#410 id=410 data-nosnippet>410</a>/// [`Collector::link_value`] or [`Collector::link_boxed`] methods.
+<a href=#411 id=411 data-nosnippet>411</a></span><span class="attr">#[repr(C)]
+<a href=#412 id=412 data-nosnippet>412</a></span><span class="kw">pub struct </span>Linked&lt;T&gt; {
+<a href=#413 id=413 data-nosnippet>413</a>    <span class="kw">pub </span>link: Link, <span class="comment">// Safety Invariant: this field must come first
+<a href=#414 id=414 data-nosnippet>414</a>    </span><span class="kw">pub </span>value: T,
+<a href=#415 id=415 data-nosnippet>415</a>}
+<a href=#416 id=416 data-nosnippet>416</a>
+<a href=#417 id=417 data-nosnippet>417</a><span class="kw">unsafe impl</span>&lt;T&gt; AsLink <span class="kw">for </span>Linked&lt;T&gt; {}
+<a href=#418 id=418 data-nosnippet>418</a>
+<a href=#419 id=419 data-nosnippet>419</a><span class="kw">impl</span>&lt;T: PartialEq&gt; PartialEq <span class="kw">for </span>Linked&lt;T&gt; {
+<a href=#420 id=420 data-nosnippet>420</a>    <span class="attr">#[inline]
+<a href=#421 id=421 data-nosnippet>421</a>    </span><span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
+<a href=#422 id=422 data-nosnippet>422</a>        <span class="self">self</span>.value == other.value
+<a href=#423 id=423 data-nosnippet>423</a>    }
+<a href=#424 id=424 data-nosnippet>424</a>}
+<a href=#425 id=425 data-nosnippet>425</a>
+<a href=#426 id=426 data-nosnippet>426</a><span class="kw">impl</span>&lt;T: Eq&gt; Eq <span class="kw">for </span>Linked&lt;T&gt; {}
+<a href=#427 id=427 data-nosnippet>427</a>
+<a href=#428 id=428 data-nosnippet>428</a><span class="kw">impl</span>&lt;T: fmt::Debug&gt; fmt::Debug <span class="kw">for </span>Linked&lt;T&gt; {
+<a href=#429 id=429 data-nosnippet>429</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#430 id=430 data-nosnippet>430</a>        <span class="macro">write!</span>(f, <span class="string">"{:?}"</span>, <span class="self">self</span>.value)
+<a href=#431 id=431 data-nosnippet>431</a>    }
+<a href=#432 id=432 data-nosnippet>432</a>}
+<a href=#433 id=433 data-nosnippet>433</a>
+<a href=#434 id=434 data-nosnippet>434</a><span class="kw">impl</span>&lt;T: fmt::Display&gt; fmt::Display <span class="kw">for </span>Linked&lt;T&gt; {
+<a href=#435 id=435 data-nosnippet>435</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="macro">write!</span>(f, <span class="string">"{}"</span>, <span class="self">self</span>.value)
+<a href=#437 id=437 data-nosnippet>437</a>    }
+<a href=#438 id=438 data-nosnippet>438</a>}
+<a href=#439 id=439 data-nosnippet>439</a>
+<a href=#440 id=440 data-nosnippet>440</a><span class="kw">impl</span>&lt;T&gt; std::ops::Deref <span class="kw">for </span>Linked&lt;T&gt; {
+<a href=#441 id=441 data-nosnippet>441</a>    <span class="kw">type </span>Target = T;
+<a href=#442 id=442 data-nosnippet>442</a>
+<a href=#443 id=443 data-nosnippet>443</a>    <span class="attr">#[inline]
+<a href=#444 id=444 data-nosnippet>444</a>    </span><span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+<a href=#445 id=445 data-nosnippet>445</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.value
+<a href=#446 id=446 data-nosnippet>446</a>    }
+<a href=#447 id=447 data-nosnippet>447</a>}
+<a href=#448 id=448 data-nosnippet>448</a>
+<a href=#449 id=449 data-nosnippet>449</a><span class="kw">impl</span>&lt;T&gt; std::ops::DerefMut <span class="kw">for </span>Linked&lt;T&gt; {
+<a href=#450 id=450 data-nosnippet>450</a>    <span class="attr">#[inline]
+<a href=#451 id=451 data-nosnippet>451</a>    </span><span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self</span>::Target {
+<a href=#452 id=452 data-nosnippet>452</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>.value
+<a href=#453 id=453 data-nosnippet>453</a>    }
+<a href=#454 id=454 data-nosnippet>454</a>}</code></pre></div></section></main></body></html>

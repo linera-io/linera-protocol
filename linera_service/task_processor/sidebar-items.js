@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["parse_operator"],"struct":["ProcessorActions","Task","TaskOutcome","TaskProcessor"],"type":["OperatorMap"]};

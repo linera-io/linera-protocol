@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AutoTriggerCheck","CheckRun","CheckRunOutput","CheckSuite","CheckSuitePreferences","CheckSuiteUpdatePreferences","ListCheckRuns","ListCheckSuites"]};

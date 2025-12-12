@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["clap",[]],["clap_builder",[]],["clio",[["impl <a class=\"trait\" href=\"clap_builder/builder/value_parser/trait.TypedValueParser.html\" title=\"trait clap_builder::builder::value_parser::TypedValueParser\">TypedValueParser</a> for <a class=\"struct\" href=\"clio/clapers/struct.OsStrParser.html\" title=\"struct clio::clapers::OsStrParser\">OsStrParser</a>&lt;<a class=\"struct\" href=\"clio/struct.ClioPath.html\" title=\"struct clio::ClioPath\">ClioPath</a>&gt;"],["impl&lt;T&gt; <a class=\"trait\" href=\"clap_builder/builder/value_parser/trait.TypedValueParser.html\" title=\"trait clap_builder::builder::value_parser::TypedValueParser\">TypedValueParser</a> for <a class=\"struct\" href=\"clio/clapers/struct.OsStrParser.html\" title=\"struct clio::clapers::OsStrParser\">OsStrParser</a>&lt;T&gt;<div class=\"where\">where\n    for&lt;'a&gt; T: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/convert/trait.TryFrom.html\" title=\"trait core::convert::TryFrom\">TryFrom</a>&lt;<a class=\"struct\" href=\"clio/struct.ClioPath.html\" title=\"struct clio::ClioPath\">ClioPath</a>, Error = <a class=\"enum\" href=\"clio/enum.Error.html\" title=\"enum clio::Error\">Error</a>&gt; + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html\" title=\"trait core::clone::Clone\">Clone</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/marker/trait.Send.html\" title=\"trait core::marker::Send\">Send</a> + 'static,</div>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[11,20,1592]}

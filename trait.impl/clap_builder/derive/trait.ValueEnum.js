@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["clap",[]],["clap_builder",[]],["clap_complete",[["impl <a class=\"trait\" href=\"clap_builder/derive/trait.ValueEnum.html\" title=\"trait clap_builder::derive::ValueEnum\">ValueEnum</a> for <a class=\"enum\" href=\"clap_complete/aot/enum.Shell.html\" title=\"enum clap_complete::aot::Shell\">Shell</a>"]]],["linera_client",[["impl <a class=\"trait\" href=\"clap_builder/derive/trait.ValueEnum.html\" title=\"trait clap_builder::derive::ValueEnum\">ValueEnum</a> for <a class=\"enum\" href=\"linera_client/client_options/enum.ResourceControlPolicyConfig.html\" title=\"enum linera_client::client_options::ResourceControlPolicyConfig\">ResourceControlPolicyConfig</a>"]]],["linera_core",[["impl <a class=\"trait\" href=\"clap_builder/derive/trait.ValueEnum.html\" title=\"trait clap_builder::derive::ValueEnum\">ValueEnum</a> for <a class=\"enum\" href=\"linera_core/client/enum.BlanketMessagePolicy.html\" title=\"enum linera_core::client::BlanketMessagePolicy\">BlanketMessagePolicy</a>"]]],["linera_rpc",[["impl <a class=\"trait\" href=\"clap_builder/derive/trait.ValueEnum.html\" title=\"trait clap_builder::derive::ValueEnum\">ValueEnum</a> for <a class=\"enum\" href=\"linera_rpc/simple/enum.TransportProtocol.html\" title=\"enum linera_rpc::simple::TransportProtocol\">TransportProtocol</a>"]]],["linera_service",[["impl <a class=\"trait\" href=\"clap_builder/derive/trait.ValueEnum.html\" title=\"trait clap_builder::derive::ValueEnum\">ValueEnum</a> for <a class=\"enum\" href=\"linera_service/cli_wrappers/local_kubernetes_net/enum.BuildMode.html\" title=\"enum linera_service::cli_wrappers::local_kubernetes_net::BuildMode\">BuildMode</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[11,20,276,364,321,309,352]}

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BUILD_METADATA"],"enum":["OsFamily"],"struct":["BuildMetadata"]};
