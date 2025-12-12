@@ -239,14 +239,26 @@ where
             .allow_application_logs()
             .map_err(|error| RuntimeError::Custom(error.into()))?;
 
-        if allowed {
-            match level {
-                log::Level::Trace => tracing::trace!("{message}"),
-                log::Level::Debug => tracing::debug!("{message}"),
-                log::Level::Info => tracing::info!("{message}"),
-                log::Level::Warn => tracing::warn!("{message}"),
-                log::Level::Error => tracing::error!("{message}"),
-            }
+        if !allowed {
+            return Ok(());
+        }
+
+        #[cfg(web)]
+        {
+            // Send log through the execution channel to the main thread
+            caller
+                .user_data_mut()
+                .runtime
+                .send_log(message.clone(), level);
+        }
+
+        // Also use tracing for native builds (and as a fallback on web)
+        match level {
+            log::Level::Trace => tracing::trace!("{message}"),
+            log::Level::Debug => tracing::debug!("{message}"),
+            log::Level::Info => tracing::info!("{message}"),
+            log::Level::Warn => tracing::warn!("{message}"),
+            log::Level::Error => tracing::error!("{message}"),
         }
         Ok(())
     }

@@ -863,6 +863,11 @@ pub trait BaseRuntime {
     /// Returns whether contract log messages should be output.
     /// This is typically enabled for clients but disabled for validators.
     fn allow_application_logs(&mut self) -> Result<bool, ExecutionError>;
+
+    /// Sends a log message (used for forwarding logs from web workers to the main thread).
+    /// This is a fire-and-forget operation - errors are silently ignored.
+    #[cfg(web)]
+    fn send_log(&mut self, message: String, level: tracing::log::Level);
 }
 
 pub trait ServiceRuntime: BaseRuntime {
