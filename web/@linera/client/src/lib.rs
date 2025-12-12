@@ -100,16 +100,6 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     max_request_ttl_ms: linera_core::client::requests_scheduler::MAX_REQUEST_TTL_MS,
     alpha: linera_core::client::requests_scheduler::ALPHA_SMOOTHING_FACTOR,
     alternative_peers_retry_delay_ms: linera_core::client::requests_scheduler::STAGGERED_DELAY_MS,
-
-    // TODO(linera-protocol#2944): separate these out from the
-    // `ClientOptions` struct, since they apply only to the CLI/native
-    // client
-    wallet_state_path: None,
-    keystore_path: None,
-    with_wallet: None,
-    chrome_trace_exporter: false,
-    chrome_trace_file: None,
-    otlp_exporter_endpoint: None,
 };
 
 const BLOCK_CACHE_SIZE: usize = 5000;
