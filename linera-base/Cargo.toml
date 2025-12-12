@@ -51,8 +51,8 @@ linera-kywasmtime = { workspace = true, optional = true }
 linera-witty = { workspace = true, features = ["macros"] }
 lru.workspace = true
 prometheus = { workspace = true, optional = true }
-quick_cache.workspace = true
 proptest = { workspace = true, optional = true, features = ["alloc"] }
+quick_cache.workspace = true
 rand.workspace = true
 reqwest = { workspace = true, optional = true }
 serde = { workspace = true, features = ["rc"] }

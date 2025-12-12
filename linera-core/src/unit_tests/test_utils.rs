@@ -290,6 +290,25 @@ where
             total_shards: 1,
         })
     }
+
+    async fn download_sender_certificates_for_receiver(
+        &self,
+        sender_chain_id: ChainId,
+        receiver_chain_id: ChainId,
+        target_height: BlockHeight,
+        start_height: BlockHeight,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_download_sender_certificates_for_receiver(
+                sender_chain_id,
+                receiver_chain_id,
+                target_height,
+                start_height,
+                sender,
+            )
+        })
+        .await
+    }
 }
 
 impl<S> LocalValidatorClient<S>
@@ -704,6 +723,95 @@ where
             .await
             .map_err(Into::into);
         sender.send(missing_blob_ids)
+    }
+
+    async fn do_download_sender_certificates_for_receiver(
+        self,
+        sender_chain_id: ChainId,
+        receiver_chain_id: ChainId,
+        target_height: BlockHeight,
+        start_height: BlockHeight,
+        sender: oneshot::Sender<Result<Vec<ConfirmedBlockCertificate>, NodeError>>,
+    ) -> Result<(), Result<Vec<ConfirmedBlockCertificate>, NodeError>> {
+        // Skip if we already have all certificates up to this height.
+        if target_height < start_height {
+            return sender.send(Ok(Vec::new()));
+        }
+
+        // Get certificate hash for target_height only.
+        let (query_sender, query_receiver) = oneshot::channel();
+        let query = ChainInfoQuery::new(sender_chain_id)
+            .with_sent_certificate_hashes_by_heights(vec![target_height]);
+
+        self.clone()
+            .do_handle_chain_info_query(query, query_sender)
+            .await
+            .ok();
+
+        let mut current_hash = match query_receiver.await {
+            Ok(Ok(response)) => response
+                .info
+                .requested_sent_certificate_hashes
+                .into_iter()
+                .next(),
+            Ok(Err(e)) => return sender.send(Err(e)),
+            Err(_) => {
+                return sender.send(Err(NodeError::ClientIoError {
+                    error: "Failed to receive chain info".to_string(),
+                }))
+            }
+        };
+
+        let Some(initial_hash) = current_hash else {
+            return sender.send(Ok(Vec::new()));
+        };
+        current_hash = Some(initial_hash);
+
+        // Traverse previous_message_blocks following the hash chain.
+        let mut certificates_to_return = Vec::new();
+
+        while let Some(hash) = current_hash {
+            // Download the certificate by hash.
+            let (cert_sender, cert_receiver) = oneshot::channel();
+            self.clone()
+                .do_download_certificate(hash, cert_sender)
+                .await
+                .ok();
+
+            let certificate = match cert_receiver.await {
+                Ok(Ok(cert)) => cert,
+                Ok(Err(e)) => return sender.send(Err(e)),
+                Err(_) => {
+                    return sender.send(Err(NodeError::ClientIoError {
+                        error: "Failed to receive certificate".to_string(),
+                    }))
+                }
+            };
+
+            let height = certificate.inner().height();
+            if height < start_height {
+                break;
+            }
+
+            // Get the previous message block entry which contains (hash, height).
+            let prev_entry = certificate
+                .block()
+                .body
+                .previous_message_blocks
+                .get(&receiver_chain_id)
+                .cloned();
+
+            certificates_to_return.push(certificate);
+
+            // Follow the hash chain - previous_message_blocks already has the hash!
+            current_hash = prev_entry
+                .filter(|(_, h)| *h >= start_height)
+                .map(|(h, _)| h);
+        }
+
+        // Return certificates in ascending height order.
+        certificates_to_return.reverse();
+        sender.send(Ok(certificates_to_return))
     }
 }
 

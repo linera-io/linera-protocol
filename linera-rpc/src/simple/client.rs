@@ -248,6 +248,22 @@ impl ValidatorNode for SimpleClient {
         Ok(certificates)
     }
 
+    async fn download_sender_certificates_for_receiver(
+        &self,
+        sender_chain_id: ChainId,
+        receiver_chain_id: ChainId,
+        target_height: BlockHeight,
+        start_height: BlockHeight,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        self.query(RpcMessage::DownloadSenderCertificatesForReceiver {
+            sender_chain_id,
+            receiver_chain_id,
+            target_height,
+            start_height,
+        })
+        .await
+    }
+
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
         self.query(RpcMessage::BlobLastUsedBy(Box::new(blob_id)))
             .await

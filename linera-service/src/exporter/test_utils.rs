@@ -384,6 +384,13 @@ impl ValidatorNode for DummyValidator {
     ) -> Result<Response<linera_rpc::grpc::api::ShardInfo>, Status> {
         unimplemented!()
     }
+
+    async fn download_sender_certificates_for_receiver(
+        &self,
+        _request: Request<linera_rpc::grpc::api::SenderCertificatesRequest>,
+    ) -> Result<Response<linera_rpc::grpc::api::CertificatesBatchResponse>, Status> {
+        unimplemented!()
+    }
 }
 
 #[async_trait]

@@ -39,9 +39,7 @@ use linera_views::{context::Context, views::RootView, ViewError};
 pub use crate::db_storage::metrics;
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
-pub use crate::db_storage::{
-    ChainStatesFirstAssignment, DbStorage, StorageCacheConfig, WallClock,
-};
+pub use crate::db_storage::{ChainStatesFirstAssignment, DbStorage, StorageCacheConfig, WallClock};
 
 /// The default namespace to be used when none is specified
 pub const DEFAULT_NAMESPACE: &str = "default";
