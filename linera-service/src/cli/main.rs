@@ -736,7 +736,7 @@ impl Runnable for Job {
                         single_destination_per_block,
                     } = benchmark_options;
                     assert!(
-                        options.context_options.max_pending_message_bundles
+                        options.client_options.max_pending_message_bundles
                             >= transactions_per_block,
                         "max_pending_message_bundles must be set to at least the same as the \
                      number of transactions per block ({transactions_per_block}) for benchmarking",

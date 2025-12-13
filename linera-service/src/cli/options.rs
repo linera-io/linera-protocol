@@ -10,7 +10,6 @@ use anyhow::{anyhow, bail, Error};
 use linera_base::crypto::InMemorySigner;
 use linera_client::{
     client_context::ClientContext,
-    client_options::ClientContextOptions,
     config::GenesisConfig,
 };
 use linera_execution::{WasmRuntime, WithWasmDefault as _};
@@ -23,7 +22,7 @@ use linera_service::{
 };
 use tracing::{debug, info};
 
-#[derive(Clone, clap::Parser)]
+#[derive(Default, Clone, clap::Parser)]
 #[command(
     name = "linera",
     version = linera_version::VersionInfo::default_clap_str(),
@@ -32,7 +31,7 @@ use tracing::{debug, info};
 pub struct Options {
     /// Common options.
     #[command(flatten)]
-    pub context_options: ClientContextOptions,
+    pub client_options: linera_client::Options,
 
     /// Sets the file storing the private state of user chains (an empty one will be created if missing)
     #[arg(long = "wallet")]
@@ -126,7 +125,7 @@ impl Options {
             storage,
             wallet,
             signer,
-            self.context_options.clone(),
+            self.client_options.clone(),
             default_chain,
             genesis_config,
             self.block_cache_size,
