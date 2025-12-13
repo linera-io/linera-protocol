@@ -166,6 +166,14 @@ pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
     Ok(TimeDelta::from_millis(s.parse()?))
 }
 
+pub fn parse_ascii_alphanumeric_string(s: &str) -> Result<String, &'static str> {
+    if s.chars().all(|x| x.is_ascii_alphanumeric()) {
+        Ok(s.to_string())
+    } else {
+        Err("Expecting ASCII alphanumeric characters")
+    }
+}
+
 /// Checks the condition five times with increasing delays. Returns `true` if it is met.
 #[cfg(with_testing)]
 pub async fn eventually<F>(condition: impl Fn() -> F) -> bool
