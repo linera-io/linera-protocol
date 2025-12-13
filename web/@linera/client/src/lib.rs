@@ -24,9 +24,7 @@ use std::{rc::Rc, sync::Arc};
 
 use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex};
 use linera_base::identifiers::ChainId;
-use linera_client::{
-    chain_listener::{ChainListener, ClientContext as _},
-};
+use linera_client::chain_listener::{ChainListener, ClientContext as _};
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
@@ -42,7 +40,8 @@ pub mod wallet;
 pub use wallet::Wallet;
 
 pub type Network = linera_rpc::node_provider::NodeProvider;
-pub type Environment = linera_core::environment::Impl<Storage, Network, Signer, Rc<linera_core::wallet::Memory>>;
+pub type Environment =
+    linera_core::environment::Impl<Storage, Network, Signer, Rc<linera_core::wallet::Memory>>;
 type JsResult<T> = Result<T, JsError>;
 
 /// The full client API, exposed to the wallet implementation. Calls
@@ -59,7 +58,9 @@ pub struct Client {
     client: Arc<AsyncMutex<linera_client::ClientContext<Environment>>>,
 }
 
-fn true_() -> bool { true }
+fn true_() -> bool {
+    true
+}
 
 #[derive(serde::Deserialize, tsify_next::Tsify)]
 #[tsify(from_wasm_abi)]
@@ -94,11 +95,7 @@ impl Client {
     /// On transport or protocol error, or if persistent storage is
     /// unavailable.
     #[wasm_bindgen(constructor)]
-    pub async fn new(
-        wallet: &Wallet,
-        signer: Signer,
-        options: Options,
-    ) -> Result<Client, JsError> {
+    pub async fn new(wallet: &Wallet, signer: Signer, options: Options) -> Result<Client, JsError> {
         const BLOCK_CACHE_SIZE: usize = 5000;
         const EXECUTION_STATE_CACHE_SIZE: usize = 10000;
 
