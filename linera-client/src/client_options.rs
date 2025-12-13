@@ -35,8 +35,9 @@ pub enum Error {
 
 util::impl_from_infallible!(Error);
 
-#[derive(Clone, clap::Parser)]
-pub struct ClientContextOptions {
+#[derive(Default, Clone, clap::Parser, serde::Deserialize, tsify_next::Tsify)]
+#[tsify(from_wasm_abi)]
+pub struct Options {
     /// Timeout for sending queries (milliseconds)
     #[arg(long = "send-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
     pub send_timeout: Duration,
@@ -90,7 +91,7 @@ pub struct ClientContextOptions {
     pub long_lived_services: bool,
 
     /// The policy for handling incoming messages.
-    #[arg(long, default_value = "accept")]
+    #[arg(long, default_value_t, value_enum)]
     pub blanket_message_policy: BlanketMessagePolicy,
 
     /// A set of chains to restrict incoming messages from. By default, messages
@@ -213,9 +214,12 @@ pub struct ClientContextOptions {
         env = "LINERA_REQUESTS_SCHEDULER_ALTERNATIVE_PEERS_RETRY_DELAY_MS"
     )]
     pub alternative_peers_retry_delay_ms: u64,
+
+    #[clap(flatten)]
+    pub chain_listener_config: crate::chain_listener::ChainListenerConfig,
 }
 
-impl ClientContextOptions {
+impl Options {
     /// Creates [`chain_client::Options`] with the corresponding values.
     pub(crate) fn to_chain_client_options(&self) -> chain_client::Options {
         let message_policy = MessagePolicy::new(

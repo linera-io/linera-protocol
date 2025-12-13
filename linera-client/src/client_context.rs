@@ -57,7 +57,7 @@ use {
 
 use crate::{
     chain_listener::{self, ClientContext as _},
-    client_options::{ChainOwnershipConfig, ClientContextOptions},
+    client_options::{ChainOwnershipConfig, Options},
     config::GenesisConfig,
     error, util, Error,
 };
@@ -272,7 +272,7 @@ where
         storage: S,
         wallet: W,
         signer: Si,
-        options: ClientContextOptions,
+        options: &Options,
         default_chain: Option<ChainId>,
         genesis_config: GenesisConfig,
         block_cache_size: usize,
@@ -296,6 +296,7 @@ where
             1 => format!("Client node for {:.8}", chain_ids[0]),
             n => format!("Client node for {:.8} and {} others", chain_ids[0], n - 1),
         };
+
         let client = Client::new(
             linera_core::environment::Impl {
                 network: node_provider,

@@ -25,14 +25,13 @@ pub use signer::Signer;
 pub mod wallet;
 pub use wallet::Wallet;
 pub mod faucet;
-use std::{collections::HashMap, future::Future, rc::Rc, sync::Arc, time::Duration};
+use std::{collections::HashMap, future::Future, rc::Rc, sync::Arc};
 
 pub use faucet::Faucet;
 use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex, stream::StreamExt};
 use linera_base::identifiers::{AccountOwner, ApplicationId};
 use linera_client::{
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
-    client_options::ClientContextOptions,
+    chain_listener::{ChainListener, ClientContext as _},
 };
 use linera_core::{
     data_types::ClientOutcome,
@@ -72,36 +71,6 @@ async fn get_storage(
     .await
 }
 
-// TODO(#13): get from user
-pub const OPTIONS: ClientContextOptions = ClientContextOptions {
-    send_timeout: linera_base::time::Duration::from_millis(4000),
-    recv_timeout: linera_base::time::Duration::from_millis(4000),
-    max_pending_message_bundles: 10,
-    retry_delay: linera_base::time::Duration::from_millis(1000),
-    max_retries: 10,
-    wait_for_outgoing_messages: false,
-    blanket_message_policy: linera_core::client::BlanketMessagePolicy::Accept,
-    restrict_chain_ids_to: None,
-    reject_message_bundles_without_application_ids: None,
-    reject_message_bundles_with_other_application_ids: None,
-    long_lived_services: false,
-    blob_download_timeout: linera_base::time::Duration::from_millis(1000),
-    certificate_batch_download_timeout: linera_base::time::Duration::from_millis(1000),
-    certificate_download_batch_size: linera_core::client::DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
-    sender_certificate_download_batch_size:
-        linera_core::client::DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
-    chain_worker_ttl: Duration::from_secs(30),
-    sender_chain_worker_ttl: Duration::from_millis(200),
-    quorum_grace_period: linera_core::DEFAULT_QUORUM_GRACE_PERIOD,
-    max_joined_tasks: 100,
-    max_accepted_latency_ms: linera_core::client::requests_scheduler::MAX_ACCEPTED_LATENCY_MS,
-    cache_ttl_ms: linera_core::client::requests_scheduler::CACHE_TTL_MS,
-    cache_max_size: linera_core::client::requests_scheduler::CACHE_MAX_SIZE,
-    max_request_ttl_ms: linera_core::client::requests_scheduler::MAX_REQUEST_TTL_MS,
-    alpha: linera_core::client::requests_scheduler::ALPHA_SMOOTHING_FACTOR,
-    alternative_peers_retry_delay_ms: linera_core::client::requests_scheduler::STAGGERED_DELAY_MS,
-};
-
 const BLOCK_CACHE_SIZE: usize = 5000;
 const EXECUTION_STATE_CACHE_SIZE: usize = 10000;
 
@@ -117,18 +86,46 @@ pub struct Client {
     client_context: Arc<AsyncMutex<ClientContext>>,
 }
 
-#[derive(serde::Deserialize)]
-struct TransferParams {
+#[derive(serde::Deserialize, tsify_next::Tsify)]
+#[tsify(from_wasm_abi)]
+pub struct TransferParams {
     donor: Option<AccountOwner>,
     amount: u64,
     recipient: linera_base::identifiers::Account,
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Default, serde::Deserialize, tsify_next::Tsify)]
 #[serde(rename_all = "camelCase")]
-struct QueryOptions {
+#[tsify(from_wasm_abi)]
+pub struct QueryOptions {
     block_hash: Option<String>,
     owner: Option<AccountOwner>,
+}
+
+#[derive(Default, serde::Deserialize, tsify_next::Tsify)]
+#[tsify(from_wasm_abi)]
+pub struct AddOwnerOptions {
+    #[serde(default)]
+    weight: u64,
+}
+
+fn true_() -> bool { true }
+
+#[derive(Default, serde::Deserialize, tsify_next::Tsify)]
+#[tsify(from_wasm_abi)]
+struct StorageOptions {
+    /// Whether to output logs from running contracts.
+    #[serde(default = "true_")]
+    pub allow_application_logs: bool,
+}
+
+#[derive(Default, serde::Deserialize, tsify_next::Tsify)]
+#[tsify(from_wasm_abi)]
+pub struct Options {
+    #[serde(flatten)]
+    storage: StorageOptions,
+    #[serde(flatten)]
+    client: linera_client::Options,
 }
 
 #[wasm_bindgen]
@@ -142,12 +139,12 @@ impl Client {
     pub async fn new(
         wallet: &Wallet,
         signer: Signer,
-        skip_process_inbox: bool,
-        allow_application_logs: bool,
+        options: Options,
     ) -> Result<Client, JsError> {
         let mut storage = get_storage()
             .await?
-            .with_allow_application_logs(allow_application_logs);
+            // TODO(TODO) this should be moved into `linera_client`
+            .with_allow_application_logs(options.storage.allow_application_logs);
         wallet
             .genesis_config
             .initialize_storage(&mut storage)
@@ -156,7 +153,7 @@ impl Client {
             storage.clone(),
             wallet.chains.clone(),
             signer,
-            OPTIONS,
+            &options.client,
             wallet.default,
             wallet.genesis_config.clone(),
             BLOCK_CACHE_SIZE,
@@ -168,10 +165,7 @@ impl Client {
         let client_context = Arc::new(AsyncMutex::new(client_context));
         let client_context_clone = client_context.clone();
         let chain_listener = ChainListener::new(
-            ChainListenerConfig {
-                skip_process_inbox,
-                ..ChainListenerConfig::default()
-            },
+            options.client.chain_listener_config,
             client_context_clone,
             storage,
             tokio_util::sync::CancellationToken::new(),
@@ -265,8 +259,7 @@ impl Client {
     /// - if the options object is of the wrong form
     /// - if the transfer fails
     #[wasm_bindgen]
-    pub async fn transfer(&self, options: wasm_bindgen::JsValue) -> JsResult<()> {
-        let params: TransferParams = serde_wasm_bindgen::from_value(options)?;
+    pub async fn transfer(&self, params: TransferParams) -> JsResult<()> {
         let chain_client = self.default_chain_client().await?;
 
         let _hash = self
@@ -299,10 +292,8 @@ impl Client {
     ///
     /// # Errors
     /// If the chain couldn't be established.
-    pub async fn identity(&self) -> JsResult<JsValue> {
-        Ok(serde_wasm_bindgen::to_value(
-            &self.default_chain_client().await?.identity().await?,
-        )?)
+    pub async fn identity(&self) -> JsResult<AccountOwner> {
+        Ok(self.default_chain_client().await?.identity().await?)
     }
 
     /// Adds a new owner to the default chain.
@@ -311,16 +302,8 @@ impl Client {
     ///
     /// If the owner is in the wrong format, or the chain client can't be instantiated.
     #[wasm_bindgen(js_name = addOwner)]
-    pub async fn add_owner(&self, owner: JsValue, options: JsValue) -> JsResult<()> {
-        #[derive(Default, serde::Deserialize)]
-        struct Options {
-            #[serde(default)]
-            weight: u64,
-        }
-
-        let owner = serde_wasm_bindgen::from_value(owner)?;
-        let Options { weight } =
-            serde_wasm_bindgen::from_value::<Option<_>>(options)?.unwrap_or_default();
+    pub async fn add_owner(&self, owner: AccountOwner, options: Option<AddOwnerOptions>) -> JsResult<()> {
+        let AddOwnerOptions { weight } = options.unwrap_or_default();
         let chain_client = self.default_chain_client().await?;
         self.apply_client_command(&chain_client, || {
             chain_client.share_ownership(owner, weight)
@@ -415,10 +398,9 @@ impl Application {
     #[wasm_bindgen]
     // TODO(#14) allow passing bytes here rather than just strings
     // TODO(#15) a lot of this logic is shared with `linera_service::node_service`
-    pub async fn query(&self, query: &str, options: JsValue) -> JsResult<String> {
+    pub async fn query(&self, query: &str, options: Option<QueryOptions>) -> JsResult<String> {
         tracing::debug!("querying application: {query}");
-        let QueryOptions { block_hash, owner } =
-            serde_wasm_bindgen::from_value::<Option<_>>(options)?.unwrap_or_default();
+        let QueryOptions { block_hash, owner } = options.unwrap_or_default();
         let mut chain_client = self.client.default_chain_client().await?;
         if let Some(owner) = owner {
             chain_client.set_preferred_owner(owner);

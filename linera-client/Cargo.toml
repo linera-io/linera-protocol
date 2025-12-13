@@ -71,6 +71,8 @@ tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 trait-variant.workspace = true
+tsify-next.workspace = true
+wasm-bindgen.workspace = true
 
 [target.wasm32-unknown-unknown.dependencies]
 flarch = { workspace = true, optional = true }
