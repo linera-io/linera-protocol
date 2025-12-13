@@ -3,10 +3,21 @@ name: Compatibility with existing testnet
 on:
   push:
     branches: [ 'testnet_conway' ]
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
   merge_group:
   pull_request:
     branches:
       - "**"
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
+      - 'docker_scylla/**'
+      - 'configuration/**'
+      - 'kubernetes/**'
+      - 'scripts/**'
+
   workflow_dispatch:
 
 concurrency:

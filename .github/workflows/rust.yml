@@ -55,6 +55,8 @@ jobs:
               - '!kubernetes/**'
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
+              - '!docs/**'
+              - '!mdbook/**'
   remote-net-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'

@@ -1,0 +1,91 @@
+name: Book
+
+on:
+  push:
+    branches: [ main ]
+    # Always run on commits
+
+  pull_request:
+    paths:
+        - 'docs/**'
+        - 'mdbook/**'
+        - 'examples/**'
+        - 'linera-base/**'
+        - 'linera-sdk/**'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v3
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      # mdbook ignores the rust-toolchain in the repo so we make it the default.
+      - name: 'Set default toolchain'
+        run: |
+          rustup show active-toolchain | awk '{ print $1 }' | xargs rustup default
+
+      - name: 'Setup mdbook'
+        uses: peaceiris/actions-mdbook@v2
+        with:
+          mdbook-version: '0.4.48'
+
+      - name: 'Install Protoc'
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 'Install mdbook linkcheck'
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: mdbook-linkcheck@0.7.7
+
+      - name: 'Install mdbook mermaid'
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: mdbook-mermaid@0.15.0
+
+      - name: 'Install mdbook admonish'
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: mdbook-admonish@1.19.0
+
+      - name: 'Build mdbook'
+        run: |
+          cd mdbook
+          mdbook build
+
+      - name: 'Build the Linera SDK'
+        run: |
+          cargo clippy --locked -p linera-sdk --features test,wasmer
+          DUPLICATE_LIBS=(target/debug/deps/libserde-* target/debug/deps/liblinera_sdk-*)
+          cargo build --locked -p linera-sdk --features test,wasmer
+          # mdbook test wants only one library but build dependencies can create duplicates.
+          rm "${DUPLICATE_LIBS[@]}"
+
+      - name: 'Test mdbook'
+        run: |
+          cd mdbook
+          mdbook test -L ../target/debug/deps/
+
+  formatting:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v3
+
+      - name: 'Setup Node'
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+
+      - name: 'Install prettier'
+        run: npm install -g prettier
+
+      - name: 'Check formatting'
+        run: prettier --check docs/

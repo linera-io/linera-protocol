@@ -1,0 +1,164 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+:root {
+    /* Brand Colors */
+    --color-primary: #0e2630; /* Background color */
+    --color-primary-code: #1A4456; /* Background code block color */
+    --color-secondary: #70D4D3; /* Highlight or link color */
+    --color-tertiary: #F3EEE2; /* Navigation or heading color */
+
+    /* Accent Colors */
+    --color-accent-blue: #70D4D3;
+    --color-accent-light-blue: #A0E3E2;
+    --color-accent-light-green: #D2E8C8;
+    --color-accent-light-orange: #ffa96c;
+    --color-accent-beige: #EDE4D2;
+
+    /* Additional Defaults & Theme Overrides */
+    --color-text: var(--color-tertiary); /* Tertiary for main text */
+    --color-background: var(--color-primary); /* Primary for page background */
+    --links: var(--color-secondary); /* Override the default --links variable so it works in code blocks */
+    --table-header-bg: var(--color-primary) !important; /* Set table header background */
+    --theme-hover: var(--color-accent-light-blue) !important; /* Hover color for "Next chapter" arrow */
+    --theme-popup-bg: var(--color-primary) !important; /* Background for copy icon on code blocks */
+    --icons: var(--color-secondary) !important; /* Set icon colors like the menu and print icons */
+
+    --fg: var(--color-text);
+    --bg: var(--color-background);
+}
+
+/* General Styling */
+body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+    font-family: 'Inter', sans-serif; /* Set Inter as the default font */
+    margin: 0;
+    padding: 0;
+}
+
+.mermaid {
+    color: var(--color-primary);
+}
+
+.spacer {
+    height: 2px;
+    background-color: var(--color-primary-code) !important;
+}
+
+.content p { line-height: 1.7em; }
+.content ol { line-height: 1.7em; }
+.content ul { line-height: 1.7em; }
+code { line-height: 1.4em; }
+
+.light, html:not(.js) {
+    --bg: var(--color-background) !important;
+}
+
+/* Body Content & Links (outside blockquotes) */
+body a:not(blockquote a):not(:visited) {
+    color: var(--color-secondary) !important; /* Default link color in body */
+}
+
+body a:not(blockquote a):hover {
+    color: var(--color-secondary) !important; /* Hover color for links in body */
+   color: var(--color-secondary); /* Hover color for links in body */
+}
+
+/* Code Elements */
+.hljs {
+    font-family: "IBM Plex Mono", "Source Code Pro", Consolas, "Ubuntu Mono", Menlo, "DejaVu Sans Mono", monospace !important;
+    overflow-x: auto;
+    color: var(--color-accent-light-blue) !important; /* Default text color for code blocks */
+    background: var(--color-primary-code) !important;
+    border-radius: 10px;
+    padding: 0.5em;
+    margin: 1em 0;
+}
+
+/* Links in Code Elements */
+.hljs a, a:visited {
+    color: var(--color-accent-light-blue, #70D4D3) !important; /* Fallback to Secondary color */
+    font-weight: bold !important;
+    text-decoration: underline !important;
+}
+
+.hljs-comment {
+    color: var(--color-accent-light-blue) !important; /* Default text color for code blocks */
+}
+
+.hljs-literal, .hljs-built_in, .hljs-meta {
+    color: var(--color-accent-light-orange) !important;
+}
+
+/* Highlighted Keywords */
+.hljs-keyword {
+    color: var(--color-secondary); /* Secondary color for keywords */
+    font-weight: bold; /* Emphasize keywords */
+}
+
+/* Highlighted Keywords */
+.hljs-built_in, .hljs-literal, .hljs-string {
+    color: var(--color-accent-light-blue); /* Secondary color for keywords */
+    font-weight: bold; /* Emphasize keywords */
+}
+
+/* Highlighted Titles */
+.hljs-title {
+    color: var(--color-tertiary); /* Accent tertiary for titles */
+    font-weight: bold; /* Optional: Bold titles */
+}
+
+/* Navigation & Links */
+.sidebar .chapter li a {
+    color: var(--color-tertiary) !important; /* Default navigation text color */
+    text-decoration: none;
+}
+
+.sidebar .chapter li a.active {
+    color: var(--color-secondary) !important; /* Active link color */
+    font-weight: bold;
+}
+
+.sidebar .chapter li a:hover {
+    color: var(--color-secondary) !important; /* Hover link color */
+}
+
+.sidebar .chapter li.part-title {
+    color: var(--color-accent-beige);
+}
+
+/* Navigation Bar (Using Primary) */
+.sidebar {
+    background-color: var(--color-primary);
+    color: var(--color-primary);
+    padding: 1em;
+}
+
+/* Blockquote Styling */
+blockquote {
+    border-block-start: none !important;
+    border-block-end: none !important;
+    background-color: var(--color-accent-light-blue); /* Background: Light Blue */
+    color: var(--color-primary); /* Main text: Tertiary */
+    margin: 1em 0;
+    border-left: 0px solid var(--color-accent-blue);
+    border-radius: 15px; /* Rounded corners */
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+/* Links in Blockquotes */
+blockquote a, blockquote a:visited {
+    color: var(--color-primary) !important; /* Links: Accent Tertiary */
+    font-weight: bold !important; /* Make links bold */
+}
+
+blockquote a:hover {
+    text-decoration: underline; /* Keep underlined on hover */
+    text-decoration-thickness: 2px; /* Optional: Thicker underline on hover */
+    color: var(--color-secondary); /* Optional: Change color on hover */
+}
+
+.mobile-nav-chapters {
+    background-color: var(--color-primary); /* Primary background color */
+}

@@ -54,6 +54,8 @@ jobs:
               - '!kubernetes/**'
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
+              - '!docs/**'
+              - '!mdbook/**'
 
   web:
     needs: changed-files

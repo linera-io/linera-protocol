@@ -3,6 +3,9 @@ name: DynamoDB tests
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
   pull_request:
     branches:
       - "**"
