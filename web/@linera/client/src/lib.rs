@@ -153,3 +153,25 @@ impl Client {
         })
     }
 }
+
+#[wasm_bindgen(start)]
+pub fn main() {
+    use tracing_subscriber::{
+        prelude::__tracing_subscriber_SubscriberExt as _, util::SubscriberInitExt as _,
+    };
+
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .without_time()
+                .with_writer(tracing_web::MakeWebConsoleWriter::new()),
+        )
+        .with(
+            tracing_web::performance_layer()
+                .with_details_from_fields(tracing_subscriber::fmt::format::Pretty::default()),
+        )
+        .init();
+}
