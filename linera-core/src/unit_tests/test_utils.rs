@@ -50,7 +50,7 @@ use {
 use crate::{
     client::{ChainClientOptions, Client},
     data_types::*,
-    environment::{TestSigner, TestWallet},
+    environment::{wallet::Chain, TestSigner, TestWallet},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
@@ -1040,12 +1040,23 @@ where
         // the rest by asking validators.
         let storage = self.make_storage().await?;
         self.chain_client_storages.push(storage.clone());
+        let wallet = TestWallet::default();
+        let owner = self.chain_owners.get(&chain_id).copied();
+        wallet.insert(
+            chain_id,
+            Chain {
+                owner,
+                block_hash,
+                next_block_height: block_height,
+                ..Chain::default()
+            },
+        );
         let client = Arc::new(Client::new(
             crate::environment::Impl {
                 network: self.make_node_provider(),
                 storage,
                 signer: self.signer.clone(),
-                wallet: TestWallet::default(),
+                wallet,
             },
             self.admin_id(),
             false,
@@ -1056,14 +1067,7 @@ where
             options,
             crate::client::RequestsSchedulerConfig::default(),
         ));
-        Ok(client.create_chain_client(
-            chain_id,
-            block_hash,
-            block_height,
-            None,
-            self.chain_owners.get(&chain_id).copied(),
-            None,
-        ))
+        Ok(client.create_chain_client(chain_id, block_hash, block_height, None, owner, None))
     }
 
     pub async fn make_client(

@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Duration};
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner},
-    data_types::{Amount, Epoch, TimeDelta, Timestamp},
+    data_types::{Amount, BlockHeight, Epoch, TimeDelta, Timestamp},
     identifiers::{Account, AccountOwner, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -174,6 +174,166 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         clock.add(TimeDelta::from_secs(1));
         if i == 30 {
             panic!("Unexpected local balance: {}", balance);
+        }
+    }
+
+    cancellation_token.cancel();
+    handle.await;
+
+    Ok(())
+}
+
+/// Tests that a follow-only chain listener does NOT process its inbox when receiving messages.
+/// We set up a listener with two chains: chain A (follow-only, no owner) and chain B (owned).
+/// The sender sends a message to A first, then to B. Once the listener processes B's inbox
+/// (which we can observe), we know it must have also seen A's notification - but A's inbox
+/// should remain unprocessed because it's follow-only (no owner key).
+#[test_log::test(tokio::test)]
+async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
+    let signer = InMemorySigner::new(Some(42));
+    let config = ChainListenerConfig::default();
+    let storage_builder = MemoryStorageBuilder::default();
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
+
+    // Create three chains: sender, chain_a (will be follow-only), chain_b (will be owned).
+    let sender = builder.add_root_chain(0, Amount::from_tokens(10)).await?;
+    let chain_a = builder.add_root_chain(1, Amount::ZERO).await?;
+    let chain_b = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_a_id = chain_a.chain_id();
+    let chain_b_id = chain_b.chain_id();
+
+    let genesis_config = GenesisConfig::new_testing(&builder);
+    let admin_id = genesis_config.admin_id();
+    let storage = builder.make_storage().await?;
+    let chain_a_info = chain_a.chain_info().await?;
+    let chain_b_info = chain_b.chain_info().await?;
+
+    let context = ClientContext {
+        client: Arc::new(Client::new(
+            environment::Impl {
+                storage: storage.clone(),
+                network: builder.make_node_provider(),
+                signer,
+                wallet: environment::TestWallet::default(),
+            },
+            admin_id,
+            false,
+            [chain_a_id, chain_b_id],
+            "Client node with follow-only and owned chains".to_string(),
+            Duration::from_secs(30),
+            Duration::from_secs(1),
+            ChainClientOptions::test_default(),
+            linera_core::client::RequestsSchedulerConfig::default(),
+        )),
+    };
+
+    // Add chain A as follow-only (no owner = follow-only mode).
+    context.wallet().insert(
+        chain_a_id,
+        wallet::Chain {
+            owner: None, // No owner means follow-only mode
+            block_hash: chain_a_info.block_hash,
+            next_block_height: chain_a_info.next_block_height,
+            timestamp: clock.current_time(),
+            pending_proposal: None,
+            epoch: Some(chain_a_info.epoch),
+        },
+    );
+
+    // Add chain B as owned (has owner = not follow-only).
+    context.wallet().insert(
+        chain_b_id,
+        wallet::Chain {
+            owner: chain_b.preferred_owner(),
+            block_hash: chain_b_info.block_hash,
+            next_block_height: chain_b_info.next_block_height,
+            timestamp: clock.current_time(),
+            pending_proposal: None,
+            epoch: Some(chain_b_info.epoch),
+        },
+    );
+
+    let context = Arc::new(Mutex::new(context));
+    let cancellation_token = CancellationToken::new();
+    let child_token = cancellation_token.child_token();
+    let (_command_sender, command_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let chain_listener = ChainListener::new(
+        config,
+        context.clone(),
+        storage.clone(),
+        child_token,
+        command_receiver,
+    )
+    .run(false) // Unit test doesn't need background sync
+    .await
+    .unwrap();
+
+    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+
+    // Send a message to chain A first (follow-only). This notification should be ignored.
+    sender
+        .transfer(AccountOwner::CHAIN, Amount::ONE, Account::chain(chain_a_id))
+        .await?;
+
+    // Then send a message to chain B (owned). The listener should process this inbox.
+    sender
+        .transfer(AccountOwner::CHAIN, Amount::ONE, Account::chain(chain_b_id))
+        .await?;
+
+    // Wait until chain B processes its inbox. Once this happens, we know the listener
+    // has seen both notifications (A's came first), but should have only acted on B's.
+    for i in 0.. {
+        tokio::task::yield_now().await;
+
+        chain_b.synchronize_from_validators().await?;
+        let chain_b_info = chain_b.chain_info().await?;
+        // Chain B should have height 1 after processing its inbox.
+        if chain_b_info.next_block_height >= BlockHeight::from(1) {
+            break;
+        }
+        if i >= 50 {
+            panic!(
+                "Chain B's inbox was not processed by the listener. Expected height >= 1, got {}",
+                chain_b_info.next_block_height
+            );
+        }
+    }
+
+    // Now verify that chain A's inbox was NOT processed (follow-only ignores NewIncomingBundle).
+    chain_a.synchronize_from_validators().await?;
+    let chain_a_info = chain_a.chain_info().await?;
+    assert_eq!(
+        chain_a_info.next_block_height,
+        BlockHeight::ZERO,
+        "Follow-only chain A should not have had its inbox processed"
+    );
+
+    // Verify that the listener's wallet still shows chain A at height 0.
+    let wallet_chain_a = context.lock().await.wallet().get(chain_a_id).unwrap();
+    assert_eq!(
+        wallet_chain_a.next_block_height,
+        BlockHeight::ZERO,
+        "Wallet should show chain A at height 0"
+    );
+
+    // Now have the original chain_a client process its inbox, creating a block.
+    chain_a.process_inbox().await?;
+
+    // Wait for the chain listener to see the NewBlock notification and update its wallet.
+    // This verifies that follow-only mode DOES process NewBlock notifications.
+    for i in 0.. {
+        tokio::task::yield_now().await;
+
+        let wallet_chain_a = context.lock().await.wallet().get(chain_a_id).unwrap();
+        if wallet_chain_a.next_block_height >= BlockHeight::from(1) {
+            break;
+        }
+        if i >= 50 {
+            panic!(
+                "Wallet not updated after chain A created a block. Expected height >= 1, got {}",
+                wallet_chain_a.next_block_height
+            );
         }
     }
 

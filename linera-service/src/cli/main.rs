@@ -438,6 +438,9 @@ impl Runnable for Job {
                     .await?;
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id).await?;
+                if chain_client.preferred_owner().is_none() {
+                    bail!("Not an owner of chain {chain_id}; cannot process inbox");
+                }
                 info!("Processing the inbox of chain {}", chain_id);
                 let time_start = Instant::now();
                 let certificates = context.process_inbox(&chain_client).await?;

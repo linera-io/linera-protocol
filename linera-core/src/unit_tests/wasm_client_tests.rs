@@ -1229,11 +1229,14 @@ where
         .unwrap();
     let chain_id = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?.into();
 
-    // Create clients for the new game chain.
+    // Create clients for the new game chain. We need to register the chain with the owner in each
+    // wallet so the client can participate in consensus (fetch manager values).
+    builder.chain_owners.insert(chain_id, owner_a);
     let mut client_a = builder
         .make_client(chain_id, None, BlockHeight::ZERO)
         .await?;
     client_a.set_preferred_owner(owner_a);
+    builder.chain_owners.insert(chain_id, owner_b);
     let mut client_b = builder
         .make_client(chain_id, None, BlockHeight::ZERO)
         .await?;
