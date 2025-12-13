@@ -193,9 +193,11 @@ impl std::str::FromStr for Account {
     WitStore,
     WitType,
     Allocative,
+    tsify_next::Tsify,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 #[cfg_attr(with_testing, derive(Default))]
+#[tsify(from_wasm_abi, into_wasm_abi)]
 pub struct ChainId(pub CryptoHash);
 
 /// The type of the blob.

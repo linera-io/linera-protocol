@@ -400,36 +400,18 @@ impl<Env: Environment> ClientContext<Env> {
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
         let chain_id = info.chain_id;
-        let client_owner = client.preferred_owner();
-        let pending_proposal = client.pending_proposal().clone();
-        let new_chain: wallet::Chain = info.as_ref().into();
-        // Try to modify the existing entry, preserving `follow_only`.
-        let modified = self
-            .wallet()
-            .modify(chain_id, |chain| {
-                chain.block_hash = new_chain.block_hash;
-                chain.next_block_height = new_chain.next_block_height;
-                chain.timestamp = new_chain.timestamp;
-                chain.epoch = new_chain.epoch;
-                chain.owner = client_owner;
-                chain.pending_proposal = pending_proposal.clone();
-            })
-            .await
-            .map_err(error::Inner::wallet)?;
-        // If the chain didn't exist, insert a new entry.
-        if modified.is_none() {
-            self.wallet()
-                .insert(
-                    chain_id,
-                    wallet::Chain {
-                        pending_proposal,
-                        owner: client_owner,
-                        ..new_chain
-                    },
-                )
-                .await
-                .map_err(error::Inner::wallet)?;
+        let mut new_chain = wallet::Chain {
+            pending_proposal: client.pending_proposal().clone(),
+            owner: client.preferred_owner(),
+            ..info.as_ref().into()
+        };
+
+        if let Some(chain) = self.wallet().get(chain_id).await.map_err(error::Inner::wallet)? {
+            new_chain.follow_only = chain.follow_only;
         }
+
+        self.wallet().insert(chain_id, new_chain).await.map_err(error::Inner::wallet)?;
+
         Ok(())
     }
 
