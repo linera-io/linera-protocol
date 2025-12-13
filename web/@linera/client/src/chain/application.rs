@@ -4,23 +4,14 @@
 use crate::{Environment, JsResult};
 
 use linera_base::identifiers::{AccountOwner, ApplicationId};
-use linera_client::{
-    chain_listener::{ChainListener, ClientContext as _},
-    ClientContext,
-};
-use linera_core::{
-    client::ChainClient,
-    data_types::ClientOutcome,
-    node::{ValidatorNode as _, ValidatorNodeProvider as _},
-};
-use linera_views::store::WithError;
+use linera_client::ClientContext;
+use linera_core::client::ChainClient;
 
-use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex, stream::StreamExt};
-use serde::ser::Serialize as _;
+use futures::lock::Mutex as AsyncMutex;
 use wasm_bindgen::prelude::*;
-use web_sys::{js_sys, wasm_bindgen};
+use web_sys::wasm_bindgen;
 
-use std::{collections::HashMap, future::Future, rc::Rc, sync::Arc};
+use std::sync::Arc;
 
 #[wasm_bindgen]
 pub struct Application {
