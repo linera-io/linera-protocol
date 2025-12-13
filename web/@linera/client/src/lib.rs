@@ -134,6 +134,13 @@ struct TransferParams {
     recipient: linera_base::identifiers::Account,
 }
 
+#[derive(Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct QueryOptions {
+    block_hash: Option<String>,
+    owner: Option<AccountOwner>,
+}
+
 #[wasm_bindgen]
 impl Client {
     /// Creates a new client and connects to the network.
@@ -314,11 +321,21 @@ impl Client {
     ///
     /// If the owner is in the wrong format, or the chain client can't be instantiated.
     #[wasm_bindgen(js_name = addOwner)]
-    pub async fn add_owner(&self, owner: JsValue) -> JsResult<()> {
+    pub async fn add_owner(&self, owner: JsValue, options: JsValue) -> JsResult<()> {
+        #[derive(Default, serde::Deserialize)]
+        struct Options {
+            #[serde(default)]
+            weight: u64,
+        }
+
         let owner = serde_wasm_bindgen::from_value(owner)?;
+        let Options { weight } =
+            serde_wasm_bindgen::from_value::<Option<_>>(options)?.unwrap_or_default();
         let chain_client = self.default_chain_client().await?;
-        self.apply_client_command(&chain_client, || chain_client.share_ownership(owner, 100))
-            .await??;
+        self.apply_client_command(&chain_client, || {
+            chain_client.share_ownership(owner, weight)
+        })
+        .await??;
         Ok(())
     }
 
@@ -408,9 +425,14 @@ impl Application {
     #[wasm_bindgen]
     // TODO(#14) allow passing bytes here rather than just strings
     // TODO(#15) a lot of this logic is shared with `linera_service::node_service`
-    pub async fn query(&self, query: &str, block_hash: Option<String>) -> JsResult<String> {
+    pub async fn query(&self, query: &str, options: JsValue) -> JsResult<String> {
         tracing::debug!("querying application: {query}");
-        let chain_client = self.client.default_chain_client().await?;
+        let QueryOptions { block_hash, owner } =
+            serde_wasm_bindgen::from_value::<Option<_>>(options)?.unwrap_or_default();
+        let mut chain_client = self.client.default_chain_client().await?;
+        if let Some(owner) = owner {
+            chain_client.set_preferred_owner(owner);
+        }
         let block_hash = if let Some(hash) = block_hash {
             Some(hash.as_str().parse()?)
         } else {
