@@ -1,20 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
-use futures::lock::Mutex as AsyncMutex;
 use linera_base::identifiers::{AccountOwner, ApplicationId};
-use linera_client::ClientContext;
 use linera_core::client::ChainClient;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-use crate::{Environment, JsResult};
+use crate::{Client, Environment, JsResult};
 
 #[wasm_bindgen]
 pub struct Application {
-    pub(crate) client: Arc<AsyncMutex<ClientContext<Environment>>>,
+    pub(crate) client: Client,
     pub(crate) chain_client: ChainClient<Environment>,
     pub(crate) id: ApplicationId,
 }
@@ -74,6 +70,7 @@ impl Application {
         if !operations.is_empty() {
             let _hash = self
                 .client
+                .0
                 .lock()
                 .await
                 .apply_client_command(&chain_client, |_chain_client| {

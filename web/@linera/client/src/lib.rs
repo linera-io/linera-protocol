@@ -49,14 +49,14 @@ type JsResult<T> = Result<T, JsError>;
 /// request.
 #[wasm_bindgen]
 #[derive(Clone)]
-pub struct Client {
+pub struct Client(
     // This use of `futures::lock::Mutex` is safe because we only
     // expose concurrency to the browser, which must always run all
     // futures on the global task queue.
     // It does nothing here in this single-threaded context, but is
     // hard-coded by `ChainListener`.
-    client: Arc<AsyncMutex<linera_client::ClientContext<Environment>>>,
-}
+    Arc<AsyncMutex<linera_client::ClientContext<Environment>>>,
+);
 
 fn true_() -> bool {
     true
@@ -142,14 +142,14 @@ impl Client {
             .boxed_local(),
         );
         log::info!("Linera Web client successfully initialized");
-        Ok(Self { client })
+        Ok(Self(client))
     }
 
     #[wasm_bindgen]
     pub async fn chain(&self, chain: ChainId) -> JsResult<Chain> {
         Ok(Chain {
-            chain_client: self.client.lock().await.make_chain_client(chain).await?,
-            client: self.client.clone(),
+            chain_client: self.0.lock().await.make_chain_client(chain).await?,
+            client: self.clone(),
         })
     }
 }

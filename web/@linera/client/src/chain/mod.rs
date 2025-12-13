@@ -1,11 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
-use futures::{lock::Mutex as AsyncMutex, stream::StreamExt};
+use futures::stream::StreamExt;
 use linera_base::identifiers::AccountOwner;
-use linera_client::{chain_listener::ClientContext as _, ClientContext};
+use linera_client::chain_listener::ClientContext as _;
 use linera_core::{
     client::ChainClient,
     node::{ValidatorNode as _, ValidatorNodeProvider as _},
@@ -14,7 +14,7 @@ use serde::ser::Serialize as _;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
 
-use crate::{Environment, JsResult};
+use crate::{Client, Environment, JsResult};
 
 pub mod application;
 pub use application::Application;
@@ -23,7 +23,7 @@ pub use application::Application;
 pub struct Chain {
     // TODO(TODO) required for now for wallet updates, but we should move that
     // functionality into `linera-core`
-    pub(crate) client: Arc<AsyncMutex<ClientContext<Environment>>>,
+    pub(crate) client: Client,
     pub(crate) chain_client: ChainClient<Environment>,
 }
 
@@ -82,6 +82,7 @@ impl Chain {
     pub async fn transfer(&self, params: TransferParams) -> JsResult<()> {
         let _hash = self
             .client
+            .0
             .lock()
             .await
             .apply_client_command(&self.chain_client, |_chain_client| {
@@ -125,6 +126,7 @@ impl Chain {
     ) -> JsResult<()> {
         let AddOwnerOptions { weight } = options.unwrap_or_default();
         self.client
+            .0
             .lock()
             .await
             .apply_client_command(&self.chain_client, |_chain_client| {
@@ -142,7 +144,7 @@ impl Chain {
     pub async fn validator_version_info(&self) -> JsResult<JsValue> {
         self.chain_client.synchronize_from_validators().await?;
         let result = self.chain_client.local_committee().await;
-        let mut client = self.client.lock().await;
+        let mut client = self.client.0.lock().await;
         client.update_wallet(&self.chain_client).await?;
         let committee = result?;
         let node_provider = client.make_node_provider();
