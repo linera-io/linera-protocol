@@ -32,7 +32,17 @@ use crate::{
 
 /// An account owner.
 #[derive(
-    Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType, Allocative,
+    Clone,
+    Copy,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    WitLoad,
+    WitStore,
+    WitType,
+    Allocative,
     tsify_next::Tsify,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]

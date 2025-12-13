@@ -1,28 +1,23 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    env,
-    path::PathBuf,
-};
+use std::{env, path::PathBuf};
 
 use anyhow::{anyhow, bail, Error};
 use linera_base::crypto::InMemorySigner;
-use linera_client::{
-    client_context::ClientContext,
-    config::GenesisConfig,
-};
+use linera_client::{client_context::ClientContext, config::GenesisConfig};
 use linera_execution::{WasmRuntime, WithWasmDefault as _};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
 use linera_persistent as persistent;
 use linera_service::{
     cli::command::ClientCommand,
-    storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig}, Wallet,
+    storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig},
+    Wallet,
 };
 use tracing::{debug, info};
 
-#[derive(Default, Clone, clap::Parser)]
+#[derive(Clone, clap::Parser)]
 #[command(
     name = "linera",
     version = linera_version::VersionInfo::default_clap_str(),
@@ -125,7 +120,7 @@ impl Options {
             storage,
             wallet,
             signer,
-            self.client_options.clone(),
+            &self.client_options,
             default_chain,
             genesis_config,
             self.block_cache_size,

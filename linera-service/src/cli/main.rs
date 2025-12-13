@@ -25,8 +25,6 @@ pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0
 pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
 
 mod options;
-use options::Options;
-
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
@@ -85,6 +83,7 @@ use linera_service::{
 };
 use linera_storage::{DbStorage, Storage};
 use linera_views::store::{KeyValueDatabase, KeyValueStore};
+use options::Options;
 use serde_json::Value;
 use tempfile::NamedTempFile;
 use tokio::{
@@ -1844,13 +1843,10 @@ fn init_tracing(
         );
         Ok(None)
     } else if options.chrome_trace_exporter {
-        let trace_file_path = options
-            .chrome_trace_file
-            .as_deref()
-            .map_or_else(
-                || format!("{}.trace.json", options.command.log_file_name()),
-                |s| s.to_string(),
-            );
+        let trace_file_path = options.chrome_trace_file.as_deref().map_or_else(
+            || format!("{}.trace.json", options.command.log_file_name()),
+            |s| s.to_string(),
+        );
         let writer = std::fs::File::create(&trace_file_path)?;
         Ok(Some(linera_service::tracing::chrome::init(
             &options.command.log_file_name(),

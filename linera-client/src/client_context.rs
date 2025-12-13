@@ -406,11 +406,19 @@ impl<Env: Environment> ClientContext<Env> {
             ..info.as_ref().into()
         };
 
-        if let Some(chain) = self.wallet().get(chain_id).await.map_err(error::Inner::wallet)? {
+        if let Some(chain) = self
+            .wallet()
+            .get(chain_id)
+            .await
+            .map_err(error::Inner::wallet)?
+        {
             new_chain.follow_only = chain.follow_only;
         }
 
-        self.wallet().insert(chain_id, new_chain).await.map_err(error::Inner::wallet)?;
+        self.wallet()
+            .insert(chain_id, new_chain)
+            .await
+            .map_err(error::Inner::wallet)?;
 
         Ok(())
     }
