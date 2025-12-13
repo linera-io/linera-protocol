@@ -1,24 +1,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{Environment, JsResult};
+use std::{collections::HashMap, sync::Arc};
 
+use futures::{lock::Mutex as AsyncMutex, stream::StreamExt};
 use linera_base::identifiers::AccountOwner;
-use linera_client::{
-    chain_listener::ClientContext as _,
-    ClientContext,
-};
+use linera_client::{chain_listener::ClientContext as _, ClientContext};
 use linera_core::{
     client::ChainClient,
     node::{ValidatorNode as _, ValidatorNodeProvider as _},
 };
-
-use futures::{lock::Mutex as AsyncMutex, stream::StreamExt};
 use serde::ser::Serialize as _;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
 
-use std::{collections::HashMap, sync::Arc};
+use crate::{Environment, JsResult};
 
 pub mod application;
 pub use application::Application;
@@ -84,7 +80,10 @@ impl Chain {
     /// - if the transfer fails
     #[wasm_bindgen]
     pub async fn transfer(&self, params: TransferParams) -> JsResult<()> {
-        let _hash = self.client.lock().await
+        let _hash = self
+            .client
+            .lock()
+            .await
             .apply_client_command(&self.chain_client, |_chain_client| {
                 self.chain_client.transfer(
                     params.donor.unwrap_or(AccountOwner::CHAIN),
@@ -102,11 +101,7 @@ impl Chain {
     /// # Errors
     /// If the chain couldn't be established.
     pub async fn balance(&self) -> JsResult<String> {
-        Ok(self
-            .chain_client
-            .query_balance()
-            .await?
-            .to_string())
+        Ok(self.chain_client.query_balance().await?.to_string())
     }
 
     /// Gets the identity of the default chain.
@@ -123,12 +118,19 @@ impl Chain {
     ///
     /// If the owner is in the wrong format, or the chain client can't be instantiated.
     #[wasm_bindgen(js_name = addOwner)]
-    pub async fn add_owner(&self, owner: AccountOwner, options: Option<AddOwnerOptions>) -> JsResult<()> {
+    pub async fn add_owner(
+        &self,
+        owner: AccountOwner,
+        options: Option<AddOwnerOptions>,
+    ) -> JsResult<()> {
         let AddOwnerOptions { weight } = options.unwrap_or_default();
-        self.client.lock().await.apply_client_command(&self.chain_client, |_chain_client| {
-            self.chain_client.share_ownership(owner, weight)
-        })
-        .await?;
+        self.client
+            .lock()
+            .await
+            .apply_client_command(&self.chain_client, |_chain_client| {
+                self.chain_client.share_ownership(owner, weight)
+            })
+            .await?;
         Ok(())
     }
 
@@ -172,7 +174,8 @@ impl Chain {
         Ok(validator_versions.serialize(
             &serde_wasm_bindgen::Serializer::new()
                 .serialize_large_number_types_as_bigints(true)
-                .serialize_maps_as_objects(true))?)
+                .serialize_maps_as_objects(true),
+        )?)
     }
 
     /// Retrieves an application for querying.

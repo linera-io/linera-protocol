@@ -1,17 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{Environment, JsResult};
+use std::sync::Arc;
 
+use futures::lock::Mutex as AsyncMutex;
 use linera_base::identifiers::{AccountOwner, ApplicationId};
 use linera_client::ClientContext;
 use linera_core::client::ChainClient;
-
-use futures::lock::Mutex as AsyncMutex;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-use std::sync::Arc;
+use crate::{Environment, JsResult};
 
 #[wasm_bindgen]
 pub struct Application {
@@ -73,7 +72,10 @@ impl Application {
         };
 
         if !operations.is_empty() {
-            let _hash = self.client.lock().await
+            let _hash = self
+                .client
+                .lock()
+                .await
                 .apply_client_command(&chain_client, |_chain_client| {
                     chain_client.execute_operations(operations.clone(), vec![])
                 })

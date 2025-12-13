@@ -5,8 +5,7 @@
 pub type Storage =
     linera_storage::DbStorage<linera_views::memory::MemoryDatabase, linera_storage::WallClock>;
 
-pub async fn get_storage(
-) -> Result<Storage, linera_views::memory::MemoryStoreError> {
+pub async fn get_storage() -> Result<Storage, linera_views::memory::MemoryStoreError> {
     linera_storage::DbStorage::maybe_create_and_connect(
         &linera_views::memory::MemoryStoreConfig {
             max_stream_queries: 1,
@@ -15,5 +14,5 @@ pub async fn get_storage(
         "linera",
         Some(linera_execution::WasmRuntime::Wasmer),
     )
-        .await
+    .await
 }
