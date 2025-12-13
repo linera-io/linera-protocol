@@ -1,0 +1,116 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::{Environment, JsResult};
+
+use linera_base::identifiers::{AccountOwner, ApplicationId};
+use linera_client::{
+    chain_listener::{ChainListener, ClientContext as _},
+    ClientContext,
+};
+use linera_core::{
+    client::ChainClient,
+    data_types::ClientOutcome,
+    node::{ValidatorNode as _, ValidatorNodeProvider as _},
+};
+use linera_views::store::WithError;
+
+use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex, stream::StreamExt};
+use serde::ser::Serialize as _;
+use wasm_bindgen::prelude::*;
+use web_sys::{js_sys, wasm_bindgen};
+
+use std::{collections::HashMap, future::Future, rc::Rc, sync::Arc};
+
+#[wasm_bindgen]
+pub struct Application {
+    pub(crate) client: Arc<AsyncMutex<ClientContext<Environment>>>,
+    pub(crate) chain_client: ChainClient<Environment>,
+    pub(crate) id: ApplicationId,
+}
+
+#[derive(Default, serde::Deserialize, tsify_next::Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
+pub struct QueryOptions {
+    pub block_hash: Option<String>,
+    pub owner: Option<AccountOwner>,
+}
+
+#[wasm_bindgen]
+impl Application {
+    /// Performs a query against an application's service.
+    ///
+    /// If `block_hash` is non-empty, it specifies the block at which to
+    /// perform the query; otherwise, the latest block is used.
+    ///
+    /// # Errors
+    /// If the application ID is invalid, the query is incorrect, or
+    /// the response isn't valid UTF-8.
+    ///
+    /// # Panics
+    /// On internal protocol errors.
+    #[wasm_bindgen]
+    // TODO(#14) allow passing bytes here rather than just strings
+    // TODO(#15) a lot of this logic is shared with `linera_service::node_service`
+    pub async fn query(&self, query: &str, options: Option<QueryOptions>) -> JsResult<String> {
+        tracing::debug!("querying application: {query}");
+        let QueryOptions { block_hash, owner } = options.unwrap_or_default();
+        let mut chain_client = self.chain_client.clone();
+        if let Some(owner) = owner {
+            chain_client.set_preferred_owner(owner);
+        }
+        let block_hash = if let Some(hash) = block_hash {
+            Some(hash.as_str().parse()?)
+        } else {
+            None
+        };
+        let linera_execution::QueryOutcome {
+            response: linera_execution::QueryResponse::User(response),
+            operations,
+        } = chain_client
+            .query_application(
+                linera_execution::Query::User {
+                    application_id: self.id,
+                    bytes: query.as_bytes().to_vec(),
+                },
+                block_hash,
+            )
+            .await?
+        else {
+            panic!("system response to user query")
+        };
+
+        if !operations.is_empty() {
+            let _hash = self.client.lock().await
+                .apply_client_command(&chain_client, |_chain_client| {
+                    chain_client.execute_operations(operations.clone(), vec![])
+                })
+                .await?;
+        }
+
+        Ok(String::from_utf8(response)?)
+    }
+}
+
+#[wasm_bindgen(start)]
+pub fn main() {
+    use tracing_subscriber::{
+        prelude::__tracing_subscriber_SubscriberExt as _, util::SubscriberInitExt as _,
+    };
+
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .without_time()
+                .with_writer(tracing_web::MakeWebConsoleWriter::new()),
+        )
+        .with(
+            tracing_web::performance_layer()
+                .with_details_from_fields(tracing_subscriber::fmt::format::Pretty::default()),
+        )
+        .init();
+}
