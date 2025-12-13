@@ -20,21 +20,15 @@ key directly in memory and uses it to sign.
 #![allow(clippy::unused_async)]
 #![recursion_limit = "256"]
 
-use std::{collections::HashMap, future::Future, rc::Rc, sync::Arc};
+use std::{rc::Rc, sync::Arc};
 
-use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex, stream::StreamExt};
-use linera_base::identifiers::{AccountOwner, ApplicationId, ChainId};
+use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex};
+use linera_base::identifiers::ChainId;
 use linera_client::{
     chain_listener::{ChainListener, ClientContext as _},
 };
-use linera_core::{
-    data_types::ClientOutcome,
-    node::{ValidatorNode as _, ValidatorNodeProvider as _},
-};
-use linera_views::store::WithError;
-use serde::ser::Serialize as _;
 use wasm_bindgen::prelude::*;
-use web_sys::{js_sys, wasm_bindgen};
+use web_sys::wasm_bindgen;
 
 pub mod chain;
 pub use chain::Chain;

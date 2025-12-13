@@ -3,24 +3,22 @@
 
 use crate::{Environment, JsResult};
 
-use linera_base::identifiers::{AccountOwner, ApplicationId};
+use linera_base::identifiers::AccountOwner;
 use linera_client::{
-    chain_listener::{ChainListener, ClientContext as _},
+    chain_listener::ClientContext as _,
     ClientContext,
 };
 use linera_core::{
     client::ChainClient,
-    data_types::ClientOutcome,
     node::{ValidatorNode as _, ValidatorNodeProvider as _},
 };
-use linera_views::store::WithError;
 
-use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex, stream::StreamExt};
+use futures::{lock::Mutex as AsyncMutex, stream::StreamExt};
 use serde::ser::Serialize as _;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
 
-use std::{collections::HashMap, future::Future, rc::Rc, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 pub mod application;
 pub use application::Application;
