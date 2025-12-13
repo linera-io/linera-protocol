@@ -37,6 +37,7 @@ util::impl_from_infallible!(Error);
 
 #[derive(Default, Clone, clap::Parser, serde::Deserialize, tsify_next::Tsify)]
 #[tsify(from_wasm_abi)]
+#[group(skip)]
 pub struct Options {
     /// Timeout for sending queries (milliseconds)
     #[arg(long = "send-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
