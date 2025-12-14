@@ -100,5 +100,5 @@ This manual was tested against the following commit of the
 
 If installation fails, reach out to the team (e.g. on
 [Discord](https://discord.gg/linera)) to help troubleshoot your issue or
-[create an issue](https://github.com/linera-io/linera-protocol/issues/new) on
+[create an issue](https://github.com/linera-io/linera-protocol/issues) on
 GitHub.

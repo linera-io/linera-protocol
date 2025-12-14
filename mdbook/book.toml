@@ -10,9 +10,9 @@ default-theme = "Light"
 default-dark-theme = "Light"
 additional-css = ["theme/theme.css", "./mdbook-admonish.css"]
 additional-js = ["custom.js", "mermaid.min.js", "mermaid-init.js"]
-git-repository-url = "https://github.com/linera-io/linera-documentation"
+git-repository-url = "https://github.com/linera-io/linera-protocol"
 git-repository-icon = "fa-github"
-edit-url-template = "https://github.com/linera-io/linera-documentation/edit/main/{path}"
+edit-url-template = "https://github.com/linera-io/linera-protocol/edit/main/{path}"
 hash-files = true
 no-section-label = true
 
@@ -45,4 +45,4 @@ assets_version = "3.0.3" # do not edit: managed by `mdbook-admonish install`
 build-dir = "book"
 create-missing = false
 use-default-preprocessors = true
-extra-watch-dirs = ["linera-protocol/"]
+
