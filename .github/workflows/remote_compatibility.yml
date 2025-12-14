@@ -7,6 +7,14 @@ on:
   pull_request:
     branches:
       - "**"
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
+      - 'docker_scylla/**'
+      - 'configuration/**'
+      - 'kubernetes/**'
+      - 'scripts/**'
+
   workflow_dispatch:
 
 concurrency:
