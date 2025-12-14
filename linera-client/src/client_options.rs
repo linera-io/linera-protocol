@@ -3,7 +3,6 @@
 
 use std::{collections::HashSet, fmt, iter};
 
-use clap_serde_derive::ClapSerde;
 use linera_base::{
     data_types::{ApplicationPermissions, TimeDelta},
     identifiers::{AccountOwner, ApplicationId, ChainId, GenericApplicationId},
@@ -36,111 +35,127 @@ pub enum Error {
 
 util::impl_from_infallible!(Error);
 
-#[derive(Debug, Clone, tsify_next::Tsify, ClapSerde, clap::Args, serde::Deserialize)]
+#[serde_inline_default::serde_inline_default]
+#[derive(Clone, clap::Parser, serde::Deserialize, tsify_next::Tsify)]
+#[tsify(from_wasm_abi)]
 #[group(skip)]
+#[serde(rename_all = "camelCase")]
 pub struct Options {
     /// Timeout for sending queries (milliseconds)
-    #[default(Duration::from_millis(4000))]
-    #[arg(long = "send-timeout-ms", value_parser = util::parse_millis)]
+    #[serde_inline_default(Duration::from_millis(4000))]
+    #[arg(long = "send-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
     pub send_timeout: Duration,
 
     /// Timeout for receiving responses (milliseconds)
-    #[default(Duration::from_millis(4000))]
+    #[serde_inline_default(Duration::from_millis(4000))]
     #[arg(long = "recv-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
     pub recv_timeout: Duration,
 
     /// The maximum number of incoming message bundles to include in a block proposal.
+    #[serde_inline_default(10)]
     #[arg(long, default_value = "10")]
     pub max_pending_message_bundles: usize,
 
     /// The duration in milliseconds after which an idle chain worker will free its memory.
-    #[default(Duration::from_millis(30000))]
+    #[serde_inline_default(Duration::from_millis(30000))]
     #[arg(
         long = "chain-worker-ttl-ms",
         default_value = "30000",
         env = "LINERA_CHAIN_WORKER_TTL_MS",
-        value_parser = util::parse_millis
+        value_parser = util::parse_millis,
     )]
     pub chain_worker_ttl: Duration,
 
     /// The duration, in milliseconds, after which an idle sender chain worker will
     /// free its memory.
-    #[default(Duration::from_millis(1000))]
+    #[serde_inline_default(Duration::from_millis(1000))]
     #[arg(
         long = "sender-chain-worker-ttl-ms",
+        default_value = "1000",
         env = "LINERA_SENDER_CHAIN_WORKER_TTL_MS",
         value_parser = util::parse_millis
     )]
     pub sender_chain_worker_ttl: Duration,
 
     /// Delay increment for retrying to connect to a validator.
-    #[default(Duration::from_millis(1000))]
+    #[serde_inline_default(Duration::from_millis(1000))]
     #[arg(
         long = "retry-delay-ms",
+        default_value = "1000",
         value_parser = util::parse_millis
     )]
     pub retry_delay: Duration,
 
     /// Number of times to retry connecting to a validator.
-    #[default(10)]
-    #[arg(long)]
+    #[serde_inline_default(10)]
+    #[arg(long, default_value = "10")]
     pub max_retries: u32,
 
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.
+    #[serde(default)]
     #[arg(long)]
     pub wait_for_outgoing_messages: bool,
 
     /// (EXPERIMENTAL) Whether application services can persist in some cases between queries.
+    #[serde(default)]
     #[arg(long)]
     pub long_lived_services: bool,
 
     /// The policy for handling incoming messages.
-    #[arg(long, value_enum)]
+    #[serde(default)]
+    #[arg(long, default_value_t, value_enum)]
     pub blanket_message_policy: BlanketMessagePolicy,
 
     /// A set of chains to restrict incoming messages from. By default, messages
     /// from all chains are accepted. To reject messages from all chains, specify
     /// an empty string.
+    #[serde(default)]
     #[arg(long, value_parser = util::parse_chain_set)]
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 
     /// A set of application IDs. If specified, only bundles with at least one message from one of
     /// these applications will be accepted.
+    #[serde(default)]
     #[arg(long, value_parser = util::parse_app_set)]
     pub reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
 
     /// A set of application IDs. If specified, only bundles where all messages are from one of
     /// these applications will be accepted.
+    #[serde(default)]
     #[arg(long, value_parser = util::parse_app_set)]
     pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
 
     /// Enable timing reports during operations
     #[cfg(not(web))]
+    #[serde(default)]
     #[arg(long)]
     pub timings: bool,
 
     /// Interval in seconds between timing reports (defaults to 5)
     #[cfg(not(web))]
+    #[serde(default)]
     #[arg(long, default_value = "5")]
     pub timing_interval: u64,
 
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
     /// as a fraction of time taken to reach quorum.
-    #[default(DEFAULT_QUORUM_GRACE_PERIOD)]
-    #[arg(long)]
+    #[serde_inline_default(DEFAULT_QUORUM_GRACE_PERIOD)]
+    #[arg(long, default_value_t = DEFAULT_QUORUM_GRACE_PERIOD)]
     pub quorum_grace_period: f64,
 
     /// The delay when downloading a blob, after which we try a second validator, in milliseconds.
+    #[serde_inline_default(Duration::from_millis(1000))]
     #[arg(
         long = "blob-download-timeout-ms",
         default_value = "1000",
-        value_parser = util::parse_millis
+        value_parser = util::parse_millis,
     )]
     pub blob_download_timeout: Duration,
 
     /// The delay when downloading a batch of certificates, after which we try a second validator,
     /// in milliseconds.
+    #[serde_inline_default(Duration::from_millis(1000))]
     #[arg(
         long = "cert-batch-download-timeout-ms",
         default_value = "1000",
@@ -150,39 +165,61 @@ pub struct Options {
 
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
-    #[default(DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE)]
-    #[arg(long)]
+    #[serde_inline_default(DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE)]
+    #[arg(
+        long,
+        default_value_t = DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+    )]
     pub certificate_download_batch_size: u64,
 
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.
-    #[default(DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE)]
-    #[arg(long)]
+    #[serde_inline_default(DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE)]
+    #[arg(
+        long,
+        default_value_t = DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+    )]
     pub sender_certificate_download_batch_size: usize,
 
     /// Maximum number of tasks that can are joined concurrently in the client.
-    #[default(100)]
-    #[arg(long)]
+    #[serde_inline_default(100)]
+    #[arg(long, default_value = "100")]
     pub max_joined_tasks: usize,
 
     /// Maximum expected latency in milliseconds for score normalization.
-    #[default(linera_core::client::requests_scheduler::MAX_ACCEPTED_LATENCY_MS)]
-    #[arg(long, env = "LINERA_REQUESTS_SCHEDULER_MAX_ACCEPTED_LATENCY_MS")]
+    #[serde_inline_default(linera_core::client::requests_scheduler::MAX_ACCEPTED_LATENCY_MS)]
+    #[arg(
+        long,
+        default_value_t = linera_core::client::requests_scheduler::MAX_ACCEPTED_LATENCY_MS,
+        env = "LINERA_REQUESTS_SCHEDULER_MAX_ACCEPTED_LATENCY_MS"
+    )]
     pub max_accepted_latency_ms: f64,
 
     /// Time-to-live for cached responses in milliseconds.
-    #[default(linera_core::client::requests_scheduler::CACHE_TTL_MS)]
-    #[arg(long, env = "LINERA_REQUESTS_SCHEDULER_CACHE_TTL_MS")]
+    #[serde_inline_default(linera_core::client::requests_scheduler::CACHE_TTL_MS)]
+    #[arg(
+        long,
+        default_value_t = linera_core::client::requests_scheduler::CACHE_TTL_MS,
+        env = "LINERA_REQUESTS_SCHEDULER_CACHE_TTL_MS"
+    )]
     pub cache_ttl_ms: u64,
 
     /// Maximum number of entries in the cache.
-    #[default(linera_core::client::requests_scheduler::CACHE_MAX_SIZE)]
-    #[arg(long, env = "LINERA_REQUESTS_SCHEDULER_CACHE_MAX_SIZE")]
+    #[serde_inline_default(linera_core::client::requests_scheduler::CACHE_MAX_SIZE)]
+    #[arg(
+        long,
+        default_value_t = linera_core::client::requests_scheduler::CACHE_MAX_SIZE,
+        env = "LINERA_REQUESTS_SCHEDULER_CACHE_MAX_SIZE"
+    )]
     pub cache_max_size: usize,
 
     /// Maximum latency for an in-flight request before we stop deduplicating it (in milliseconds).
-    #[default(linera_core::client::requests_scheduler::MAX_REQUEST_TTL_MS)]
-    #[arg(long, env = "LINERA_REQUESTS_SCHEDULER_MAX_REQUEST_TTL_MS")]
+    #[serde_inline_default(linera_core::client::requests_scheduler::MAX_REQUEST_TTL_MS)]
+    #[arg(
+        long,
+        default_value_t = linera_core::client::requests_scheduler::MAX_REQUEST_TTL_MS,
+        env = "LINERA_REQUESTS_SCHEDULER_MAX_REQUEST_TTL_MS"
+    )]
     pub max_request_ttl_ms: u64,
 
     /// Smoothing factor for Exponential Moving Averages (0 < alpha < 1).
@@ -190,25 +227,44 @@ pub struct Options {
     /// Typical values are between 0.01 and 0.5.
     /// A value of 0.1 means that 10% of the new observation is considered
     /// and 90% of the previous average is retained.
-    #[default(linera_core::client::requests_scheduler::ALPHA_SMOOTHING_FACTOR)]
-    #[arg(long, env = "LINERA_REQUESTS_SCHEDULER_ALPHA")]
+    #[serde_inline_default(linera_core::client::requests_scheduler::ALPHA_SMOOTHING_FACTOR)]
+    #[arg(
+        long,
+        default_value_t = linera_core::client::requests_scheduler::ALPHA_SMOOTHING_FACTOR,
+        env = "LINERA_REQUESTS_SCHEDULER_ALPHA"
+    )]
     pub alpha: f64,
 
     /// Delay in milliseconds between starting requests to different peers.
     /// This helps to stagger requests and avoid overwhelming the network.
-    #[default(linera_core::client::requests_scheduler::STAGGERED_DELAY_MS)]
+    #[serde_inline_default(linera_core::client::requests_scheduler::STAGGERED_DELAY_MS)]
     #[arg(
         long,
+        default_value_t = linera_core::client::requests_scheduler::STAGGERED_DELAY_MS,
         env = "LINERA_REQUESTS_SCHEDULER_ALTERNATIVE_PEERS_RETRY_DELAY_MS"
     )]
     pub alternative_peers_retry_delay_ms: u64,
 
+    #[serde(flatten)]
     #[clap(flatten)]
-    #[clap_serde]
     pub chain_listener_config: crate::chain_listener::ChainListenerConfig,
 }
 
-pub type PartialOptions = <Options as ClapSerde>::Opt;
+impl Default for Options {
+    fn default() -> Self {
+        // Return a default value that agrees with the serde defaults, by deserializing an
+        // empty map
+        use serde::{
+            de::value::{Error as SerdeError, MapDeserializer},
+            Deserialize as _,
+        };
+        Self::deserialize(MapDeserializer::<_, SerdeError>::new(std::iter::empty::<(
+            (),
+            (),
+        )>()))
+        .expect("Options has no required fields")
+    }
+}
 
 impl Options {
     /// Creates [`chain_client::Options`] with the corresponding values.

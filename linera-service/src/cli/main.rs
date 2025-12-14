@@ -738,7 +738,7 @@ impl Runnable for Job {
                         options.client_options.max_pending_message_bundles
                             >= transactions_per_block,
                         "max_pending_message_bundles must be set to at least the same as the \
-                     number of transactions per block ({transactions_per_block}) for benchmarking",
+                         number of transactions per block ({transactions_per_block}) for benchmarking",
                     );
                     assert!(num_chains > 0, "Number of chains must be greater than 0");
                     assert!(

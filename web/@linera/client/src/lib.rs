@@ -59,12 +59,6 @@ pub struct Client(
 );
 
 #[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(typescript_type = "Partial<Options>")]
-    pub type ClientOptions;
-}
-
-#[wasm_bindgen]
 impl Client {
     /// Creates a new client and connects to the network.
     ///
@@ -75,20 +69,12 @@ impl Client {
     pub async fn new(
         wallet: &Wallet,
         signer: Signer,
-        options: Option<ClientOptions>,
+        options: Option<linera_client::Options>,
     ) -> Result<Client, JsError> {
         const BLOCK_CACHE_SIZE: usize = 5000;
         const EXECUTION_STATE_CACHE_SIZE: usize = 10000;
 
-        let options: linera_client::Options = options
-            .map(|options| {
-                serde_wasm_bindgen::from_value::<linera_client::PartialOptions>(options.into())
-            })
-            .transpose()?
-            .unwrap_or_default()
-            .into();
-
-        tracing::warn!("{options:#?}");
+        let options = options.unwrap_or_default();
 
         let mut storage = storage::get_storage().await?;
         wallet

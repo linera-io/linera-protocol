@@ -47,7 +47,6 @@ web-default = ["web", "wasmer", "indexed-db"]
 anyhow.workspace = true
 bcs.workspace = true
 clap.workspace = true
-clap-serde-derive.workspace = true
 futures.workspace = true
 hdrhistogram = { workspace = true }
 linera-base.workspace = true
@@ -64,6 +63,7 @@ prometheus-parse.workspace = true
 rand.workspace = true
 reqwest.workspace = true
 serde.workspace = true
+serde-inline-default = "1.0.0"
 serde_yaml.workspace = true
 thiserror.workspace = true
 thiserror-context.workspace = true

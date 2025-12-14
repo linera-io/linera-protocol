@@ -7,7 +7,6 @@ use std::{
     time::Duration,
 };
 
-use clap_serde_derive::ClapSerde;
 use futures::{
     future::{join_all, select_all},
     lock::Mutex,
@@ -36,10 +35,12 @@ use tracing::{debug, error, info, instrument, warn, Instrument as _};
 
 use crate::error::{self, Error};
 
-#[derive(Debug, Clone, clap::Args, serde::Serialize, serde::Deserialize, ClapSerde)]
+#[derive(Default, Debug, Clone, clap::Args, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChainListenerConfig {
     /// Do not create blocks automatically to receive incoming messages. Instead, wait for
     /// an explicit mutation `processInbox`.
+    #[serde(default)]
     #[arg(
         long = "listener-skip-process-inbox",
         env = "LINERA_LISTENER_SKIP_PROCESS_INBOX"
@@ -47,6 +48,7 @@ pub struct ChainListenerConfig {
     pub skip_process_inbox: bool,
 
     /// Wait before processing any notification (useful for testing).
+    #[serde(default)]
     #[arg(
         long = "listener-delay-before-ms",
         default_value = "0",
@@ -55,6 +57,7 @@ pub struct ChainListenerConfig {
     pub delay_before_ms: u64,
 
     /// Wait after processing any notification (useful for rate limiting).
+    #[serde(default)]
     #[arg(
         long = "listener-delay-after-ms",
         default_value = "0",

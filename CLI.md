@@ -124,9 +124,6 @@ Client implementation and command-line tool for the Linera blockchain
 
 ###### **Options:**
 
-* `--wallet <WALLET_STATE_PATH>` — Sets the file storing the private state of user chains (an empty one will be created if missing)
-* `--keystore <KEYSTORE_PATH>` — Sets the file storing the keystore state
-* `-w`, `--with-wallet <WITH_WALLET>` — Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet storage config from the environment variables `LINERA_WALLET_{X}` and `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and `LINERA_STORAGE`
 * `--send-timeout-ms <SEND_TIMEOUT>` — Timeout for sending queries (milliseconds)
 
   Default value: `4000`
@@ -148,9 +145,6 @@ Client implementation and command-line tool for the Linera blockchain
 * `--max-retries <MAX_RETRIES>` — Number of times to retry connecting to a validator
 
   Default value: `10`
-* `--chrome-trace-exporter` — Enable OpenTelemetry Chrome JSON exporter for trace data analysis
-* `--chrome-trace-file <CHROME_TRACE_FILE>` — Output file path for Chrome trace JSON format. Can be visualized in chrome://tracing or Perfetto UI
-* `--otlp-exporter-endpoint <OTLP_EXPORTER_ENDPOINT>` — OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature)
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
 * `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries
 * `--blanket-message-policy <BLANKET_MESSAGE_POLICY>` — The policy for handling incoming messages
@@ -208,6 +202,19 @@ Client implementation and command-line tool for the Linera blockchain
 * `--alternative-peers-retry-delay-ms <ALTERNATIVE_PEERS_RETRY_DELAY_MS>` — Delay in milliseconds between starting requests to different peers. This helps to stagger requests and avoid overwhelming the network
 
   Default value: `150`
+* `--listener-skip-process-inbox` — Do not create blocks automatically to receive incoming messages. Instead, wait for an explicit mutation `processInbox`
+* `--listener-delay-before-ms <DELAY_BEFORE_MS>` — Wait before processing any notification (useful for testing)
+
+  Default value: `0`
+* `--listener-delay-after-ms <DELAY_AFTER_MS>` — Wait after processing any notification (useful for rate limiting)
+
+  Default value: `0`
+* `--wallet <WALLET_STATE_PATH>` — Sets the file storing the private state of user chains (an empty one will be created if missing)
+* `--keystore <KEYSTORE_PATH>` — Sets the file storing the keystore state
+* `-w`, `--with-wallet <WITH_WALLET>` — Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet storage config from the environment variables `LINERA_WALLET_{X}` and `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and `LINERA_STORAGE`
+* `--chrome-trace-exporter` — Enable OpenTelemetry Chrome JSON exporter for trace data analysis
+* `--chrome-trace-file <CHROME_TRACE_FILE>` — Output file path for Chrome trace JSON format. Can be visualized in chrome://tracing or Perfetto UI
+* `--otlp-exporter-endpoint <OTLP_EXPORTER_ENDPOINT>` — OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature)
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
 * `--storage-max-concurrent-queries <STORAGE_MAX_CONCURRENT_QUERIES>` — The maximal number of simultaneous queries to the database
 * `--storage-max-stream-queries <STORAGE_MAX_STREAM_QUERIES>` — The maximal number of simultaneous stream queries to the database

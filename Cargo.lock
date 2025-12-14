@@ -2276,28 +2276,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clap-serde-derive"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4b7d643cbdc3a4eb0b5db8b9844ab2002bc4be44c1244db5cd27df8e594c125"
-dependencies = [
- "clap",
- "clap-serde-proc",
- "serde",
-]
-
-[[package]]
-name = "clap-serde-proc"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6725cfcf906f158cdad4ca9a2a426133b36a3f91b5da2b971f8b956823ef55e"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "clap_builder"
 version = "4.5.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5359,7 +5337,6 @@ dependencies = [
  "bcs",
  "cfg_aliases",
  "clap",
- "clap-serde-derive",
  "counter",
  "crowd-funding",
  "ethereum-tracker",
@@ -5392,6 +5369,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest 0.11.27",
  "serde",
+ "serde-inline-default",
  "serde-wasm-bindgen 0.6.5",
  "serde_yaml",
  "social",
@@ -9102,6 +9080,17 @@ checksum = "b00d5258adb4bc52373d80547cf9a356c00c0012d3d2c06a963a41305ff6a701"
 dependencies = [
  "serde",
  "snafu 0.6.10",
+]
+
+[[package]]
+name = "serde-inline-default"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92d48532bc0781ac622a5fea0f16502d3b4f1af0fcebe56d618120969f35d315"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.105",
 ]
 
 [[package]]
