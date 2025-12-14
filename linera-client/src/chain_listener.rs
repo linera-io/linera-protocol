@@ -35,7 +35,9 @@ use tracing::{debug, error, info, instrument, warn, Instrument as _};
 
 use crate::error::{self, Error};
 
-#[derive(Debug, Default, Clone, clap::Args, serde::Serialize, serde::Deserialize)]
+use clap_serde_derive::ClapSerde;
+
+#[derive(Debug, Clone, clap::Args, serde::Serialize, serde::Deserialize, ClapSerde)]
 pub struct ChainListenerConfig {
     /// Do not create blocks automatically to receive incoming messages. Instead, wait for
     /// an explicit mutation `processInbox`.

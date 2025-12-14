@@ -19,6 +19,8 @@ use linera_core::{
 };
 use linera_execution::ResourceControlPolicy;
 
+use clap_serde_derive::ClapSerde;
+
 #[cfg(not(web))]
 use crate::client_metrics::TimingConfig;
 use crate::util;
@@ -35,15 +37,16 @@ pub enum Error {
 
 util::impl_from_infallible!(Error);
 
-#[derive(Default, Clone, clap::Parser, serde::Deserialize, tsify_next::Tsify)]
-#[tsify(from_wasm_abi)]
+#[derive(Clone, tsify_next::Tsify, ClapSerde, serde::Deserialize)]
 #[group(skip)]
 pub struct Options {
     /// Timeout for sending queries (milliseconds)
-    #[arg(long = "send-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
+    #[default(Duration::from_millis(4000))]
+    #[arg(long = "send-timeout-ms", value_parser = util::parse_millis)]
     pub send_timeout: Duration,
 
     /// Timeout for receiving responses (milliseconds)
+    #[default(Duration::from_millis(4000))]
     #[arg(long = "recv-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
     pub recv_timeout: Duration,
 
@@ -52,6 +55,7 @@ pub struct Options {
     pub max_pending_message_bundles: usize,
 
     /// The duration in milliseconds after which an idle chain worker will free its memory.
+    #[default(Duration::from_millis(30000))]
     #[arg(
         long = "chain-worker-ttl-ms",
         default_value = "30000",
@@ -62,24 +66,25 @@ pub struct Options {
 
     /// The duration, in milliseconds, after which an idle sender chain worker will
     /// free its memory.
+    #[default(Duration::from_millis(1000))]
     #[arg(
         long = "sender-chain-worker-ttl-ms",
-        default_value = "1000",
         env = "LINERA_SENDER_CHAIN_WORKER_TTL_MS",
         value_parser = util::parse_millis
     )]
     pub sender_chain_worker_ttl: Duration,
 
     /// Delay increment for retrying to connect to a validator.
+    #[default(Duration::from_millis(1000))]
     #[arg(
         long = "retry-delay-ms",
-        default_value = "1000",
         value_parser = util::parse_millis
     )]
     pub retry_delay: Duration,
 
     /// Number of times to retry connecting to a validator.
-    #[arg(long, default_value = "10")]
+    #[default(10)]
+    #[arg(long)]
     pub max_retries: u32,
 
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
@@ -92,7 +97,7 @@ pub struct Options {
     pub long_lived_services: bool,
 
     /// The policy for handling incoming messages.
-    #[arg(long, default_value_t, value_enum)]
+    #[arg(long, value_enum)]
     pub blanket_message_policy: BlanketMessagePolicy,
 
     /// A set of chains to restrict incoming messages from. By default, messages
@@ -123,7 +128,8 @@ pub struct Options {
 
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
     /// as a fraction of time taken to reach quorum.
-    #[arg(long, default_value_t = DEFAULT_QUORUM_GRACE_PERIOD)]
+    #[default(DEFAULT_QUORUM_GRACE_PERIOD)]
+    #[arg(long)]
     pub quorum_grace_period: f64,
 
     /// The delay when downloading a blob, after which we try a second validator, in milliseconds.
@@ -145,17 +151,17 @@ pub struct Options {
 
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
+    #[default(DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE)]
     #[arg(
         long,
-        default_value_t = DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     )]
     pub certificate_download_batch_size: u64,
 
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.
+    #[default(DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE)]
     #[arg(
         long,
-        default_value_t = DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     )]
     pub sender_certificate_download_batch_size: usize,
 
@@ -164,33 +170,33 @@ pub struct Options {
     pub max_joined_tasks: usize,
 
     /// Maximum expected latency in milliseconds for score normalization.
+    #[default(linera_core::client::requests_scheduler::MAX_ACCEPTED_LATENCY_MS)]
     #[arg(
         long,
-        default_value_t = linera_core::client::requests_scheduler::MAX_ACCEPTED_LATENCY_MS,
         env = "LINERA_REQUESTS_SCHEDULER_MAX_ACCEPTED_LATENCY_MS"
     )]
     pub max_accepted_latency_ms: f64,
 
     /// Time-to-live for cached responses in milliseconds.
+    #[default(linera_core::client::requests_scheduler::CACHE_TTL_MS)]
     #[arg(
         long,
-        default_value_t = linera_core::client::requests_scheduler::CACHE_TTL_MS,
         env = "LINERA_REQUESTS_SCHEDULER_CACHE_TTL_MS"
     )]
     pub cache_ttl_ms: u64,
 
     /// Maximum number of entries in the cache.
+    #[default(linera_core::client::requests_scheduler::CACHE_MAX_SIZE)]
     #[arg(
         long,
-        default_value_t = linera_core::client::requests_scheduler::CACHE_MAX_SIZE,
         env = "LINERA_REQUESTS_SCHEDULER_CACHE_MAX_SIZE"
     )]
     pub cache_max_size: usize,
 
     /// Maximum latency for an in-flight request before we stop deduplicating it (in milliseconds).
+    #[default(linera_core::client::requests_scheduler::MAX_REQUEST_TTL_MS)]
     #[arg(
         long,
-        default_value_t = linera_core::client::requests_scheduler::MAX_REQUEST_TTL_MS,
         env = "LINERA_REQUESTS_SCHEDULER_MAX_REQUEST_TTL_MS"
     )]
     pub max_request_ttl_ms: u64,
@@ -200,25 +206,28 @@ pub struct Options {
     /// Typical values are between 0.01 and 0.5.
     /// A value of 0.1 means that 10% of the new observation is considered
     /// and 90% of the previous average is retained.
+    #[default(linera_core::client::requests_scheduler::ALPHA_SMOOTHING_FACTOR)]
     #[arg(
         long,
-        default_value_t = linera_core::client::requests_scheduler::ALPHA_SMOOTHING_FACTOR,
         env = "LINERA_REQUESTS_SCHEDULER_ALPHA"
     )]
     pub alpha: f64,
 
     /// Delay in milliseconds between starting requests to different peers.
     /// This helps to stagger requests and avoid overwhelming the network.
+    #[default(linera_core::client::requests_scheduler::STAGGERED_DELAY_MS)]
     #[arg(
         long,
-        default_value_t = linera_core::client::requests_scheduler::STAGGERED_DELAY_MS,
         env = "LINERA_REQUESTS_SCHEDULER_ALTERNATIVE_PEERS_RETRY_DELAY_MS"
     )]
     pub alternative_peers_retry_delay_ms: u64,
 
     #[clap(flatten)]
+    #[clap_serde]
     pub chain_listener_config: crate::chain_listener::ChainListenerConfig,
 }
+
+pub type PartialOptions = <Options as ClapSerde>::Opt;
 
 impl Options {
     /// Creates [`chain_client::Options`] with the corresponding values.

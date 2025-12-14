@@ -22,9 +22,10 @@ key directly in memory and uses it to sign.
 
 use std::{rc::Rc, sync::Arc};
 
-use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex};
 use linera_base::identifiers::ChainId;
 use linera_client::chain_listener::{ChainListener, ClientContext as _};
+
+use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex};
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
@@ -58,33 +59,10 @@ pub struct Client(
     Arc<AsyncMutex<linera_client::ClientContext<Environment>>>,
 );
 
-fn true_() -> bool {
-    true
-}
-
-#[derive(serde::Deserialize, tsify_next::Tsify)]
-#[tsify(from_wasm_abi)]
-pub struct StorageOptions {
-    /// Whether to output logs from running contracts.
-    #[serde(default = "true_")]
-    pub allow_application_logs: bool,
-}
-
-impl Default for StorageOptions {
-    fn default() -> Self {
-        Self {
-            allow_application_logs: true,
-        }
-    }
-}
-
-#[derive(Default, serde::Deserialize, tsify_next::Tsify)]
-#[tsify(from_wasm_abi)]
-pub struct Options {
-    #[serde(flatten)]
-    pub storage: StorageOptions,
-    #[serde(flatten)]
-    pub client: linera_client::Options,
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "Partial<Options>")]
+    pub type ClientOptions;
 }
 
 #[wasm_bindgen]
@@ -92,26 +70,26 @@ impl Client {
     /// Creates a new client and connects to the network.
     ///
     /// # Errors
-    /// On transport or protocol error, or if persistent storage is
-    /// unavailable.
+    /// On transport or protocol error, if persistent storage is
+    /// unavailable, or if `options` is incorrectly structured.
     #[wasm_bindgen(constructor)]
-    pub async fn new(wallet: &Wallet, signer: Signer, options: Options) -> Result<Client, JsError> {
+    pub async fn new(wallet: &Wallet, signer: Signer, options: ClientOptions) -> Result<Client, JsError> {
         const BLOCK_CACHE_SIZE: usize = 5000;
         const EXECUTION_STATE_CACHE_SIZE: usize = 10000;
 
-        let mut storage = storage::get_storage()
-            .await?
-            // TODO(TODO) this should be moved into `linera_client`
-            .with_allow_application_logs(options.storage.allow_application_logs);
+        let options: linera_client::Options = serde_wasm_bindgen::from_value::<linera_client::PartialOptions>(options.into())?.into();
+
+        let mut storage = storage::get_storage().await?;
         wallet
             .genesis_config
             .initialize_storage(&mut storage)
             .await?;
+
         let client = linera_client::ClientContext::new(
             storage.clone(),
             wallet.chains.clone(),
             signer,
-            &options.client,
+            &options,
             wallet.default,
             wallet.genesis_config.clone(),
             BLOCK_CACHE_SIZE,
@@ -123,7 +101,7 @@ impl Client {
         let client = Arc::new(AsyncMutex::new(client));
         let client_clone = client.clone();
         let chain_listener = ChainListener::new(
-            options.client.chain_listener_config,
+            options.chain_listener_config,
             client_clone,
             storage,
             tokio_util::sync::CancellationToken::new(),

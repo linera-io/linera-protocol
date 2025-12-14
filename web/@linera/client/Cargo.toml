@@ -14,6 +14,8 @@ pedantic = "warn"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+clap.workspace = true
+clap-serde-derive.workspace = true
 console_error_panic_hook.workspace = true
 futures.workspace = true
 js-sys.workspace = true
