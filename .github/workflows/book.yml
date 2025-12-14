@@ -40,9 +40,20 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 'Install mdbook preprocessors'
-        run: |
-          cargo install mdbook-linkcheck@0.7.7 mdbook-mermaid@0.15.0 mdbook-admonish@1.19.0
+      - name: 'Install mdbook linkcheck'
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: mdbook-linkcheck@0.7.7
+
+      - name: 'Install mdbook mermaid'
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: mdbook-mermaid@0.15.0
+
+      - name: 'Install mdbook admonish'
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: mdbook-admonish@1.19.0
 
       - name: 'Build mdbook'
         run: |
