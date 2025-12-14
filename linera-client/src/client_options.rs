@@ -37,7 +37,7 @@ pub enum Error {
 
 util::impl_from_infallible!(Error);
 
-#[derive(Clone, tsify_next::Tsify, ClapSerde, serde::Deserialize)]
+#[derive(Debug, Clone, tsify_next::Tsify, ClapSerde, serde::Deserialize)]
 #[group(skip)]
 pub struct Options {
     /// Timeout for sending queries (milliseconds)
@@ -166,7 +166,8 @@ pub struct Options {
     pub sender_certificate_download_batch_size: usize,
 
     /// Maximum number of tasks that can are joined concurrently in the client.
-    #[arg(long, default_value = "100")]
+    #[default(100)]
+    #[arg(long)]
     pub max_joined_tasks: usize,
 
     /// Maximum expected latency in milliseconds for score normalization.
