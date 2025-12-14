@@ -6289,8 +6289,6 @@ dependencies = [
 name = "linera-web"
 version = "0.16.0"
 dependencies = [
- "clap",
- "clap-serde-derive",
  "console_error_panic_hook",
  "futures",
  "js-sys",
