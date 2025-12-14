@@ -104,6 +104,7 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     // TODO(linera-protocol#2944): separate these out from the
     // `ClientOptions` struct, since they apply only to the CLI/native
     // client
+    home_directory: None,
     wallet_state_path: None,
     keystore_path: None,
     with_wallet: None,

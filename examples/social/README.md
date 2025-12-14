@@ -53,12 +53,8 @@ linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
 Create the user wallets and add chains to them:
 
 ```bash
-export LINERA_WALLET_1="$LINERA_TMP_DIR/wallet_1.json"
-export LINERA_KEYSTORE_1="$LINERA_TMP_DIR/keystore_1.json"
-export LINERA_STORAGE_1="rocksdb:$LINERA_TMP_DIR/client_1.db"
-export LINERA_WALLET_2="$LINERA_TMP_DIR/wallet_2.json"
-export LINERA_KEYSTORE_2="$LINERA_TMP_DIR/keystore_2.json"
-export LINERA_STORAGE_2="rocksdb:$LINERA_TMP_DIR/client_2.db"
+# Set the home directory for future wallets.
+export LINERA_HOME="$LINERA_TMP_DIR"
 
 linera --with-wallet 1 wallet init --faucet $FAUCET_URL
 linera --with-wallet 2 wallet init --faucet $FAUCET_URL
@@ -70,9 +66,6 @@ CHAIN_2="${INFO_2[0]}"
 OWNER_1="${INFO_1[3]}"
 OWNER_2="${INFO_2[3]}"
 ```
-
-Note that `linera --with-wallet 1` is equivalent to `linera --wallet "$LINERA_WALLET_1" --keystore "$LINERA_KEYSTORE_1"
---storage "$LINERA_STORAGE_1"`.
 
 Compile the `social` example and create an application with it:
 

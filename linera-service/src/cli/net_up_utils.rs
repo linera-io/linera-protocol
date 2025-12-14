@@ -311,28 +311,15 @@ async fn print_messages_and_create_faucet(
 
     eprintln!(
         "To use the admin wallet of this test network, you may set \
-         the environment variables LINERA_WALLET, LINERA_KEYSTORE, \
-         and LINERA_STORAGE as follows.\n"
+         the environment variable LINERA_HOME as follows.\n"
     );
     println!(
         "{}",
         format!(
-            "export LINERA_WALLET=\"{}\"",
-            client.wallet_path().display(),
+            "export LINERA_HOME=\"{}\"",
+            client.path_provider.path().display()
         )
         .bold(),
-    );
-    println!(
-        "{}",
-        format!(
-            "export LINERA_KEYSTORE=\"{}\"",
-            client.keystore_path().display(),
-        )
-        .bold()
-    );
-    println!(
-        "{}",
-        format!("export LINERA_STORAGE=\"{}\"", client.storage_path()).bold(),
     );
 
     let wallet: crate::wallet::Wallet = client.load_wallet()?;
