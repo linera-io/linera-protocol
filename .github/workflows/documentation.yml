@@ -31,7 +31,7 @@ permissions:
 
 jobs:
 
-  publish-docs:
+  publish-rust-docs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
