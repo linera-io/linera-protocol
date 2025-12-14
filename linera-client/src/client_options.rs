@@ -36,7 +36,7 @@ pub enum Error {
 
 util::impl_from_infallible!(Error);
 
-#[derive(Debug, Clone, tsify_next::Tsify, ClapSerde, serde::Deserialize)]
+#[derive(Debug, Clone, tsify_next::Tsify, ClapSerde, clap::Args, serde::Deserialize)]
 #[group(skip)]
 pub struct Options {
     /// Timeout for sending queries (milliseconds)
