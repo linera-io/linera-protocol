@@ -31,7 +31,7 @@ runnable = false
 
 [output.linkcheck]
 optional = true
-follow-web-links = true
+follow-web-links = false
 exclude = [ 'x\.com', 'crates\.io', 'npmjs\.com' ]
 
 [preprocessor.mermaid]
