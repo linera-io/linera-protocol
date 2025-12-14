@@ -164,7 +164,10 @@
       }
 
       async function updateBalance(application, owner, blockHash) {
-          const response = JSON.parse(await application.query(gql(`query { tickerSymbol, accounts { entry(key: "${owner}") { value } } }`), blockHash));
+          const response = JSON.parse(await application.query(
+              gql(`query { tickerSymbol, accounts { entry(key: "${owner}") { value } } }`),
+              { blockHash },
+          ));
           console.debug('application response:', response);
           document.querySelector('#ticker-symbol').textContent = response.data.tickerSymbol;
           document.querySelector('#balance').textContent = (+(response?.data?.accounts?.entry.value || 0)).toFixed(2);

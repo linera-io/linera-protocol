@@ -82,19 +82,19 @@
               logs.insertBefore(entry, logs.firstChild);
           }
 
-          async function updateCount(block_hash) {
-              const response = await counter.query('{ "query": "query { value }" }', block_hash);
+          async function updateCount(blockHash) {
+              const response = await counter.query('{ "query": "query { value }" }', { blockHash });
               document.getElementById('count').innerText
                   = JSON.parse(response).data.value;
           }
 
-          updateCount(null);
+          updateCount();
           client.onNotification(notification => {
               let newBlock = notification.reason.NewBlock;
               if (notification.reason.BlockExecuted) {
                 let hash = notification.reason.BlockExecuted.hash;
                 updateCount(hash);
-              } else if(newBlock) {
+              } else if (newBlock) {
                 addLogEntry(newBlock);
                 updateCount(null);
               }
