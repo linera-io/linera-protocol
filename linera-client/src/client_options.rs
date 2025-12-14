@@ -3,6 +3,7 @@
 
 use std::{collections::HashSet, fmt, iter};
 
+use clap_serde_derive::ClapSerde;
 use linera_base::{
     data_types::{ApplicationPermissions, TimeDelta},
     identifiers::{AccountOwner, ApplicationId, ChainId, GenericApplicationId},
@@ -18,8 +19,6 @@ use linera_core::{
     DEFAULT_QUORUM_GRACE_PERIOD,
 };
 use linera_execution::ResourceControlPolicy;
-
-use clap_serde_derive::ClapSerde;
 
 #[cfg(not(web))]
 use crate::client_metrics::TimingConfig;
@@ -152,17 +151,13 @@ pub struct Options {
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
     #[default(DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE)]
-    #[arg(
-        long,
-    )]
+    #[arg(long)]
     pub certificate_download_batch_size: u64,
 
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.
     #[default(DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE)]
-    #[arg(
-        long,
-    )]
+    #[arg(long)]
     pub sender_certificate_download_batch_size: usize,
 
     /// Maximum number of tasks that can are joined concurrently in the client.
@@ -172,34 +167,22 @@ pub struct Options {
 
     /// Maximum expected latency in milliseconds for score normalization.
     #[default(linera_core::client::requests_scheduler::MAX_ACCEPTED_LATENCY_MS)]
-    #[arg(
-        long,
-        env = "LINERA_REQUESTS_SCHEDULER_MAX_ACCEPTED_LATENCY_MS"
-    )]
+    #[arg(long, env = "LINERA_REQUESTS_SCHEDULER_MAX_ACCEPTED_LATENCY_MS")]
     pub max_accepted_latency_ms: f64,
 
     /// Time-to-live for cached responses in milliseconds.
     #[default(linera_core::client::requests_scheduler::CACHE_TTL_MS)]
-    #[arg(
-        long,
-        env = "LINERA_REQUESTS_SCHEDULER_CACHE_TTL_MS"
-    )]
+    #[arg(long, env = "LINERA_REQUESTS_SCHEDULER_CACHE_TTL_MS")]
     pub cache_ttl_ms: u64,
 
     /// Maximum number of entries in the cache.
     #[default(linera_core::client::requests_scheduler::CACHE_MAX_SIZE)]
-    #[arg(
-        long,
-        env = "LINERA_REQUESTS_SCHEDULER_CACHE_MAX_SIZE"
-    )]
+    #[arg(long, env = "LINERA_REQUESTS_SCHEDULER_CACHE_MAX_SIZE")]
     pub cache_max_size: usize,
 
     /// Maximum latency for an in-flight request before we stop deduplicating it (in milliseconds).
     #[default(linera_core::client::requests_scheduler::MAX_REQUEST_TTL_MS)]
-    #[arg(
-        long,
-        env = "LINERA_REQUESTS_SCHEDULER_MAX_REQUEST_TTL_MS"
-    )]
+    #[arg(long, env = "LINERA_REQUESTS_SCHEDULER_MAX_REQUEST_TTL_MS")]
     pub max_request_ttl_ms: u64,
 
     /// Smoothing factor for Exponential Moving Averages (0 < alpha < 1).
@@ -208,10 +191,7 @@ pub struct Options {
     /// A value of 0.1 means that 10% of the new observation is considered
     /// and 90% of the previous average is retained.
     #[default(linera_core::client::requests_scheduler::ALPHA_SMOOTHING_FACTOR)]
-    #[arg(
-        long,
-        env = "LINERA_REQUESTS_SCHEDULER_ALPHA"
-    )]
+    #[arg(long, env = "LINERA_REQUESTS_SCHEDULER_ALPHA")]
     pub alpha: f64,
 
     /// Delay in milliseconds between starting requests to different peers.

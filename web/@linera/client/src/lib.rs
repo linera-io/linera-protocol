@@ -22,10 +22,9 @@ key directly in memory and uses it to sign.
 
 use std::{rc::Rc, sync::Arc};
 
+use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex};
 use linera_base::identifiers::ChainId;
 use linera_client::chain_listener::{ChainListener, ClientContext as _};
-
-use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex};
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
@@ -73,11 +72,21 @@ impl Client {
     /// On transport or protocol error, if persistent storage is
     /// unavailable, or if `options` is incorrectly structured.
     #[wasm_bindgen(constructor)]
-    pub async fn new(wallet: &Wallet, signer: Signer, options: Option<ClientOptions>) -> Result<Client, JsError> {
+    pub async fn new(
+        wallet: &Wallet,
+        signer: Signer,
+        options: Option<ClientOptions>,
+    ) -> Result<Client, JsError> {
         const BLOCK_CACHE_SIZE: usize = 5000;
         const EXECUTION_STATE_CACHE_SIZE: usize = 10000;
 
-        let options: linera_client::Options = options.map(|options| serde_wasm_bindgen::from_value::<linera_client::PartialOptions>(options.into())).transpose()?.unwrap_or_default().into();
+        let options: linera_client::Options = options
+            .map(|options| {
+                serde_wasm_bindgen::from_value::<linera_client::PartialOptions>(options.into())
+            })
+            .transpose()?
+            .unwrap_or_default()
+            .into();
 
         tracing::warn!("{options:#?}");
 

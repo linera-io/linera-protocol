@@ -14,6 +14,6 @@ pub async fn get_storage() -> Result<Storage, linera_views::memory::MemoryStoreE
         "linera",
         Some(linera_execution::WasmRuntime::Wasmer),
     )
-        .await?
-        .with_allow_application_logs(true))
+    .await?
+    .with_allow_application_logs(true))
 }

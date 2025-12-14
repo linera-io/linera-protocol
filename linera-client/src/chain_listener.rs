@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 
+use clap_serde_derive::ClapSerde;
 use futures::{
     future::{join_all, select_all},
     lock::Mutex,
@@ -34,8 +35,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn, Instrument as _};
 
 use crate::error::{self, Error};
-
-use clap_serde_derive::ClapSerde;
 
 #[derive(Debug, Clone, clap::Args, serde::Serialize, serde::Deserialize, ClapSerde)]
 pub struct ChainListenerConfig {
