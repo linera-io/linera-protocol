@@ -120,6 +120,11 @@ impl Client {
         Ok(Self(client))
     }
 
+    /// Connect to a chain on the Linera network.
+    ///
+    /// # Errors
+    ///
+    /// If the wallet could not be read or chain synchronization fails.
     #[wasm_bindgen]
     pub async fn chain(&self, chain: ChainId) -> JsResult<Chain> {
         Ok(Chain {

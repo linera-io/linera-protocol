@@ -21,8 +21,6 @@ pub use application::Application;
 
 #[wasm_bindgen]
 pub struct Chain {
-    // TODO(TODO) required for now for wallet updates, but we should move that
-    // functionality into `linera-core`
     pub(crate) client: Client,
     pub(crate) chain_client: ChainClient<Environment>,
 }
