@@ -2,8 +2,8 @@
 
 ## Markdown syntax
 
-We use a number of markdown extensions supported by the `mdbook` generator (configured in the
-directory `mdbook/`).
+We use a number of markdown extensions supported by the `mdbook` generator
+(configured in the directory `mdbook/`).
 
 ## Release constants
 
@@ -14,5 +14,6 @@ directory `mdbook/`).
 
 ## Formatting
 
-This directory is formatted with prettier. To install prettier run `npm install -g
-prettier`. To use prettier run `prettier --write docs` from the root of the repository.
+This directory is formatted with prettier. To install prettier run
+`npm install -g prettier`. To use prettier run `prettier --write docs` from the
+root of the repository.
