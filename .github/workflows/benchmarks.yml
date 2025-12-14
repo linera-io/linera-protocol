@@ -3,6 +3,9 @@ name: Benchmarks
 on:
   push:
     branches: [ main, 'devnet_*', 'testnet_*' ]
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
   workflow_dispatch:
 
 env:

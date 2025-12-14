@@ -4,6 +4,9 @@ on:
   pull_request:
     branches:
       - "**"
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
   merge_group:
   workflow_dispatch:
 

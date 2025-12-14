@@ -3,7 +3,13 @@ name: Long Faucet chain test
 on:
   push:
     branches: [ 'devnet_*', 'testnet_*' ]
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
   merge_group:
   workflow_dispatch:
 

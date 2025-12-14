@@ -4,7 +4,8 @@ on:
   push:
     branches: [ main, 'devnet_*', 'testnet_*' ]
     paths-ignore:
-      - '*.md'
+      - 'docs/**'
+      - 'mdbook/**'
       - 'docker/**'
       - 'docker_scylla/**'
       - 'configuration/**'

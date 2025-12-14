@@ -3,9 +3,15 @@ name: Explorer tests
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
   pull_request:
     branches:
       - "**"
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull requests

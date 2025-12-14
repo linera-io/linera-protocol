@@ -3,6 +3,9 @@ name: ScyllaDB tests
 on:
   push:
     branches: [ main, 'devnet_*', 'testnet_*' ]
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
   pull_request:
     branches:
       - "**"

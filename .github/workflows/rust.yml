@@ -3,10 +3,16 @@ name: Rust
 on:
   push:
     branches: [ 'devnet_*', 'testnet_*' ]
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
   merge_group:
   pull_request:
     branches:
       - "**"
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull requests

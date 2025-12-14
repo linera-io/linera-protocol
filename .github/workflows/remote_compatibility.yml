@@ -3,6 +3,9 @@ name: Compatibility with existing testnet
 on:
   push:
     branches: [ 'testnet_conway' ]
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
   merge_group:
   pull_request:
     branches:
