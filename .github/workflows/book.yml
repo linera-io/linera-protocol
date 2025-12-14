@@ -40,6 +40,15 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: 'Install mdbook preprocessors'
+        run: |
+          cargo install mdbook-linkcheck@0.7.7 mdbook-mermaid@0.15.0 mdbook-admonish@1.19.0
+
+      - name: 'Build mdbook'
+        run: |
+          cd mdbook
+          mdbook build
+
       - name: 'Build the Linera SDK'
         run: |
           cargo clippy --locked -p linera-sdk --features test,wasmer
@@ -48,14 +57,9 @@ jobs:
           # mdbook test wants only one library but build dependencies can create duplicates.
           rm "${DUPLICATE_LIBS[@]}"
 
-      - name: 'Install mdbook preprocessors'
-        run: |
-          cargo install mdbook-linkcheck@0.7.7 mdbook-mermaid@0.15.0 mdbook-admonish@1.19.0
-
-      - name: 'Build and test mdbook'
+      - name: 'Test mdbook'
         run: |
           cd mdbook
-          mdbook build
           mdbook test -L ../target/debug/deps/
 
   formatting:
