@@ -64,7 +64,7 @@ bucket managed by the Linera Protocol core team.
 An example can be found here:
 
 ```bash
-wget "https://storage.googleapis.com/linera-io-dev-public/{{#include ../../TESTNET_DOMAIN}}/genesis.json"
+wget "https://storage.googleapis.com/linera-io-dev-public/{{#include ../../RELEASE_DOMAIN}}/genesis.json"
 ```
 
 ### Creating Your Keys

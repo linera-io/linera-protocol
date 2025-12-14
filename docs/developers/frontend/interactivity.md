@@ -62,7 +62,7 @@ let the user know the ID of their new chain.
 
 ```javascript
 const faucet = await new linera.Faucet(
-  'https://faucet.{{#include ../../TESTNET_DOMAIN}}.linera.net',
+  'https://faucet.{{#include ../../RELEASE_DOMAIN}}.linera.net',
 );
 const wallet = await faucet.createWallet();
 const client = await new linera.Client(wallet);
