@@ -78,18 +78,6 @@ pub struct Options {
     #[arg(long, env = "LINERA_CLIENT_TOKIO_BLOCKING_THREADS")]
     pub tokio_blocking_threads: Option<usize>,
 
-    /// Size of the block cache (default: 5000)
-    #[arg(long, env = "LINERA_BLOCK_CACHE_SIZE", default_value = "5000")]
-    pub block_cache_size: usize,
-
-    /// Size of the execution state cache (default: 10000)
-    #[arg(
-        long,
-        env = "LINERA_EXECUTION_STATE_CACHE_SIZE",
-        default_value = "10000"
-    )]
-    pub execution_state_cache_size: usize,
-
     /// Subcommand.
     #[command(subcommand)]
     pub command: ClientCommand,
@@ -121,8 +109,6 @@ impl Options {
             &self.client_options,
             default_chain,
             genesis_config,
-            self.block_cache_size,
-            self.execution_state_cache_size,
         )
         .await?)
     }

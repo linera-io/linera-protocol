@@ -275,8 +275,6 @@ where
         options: &Options,
         default_chain: Option<ChainId>,
         genesis_config: GenesisConfig,
-        _block_cache_size: usize,
-        _execution_state_cache_size: usize,
     ) -> Result<Self, Error> {
         #[cfg(not(web))]
         let timing_config = options.to_timing_config();
