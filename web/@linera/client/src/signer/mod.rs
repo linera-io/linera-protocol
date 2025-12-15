@@ -62,7 +62,6 @@ impl From<JsValue> for Error {
 
 impl std::error::Error for Error {}
 
-
 #[wasm_bindgen(typescript_custom_section)]
 const _: &str = r#"import type { Signer } from '../signer/index.js';"#;
 
@@ -72,7 +71,11 @@ extern "C" {
     pub type Signer;
 
     #[wasm_bindgen(catch, method)]
-    async fn sign(this: &Signer, owner: AccountOwner, value: Vec<u8>) -> Result<js_sys::JsString, JsValue>;
+    async fn sign(
+        this: &Signer,
+        owner: AccountOwner,
+        value: Vec<u8>,
+    ) -> Result<js_sys::JsString, JsValue>;
 
     #[wasm_bindgen(catch, method, js_name = "containsKey")]
     async fn contains_key(this: &Signer, owner: AccountOwner) -> Result<JsValue, JsValue>;
@@ -91,15 +94,19 @@ impl linera_base::crypto::Signer for Signer {
         value: &CryptoHash,
     ) -> Result<AccountSignature, Self::Error> {
         Ok(AccountSignature::EvmSecp256k1 {
-            signature: String::from(self
-                // Pass CryptoHash without serializing as that adds bytes
-                // to the serialized value which we don't want for signing.
-                .sign(*owner, value.as_bytes().0.to_vec())
-                .await?).parse().map_err(|_| Error::UnexpectedSignatureFormat)?,
+            signature: String::from(
+                self
+                    // Pass CryptoHash without serializing as that adds bytes
+                    // to the serialized value which we don't want for signing.
+                    .sign(*owner, value.as_bytes().0.to_vec())
+                    .await?,
+            )
+            .parse()
+            .map_err(|_| Error::UnexpectedSignatureFormat)?,
             address: if let AccountOwner::Address20(address) = owner {
                 *address
             } else {
-                return Err(Error::InvalidAccountOwnerType)
+                return Err(Error::InvalidAccountOwnerType);
             },
         })
     }
