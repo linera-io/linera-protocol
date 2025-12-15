@@ -69,7 +69,7 @@ use validator_trackers::ValidatorTrackers;
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout},
-    environment::Environment,
+    environment::{wallet::Wallet as _, Environment},
     local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
@@ -146,15 +146,54 @@ mod metrics {
     });
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+/// Defines what type of notifications we should process for a chain:
+/// - do we fully participate in consensus and download sender chains?
+/// - or do we only follow the chain's blocks without participating?
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ListeningMode {
+    /// Listen to everything: all blocks for the chain and all blocks from sender chains,
+    /// and participate in rounds.
     FullChain,
+    /// Listen to all blocks for the chain, but don't download sender chain blocks or participate
+    /// in rounds. Use this when interested in the chain's state but not intending to propose
+    /// blocks (e.g., because we're not a chain owner).
+    FollowChain,
+}
+
+impl PartialOrd for ListeningMode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        use std::cmp::Ordering;
+        match (self, other) {
+            (ListeningMode::FullChain, ListeningMode::FullChain) => Some(Ordering::Equal),
+            (ListeningMode::FullChain, _) => Some(Ordering::Greater),
+            (_, ListeningMode::FullChain) => Some(Ordering::Less),
+            (ListeningMode::FollowChain, ListeningMode::FollowChain) => Some(Ordering::Equal),
+        }
+    }
 }
 
 impl ListeningMode {
+    /// Returns whether a notification with this reason should be processed under this listening
+    /// mode.
+    pub fn is_relevant(&self, reason: &Reason) -> bool {
+        match (reason, self) {
+            // FullChain processes everything.
+            (_, ListeningMode::FullChain) => true,
+            // FollowChain processes new blocks on the chain itself (including events embedded in
+            // NewBlock).
+            (Reason::NewBlock { .. }, ListeningMode::FollowChain) => true,
+            (_, ListeningMode::FollowChain) => false,
+        }
+    }
+
     pub fn extend(&mut self, other: Option<ListeningMode>) {
         match (self, other) {
+            (_, None) => (),
             (ListeningMode::FullChain, _) => (),
+            (mode, Some(ListeningMode::FullChain)) => {
+                *mode = ListeningMode::FullChain;
+            }
+            (ListeningMode::FollowChain, _) => (),
         }
     }
 }
@@ -244,6 +283,18 @@ impl<Env: Environment> Client<Env> {
     /// Returns a reference to the client's [`Wallet`][crate::environment::Wallet].
     pub fn wallet(&self) -> &Env::Wallet {
         self.environment.wallet()
+    }
+
+    /// Returns whether the given chain is in follow-only mode (no owner key in the wallet).
+    ///
+    /// If the chain is not in the wallet, returns `true` since we don't have an owner key
+    /// for it.
+    async fn is_chain_follow_only(&self, chain_id: ChainId) -> bool {
+        match self.wallet().get(chain_id).await {
+            Ok(Some(chain)) => chain.owner.is_none(),
+            // Chain not in wallet or error: treat as follow-only.
+            Ok(None) | Err(_) => true,
+        }
     }
 
     /// Adds a chain to the set of chains tracked by the local node.
@@ -1092,8 +1143,10 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Downloads and processes any certificates we are missing for the given chain.
+    ///
+    /// If we are an owner of the chain, also synchronizes the consensus state.
     #[instrument(level = "trace", skip_all)]
-    async fn synchronize_chain_state(
+    pub(crate) async fn synchronize_chain_state(
         &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
@@ -1101,8 +1154,10 @@ impl<Env: Environment> Client<Env> {
         Box::pin(self.synchronize_chain_state_from_committee(chain_id, committee)).await
     }
 
-    /// Downloads and processes any certificates we are missing for the given chain, from the given
-    /// committee.
+    /// Downloads certificates for the given chain from the given committee.
+    ///
+    /// If the chain is not in follow-only mode, also fetches and processes manager values
+    /// (timeout certificates, proposals, locking blocks) for consensus participation.
     #[instrument(level = "trace", skip_all)]
     pub async fn synchronize_chain_state_from_committee(
         &self,
@@ -1110,7 +1165,11 @@ impl<Env: Environment> Client<Env> {
         committee: Committee,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
-        let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
+        let _latency = if !self.is_chain_follow_only(chain_id).await {
+            Some(metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency())
+        } else {
+            None
+        };
 
         let validators = self.make_nodes(&committee)?;
         Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;
@@ -1133,29 +1192,46 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Downloads any certificates from the specified validator that we are missing for the given
-    /// chain, and processes them.
+    /// chain.
+    ///
+    /// If the chain is owned, also fetches and processes manager values
+    /// (timeout certificates, proposals, locking blocks) for consensus participation.
     #[instrument(level = "trace", skip(self, remote_node, chain_id))]
     pub(crate) async fn synchronize_chain_state_from(
         &self,
         remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
     ) -> Result<(), ChainClientError> {
-        let mut local_info = self.local_node.chain_info(chain_id).await?;
-        let query = ChainInfoQuery::new(chain_id).with_manager_values();
-        let remote_info = remote_node.handle_chain_info_query(query).await?;
-        if let Some(new_info) = self
-            .download_certificates_from(remote_node, chain_id, remote_info.next_block_height)
-            .await?
-        {
-            local_info = new_info;
+        let with_manager_values = !self.is_chain_follow_only(chain_id).await;
+        let query = if with_manager_values {
+            ChainInfoQuery::new(chain_id).with_manager_values()
+        } else {
+            ChainInfoQuery::new(chain_id)
         };
+        let remote_info = remote_node.handle_chain_info_query(query).await?;
+        let local_info = self
+            .download_certificates_from(remote_node, chain_id, remote_info.next_block_height)
+            .await?;
+
+        if !with_manager_values {
+            return Ok(());
+        }
 
         // If we are at the same height as the remote node, we also update our chain manager.
-        if local_info.next_block_height != remote_info.next_block_height {
+        let local_height = match local_info {
+            Some(info) => info.next_block_height,
+            None => {
+                self.local_node
+                    .chain_info(chain_id)
+                    .await?
+                    .next_block_height
+            }
+        };
+        if local_height != remote_info.next_block_height {
             debug!(
                 remote_node = remote_node.address(),
                 remote_height = %remote_info.next_block_height,
-                local_height = %local_info.next_block_height,
+                local_height = %local_height,
                 "synced from validator, but remote height and local height are different",
             );
             return Ok(());
@@ -1183,7 +1259,7 @@ impl<Env: Environment> Client<Env> {
                         debug!(
                             remote_node = remote_node.address(),
                             %hash,
-                            height = %local_info.next_block_height,
+                            height = %local_height,
                             %error,
                             "skipping locked block from validator",
                         );
@@ -1210,7 +1286,7 @@ impl<Env: Environment> Client<Env> {
                                 Err(error) => {
                                     info!(
                                         remote_node = remote_node.address(),
-                                        height = %local_info.next_block_height,
+                                        height = %local_height,
                                         proposer = %owner,
                                         %blob_id,
                                         %error,
@@ -1279,7 +1355,7 @@ impl<Env: Environment> Client<Env> {
                 debug!(
                     remote_node = remote_node.address(),
                     proposer = %owner,
-                    height = %local_info.next_block_height,
+                    height = %local_height,
                     error = %err,
                     "skipping proposal from validator",
                 );
@@ -3104,8 +3180,14 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// To create a block that actually executes the messages in the inbox,
     /// `process_inbox` must be called separately.
+    ///
+    /// If the chain is in follow-only mode, this only downloads blocks for this chain without
+    /// fetching manager values or sender/publisher chains.
     #[instrument(level = "trace")]
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, ChainClientError> {
+        if self.preferred_owner.is_none() {
+            return self.client.synchronize_chain_state(self.chain_id).await;
+        }
         let info = self.prepare_chain().await?;
         self.synchronize_publisher_chains().await?;
         self.find_received_certificates(None).await?;
