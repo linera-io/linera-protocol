@@ -71,6 +71,8 @@ tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 trait-variant.workspace = true
+tsify-next.workspace = true
+wasm-bindgen.workspace = true
 
 [target.wasm32-unknown-unknown.dependencies]
 flarch = { workspace = true, optional = true }
@@ -120,3 +122,9 @@ test-strategy.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
+
+[package.metadata.cargo-machete]
+ignored = [
+    # `wasm-bindgen` is implicitly used by `tsify-next
+    "wasm-bindgen",
+]

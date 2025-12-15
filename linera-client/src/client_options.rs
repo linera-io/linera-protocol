@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, fmt, iter, path::PathBuf};
+use std::{collections::HashSet, fmt, iter};
 
 use linera_base::{
     data_types::{ApplicationPermissions, TimeDelta},
@@ -35,23 +35,11 @@ pub enum Error {
 
 util::impl_from_infallible!(Error);
 
-#[derive(Clone, clap::Parser)]
-pub struct ClientContextOptions {
-    /// Sets the file storing the private state of user chains (an empty one will be created if missing)
-    #[arg(long = "wallet")]
-    pub wallet_state_path: Option<PathBuf>,
-
-    /// Sets the file storing the keystore state.
-    #[arg(long = "keystore")]
-    pub keystore_path: Option<PathBuf>,
-
-    /// Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet
-    /// storage config from the environment variables `LINERA_WALLET_{X}` and
-    /// `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and
-    /// `LINERA_STORAGE`.
-    #[arg(long, short = 'w', value_parser = util::parse_ascii_alphanumeric_string)]
-    pub with_wallet: Option<String>,
-
+#[derive(Clone, clap::Parser, serde::Deserialize, tsify_next::Tsify)]
+#[tsify(from_wasm_abi)]
+#[group(skip)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Options {
     /// Timeout for sending queries (milliseconds)
     #[arg(long = "send-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
     pub send_timeout: Duration,
@@ -69,7 +57,7 @@ pub struct ClientContextOptions {
         long = "chain-worker-ttl-ms",
         default_value = "30000",
         env = "LINERA_CHAIN_WORKER_TTL_MS",
-        value_parser = util::parse_millis
+        value_parser = util::parse_millis,
     )]
     pub chain_worker_ttl: Duration,
 
@@ -95,19 +83,6 @@ pub struct ClientContextOptions {
     #[arg(long, default_value = "10")]
     pub max_retries: u32,
 
-    /// Enable OpenTelemetry Chrome JSON exporter for trace data analysis.
-    #[arg(long)]
-    pub chrome_trace_exporter: bool,
-
-    /// Output file path for Chrome trace JSON format.
-    /// Can be visualized in chrome://tracing or Perfetto UI.
-    #[arg(long, env = "LINERA_CHROME_TRACE_FILE")]
-    pub chrome_trace_file: Option<String>,
-
-    /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
-    #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
-    pub otlp_exporter_endpoint: Option<String>,
-
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.
     #[arg(long)]
@@ -118,7 +93,7 @@ pub struct ClientContextOptions {
     pub long_lived_services: bool,
 
     /// The policy for handling incoming messages.
-    #[arg(long, default_value = "accept")]
+    #[arg(long, default_value_t, value_enum)]
     pub blanket_message_policy: BlanketMessagePolicy,
 
     /// A set of chains to restrict incoming messages from. By default, messages
@@ -156,7 +131,7 @@ pub struct ClientContextOptions {
     #[arg(
         long = "blob-download-timeout-ms",
         default_value = "1000",
-        value_parser = util::parse_millis
+        value_parser = util::parse_millis,
     )]
     pub blob_download_timeout: Duration,
 
@@ -241,9 +216,29 @@ pub struct ClientContextOptions {
         env = "LINERA_REQUESTS_SCHEDULER_ALTERNATIVE_PEERS_RETRY_DELAY_MS"
     )]
     pub alternative_peers_retry_delay_ms: u64,
+
+    #[serde(flatten)]
+    #[clap(flatten)]
+    pub chain_listener_config: crate::chain_listener::ChainListenerConfig,
 }
 
-impl ClientContextOptions {
+impl Default for Options {
+    fn default() -> Self {
+        use clap::Parser;
+
+        #[derive(Parser)]
+        struct OptionsParser {
+            #[clap(flatten)]
+            options: Options,
+        }
+
+        OptionsParser::try_parse_from(std::iter::empty::<std::ffi::OsString>())
+            .expect("Options has no required arguments")
+            .options
+    }
+}
+
+impl Options {
     /// Creates [`chain_client::Options`] with the corresponding values.
     pub(crate) fn to_chain_client_options(&self) -> chain_client::Options {
         let message_policy = MessagePolicy::new(

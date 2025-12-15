@@ -8,9 +8,11 @@
 
 pub mod chain_listener;
 pub mod client_context;
+pub use client_context::ClientContext;
 #[cfg(not(web))]
 pub mod client_metrics;
 pub mod client_options;
+pub use client_options::Options;
 pub mod config;
 mod error;
 pub mod util;
