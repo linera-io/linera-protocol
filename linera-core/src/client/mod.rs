@@ -48,7 +48,7 @@ use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     environment::Environment,
     local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
-    node::{CrossChainMessageDelivery, NodeError, ValidatorNodeProvider as _},
+    node::{CrossChainMessageDelivery, NodeError, ValidatorNode as _, ValidatorNodeProvider as _},
     notifier::{ChannelNotifier, Notifier as _},
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, ValidatorUpdater},
@@ -958,6 +958,68 @@ impl<Env: Environment> Client<Env> {
             }
         }
 
+        Ok(())
+    }
+
+    /// Downloads any missing event blocks that the given certificate references in its
+    /// `previous_event_blocks` field, for the specified streams.
+    ///
+    /// This is used for lazy synchronization of EventsOnly chains: instead of downloading
+    /// all blocks upfront, we only download blocks that contain events for streams we care about.
+    #[instrument(level = "trace", skip_all)]
+    pub(crate) async fn download_missing_event_blocks(
+        &self,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+        certificate: &ConfirmedBlockCertificate,
+        relevant_streams: &BTreeSet<StreamId>,
+    ) -> Result<(), chain_client::Error> {
+        let mut pending: BTreeMap<BlockHeight, CryptoHash> = BTreeMap::new();
+
+        self.collect_missing_event_block_predecessors(certificate, relevant_streams, &mut pending)
+            .await?;
+
+        while let Some((_, hash)) = pending.pop_last() {
+            let mut certificates = remote_node.node.download_certificates(vec![hash]).await?;
+            let prev_cert = certificates
+                .pop()
+                .ok_or_else(|| NodeError::MissingCertificates(vec![hash]))?;
+
+            self.handle_certificate(prev_cert.clone()).await?;
+
+            self.collect_missing_event_block_predecessors(
+                &prev_cert,
+                relevant_streams,
+                &mut pending,
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Collects missing predecessor blocks from `previous_event_blocks` for the given streams.
+    async fn collect_missing_event_block_predecessors(
+        &self,
+        certificate: &ConfirmedBlockCertificate,
+        relevant_streams: &BTreeSet<StreamId>,
+        pending: &mut BTreeMap<BlockHeight, CryptoHash>,
+    ) -> Result<(), chain_client::Error> {
+        for stream_id in relevant_streams {
+            if let Some((prev_hash, prev_height)) = certificate
+                .block()
+                .body
+                .previous_event_blocks
+                .get(stream_id)
+            {
+                if !self
+                    .storage_client()
+                    .contains_certificate(*prev_hash)
+                    .await?
+                {
+                    pending.insert(*prev_height, *prev_hash);
+                }
+            }
+        }
         Ok(())
     }
 
