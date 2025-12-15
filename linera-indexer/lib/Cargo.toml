@@ -64,7 +64,8 @@ sqlx = { workspace = true, features = [
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tokio-stream = "0.1"
-tonic = { workspace = true, features = ["server", "codegen", "prost"] }
+tonic = { workspace = true, features = ["server", "codegen"] }
+tonic-prost.workspace = true
 tower-http = { workspace = true, features = ["cors"] }
 tracing.workspace = true
 
@@ -73,7 +74,7 @@ assert_matches.workspace = true
 dockertest = "0.5"
 
 [build-dependencies]
-tonic-build = { workspace = true, features = ["prost"] }
+tonic-prost-build.workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["prost"]
+ignored = ["prost", "tonic-prost"]
