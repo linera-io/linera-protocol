@@ -67,6 +67,7 @@ linera-storage.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
 lru.workspace = true
+quick_cache.workspace = true
 papaya = { workspace = true, features = ["serde"] }
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }

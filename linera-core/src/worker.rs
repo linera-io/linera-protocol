@@ -47,7 +47,7 @@ use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
     notifier::Notifier,
-    value_cache::ValueCache,
+    value_cache::{ParkingCache, ValueCache},
     CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
@@ -378,7 +378,7 @@ where
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
     block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache: Arc<ParkingCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     /// Chain IDs that should be tracked by a worker.
     tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -435,7 +435,7 @@ where
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
             block_cache: Arc::new(ValueCache::new(block_cache_size)),
-            execution_state_cache: Arc::new(ValueCache::new(execution_state_cache_size)),
+            execution_state_cache: Arc::new(ParkingCache::new(execution_state_cache_size)),
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -456,7 +456,7 @@ where
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
             block_cache: Arc::new(ValueCache::new(block_cache_size)),
-            execution_state_cache: Arc::new(ValueCache::new(execution_state_cache_size)),
+            execution_state_cache: Arc::new(ParkingCache::new(execution_state_cache_size)),
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
