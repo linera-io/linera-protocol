@@ -130,6 +130,15 @@ spec:
                 --storage scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042 \
                 --storage-replication-factor {{ .Values.storageReplicationFactor | quote }} \
                 --id "$ORDINAL" \
+                {{- if .Values.blobCacheSize }}
+                --blob-cache-size {{ .Values.blobCacheSize }} \
+                {{- end }}
+                {{- if .Values.certificateCacheSize }}
+                --certificate-cache-size {{ .Values.certificateCacheSize }} \
+                {{- end }}
+                {{- if .Values.confirmedBlockCacheSize }}
+                --confirmed-block-cache-size {{ .Values.confirmedBlockCacheSize }} \
+                {{- end }}
                 /config/server.json
           env:
             - name: RUST_LOG

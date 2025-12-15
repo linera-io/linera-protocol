@@ -61,6 +61,11 @@ crossChainQueueSize: ""
 # Set to empty string to use default
 notificationQueueSize: ""
 
+# Application-level cache sizes (default in binary is 1000)
+blobCacheSize: ""
+certificateCacheSize: ""
+confirmedBlockCacheSize: ""
+
 # ============================================================================
 # Storage Configuration
 # ============================================================================
