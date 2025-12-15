@@ -184,6 +184,7 @@ impl Chain {
     /// If the application ID is invalid.
     #[wasm_bindgen]
     pub async fn application(&self, id: &str) -> JsResult<Application> {
+        web_sys::console::debug!("connecting to Linera application {id}");
         Ok(Application {
             client: self.client.clone(),
             chain_client: self.chain_client.clone(),

@@ -160,7 +160,6 @@
               gql(`query { tickerSymbol, accounts { entry(key: "${owner}") { value } } }`),
               { blockHash },
           ));
-          console.warn('application response:', response);
           document.querySelector('#ticker-symbol').textContent = response.data.tickerSymbol;
           document.querySelector('#balance').textContent = (+( response.data.accounts.entry?.value || 0)).toFixed(2);
       }
@@ -218,27 +217,19 @@
               navigator.clipboard.writeText(document.querySelector('#account-id').textContent);
           });
 
-          console.warn(1);
-
           await linera.initialize();
           const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
           const mnemonic = ethers.Wallet.createRandom().mnemonic.phrase;
           const signer = linera.signer.PrivateKey.fromMnemonic(mnemonic);
           const wallet = await faucet.createWallet();
-          console.warn(5);
           const owner = signer.address();
           const chainId = await faucet.claimChain(wallet, owner);
-          console.warn(6);
           const client = await new linera.Client(wallet, signer);
-          console.warn(7);
           document.querySelector('#chain-id').innerText = chainId;
           document.querySelector('#owner').innerText = owner;
 
-          console.warn(8);
           const chain = await client.chain(chainId);
-          console.warn(9);
           const application = await chain.application(import.meta.env.LINERA_APPLICATION_ID);
-          console.warn(10);
 
           await updateBalance(application, owner, null);
 
