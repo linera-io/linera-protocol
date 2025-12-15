@@ -12,6 +12,8 @@ use async_trait::async_trait;
 use futures::{
     future::Either,
     lock::{Mutex, MutexGuard},
+    stream,
+    stream::StreamExt as _,
     Future,
 };
 use linera_base::{
@@ -481,7 +483,9 @@ where
     ) -> Result<(), Result<NotificationStream, NodeError>> {
         let validator = self.client.lock().await;
         let rx = validator.notifier.subscribe(chains);
-        let stream: NotificationStream = Box::pin(UnboundedReceiverStream::new(rx));
+        // Flatten the batched notifications into individual items
+        let stream: NotificationStream =
+            Box::pin(UnboundedReceiverStream::new(rx).flat_map(stream::iter));
         sender.send(Ok(stream))
     }
 
