@@ -37,8 +37,8 @@ impl Application {
     /// # Panics
     /// On internal protocol errors.
     #[wasm_bindgen]
-    // TODO(#14) allow passing bytes here rather than just strings
-    // TODO(#15) a lot of this logic is shared with `linera_service::node_service`
+    // TODO(#5253) allow passing bytes here rather than just strings
+    // TODO(#5152) a lot of this logic is shared with `linera_service::node_service`
     pub async fn query(&self, query: &str, options: Option<QueryOptions>) -> JsResult<String> {
         tracing::debug!("querying application: {query}");
         let QueryOptions { block_hash, owner } = options.unwrap_or_default();

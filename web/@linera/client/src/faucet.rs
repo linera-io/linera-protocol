@@ -32,7 +32,6 @@ impl Faucet {
         })
     }
 
-    // TODO(#40): figure out a way to alias or specify this string for TypeScript
     /// Claims a new chain from the faucet, with a new keypair and some tokens.
     ///
     /// # Errors

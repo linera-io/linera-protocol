@@ -11,7 +11,7 @@ use linera_base::{
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-// TODO(TODO) remove this in favour of passing up arbitrary `JsValue` errors
+// TODO(#5150) remove this in favour of passing up arbitrary `JsValue` errors
 #[repr(u8)]
 #[wasm_bindgen(js_name = "SignerError")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
