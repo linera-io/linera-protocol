@@ -83,6 +83,18 @@ jobs:
       with:
         version: 10.17
 
+    # Run tests
+    - name: Test the npm packages
+      run: |
+        cd web
+        pnpm install --frozen-lockfile
+        (cd @linera/client && pnpm exec playwright install)
+        pnpm -r run ci
+    - name: Test `linera-views` on the Web
+      run: |
+        cd linera-views
+        WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
+
     # Setup fixtures
     - name: Run the storage-service instance
       run: |
@@ -106,15 +118,3 @@ jobs:
     - name: Wait for faucet to be ready
       run: |
         until curl -s http://localhost:8079 >/dev/null; do sleep 1; done
-
-    # Run tests
-    - name: Test the npm packages
-      run: |
-        cd web
-        pnpm install --frozen-lockfile
-        (cd @linera/client && pnpm exec playwright install)
-        pnpm -r run ci
-    - name: Test `linera-views` on the Web
-      run: |
-        cd linera-views
-        WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
