@@ -502,6 +502,7 @@ impl<Env: Environment> ChainClient<Env> {
             return Ok(Vec::new());
         }
 
+        let query_start = linera_base::time::Instant::now();
         let query = ChainInfoQuery::new(self.chain_id).with_pending_message_bundles();
         let info = self
             .client
@@ -509,6 +510,7 @@ impl<Env: Environment> ChainClient<Env> {
             .handle_chain_info_query(query)
             .await?
             .info;
+        let query_elapsed = query_start.elapsed();
         if self.preferred_owner.is_some_and(|owner| {
             info.manager
                 .ownership
@@ -521,6 +523,12 @@ impl<Env: Environment> ChainClient<Env> {
             );
         }
 
+        info!(
+            "pending_bundles={} max={} query_time={:?}",
+            info.requested_pending_message_bundles.len(),
+            self.options.max_pending_message_bundles,
+            query_elapsed,
+        );
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
@@ -2262,20 +2270,45 @@ impl<Env: Environment> ChainClient<Env> {
         let _latency = super::metrics::PROCESS_INBOX_WITHOUT_PREPARE_LATENCY.measure_latency();
 
         let mut certificates = Vec::new();
+        let mut block_count = 0u64;
+        let process_start = linera_base::time::Instant::now();
         loop {
+            let block_start = linera_base::time::Instant::now();
             // We provide no operations - this means that the only operations executed
             // will be epoch changes, receiving messages and processing event stream
             // updates, if any are pending.
             match self.execute_block(vec![], vec![]).await {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
-                | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
+                | Ok(ExecuteBlockOutcome::Conflict(certificate)) => {
+                    block_count += 1;
+                    let block_elapsed = block_start.elapsed();
+                    let bundles_in_block = certificate.block().body.incoming_bundles().count();
+                    info!(
+                        "block #{} completed: bundles={} time={:?} height={}",
+                        block_count,
+                        bundles_in_block,
+                        block_elapsed,
+                        certificate.block().header.height,
+                    );
+                    certificates.push(certificate);
+                }
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
+                    info!(
+                        "process_inbox: timeout after {} blocks in {:?}",
+                        block_count,
+                        process_start.elapsed()
+                    );
                     return Ok((certificates, Some(timeout)));
                 }
                 // Nothing in the inbox and no stream updates to be processed.
                 Err(Error::LocalNodeError(LocalNodeError::WorkerError(
                     WorkerError::ChainError(chain_error),
                 ))) if matches!(*chain_error, ChainError::EmptyBlock) => {
+                    info!(
+                        "process_inbox: completed {} blocks in {:?}",
+                        block_count,
+                        process_start.elapsed()
+                    );
                     return Ok((certificates, None));
                 }
                 Err(error) => return Err(error),
