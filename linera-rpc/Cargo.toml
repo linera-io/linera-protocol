@@ -34,6 +34,7 @@ metrics = [
 
 server = ["tokio-util", "tonic-health", "tonic-reflection"]
 simple-network = ["tokio-util/net"]
+transport = ["tonic-prost-build/transport"]
 
 web = [
     "linera-base/web",
@@ -84,6 +85,8 @@ test-strategy.workspace = true
 tonic = { workspace = true, features = [
     "tls-webpki-roots",
     "codegen",
+    "router",
+    "server",
     "transport",
 ] }
 tonic-prost.workspace = true

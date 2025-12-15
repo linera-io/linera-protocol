@@ -74,7 +74,7 @@ assert_matches.workspace = true
 dockertest = "0.5"
 
 [build-dependencies]
-tonic-prost-build.workspace = true
+tonic-prost-build = { workspace = true, features = ["transport"] }
 
 [package.metadata.cargo-machete]
 ignored = ["prost", "tonic-prost"]

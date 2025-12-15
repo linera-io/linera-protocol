@@ -85,7 +85,11 @@ fs-err = { workspace = true, optional = true }
 fs4 = { workspace = true, optional = true }
 papaya = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["full"] }
-linera-rpc = { workspace = true, features = ["server", "simple-network"] }
+linera-rpc = { workspace = true, features = [
+    "server",
+    "simple-network",
+    "transport",
+] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
