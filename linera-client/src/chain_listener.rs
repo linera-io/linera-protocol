@@ -35,7 +35,7 @@ use tracing::{debug, error, info, instrument, warn, Instrument as _};
 
 use crate::error::{self, Error};
 
-#[derive(Default, Debug, Clone, clap::Args, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Debug, Clone, clap::Args, serde::Serialize, serde::Deserialize, tsify_next::Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct ChainListenerConfig {
     /// Do not create blocks automatically to receive incoming messages. Instead, wait for

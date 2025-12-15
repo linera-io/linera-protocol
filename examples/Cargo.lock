@@ -3734,6 +3734,8 @@ dependencies = [
  "tracing",
  "trait-set",
  "trait-variant",
+ "tsify-next",
+ "wasm-bindgen",
  "web-thread-pool",
 ]
 

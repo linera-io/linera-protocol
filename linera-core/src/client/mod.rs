@@ -147,7 +147,7 @@ pub struct MessagePolicy {
     reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
 }
 
-#[derive(Default, Copy, Clone, Debug, clap::ValueEnum, serde::Deserialize)]
+#[derive(Default, Copy, Clone, Debug, clap::ValueEnum, serde::Deserialize, tsify_next::Tsify)]
 pub enum BlanketMessagePolicy {
     /// Automatically accept all incoming messages. Reject them only if execution fails.
     #[default]

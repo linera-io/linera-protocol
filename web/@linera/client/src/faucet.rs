@@ -43,19 +43,18 @@ impl Faucet {
     /// # Panics
     /// If an error occurs in the chain listener task.
     #[wasm_bindgen(js_name = claimChain)]
-    pub async fn claim_chain(&self, wallet: &mut Wallet, owner: JsValue) -> JsResult<String> {
-        let account_owner: AccountOwner = serde_wasm_bindgen::from_value(owner)?;
+    pub async fn claim_chain(&self, wallet: &mut Wallet, owner: AccountOwner) -> JsResult<String> {
         tracing::info!(
             "Requesting a new chain for owner {} using the faucet at address {}",
-            account_owner,
+            owner,
             self.0.url(),
         );
-        let description = self.0.claim(&account_owner).await?;
+        let description = self.0.claim(&owner).await?;
         let chain_id = description.id();
         wallet.chains.insert(
             chain_id,
             wallet::Chain {
-                owner: Some(account_owner),
+                owner: Some(owner),
                 ..description.into()
             },
         );

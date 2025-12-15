@@ -5441,6 +5441,8 @@ dependencies = [
  "tracing-subscriber 0.3.19",
  "trait-set",
  "trait-variant",
+ "tsify-next",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-thread-pool",
 ]
