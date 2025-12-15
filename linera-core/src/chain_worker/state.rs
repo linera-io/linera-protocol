@@ -1069,6 +1069,7 @@ where
         origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
+        let incoming_count = bundles.len();
         // Only process certificates with relevant heights and epochs.
         let next_height_to_receive = self.chain.next_block_height_to_receive(&origin).await?;
         let last_anticipated_block_height =
@@ -1082,18 +1083,19 @@ where
             last_anticipated_block_height,
             bundles,
         )?;
+        let selected_count = bundles.len();
         let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
             return Ok(None);
         };
         // Process the received messages in certificates.
         let local_time = self.storage.clock().current_time();
         let mut previous_height = None;
-        for bundle in bundles {
+        for bundle in &bundles {
             let add_to_received_log = previous_height != Some(bundle.height);
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
             self.chain
-                .receive_message_bundle(&origin, bundle, local_time, add_to_received_log)
+                .receive_message_bundle(&origin, bundle.clone(), local_time, add_to_received_log)
                 .await?;
         }
         if !self.config.allow_inactive_chains && !self.chain.is_active() {
@@ -1719,15 +1721,26 @@ where
             );
         }
         if query.request_pending_message_bundles {
+            let load_start = linera_base::time::Instant::now();
             let mut bundles = Vec::new();
             let pairs = chain.inboxes.try_load_all_entries().await?;
+            let num_inboxes = pairs.len();
             let action = if *chain.execution_state.system.closed.get() {
                 MessageAction::Reject
             } else {
                 MessageAction::Accept
             };
             for (origin, inbox) in pairs {
-                for bundle in inbox.added_bundles.elements().await? {
+                let inbox_bundles: Vec<_> = inbox.added_bundles.elements().await?;
+                let inbox_count = inbox_bundles.len();
+                if inbox_count > 0 {
+                    tracing::debug!(
+                        "inbox from {:?}: {} bundles",
+                        origin,
+                        inbox_count
+                    );
+                }
+                for bundle in inbox_bundles {
                     bundles.push(IncomingBundle {
                         origin,
                         bundle,
@@ -1736,6 +1749,13 @@ where
                 }
             }
             bundles.sort_by_key(|b| b.bundle.timestamp);
+            let load_elapsed = load_start.elapsed();
+            tracing::info!(
+                "loaded {} bundles from {} inboxes in {:?}",
+                bundles.len(),
+                num_inboxes,
+                load_elapsed
+            );
             info.requested_pending_message_bundles = bundles;
         }
         let hashes = chain
