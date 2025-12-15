@@ -102,7 +102,11 @@ linera-faucet-client.workspace = true
 linera-faucet-server.workspace = true
 linera-metrics = { workspace = true, optional = true }
 linera-persistent = { workspace = true, features = ["fs"] }
-linera-rpc = { workspace = true, features = ["server", "simple-network"] }
+linera-rpc = { workspace = true, features = [
+    "server",
+    "simple-network",
+    "transport",
+] }
 linera-sdk = { workspace = true }
 linera-storage.workspace = true
 linera-storage-service = { workspace = true, optional = true }
@@ -132,8 +136,14 @@ tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
 tokio-util.workspace = true
 toml.workspace = true
-tonic = { workspace = true, features = ["transport", "tls", "tls-roots"] }
+tonic = { workspace = true, features = [
+    "transport",
+    "tls-native-roots",
+    "tls-ring",
+    "tls-webpki-roots",
+] }
 tonic-health.workspace = true
+tonic-prost.workspace = true
 tonic-reflection.workspace = true
 tonic-web.workspace = true
 tower.workspace = true
@@ -143,7 +153,7 @@ url = { workspace = true, features = ["serde"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
-tonic-build = { workspace = true, features = ["prost", "transport"] }
+tonic-prost-build = { workspace = true, features = ["transport"] }
 
 [dev-dependencies]
 amm.workspace = true
@@ -206,3 +216,6 @@ path = "src/exporter/main.rs"
 [[bench]]
 name = "transfers"
 harness = false
+
+[package.metadata.cargo-machete]
+ignored = ["tonic-prost"]
