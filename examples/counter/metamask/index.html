@@ -65,20 +65,23 @@
      const signer = await new linera_metamask.Signer();
      const wallet = await faucet.createWallet();
      const owner = await signer.address();
-     const chain = await faucet.claimChain(wallet, owner);
+     const chainId = await faucet.claimChain(wallet, owner);
      document.getElementById('owner').innerText = owner;
-     document.getElementById('chain-id').innerText = chain;
+     document.getElementById('chain-id').innerText = chainId;
 
      // For autosigning: first we set up a local (in-memory) signer, and provide it to the
      // client along with the MetaMask signer
      const autosigner = linera.signer.PrivateKey.createRandom();
      const client = await new linera.Client(wallet, new linera.signer.Composite(autosigner, signer));
 
-     // Connect to the counter application.
-     const counter = await client.application(import.meta.env.LINERA_APPLICATION_ID);
+     // Connect to our user chain.
+     const chain = await client.chain(chainId);
+
+     // Connect to the counter application on the chain.
+     const counter = await chain.application(import.meta.env.LINERA_APPLICATION_ID);
 
      // When we get a new block, show it in the UI and update the counter from the chain state.
-     client.onNotification(notification => {
+     chain.onNotification(notification => {
          let newBlock = notification.reason.NewBlock;
          if (!newBlock) return;
          addLogEntry(newBlock);
@@ -88,8 +91,8 @@
      // For autosigning: we then add the in-memory signer as an owner of the chain in the
      // wallet, and set it as the default owner (so it will be used to process messages and
      // events).
-     await client.addOwner(autosigner.address());
-     wallet.setOwner(chain, autosigner.address());
+     await chain.addOwner(autosigner.address());
+     wallet.setOwner(chainId, autosigner.address());
 
      function addLogEntry(block) {
          const entry = logs.getElementsByTagName('template')[0].content.cloneNode(true);

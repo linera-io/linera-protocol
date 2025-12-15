@@ -1,15 +1,20 @@
 {
-    "include": ["src/**/*.ts"],
+    "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.mjs"],
     "compilerOptions": {
-        "target": "es6",
-        "moduleResolution": "nodenext",
-        "module": "NodeNext",
+        "baseUrl": "./",
+        "target": "es2022",
+        "module": "Node16",
+        "moduleResolution": "node16",
+        "sourceMap": true,
         "outDir": "dist/",
+        "allowJs": true,
         "rootDir": "src",
         "declaration": true,
         "paths": {
-            "@linera-web": ["./dist/linera.js"],
-            "web-thread:wasm-shim": ["./dist/linera.js"]
+            "web-thread:wasm-shim": ["./src/wasm/index.js"]
         }
+    },
+    "tsc-alias": {
+        "resolveFullPaths": true
     }
 }

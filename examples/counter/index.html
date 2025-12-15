@@ -48,67 +48,58 @@
       </div>
     </div>
 
-    <script type="importmap">
-      {
-          "imports": {
-              "@linera/client": "./js/@linera/client/index.js"
-          }
-      }
-    </script>
-
     <script type="module">
-      import * as linera from '@linera/client';
-      import { ethers } from 'ethers';
+     import * as linera from '@linera/client';
+     import { ethers } from 'ethers';
 
-     async function run() {
-         console.log(linera);
-          await linera.initialize();
-          const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
-          const signer = linera.signer.PrivateKey.createRandom();
-          const wallet = await faucet.createWallet();
-          const owner = await signer.address();
-          document.getElementById('owner').innerText = owner;
-          document.getElementById('chain-id').innerText = await faucet.claimChain(wallet, owner);
-          const client = await new linera.Client(wallet, signer);
-          const counter = await client.application(import.meta.env.LINERA_APPLICATION_ID);
-          const logs = document.getElementById('logs');
-          const incrementButton = document.getElementById('increment-btn');
-          const blockTemplate = document.getElementById('block-template');
+     await linera.initialize();
+     console.log('initialized');
+     const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
+     const signer = linera.signer.PrivateKey.createRandom();
+     const wallet = await faucet.createWallet();
+     console.log('wallet created');
+     const owner = await signer.address();
+     console.log('address got');
+     const chainId = await faucet.claimChain(wallet, owner);
+     console.log('chain claimed');
+     document.getElementById('owner').innerText = owner;
+     document.getElementById('chain-id').innerText = chainId;
+     const client = await new linera.Client(wallet, signer);
+     console.log('chain claimed');
+     let chain = await client.chain(chainId);
+     const counter = await chain.application(import.meta.env.LINERA_APPLICATION_ID);
+     const logs = document.getElementById('logs');
+     const incrementButton = document.getElementById('increment-btn');
+     const blockTemplate = document.getElementById('block-template');
 
-          function addLogEntry(block) {
-              const entry = logs.getElementsByTagName('template')[0].content.cloneNode(true);
-              entry.querySelector('.height').textContent = block.height;
-              entry.querySelector('.hash').textContent = block.hash;
-              logs.insertBefore(entry, logs.firstChild);
-          }
+     function addLogEntry(block) {
+         const entry = logs.getElementsByTagName('template')[0].content.cloneNode(true);
+         entry.querySelector('.height').textContent = block.height;
+         entry.querySelector('.hash').textContent = block.hash;
+         logs.insertBefore(entry, logs.firstChild);
+     }
 
-          async function updateCount(blockHash) {
-              const response = await counter.query('{ "query": "query { value }" }', { blockHash });
-              document.getElementById('count').innerText
-                  = JSON.parse(response).data.value;
-          }
+     async function updateCount(blockHash) {
+         const response = await counter.query('{ "query": "query { value }" }', { blockHash });
+         document.getElementById('count').innerText
+             = JSON.parse(response).data.value;
+     }
 
-          updateCount();
-          client.onNotification(notification => {
-              let newBlock = notification.reason.NewBlock;
-              if (notification.reason.BlockExecuted) {
-                let hash = notification.reason.BlockExecuted.hash;
-                updateCount(hash);
-              } else if (newBlock) {
-                addLogEntry(newBlock);
-                updateCount(null);
-              }
-          });
+     updateCount();
+     chain.onNotification(notification => {
+         let newBlock = notification.reason.NewBlock;
+         if (notification.reason.BlockExecuted) {
+             let hash = notification.reason.BlockExecuted.hash;
+             updateCount(hash);
+         } else if (newBlock) {
+             addLogEntry(newBlock);
+             updateCount(null);
+         }
+     });
 
-          incrementButton.addEventListener('click', () => {
-              counter.query('{ "query": "mutation { increment(value: 1) }" }');
-          });
-      }
-
-      if (document.readyState === 'loading')
-          document.addEventListener('DOMContentLoaded', run);
-      else
-          run();
+     incrementButton.addEventListener('click', () => {
+         counter.query('{ "query": "mutation { increment(value: 1) }" }');
+     });
     </script>
   </body>
 </html>

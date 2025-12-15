@@ -83,6 +83,8 @@ tonic.workspace = true
 tracing.workspace = true
 trait-set.workspace = true
 trait-variant.workspace = true
+tsify-next.workspace = true
+wasm-bindgen.workspace = true
 wasm-bindgen-futures = { workspace = true, optional = true }
 web-thread-pool.workspace = true
 
@@ -117,7 +119,7 @@ criterion = { workspace = true, default-features = true, features = [
 ] }
 
 [package.metadata.cargo-machete]
-ignored = ["proptest"]
+ignored = ["proptest", "wasm-bindgen"]
 
 [[bench]]
 name = "client_benchmarks"

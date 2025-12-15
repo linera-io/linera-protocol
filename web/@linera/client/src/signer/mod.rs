@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module contains various implementation of the [`Signer`] trait usable in the browser.
-use std::{fmt::Display, str::FromStr};
+use std::fmt::Display;
 
 use linera_base::{
-    crypto::{AccountSignature, CryptoHash, EvmSignature},
+    crypto::{AccountSignature, CryptoHash},
     identifiers::AccountOwner,
 };
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-// TODO(TODO) remove this in favour of passing up arbitrary `JsValue` errors
+// TODO(#5150) remove this in favour of passing up arbitrary `JsValue` errors
 #[repr(u8)]
 #[wasm_bindgen(js_name = "SignerError")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -62,27 +62,30 @@ impl From<JsValue> for Error {
 
 impl std::error::Error for Error {}
 
+#[wasm_bindgen(typescript_custom_section)]
+const _: &str = r#"import type { Signer } from '../signer/index.js';"#;
+
 #[wasm_bindgen]
 extern "C" {
-    // We refer to the interface defined above.
     #[wasm_bindgen(typescript_type = "Signer")]
     pub type Signer;
 
     #[wasm_bindgen(catch, method)]
-    async fn sign(this: &Signer, owner: JsValue, value: Vec<u8>) -> Result<JsValue, JsValue>;
+    async fn sign(
+        this: &Signer,
+        owner: AccountOwner,
+        value: Vec<u8>,
+    ) -> Result<js_sys::JsString, JsValue>;
 
     #[wasm_bindgen(catch, method, js_name = "containsKey")]
-    async fn contains_key(this: &Signer, owner: JsValue) -> Result<JsValue, JsValue>;
+    async fn contains_key(this: &Signer, owner: AccountOwner) -> Result<JsValue, JsValue>;
 }
 
 impl linera_base::crypto::Signer for Signer {
     type Error = Error;
 
     async fn contains_key(&self, owner: &AccountOwner) -> Result<bool, Self::Error> {
-        let js_owner = serde_wasm_bindgen::to_value(owner).unwrap();
-        let js_bool = self.contains_key(js_owner).await.map_err(Error::from)?;
-
-        serde_wasm_bindgen::from_value(js_bool).map_err(|_| Error::JsConversion)
+        Ok(self.contains_key(*owner).await?.is_truthy())
     }
 
     async fn sign(
@@ -90,22 +93,21 @@ impl linera_base::crypto::Signer for Signer {
         owner: &AccountOwner,
         value: &CryptoHash,
     ) -> Result<AccountSignature, Self::Error> {
-        let address = match owner {
-            AccountOwner::Address20(address) => *address,
-            _ => return Err(Error::InvalidAccountOwnerType),
-        };
-        let js_owner = JsValue::from_str(&owner.to_string());
-        // Pass CryptoHash without serializing as that adds bytes
-        // to the serialized value which we don't want for signing.
-        let js_cryptohash = value.as_bytes().0.to_vec();
-        let js_signature = self
-            .sign(js_owner, js_cryptohash)
-            .await
-            .map_err(Error::from)?
-            .as_string()
-            .ok_or(Error::JsConversion)?;
-        let signature =
-            EvmSignature::from_str(&js_signature).map_err(|_| Error::UnexpectedSignatureFormat)?;
-        Ok(AccountSignature::EvmSecp256k1 { signature, address })
+        Ok(AccountSignature::EvmSecp256k1 {
+            signature: String::from(
+                self
+                    // Pass CryptoHash without serializing as that adds bytes
+                    // to the serialized value which we don't want for signing.
+                    .sign(*owner, value.as_bytes().0.to_vec())
+                    .await?,
+            )
+            .parse()
+            .map_err(|_| Error::UnexpectedSignatureFormat)?,
+            address: if let AccountOwner::Address20(address) = owner {
+                *address
+            } else {
+                return Err(Error::InvalidAccountOwnerType);
+            },
+        })
     }
 }

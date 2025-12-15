@@ -1,7 +1,7 @@
 [package]
 name = "linera-web"
 description = "The Linera Web client"
-version.workspace = true
+version = "0.16.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 repository = "https://github.com/linera-io/linera-protocol/"
@@ -23,9 +23,15 @@ serde.workspace = true
 serde-wasm-bindgen.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
-tracing = { workspace = true, features = ["release_max_level_debug"] }
+tracing.workspace = true
+tracing-web.workspace = true
+tsify-next = "0.5.6"
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
+
+[dependencies.tracing-subscriber]
+features = ["ansi", "fmt", "std"]
+workspace = true
 
 [dependencies.linera-base]
 features = ["web"]
