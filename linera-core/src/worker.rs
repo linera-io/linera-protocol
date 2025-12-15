@@ -47,9 +47,9 @@ use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
     notifier::Notifier,
-    value_cache::{ParkingCache, ValueCache},
     CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
+use linera_base::value_cache::{ParkingCache, ValueCache};
 
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]

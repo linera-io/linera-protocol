@@ -43,10 +43,11 @@ use linera_views::{
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
 use tracing::{debug, instrument, trace, warn};
 
+use linera_base::value_cache::{ParkingCache, ValueCache};
+
 use super::{ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier, EventSubscriptionsResult};
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    value_cache::{ParkingCache, ValueCache},
     worker::{NetworkActions, Notification, Reason, WorkerError},
 };
 
@@ -589,7 +590,7 @@ where
             for cert in certificates {
                 let hashed_block = cert.into_value().into_inner();
                 let height = hashed_block.inner().header.height;
-                self.block_values.insert(Cow::Owned(hashed_block.clone()));
+                self.block_values.insert_hashed(Cow::Owned(hashed_block.clone()));
                 height_to_blocks.insert(height, hashed_block);
             }
         }
@@ -782,7 +783,7 @@ where
         }
 
         self.block_values
-            .insert(Cow::Borrowed(certificate.inner().inner()));
+            .insert_hashed(Cow::Borrowed(certificate.inner().inner()));
         let required_blob_ids = block.required_blob_ids();
         let maybe_blobs = self
             .maybe_get_required_blobs(required_blob_ids, Some(&block.created_blobs()))
@@ -1027,7 +1028,7 @@ where
         self.save().await?;
 
         self.block_values
-            .insert(Cow::Owned(certificate.into_inner().into_inner()));
+            .insert_hashed(Cow::Owned(certificate.into_inner().into_inner()));
 
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
@@ -1670,10 +1671,12 @@ where
         match manager.create_vote(proposal, block, key_pair, local_time, blobs)? {
             // Cache the value we voted on, so the client doesn't have to send it again.
             Some(Either::Left(vote)) => {
-                self.block_values.insert(Cow::Borrowed(vote.value.inner()));
+                self.block_values
+                    .insert_hashed(Cow::Borrowed(vote.value.inner()));
             }
             Some(Either::Right(vote)) => {
-                self.block_values.insert(Cow::Borrowed(vote.value.inner()));
+                self.block_values
+                    .insert_hashed(Cow::Borrowed(vote.value.inner()));
             }
             None => (),
         }
