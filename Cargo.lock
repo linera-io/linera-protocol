@@ -5369,7 +5369,6 @@ dependencies = [
  "rand 0.8.5",
  "reqwest 0.11.27",
  "serde",
- "serde-inline-default",
  "serde-wasm-bindgen 0.6.5",
  "serde_yaml",
  "social",
@@ -9080,17 +9079,6 @@ checksum = "b00d5258adb4bc52373d80547cf9a356c00c0012d3d2c06a963a41305ff6a701"
 dependencies = [
  "serde",
  "snafu 0.6.10",
-]
-
-[[package]]
-name = "serde-inline-default"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92d48532bc0781ac622a5fea0f16502d3b4f1af0fcebe56d618120969f35d315"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.105",
 ]
 
 [[package]]
