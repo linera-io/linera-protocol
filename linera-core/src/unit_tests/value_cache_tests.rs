@@ -145,7 +145,8 @@ fn test_one_over_capacity() {
     // Exactly one value should have been evicted
     let present_count = values.iter().filter(|v| cache.contains(&v.hash())).count();
     assert_eq!(
-        present_count, TEST_CACHE_SIZE,
+        present_count,
+        TEST_CACHE_SIZE,
         "Expected {} items in cache after inserting {} items with capacity {}",
         TEST_CACHE_SIZE,
         values.len(),

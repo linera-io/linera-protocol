@@ -94,6 +94,10 @@ service ValidatorNode {
   // Download a batch of certificates, in serialized form, by their heights.
   rpc DownloadRawCertificatesByHeights(DownloadCertificatesByHeightsRequest) returns (RawCertificatesBatch);
 
+  // Download sender certificates with their sending ancestors.
+  // Traverses previous_message_blocks to find all certificates that sent messages to the receiver.
+  rpc DownloadSenderCertificatesForReceiver(SenderCertificatesRequest) returns (CertificatesBatchResponse);
+
   // Return the hash of the `Certificate` that last used a blob.
   rpc BlobLastUsedBy(BlobId) returns (CryptoHash);
 
@@ -122,6 +126,14 @@ message RawCertificate {
 message DownloadCertificatesByHeightsRequest {
   ChainId chain_id = 1;
   repeated BlockHeight heights = 2;
+}
+
+// A request for downloading sender certificates with their sending ancestors.
+message SenderCertificatesRequest {
+  ChainId sender_chain_id = 1;
+  ChainId receiver_chain_id = 2;
+  BlockHeight target_height = 3;
+  BlockHeight start_height = 4;
 }
 
 // A request for a batch of certificates.

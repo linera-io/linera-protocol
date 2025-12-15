@@ -318,4 +318,37 @@ impl ValidatorNode for Client {
             Client::Simple(simple_client) => simple_client.get_shard_info(chain_id).await?,
         })
     }
+
+    async fn download_sender_certificates_for_receiver(
+        &self,
+        sender_chain_id: ChainId,
+        receiver_chain_id: ChainId,
+        target_height: BlockHeight,
+        start_height: BlockHeight,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => {
+                grpc_client
+                    .download_sender_certificates_for_receiver(
+                        sender_chain_id,
+                        receiver_chain_id,
+                        target_height,
+                        start_height,
+                    )
+                    .await?
+            }
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => {
+                simple_client
+                    .download_sender_certificates_for_receiver(
+                        sender_chain_id,
+                        receiver_chain_id,
+                        target_height,
+                        start_height,
+                    )
+                    .await?
+            }
+        })
+    }
 }

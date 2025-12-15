@@ -266,6 +266,43 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(certificates)
     }
 
+    /// Downloads sender certificates with their sending ancestors.
+    #[instrument(level = "trace")]
+    pub async fn download_sender_certificates_for_receiver(
+        &self,
+        sender_chain_id: ChainId,
+        receiver_chain_id: ChainId,
+        target_height: BlockHeight,
+        start_height: BlockHeight,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        let certificates = self
+            .node
+            .download_sender_certificates_for_receiver(
+                sender_chain_id,
+                receiver_chain_id,
+                target_height,
+                start_height,
+            )
+            .await?;
+
+        // Validate that all returned certificates are for the sender chain
+        // and in ascending height order.
+        let mut prev_height = None;
+        for certificate in &certificates {
+            ensure!(
+                certificate.inner().chain_id() == sender_chain_id,
+                NodeError::UnexpectedCertificateValue
+            );
+            let height = certificate.inner().height();
+            if let Some(prev) = prev_height {
+                ensure!(height > prev, NodeError::UnexpectedCertificateValue);
+            }
+            prev_height = Some(height);
+        }
+
+        Ok(certificates)
+    }
+
     /// Checks that requesting these blobs when trying to handle this certificate is legitimate,
     /// i.e. that there are no duplicates and the blobs are actually required.
     pub fn check_blobs_not_found<T: CertificateValue>(

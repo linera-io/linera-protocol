@@ -17,6 +17,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{ApplicationId, BlobId, ChainId, StreamId},
     time::Instant,
+    value_cache::{ParkingCache, ValueCache},
 };
 use linera_chain::{
     data_types::{BlockProposal, MessageBundle, ProposedBlock},
@@ -31,8 +32,6 @@ use linera_storage::{Clock as _, Storage};
 use linera_views::context::InactiveContext;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{debug, instrument, trace, Instrument as _};
-
-use linera_base::value_cache::{ParkingCache, ValueCache};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
 use crate::{

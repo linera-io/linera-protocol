@@ -19,6 +19,7 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
     time::Instant,
     util::traits::DynError,
+    value_cache::{ParkingCache, ValueCache},
 };
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
@@ -49,7 +50,6 @@ use crate::{
     notifier::Notifier,
     CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
-use linera_base::value_cache::{ParkingCache, ValueCache};
 
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]

@@ -19,6 +19,13 @@ pub enum RequestKey {
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
     },
+    /// Download sender certificates for a receiver chain
+    SenderCertificates {
+        sender_chain_id: ChainId,
+        receiver_chain_id: ChainId,
+        target_height: BlockHeight,
+        start_height: BlockHeight,
+    },
     /// Download a blob by ID
     Blob(BlobId),
     /// Download a pending blob
@@ -32,6 +39,9 @@ impl RequestKey {
     pub(super) fn chain_id(&self) -> Option<ChainId> {
         match self {
             RequestKey::Certificates { chain_id, .. } => Some(*chain_id),
+            RequestKey::SenderCertificates {
+                sender_chain_id, ..
+            } => Some(*sender_chain_id),
             RequestKey::PendingBlob { chain_id, .. } => Some(*chain_id),
             _ => None,
         }

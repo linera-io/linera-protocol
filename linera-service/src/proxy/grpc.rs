@@ -15,10 +15,17 @@ use std::{
 
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{future::BoxFuture, stream, stream::BoxStream, stream::StreamExt as _, FutureExt as _};
+use futures::{
+    future::BoxFuture,
+    stream,
+    stream::{BoxStream, StreamExt as _},
+    FutureExt as _,
+};
 use linera_base::identifiers::ChainId;
 use linera_core::{
-    data_types::{CertificatesByHeightRequest, ChainInfo, ChainInfoQuery},
+    data_types::{
+        CertificatesByHeightRequest, ChainInfo, ChainInfoQuery, SenderCertificatesRequest,
+    },
     node::NodeError,
     notifier::ChannelNotifier,
     JoinSetExt as _,
@@ -795,6 +802,108 @@ where
         }))
     }
 
+    #[instrument(
+        skip_all,
+        err(Display),
+        fields(method = "download_sender_certificates_for_receiver")
+    )]
+    async fn download_sender_certificates_for_receiver(
+        &self,
+        request: Request<api::SenderCertificatesRequest>,
+    ) -> Result<Response<CertificatesBatchResponse>, Status> {
+        let request: SenderCertificatesRequest = request.into_inner().try_into()?;
+
+        // Skip if we already have all certificates up to this height.
+        if request.target_height < request.start_height {
+            return Ok(Response::new(CertificatesBatchResponse::try_from(Vec::<
+                linera_chain::types::Certificate,
+            >::new(
+            ))?));
+        }
+
+        // Get certificate hash for target_height only.
+        let chain_info_request = ChainInfoQuery::new(request.sender_chain_id)
+            .with_sent_certificate_hashes_by_heights(vec![request.target_height]);
+
+        let chain_info_response = self
+            .handle_chain_info_query(Request::new(chain_info_request.try_into()?))
+            .await?;
+
+        let chain_info_result = chain_info_response.into_inner();
+        let mut current_hash = match chain_info_result.inner {
+            Some(api::chain_info_result::Inner::ChainInfoResponse(response)) => {
+                let chain_info: ChainInfo =
+                    bincode::deserialize(&response.chain_info).map_err(|e| {
+                        Status::internal(format!("Failed to deserialize ChainInfo: {}", e))
+                    })?;
+                chain_info
+                    .requested_sent_certificate_hashes
+                    .into_iter()
+                    .next()
+            }
+            Some(api::chain_info_result::Inner::Error(error)) => {
+                let error =
+                    bincode::deserialize(&error).unwrap_or_else(|err| NodeError::GrpcError {
+                        error: format!("failed to unmarshal error message: {}", err),
+                    });
+                return Err(Status::internal(format!(
+                    "Chain info query failed: {error}"
+                )));
+            }
+            None => {
+                return Err(Status::internal("Empty chain info result"));
+            }
+        };
+
+        let Some(initial_hash) = current_hash else {
+            return Ok(Response::new(CertificatesBatchResponse::try_from(Vec::<
+                linera_chain::types::Certificate,
+            >::new(
+            ))?));
+        };
+        current_hash = Some(initial_hash);
+
+        // Traverse previous_message_blocks following the hash chain.
+        let mut certificates_to_return = Vec::new();
+
+        while let Some(hash) = current_hash {
+            // Read the certificate from storage (benefits from the certificate cache).
+            let certificate = self
+                .0
+                .storage
+                .read_certificate(hash)
+                .await
+                .map_err(Self::view_error_to_status)?
+                .ok_or_else(|| Status::internal(format!("Missing certificate {}", hash)))?;
+
+            let height = certificate.inner().height();
+            if height < request.start_height {
+                break;
+            }
+
+            // Get the previous message block entry which contains (hash, height).
+            let prev_entry = certificate
+                .block()
+                .body
+                .previous_message_blocks
+                .get(&request.receiver_chain_id)
+                .cloned();
+
+            certificates_to_return.push(linera_chain::types::Certificate::from(certificate));
+
+            // Follow the hash chain - previous_message_blocks already has the hash!
+            current_hash = prev_entry
+                .filter(|(_, h)| *h >= request.start_height)
+                .map(|(h, _)| h);
+        }
+
+        // Return certificates in ascending height order.
+        certificates_to_return.reverse();
+        Ok(Response::new(CertificatesBatchResponse::try_from(
+            certificates_to_return,
+        )?))
+    }
+
     #[instrument(skip_all, err(level = Level::WARN), fields(
         method = "blob_last_used_by"
     ))]
@@ -858,10 +967,8 @@ where
         request: Request<NotificationBatch>,
     ) -> Result<Response<()>, Status> {
         // Group notifications by chain_id to send them in batches
-        let mut by_chain: std::collections::HashMap<
-            ChainId,
-            Vec<Result<Notification, Status>>,
-        > = std::collections::HashMap::new();
+        let mut by_chain: std::collections::HashMap<ChainId, Vec<Result<Notification, Status>>> =
+            std::collections::HashMap::new();
 
         for notification in request.into_inner().notifications {
             let chain_id = notification
