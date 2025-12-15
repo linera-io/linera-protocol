@@ -37,7 +37,12 @@ prost.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tonic = { workspace = true, features = ["codegen", "router", "server", "transport"] }
+tonic = { workspace = true, features = [
+    "codegen",
+    "router",
+    "server",
+    "transport",
+] }
 tonic-prost.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt"] }
