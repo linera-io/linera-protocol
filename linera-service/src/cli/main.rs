@@ -1640,7 +1640,7 @@ struct ClientOptions {
     wasm_runtime: Option<WasmRuntime>,
 
     /// Output log messages from contract execution.
-    #[arg(long = "with_application_logs")]
+    #[arg(long = "with-application-logs")]
     application_logs: bool,
 
     /// The number of Tokio worker threads to use.
