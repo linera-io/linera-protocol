@@ -237,16 +237,20 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         let chain_ids = {
             let guard = self.context.lock().await;
             let admin_chain_id = guard.admin_chain();
-            guard
-                .make_chain_client(admin_chain_id)
-                .await?
-                .synchronize_chain_state(admin_chain_id)
-                .await?;
-            guard
+            let wallet_chain_ids = guard
                 .wallet()
                 .chain_ids()
                 .collect::<Vec<_>>()
-                .await
+                .await;
+            // Only synchronize the admin chain if the wallet has chains
+            if !wallet_chain_ids.is_empty() {
+                guard
+                    .make_chain_client(admin_chain_id)
+                    .await?
+                    .synchronize_chain_state(admin_chain_id)
+                    .await?;
+            }
+            wallet_chain_ids
                 .into_iter()
                 .chain([Ok(admin_chain_id)])
                 .map(|maybe_chain_id| {
