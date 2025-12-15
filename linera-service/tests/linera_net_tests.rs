@@ -2222,6 +2222,9 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         .run_node_service(port2, ProcessInbox::Automatic)
         .await?;
 
+    // Client 1 posts again, to trigger downloading missing events in client 2.
+    app1.mutate("post(text: \"Fourth post!\")").await?;
+
     let query = "receivedPosts { keys { author, index } }";
     let expected_response = json!({
         "receivedPosts": {
@@ -2234,8 +2237,8 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     });
 
     loop {
-        let (_, height3) = node_service2.chain_tip(chain2).await?.unwrap();
-        if height3 > latest_height {
+        let (_, height4) = node_service2.chain_tip(chain2).await?.unwrap();
+        if height4 > latest_height {
             break;
         }
         linera_base::time::timer::sleep(Duration::from_millis(500)).await;
@@ -2243,10 +2246,10 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
 
     assert_eq!(app2.query(query).await?, expected_response);
 
-    let tip_after_third_post = node_service2.chain_tip(chain1).await?;
+    let tip_after_fourth_post = node_service2.chain_tip(chain1).await?;
     // The third post should not have moved the tip hash, either (the block with the
     // transfer should still not have been downloaded).
-    assert_eq!(tip_after_first_post, tip_after_third_post);
+    assert_eq!(tip_after_first_post, tip_after_fourth_post);
 
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
