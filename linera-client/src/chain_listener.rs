@@ -275,7 +275,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         if enable_background_sync {
             let context = Arc::clone(&self.context);
             let cancellation_token = self.cancellation_token.clone();
-            for chain_id in chain_ids.keys() {
+            for (chain_id, mode) in chain_ids.iter() {
+                if mode != &ListeningMode::FullChain {
+                    continue;
+                }
                 let context = Arc::clone(&context);
                 let cancellation_token = cancellation_token.clone();
                 let chain_id = *chain_id;
