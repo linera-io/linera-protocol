@@ -1528,7 +1528,6 @@ impl Runnable for Job {
                     .synchronize_chain_state_from_committee(committee)
                     .await?;
                 context.update_wallet_from_client(&chain_client).await?;
-                dbg!(context.wallet().chain_ids());
             }
 
             Wallet(WalletCommand::FollowChain { chain_id, sync }) => {
