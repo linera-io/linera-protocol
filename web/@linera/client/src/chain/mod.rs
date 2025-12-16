@@ -25,7 +25,7 @@ pub struct Chain {
     pub(crate) chain_client: ChainClient<Environment>,
 }
 
-#[derive(serde::Deserialize, tsify_next::Tsify)]
+#[derive(serde::Deserialize, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
 pub struct TransferParams {
     pub donor: Option<AccountOwner>,
@@ -33,7 +33,7 @@ pub struct TransferParams {
     pub recipient: linera_base::identifiers::Account,
 }
 
-#[derive(Default, serde::Deserialize, tsify_next::Tsify)]
+#[derive(Default, serde::Deserialize, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
 pub struct AddOwnerOptions {
     #[serde(default)]

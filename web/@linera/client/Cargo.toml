@@ -28,7 +28,7 @@ tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 tracing-web.workspace = true
-tsify-next = "0.5.6"
+tsify.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 
