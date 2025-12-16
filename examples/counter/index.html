@@ -53,19 +53,14 @@
      import { ethers } from 'ethers';
 
      await linera.initialize();
-     console.log('initialized');
      const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
      const signer = linera.signer.PrivateKey.createRandom();
      const wallet = await faucet.createWallet();
-     console.log('wallet created');
      const owner = await signer.address();
-     console.log('address got');
      const chainId = await faucet.claimChain(wallet, owner);
-     console.log('chain claimed');
      document.getElementById('owner').innerText = owner;
      document.getElementById('chain-id').innerText = chainId;
      const client = await new linera.Client(wallet, signer);
-     console.log('chain claimed');
      let chain = await client.chain(chainId);
      const counter = await chain.application(import.meta.env.LINERA_APPLICATION_ID);
      const logs = document.getElementById('logs');
