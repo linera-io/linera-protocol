@@ -5290,7 +5290,7 @@ dependencies = [
  "tracing-web",
  "trait-set",
  "trait-variant",
- "tsify-next",
+ "tsify",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-time",
@@ -5383,7 +5383,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "trait-variant",
- "tsify-next",
+ "tsify",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -5441,7 +5441,7 @@ dependencies = [
  "tracing-subscriber 0.3.19",
  "trait-set",
  "trait-variant",
- "tsify-next",
+ "tsify",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-thread-pool",
@@ -6288,7 +6288,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber 0.3.19",
  "tracing-web",
- "tsify-next",
+ "tsify",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -10899,24 +10899,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
-name = "tsify-next"
-version = "0.5.6"
+name = "tsify"
+version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d0f2208feeb5f7a6edb15a2389c14cd42480ef6417318316bb866da5806a61d"
+checksum = "b2ec91b85e6c6592ed28636cb1dd1fac377ecbbeb170ff1d79f97aac5e38926d"
 dependencies = [
- "gloo-utils",
  "serde",
  "serde-wasm-bindgen 0.6.5",
- "serde_json",
- "tsify-next-macros",
+ "tsify-macros",
  "wasm-bindgen",
 ]
 
 [[package]]
-name = "tsify-next-macros"
+name = "tsify-macros"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f81253930d0d388a3ab8fa4ae56da9973ab171ef833d1be2e9080fc3ce502bd6"
+checksum = "9fc2c44dc9fe4baf55b88e032621b7a11b215a1f0a7de8d0aa04367207d915bc"
 dependencies = [
  "proc-macro2",
  "quote",

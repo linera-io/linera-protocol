@@ -15,7 +15,7 @@ pub struct Application {
     pub(crate) id: ApplicationId,
 }
 
-#[derive(Default, serde::Deserialize, tsify_next::Tsify)]
+#[derive(Default, serde::Deserialize, tsify::Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(from_wasm_abi)]
 pub struct QueryOptions {

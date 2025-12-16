@@ -35,7 +35,7 @@ pub enum Error {
 
 util::impl_from_infallible!(Error);
 
-#[derive(Clone, clap::Parser, serde::Deserialize, tsify_next::Tsify)]
+#[derive(Clone, clap::Parser, serde::Deserialize, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
 #[group(skip)]
 #[serde(default, rename_all = "camelCase")]

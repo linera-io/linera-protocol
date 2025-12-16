@@ -274,10 +274,10 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 tracing-web = "0.1.3"
 trait-set = "0.3.0"
 trait-variant = "0.1.1"
-tsify-next = { version = "0.5.6", default-features = false, features = ["js"] }
+tsify = { version = "0.5.5", default-features = false, features = ["js"] }
 url = "2.4"
-wasm-bindgen = "0.2.92"
-wasm-bindgen-futures = "0.4.42"
+wasm-bindgen = "0.2.100"
+wasm-bindgen-futures = "=0.4.50"
 wasm-bindgen-test = "0.3.42"
 wasm-instrument = { package = "linera-wasm-instrument", version = "0.4.0-linera.1" }
 wasmer = { package = "linera-wasmer", version = "4.4.0-linera.7", default-features = false }
