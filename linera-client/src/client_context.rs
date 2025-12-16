@@ -57,7 +57,7 @@ use {
 
 use crate::{
     chain_listener::{self, ClientContext as _},
-    client_options::{ChainOwnershipConfig, ClientContextOptions},
+    client_options::{ChainOwnershipConfig, Options},
     config::GenesisConfig,
     error, util, Error,
 };
@@ -272,11 +272,9 @@ where
         storage: S,
         wallet: W,
         signer: Si,
-        options: ClientContextOptions,
+        options: &Options,
         default_chain: Option<ChainId>,
         genesis_config: GenesisConfig,
-        _block_cache_size: usize,
-        _execution_state_cache_size: usize,
     ) -> Result<Self, Error> {
         #[cfg(not(web))]
         let timing_config = options.to_timing_config();
@@ -296,6 +294,7 @@ where
             1 => format!("Client node for {:.8}", chain_ids[0]),
             n => format!("Client node for {:.8} and {} others", chain_ids[0], n - 1),
         };
+
         let client = Client::new(
             linera_core::environment::Impl {
                 network: node_provider,
@@ -396,20 +395,19 @@ impl<Env: Environment> ClientContext<Env> {
         client: &ChainClient<Env_>,
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
-        let client_owner = client.preferred_owner();
-        let pending_proposal = client.pending_proposal().clone();
-        let _old_value = self
-            .wallet()
+
+        self.wallet()
             .insert(
                 info.chain_id,
                 wallet::Chain {
-                    pending_proposal,
-                    owner: client_owner,
+                    pending_proposal: client.pending_proposal().clone(),
+                    owner: client.preferred_owner(),
                     ..info.as_ref().into()
                 },
             )
             .await
             .map_err(error::Inner::wallet)?;
+
         Ok(())
     }
 

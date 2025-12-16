@@ -35,6 +35,7 @@ use crate::{
     Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType, Allocative,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
+#[cfg_attr(web, derive(tsify_next::Tsify), tsify(from_wasm_abi, into_wasm_abi))]
 pub enum AccountOwner {
     /// Short addresses reserved for the protocol.
     Reserved(u8),
@@ -104,6 +105,7 @@ impl From<CryptoHash> for AccountOwner {
     WitStore,
     WitType,
 )]
+#[cfg_attr(web, derive(tsify_next::Tsify), tsify(from_wasm_abi, into_wasm_abi))]
 pub struct Account {
     /// The chain of the account.
     pub chain_id: ChainId,
@@ -183,6 +185,7 @@ impl std::str::FromStr for Account {
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 #[cfg_attr(with_testing, derive(Default))]
+#[cfg_attr(web, derive(tsify_next::Tsify), tsify(from_wasm_abi, into_wasm_abi))]
 pub struct ChainId(pub CryptoHash);
 
 /// The type of the blob.
@@ -347,6 +350,9 @@ impl From<DataBlobHash> for BlobId {
     }
 }
 
+#[cfg_attr(web, wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section))]
+const _: &str = "export type ApplicationId = string;";
+
 /// A unique identifier for a user application from a blob.
 #[derive(Debug, WitLoad, WitStore, WitType, Allocative)]
 #[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
@@ -377,6 +383,7 @@ pub struct ApplicationId<A = ()> {
     WitType,
     Allocative,
 )]
+#[cfg_attr(web, derive(tsify_next::Tsify), tsify(from_wasm_abi, into_wasm_abi))]
 pub enum GenericApplicationId {
     /// The system application.
     System,

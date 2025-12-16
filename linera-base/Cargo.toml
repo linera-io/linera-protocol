@@ -68,6 +68,8 @@ tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["json", "fmt", "ansi"] }
 trait-set.workspace = true
 trait-variant.workspace = true
+tsify-next.workspace = true
+wasm-bindgen.workspace = true
 wasm-bindgen-futures = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
 
@@ -106,4 +108,11 @@ test-case.workspace = true
 cfg_aliases.workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["async-graphql-derive", "getrandom", "serde_bytes"]
+ignored = [
+    "async-graphql-derive",
+    # `getrandom` is not used directly here but we require it in order to give it feature flags
+    "getrandom",
+    "serde_bytes",
+    # `wasm-bindgen` is implicitly used by `tsify-next
+    "wasm-bindgen",
+]

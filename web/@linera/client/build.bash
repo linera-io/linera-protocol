@@ -30,11 +30,14 @@ cargo build --lib --target wasm32-unknown-unknown $profile_flag
 
 wasm-bindgen \
     "$target_dir"/wasm32-unknown-unknown/$profile_dir/linera_web.wasm \
-    --out-dir dist \
-    --out-name linera \
+    --out-dir src/wasm \
+    --out-name index \
     --typescript \
     --target web \
     --split-linked-modules
+
+mkdir -p dist/wasm
+cp src/wasm/index_bg.wasm{,.d.ts} dist/wasm
 
 pnpm exec tsc
 pnpm exec tsc-alias
