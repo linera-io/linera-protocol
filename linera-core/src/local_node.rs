@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{BTreeMap, HashMap},
     sync::Arc,
 };
 
@@ -262,11 +262,25 @@ where
             .state
             .handle_chain_info_query(ChainInfoQuery::new(sender_chain).with_network_actions())
             .await?;
-        let mut requests = VecDeque::from_iter(actions.cross_chain_requests);
-        while let Some(request) = requests.pop_front() {
-            let new_actions = self.node.state.handle_cross_chain_request(request).await?;
-            requests.extend(new_actions.cross_chain_requests);
+
+        // Process cross-chain requests in parallel for better throughput.
+        // UpdateRecipient requests to different recipients are independent.
+        let mut join_set = tokio::task::JoinSet::new();
+        let node = self.node.clone();
+
+        for request in actions.cross_chain_requests {
+            let node = node.clone();
+            join_set.spawn(async move { node.state.handle_cross_chain_request(request).await });
         }
+
+        while let Some(result) = join_set.join_next().await {
+            let new_actions = result.expect("cross-chain task panicked")?;
+            for request in new_actions.cross_chain_requests {
+                let node = node.clone();
+                join_set.spawn(async move { node.state.handle_cross_chain_request(request).await });
+            }
+        }
+
         Ok(())
     }
 
