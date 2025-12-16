@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
@@ -663,12 +663,27 @@ where
             let (response, actions) =
                 ProcessableCertificate::process_certificate(&this, certificate).await?;
             notifications.notify(&actions.notifications);
-            let mut requests = VecDeque::from(actions.cross_chain_requests);
-            while let Some(request) = requests.pop_front() {
-                let actions = this.handle_cross_chain_request(request).await?;
-                requests.extend(actions.cross_chain_requests);
-                notifications.notify(&actions.notifications);
+
+            // Process cross-chain requests in parallel for better throughput.
+            // UpdateRecipient requests to different recipients are independent.
+            // As requests complete, they may generate follow-up requests (e.g.,
+            // UpdateRecipient generates ConfirmUpdatedRecipient), which we spawn
+            // as additional parallel tasks.
+            let mut join_set = tokio::task::JoinSet::<Result<NetworkActions, WorkerError>>::new();
+            for request in actions.cross_chain_requests {
+                let this = this.clone();
+                join_set.spawn(async move { this.handle_cross_chain_request(request).await });
             }
+
+            while let Some(result) = join_set.join_next().await {
+                let actions = result.expect("cross-chain task panicked")?;
+                notifications.notify(&actions.notifications);
+                for request in actions.cross_chain_requests {
+                    let this = this.clone();
+                    join_set.spawn(async move { this.handle_cross_chain_request(request).await });
+                }
+            }
+
             Ok(response)
         })
         .await
