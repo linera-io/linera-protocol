@@ -6270,7 +6270,7 @@ dependencies = [
 
 [[package]]
 name = "linera-web"
-version = "0.16.0"
+version = "0.15.7"
 dependencies = [
  "console_error_panic_hook",
  "futures",

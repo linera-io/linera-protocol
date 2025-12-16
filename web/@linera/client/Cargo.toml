@@ -1,11 +1,14 @@
 [package]
 name = "linera-web"
 description = "The Linera Web client"
-version = "0.16.0"
-authors = ["Linera <contact@linera.io>"]
-edition = "2021"
-repository = "https://github.com/linera-io/linera-protocol/"
-license = "Apache-2.0"
+readme = "README.md"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
 
 [lints.clippy]
 pedantic = "warn"
