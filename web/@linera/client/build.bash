@@ -38,8 +38,8 @@ wasm-bindgen \
     --target web \
     --split-linked-modules
 
-mkdir -p dist/wasm
-cp src/wasm/index_bg.wasm{,.d.ts} dist/wasm
+mkdir -p dist
+cp -r src/wasm dist/
 
 pnpm exec tsc
 pnpm exec tsc-alias
