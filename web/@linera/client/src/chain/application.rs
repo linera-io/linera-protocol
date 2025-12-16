@@ -19,7 +19,9 @@ pub struct Application {
 #[serde(rename_all = "camelCase")]
 #[tsify(from_wasm_abi)]
 pub struct QueryOptions {
+    #[serde(default)]
     pub block_hash: Option<String>,
+    #[serde(default)]
     pub owner: Option<AccountOwner>,
 }
 

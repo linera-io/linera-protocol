@@ -28,6 +28,7 @@ pub struct Chain {
 #[derive(serde::Deserialize, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
 pub struct TransferParams {
+    #[serde(default)]
     pub donor: Option<AccountOwner>,
     pub amount: u64,
     pub recipient: linera_base::identifiers::Account,
