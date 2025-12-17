@@ -6,9 +6,9 @@ metadata:
     app: shards
 spec:
   ports:
-    - port: 19100
+    - port: {{ .Values.shardPort }}
       name: http
-    - port: 21100
+    - port: {{ .Values.metricsPort }}
       name: metrics
   clusterIP: None
   selector:
@@ -89,6 +89,18 @@ spec:
         - name: linera-server
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.shardPort }}
+              name: grpc
+            - containerPort: {{ .Values.metricsPort }}
+              name: metrics
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.shardPort }}
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           command:
             - sh
             - -c

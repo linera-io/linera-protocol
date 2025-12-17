@@ -113,6 +113,13 @@ spec:
               value: {{ .Values.logLevel }}
             - name: LINERA_OTLP_EXPORTER_ENDPOINT
               value: {{ .Values.otlpExporterEndpoint }}
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.proxyPort }}
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           volumeMounts:
             - name: config
               mountPath: "/config"
