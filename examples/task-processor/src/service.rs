@@ -7,9 +7,10 @@ mod state;
 
 use std::sync::Arc;
 
-use async_graphql::{EmptySubscription, InputObject, Object, Request, Response, Schema};
+use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use linera_sdk::{
     linera_base_types::{Timestamp, WithServiceAbi},
+    task_processor::{ProcessorActions, Task, TaskOutcome},
     views::View,
     Service, ServiceRuntime,
 };
@@ -60,35 +61,6 @@ impl Service for TaskProcessorService {
 struct QueryRoot {
     state: Arc<TaskProcessorState>,
     runtime: Arc<ServiceRuntime<TaskProcessorService>>,
-}
-
-/// The actions requested by this application for off-chain processing.
-#[derive(Default, Debug, serde::Serialize, serde::Deserialize)]
-struct ProcessorActions {
-    /// Request a callback at the given timestamp.
-    request_callback: Option<Timestamp>,
-    /// Tasks to execute off-chain.
-    execute_tasks: Vec<Task>,
-}
-
-async_graphql::scalar!(ProcessorActions);
-
-/// A task to be executed by an off-chain operator.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct Task {
-    /// The name of the operator to execute.
-    operator: String,
-    /// The input to pass to the operator (JSON string).
-    input: String,
-}
-
-/// The outcome of executing an off-chain task.
-#[derive(Debug, InputObject, serde::Serialize, serde::Deserialize)]
-struct TaskOutcome {
-    /// The name of the operator that executed the task.
-    operator: String,
-    /// The output from the operator (JSON string).
-    output: String,
 }
 
 #[Object]
