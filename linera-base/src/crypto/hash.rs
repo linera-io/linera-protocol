@@ -29,11 +29,13 @@ use crate::{
     doc_scalar,
 };
 
-#[cfg_attr(web, wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section))]
-const _: &str = "export interface CryptoHash {}";
-
 /// A Keccak256 value.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+#[cfg_attr(
+    web,
+    derive(tsify::Tsify),
+    tsify(from_wasm_abi, into_wasm_abi, type = "string")
+)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct CryptoHash(B256);
 
