@@ -7,7 +7,6 @@
         "moduleResolution": "node16",
         "sourceMap": true,
         "outDir": "dist/",
-        "allowJs": true,
         "rootDir": "src",
         "declaration": true,
         "paths": {
