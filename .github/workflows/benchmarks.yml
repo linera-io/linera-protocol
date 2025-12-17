@@ -1,8 +1,9 @@
 name: Benchmarks
 
 on:
-  push:
-    branches: [ main, 'devnet_*', 'testnet_*' ]
+  # TODO(#5173): reactivate this rule
+  # push:
+  #   branches: [ main, 'devnet_*', 'testnet_*' ]
   workflow_dispatch:
 
 env:
