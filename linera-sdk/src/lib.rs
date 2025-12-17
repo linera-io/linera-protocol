@@ -47,7 +47,7 @@ pub use bcs;
 pub use linera_base::{
     abi,
     data_types::{Resources, SendMessageRequest},
-    ensure, http,
+    ensure, http, task_processor,
 };
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
