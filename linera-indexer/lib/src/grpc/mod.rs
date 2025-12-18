@@ -91,7 +91,7 @@ where
                             {
                                 Ok(Some(())) => {
                                     // If processing was successful, return an ACK
-                                    info!("Processed element successfully");
+                                    tracing::trace!("Processed element successfully");
                                     return Some((Ok(()), (input_stream, database, pending_blobs)));
                                 }
                                 Err(error) => {
@@ -157,8 +157,10 @@ where
                 let height = block_cert.inner().height();
 
                 info!(
-                    "Received block: {} for chain: {} at height: {}",
-                    block_hash, chain_id, height
+                    ?block_hash,
+                    ?chain_id,
+                    ?height,
+                    "Received block certificate",
                 );
 
                 database
@@ -166,10 +168,10 @@ where
                     .await
                     .map_err(Into::into)?;
 
-                info!(
-                    "Successfully committed block {} with {} blobs",
-                    block_hash,
-                    pending_blobs.len()
+                tracing::trace!(
+                    ?block_hash,
+                    pending_blobs_len = pending_blobs.len(),
+                    "Stored block with blobs successfully"
                 );
                 pending_blobs.clear();
                 Ok(Some(()))
