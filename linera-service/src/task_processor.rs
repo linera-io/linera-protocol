@@ -13,14 +13,14 @@ use std::{
     sync::Arc,
 };
 
-use async_graphql::{scalar, InputType as _};
+use async_graphql::InputType as _;
 use futures::{stream::StreamExt, FutureExt};
 use linera_base::{
     data_types::{TimeDelta, Timestamp},
     identifiers::{ApplicationId, ChainId},
+    task_processor::{ProcessorActions, TaskOutcome},
 };
 use linera_core::{client::ChainClient, node::NotificationStream, worker::Reason};
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::{io::AsyncWriteExt, process::Command, select, sync::mpsc};
 use tokio_util::sync::CancellationToken;
@@ -30,48 +30,6 @@ use crate::controller::Update;
 
 /// A map from operator names to their binary paths.
 pub type OperatorMap = Arc<BTreeMap<String, PathBuf>>;
-
-/// The off-chain actions requested by the service of an on-chain application.
-///
-/// On-chain applications should be ready to respond to GraphQL queries of the form:
-/// ```ignore
-/// query {
-///   nextActions(lastRequestedCallback: Timestamp, now: Timestamp!): ProcessorActions!
-/// }
-///
-/// query {
-///   processTaskOutcome(outcome: TaskOutcome!)
-/// }
-/// ```
-#[derive(Default, Debug, Serialize, Deserialize)]
-pub struct ProcessorActions {
-    /// The application is requesting to be called back no later than the given timestamp.
-    pub request_callback: Option<Timestamp>,
-    /// The application is requesting the execution of the given tasks.
-    pub execute_tasks: Vec<Task>,
-}
-
-scalar!(ProcessorActions);
-
-/// An off-chain task requested by an on-chain application.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Task {
-    /// The operator handling the task.
-    pub operator: String,
-    /// The input argument in JSON.
-    pub input: String,
-}
-
-/// The result of executing an off-chain operator.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TaskOutcome {
-    /// The operator handling the task.
-    pub operator: String,
-    /// The JSON output.
-    pub output: String,
-}
-
-scalar!(TaskOutcome);
 
 /// Parse an operator mapping in the format `name=path` or just `name`.
 /// If only `name` is provided, the path defaults to the name itself.
