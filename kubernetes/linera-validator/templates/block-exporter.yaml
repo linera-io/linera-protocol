@@ -42,8 +42,8 @@ spec:
     spec:
       initContainers:
         - name: linera-exporter-initializer
-          image: {{ .Values.indexer.image }}
-          imagePullPolicy: {{ .Values.indexer.imagePullPolicy }}
+          image: {{ .Values.lineraImage }}
+          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 65534
@@ -153,8 +153,8 @@ spec:
               done
       containers:
         - name: linera-block-exporter
-          image: {{ .Values.indexer.image }}
-          imagePullPolicy: {{ .Values.indexer.imagePullPolicy }}
+          image: {{ .Values.blockExporter.image }}
+          imagePullPolicy: {{ .Values.blockExporter.imagePullPolicy }}
           command:
             - "./linera-exporter"
             - "--storage"
