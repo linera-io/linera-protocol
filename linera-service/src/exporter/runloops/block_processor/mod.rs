@@ -273,17 +273,11 @@ mod test {
             _ = block_processor.run_with_shutdown(signal, 5) => {},
         }
 
-        // oredered pair of (chain_id, block_height)
-        let expected_state = [
-            (1, 0),
-            (0, 0),
-            (0, 1),
-            (1, 1),
-            (1, 2),
-            (0, 2),
-            (0, 3),
-            (1, 3),
-        ];
+        // Ordered pair of (chain_id, block_height).
+        // Even though there are multiple chains with messages between them,
+        // the final topological sort for the block_id notifications will yield
+        // only blocks from chain B (ignoring sender chain A).
+        let expected_state = [(1, 0), (1, 1), (1, 2), (1, 3)];
 
         for (i, (x, y)) in expected_state.into_iter().enumerate() {
             let hash = exporter_storage.get_block_with_blob_ids(i).await?.0.hash();
@@ -407,7 +401,11 @@ mod test {
             _ = block_processor.run_with_shutdown(signal, 5) => {},
         }
 
-        let expected_state = [(2, 0), (1, 0), (0, 0), (0, 1), (1, 1), (2, 1)];
+        // Even though there are multiple chains with messages between them,
+        // the final topological sort for the returned `block_id` notification
+        // (which is the last block of chain C) will yield only two blocks from
+        // chain C (ignoring sender chains).
+        let expected_state = [(2, 0), (2, 1)];
 
         for (i, (x, y)) in expected_state.into_iter().enumerate() {
             let hash = exporter_storage.get_block_with_blob_ids(i).await?.0.hash();
