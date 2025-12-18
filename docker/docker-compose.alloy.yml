@@ -52,4 +52,7 @@ services:
       com.centurylinklabs.watchtower.enable: "true"
     depends_on:
       - proxy
-      - shard
+      - shard-0
+      - shard-1
+      - shard-2
+      - shard-3
