@@ -159,8 +159,9 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         storage,
         child_token,
         tokio::sync::mpsc::unbounded_channel().1,
+        false, // Unit test doesn't need background sync
     )
-    .run(false) // Unit test doesn't need background sync
+    .run()
     .await
     .unwrap();
 
@@ -273,8 +274,9 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
         storage.clone(),
         child_token,
         tokio::sync::mpsc::unbounded_channel().1,
+        false, // Unit test doesn't need background sync
     )
-    .run(false) // Unit test doesn't need background sync
+    .run()
     .await
     .unwrap();
 
@@ -400,8 +402,9 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
         storage.clone(),
         child_token,
         tokio::sync::mpsc::unbounded_channel().1,
+        false, // Unit test doesn't need background sync
     )
-    .run(false) // Unit test doesn't need background sync
+    .run()
     .await
     .unwrap();
 
