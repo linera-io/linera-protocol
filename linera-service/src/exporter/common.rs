@@ -10,7 +10,7 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::{data_types::IncomingBundle, types::ConfirmedBlock};
+use linera_chain::types::ConfirmedBlock;
 use linera_rpc::grpc::{GrpcError, GrpcProtoConversionError};
 use linera_sdk::views::ViewError;
 use serde::{Deserialize, Serialize};
@@ -106,14 +106,6 @@ impl BlockId {
             hash,
             chain_id,
             height,
-        }
-    }
-
-    pub(crate) fn from_incoming_bundle(incoming_bundle: &IncomingBundle) -> Self {
-        Self {
-            hash: incoming_bundle.bundle.certificate_hash,
-            chain_id: incoming_bundle.origin,
-            height: incoming_bundle.bundle.height,
         }
     }
 
