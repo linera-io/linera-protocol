@@ -19,17 +19,36 @@ prometheus.scrape "proxy_metrics" {
   scrape_timeout  = "10s"
 }
 
-// Scrape metrics from shard services (all 4 replicas)
+// Scrape metrics from all shard services
 prometheus.scrape "shard_metrics" {
   targets = [
     {
-      __address__ = "shard:21100",
+      __address__ = "docker-shard-1:21100",
       job         = "linera-shard",
+      shard       = "0",
+      instance    = env("HOSTNAME"),
+    },
+    {
+      __address__ = "docker-shard-2:21100",
+      job         = "linera-shard",
+      shard       = "1",
+      instance    = env("HOSTNAME"),
+    },
+    {
+      __address__ = "docker-shard-3:21100",
+      job         = "linera-shard",
+      shard       = "2",
+      instance    = env("HOSTNAME"),
+    },
+    {
+      __address__ = "docker-shard-4:21100",
+      job         = "linera-shard",
+      shard       = "3",
       instance    = env("HOSTNAME"),
     },
   ]
 
-  // Conditionally forward to OTLP converter if Prometheus export is enabled
+  // Conditional forwarding - only export if PROMETHEUS_ENABLED is set to "true"
   forward_to = env("PROMETHEUS_ENABLED") == "true" ? [otelcol.receiver.prometheus.default.receiver] : []
 
   scrape_interval = "15s"
