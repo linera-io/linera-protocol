@@ -38,6 +38,12 @@ services:
       - "0"
       - "--overprovisioned"
       - "1"
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe cluster' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
     depends_on:
       scylla-setup:
         condition: service_completed_successfully
@@ -58,14 +64,24 @@ services:
       - .:/config
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/21100' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     depends_on:
       shard-init:
         condition: service_completed_successfully
+      scylla:
+        condition: service_healthy
 
-  shard:
+  # Each shard must run with a unique --shard number matching the server.json configuration.
+  # Docker Compose replicas don't support per-replica arguments, so we define separate services.
+  shard-0:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
-    deploy:
-      replicas: 4
+    container_name: docker-shard-1
+    hostname: docker-shard-1
     command:
       - ./linera-server
       - run
@@ -75,6 +91,75 @@ services:
       - /config/server.json
       - --shard
       - "0"
+      - --storage-replication-factor
+      - "1"
+    volumes:
+      - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+
+  shard-1:
+    image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
+    container_name: docker-shard-2
+    hostname: docker-shard-2
+    command:
+      - ./linera-server
+      - run
+      - --storage
+      - scylladb:tcp:scylla:9042
+      - --server
+      - /config/server.json
+      - --shard
+      - "1"
+      - --storage-replication-factor
+      - "1"
+    volumes:
+      - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+
+  shard-2:
+    image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
+    container_name: docker-shard-3
+    hostname: docker-shard-3
+    command:
+      - ./linera-server
+      - run
+      - --storage
+      - scylladb:tcp:scylla:9042
+      - --server
+      - /config/server.json
+      - --shard
+      - "2"
+      - --storage-replication-factor
+      - "1"
+    volumes:
+      - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+
+  shard-3:
+    image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}"
+    container_name: docker-shard-4
+    hostname: docker-shard-4
+    command:
+      - ./linera-server
+      - run
+      - --storage
+      - scylladb:tcp:scylla:9042
+      - --server
+      - /config/server.json
+      - --shard
+      - "3"
       - --storage-replication-factor
       - "1"
     volumes:
