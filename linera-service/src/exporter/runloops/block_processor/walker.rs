@@ -168,13 +168,6 @@ impl ProcessedBlock {
             dependencies.push(parent);
         }
 
-        let message_senders = block
-            .block()
-            .body
-            .incoming_bundles()
-            .map(BlockId::from_incoming_bundle);
-        dependencies.extend(message_senders);
-
         let new_committee = block.block().body.operations().find_map(|m| {
             if let Operation::System(boxed) = m {
                 if let SystemOperation::Admin(AdminOperation::CreateCommittee {
