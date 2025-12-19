@@ -302,35 +302,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         })
     }
 
-    async fn start_background_sync(
-        &mut self,
-        chain_id: ChainId,
-        mode: ListeningMode,
-    ) -> Option<CancellationToken> {
-        if !self.enable_background_sync {
-            return None;
-        }
-        if mode != ListeningMode::FullChain {
-            return None;
-        }
-        let context = Arc::clone(&self.context);
-        let cancellation_token = CancellationToken::new();
-        let cancellation_token_clone = cancellation_token.clone();
-        linera_base::task::spawn(async move {
-            if let Err(e) = Self::background_sync_received_certificates(
-                context,
-                chain_id,
-                cancellation_token_clone,
-            )
-            .await
-            {
-                warn!("Background sync failed for chain {chain_id}: {e}");
-            }
-        })
-        .forget();
-        Some(cancellation_token)
-    }
-
     /// Processes a notification, updating local chains and validators as needed.
     async fn process_notification(&mut self, notification: Notification) -> Result<(), Error> {
         Self::sleep(self.config.delay_before_ms).await;
@@ -530,6 +501,35 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         let publishing_chains = self.update_event_subscriptions(chain_id).await?;
         self.maybe_process_inbox(chain_id).await?;
         Ok(publishing_chains)
+    }
+
+    async fn start_background_sync(
+        &mut self,
+        chain_id: ChainId,
+        mode: ListeningMode,
+    ) -> Option<CancellationToken> {
+        if !self.enable_background_sync {
+            return None;
+        }
+        if mode != ListeningMode::FullChain {
+            return None;
+        }
+        let context = Arc::clone(&self.context);
+        let cancellation_token = CancellationToken::new();
+        let cancellation_token_clone = cancellation_token.clone();
+        linera_base::task::spawn(async move {
+            if let Err(e) = Self::background_sync_received_certificates(
+                context,
+                chain_id,
+                cancellation_token_clone,
+            )
+            .await
+            {
+                warn!("Background sync failed for chain {chain_id}: {e}");
+            }
+        })
+        .forget();
+        Some(cancellation_token)
     }
 
     /// Updates the event subscribers map, and returns all publishing chains we need to listen to.
