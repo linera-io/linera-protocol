@@ -164,6 +164,8 @@ struct ListeningClient<C: ClientContext> {
     timeout: Timestamp,
     /// The mode of listening to this chain.
     listening_mode: ListeningMode,
+    /// The cancellation token for the background sync process, if started.
+    maybe_sync_cancellation_token: Option<CancellationToken>,
 }
 
 impl<C: ClientContext> ListeningClient<C> {
@@ -173,6 +175,7 @@ impl<C: ClientContext> ListeningClient<C> {
         join_handle: NonBlockingFuture<()>,
         notification_stream: NotificationStream,
         listening_mode: ListeningMode,
+        maybe_sync_cancellation_token: Option<CancellationToken>,
     ) -> Self {
         Self {
             client,
@@ -182,12 +185,16 @@ impl<C: ClientContext> ListeningClient<C> {
             notification_stream: Arc::new(Mutex::new(notification_stream)),
             timeout: Timestamp::from(u64::MAX),
             listening_mode,
+            maybe_sync_cancellation_token,
         }
     }
 
     async fn stop(self) {
         // TODO(#4965): this is unnecessary: the join handle now also acts as an abort handle
         drop(self.abort_handle);
+        if let Some(cancellation_token) = self.maybe_sync_cancellation_token {
+            cancellation_token.cancel();
+        }
         self.join_handle.await;
     }
 }
@@ -279,10 +286,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             chain_ids
         };
 
-        // Start background tasks to sync received certificates for each chain,
-        // if enabled.
-        self.start_background_sync(&chain_ids).await;
-
         Ok(async {
             self.listen_recursively(chain_ids).await?;
             loop {
@@ -299,32 +302,33 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         })
     }
 
-    async fn start_background_sync(&mut self, chain_ids: &BTreeMap<ChainId, ListeningMode>) {
+    async fn start_background_sync(
+        &mut self,
+        chain_id: ChainId,
+        mode: ListeningMode,
+    ) -> Option<CancellationToken> {
         if !self.enable_background_sync {
-            return;
+            return None;
+        }
+        if mode != ListeningMode::FullChain {
+            return None;
         }
         let context = Arc::clone(&self.context);
-        let cancellation_token = self.cancellation_token.clone();
-        for (chain_id, mode) in chain_ids {
-            if mode != &ListeningMode::FullChain {
-                continue;
+        let cancellation_token = CancellationToken::new();
+        let cancellation_token_clone = cancellation_token.clone();
+        linera_base::task::spawn(async move {
+            if let Err(e) = Self::background_sync_received_certificates(
+                context,
+                chain_id,
+                cancellation_token_clone,
+            )
+            .await
+            {
+                warn!("Background sync failed for chain {chain_id}: {e}");
             }
-            let context = Arc::clone(&context);
-            let cancellation_token = cancellation_token.clone();
-            let chain_id = *chain_id;
-            linera_base::task::spawn(async move {
-                if let Err(e) = Self::background_sync_received_certificates(
-                    context,
-                    chain_id,
-                    cancellation_token,
-                )
-                .await
-                {
-                    warn!("Background sync failed for chain {chain_id}: {e}");
-                }
-            })
-            .forget();
-        }
+        })
+        .forget();
+        Some(cancellation_token)
     }
 
     /// Processes a notification, updating local chains and validators as needed.
@@ -501,6 +505,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .get(&chain_id)
                 .map(|existing_client| existing_client.listening_mode.clone()),
         );
+        // Start background tasks to sync received certificates, if enabled.
+        let maybe_sync_cancellation_token = self
+            .start_background_sync(chain_id, listening_mode.clone())
+            .await;
         let client = self
             .context
             .lock()
@@ -516,6 +524,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             join_handle,
             notification_stream,
             listening_mode,
+            maybe_sync_cancellation_token,
         );
         self.listening.insert(chain_id, listening_client);
         let publishing_chains = self.update_event_subscriptions(chain_id).await?;
@@ -577,7 +586,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     match command {
                         ListenerCommand::Listen(new_chains) => {
                             debug!(?new_chains, "received command to listen to new chains");
-                            self.start_background_sync(&new_chains).await;
                             self.listen_recursively(new_chains).await?;
                         }
                         ListenerCommand::StopListening(chains) => {
