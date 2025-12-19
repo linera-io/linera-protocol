@@ -295,7 +295,7 @@ impl ActiveChain {
     /// Adds a block to this microchain that receives all queued messages in the microchains
     /// inboxes.
     ///
-    /// Returns the generate block of processed messages.
+    /// Returns the certificate of the latest block added to the chain, if any.
     pub async fn handle_received_messages(&self) -> Option<ConfirmedBlockCertificate> {
         let chain_id = self.id();
         let (information, _) = self
