@@ -2841,6 +2841,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     // Setting up the application matching engine.
     let parameter = Parameters {
         tokens: [token0, token1],
+        price_decimals: 0,
     };
     let module_id = node_service_admin
         .publish_module::<MatchingEngineAbi, Parameters, ()>(
@@ -2874,7 +2875,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         app_matching_a
             .order(matching_engine::Order::Insert {
                 owner: owner_a,
-                amount: Amount::from_tokens(3),
+                quantity: Amount::from_tokens(3),
                 nature: OrderNature::Bid,
                 price: Price { price },
             })
@@ -2885,7 +2886,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         app_matching_b
             .order(matching_engine::Order::Insert {
                 owner: owner_b,
-                amount: Amount::from_tokens(4),
+                quantity: Amount::from_tokens(4),
                 nature: OrderNature::Ask,
                 price: Price { price },
             })
@@ -2907,17 +2908,19 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     // Now cancelling all the orders
     for order_id in order_ids_a {
         app_matching_a
-            .order(matching_engine::Order::Cancel {
+            .order(matching_engine::Order::Modify {
                 owner: owner_a,
                 order_id,
+                new_quantity: Amount::ZERO,
             })
             .await;
     }
     for order_id in order_ids_b {
         app_matching_b
-            .order(matching_engine::Order::Cancel {
+            .order(matching_engine::Order::Modify {
                 owner: owner_b,
                 order_id,
+                new_quantity: Amount::ZERO,
             })
             .await;
     }
