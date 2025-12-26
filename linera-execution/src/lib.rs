@@ -463,11 +463,19 @@ pub trait UserService {
 }
 
 /// Configuration options for the execution runtime available to applications.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 pub struct ExecutionRuntimeConfig {
     /// Whether contract log messages should be output.
     /// This is typically enabled for clients but disabled for validators.
     pub allow_application_logs: bool,
+}
+
+impl Default for ExecutionRuntimeConfig {
+    fn default() -> Self {
+        Self {
+            allow_application_logs: true,
+        }
+    }
 }
 
 /// Requirements for the `extra` field in our state views (and notably the
