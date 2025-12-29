@@ -32,6 +32,12 @@ linera_spawn linera net up --with-faucet --faucet-port $LINERA_FAUCET_PORT
 #   LINERA_FAUCET_URL=https://faucet.testnet-XXX.linera.net  # for some value XXX
 ```
 
+Enable logs for user applications:
+
+```bash
+export LINERA_APPLICATION_LOGS=true
+```
+
 Create the user wallet and add chains to it:
 
 ```bash
