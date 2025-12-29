@@ -92,8 +92,17 @@ FAUCET_URL=http://localhost:8080
 # If you're using a testnet, start here and run this instead:
 #   LINERA_TMP_DIR=$(mktemp -d)
 #   FAUCET_URL=https://faucet.testnet-XXX.linera.net  # for some value XXX
+```
 
-# Set the path of the future wallet.
+Enable logs for user applications:
+
+```bash
+export LINERA_APPLICATION_LOGS=true
+```
+
+Set the path of the future wallet:
+
+```bash
 export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
 export LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json"
 export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"

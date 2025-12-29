@@ -67,7 +67,7 @@ pub struct Options {
     pub wasm_runtime: Option<WasmRuntime>,
 
     /// Output log messages from contract execution.
-    #[arg(long = "with_application_logs")]
+    #[arg(long = "with-application-logs", env = "LINERA_APPLICATION_LOGS")]
     pub application_logs: bool,
 
     /// The number of Tokio worker threads to use.
