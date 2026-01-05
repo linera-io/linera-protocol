@@ -683,101 +683,15 @@ where
         delivery: CrossChainMessageDelivery,
         latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
     ) -> Result<(), ChainClientError> {
-        let info = if let Ok(height) = target_block_height.try_sub_one() {
-            // Figure out which certificates this validator is missing. In many cases, it's just the
-            // last one, so we optimistically send that one right away.
-            let certificate = if let Some(cert) = latest_certificate {
-                cert
-            } else {
-                let hash = self
-                    .client
-                    .local_node
-                    .get_block_hashes(chain_id, vec![height])
-                    .await?
-                    .into_iter()
-                    .next()
-                    .ok_or_else(|| {
-                        ChainClientError::InternalError(
-                            "send_chain_information called with invalid target_block_height",
-                        )
-                    })?;
-                self.client
-                    .local_node
-                    .storage_client()
-                    .read_certificate(hash)
-                    .await?
-                    .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?
-            };
-            let info = match self.send_confirmed_certificate(certificate, delivery).await {
-                Ok(info) => info,
-                Err(error) => {
-                    tracing::debug!(
-                        address = self.remote_node.address(), %error,
-                        "validator failed to handle confirmed certificate; sending whole chain",
-                    );
-                    let query = ChainInfoQuery::new(chain_id);
-                    self.remote_node.handle_chain_info_query(query).await?
-                }
-            };
-            // Calculate which block heights the validator is still missing.
-            // info.next_block_height indicates where the validator is currently at.
-            let heights: Vec<_> = (info.next_block_height.0..target_block_height.0)
-                .map(BlockHeight)
-                .collect();
-            let validator_missing_hashes = self
-                .client
-                .local_node
-                .get_block_hashes(chain_id, heights)
-                .await?;
-            if !validator_missing_hashes.is_empty() {
-                // Send the requested certificates in order.
-                let certificates = self
-                    .client
-                    .local_node
-                    .storage_client()
-                    .read_certificates(validator_missing_hashes.clone())
-                    .await?;
-                let certificates =
-                    match ResultReadCertificates::new(certificates, validator_missing_hashes) {
-                        ResultReadCertificates::Certificates(certificates) => certificates,
-                        ResultReadCertificates::InvalidHashes(hashes) => {
-                            return Err(ChainClientError::ReadCertificatesError(hashes))
-                        }
-                    };
-                for certificate in certificates {
-                    self.send_confirmed_certificate(certificate, delivery)
-                        .await?;
-                }
-            }
-            info
+        // Phase 1: Height synchronization
+        let info = if target_block_height.0 > 0 {
+            self.sync_chain_height(chain_id, target_block_height, delivery, latest_certificate)
+                .await?
         } else {
-            // The remote node might not know about the chain yet. We need to send
-            // the chain description (and any dependencies) before sending blocks.
-            let blob_states = self
-                .client
-                .local_node
-                .read_blob_states_from_storage(&[BlobId::new(
-                    chain_id.0,
-                    BlobType::ChainDescription,
-                )])
-                .await?;
-            let mut chain_heights = BTreeMap::new();
-            for blob_state in blob_states {
-                let block_chain_id = blob_state.chain_id;
-                let block_height = blob_state.block_height.try_add_one()?;
-                chain_heights
-                    .entry(block_chain_id)
-                    .and_modify(|h| *h = block_height.max(*h))
-                    .or_insert(block_height);
-            }
-            self.send_chain_info_up_to_heights(
-                chain_heights,
-                CrossChainMessageDelivery::NonBlocking,
-            )
-            .await?;
-            let query = ChainInfoQuery::new(chain_id);
-            self.remote_node.handle_chain_info_query(query).await?
+            self.initialize_new_chain_on_validator(chain_id).await?
         };
+
+        // Phase 2: Round synchronization (if needed)
         // Height synchronization is complete. Now check if we need to synchronize
         // the consensus round at this height.
         let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
@@ -787,25 +701,170 @@ where
             // If we don't have the full chain description locally, we can't help the
             // validator with round synchronization. This is not an error - the validator
             // should retry later once the chain is fully initialized locally.
-            Err(LocalNodeError::BlobsNotFound(_)) => return Ok(()),
+            Err(LocalNodeError::BlobsNotFound(_)) => {
+                tracing::debug!("local chain description not fully available, skipping round sync");
+                return Ok(());
+            }
             Err(error) => return Err(error.into()),
         };
+
         let manager = local_info.manager;
         if local_info.next_block_height != remote_height || manager.current_round <= remote_round {
             return Ok(());
         }
-        // The remote node is at our height but not at the current round. Send it the proposal,
-        // validated block certificate or timeout certificate that proves the current round.
-        // These are alternatives - we try each and return successfully if any succeeds.
 
+        // Validator is at our height but behind on consensus round
+        self.sync_consensus_round(remote_round, &manager).await
+    }
+
+    /// Synchronizes a validator to a specific block height by sending missing certificates.
+    ///
+    /// Uses an optimistic approach: sends the last certificate first, then fills in any gaps.
+    ///
+    /// Returns the ChainInfo from the validator after synchronization.
+    async fn sync_chain_height(
+        &mut self,
+        chain_id: ChainId,
+        target_block_height: BlockHeight,
+        delivery: CrossChainMessageDelivery,
+        latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
+        let height = target_block_height.try_sub_one()?;
+
+        // Get the certificate for the last block we want to send
+        let certificate = if let Some(cert) = latest_certificate {
+            cert
+        } else {
+            let hash = self
+                .client
+                .local_node
+                .get_block_hashes(chain_id, vec![height])
+                .await?
+                .into_iter()
+                .next()
+                .ok_or_else(|| {
+                    ChainClientError::InternalError(
+                        "send_chain_information called with invalid target_block_height",
+                    )
+                })?;
+            self.client
+                .local_node
+                .storage_client()
+                .read_certificate(hash)
+                .await?
+                .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?
+        };
+
+        // Optimistically try sending just the last certificate
+        let info = match self.send_confirmed_certificate(certificate, delivery).await {
+            Ok(info) => info,
+            Err(error) => {
+                tracing::debug!(
+                    address = self.remote_node.address(), %error,
+                    "validator failed to handle confirmed certificate; sending whole chain",
+                );
+                let query = ChainInfoQuery::new(chain_id);
+                self.remote_node.handle_chain_info_query(query).await?
+            }
+        };
+
+        // Calculate which block heights the validator is still missing
+        let heights: Vec<_> = (info.next_block_height.0..target_block_height.0)
+            .map(BlockHeight)
+            .collect();
+
+        if heights.is_empty() {
+            return Ok(info);
+        }
+
+        // Send any additional missing certificates in order
+        let validator_missing_hashes = self
+            .client
+            .local_node
+            .get_block_hashes(chain_id, heights)
+            .await?;
+
+        let certificates = self
+            .client
+            .local_node
+            .storage_client()
+            .read_certificates(validator_missing_hashes.clone())
+            .await?;
+        let certificates = match ResultReadCertificates::new(certificates, validator_missing_hashes)
+        {
+            ResultReadCertificates::Certificates(certificates) => certificates,
+            ResultReadCertificates::InvalidHashes(hashes) => {
+                return Err(ChainClientError::ReadCertificatesError(hashes))
+            }
+        };
+        for certificate in certificates {
+            self.send_confirmed_certificate(certificate, delivery)
+                .await?;
+        }
+
+        Ok(info)
+    }
+
+    /// Initializes a new chain on the validator by sending the chain description and dependencies.
+    ///
+    /// This is called when the validator doesn't know about the chain yet (target_block_height == 0).
+    ///
+    /// Returns the ChainInfo from the validator after initialization.
+    async fn initialize_new_chain_on_validator(
+        &mut self,
+        chain_id: ChainId,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
+        // Read the chain description blob
+        let blob_states = self
+            .client
+            .local_node
+            .read_blob_states_from_storage(&[BlobId::new(chain_id.0, BlobType::ChainDescription)])
+            .await?;
+
+        // Find all chains that need to be sent (dependencies)
+        let mut chain_heights = BTreeMap::new();
+        for blob_state in blob_states {
+            let block_chain_id = blob_state.chain_id;
+            let block_height = blob_state.block_height.try_add_one()?;
+            chain_heights
+                .entry(block_chain_id)
+                .and_modify(|h| *h = block_height.max(*h))
+                .or_insert(block_height);
+        }
+
+        // Send all dependency chains
+        self.send_chain_info_up_to_heights(chain_heights, CrossChainMessageDelivery::NonBlocking)
+            .await?;
+
+        // Query the validator's state for this chain
+        let query = ChainInfoQuery::new(chain_id);
+        let info = self.remote_node.handle_chain_info_query(query).await?;
+        Ok(info)
+    }
+
+    /// Synchronizes the consensus round state with the validator.
+    ///
+    /// If the validator is at the same height but an earlier round, sends the evidence
+    /// (proposal, validated block, or timeout certificate) that justifies the current round.
+    ///
+    /// This is a best-effort operation - failures are logged but don't fail the entire sync.
+    async fn sync_consensus_round(
+        &mut self,
+        remote_round: Round,
+        manager: &linera_chain::manager::ChainManagerInfo,
+    ) -> Result<(), ChainClientError> {
         // Try to send a proposal for the current round
         for proposal in manager
             .requested_proposed
-            .into_iter()
-            .chain(manager.requested_signed_proposal)
+            .iter()
+            .chain(manager.requested_signed_proposal.iter())
         {
             if proposal.content.round == manager.current_round {
-                match self.remote_node.handle_block_proposal(proposal).await {
+                match self
+                    .remote_node
+                    .handle_block_proposal(proposal.clone())
+                    .await
+                {
                     Ok(_) => {
                         tracing::debug!("successfully sent block proposal for round sync");
                         return Ok(());
@@ -818,12 +877,12 @@ where
         }
 
         // Try to send a validated block for the current round
-        if let Some(LockingBlock::Regular(validated)) = manager.requested_locking.map(|b| *b) {
+        if let Some(LockingBlock::Regular(validated)) = manager.requested_locking.as_deref() {
             if validated.round == manager.current_round {
                 match self
                     .remote_node
                     .handle_optimized_validated_certificate(
-                        &validated,
+                        validated,
                         CrossChainMessageDelivery::NonBlocking,
                     )
                     .await
@@ -840,9 +899,13 @@ where
         }
 
         // Try to send a timeout certificate
-        if let Some(cert) = manager.timeout {
+        if let Some(cert) = &manager.timeout {
             if cert.round >= remote_round {
-                match self.remote_node.handle_timeout_certificate(*cert).await {
+                match self
+                    .remote_node
+                    .handle_timeout_certificate(cert.as_ref().clone())
+                    .await
+                {
                     Ok(_) => {
                         tracing::debug!(round = %cert.round, "successfully sent timeout certificate");
                         return Ok(());
