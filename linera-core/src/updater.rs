@@ -608,24 +608,10 @@ where
                         .node
                         .missing_blob_ids(mem::take(&mut blob_ids))
                         .await?;
-                    let blob_states = self
-                        .client
-                        .local_node
-                        .read_blob_states_from_storage(&missing_blob_ids)
-                        .await?;
-                    let mut chain_heights = BTreeMap::new();
-                    for blob_state in blob_states {
-                        let block_chain_id = blob_state.chain_id;
-                        let block_height = blob_state.block_height.try_add_one()?;
-                        chain_heights
-                            .entry(block_chain_id)
-                            .and_modify(|h| *h = block_height.max(*h))
-                            .or_insert(block_height);
-                    }
-                    tracing::debug!("Sending chains {chain_heights:?}");
 
-                    self.send_chain_info_up_to_heights(
-                        chain_heights,
+                    tracing::debug!("Sending chains for missing blobs");
+                    self.send_chain_info_for_blobs(
+                        &missing_blob_ids,
                         CrossChainMessageDelivery::NonBlocking,
                     )
                     .await?;
@@ -814,27 +800,12 @@ where
         &mut self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        // Read the chain description blob
-        let blob_states = self
-            .client
-            .local_node
-            .read_blob_states_from_storage(&[BlobId::new(chain_id.0, BlobType::ChainDescription)])
-            .await?;
-
-        // Find all chains that need to be sent (dependencies)
-        let mut chain_heights = BTreeMap::new();
-        for blob_state in blob_states {
-            let block_chain_id = blob_state.chain_id;
-            let block_height = blob_state.block_height.try_add_one()?;
-            chain_heights
-                .entry(block_chain_id)
-                .and_modify(|h| *h = block_height.max(*h))
-                .or_insert(block_height);
-        }
-
-        // Send all dependency chains
-        self.send_chain_info_up_to_heights(chain_heights, CrossChainMessageDelivery::NonBlocking)
-            .await?;
+        // Send chain description and all dependency chains
+        self.send_chain_info_for_blobs(
+            &[BlobId::new(chain_id.0, BlobType::ChainDescription)],
+            CrossChainMessageDelivery::NonBlocking,
+        )
+        .await?;
 
         // Query the validator's state for this chain
         let query = ChainInfoQuery::new(chain_id);
@@ -921,6 +892,35 @@ where
         // This is not a fatal error - height sync succeeded which is the primary goal.
         tracing::debug!("round sync not performed: no applicable data or all attempts failed");
         Ok(())
+    }
+
+    /// Sends chain information for all chains referenced by the given blobs.
+    ///
+    /// Reads blob states from storage, determines the chain heights needed,
+    /// and sends chain information to bring the validator up to date.
+    async fn send_chain_info_for_blobs(
+        &mut self,
+        blob_ids: &[BlobId],
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<(), ChainClientError> {
+        let blob_states = self
+            .client
+            .local_node
+            .read_blob_states_from_storage(blob_ids)
+            .await?;
+
+        let mut chain_heights = BTreeMap::new();
+        for blob_state in blob_states {
+            let block_chain_id = blob_state.chain_id;
+            let block_height = blob_state.block_height.try_add_one()?;
+            chain_heights
+                .entry(block_chain_id)
+                .and_modify(|h| *h = block_height.max(*h))
+                .or_insert(block_height);
+        }
+
+        self.send_chain_info_up_to_heights(chain_heights, delivery)
+            .await
     }
 
     async fn send_chain_info_up_to_heights(
