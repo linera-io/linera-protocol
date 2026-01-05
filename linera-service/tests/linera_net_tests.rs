@@ -572,6 +572,8 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
         function get_address(uint256 index);
         function get_value();
         function increment();
+        function remote_increment(uint256 index);
+        function remote_value(uint256 index);
     }
 
     let constructor_argument = Vec::new();
@@ -682,6 +684,30 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     assert_contract_balance(&application, address0, Amount::ONE).await?;
     assert_contract_balance(&application, address1, Amount::ONE).await?;
     assert_contract_balance(&application, address_app, Amount::from_tokens(25)).await?;
+
+    // Operating on the application0
+
+    let operation0 = remote_incrementCall {
+        index: U256::from(0),
+    };
+    let operation0 = get_zero_operation(operation0)?;
+    application.run_json_query(operation0).await?;
+
+    let operation0 = incrementCall {};
+    let operation0 = get_zero_operation(operation0)?;
+    application0.run_json_query(operation0).await?;
+
+    let query = get_valueCall {};
+    let query = EvmQuery::Query(query.abi_encode());
+    let result = application0.run_json_query(query.clone()).await?;
+    assert_eq!(read_evm_u256_entry(result), U256::from(44));
+
+    let query = remote_valueCall {
+        index: U256::from(0),
+    };
+    let query = EvmQuery::Query(query.abi_encode());
+    let result = application.run_json_query(query.clone()).await?;
+    assert_eq!(read_evm_u256_entry(result), U256::from(44));
 
     node_service.ensure_is_running()?;
 

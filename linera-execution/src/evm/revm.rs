@@ -985,43 +985,49 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
                 )?;
             }
             let module_id = Self::publish_create_inputs(context, inputs)?;
-            let mut runtime = context.db().0.runtime.lock().unwrap();
-            let chain_id = runtime.chain_id()?;
-            let application_id = runtime.application_id()?;
-            let expected_application_id =
-                Self::get_expected_application_id(&mut runtime, module_id)?;
-            if inputs.value != U256::ZERO {
-                let amount = Amount::try_from(inputs.value).map_err(EvmExecutionError::from)?;
-                let destination = Account {
-                    chain_id,
-                    owner: expected_application_id.into(),
+            let (deployed_bytecode, address) = {
+                let mut runtime = context.db().0.runtime.lock().unwrap();
+                let chain_id = runtime.chain_id()?;
+                let application_id = runtime.application_id()?;
+                let expected_application_id =
+                    Self::get_expected_application_id(&mut runtime, module_id)?;
+                if inputs.value != U256::ZERO {
+                    let amount = Amount::try_from(inputs.value).map_err(EvmExecutionError::from)?;
+                    let destination = Account {
+                        chain_id,
+                        owner: expected_application_id.into(),
+                    };
+                    let source = application_id.into();
+                    runtime.transfer(source, destination, amount)?;
+                }
+                let parameters = JSON_EMPTY_VECTOR.to_vec(); // No constructor
+                let evm_call = EvmInstantiation {
+                    value: inputs.value,
+                    argument: Vec::new(),
                 };
-                let source = application_id.into();
-                runtime.transfer(source, destination, amount)?;
-            }
-            let parameters = JSON_EMPTY_VECTOR.to_vec(); // No constructor
-            let evm_call = EvmInstantiation {
-                value: inputs.value,
-                argument: Vec::new(),
+                let argument = serde_json::to_vec(&evm_call)?;
+                let required_application_ids = Vec::new();
+                let created_application_id = runtime.create_application(
+                    module_id,
+                    parameters,
+                    argument,
+                    required_application_ids,
+                )?;
+                assert_eq!(expected_application_id, created_application_id);
+                let argument = GET_DEPLOYED_BYTECODE_SELECTOR.to_vec();
+                let deployed_bytecode: Vec<u8> =
+                    runtime.try_call_application(false, created_application_id, argument)?;
+                let address = created_application_id.evm_address();
+                (deployed_bytecode, address)
             };
-            let argument = serde_json::to_vec(&evm_call)?;
-            let required_application_ids = Vec::new();
-            let created_application_id = runtime.create_application(
-                module_id,
-                parameters,
-                argument,
-                required_application_ids,
-            )?;
-            assert_eq!(expected_application_id, created_application_id);
-            let argument = GET_DEPLOYED_BYTECODE_SELECTOR.to_vec();
-            let deployed_bytecode: Vec<u8> =
-                runtime.try_call_application(false, created_application_id, argument)?;
+            let bytecode = revm_state::Bytecode::new_legacy(deployed_bytecode.clone().into());
+            context.journal().load_account(address)?;
+            context.journal().set_code(address, bytecode);
             let result = InterpreterResult {
                 result: InstructionResult::Return, // Only possibility if no error occurred.
                 output: Bytes::from(deployed_bytecode),
                 gas: Gas::new(inputs.gas_limit),
             };
-            let address = created_application_id.evm_address();
             let creation_outcome = CreateOutcome {
                 result,
                 address: Some(address),

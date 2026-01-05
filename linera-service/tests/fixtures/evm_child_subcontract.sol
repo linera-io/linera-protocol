@@ -1,6 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+pragma solidity ^0.8.0;
 
 // Simple subcontract
 contract Counter {
@@ -44,5 +44,15 @@ contract CounterFactory {
     function get_balance(address account) external returns (uint256) {
         uint256 balance = account.balance;
         return balance;
+    }
+
+    function remote_increment(uint256 index) external {
+        Counter counter = counters[index];
+        counter.increment();
+    }
+
+    function remote_value(uint256 index) external returns (uint256) {
+        Counter counter = counters[index];
+        return counter.get_value();
     }
 }
