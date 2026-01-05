@@ -636,18 +636,18 @@ where
     /// Sends chain information to bring a validator up to date with a specific chain.
     ///
     /// This method performs a two-phase synchronization:
-    /// 1. **Height synchronization**: Ensures the validator has all blocks up to `target_block_height`
+    /// 1. **Height synchronization**: Ensures the validator has all blocks up to `target_block_height`.
     /// 2. **Round synchronization**: If heights match, ensures the validator has proposals/certificates
-    ///    for the current consensus round
+    ///    for the current consensus round.
     ///
     /// # Height Sync Strategy
     /// - For existing chains (target_block_height > 0):
-    ///   * Optimistically sends the last certificate first (often that's all that's missing)
-    ///   * Falls back to full chain query if the validator needs more context
-    ///   * Sends any additional missing certificates in order
+    ///   * Optimistically sends the last certificate first (often that's all that's missing).
+    ///   * Falls back to full chain query if the validator needs more context.
+    ///   * Sends any additional missing certificates in order.
     /// - For new chains (target_block_height == 0):
-    ///   * Sends the chain description and dependencies first
-    ///   * Then queries the validator's state
+    ///   * Sends the chain description and dependencies first.
+    ///   * Then queries the validator's state.
     ///
     /// # Round Sync Strategy
     /// Once heights match, if the local node is at a higher round, sends the evidence
@@ -707,7 +707,7 @@ where
     ///
     /// Uses an optimistic approach: sends the last certificate first, then fills in any gaps.
     ///
-    /// Returns the ChainInfo from the validator after synchronization.
+    /// Returns the [`ChainInfo`] from the validator after synchronization.
     async fn sync_chain_height(
         &mut self,
         chain_id: ChainId,
@@ -793,9 +793,9 @@ where
 
     /// Initializes a new chain on the validator by sending the chain description and dependencies.
     ///
-    /// This is called when the validator doesn't know about the chain yet (target_block_height == 0).
+    /// This is called when the validator doesn't know about the chain yet.
     ///
-    /// Returns the ChainInfo from the validator after initialization.
+    /// Returns the [`ChainInfo`] from the validator after initialization.
     async fn initialize_new_chain_on_validator(
         &mut self,
         chain_id: ChainId,
