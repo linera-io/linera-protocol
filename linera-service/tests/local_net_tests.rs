@@ -36,7 +36,8 @@ use test_case::test_case;
 use {alloy_primitives::U256, linera_service::cli_wrappers::ApplicationWrapper};
 #[cfg(feature = "storage-service")]
 use {
-    linera_base::port::get_free_port, linera_service::cli_wrappers::Faucet, std::process::Command,
+    assert_matches::assert_matches, linera_base::port::get_free_port,
+    linera_service::cli_wrappers::Faucet, std::process::Command,
 };
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
@@ -1288,7 +1289,7 @@ async fn test_node_service_with_task_processor() -> Result<()> {
     let port = get_node_port().await;
     let operators = vec![("echo".to_string(), operator_path)];
     let mut node_service = client
-        .run_node_service_with_options(port, ProcessInbox::Skip, &[app_id], &operators)
+        .run_node_service_with_options(port, ProcessInbox::Skip, &[app_id], &operators, false)
         .await?;
 
     node_service.ensure_is_running()?;
@@ -1326,6 +1327,69 @@ async fn test_node_service_with_task_processor() -> Result<()> {
     // Check that the task was processed (task count should be 1).
     let task_count: u64 = app.query_json("taskCount").await?;
     assert_eq!(task_count, 1);
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+/// Test that the node service read-only mode disables mutations and prevents query-triggered operations.
+#[cfg(feature = "storage-service")]
+#[test_log::test(tokio::test)]
+async fn test_node_service_read_only_mode() -> Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
+    let owner = client.get_owner().unwrap();
+
+    // Start the node service in read-only mode.
+    let port = get_node_port().await;
+    let mut node_service = client
+        .run_node_service_with_options(port, ProcessInbox::Skip, &[], &[], true)
+        .await?;
+
+    node_service.ensure_is_running()?;
+
+    // Verify that queries work by checking the chain balance.
+    let chain_account = Account::chain(chain);
+    let balance = node_service.balance(&chain_account).await?;
+    assert!(balance > Amount::ZERO, "Expected chain to have balance");
+
+    // Verify that mutations are disabled by trying to transfer.
+    // In read-only mode, the mutation type doesn't exist in the schema, so this should fail.
+    let recipient = Account::new(chain, owner);
+    let result = node_service
+        .transfer(
+            chain,
+            AccountOwner::CHAIN,
+            recipient,
+            Amount::from_tokens(1),
+        )
+        .await;
+    assert_matches!(result, Err(_));
+
+    // Terminate the read-only mode service.
+    node_service.terminate().await?;
+
+    // Restart the node service without read-only mode.
+    let mut node_service = client
+        .run_node_service_with_options(port, ProcessInbox::Skip, &[], &[], false)
+        .await?;
+    node_service.ensure_is_running()?;
+
+    // Verify that mutations now succeed by transferring from chain to owner.
+    node_service
+        .transfer(
+            chain,
+            AccountOwner::CHAIN,
+            recipient,
+            Amount::from_tokens(1),
+        )
+        .await?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
