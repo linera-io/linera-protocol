@@ -1393,8 +1393,6 @@ async fn test_node_service_with_task_processor() -> Result<()> {
 #[cfg(feature = "storage-service")]
 #[test_log::test(tokio::test)]
 async fn test_node_service_public_mode() -> Result<()> {
-    use linera_base::identifiers::Account;
-
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1412,17 +1410,41 @@ async fn test_node_service_public_mode() -> Result<()> {
     node_service.ensure_is_running()?;
 
     // Verify that queries work by checking the chain balance.
-    let account = Account::chain(chain);
-    let balance = node_service.balance(&account).await?;
+    let chain_account = Account::chain(chain);
+    let balance = node_service.balance(&chain_account).await?;
     assert!(balance > Amount::ZERO, "Expected chain to have balance");
 
     // Verify that mutations are disabled by trying to transfer.
     // In public mode, the mutation type doesn't exist in the schema, so this should fail.
     let recipient = Account::new(chain, owner);
     let result = node_service
-        .transfer(chain, owner, recipient, Amount::from_tokens(1))
+        .transfer(
+            chain,
+            AccountOwner::CHAIN,
+            recipient,
+            Amount::from_tokens(1),
+        )
         .await;
     assert_matches!(result, Err(_));
+
+    // Terminate the public mode service.
+    node_service.terminate().await?;
+
+    // Restart the node service without public mode.
+    let mut node_service = client
+        .run_node_service_with_options(port, ProcessInbox::Skip, &[], &[], false)
+        .await?;
+    node_service.ensure_is_running()?;
+
+    // Verify that mutations now succeed by transferring from chain to owner.
+    node_service
+        .transfer(
+            chain,
+            AccountOwner::CHAIN,
+            recipient,
+            Amount::from_tokens(1),
+        )
+        .await?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
