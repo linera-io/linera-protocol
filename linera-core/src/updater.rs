@@ -647,6 +647,35 @@ where
         .await
     }
 
+    /// Sends chain information to bring a validator up to date with a specific chain.
+    ///
+    /// This method performs a two-phase synchronization:
+    /// 1. **Height synchronization**: Ensures the validator has all blocks up to `target_block_height`
+    /// 2. **Round synchronization**: If heights match, ensures the validator has proposals/certificates
+    ///    for the current consensus round
+    ///
+    /// # Height Sync Strategy
+    /// - For existing chains (target_block_height > 0):
+    ///   * Optimistically sends the last certificate first (often that's all that's missing)
+    ///   * Falls back to full chain query if the validator needs more context
+    ///   * Sends any additional missing certificates in order
+    /// - For new chains (target_block_height == 0):
+    ///   * Sends the chain description and dependencies first
+    ///   * Then queries the validator's state
+    ///
+    /// # Round Sync Strategy
+    /// Once heights match, if the local node is at a higher round, sends the evidence
+    /// (proposal, validated block, or timeout certificate) that proves the current round.
+    ///
+    /// # Parameters
+    /// - `chain_id`: The chain to synchronize
+    /// - `target_block_height`: The height the validator should reach
+    /// - `delivery`: Message delivery mode (blocking or non-blocking)
+    /// - `latest_certificate`: Optional certificate at target_block_height - 1 to avoid a storage lookup
+    ///
+    /// # Returns
+    /// - `Ok(())` if synchronization completed successfully or the validator is already up to date
+    /// - `Err` if there was a communication or storage error
     pub async fn send_chain_information(
         &mut self,
         chain_id: ChainId,
@@ -690,7 +719,8 @@ where
                     self.remote_node.handle_chain_info_query(query).await?
                 }
             };
-            // Obtain the missing blocks and the manager state from the local node.
+            // Calculate which block heights the validator is still missing.
+            // info.next_block_height indicates where the validator is currently at.
             let heights: Vec<_> = (info.next_block_height.0..target_block_height.0)
                 .map(BlockHeight)
                 .collect();
@@ -721,7 +751,8 @@ where
             }
             info
         } else {
-            // The remote node might not know about the chain yet.
+            // The remote node might not know about the chain yet. We need to send
+            // the chain description (and any dependencies) before sending blocks.
             let blob_states = self
                 .client
                 .local_node
@@ -747,11 +778,15 @@ where
             let query = ChainInfoQuery::new(chain_id);
             self.remote_node.handle_chain_info_query(query).await?
         };
+        // Height synchronization is complete. Now check if we need to synchronize
+        // the consensus round at this height.
         let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
         let local_info = match self.client.local_node.handle_chain_info_query(query).await {
             Ok(response) => response.info,
-            // We don't have the full chain description.
+            // If we don't have the full chain description locally, we can't help the
+            // validator with round synchronization. This is not an error - the validator
+            // should retry later once the chain is fully initialized locally.
             Err(LocalNodeError::BlobsNotFound(_)) => return Ok(()),
             Err(error) => return Err(error.into()),
         };
@@ -761,6 +796,8 @@ where
         }
         // The remote node is at our height but not at the current round. Send it the proposal,
         // validated block certificate or timeout certificate that proves the current round.
+        // Try to send a proposal for the current round. This helps the validator understand
+        // which block is being proposed.
         for proposal in manager
             .requested_proposed
             .into_iter()
