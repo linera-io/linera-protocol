@@ -53,7 +53,7 @@ jobs:
         # run: echo 1048576 > /proc/sys/fs/aio-max-nr
       - name: Build client binary
         run: |
-          cargo install --path linera-service --bin linera --bin linera-server --debug
+          cargo install --path linera-service --bin linera --bin linera-server --debug --locked
       # TODO(#2709): Remove this step once this workflow runs in a custom runner
       - name: Patch Docker compose file to run ScyllaDB in developer mode
         run: |
