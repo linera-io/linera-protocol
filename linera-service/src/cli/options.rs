@@ -90,6 +90,11 @@ pub struct Options {
     )]
     pub execution_state_cache_size: usize,
 
+    /// Enable memory profiling (requires jemalloc feature and metrics).
+    /// Exposes /debug/pprof and /debug/flamegraph endpoints on the metrics server.
+    #[arg(long, env = "LINERA_ENABLE_MEMORY_PROFILING")]
+    pub enable_memory_profiling: bool,
+
     /// Subcommand.
     #[command(subcommand)]
     pub command: ClientCommand,
