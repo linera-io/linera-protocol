@@ -94,6 +94,17 @@ pub mod metrics {
         )
     });
 
+    /// The metric counting how often confirmed blocks are read from storage.
+    #[doc(hidden)]
+    pub(super) static READ_CONFIRMED_BLOCKS_COUNTER: LazyLock<IntCounterVec> =
+        LazyLock::new(|| {
+            register_int_counter_vec(
+                "read_confirmed_blocks",
+                "The metric counting how often confirmed blocks are read from storage",
+                &[],
+            )
+        });
+
     /// The metric counting how often a blob is read from storage.
     #[doc(hidden)]
     pub(super) static READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
@@ -1214,6 +1225,28 @@ where
             .with_label_values(&[])
             .inc();
         Ok(value)
+    }
+
+    #[instrument(skip_all)]
+    async fn read_confirmed_blocks<I: IntoIterator<Item = CryptoHash> + Send>(
+        &self,
+        hashes: I,
+    ) -> Result<Vec<Option<ConfirmedBlock>>, ViewError> {
+        let hashes = hashes.into_iter().collect::<Vec<_>>();
+        if hashes.is_empty() {
+            return Ok(Vec::new());
+        }
+        let root_keys = Self::get_root_keys_for_certificates(&hashes);
+        let mut blocks = Vec::new();
+        for root_key in root_keys {
+            let store = self.database.open_shared(&root_key)?;
+            blocks.push(store.read_value(BLOCK_KEY).await?);
+        }
+        #[cfg(with_metrics)]
+        metrics::READ_CONFIRMED_BLOCKS_COUNTER
+            .with_label_values(&[])
+            .inc_by(hashes.len() as u64);
+        Ok(blocks)
     }
 
     #[instrument(skip_all, fields(%blob_id))]
