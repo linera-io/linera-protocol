@@ -514,26 +514,50 @@ where
                     })?,
             );
         }
-        let certificates = self.storage.read_certificates(hashes.clone()).await?;
-        let certificates = match ResultReadCertificates::new(certificates, hashes) {
-            ResultReadCertificates::Certificates(certificates) => certificates,
-            ResultReadCertificates::InvalidHashes(hashes) => {
-                return Err(WorkerError::ReadCertificatesError(hashes))
+
+        let mut uncached_hashes = Vec::new();
+        let mut height_to_blocks: HashMap<BlockHeight, Hashed<Block>> = HashMap::new();
+
+        for hash in hashes {
+            if let Some(hashed_block) = self.block_values.get(&hash) {
+                height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
+            } else {
+                uncached_hashes.push(hash);
             }
-        };
-        let certificates = heights
-            .into_iter()
-            .zip(certificates)
-            .collect::<HashMap<_, _>>();
-        // For each medium, select the relevant messages.
+        }
+
+        if !uncached_hashes.is_empty() {
+            let certificates = self
+                .storage
+                .read_certificates(uncached_hashes.clone())
+                .await?;
+            let certificates = match ResultReadCertificates::new(certificates, uncached_hashes) {
+                ResultReadCertificates::Certificates(certificates) => certificates,
+                ResultReadCertificates::InvalidHashes(hashes) => {
+                    return Err(WorkerError::ReadCertificatesError(hashes))
+                }
+            };
+
+            for cert in certificates {
+                let hashed_block = cert.into_value().into_inner();
+                let height = hashed_block.inner().header.height;
+                self.block_values.insert(Cow::Owned(hashed_block.clone()));
+                height_to_blocks.insert(height, hashed_block);
+            }
+        }
+
         let mut cross_chain_requests = Vec::new();
         for (recipient, heights) in heights_by_recipient {
             let mut bundles = Vec::new();
             for height in heights {
-                let cert = certificates
+                let hashed_block = height_to_blocks
                     .get(&height)
-                    .ok_or_else(|| ChainError::InternalError("missing certificates".to_string()))?;
-                bundles.extend(cert.message_bundles_for(recipient));
+                    .ok_or_else(|| ChainError::InternalError("missing block".to_string()))?;
+                bundles.extend(
+                    hashed_block
+                        .inner()
+                        .message_bundles_for(recipient, hashed_block.hash()),
+                );
             }
             let request = CrossChainRequest::UpdateRecipient {
                 sender: self.chain.chain_id(),
