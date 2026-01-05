@@ -1343,7 +1343,7 @@ async fn test_node_service_with_task_processor() -> Result<()> {
     let port = get_node_port().await;
     let operators = vec![("echo".to_string(), operator_path)];
     let mut node_service = client
-        .run_node_service_with_options(port, ProcessInbox::Skip, &[app_id], &operators)
+        .run_node_service_with_options(port, ProcessInbox::Skip, &[app_id], &operators, false)
         .await?;
 
     node_service.ensure_is_running()?;
@@ -1381,6 +1381,54 @@ async fn test_node_service_with_task_processor() -> Result<()> {
     // Check that the task was processed (task count should be 1).
     let task_count: u64 = app.query_json("taskCount").await?;
     assert_eq!(task_count, 1);
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+
+/// Test that the node service public mode disables mutations and prevents query-triggered operations.
+#[cfg(feature = "storage-service")]
+#[test_log::test(tokio::test)]
+async fn test_node_service_public_mode() -> Result<()> {
+    use linera_base::identifiers::Account;
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
+    let owner = client.get_owner().unwrap();
+
+    // Start the node service in public mode.
+    let port = get_node_port().await;
+    let mut node_service = client
+        .run_node_service_with_options(port, ProcessInbox::Skip, &[], &[], true)
+        .await?;
+
+    node_service.ensure_is_running()?;
+
+    // Verify that queries work by checking the chain balance.
+    let account = Account::chain(chain);
+    let balance = node_service.balance(&account).await?;
+    assert!(balance > Amount::ZERO, "Expected chain to have balance");
+
+    // Verify that mutations are disabled by trying to transfer.
+    // In public mode, the mutation type doesn't exist in the schema, so this should fail.
+    let recipient = Account::new(chain, owner);
+    let result = node_service
+        .transfer(chain, owner, recipient, Amount::from_tokens(1))
+        .await;
+    let error_message = result.expect_err("Expected mutation to fail in public mode").to_string();
+    // The error comes from `query_node` which retries and then reports failure.
+    // The actual GraphQL error "Schema is not configured for mutations" is logged as a warning.
+    assert!(
+        error_message.contains("mutation") && error_message.contains("failed"),
+        "Unexpected error: {error_message}"
+    );
 
     net.ensure_is_running().await?;
     net.terminate().await?;

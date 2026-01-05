@@ -475,7 +475,7 @@ impl ClientWrapper {
         port: impl Into<Option<u16>>,
         process_inbox: ProcessInbox,
     ) -> Result<NodeService> {
-        self.run_node_service_with_options(port, process_inbox, &[], &[])
+        self.run_node_service_with_options(port, process_inbox, &[], &[], false)
             .await
     }
 
@@ -486,6 +486,7 @@ impl ClientWrapper {
         process_inbox: ProcessInbox,
         operator_application_ids: &[ApplicationId],
         operators: &[(String, PathBuf)],
+        public: bool,
     ) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
@@ -501,6 +502,9 @@ impl ClientWrapper {
         }
         for (name, path) in operators {
             command.args(["--operators", &format!("{}={}", name, path.display())]);
+        }
+        if public {
+            command.arg("--public");
         }
         let child = command
             .args(["--port".to_string(), port.to_string()])
