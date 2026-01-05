@@ -662,6 +662,7 @@ where
     /// # Returns
     /// - `Ok(())` if synchronization completed successfully or the validator is already up to date
     /// - `Err` if there was a communication or storage error
+    #[instrument(level = "trace", skip_all)]
     pub async fn send_chain_information(
         &mut self,
         chain_id: ChainId,
@@ -896,8 +897,9 @@ where
 
     /// Sends chain information for all chains referenced by the given blobs.
     ///
-    /// Reads blob states from storage, determines the chain heights needed,
-    /// and sends chain information to bring the validator up to date.
+    /// Reads blob states from storage, determines the specific chain heights needed,
+    /// and sends chain information for those heights. With sparse chains, this only
+    /// sends the specific blocks containing the blobs, not all blocks up to those heights.
     async fn send_chain_info_for_blobs(
         &mut self,
         blob_ids: &[BlobId],
@@ -912,15 +914,67 @@ where
         let mut chain_heights = BTreeMap::new();
         for blob_state in blob_states {
             let block_chain_id = blob_state.chain_id;
-            let block_height = blob_state.block_height.try_add_one()?;
+            let block_height = blob_state.block_height;
             chain_heights
                 .entry(block_chain_id)
-                .and_modify(|h| *h = block_height.max(*h))
-                .or_insert(block_height);
+                .or_insert_with(BTreeSet::new)
+                .insert(block_height);
         }
 
-        self.send_chain_info_up_to_heights(chain_heights, delivery)
+        self.send_chain_info_at_heights(chain_heights, delivery)
             .await
+    }
+
+    /// Sends chain information for specific heights on multiple chains.
+    ///
+    /// Unlike `send_chain_info_up_to_heights`, this method only sends the blocks at the
+    /// specified heights, not all blocks up to those heights. This is more efficient for
+    /// sparse chains where only specific blocks are needed.
+    async fn send_chain_info_at_heights(
+        &mut self,
+        chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<(), ChainClientError> {
+        let tasks: Vec<_> = chain_heights
+            .into_iter()
+            .flat_map(|(chain_id, heights)| {
+                heights.into_iter().map(move |height| (chain_id, height))
+            })
+            .collect();
+
+        FuturesUnordered::from_iter(tasks.into_iter().map(|(chain_id, height)| {
+            let mut updater = self.clone();
+            async move {
+                // Get the certificate at this specific height and send only that
+                let hash = updater
+                    .client
+                    .local_node
+                    .get_block_hashes(chain_id, vec![height])
+                    .await?
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| {
+                        ChainClientError::InternalError(
+                            "send_chain_info_at_heights called with invalid height",
+                        )
+                    })?;
+                let certificate = updater
+                    .client
+                    .local_node
+                    .storage_client()
+                    .read_certificate(hash)
+                    .await?
+                    .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
+
+                updater
+                    .send_confirmed_certificate(certificate, delivery)
+                    .await
+                    .map(|_| ())
+            }
+        }))
+        .try_collect::<Vec<_>>()
+        .await?;
+        Ok(())
     }
 
     async fn send_chain_info_up_to_heights(
