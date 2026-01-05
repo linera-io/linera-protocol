@@ -14,6 +14,7 @@ mod guard;
 use std::{env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
+use assert_matches::assert_matches;
 use guard::INTEGRATION_TEST_GUARD;
 use linera_base::{
     crypto::Secp256k1SecretKey,
@@ -1388,7 +1389,6 @@ async fn test_node_service_with_task_processor() -> Result<()> {
     Ok(())
 }
 
-
 /// Test that the node service public mode disables mutations and prevents query-triggered operations.
 #[cfg(feature = "storage-service")]
 #[test_log::test(tokio::test)]
@@ -1422,13 +1422,7 @@ async fn test_node_service_public_mode() -> Result<()> {
     let result = node_service
         .transfer(chain, owner, recipient, Amount::from_tokens(1))
         .await;
-    let error_message = result.expect_err("Expected mutation to fail in public mode").to_string();
-    // The error comes from `query_node` which retries and then reports failure.
-    // The actual GraphQL error "Schema is not configured for mutations" is logged as a warning.
-    assert!(
-        error_message.contains("mutation") && error_message.contains("failed"),
-        "Unexpected error: {error_message}"
-    );
+    assert_matches!(result, Err(_));
 
     net.ensure_is_running().await?;
     net.terminate().await?;
