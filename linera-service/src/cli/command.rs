@@ -726,6 +726,11 @@ pub enum ClientCommand {
         /// Example: `--operators my-operator=/path/to/binary`
         #[arg(long = "operators", value_parser = parse_operator)]
         operators: Vec<(String, PathBuf)>,
+
+        /// Run in read-only mode: disallow mutations and prevent queries from scheduling
+        /// operations. Use this when exposing the service to untrusted clients.
+        #[arg(long)]
+        read_only: bool,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.

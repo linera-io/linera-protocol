@@ -4,8 +4,8 @@
 use std::{borrow::Cow, future::IntoFuture, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{
-    futures_util::Stream, resolver_utils::ContainerType, Error, MergedObject, OutputType,
-    ScalarType, Schema, SimpleObject, Subscription,
+    futures_util::Stream, resolver_utils::ContainerType, EmptyMutation, Error, MergedObject,
+    OutputType, Request, Response, ScalarType, Schema, SimpleObject, Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
@@ -86,15 +86,18 @@ enum NodeServiceError {
     InvalidChainId(CryptoError),
     #[error(transparent)]
     Client(#[from] linera_client::Error),
+    #[error("scheduling operations from queries is disabled in read-only mode")]
+    ReadOnlyModeOperationsNotAllowed,
 }
 
 impl IntoResponse for NodeServiceError {
     fn into_response(self) -> response::Response {
-        let status = if let NodeServiceError::InvalidChainId(_) | NodeServiceError::BcsHex(_) = self
-        {
-            StatusCode::BAD_REQUEST
-        } else {
-            StatusCode::INTERNAL_SERVER_ERROR
+        let status = match self {
+            NodeServiceError::InvalidChainId(_) | NodeServiceError::BcsHex(_) => {
+                StatusCode::BAD_REQUEST
+            }
+            NodeServiceError::ReadOnlyModeOperationsNotAllowed => StatusCode::FORBIDDEN,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let body = json!({"error": self.to_string()}).to_string();
         (status, body).into_response()
@@ -836,6 +839,50 @@ impl ApplicationOverview {
     }
 }
 
+/// Schema type that can be either full (with mutations) or read-only.
+pub enum NodeServiceSchema<C>
+where
+    C: ClientContext + 'static,
+{
+    /// Full schema with mutations enabled.
+    Full(Schema<QueryRoot<C>, MutationRoot<C>, SubscriptionRoot<C>>),
+    /// Read-only schema with mutations disabled.
+    ReadOnly(Schema<QueryRoot<C>, EmptyMutation, SubscriptionRoot<C>>),
+}
+
+impl<C> NodeServiceSchema<C>
+where
+    C: ClientContext,
+{
+    /// Executes a GraphQL request.
+    pub async fn execute(&self, request: impl Into<Request>) -> Response {
+        match self {
+            Self::Full(schema) => schema.execute(request).await,
+            Self::ReadOnly(schema) => schema.execute(request).await,
+        }
+    }
+
+    /// Returns the SDL (Schema Definition Language) representation.
+    pub fn sdl(&self) -> String {
+        match self {
+            Self::Full(schema) => schema.sdl(),
+            Self::ReadOnly(schema) => schema.sdl(),
+        }
+    }
+}
+
+impl<C> Clone for NodeServiceSchema<C>
+where
+    C: ClientContext,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::Full(schema) => Self::Full(schema.clone()),
+            Self::ReadOnly(schema) => Self::ReadOnly(schema.clone()),
+        }
+    }
+}
+
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<C>
@@ -848,6 +895,8 @@ where
     metrics_port: NonZeroU16,
     default_chain: Option<ChainId>,
     context: Arc<Mutex<C>>,
+    /// If true, disallow mutations and prevent queries from scheduling operations.
+    read_only: bool,
 }
 
 impl<C> Clone for NodeService<C>
@@ -862,6 +911,7 @@ where
             metrics_port: self.metrics_port,
             default_chain: self.default_chain,
             context: Arc::clone(&self.context),
+            read_only: self.read_only,
         }
     }
 }
@@ -877,6 +927,7 @@ where
         #[cfg(with_metrics)] metrics_port: NonZeroU16,
         default_chain: Option<ChainId>,
         context: Arc<Mutex<C>>,
+        read_only: bool,
     ) -> Self {
         Self {
             config,
@@ -885,6 +936,7 @@ where
             metrics_port,
             default_chain,
             context,
+            read_only,
         }
     }
 
@@ -893,21 +945,30 @@ where
         SocketAddr::from(([0, 0, 0, 0], self.metrics_port.get()))
     }
 
-    pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, SubscriptionRoot<C>> {
-        Schema::build(
-            QueryRoot {
-                context: Arc::clone(&self.context),
-                port: self.port,
-                default_chain: self.default_chain,
-            },
-            MutationRoot {
-                context: Arc::clone(&self.context),
-            },
-            SubscriptionRoot {
-                context: Arc::clone(&self.context),
-            },
-        )
-        .finish()
+    pub fn schema(&self) -> NodeServiceSchema<C> {
+        let query = QueryRoot {
+            context: Arc::clone(&self.context),
+            port: self.port,
+            default_chain: self.default_chain,
+        };
+        let subscription = SubscriptionRoot {
+            context: Arc::clone(&self.context),
+        };
+
+        if self.read_only {
+            NodeServiceSchema::ReadOnly(Schema::build(query, EmptyMutation, subscription).finish())
+        } else {
+            NodeServiceSchema::Full(
+                Schema::build(
+                    query,
+                    MutationRoot {
+                        context: Arc::clone(&self.context),
+                    },
+                    subscription,
+                )
+                .finish(),
+            )
+        }
     }
 
     /// Runs the node service.
@@ -925,17 +986,26 @@ where
         #[cfg(with_metrics)]
         monitoring_server::start_metrics(self.metrics_address(), cancellation_token.clone());
 
-        let app = Router::new()
+        let base_router = Router::new()
             .route("/", index_handler)
             .route(
                 "/chains/{chain_id}/applications/{application_id}",
                 application_handler,
             )
-            .route("/ready", axum::routing::get(|| async { "ready!" }))
-            .route_service("/ws", GraphQLSubscription::new(self.schema()))
-            .layer(Extension(self.clone()))
-            // TODO(#551): Provide application authentication.
-            .layer(CorsLayer::permissive());
+            .route("/ready", axum::routing::get(|| async { "ready!" }));
+
+        // Create router with appropriate schema for WebSocket subscriptions.
+        let app = match self.schema() {
+            NodeServiceSchema::Full(schema) => {
+                base_router.route_service("/ws", GraphQLSubscription::new(schema))
+            }
+            NodeServiceSchema::ReadOnly(schema) => {
+                base_router.route_service("/ws", GraphQLSubscription::new(schema))
+            }
+        }
+        .layer(Extension(self.clone()))
+        // TODO(#551): Provide application authentication.
+        .layer(CorsLayer::permissive());
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
@@ -980,6 +1050,10 @@ where
             .await?;
         if operations.is_empty() {
             return Ok(response);
+        }
+
+        if self.read_only {
+            return Err(NodeServiceError::ReadOnlyModeOperationsNotAllowed);
         }
 
         trace!("Query requested a new block with operations: {operations:?}");

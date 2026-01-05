@@ -1066,6 +1066,7 @@ impl Runnable for Job {
                 operator_application_ids,
                 operators,
                 controller_application_id,
+                read_only,
             } => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -1131,6 +1132,7 @@ impl Runnable for Job {
                     metrics_port,
                     Some(chain_id),
                     context,
+                    read_only,
                 );
                 service.run(cancellation_token, command_receiver).await?;
             }
