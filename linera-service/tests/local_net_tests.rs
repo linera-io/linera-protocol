@@ -14,7 +14,6 @@ mod guard;
 use std::{env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
-use assert_matches::assert_matches;
 use guard::INTEGRATION_TEST_GUARD;
 use linera_base::{
     crypto::Secp256k1SecretKey,
@@ -37,7 +36,8 @@ use test_case::test_case;
 use {alloy_primitives::U256, linera_service::cli_wrappers::ApplicationWrapper};
 #[cfg(feature = "storage-service")]
 use {
-    linera_base::port::get_free_port, linera_service::cli_wrappers::Faucet, std::process::Command,
+    assert_matches::assert_matches, linera_base::port::get_free_port,
+    linera_service::cli_wrappers::Faucet, std::process::Command,
 };
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
