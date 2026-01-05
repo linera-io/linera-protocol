@@ -237,7 +237,7 @@ async fn main() -> std::io::Result<()> {
         std::num::NonZeroU16::new(8081).unwrap(),
         None,
         Arc::new(Mutex::new(DummyContext)),
-        false, // public mode disabled for schema export
+        false, // read-only mode disabled for schema export
     );
     let schema = service.schema().sdl();
     print!("{}", schema);

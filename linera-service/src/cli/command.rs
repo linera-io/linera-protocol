@@ -727,10 +727,10 @@ pub enum ClientCommand {
         #[arg(long = "operators", value_parser = parse_operator)]
         operators: Vec<(String, PathBuf)>,
 
-        /// Run in public mode: disallow mutations and prevent queries from scheduling
+        /// Run in read-only mode: disallow mutations and prevent queries from scheduling
         /// operations. Use this when exposing the service to untrusted clients.
         #[arg(long)]
-        public: bool,
+        read_only: bool,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.

@@ -86,8 +86,8 @@ enum NodeServiceError {
     InvalidChainId(CryptoError),
     #[error(transparent)]
     Client(#[from] linera_client::Error),
-    #[error("scheduling operations from queries is disabled in public mode")]
-    PublicModeOperationsNotAllowed,
+    #[error("scheduling operations from queries is disabled in read-only mode")]
+    ReadOnlyModeOperationsNotAllowed,
 }
 
 impl IntoResponse for NodeServiceError {
@@ -96,7 +96,7 @@ impl IntoResponse for NodeServiceError {
             NodeServiceError::InvalidChainId(_) | NodeServiceError::BcsHex(_) => {
                 StatusCode::BAD_REQUEST
             }
-            NodeServiceError::PublicModeOperationsNotAllowed => StatusCode::FORBIDDEN,
+            NodeServiceError::ReadOnlyModeOperationsNotAllowed => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let body = json!({"error": self.to_string()}).to_string();
@@ -839,15 +839,15 @@ impl ApplicationOverview {
     }
 }
 
-/// Schema type that can be either full (with mutations) or public (read-only).
+/// Schema type that can be either full (with mutations) or read-only.
 pub enum NodeServiceSchema<C>
 where
     C: ClientContext + 'static,
 {
     /// Full schema with mutations enabled.
     Full(Schema<QueryRoot<C>, MutationRoot<C>, SubscriptionRoot<C>>),
-    /// Public schema with mutations disabled.
-    Public(Schema<QueryRoot<C>, EmptyMutation, SubscriptionRoot<C>>),
+    /// Read-only schema with mutations disabled.
+    ReadOnly(Schema<QueryRoot<C>, EmptyMutation, SubscriptionRoot<C>>),
 }
 
 impl<C> NodeServiceSchema<C>
@@ -858,7 +858,7 @@ where
     pub async fn execute(&self, request: impl Into<Request>) -> Response {
         match self {
             Self::Full(schema) => schema.execute(request).await,
-            Self::Public(schema) => schema.execute(request).await,
+            Self::ReadOnly(schema) => schema.execute(request).await,
         }
     }
 
@@ -866,7 +866,7 @@ where
     pub fn sdl(&self) -> String {
         match self {
             Self::Full(schema) => schema.sdl(),
-            Self::Public(schema) => schema.sdl(),
+            Self::ReadOnly(schema) => schema.sdl(),
         }
     }
 }
@@ -878,7 +878,7 @@ where
     fn clone(&self) -> Self {
         match self {
             Self::Full(schema) => Self::Full(schema.clone()),
-            Self::Public(schema) => Self::Public(schema.clone()),
+            Self::ReadOnly(schema) => Self::ReadOnly(schema.clone()),
         }
     }
 }
@@ -896,7 +896,7 @@ where
     default_chain: Option<ChainId>,
     context: Arc<Mutex<C>>,
     /// If true, disallow mutations and prevent queries from scheduling operations.
-    public: bool,
+    read_only: bool,
 }
 
 impl<C> Clone for NodeService<C>
@@ -911,7 +911,7 @@ where
             metrics_port: self.metrics_port,
             default_chain: self.default_chain,
             context: Arc::clone(&self.context),
-            public: self.public,
+            read_only: self.read_only,
         }
     }
 }
@@ -927,7 +927,7 @@ where
         #[cfg(with_metrics)] metrics_port: NonZeroU16,
         default_chain: Option<ChainId>,
         context: Arc<Mutex<C>>,
-        public: bool,
+        read_only: bool,
     ) -> Self {
         Self {
             config,
@@ -936,7 +936,7 @@ where
             metrics_port,
             default_chain,
             context,
-            public,
+            read_only,
         }
     }
 
@@ -955,8 +955,8 @@ where
             context: Arc::clone(&self.context),
         };
 
-        if self.public {
-            NodeServiceSchema::Public(Schema::build(query, EmptyMutation, subscription).finish())
+        if self.read_only {
+            NodeServiceSchema::ReadOnly(Schema::build(query, EmptyMutation, subscription).finish())
         } else {
             NodeServiceSchema::Full(
                 Schema::build(
@@ -999,7 +999,7 @@ where
             NodeServiceSchema::Full(schema) => {
                 base_router.route_service("/ws", GraphQLSubscription::new(schema))
             }
-            NodeServiceSchema::Public(schema) => {
+            NodeServiceSchema::ReadOnly(schema) => {
                 base_router.route_service("/ws", GraphQLSubscription::new(schema))
             }
         }
@@ -1052,8 +1052,8 @@ where
             return Ok(response);
         }
 
-        if self.public {
-            return Err(NodeServiceError::PublicModeOperationsNotAllowed);
+        if self.read_only {
+            return Err(NodeServiceError::ReadOnlyModeOperationsNotAllowed);
         }
 
         trace!("Query requested a new block with operations: {operations:?}");

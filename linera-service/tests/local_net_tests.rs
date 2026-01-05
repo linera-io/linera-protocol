@@ -1389,10 +1389,10 @@ async fn test_node_service_with_task_processor() -> Result<()> {
     Ok(())
 }
 
-/// Test that the node service public mode disables mutations and prevents query-triggered operations.
+/// Test that the node service read-only mode disables mutations and prevents query-triggered operations.
 #[cfg(feature = "storage-service")]
 #[test_log::test(tokio::test)]
-async fn test_node_service_public_mode() -> Result<()> {
+async fn test_node_service_read_only_mode() -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1401,7 +1401,7 @@ async fn test_node_service_public_mode() -> Result<()> {
     let chain = client.load_wallet()?.default_chain().unwrap();
     let owner = client.get_owner().unwrap();
 
-    // Start the node service in public mode.
+    // Start the node service in read-only mode.
     let port = get_node_port().await;
     let mut node_service = client
         .run_node_service_with_options(port, ProcessInbox::Skip, &[], &[], true)
@@ -1415,7 +1415,7 @@ async fn test_node_service_public_mode() -> Result<()> {
     assert!(balance > Amount::ZERO, "Expected chain to have balance");
 
     // Verify that mutations are disabled by trying to transfer.
-    // In public mode, the mutation type doesn't exist in the schema, so this should fail.
+    // In read-only mode, the mutation type doesn't exist in the schema, so this should fail.
     let recipient = Account::new(chain, owner);
     let result = node_service
         .transfer(
@@ -1427,10 +1427,10 @@ async fn test_node_service_public_mode() -> Result<()> {
         .await;
     assert_matches!(result, Err(_));
 
-    // Terminate the public mode service.
+    // Terminate the read-only mode service.
     node_service.terminate().await?;
 
-    // Restart the node service without public mode.
+    // Restart the node service without read-only mode.
     let mut node_service = client
         .run_node_service_with_options(port, ProcessInbox::Skip, &[], &[], false)
         .await?;

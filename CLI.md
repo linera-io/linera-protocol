@@ -724,7 +724,7 @@ Run a GraphQL service to explore and extend the chains of the wallet
 * `--operator-application-ids <OPERATOR_APPLICATION_IDS>` — Application IDs of operator applications to watch. When specified, a task processor is started alongside the node service
 * `--controller-id <CONTROLLER_APPLICATION_ID>` — A controller to execute a dynamic set of applications running on a dynamic set of chains
 * `--operators <OPERATORS>` — Supported operators and their binary paths. Format: `name=path` or just `name` (uses name as path). Example: `--operators my-operator=/path/to/binary`
-* `--public` — Run in public mode: disallow mutations and prevent queries from scheduling operations. Use this when exposing the service to untrusted clients
+* `--read-only` — Run in read-only mode: disallow mutations and prevent queries from scheduling operations. Use this when exposing the service to untrusted clients
 
 
 
