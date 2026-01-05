@@ -796,24 +796,31 @@ where
         }
         // The remote node is at our height but not at the current round. Send it the proposal,
         // validated block certificate or timeout certificate that proves the current round.
-        // Try to send a proposal for the current round. This helps the validator understand
-        // which block is being proposed.
+        // These are alternatives - we try each and return successfully if any succeeds.
+
+        // Try to send a proposal for the current round
         for proposal in manager
             .requested_proposed
             .into_iter()
             .chain(manager.requested_signed_proposal)
         {
             if proposal.content.round == manager.current_round {
-                if let Err(error) = self.remote_node.handle_block_proposal(proposal).await {
-                    tracing::info!(%error, "failed to send block proposal");
-                } else {
-                    return Ok(());
+                match self.remote_node.handle_block_proposal(proposal).await {
+                    Ok(_) => {
+                        tracing::debug!("successfully sent block proposal for round sync");
+                        return Ok(());
+                    }
+                    Err(error) => {
+                        tracing::debug!(%error, "failed to send block proposal");
+                    }
                 }
             }
         }
+
+        // Try to send a validated block for the current round
         if let Some(LockingBlock::Regular(validated)) = manager.requested_locking.map(|b| *b) {
             if validated.round == manager.current_round {
-                if let Err(error) = self
+                match self
                     .remote_node
                     .handle_optimized_validated_certificate(
                         &validated,
@@ -821,18 +828,35 @@ where
                     )
                     .await
                 {
-                    tracing::info!(%error, "failed to send locking block");
-                } else {
-                    return Ok(());
+                    Ok(_) => {
+                        tracing::debug!("successfully sent validated block for round sync");
+                        return Ok(());
+                    }
+                    Err(error) => {
+                        tracing::debug!(%error, "failed to send validated block");
+                    }
                 }
             }
         }
+
+        // Try to send a timeout certificate
         if let Some(cert) = manager.timeout {
             if cert.round >= remote_round {
-                tracing::debug!(round = %cert.round, "sending timeout");
-                self.remote_node.handle_timeout_certificate(*cert).await?;
+                match self.remote_node.handle_timeout_certificate(*cert).await {
+                    Ok(_) => {
+                        tracing::debug!(round = %cert.round, "successfully sent timeout certificate");
+                        return Ok(());
+                    }
+                    Err(error) => {
+                        tracing::debug!(%error, round = %cert.round, "failed to send timeout certificate");
+                    }
+                }
             }
         }
+
+        // If we reach here, either we had no round sync data to send, or all attempts failed.
+        // This is not a fatal error - height sync succeeded which is the primary goal.
+        tracing::debug!("round sync not performed: no applicable data or all attempts failed");
         Ok(())
     }
 
