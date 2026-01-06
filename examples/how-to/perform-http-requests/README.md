@@ -87,6 +87,12 @@ linera_spawn linera net up --with-faucet --faucet-port 8081
 FAUCET_URL=http://localhost:8081
 ```
 
+Enable logs for user applications:
+
+```bash
+export LINERA_APPLICATION_LOGS=true
+```
+
 We then create a wallet and obtain a chain to use with the application.
 
 ```bash
