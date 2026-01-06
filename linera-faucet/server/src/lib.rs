@@ -1001,8 +1001,9 @@ where
             self.storage,
             cancellation_token.clone(),
             tokio::sync::mpsc::unbounded_channel().1,
+            false, // Faucet doesn't receive messages, so no need for background sync
         )
-        .run(false) // Faucet doesn't receive messages, so no need for background sync
+        .run()
         .await?;
         let batch_processor_task = batch_processor.run(cancellation_token.clone());
         let tcp_listener =

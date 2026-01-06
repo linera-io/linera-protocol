@@ -98,8 +98,9 @@ impl Client {
             storage,
             tokio_util::sync::CancellationToken::new(),
             tokio::sync::mpsc::unbounded_channel().1,
+            true, // Enable background sync
         )
-        .run(true) // Enable background sync
+        .run()
         .boxed_local()
         .await?
         .boxed_local();

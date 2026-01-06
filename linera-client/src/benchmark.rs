@@ -127,7 +127,7 @@ impl<Env: Environment> Benchmark<Env> {
         let barrier = Arc::new(Barrier::new(num_chains + 1));
 
         let chain_listener_result = chain_listener
-            .run(true) // Enabling background sync for benchmarks
+            .run()
             .await;
 
         let chain_listener_handle =
