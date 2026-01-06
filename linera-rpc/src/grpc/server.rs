@@ -8,11 +8,10 @@ use std::{
 };
 
 use futures::{channel::mpsc, future::BoxFuture, FutureExt as _};
-use linera_base::{
-    data_types::Blob,
-    identifiers::ChainId,
-    time::{Duration, Instant},
-};
+use http::Request as HttpRequest;
+#[cfg(with_metrics)]
+use linera_base::time::Instant;
+use linera_base::{data_types::Blob, identifiers::ChainId, time::Duration};
 use linera_core::{
     join_set_ext::JoinSet,
     node::NodeError,
@@ -23,7 +22,7 @@ use linera_storage::Storage;
 use tokio::sync::{broadcast::error::RecvError, oneshot};
 use tokio_util::sync::CancellationToken;
 use tonic::{transport::Channel, Request, Response, Status};
-use tower::{builder::ServiceBuilder, Layer, Service};
+use tower::{Layer, Service};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use super::{
@@ -60,13 +59,17 @@ mod metrics {
         register_histogram_vec(
             "server_request_latency",
             "Server request latency",
-            &[],
+            &["method_name"],
             linear_bucket_interval(1.0, 25.0, 2000.0),
         )
     });
 
     pub static SERVER_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("server_request_count", "Server request count", &[])
+        register_int_counter_vec(
+            "server_request_count",
+            "Server request count",
+            &["method_name"],
+        )
     });
 
     pub static SERVER_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
@@ -84,16 +87,6 @@ mod metrics {
             &["method_name"],
         )
     });
-
-    pub static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: LazyLock<HistogramVec> =
-        LazyLock::new(|| {
-            register_histogram_vec(
-                "server_request_latency_per_request_type",
-                "Server request latency per request type",
-                &["method_name"],
-                linear_bucket_interval(1.0, 25.0, 2000.0),
-            )
-        });
 
     pub static CROSS_CHAIN_MESSAGE_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
@@ -126,6 +119,11 @@ impl GrpcServerHandle {
     }
 }
 
+#[cfg(with_metrics)]
+fn extract_method_name(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
 #[derive(Clone)]
 pub struct GrpcPrometheusMetricsMiddlewareLayer;
 
@@ -142,10 +140,11 @@ impl<S> Layer<S> for GrpcPrometheusMetricsMiddlewareLayer {
     }
 }
 
-impl<S, Req> Service<Req> for GrpcPrometheusMetricsMiddlewareService<S>
+impl<S, B> Service<HttpRequest<B>> for GrpcPrometheusMetricsMiddlewareService<S>
 where
+    S: Service<HttpRequest<B>> + Clone + Send + 'static,
     S::Future: Send + 'static,
-    S: Service<Req> + std::marker::Send,
+    B: Send + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -155,20 +154,24 @@ where
         self.service.poll_ready(cx)
     }
 
-    fn call(&mut self, request: Req) -> Self::Future {
+    fn call(&mut self, request: HttpRequest<B>) -> Self::Future {
+        #[cfg(with_metrics)]
+        let method_name = extract_method_name(request.uri().path()).to_string();
         #[cfg(with_metrics)]
         let start = Instant::now();
         let future = self.service.call(request);
         async move {
-            let response = future.await?;
+            let result = future.await;
             #[cfg(with_metrics)]
             {
                 metrics::SERVER_REQUEST_LATENCY
-                    .with_label_values(&[])
+                    .with_label_values(&[&method_name])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
-                metrics::SERVER_REQUEST_COUNT.with_label_values(&[]).inc();
+                metrics::SERVER_REQUEST_COUNT
+                    .with_label_values(&[&method_name])
+                    .inc();
             }
-            Ok(response)
+            result
         }
         .boxed()
     }
@@ -267,11 +270,7 @@ where
                 .await;
 
             tonic::transport::Server::builder()
-                .layer(
-                    ServiceBuilder::new()
-                        .layer(GrpcPrometheusMetricsMiddlewareLayer)
-                        .into_inner(),
-                )
+                .layer(GrpcPrometheusMetricsMiddlewareLayer)
                 .add_service(health_service)
                 .add_service(reflection_service)
                 .add_service(worker_node)
@@ -439,22 +438,17 @@ where
         .await;
     }
 
-    fn log_request_outcome_and_latency(start: Instant, success: bool, method_name: &str) {
+    fn log_request_outcome(success: bool, method_name: &str) {
         #![cfg_attr(not(with_metrics), allow(unused_variables))]
         #[cfg(with_metrics)]
-        {
-            metrics::SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
+        if success {
+            metrics::SERVER_REQUEST_SUCCESS
                 .with_label_values(&[method_name])
-                .observe(start.elapsed().as_secs_f64() * 1000.0);
-            if success {
-                metrics::SERVER_REQUEST_SUCCESS
-                    .with_label_values(&[method_name])
-                    .inc();
-            } else {
-                metrics::SERVER_REQUEST_ERROR
-                    .with_label_values(&[method_name])
-                    .inc();
-            }
+                .inc();
+        } else {
+            metrics::SERVER_REQUEST_ERROR
+                .with_label_values(&[method_name])
+                .inc();
         }
     }
 
@@ -486,18 +480,17 @@ where
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let start = Instant::now();
         let proposal = request.into_inner().try_into()?;
         trace!(?proposal, "Handling block proposal");
         Ok(Response::new(
             match self.state.clone().handle_block_proposal(proposal).await {
                 Ok((info, actions)) => {
-                    Self::log_request_outcome_and_latency(start, true, "handle_block_proposal");
+                    Self::log_request_outcome(true, "handle_block_proposal");
                     self.handle_network_actions(actions);
                     info.try_into()?
                 }
                 Err(error) => {
-                    Self::log_request_outcome_and_latency(start, false, "handle_block_proposal");
+                    Self::log_request_outcome(false, "handle_block_proposal");
                     self.log_error(&error, "Failed to handle block proposal");
                     NodeError::from(error).try_into()?
                 }
@@ -518,7 +511,6 @@ where
         &self,
         request: Request<LiteCertificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let start = Instant::now();
         let HandleLiteCertRequest {
             certificate,
             wait_for_outgoing_messages,
@@ -533,7 +525,7 @@ where
         .await
         {
             Ok((info, actions)) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_lite_certificate");
+                Self::log_request_outcome(true, "handle_lite_certificate");
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -543,7 +535,7 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_lite_certificate");
+                Self::log_request_outcome(false, "handle_lite_certificate");
                 self.log_error(&error, "Failed to handle lite certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -563,7 +555,6 @@ where
         &self,
         request: Request<api::HandleConfirmedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let start = Instant::now();
         let HandleConfirmedCertificateRequest {
             certificate,
             wait_for_outgoing_messages,
@@ -577,7 +568,7 @@ where
             .await
         {
             Ok((info, actions)) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_confirmed_certificate");
+                Self::log_request_outcome(true, "handle_confirmed_certificate");
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -587,7 +578,7 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_confirmed_certificate");
+                Self::log_request_outcome(false, "handle_confirmed_certificate");
                 self.log_error(&error, "Failed to handle confirmed certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -607,7 +598,6 @@ where
         &self,
         request: Request<api::HandleValidatedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let start = Instant::now();
         let HandleValidatedCertificateRequest { certificate } = request.into_inner().try_into()?;
         trace!(?certificate, "Handling certificate");
         match self
@@ -617,12 +607,12 @@ where
             .await
         {
             Ok((info, actions)) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_validated_certificate");
+                Self::log_request_outcome(true, "handle_validated_certificate");
                 self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_validated_certificate");
+                Self::log_request_outcome(false, "handle_validated_certificate");
                 self.log_error(&error, "Failed to handle validated certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -642,7 +632,6 @@ where
         &self,
         request: Request<api::HandleTimeoutCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let start = Instant::now();
         let HandleTimeoutCertificateRequest { certificate } = request.into_inner().try_into()?;
         trace!(?certificate, "Handling Timeout certificate");
         match self
@@ -652,11 +641,11 @@ where
             .await
         {
             Ok((info, _actions)) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_timeout_certificate");
+                Self::log_request_outcome(true, "handle_timeout_certificate");
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_timeout_certificate");
+                Self::log_request_outcome(false, "handle_timeout_certificate");
                 self.log_error(&error, "Failed to handle timeout certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -676,17 +665,16 @@ where
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let start = Instant::now();
         let query = request.into_inner().try_into()?;
         trace!(?query, "Handling chain info query");
         match self.state.clone().handle_chain_info_query(query).await {
             Ok((info, actions)) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_chain_info_query");
+                Self::log_request_outcome(true, "handle_chain_info_query");
                 self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_chain_info_query");
+                Self::log_request_outcome(false, "handle_chain_info_query");
                 self.log_error(&error, "Failed to handle chain info query");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -706,7 +694,6 @@ where
         &self,
         request: Request<PendingBlobRequest>,
     ) -> Result<Response<PendingBlobResult>, Status> {
-        let start = Instant::now();
         let (chain_id, blob_id) = request.into_inner().try_into()?;
         trace!(?chain_id, ?blob_id, "Download pending blob");
         match self
@@ -716,11 +703,11 @@ where
             .await
         {
             Ok(blob) => {
-                Self::log_request_outcome_and_latency(start, true, "download_pending_blob");
+                Self::log_request_outcome(true, "download_pending_blob");
                 Ok(Response::new(blob.into_content().try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "download_pending_blob");
+                Self::log_request_outcome(false, "download_pending_blob");
                 self.log_error(&error, "Failed to download pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -740,18 +727,17 @@ where
         &self,
         request: Request<HandlePendingBlobRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let start = Instant::now();
         let (chain_id, blob_content) = request.into_inner().try_into()?;
         let blob = Blob::new(blob_content);
         let blob_id = blob.id();
         trace!(?chain_id, ?blob_id, "Handle pending blob");
         match self.state.clone().handle_pending_blob(chain_id, blob).await {
             Ok(info) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_pending_blob");
+                Self::log_request_outcome(true, "handle_pending_blob");
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_pending_blob");
+                Self::log_request_outcome(false, "handle_pending_blob");
                 self.log_error(&error, "Failed to handle pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -771,16 +757,15 @@ where
         &self,
         request: Request<CrossChainRequest>,
     ) -> Result<Response<()>, Status> {
-        let start = Instant::now();
         let request = request.into_inner().try_into()?;
         trace!(?request, "Handling cross-chain request");
         match self.state.clone().handle_cross_chain_request(request).await {
             Ok(actions) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_cross_chain_request");
+                Self::log_request_outcome(true, "handle_cross_chain_request");
                 self.handle_network_actions(actions)
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_cross_chain_request");
+                Self::log_request_outcome(false, "handle_cross_chain_request");
                 let nickname = self.state.nickname();
                 error!(nickname, %error, "Failed to handle cross-chain request");
             }

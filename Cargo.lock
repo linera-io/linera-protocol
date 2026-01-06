@@ -5766,6 +5766,7 @@ dependencies = [
  "clap",
  "ed25519-dalek",
  "futures",
+ "http 1.3.1",
  "insta",
  "linera-base",
  "linera-chain",

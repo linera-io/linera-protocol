@@ -16,6 +16,7 @@ use std::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
+use http::Request as HttpRequest;
 use linera_base::identifiers::ChainId;
 use linera_core::{
     data_types::{CertificatesByHeightRequest, ChainInfo, ChainInfoQuery},
@@ -55,7 +56,7 @@ use tonic::{
     Request, Response, Status,
 };
 use tonic_web::GrpcWebLayer;
-use tower::{builder::ServiceBuilder, Layer, Service};
+use tower::{Layer, Service};
 use tracing::{debug, info, instrument, Instrument as _, Level};
 
 #[cfg(with_metrics)]
@@ -71,12 +72,17 @@ mod metrics {
         register_histogram_vec(
             "proxy_request_latency",
             "Proxy request latency",
-            &[],
+            &["method_name"],
             linear_bucket_interval(1.0, 50.0, 2000.0),
         )
     });
+
     pub static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("proxy_request_count", "Proxy request count", &[])
+        register_int_counter_vec(
+            "proxy_request_count",
+            "Proxy request count",
+            &["method_name"],
+        )
     });
 
     pub static PROXY_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
@@ -96,6 +102,11 @@ mod metrics {
     });
 }
 
+#[cfg(with_metrics)]
+fn extract_method_name(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
 #[derive(Clone)]
 pub struct PrometheusMetricsMiddlewareLayer;
 
@@ -112,10 +123,11 @@ impl<S> Layer<S> for PrometheusMetricsMiddlewareLayer {
     }
 }
 
-impl<S, Req> Service<Req> for PrometheusMetricsMiddlewareService<S>
+impl<S, B> Service<HttpRequest<B>> for PrometheusMetricsMiddlewareService<S>
 where
+    S: Service<HttpRequest<B>> + Clone + Send + 'static,
     S::Future: Send + 'static,
-    S: Service<Req> + std::marker::Send,
+    B: Send + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -125,20 +137,24 @@ where
         self.service.poll_ready(cx)
     }
 
-    fn call(&mut self, request: Req) -> Self::Future {
+    fn call(&mut self, request: HttpRequest<B>) -> Self::Future {
         #[cfg(with_metrics)]
-        let start = linera_base::time::Instant::now();
+        let method_name = extract_method_name(request.uri().path()).to_string();
+        #[cfg(with_metrics)]
+        let start = std::time::Instant::now();
         let future = self.service.call(request);
         async move {
-            let response = future.await?;
+            let result = future.await;
             #[cfg(with_metrics)]
             {
                 metrics::PROXY_REQUEST_LATENCY
-                    .with_label_values(&[])
+                    .with_label_values(&[&method_name])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
-                metrics::PROXY_REQUEST_COUNT.with_label_values(&[]).inc();
+                metrics::PROXY_REQUEST_COUNT
+                    .with_label_values(&[&method_name])
+                    .inc();
             }
-            Ok(response)
+            result
         }
         .boxed()
     }
@@ -280,11 +296,7 @@ where
                     // interpreted as "not set"
                     Some(u32::MAX - 1),
                 )
-                .layer(
-                    ServiceBuilder::new()
-                        .layer(PrometheusMetricsMiddlewareLayer)
-                        .into_inner(),
-                )
+                .layer(PrometheusMetricsMiddlewareLayer)
                 .layer(
                     // enable
                     // [CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS)
@@ -340,19 +352,18 @@ where
         Ok((client, inner))
     }
 
-    #[allow(clippy::result_large_err)]
-    fn log_and_return_proxy_request_outcome(
-        result: Result<Response<ChainInfoResult>, Status>,
+    async fn log_and_return_proxy_request_outcome<T>(
+        future: impl std::future::Future<Output = Result<Response<T>, Status>>,
         method_name: &str,
-    ) -> Result<Response<ChainInfoResult>, Status> {
+    ) -> Result<Response<T>, Status> {
         #![allow(unused_variables)]
-        match result {
-            Ok(chain_info_result) => {
+        match future.await {
+            Ok(response) => {
                 #[cfg(with_metrics)]
                 metrics::PROXY_REQUEST_SUCCESS
                     .with_label_values(&[method_name])
                     .inc();
-                Ok(chain_info_result)
+                Ok(response)
             }
             Err(status) => {
                 #[cfg(with_metrics)]
@@ -400,9 +411,10 @@ where
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.worker_client(request)?;
         Self::log_and_return_proxy_request_outcome(
-            client.handle_block_proposal(inner).await,
+            client.handle_block_proposal(inner),
             "handle_block_proposal",
         )
+        .await
     }
 
     #[instrument(skip_all, err(Display), fields(method = "handle_lite_certificate"))]
@@ -412,9 +424,10 @@ where
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.worker_client(request)?;
         Self::log_and_return_proxy_request_outcome(
-            client.handle_lite_certificate(inner).await,
+            client.handle_lite_certificate(inner),
             "handle_lite_certificate",
         )
+        .await
     }
 
     #[instrument(
@@ -428,9 +441,10 @@ where
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.worker_client(request)?;
         Self::log_and_return_proxy_request_outcome(
-            client.handle_confirmed_certificate(inner).await,
+            client.handle_confirmed_certificate(inner),
             "handle_confirmed_certificate",
         )
+        .await
     }
 
     #[instrument(
@@ -444,9 +458,10 @@ where
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.worker_client(request)?;
         Self::log_and_return_proxy_request_outcome(
-            client.handle_validated_certificate(inner).await,
+            client.handle_validated_certificate(inner),
             "handle_validated_certificate",
         )
+        .await
     }
 
     #[instrument(skip_all, err(Display), fields(method = "handle_timeout_certificate"))]
@@ -456,9 +471,10 @@ where
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.worker_client(request)?;
         Self::log_and_return_proxy_request_outcome(
-            client.handle_timeout_certificate(inner).await,
+            client.handle_timeout_certificate(inner),
             "handle_timeout_certificate",
         )
+        .await
     }
 
     #[instrument(skip_all, err(Display), fields(method = "handle_chain_info_query"))]
@@ -468,9 +484,10 @@ where
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.worker_client(request)?;
         Self::log_and_return_proxy_request_outcome(
-            client.handle_chain_info_query(inner).await,
+            client.handle_chain_info_query(inner),
             "handle_chain_info_query",
         )
+        .await
     }
 
     #[instrument(skip_all, err(Display), fields(method = "subscribe"))]
@@ -569,23 +586,11 @@ where
         request: Request<PendingBlobRequest>,
     ) -> Result<Response<PendingBlobResult>, Status> {
         let (mut client, inner) = self.worker_client(request)?;
-        #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
-        match client.download_pending_blob(inner).await {
-            Ok(blob_result) => {
-                #[cfg(with_metrics)]
-                metrics::PROXY_REQUEST_SUCCESS
-                    .with_label_values(&["download_pending_blob"])
-                    .inc();
-                Ok(blob_result)
-            }
-            Err(status) => {
-                #[cfg(with_metrics)]
-                metrics::PROXY_REQUEST_ERROR
-                    .with_label_values(&["download_pending_blob"])
-                    .inc();
-                Err(status)
-            }
-        }
+        Self::log_and_return_proxy_request_outcome(
+            client.download_pending_blob(inner),
+            "download_pending_blob",
+        )
+        .await
     }
 
     #[instrument(skip_all, err(Display), fields(method = "handle_pending_blob"))]
@@ -594,23 +599,11 @@ where
         request: Request<HandlePendingBlobRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.worker_client(request)?;
-        #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
-        match client.handle_pending_blob(inner).await {
-            Ok(blob_result) => {
-                #[cfg(with_metrics)]
-                metrics::PROXY_REQUEST_SUCCESS
-                    .with_label_values(&["handle_pending_blob"])
-                    .inc();
-                Ok(blob_result)
-            }
-            Err(status) => {
-                #[cfg(with_metrics)]
-                metrics::PROXY_REQUEST_ERROR
-                    .with_label_values(&["handle_pending_blob"])
-                    .inc();
-                Err(status)
-            }
-        }
+        Self::log_and_return_proxy_request_outcome(
+            client.handle_pending_blob(inner),
+            "handle_pending_blob",
+        )
+        .await
     }
 
     #[instrument(skip_all, err(Display), fields(method = "download_certificate"))]
