@@ -56,6 +56,7 @@ cfg-if.workspace = true
 clap.workspace = true
 ed25519-dalek.workspace = true
 futures.workspace = true
+http.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
