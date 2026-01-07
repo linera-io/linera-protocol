@@ -1062,16 +1062,6 @@ impl<'a, Runtime: ServiceRuntime> Inspector<ServiceCtx<'a, Runtime>>
         let result = self.create_or_fail(context, inputs);
         map_result_create_outcome(&self.db.0, result)
     }
-
-    /// See below on `fn call_or_fail`.
-    fn call(
-        &mut self,
-        context: &mut ServiceCtx<'a, Runtime>,
-        inputs: &mut CallInputs,
-    ) -> Option<CallOutcome> {
-        let result = self.call_or_fail(context, inputs);
-        map_result_call_outcome(&self.db.0, result)
-    }
 }
 
 impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
@@ -1109,33 +1099,6 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         } else {
             Err(EvmExecutionError::NoContractCreationInService.into())
         }
-    }
-
-    /// Every call to a contract passes by this function.
-    /// Three kinds:
-    /// --- Call to the EVM smart contract itself
-    /// --- Call to the PRECOMPILE smart contract.
-    /// --- Call to other EVM smart contract
-    ///
-    /// The first kind is the call to the contract itself like
-    /// constructor or from an external call.
-    /// The second kind is precompile calls. This include the
-    /// classic one but also the one that accesses the Linera
-    /// functionalities.
-    /// The last kind is the calls to other EVM smart contracts.
-    fn call_or_fail(
-        &mut self,
-        _context: &mut ServiceCtx<'_, Runtime>,
-        inputs: &mut CallInputs,
-    ) -> Result<Option<CallOutcome>, ExecutionError> {
-        if self.precompile_addresses.contains(&inputs.target_address)
-            || inputs.target_address == self.contract_address
-        {
-            // Precompile calls are handled by the precompile code.
-            // The EVM smart contract is being called
-            return Ok(None);
-        }
-        Ok(None)
     }
 }
 
@@ -1596,7 +1559,6 @@ where
             runtime.maximum_blob_size()? as usize
         };
         let nonce = self.db.get_nonce(&caller)?;
-        //        let nonce = 0;
         let result_state = {
             let mut ctx: revm_context::Context<
                 BlockEnv,
