@@ -10,7 +10,7 @@ use linera_base::{
         AccountOwner, ApplicationId, ChainId, DataBlobHash, GenericApplicationId, ModuleId,
         StreamId, StreamName,
     },
-    ownership::{ChangeApplicationPermissionsError, CloseChainError},
+    ownership::{ChangeApplicationPermissionsError, ChangeOwnershipError, CloseChainError},
     vm::VmRuntime,
 };
 
@@ -103,6 +103,16 @@ impl From<wit_contract_api::CloseChainError> for CloseChainError {
     fn from(guest: wit_contract_api::CloseChainError) -> Self {
         match guest {
             wit_contract_api::CloseChainError::NotPermitted => CloseChainError::NotPermitted,
+        }
+    }
+}
+
+impl From<wit_contract_api::ChangeOwnershipError> for ChangeOwnershipError {
+    fn from(guest: wit_contract_api::ChangeOwnershipError) -> Self {
+        match guest {
+            wit_contract_api::ChangeOwnershipError::NotPermitted => {
+                ChangeOwnershipError::NotPermitted
+            }
         }
     }
 }
