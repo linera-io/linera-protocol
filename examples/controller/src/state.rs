@@ -34,4 +34,6 @@ pub struct ControllerState {
     /// backup).
     // NOTE: Currently, services should run on a single worker at a time.
     pub services: MapView<ManagedServiceId, HashSet<ChainId>>,
+    /// All the chains currently being followed and by which workers.
+    pub chains: MapView<ChainId, HashSet<ChainId>>,
 }
