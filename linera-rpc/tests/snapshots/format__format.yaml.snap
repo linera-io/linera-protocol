@@ -96,13 +96,10 @@ ApplicationPermissions:
     - mandatory_applications:
         SEQ:
           TYPENAME: ApplicationId
-    - close_chain:
+    - admin:
         SEQ:
           TYPENAME: ApplicationId
     - change_application_permissions:
-        SEQ:
-          TYPENAME: ApplicationId
-    - change_ownership:
         SEQ:
           TYPENAME: ApplicationId
     - call_service_as_oracle:

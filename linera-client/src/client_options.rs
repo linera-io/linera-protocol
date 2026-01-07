@@ -405,16 +405,14 @@ pub struct ApplicationPermissionsConfig {
     /// every block.
     #[arg(long)]
     pub mandatory_applications: Option<Vec<ApplicationId>>,
-    /// These applications are allowed to close the current chain using the system API.
+    /// These applications have admin permission: they can close the chain and change ownership.
+    /// Admin apps are also exempt from execute_operations and mandatory_applications restrictions.
     #[arg(long)]
-    pub close_chain: Option<Vec<ApplicationId>>,
+    pub admin: Option<Vec<ApplicationId>>,
     /// These applications are allowed to change the application permissions on the current chain
     /// using the system API.
     #[arg(long)]
     pub change_application_permissions: Option<Vec<ApplicationId>>,
-    /// These applications are allowed to change the chain's ownership using the system API.
-    #[arg(long)]
-    pub change_ownership: Option<Vec<ApplicationId>>,
     /// These applications are allowed to call services as oracles on the current chain using the
     /// system API.
     #[arg(long)]
@@ -430,11 +428,10 @@ impl From<ApplicationPermissionsConfig> for ApplicationPermissions {
         ApplicationPermissions {
             execute_operations: config.execute_operations,
             mandatory_applications: config.mandatory_applications.unwrap_or_default(),
-            close_chain: config.close_chain.unwrap_or_default(),
+            admin: config.admin.unwrap_or_default(),
             change_application_permissions: config
                 .change_application_permissions
                 .unwrap_or_default(),
-            change_ownership: config.change_ownership.unwrap_or_default(),
             call_service_as_oracle: config.call_service_as_oracle,
             make_http_requests: config.make_http_requests,
         }

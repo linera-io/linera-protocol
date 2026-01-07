@@ -323,9 +323,8 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
   Default value: `86400000`
 * `--execute-operations <EXECUTE_OPERATIONS>` — If present, only operations from the specified applications are allowed, and no system operations. Otherwise all operations are allowed
 * `--mandatory-applications <MANDATORY_APPLICATIONS>` — At least one operation or incoming message from each of these applications must occur in every block
-* `--close-chain <CLOSE_CHAIN>` — These applications are allowed to close the current chain using the system API
+* `--admin <ADMIN>` — These applications have admin permission: they can close the chain and change ownership. Admin apps are also exempt from execute_operations and mandatory_applications restrictions
 * `--change-application-permissions <CHANGE_APPLICATION_PERMISSIONS>` — These applications are allowed to change the application permissions on the current chain using the system API
-* `--change-ownership <CHANGE_OWNERSHIP>` — These applications are allowed to change the chain's ownership using the system API
 * `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — These applications are allowed to call services as oracles on the current chain using the system API
 * `--make-http-requests <MAKE_HTTP_REQUESTS>` — These applications are allowed to make HTTP requests on the current chain using the system API
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
@@ -402,9 +401,8 @@ Changes the application permissions configuration
 * `--chain-id <CHAIN_ID>` — The ID of the chain to which the new permissions will be applied
 * `--execute-operations <EXECUTE_OPERATIONS>` — If present, only operations from the specified applications are allowed, and no system operations. Otherwise all operations are allowed
 * `--mandatory-applications <MANDATORY_APPLICATIONS>` — At least one operation or incoming message from each of these applications must occur in every block
-* `--close-chain <CLOSE_CHAIN>` — These applications are allowed to close the current chain using the system API
+* `--admin <ADMIN>` — These applications have admin permission: they can close the chain and change ownership. Admin apps are also exempt from execute_operations and mandatory_applications restrictions
 * `--change-application-permissions <CHANGE_APPLICATION_PERMISSIONS>` — These applications are allowed to change the application permissions on the current chain using the system API
-* `--change-ownership <CHANGE_OWNERSHIP>` — These applications are allowed to change the chain's ownership using the system API
 * `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — These applications are allowed to call services as oracles on the current chain using the system API
 * `--make-http-requests <MAKE_HTTP_REQUESTS>` — These applications are allowed to make HTTP requests on the current chain using the system API
 

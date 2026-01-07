@@ -983,18 +983,16 @@ pub struct ApplicationPermissions {
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
     pub mandatory_applications: Vec<ApplicationId>,
-    /// These applications are allowed to close the current chain.
+    /// These applications are allowed to perform admin operations: closing the chain and
+    /// changing ownership. Admin apps are also exempt from `execute_operations` and
+    /// `mandatory_applications` restrictions.
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
-    pub close_chain: Vec<ApplicationId>,
+    pub admin: Vec<ApplicationId>,
     /// These applications are allowed to change the application permissions.
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
     pub change_application_permissions: Vec<ApplicationId>,
-    /// These applications are allowed to change the chain's ownership.
-    #[graphql(default)]
-    #[debug(skip_if = Vec::is_empty)]
-    pub change_ownership: Vec<ApplicationId>,
     /// These applications are allowed to perform calls to services as oracles.
     #[graphql(default)]
     #[debug(skip_if = Option::is_none)]
@@ -1012,9 +1010,8 @@ impl ApplicationPermissions {
         Self {
             execute_operations: Some(vec![app_id]),
             mandatory_applications: vec![app_id],
-            close_chain: vec![app_id],
+            admin: vec![app_id],
             change_application_permissions: vec![app_id],
-            change_ownership: vec![app_id],
             call_service_as_oracle: Some(vec![app_id]),
             make_http_requests: Some(vec![app_id]),
         }
@@ -1026,26 +1023,30 @@ impl ApplicationPermissions {
         Self {
             execute_operations: Some(app_ids.clone()),
             mandatory_applications: app_ids.clone(),
-            close_chain: app_ids.clone(),
+            admin: app_ids.clone(),
             change_application_permissions: app_ids.clone(),
-            change_ownership: app_ids.clone(),
             call_service_as_oracle: Some(app_ids.clone()),
             make_http_requests: Some(app_ids),
         }
     }
 
     /// Returns whether operations with the given application ID are allowed on this chain.
+    /// Admin apps are always allowed to execute operations.
     pub fn can_execute_operations(&self, app_id: &GenericApplicationId) -> bool {
         match (app_id, &self.execute_operations) {
             (_, None) => true,
             (GenericApplicationId::System, Some(_)) => false,
-            (GenericApplicationId::User(app_id), Some(app_ids)) => app_ids.contains(app_id),
+            (GenericApplicationId::User(app_id), Some(app_ids)) => {
+                app_ids.contains(app_id) || self.is_admin(app_id)
+            }
         }
     }
 
-    /// Returns whether the given application is allowed to close this chain.
-    pub fn can_close_chain(&self, app_id: &ApplicationId) -> bool {
-        self.close_chain.contains(app_id)
+    /// Returns whether the given application has admin permissions (can close chain, change
+    /// ownership). Admin apps are also exempt from `execute_operations` and
+    /// `mandatory_applications` restrictions.
+    pub fn is_admin(&self, app_id: &ApplicationId) -> bool {
+        self.admin.contains(app_id)
     }
 
     /// Returns whether the given application is allowed to change the application
@@ -1054,9 +1055,22 @@ impl ApplicationPermissions {
         self.change_application_permissions.contains(app_id)
     }
 
-    /// Returns whether the given application is allowed to change the chain's ownership.
-    pub fn can_change_ownership(&self, app_id: &ApplicationId) -> bool {
-        self.change_ownership.contains(app_id)
+    /// Returns whether the given application is allowed to change to the given new permissions.
+    /// This requires `change_application_permissions` permission, and if `admin` is being
+    /// modified, also requires `admin` permission.
+    pub fn can_change_application_permissions_to(
+        &self,
+        app_id: &ApplicationId,
+        new_permissions: &ApplicationPermissions,
+    ) -> bool {
+        if !self.can_change_application_permissions(app_id) {
+            return false;
+        }
+        // Modifying the admin list requires admin permission.
+        if self.admin != new_permissions.admin && !self.is_admin(app_id) {
+            return false;
+        }
+        true
     }
 
     /// Returns whether the given application can call services.

@@ -1197,7 +1197,7 @@ async fn test_change_ownership(authorized: bool) -> Result<(), ExecutionError> {
         .await
         .expect("should register mock application");
 
-    let change_ownership = if authorized {
+    let admin = if authorized {
         vec![application_id]
     } else {
         vec![]
@@ -1206,7 +1206,7 @@ async fn test_change_ownership(authorized: bool) -> Result<(), ExecutionError> {
     view.system
         .application_permissions
         .set(ApplicationPermissions {
-            change_ownership,
+            admin,
             ..ApplicationPermissions::new_single(application_id)
         });
 

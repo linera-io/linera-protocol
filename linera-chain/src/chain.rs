@@ -963,12 +963,20 @@ where
                     );
                     if let Operation::User { application_id, .. } = operation {
                         mandatory.remove(application_id);
+                        // Admin apps are exempt from mandatory_applications requirements.
+                        if app_permissions.is_admin(application_id) {
+                            mandatory.clear();
+                        }
                     }
                 }
                 Transaction::ReceiveMessages(incoming_bundle) => {
                     for pending in incoming_bundle.messages() {
                         if let Message::User { application_id, .. } = &pending.message {
                             mandatory.remove(application_id);
+                            // Admin apps are exempt from mandatory_applications requirements.
+                            if app_permissions.is_admin(application_id) {
+                                mandatory.clear();
+                            }
                         }
                     }
                 }

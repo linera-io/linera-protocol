@@ -48,9 +48,8 @@ interface contract-runtime-api {
     record application-permissions {
         execute-operations: option<list<application-id>>,
         mandatory-applications: list<application-id>,
-        close-chain: list<application-id>,
+        admin: list<application-id>,
         change-application-permissions: list<application-id>,
-        change-ownership: list<application-id>,
         call-service-as-oracle: option<list<application-id>>,
         make-http-requests: option<list<application-id>>,
     }
