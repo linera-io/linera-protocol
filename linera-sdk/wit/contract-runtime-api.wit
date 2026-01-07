@@ -9,8 +9,9 @@ interface contract-runtime-api {
     transfer: func(source: account-owner, destination: account, amount: amount);
     claim: func(source: account, destination: account, amount: amount);
     open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> chain-id;
-    close-chain: func() -> result<tuple<>, close-chain-error>;
-    change-application-permissions: func(application-permissions: application-permissions) -> result<tuple<>, change-application-permissions-error>;
+    close-chain: func() -> result<tuple<>, manage-chain-error>;
+    change-ownership: func(ownership: chain-ownership) -> result<tuple<>, manage-chain-error>;
+    change-application-permissions: func(application-permissions: application-permissions) -> result<tuple<>, manage-chain-error>;
     create-application: func(module-id: module-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<application-id>) -> application-id;
     create-data-blob: func(bytes: list<u8>) -> data-blob-hash;
     publish-module: func(contract: bytecode, service: bytecode, vm-runtime: vm-runtime) -> module-id;
@@ -47,8 +48,7 @@ interface contract-runtime-api {
     record application-permissions {
         execute-operations: option<list<application-id>>,
         mandatory-applications: list<application-id>,
-        close-chain: list<application-id>,
-        change-application-permissions: list<application-id>,
+        manage-chain: list<application-id>,
         call-service-as-oracle: option<list<application-id>>,
         make-http-requests: option<list<application-id>>,
     }
@@ -76,14 +76,6 @@ interface contract-runtime-api {
         timeout-config: timeout-config,
     }
 
-    enum change-application-permissions-error {
-        not-permitted,
-    }
-
-    enum close-chain-error {
-        not-permitted,
-    }
-
     record crypto-hash {
         part1: u64,
         part2: u64,
@@ -93,6 +85,10 @@ interface contract-runtime-api {
 
     record data-blob-hash {
         inner0: crypto-hash,
+    }
+
+    enum manage-chain-error {
+        not-permitted,
     }
 
     record module-id {

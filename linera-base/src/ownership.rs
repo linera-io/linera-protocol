@@ -235,19 +235,12 @@ impl ChainOwnership {
     }
 }
 
-/// Errors that can happen when attempting to close a chain.
+/// Errors that can happen when attempting to manage a chain (close it, change ownership, or
+/// change application permissions).
 #[derive(Clone, Copy, Debug, Error, WitStore, WitType)]
-pub enum CloseChainError {
-    /// The application wasn't allowed to close the chain.
-    #[error("Unauthorized attempt to close the chain")]
-    NotPermitted,
-}
-
-/// Errors that can happen when attempting to change the application permissions.
-#[derive(Clone, Copy, Debug, Error, WitStore, WitType)]
-pub enum ChangeApplicationPermissionsError {
-    /// The application wasn't allowed to change the application permissions.
-    #[error("Unauthorized attempt to change the application permissions")]
+pub enum ManageChainError {
+    /// The application wasn't allowed to perform this chain management operation.
+    #[error("Unauthorized chain management operation")]
     NotPermitted,
 }
 

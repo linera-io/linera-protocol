@@ -194,8 +194,7 @@ impl From<ApplicationPermissions> for wit_contract_api::ApplicationPermissions {
         let ApplicationPermissions {
             execute_operations,
             mandatory_applications,
-            close_chain,
-            change_application_permissions,
+            manage_chain,
             call_service_as_oracle,
             make_http_requests,
         } = permissions;
@@ -203,11 +202,7 @@ impl From<ApplicationPermissions> for wit_contract_api::ApplicationPermissions {
             execute_operations: execute_operations
                 .map(|app_ids| app_ids.into_iter().map(Into::into).collect()),
             mandatory_applications: mandatory_applications.into_iter().map(Into::into).collect(),
-            close_chain: close_chain.into_iter().map(Into::into).collect(),
-            change_application_permissions: change_application_permissions
-                .into_iter()
-                .map(Into::into)
-                .collect(),
+            manage_chain: manage_chain.into_iter().map(Into::into).collect(),
             call_service_as_oracle: call_service_as_oracle
                 .map(|app_ids| app_ids.into_iter().map(Into::into).collect()),
             make_http_requests: make_http_requests

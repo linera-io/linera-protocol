@@ -77,13 +77,10 @@ input ApplicationPermissions {
 	"""
 	mandatoryApplications: [ApplicationId!]! = []
 	"""
-	These applications are allowed to close the current chain.
+	These applications are allowed to close the current chain, change the application
+	permissions, and change the ownership.
 	"""
-	closeChain: [ApplicationId!]! = []
-	"""
-	These applications are allowed to change the application permissions.
-	"""
-	changeApplicationPermissions: [ApplicationId!]! = []
+	manageChain: [ApplicationId!]! = []
 	"""
 	These applications are allowed to perform calls to services as oracles.
 	"""
@@ -1055,9 +1052,9 @@ type MutationRoot {
 		"""
 		chainId: ChainId!,
 		"""
-		These applications are allowed to close the current chain.
+		These applications are allowed to manage the chain: close it, change application permissions, and change ownership.
 		"""
-		closeChain: [ApplicationId!]!,
+		manageChain: [ApplicationId!]!,
 		"""
 		If this is `None`, all system operations and application operations are allowed.
 		If it is `Some`, only operations from the specified applications are allowed,
@@ -1068,10 +1065,6 @@ type MutationRoot {
 		At least one operation or incoming message from each of these applications must occur in every block.
 		"""
 		mandatoryApplications: [ApplicationId!]!,
-		"""
-		These applications are allowed to change the application permissions.
-		"""
-		changeApplicationPermissions: [ApplicationId!]!,
 		"""
 		These applications are allowed to perform calls to services as oracles.
 		"""

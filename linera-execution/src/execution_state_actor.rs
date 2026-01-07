@@ -332,10 +332,24 @@ where
                 callback,
             } => {
                 let app_permissions = self.state.system.application_permissions.get();
-                if !app_permissions.can_close_chain(&application_id) {
+                if !app_permissions.can_manage_chain(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
                     self.state.system.close_chain();
+                    callback.respond(Ok(()));
+                }
+            }
+
+            ChangeOwnership {
+                application_id,
+                ownership,
+                callback,
+            } => {
+                let app_permissions = self.state.system.application_permissions.get();
+                if !app_permissions.can_manage_chain(&application_id) {
+                    callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
+                } else {
+                    self.state.system.ownership.set(ownership);
                     callback.respond(Ok(()));
                 }
             }
@@ -346,7 +360,7 @@ where
                 callback,
             } => {
                 let app_permissions = self.state.system.application_permissions.get();
-                if !app_permissions.can_change_application_permissions(&application_id) {
+                if !app_permissions.can_manage_chain(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
                     self.state
@@ -1210,6 +1224,13 @@ pub enum ExecutionRequest {
 
     CloseChain {
         application_id: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<Result<(), ExecutionError>>,
+    },
+
+    ChangeOwnership {
+        application_id: ApplicationId,
+        ownership: ChainOwnership,
         #[debug(skip)]
         callback: Sender<Result<(), ExecutionError>>,
     },

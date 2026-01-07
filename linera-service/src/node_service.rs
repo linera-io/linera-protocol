@@ -501,8 +501,11 @@ where
     async fn change_application_permissions(
         &self,
         #[graphql(desc = "The chain whose permissions are being changed")] chain_id: ChainId,
-        #[graphql(desc = "These applications are allowed to close the current chain.")]
-        close_chain: Vec<ApplicationId>,
+        #[graphql(
+            desc = "These applications are allowed to manage the chain: close it, change \
+                    application permissions, and change ownership."
+        )]
+        manage_chain: Vec<ApplicationId>,
         #[graphql(
             desc = "If this is `None`, all system operations and application operations are allowed.
 If it is `Some`, only operations from the specified applications are allowed,
@@ -513,8 +516,6 @@ and no system operations."
             desc = "At least one operation or incoming message from each of these applications must occur in every block."
         )]
         mandatory_applications: Vec<ApplicationId>,
-        #[graphql(desc = "These applications are allowed to change the application permissions.")]
-        change_application_permissions: Vec<ApplicationId>,
         #[graphql(
             desc = "These applications are allowed to perform calls to services as oracles."
         )]
@@ -525,8 +526,7 @@ and no system operations."
         let operation = SystemOperation::ChangeApplicationPermissions(ApplicationPermissions {
             execute_operations,
             mandatory_applications,
-            close_chain,
-            change_application_permissions,
+            manage_chain,
             call_service_as_oracle,
             make_http_requests,
         });
