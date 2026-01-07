@@ -42,6 +42,14 @@ pub fn parse_app_set(s: &str) -> anyhow::Result<HashSet<GenericApplicationId>> {
         .collect()
 }
 
+pub fn parse_json_app_vec(s: &str) -> anyhow::Result<Vec<ApplicationId>> {
+    Ok(serde_json::from_str(s.trim())?)
+}
+
+pub fn parse_json_optional_app_vec(s: &str) -> anyhow::Result<Option<Vec<ApplicationId>>> {
+    Ok(serde_json::from_str(s.trim())?)
+}
+
 /// Returns after the specified time or if we receive a notification that a new round has started.
 pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: RoundTimeout) {
     let mut stream = stream.filter(|notification| match &notification.reason {

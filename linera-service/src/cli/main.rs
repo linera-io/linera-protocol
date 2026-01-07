@@ -265,8 +265,8 @@ impl Runnable for Job {
                 );
                 let time_start = Instant::now();
                 let ownership = ChainOwnership::try_from(ownership_config)?;
-                let application_permissions =
-                    ApplicationPermissions::from(application_permissions_config);
+                let mut application_permissions = ApplicationPermissions::default();
+                application_permissions_config.update(&mut application_permissions);
                 let (description, certificate) = context
                     .apply_client_command(&chain_client, |chain_client| {
                         let ownership = ownership.clone();
@@ -342,13 +342,14 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(chain_id).await?;
                 info!("Changing application permissions for chain {}", chain_id);
                 let time_start = Instant::now();
-                let application_permissions =
-                    ApplicationPermissions::from(application_permissions_config);
                 let certificate = context
                     .apply_client_command(&chain_client, |chain_client| {
-                        let application_permissions = application_permissions.clone();
+                        let application_permissions_config = application_permissions_config.clone();
                         let chain_client = chain_client.clone();
                         async move {
+                            let mut application_permissions =
+                                chain_client.query_application_permissions().await?;
+                            application_permissions_config.update(&mut application_permissions);
                             chain_client
                                 .change_application_permissions(application_permissions)
                                 .await
