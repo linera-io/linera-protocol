@@ -911,13 +911,13 @@ where
             .read_blob_states_from_storage(blob_ids)
             .await?;
 
-        let mut chain_heights = BTreeMap::new();
+        let mut chain_heights: BTreeMap<ChainId, BTreeSet<BlockHeight>> = BTreeMap::new();
         for blob_state in blob_states {
             let block_chain_id = blob_state.chain_id;
             let block_height = blob_state.block_height;
             chain_heights
                 .entry(block_chain_id)
-                .or_insert_with(BTreeSet::new)
+                .or_default()
                 .insert(block_height);
         }
 
@@ -935,41 +935,41 @@ where
         chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
-        let tasks: Vec<_> = chain_heights
-            .into_iter()
-            .flat_map(|(chain_id, heights)| {
-                heights.into_iter().map(move |height| (chain_id, height))
-            })
-            .collect();
-
-        FuturesUnordered::from_iter(tasks.into_iter().map(|(chain_id, height)| {
+        FuturesUnordered::from_iter(chain_heights.into_iter().map(|(chain_id, heights)| {
             let mut updater = self.clone();
             async move {
-                // Get the certificate at this specific height and send only that
-                let hash = updater
+                // Get all block hashes for this chain at the specified heights in one call
+                let heights_vec: Vec<_> = heights.into_iter().collect();
+                let hashes = updater
                     .client
                     .local_node
-                    .get_block_hashes(chain_id, vec![height])
-                    .await?
-                    .into_iter()
-                    .next()
-                    .ok_or_else(|| {
-                        ChainClientError::InternalError(
-                            "send_chain_info_at_heights called with invalid height",
-                        )
-                    })?;
-                let certificate = updater
+                    .get_block_hashes(chain_id, heights_vec.clone())
+                    .await?;
+
+                if hashes.len() != heights_vec.len() {
+                    return Err(ChainClientError::InternalError(
+                        "send_chain_info_at_heights called with invalid heights",
+                    ));
+                }
+
+                // Read all certificates in one call
+                let certificates = updater
                     .client
                     .local_node
                     .storage_client()
-                    .read_certificate(hash)
-                    .await?
-                    .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
+                    .read_certificates(hashes.clone())
+                    .await?;
 
-                updater
-                    .send_confirmed_certificate(certificate, delivery)
-                    .await
-                    .map(|_| ())
+                // Send each certificate
+                for (hash, certificate) in hashes.into_iter().zip(certificates) {
+                    let certificate =
+                        certificate.ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
+                    updater
+                        .send_confirmed_certificate(certificate, delivery)
+                        .await?;
+                }
+
+                Ok::<_, ChainClientError>(())
             }
         }))
         .try_collect::<Vec<_>>()
