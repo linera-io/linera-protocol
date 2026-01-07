@@ -243,6 +243,14 @@ pub enum CloseChainError {
     NotPermitted,
 }
 
+/// Errors that can happen when attempting to change the chain ownership.
+#[derive(Clone, Copy, Debug, Error, WitStore, WitType)]
+pub enum ChangeOwnershipError {
+    /// The application wasn't allowed to change the chain ownership.
+    #[error("Unauthorized attempt to change the chain ownership")]
+    NotPermitted,
+}
+
 /// Errors that can happen when attempting to change the application permissions.
 #[derive(Clone, Copy, Debug, Error, WitStore, WitType)]
 pub enum ChangeApplicationPermissionsError {

@@ -340,6 +340,20 @@ where
                 }
             }
 
+            ChangeOwnership {
+                application_id,
+                ownership,
+                callback,
+            } => {
+                let app_permissions = self.state.system.application_permissions.get();
+                if !app_permissions.can_close_chain(&application_id) {
+                    callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
+                } else {
+                    self.state.system.ownership.set(ownership);
+                    callback.respond(Ok(()));
+                }
+            }
+
             ChangeApplicationPermissions {
                 application_id,
                 application_permissions,
@@ -1210,6 +1224,13 @@ pub enum ExecutionRequest {
 
     CloseChain {
         application_id: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<Result<(), ExecutionError>>,
+    },
+
+    ChangeOwnership {
+        application_id: ApplicationId,
+        ownership: ChainOwnership,
         #[debug(skip)]
         callback: Sender<Result<(), ExecutionError>>,
     },
