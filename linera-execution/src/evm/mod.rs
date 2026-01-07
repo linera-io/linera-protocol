@@ -33,10 +33,6 @@ pub enum EvmExecutionError {
     IncoherentBalances(Address, U256, U256),
     #[error("Unknown signer")]
     UnknownSigner,
-    #[error("No transfer in services")]
-    NoTransferInServices,
-    #[error("No transfer in Wasm application call")]
-    NoTransferInRuntimeCall,
     #[error("The function {0} is being called but is missing from the bytecode API")]
     MissingFunction(String),
     #[error("Incorrect contract creation: {0}")]
