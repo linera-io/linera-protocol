@@ -958,30 +958,29 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             inputs.scheme = CreateScheme::Custom {
                 address: self.contract_address,
             };
-            Ok(None)
-        } else {
-            let module_id = Self::publish_create_inputs(context, inputs)?;
-            let mut map = self.db.1.lock().unwrap();
-            let num_apps = map.len() as u32;
-            let expected_application_id =
-                Self::get_expected_application_id(context, module_id, num_apps)?;
-            map.insert(expected_application_id, (module_id, num_apps));
-            let address = expected_application_id.evm_address();
-            if inputs.value != U256::ZERO {
-                let value = Amount::try_from(inputs.value).map_err(EvmExecutionError::from)?;
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
-                let application_id = runtime.application_id()?;
-                let source = application_id.into();
-                let chain_id = runtime.chain_id()?;
-                let account = identifiers::Account {
-                    chain_id,
-                    owner: expected_application_id.into(),
-                };
-                runtime.transfer(source, account, value)?;
-            }
-            inputs.scheme = CreateScheme::Custom { address };
-            Ok(None)
+            return Ok(None);
         }
+        let module_id = Self::publish_create_inputs(context, inputs)?;
+        let mut map = self.db.1.lock().unwrap();
+        let num_apps = map.len() as u32;
+        let expected_application_id =
+            Self::get_expected_application_id(context, module_id, num_apps)?;
+        map.insert(expected_application_id, (module_id, num_apps));
+        let address = expected_application_id.evm_address();
+        if inputs.value != U256::ZERO {
+            let value = Amount::try_from(inputs.value).map_err(EvmExecutionError::from)?;
+            let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+            let application_id = runtime.application_id()?;
+            let source = application_id.into();
+            let chain_id = runtime.chain_id()?;
+            let account = identifiers::Account {
+                chain_id,
+                owner: expected_application_id.into(),
+            };
+            runtime.transfer(source, account, value)?;
+        }
+        inputs.scheme = CreateScheme::Custom { address };
+        Ok(None)
     }
 
     /// Every call to a contract passes by this function.

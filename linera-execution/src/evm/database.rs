@@ -78,7 +78,7 @@ impl<Runtime> Clone for InnerDatabase<Runtime> {
     }
 }
 
-/// Encodes the `index` of the EVM storage associated to the smart contract
+/// Encodes the `index` of the EVM storage associated with the smart contract
 /// in a Linera key.
 fn get_storage_key(index: U256) -> Vec<u8> {
     let mut key = vec![KeyCategory::Storage as u8];
@@ -86,7 +86,7 @@ fn get_storage_key(index: U256) -> Vec<u8> {
     key
 }
 
-/// Returns the tag associated to the contract.
+/// Returns the tag associated with the contract.
 fn get_address_key(prefix: u8, address: Address) -> Vec<u8> {
     let mut key = vec![prefix];
     key.extend(address);
@@ -151,7 +151,7 @@ where
         Ok(Some(account_info))
     }
 
-    /// Reading the state from local contract storage.
+    /// Reads the state from local contract storage.
     fn account_info_from_local_storage(
         &self,
         address: Address,
@@ -175,7 +175,7 @@ where
         }
     }
 
-    /// Reading the state from local contract storage.
+    /// Reads the state from local contract storage.
     fn account_info_from_storage(
         &self,
         f: fn(&Self, Address) -> Result<Option<AccountInfo>, ExecutionError>,
@@ -199,7 +199,7 @@ where
         runtime.has_empty_storage(application_id)
     }
 
-    /// Reading the starting balance
+    /// Readd the starting balance
     fn get_start_balance(&self, address: Address) -> Result<U256, ExecutionError> {
         let mut runtime = self.runtime.lock().unwrap();
         let account_owner = address.into();
@@ -237,7 +237,7 @@ where
         Ok(account_info)
     }
 
-    /// Reading the storage
+    /// Reads the storage
     fn read_storage(
         &self,
         f: fn(&Self, Address, U256) -> Result<U256, ExecutionError>,
@@ -257,7 +257,7 @@ where
         f(self, address, index)
     }
 
-    /// Reading the storage
+    /// Reads the storage
     pub fn read_from_local_storage(&self, index: U256) -> Result<U256, ExecutionError> {
         let key = get_storage_key(index);
         let mut runtime = self.runtime.lock().unwrap();

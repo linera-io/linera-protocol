@@ -67,7 +67,7 @@ pub struct InvalidVmRuntime(String);
 pub enum EvmQuery {
     /// Account state
     AccountInfo,
-    /// Account state
+    /// Storage query
     Storage(U256),
     /// A read-only query.
     Query(Vec<u8>),

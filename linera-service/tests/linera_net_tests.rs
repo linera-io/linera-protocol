@@ -590,7 +590,6 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     client
         .transfer_with_accounts(Amount::from_tokens(50), account_chain, account1)
         .await?;
-    tracing::info!("test_evm_end_to_end_child_subcontract, step 1");
 
     let module = load_solidity_example_by_name(
         "tests/fixtures/evm_child_subcontract.sol",
@@ -617,26 +616,22 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
 
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
-    tracing::info!("test_evm_end_to_end_child_subcontract, step 2");
     let application = node_service.make_application(&chain_id, &application_id)?;
     let address_app = application_id.evm_address();
 
     // Creating the subcontracts
 
-    tracing::info!("test_evm_end_to_end_child_subcontract, step 3");
     let operation0_a = createCounterCall {
         initialValue: U256::from(42),
     };
     let operation0_a = get_zero_operation(operation0_a)?;
     application.run_json_query(operation0_a).await?;
 
-    tracing::info!("test_evm_end_to_end_child_subcontract, step 4");
     let operation0_b = remote_incrementCall {
         index: U256::from(0),
     };
     let operation0_b = get_zero_operation(operation0_b)?;
     application.run_json_query(operation0_b).await?;
-    tracing::info!("test_evm_end_to_end_child_subcontract, step 5");
 
     let operation1 = createCounterCall {
         initialValue: U256::from(149),
@@ -792,7 +787,6 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     client_a
         .transfer_with_accounts(Amount::from_tokens(50), account_chain_a, account_a_2)
         .await?;
-    tracing::info!("test_evm_end_to_end_balance_and_transfer, step 1");
 
     sol! {
         function send_cash(address recipient, uint256 amount);
@@ -821,7 +815,6 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
             None,
         )
         .await?;
-    tracing::info!("test_evm_end_to_end_balance_and_transfer, step 2");
 
     let account_owner_app: AccountOwner = application_id.into();
     let address_app = account_owner_app.to_evm_address().unwrap();
@@ -857,11 +850,8 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     // Checking the balances on input
 
     assert_contract_balance(&app_a, address1, balance_a_1).await?;
-    tracing::info!("test_evm_end_to_end_balance_and_transfer, step 3");
     assert_contract_balance(&app_a, address2, balance_a_2).await?;
-    tracing::info!("test_evm_end_to_end_balance_and_transfer, step 4");
     assert_contract_balance(&app_a, address_app, balance_a_app).await?;
-    tracing::info!("test_evm_end_to_end_balance_and_transfer, step 5");
 
     // Transferring amount
 
@@ -876,7 +866,6 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     };
     let operation = get_zero_operation(operation)?;
     app_a.run_json_query(operation).await?;
-    tracing::info!("test_evm_end_to_end_balance_and_transfer, step 6");
 
     // Checking the balances of app_a
 
@@ -897,7 +886,6 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     let operation = EvmOperation::new(amount_operation, operation.abi_encode());
     let operation = EvmQuery::Operation(operation.to_bytes()?);
     app_a.run_json_query(operation).await?;
-    tracing::info!("test_evm_end_to_end_balance_and_transfer, step 7");
 
     let balance_a_app_after2 = node_service_a.balance(&account_a_app).await?;
     assert_eq!(balance_a_app_after2, balance_a_app_after + amount_operation);
@@ -919,22 +907,18 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     let operation = null_operationCall {};
     let operation = get_zero_operation(operation)?;
     app_b.run_json_query(operation).await?;
-    tracing::info!("test_evm_end_to_end_balance_and_transfer, step 8");
 
     assert_eq!(node_service_b.balance(&account_b_1).await?, Amount::ZERO);
     assert_eq!(node_service_b.balance(&account_b_2).await?, Amount::ZERO);
     assert_eq!(node_service_b.balance(&account_b_app).await?, Amount::ZERO);
-    tracing::info!("test_evm_end_to_end_balance_and_transfer, step 9");
     assert_contract_balance(&app_b, address1, Amount::ZERO).await?;
     assert_contract_balance(&app_b, address2, Amount::ZERO).await?;
     assert_contract_balance(&app_b, address_app, Amount::ZERO).await?;
-    tracing::info!("test_evm_end_to_end_balance_and_transfer, step 10");
 
     // Creating app_b via service calls and checking balances.
     assert_contract_balance(&app_c, address1, Amount::ZERO).await?;
     assert_contract_balance(&app_c, address2, Amount::ZERO).await?;
     assert_contract_balance(&app_c, address_app, Amount::ZERO).await?;
-    tracing::info!("test_evm_end_to_end_balance_and_transfer, step 11");
 
     // Winding down
 
