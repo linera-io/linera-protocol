@@ -995,6 +995,9 @@ pub trait ContractRuntime: BaseRuntime {
         application_permissions: ApplicationPermissions,
     ) -> Result<(), ExecutionError>;
 
+    /// Changes the chain's ownership.
+    fn change_ownership(&mut self, ownership: ChainOwnership) -> Result<(), ExecutionError>;
+
     /// Creates a new application on chain.
     fn create_application(
         &mut self,

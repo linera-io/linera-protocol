@@ -412,6 +412,9 @@ pub struct ApplicationPermissionsConfig {
     /// using the system API.
     #[arg(long)]
     pub change_application_permissions: Option<Vec<ApplicationId>>,
+    /// These applications are allowed to change the chain's ownership using the system API.
+    #[arg(long)]
+    pub change_ownership: Option<Vec<ApplicationId>>,
     /// These applications are allowed to call services as oracles on the current chain using the
     /// system API.
     #[arg(long)]
@@ -431,6 +434,7 @@ impl From<ApplicationPermissionsConfig> for ApplicationPermissions {
             change_application_permissions: config
                 .change_application_permissions
                 .unwrap_or_default(),
+            change_ownership: config.change_ownership.unwrap_or_default(),
             call_service_as_oracle: config.call_service_as_oracle,
             make_http_requests: config.make_http_requests,
         }

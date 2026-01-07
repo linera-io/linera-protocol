@@ -9,7 +9,9 @@ use linera_base::{
     },
     http,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, StreamName},
-    ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
+    ownership::{
+        ChainOwnership, ChangeApplicationPermissionsError, ChangeOwnershipError, CloseChainError,
+    },
     vm::VmRuntime,
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -534,6 +536,21 @@ where
             Ok(()) => Ok(Ok(())),
             Err(ExecutionError::UnauthorizedApplication(_)) => {
                 Ok(Err(ChangeApplicationPermissionsError::NotPermitted))
+            }
+            Err(error) => Err(RuntimeError::Custom(error.into())),
+        }
+    }
+
+    /// Changes the ownership of the current chain. Returns an error if the application
+    /// doesn't have permission to do so.
+    fn change_ownership(
+        caller: &mut Caller,
+        ownership: ChainOwnership,
+    ) -> Result<Result<(), ChangeOwnershipError>, RuntimeError> {
+        match caller.user_data_mut().runtime.change_ownership(ownership) {
+            Ok(()) => Ok(Ok(())),
+            Err(ExecutionError::UnauthorizedApplication(_)) => {
+                Ok(Err(ChangeOwnershipError::NotPermitted))
             }
             Err(error) => Err(RuntimeError::Custom(error.into())),
         }

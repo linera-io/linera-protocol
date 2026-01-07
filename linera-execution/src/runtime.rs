@@ -1505,6 +1505,18 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?
     }
 
+    fn change_ownership(&mut self, ownership: ChainOwnership) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        let application_id = this.current_application().id;
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::ChangeOwnership {
+                application_id,
+                ownership,
+                callback,
+            })?
+            .recv_response()?
+    }
+
     fn peek_application_index(&mut self) -> Result<u32, ExecutionError> {
         let index = self
             .inner()

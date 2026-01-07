@@ -991,6 +991,10 @@ pub struct ApplicationPermissions {
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
     pub change_application_permissions: Vec<ApplicationId>,
+    /// These applications are allowed to change the chain's ownership.
+    #[graphql(default)]
+    #[debug(skip_if = Vec::is_empty)]
+    pub change_ownership: Vec<ApplicationId>,
     /// These applications are allowed to perform calls to services as oracles.
     #[graphql(default)]
     #[debug(skip_if = Option::is_none)]
@@ -1010,6 +1014,7 @@ impl ApplicationPermissions {
             mandatory_applications: vec![app_id],
             close_chain: vec![app_id],
             change_application_permissions: vec![app_id],
+            change_ownership: vec![app_id],
             call_service_as_oracle: Some(vec![app_id]),
             make_http_requests: Some(vec![app_id]),
         }
@@ -1023,6 +1028,7 @@ impl ApplicationPermissions {
             mandatory_applications: app_ids.clone(),
             close_chain: app_ids.clone(),
             change_application_permissions: app_ids.clone(),
+            change_ownership: app_ids.clone(),
             call_service_as_oracle: Some(app_ids.clone()),
             make_http_requests: Some(app_ids),
         }
@@ -1046,6 +1052,11 @@ impl ApplicationPermissions {
     /// permissions for this chain.
     pub fn can_change_application_permissions(&self, app_id: &ApplicationId) -> bool {
         self.change_application_permissions.contains(app_id)
+    }
+
+    /// Returns whether the given application is allowed to change the chain's ownership.
+    pub fn can_change_ownership(&self, app_id: &ApplicationId) -> bool {
+        self.change_ownership.contains(app_id)
     }
 
     /// Returns whether the given application can call services.

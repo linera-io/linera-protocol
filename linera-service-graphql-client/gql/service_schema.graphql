@@ -85,6 +85,10 @@ input ApplicationPermissions {
 	"""
 	changeApplicationPermissions: [ApplicationId!]! = []
 	"""
+	These applications are allowed to change the chain's ownership.
+	"""
+	changeOwnership: [ApplicationId!]! = []
+	"""
 	These applications are allowed to perform calls to services as oracles.
 	"""
 	callServiceAsOracle: [ApplicationId!] = null
@@ -1072,6 +1076,10 @@ type MutationRoot {
 		These applications are allowed to change the application permissions.
 		"""
 		changeApplicationPermissions: [ApplicationId!]!,
+		"""
+		These applications are allowed to change the chain's ownership.
+		"""
+		changeOwnership: [ApplicationId!]!,
 		"""
 		These applications are allowed to perform calls to services as oracles.
 		"""

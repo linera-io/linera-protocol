@@ -11,6 +11,7 @@ interface contract-runtime-api {
     open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> chain-id;
     close-chain: func() -> result<tuple<>, close-chain-error>;
     change-application-permissions: func(application-permissions: application-permissions) -> result<tuple<>, change-application-permissions-error>;
+    change-ownership: func(ownership: chain-ownership) -> result<tuple<>, change-ownership-error>;
     create-application: func(module-id: module-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<application-id>) -> application-id;
     create-data-blob: func(bytes: list<u8>) -> data-blob-hash;
     publish-module: func(contract: bytecode, service: bytecode, vm-runtime: vm-runtime) -> module-id;
@@ -49,6 +50,7 @@ interface contract-runtime-api {
         mandatory-applications: list<application-id>,
         close-chain: list<application-id>,
         change-application-permissions: list<application-id>,
+        change-ownership: list<application-id>,
         call-service-as-oracle: option<list<application-id>>,
         make-http-requests: option<list<application-id>>,
     }
@@ -77,6 +79,10 @@ interface contract-runtime-api {
     }
 
     enum change-application-permissions-error {
+        not-permitted,
+    }
+
+    enum change-ownership-error {
         not-permitted,
     }
 

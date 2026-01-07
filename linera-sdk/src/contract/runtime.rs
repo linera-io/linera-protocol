@@ -14,7 +14,8 @@ use linera_base::{
         Account, AccountOwner, ApplicationId, ChainId, DataBlobHash, ModuleId, StreamName,
     },
     ownership::{
-        AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
+        AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError,
+        ChangeOwnershipError, CloseChainError,
     },
     vm::VmRuntime,
 };
@@ -346,6 +347,15 @@ where
     ) -> Result<(), ChangeApplicationPermissionsError> {
         contract_wit::change_application_permissions(&application_permissions.into())
             .map_err(|error| error.into())
+    }
+
+    /// Changes the ownership of the current chain. Returns an error if the application
+    /// doesn't have permission to do so.
+    pub fn change_ownership(
+        &mut self,
+        ownership: ChainOwnership,
+    ) -> Result<(), ChangeOwnershipError> {
+        contract_wit::change_ownership(&ownership.into()).map_err(|error| error.into())
     }
 
     /// Creates a new on-chain application, based on the supplied module and parameters.

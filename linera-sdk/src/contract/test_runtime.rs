@@ -19,7 +19,8 @@ use linera_base::{
         Account, AccountOwner, ApplicationId, BlobId, ChainId, DataBlobHash, ModuleId, StreamName,
     },
     ownership::{
-        AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
+        AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError,
+        ChangeOwnershipError, CloseChainError,
     },
     vm::VmRuntime,
 };
@@ -68,6 +69,7 @@ where
     chain_ownership: Option<ChainOwnership>,
     can_close_chain: Option<bool>,
     can_change_application_permissions: Option<bool>,
+    can_change_ownership: Option<bool>,
     call_application_handler: Option<CallApplicationHandler>,
     send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Application::Message>>>>,
     outgoing_transfers: HashMap<Account, Amount>,
@@ -118,6 +120,7 @@ where
             chain_ownership: None,
             can_close_chain: None,
             can_change_application_permissions: None,
+            can_change_ownership: None,
             call_application_handler: None,
             send_message_requests: Arc::default(),
             outgoing_transfers: HashMap::new(),
@@ -623,6 +626,20 @@ where
         self
     }
 
+    /// Configures if the application being tested is allowed to change the chain's
+    /// ownership.
+    pub fn with_can_change_ownership(mut self, can_change_ownership: bool) -> Self {
+        self.can_change_ownership = Some(can_change_ownership);
+        self
+    }
+
+    /// Configures if the application being tested is allowed to change the chain's
+    /// ownership.
+    pub fn set_can_change_ownership(&mut self, can_change_ownership: bool) -> &mut Self {
+        self.can_change_ownership = Some(can_change_ownership);
+        self
+    }
+
     /// Closes the current chain. Returns an error if the application doesn't have
     /// permission to do so.
     pub fn close_chain(&mut self) -> Result<(), CloseChainError> {
@@ -657,9 +674,30 @@ where
             self.can_close_chain = Some(application_permissions.can_close_chain(&application_id));
             self.can_change_application_permissions =
                 Some(application_permissions.can_change_application_permissions(&application_id));
+            self.can_change_ownership =
+                Some(application_permissions.can_change_ownership(&application_id));
             Ok(())
         } else {
             Err(ChangeApplicationPermissionsError::NotPermitted)
+        }
+    }
+
+    /// Changes the chain's ownership. Returns an error if the application doesn't have
+    /// permission to do so.
+    pub fn change_ownership(
+        &mut self,
+        ownership: ChainOwnership,
+    ) -> Result<(), ChangeOwnershipError> {
+        let authorized = self.can_change_ownership.expect(
+            "Authorization to change the chain's ownership has not been mocked, \
+            please call `MockContractRuntime::set_can_change_ownership` first",
+        );
+
+        if authorized {
+            self.chain_ownership = Some(ownership);
+            Ok(())
+        } else {
+            Err(ChangeOwnershipError::NotPermitted)
         }
     }
 

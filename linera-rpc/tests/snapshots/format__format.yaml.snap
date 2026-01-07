@@ -102,6 +102,9 @@ ApplicationPermissions:
     - change_application_permissions:
         SEQ:
           TYPENAME: ApplicationId
+    - change_ownership:
+        SEQ:
+          TYPENAME: ApplicationId
     - call_service_as_oracle:
         OPTION:
           SEQ:

@@ -357,6 +357,20 @@ where
                 }
             }
 
+            ChangeOwnership {
+                application_id,
+                ownership,
+                callback,
+            } => {
+                let app_permissions = self.state.system.application_permissions.get();
+                if !app_permissions.can_change_ownership(&application_id) {
+                    callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
+                } else {
+                    self.state.system.ownership.set(ownership);
+                    callback.respond(Ok(()));
+                }
+            }
+
             PeekApplicationIndex { callback } => {
                 let index = self.txn_tracker.peek_application_index();
                 callback.respond(index)
@@ -1217,6 +1231,13 @@ pub enum ExecutionRequest {
     ChangeApplicationPermissions {
         application_id: ApplicationId,
         application_permissions: ApplicationPermissions,
+        #[debug(skip)]
+        callback: Sender<Result<(), ExecutionError>>,
+    },
+
+    ChangeOwnership {
+        application_id: ApplicationId,
+        ownership: ChainOwnership,
         #[debug(skip)]
         callback: Sender<Result<(), ExecutionError>>,
     },
