@@ -631,7 +631,7 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     application.run_json_query(operation0_a).await?;
 
     tracing::info!("test_evm_end_to_end_child_subcontract, step 4");
-    let operation0_b = call_incrementCall {
+    let operation0_b = remote_incrementCall {
         index: U256::from(0),
     };
     let operation0_b = get_zero_operation(operation0_b)?;
@@ -712,14 +712,14 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     let query = get_valueCall {};
     let query = EvmQuery::Query(query.abi_encode());
     let result = application0.run_json_query(query.clone()).await?;
-    assert_eq!(read_evm_u256_entry(result), U256::from(44));
+    assert_eq!(read_evm_u256_entry(result), U256::from(45));
 
     let query = remote_valueCall {
         index: U256::from(0),
     };
     let query = EvmQuery::Query(query.abi_encode());
     let result = application.run_json_query(query.clone()).await?;
-    assert_eq!(read_evm_u256_entry(result), U256::from(44));
+    assert_eq!(read_evm_u256_entry(result), U256::from(45));
 
     // Doing some reentrant call
     let operation2 = reentrant_testCall {

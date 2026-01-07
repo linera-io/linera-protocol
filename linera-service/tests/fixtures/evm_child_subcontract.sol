@@ -58,10 +58,10 @@ contract CounterFactory {
         counter.increment();
     }
 
-
     function remote_value(uint256 index) external returns (uint256) {
         Counter counter = counters[index];
         return counter.get_value();
+    }
 
     function reentrant_test(uint256 index, uint256 value) public {
         reentrant_value = value;
@@ -73,7 +73,7 @@ contract CounterFactory {
         return reentrant_value;
     }
 
-    function test_code_length(uint256 index) public returns (uint256) {
+    function test_code_length(uint256 index) public {
         Counter counter = counters[index];
         require(address(counter).code.length > 0);
     }
