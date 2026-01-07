@@ -1167,6 +1167,106 @@ async fn test_change_application_permissions(authorized: bool) -> Result<(), Exe
     Ok(())
 }
 
+/// Tests that changing the admin field requires admin permission.
+#[test_case(false, false => matches Ok(_); "non-admin can change non-admin fields")]
+#[test_case(false, true => matches Err(ExecutionError::UnauthorizedApplication(_)); "non-admin cannot change admin field")]
+#[test_case(true, true => matches Ok(_); "admin can change admin field")]
+#[test_log::test(tokio::test)]
+async fn test_change_application_permissions_admin_restriction(
+    is_admin: bool,
+    changes_admin: bool,
+) -> Result<(), ExecutionError> {
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    let mut view = SystemExecutionState {
+        ownership: ChainOwnership::default(),
+        balance: Amount::ONE,
+        balances: BTreeMap::new(),
+        ..SystemExecutionState::new(description)
+    }
+    .into_view()
+    .await;
+
+    let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
+    let service_blob = TransferTestEndpoint::sender_application_service_blob();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+
+    let application_description = TransferTestEndpoint::sender_application_description();
+    let application_description_blob = Blob::new_application_description(&application_description);
+    let app_desc_blob_id = application_description_blob.id();
+
+    let (application_id, application) = view
+        .register_mock_application_with(application_description, contract_blob, service_blob)
+        .await
+        .expect("should register mock application");
+
+    // App always has change_application_permissions, but only has admin if is_admin is true.
+    let admin = if is_admin {
+        vec![application_id]
+    } else {
+        vec![]
+    };
+
+    let initial_permissions = ApplicationPermissions {
+        change_application_permissions: vec![application_id],
+        admin: admin.clone(),
+        ..ApplicationPermissions::default()
+    };
+    view.system
+        .application_permissions
+        .set(initial_permissions.clone());
+
+    // New permissions: if changes_admin is true, we modify the admin field.
+    let new_admin = if changes_admin {
+        // Change the admin field: add app if it wasn't there, remove if it was.
+        if is_admin {
+            vec![] // Remove self from admin
+        } else {
+            vec![application_id] // Add self to admin
+        }
+    } else {
+        admin // Keep same as initial
+    };
+
+    let new_permissions = ApplicationPermissions {
+        change_application_permissions: vec![application_id],
+        admin: new_admin,
+        call_service_as_oracle: if changes_admin { None } else { Some(vec![]) },
+        ..ApplicationPermissions::default()
+    };
+
+    application.expect_call(ExpectedCall::execute_operation({
+        let new_permissions = new_permissions.clone();
+        move |runtime, _operation| {
+            runtime.change_application_permissions(new_permissions)?;
+            Ok(vec![])
+        }
+    }));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = create_dummy_operation_context(chain_id);
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+
+    let mut txn_tracker = TransactionTracker::new_replaying(vec![
+        OracleResponse::Blob(app_desc_blob_id),
+        OracleResponse::Blob(contract_blob_id),
+        OracleResponse::Blob(service_blob_id),
+    ]);
+    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, operation)
+        .await?;
+
+    // Verify the permissions were actually changed.
+    assert_eq!(view.system.application_permissions.get(), &new_permissions);
+
+    Ok(())
+}
+
 /// Tests the contract system API to change chain ownership.
 #[test_case(true => matches Ok(_); "when authorized")]
 #[test_case(false => matches Err(ExecutionError::UnauthorizedApplication(_)); "when unauthorized")]
