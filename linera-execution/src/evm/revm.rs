@@ -824,9 +824,20 @@ impl<'a, Runtime: ContractRuntime> Inspector<ContractCtx<'a, Runtime>>
 }
 
 impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
-    /// Gets the expected `ApplicationId`. We need to transfer
-    /// native tokens before the application is created (see below).
-    /// Therefore, we need to pre-compute the obtained application ID.
+    /// Gets the expected `ApplicationId` corresponding to the
+    /// EVM contract being created.
+    /// module_id is the module being created.
+    ///
+    /// The index num_apps is the index of the application being
+    /// created. This is needed because the calls to `create_applications`
+    /// are done at the end of the execution of the contract.
+    /// So, the peek_application_index always returns the same index
+    /// during the execution.
+    ///
+    /// The parameters are empty because there is no argument
+    /// to the creation of the contract. In fact the .init_code
+    /// contains the concatenation of the bytecode and the constructor
+    /// argument so no additional argument needs to be added.
     fn get_expected_application_id(
         context: &mut ContractCtx<'_, Runtime>,
         module_id: ModuleId,
@@ -849,7 +860,8 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         Ok(ApplicationId::from(&application_description))
     }
 
-    /// Publishes the `inputs`.
+    /// Publishes the init_code as a `ModuleId`.
+    /// There is no need for a separate blob for the service.
     fn publish_create_inputs(
         context: &mut ContractCtx<'_, Runtime>,
         inputs: &mut CreateInputs,
@@ -882,7 +894,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// The second case occurs when the first contract has
     /// been created and that contract starts making new
     /// contracts.
-    /// In relation to bytecode, the following notions are
+    /// In relation to EVM bytecode, the following notions are
     /// relevant:
     /// * The bytecode is created from the compilation.
     /// * The bytecode concatenated with the constructor
@@ -927,27 +939,23 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// * The instantiation argument is empty since an EVM contract
     ///   creating a new contract will not support Linera features.
     ///   This is simply not part of create/create2 in the EVM.
-    /// * That call to `create_application` leads to a creation of
-    ///   a new contract and so a call to `fn create_or_fail` in
-    ///   another instance of Revm.
-    /// * When returning the `CreateOutcome`, we need to have the
-    ///   deployed bytecode. This is implemented through a special
-    ///   call to `GET_ACCOUNT_INFO_SELECTOR`. This is done
-    ///   with an `execute_operation`.
-    /// * Data is put together as a `Some(...)` which tells Revm
-    ///   that it does not need to execute the bytecode since the
-    ///   output is given to it.
+    /// * The application_id is being computed and used to adjust
+    ///   the contract creation.
+    /// * The balance is adjusted so that when it gets created in
+    ///   Linera it will have the correct balance.
+    /// * But that is the only change being done. We return Ok(None)
+    ///   which means that the contract creation is done as usual
+    ///   with REVM.
     ///
-    /// The fact that the creation of a contract can be done in a
-    /// parallel way to transferring native tokens to the contract
-    /// being created requires us to handle this as well.
-    /// * We cannot do a transfer from the calling contract with
-    ///   `deposit_funds` because we would not have the right
-    ///   to make the transfer.
-    /// * Therefore, we have to do the transfer before
-    ///   `create_application`. This forces us to know the
-    ///   `application_id` before it is created. This is done
-    ///   by building the `ApplicationDescription` and its hash.
+    /// The instantiation in Linera of the separate contracts
+    /// is done at the end of the contract execution. It goes
+    /// in the following way.
+    /// * The HashMap<ApplicationId, (ModuleId, u32)> contains
+    ///   the list of application to create and their index.
+    /// * The index and ModuleId allow the `create_application`
+    ///   to create a contract with the right application_id.
+    /// * The `create_application` is in that case just a
+    ///   writing of the data to storage.
     fn create_or_fail(
         &mut self,
         context: &mut ContractCtx<'_, Runtime>,
@@ -1153,6 +1161,8 @@ where
         self.db.0.set_contract_address()?;
         let caller = self.get_msg_address()?;
         let instantiation_argument = serde_json::from_slice::<EvmInstantiation>(&argument)?;
+        // This is the case of a contract created by REVM by another contract. We only
+        // need to write it to storage.
         if let Some(remainder) = instantiation_argument
             .argument
             .as_slice()
@@ -1170,6 +1180,18 @@ where
         Ok(())
     }
 
+    /// Execute the operation.
+    /// The first 3 possibilities are internal calls
+    /// from another REVM instance:
+    /// * The `GET_ACCOUNT_INFO_SELECTOR` retrieves the
+    ///   AccountInfo of that EVM contract.
+    /// * The `GET_CONTRACT_STORAGE_SELECTOR` is about
+    ///   individual storage entries.
+    /// * The `COMMIT_CONTRACT_CHANGES_SELECTOR` is about
+    ///   committing the state
+    ///
+    /// If not in those cases, then the execution proceeds
+    /// normally and creates an REVM instance.
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         self.db.0.set_contract_address()?;
         ensure_message_length(operation.len(), 4)?;

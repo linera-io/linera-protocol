@@ -45,7 +45,10 @@ pub const EVM_SERVICE_GAS_LIMIT: u64 = 20_000_000;
 
 impl DBErrorMarker for ExecutionError {}
 
-/// This is the encapsulation of the `Runtime` corresponding to the contract.
+/// This is the database common to the `ContractDatabase<Runtime>` and
+/// `ServiceDatabase<Runtime>`. It encapsulates the main data of the
+/// query, the contract address, who calls the contract with which value.
+/// It also store the error if one occurs, the access to the runtime.
 pub(crate) struct InnerDatabase<Runtime> {
     /// This is the EVM address of the contract.
     /// At the creation, it is set to `Address::ZERO` and then later set to the correct value.
@@ -56,7 +59,7 @@ pub(crate) struct InnerDatabase<Runtime> {
     pub value: U256,
     /// The runtime of the contract.
     pub runtime: Arc<Mutex<Runtime>>,
-    /// The uncommitted changes to the contract.
+    /// The uncommitted changes to the contract. It is used only for service calls.
     pub changes: EvmState,
     /// Whether the contract has been instantiated in REVM.
     pub is_revm_instantiated: bool,
@@ -128,6 +131,20 @@ where
         Ok(())
     }
 
+    /// Reads the account info from the storage for a contract A
+    /// of address contract_address.
+    /// * The function `f` is accessing the state for an account
+    ///   whose address is different from contract_address (e.g.
+    ///   a contract created in the contract A or accessed by A,
+    ///   e.g. ERC20).
+    ///   For `ContractRuntime` and `ServiceRuntime` the method
+    ///   to access is different. So, the function has to be
+    ///   provided as argument.
+    /// * The address in question being read.
+    /// * Whether the contract is newly created or not. For newly
+    ///   created contract, the balance is the one of REVM. For
+    ///   existing contract, the balance has to be accessed from
+    ///   Linera.
     fn read_basic_ref(
         &self,
         f: fn(&Self, Address) -> Result<Option<AccountInfo>, ExecutionError>,
@@ -151,8 +168,27 @@ where
         Ok(Some(account_info))
     }
 
-    /// Reads the state from local contract storage.
+    /// Reads the state from the local storage.
     fn account_info_from_local_storage(
+        &self,
+        address: Address,
+    ) -> Result<Option<AccountInfo>, ExecutionError> {
+        let mut runtime = self.runtime.lock().unwrap();
+        let key_info = get_address_key(KeyCategory::AccountInfo as u8, address);
+        let promise = runtime.read_value_bytes_new(key_info)?;
+        let result = runtime.read_value_bytes_wait(&promise)?;
+        Ok(from_bytes_option::<AccountInfo>(&result)?)
+    }
+
+    /// Reads the state from the inner database.
+    ///
+    /// If changes is not empty, then it means that
+    /// the contract has been instantiated for a
+    /// service query. In that case we do not have
+    /// any storage possible to access, just changes.
+    ///
+    /// In the other case, we access 
+    fn account_info_from_inner_database(
         &self,
         address: Address,
     ) -> Result<Option<AccountInfo>, ExecutionError> {
@@ -165,14 +201,7 @@ where
             let account = self.changes.get(&address);
             return Ok(account.map(|account| account.info.clone()));
         }
-        let mut runtime = self.runtime.lock().unwrap();
-        let key_info = get_address_key(KeyCategory::AccountInfo as u8, address);
-        let promise = runtime.read_value_bytes_new(key_info)?;
-        let result = runtime.read_value_bytes_wait(&promise)?;
-        match result {
-            None => Ok(None),
-            Some(bytes) => Ok(Some(bcs::from_bytes::<AccountInfo>(&bytes)?)),
-        }
+        self.account_info_from_local_storage(address)
     }
 
     /// Reads the state from local contract storage.
@@ -181,7 +210,7 @@ where
         f: fn(&Self, Address) -> Result<Option<AccountInfo>, ExecutionError>,
         address: Address,
     ) -> Result<Option<AccountInfo>, ExecutionError> {
-        let account_info = self.account_info_from_local_storage(address)?;
+        let account_info = self.account_info_from_inner_database(address)?;
         if let Some(account_info) = account_info {
             return Ok(Some(account_info));
         }
@@ -199,7 +228,7 @@ where
         runtime.has_empty_storage(application_id)
     }
 
-    /// Readd the starting balance
+    /// Reads the starting balance
     fn get_start_balance(&self, address: Address) -> Result<U256, ExecutionError> {
         let mut runtime = self.runtime.lock().unwrap();
         let account_owner = address.into();
@@ -231,13 +260,16 @@ where
 
     pub fn get_account_info(&self) -> Result<AccountInfo, ExecutionError> {
         let address = self.contract_address;
-        let account_info = self.account_info_from_local_storage(address)?;
+        let account_info = self.account_info_from_inner_database(address)?;
         let mut account_info = account_info.ok_or(EvmExecutionError::MissingAccountInfo)?;
         account_info.balance = self.get_start_balance(address)?;
         Ok(account_info)
     }
 
-    /// Reads the storage
+    /// Reads the storage entry.
+    /// * The function `f` is about accessing a storage value.
+    ///   The function varies for `Contract` and `Service`.
+    /// * The `address` and `index` are the one of the query.
     fn read_storage(
         &self,
         f: fn(&Self, Address, U256) -> Result<U256, ExecutionError>,
@@ -245,6 +277,8 @@ where
         index: U256,
     ) -> Result<U256, ExecutionError> {
         if !self.changes.is_empty() {
+            // This is the case of a contract instantiated for a service call.
+            // The storage values are accessed there.
             let account = self.changes.get(&address).unwrap();
             return Ok(match account.storage.get(&index) {
                 None => U256::ZERO,
@@ -252,12 +286,15 @@ where
             });
         }
         if address == self.contract_address {
+            // In that case we access the value from the
+            // local storage.
             return self.read_from_local_storage(index);
         }
+        // Use the function for accessing the value.
         f(self, address, index)
     }
 
-    /// Reads the storage
+    /// Reads the value from the local storage.
     pub fn read_from_local_storage(&self, index: U256) -> Result<U256, ExecutionError> {
         let key = get_storage_key(index);
         let mut runtime = self.runtime.lock().unwrap();
@@ -399,7 +436,7 @@ impl<Runtime> InnerDatabase<Runtime>
 where
     Runtime: ServiceRuntime,
 {
-    /// Getting the smart contract code if existing.
+    /// Gets the account info via a service query.
     fn get_service_account_info(
         &self,
         address: Address,
@@ -412,7 +449,7 @@ where
         Ok(Some(account_info))
     }
 
-    /// Getting the service storage value
+    /// Gets the storage value by doing a storage service query.
     fn get_service_storage_value(
         &self,
         address: Address,
@@ -438,7 +475,9 @@ where
         )
     }
 
-    /// Effectively commits changes to storage.
+    /// Balances of the contracts have to be checked when
+    /// writing. There is a balance in Linera and a balance
+    /// in EVM and they have to be coherent.
     fn check_balance(
         &mut self,
         address: Address,
@@ -505,6 +544,7 @@ where
     }
 
     /// Returns whether the account is writable.
+    /// We do not write the accounts of Externally Owned Accounts.
     pub fn is_account_writable(&self, address: &Address, account: &revm_state::Account) -> bool {
         if *address == FAUCET_ADDRESS {
             // We do not write the faucet address nor expect any coherency from it.
@@ -522,6 +562,12 @@ where
         !code_empty
     }
 
+    /// Creates a new contract. The account contains
+    /// the AccountInfo and the storage to be written.
+    /// The parameters is empty because the constructor
+    /// does not need to be concatenated as it has
+    /// already been concatenated to the bytecode in the
+    /// init_code.
     fn create_new_contract(
         &mut self,
         address: Address,
@@ -529,7 +575,6 @@ where
         module_id: ModuleId,
     ) -> Result<(), ExecutionError> {
         let application_id = address_to_user_application_id(address);
-        let mut runtime = self.0.runtime.lock().unwrap();
         let mut argument = ALREADY_CREATED_CONTRACT_SELECTOR.to_vec();
         argument.extend(bcs::to_bytes(&account)?);
         let evm_instantiation = EvmInstantiation {
@@ -539,6 +584,7 @@ where
         let argument = serde_json::to_vec(&evm_instantiation)?;
         let parameters = JSON_EMPTY_VECTOR.to_vec(); // No constructor
         let required_application_ids = Vec::new();
+        let mut runtime = self.0.runtime.lock().unwrap();
         let created_application_id = runtime.create_application(
             module_id,
             parameters,
@@ -552,20 +598,30 @@ where
         Ok(())
     }
 
+    /// Commits the changes to another contract.
+    /// This is done by doing a call application.
     fn commit_remote_contract(
         &mut self,
         address: Address,
         account: revm_state::Account,
     ) -> Result<(), ExecutionError> {
         let application_id = address_to_user_application_id(address);
-        let mut runtime = self.0.runtime.lock().unwrap();
         let mut argument = COMMIT_CONTRACT_CHANGES_SELECTOR.to_vec();
         argument.extend(bcs::to_bytes(&account)?);
+        let mut runtime = self.0.runtime.lock().unwrap();
         runtime.try_call_application(false, application_id, argument)?;
         Ok(())
     }
 
     /// Effectively commits changes to storage.
+    /// This is done in the following way:
+    /// * Identify the balances that needs to be checked
+    /// * Write down the state of the contract for contract_address locally.
+    /// * For the other contracts, if it already created, commit it.
+    ///
+    /// If not insert them into the map.
+    /// * Iterates over the entry of the map and creates the contract in the
+    ///   right order.
     pub fn commit_changes(&mut self) -> Result<(), ExecutionError> {
         let changes = mem::take(&mut self.0.changes);
         let mut balances = Vec::new();
@@ -624,6 +680,7 @@ where
     type Error = ExecutionError;
 
     /// The `basic_ref` is the function for reading the state of the application.
+    /// The code `read_basic_ref` is used with the relevant access function.
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
         let is_newly_created = {
             let map = self.1.lock().unwrap();
@@ -637,10 +694,17 @@ where
         )
     }
 
+    /// There are two ways to implements the trait:
+    /// * Returns entries with "code: Some(...)"
+    /// * Returns entries with "code: None".
+    ///
+    /// Since we choose the first design, the "code_by_hash_ref" is not needed. There
+    /// is an example in revm source code of this kind.
     fn code_by_hash_ref(&self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
         panic!("Returned AccountInfo should have code: Some(...) and so code_by_hash_ref should never be called");
     }
 
+    /// Access the storage by the relevant remote access function.
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, ExecutionError> {
         self.0.read_storage(
             InnerDatabase::<Runtime>::get_contract_storage_value,
@@ -701,7 +765,7 @@ where
 
     /// Reads the nonce of the user
     pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
-        let account_info: Option<AccountInfo> = self.basic_ref(*address)?;
+        let account_info = self.basic_ref(*address)?;
         Ok(match account_info {
             None => 0,
             Some(account_info) => account_info.nonce,
@@ -726,6 +790,7 @@ where
     type Error = ExecutionError;
 
     /// The `basic_ref` is the function for reading the state of the application.
+    /// There is no newly created contracts for services.
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
         let is_newly_created = false; // No contract creation in service
         self.0.read_basic_ref(
@@ -735,6 +800,12 @@ where
         )
     }
 
+    /// There are two ways to implements the trait:
+    /// * Returns entries with "code: Some(...)"
+    /// * Returns entries with "code: None".
+    ///
+    /// Since we choose the first design, the "code_by_hash_ref" is not needed. There
+    /// is an example in revm source code of this kind.
     fn code_by_hash_ref(&self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
         panic!("Returned AccountInfo should have code: Some(...) and so code_by_hash_ref should never be called");
     }
@@ -796,7 +867,7 @@ where
 
     /// Reads the nonce of the user
     pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
-        let account_info: Option<AccountInfo> = self.basic_ref(*address)?;
+        let account_info = self.basic_ref(*address)?;
         Ok(match account_info {
             None => 0,
             Some(account_info) => account_info.nonce,
