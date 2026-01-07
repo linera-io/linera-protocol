@@ -9,9 +9,7 @@ use linera_base::{
     },
     http,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, StreamName},
-    ownership::{
-        ChainOwnership, ChangeApplicationPermissionsError, ChangeOwnershipError, CloseChainError,
-    },
+    ownership::{ChainOwnership, ManageChainError},
     vm::VmRuntime,
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -512,11 +510,11 @@ where
 
     /// Closes the current chain. Returns an error if the application doesn't have
     /// permission to do so.
-    fn close_chain(caller: &mut Caller) -> Result<Result<(), CloseChainError>, RuntimeError> {
+    fn close_chain(caller: &mut Caller) -> Result<Result<(), ManageChainError>, RuntimeError> {
         match caller.user_data_mut().runtime.close_chain() {
             Ok(()) => Ok(Ok(())),
             Err(ExecutionError::UnauthorizedApplication(_)) => {
-                Ok(Err(CloseChainError::NotPermitted))
+                Ok(Err(ManageChainError::NotPermitted))
             }
             Err(error) => Err(RuntimeError::Custom(error.into())),
         }
@@ -527,11 +525,11 @@ where
     fn change_ownership(
         caller: &mut Caller,
         ownership: ChainOwnership,
-    ) -> Result<Result<(), ChangeOwnershipError>, RuntimeError> {
+    ) -> Result<Result<(), ManageChainError>, RuntimeError> {
         match caller.user_data_mut().runtime.change_ownership(ownership) {
             Ok(()) => Ok(Ok(())),
             Err(ExecutionError::UnauthorizedApplication(_)) => {
-                Ok(Err(ChangeOwnershipError::NotPermitted))
+                Ok(Err(ManageChainError::NotPermitted))
             }
             Err(error) => Err(RuntimeError::Custom(error.into())),
         }
@@ -542,7 +540,7 @@ where
     fn change_application_permissions(
         caller: &mut Caller,
         application_permissions: ApplicationPermissions,
-    ) -> Result<Result<(), ChangeApplicationPermissionsError>, RuntimeError> {
+    ) -> Result<Result<(), ManageChainError>, RuntimeError> {
         match caller
             .user_data_mut()
             .runtime
@@ -550,7 +548,7 @@ where
         {
             Ok(()) => Ok(Ok(())),
             Err(ExecutionError::UnauthorizedApplication(_)) => {
-                Ok(Err(ChangeApplicationPermissionsError::NotPermitted))
+                Ok(Err(ManageChainError::NotPermitted))
             }
             Err(error) => Err(RuntimeError::Custom(error.into())),
         }

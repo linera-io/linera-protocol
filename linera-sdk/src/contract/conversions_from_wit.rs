@@ -10,7 +10,7 @@ use linera_base::{
         AccountOwner, ApplicationId, ChainId, DataBlobHash, GenericApplicationId, ModuleId,
         StreamId, StreamName,
     },
-    ownership::{ChangeApplicationPermissionsError, ChangeOwnershipError, CloseChainError},
+    ownership::ManageChainError,
     vm::VmRuntime,
 };
 
@@ -99,32 +99,10 @@ impl From<wit_contract_api::Amount> for Amount {
     }
 }
 
-impl From<wit_contract_api::CloseChainError> for CloseChainError {
-    fn from(guest: wit_contract_api::CloseChainError) -> Self {
+impl From<wit_contract_api::ManageChainError> for ManageChainError {
+    fn from(guest: wit_contract_api::ManageChainError) -> Self {
         match guest {
-            wit_contract_api::CloseChainError::NotPermitted => CloseChainError::NotPermitted,
-        }
-    }
-}
-
-impl From<wit_contract_api::ChangeOwnershipError> for ChangeOwnershipError {
-    fn from(guest: wit_contract_api::ChangeOwnershipError) -> Self {
-        match guest {
-            wit_contract_api::ChangeOwnershipError::NotPermitted => {
-                ChangeOwnershipError::NotPermitted
-            }
-        }
-    }
-}
-
-impl From<wit_contract_api::ChangeApplicationPermissionsError>
-    for ChangeApplicationPermissionsError
-{
-    fn from(guest: wit_contract_api::ChangeApplicationPermissionsError) -> Self {
-        match guest {
-            wit_contract_api::ChangeApplicationPermissionsError::NotPermitted => {
-                ChangeApplicationPermissionsError::NotPermitted
-            }
+            wit_contract_api::ManageChainError::NotPermitted => ManageChainError::NotPermitted,
         }
     }
 }

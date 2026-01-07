@@ -18,10 +18,7 @@ use linera_base::{
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, ChainId, DataBlobHash, ModuleId, StreamName,
     },
-    ownership::{
-        AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError,
-        ChangeOwnershipError, CloseChainError,
-    },
+    ownership::{AccountPermissionError, ChainOwnership, ManageChainError},
     vm::VmRuntime,
 };
 use serde::Serialize;
@@ -606,7 +603,7 @@ where
 
     /// Closes the current chain. Returns an error if the application doesn't have
     /// permission to do so.
-    pub fn close_chain(&mut self) -> Result<(), CloseChainError> {
+    pub fn close_chain(&mut self) -> Result<(), ManageChainError> {
         let authorized = self.can_manage_chain.expect(
             "Authorization to manage the chain has not been mocked, \
             please call `MockContractRuntime::set_can_manage_chain` first",
@@ -615,16 +612,13 @@ where
         if authorized {
             Ok(())
         } else {
-            Err(CloseChainError::NotPermitted)
+            Err(ManageChainError::NotPermitted)
         }
     }
 
     /// Changes the ownership of the current chain. Returns an error if the application doesn't
     /// have permission to do so.
-    pub fn change_ownership(
-        &mut self,
-        ownership: ChainOwnership,
-    ) -> Result<(), ChangeOwnershipError> {
+    pub fn change_ownership(&mut self, ownership: ChainOwnership) -> Result<(), ManageChainError> {
         let authorized = self.can_manage_chain.expect(
             "Authorization to manage the chain has not been mocked, \
             please call `MockContractRuntime::set_can_manage_chain` first",
@@ -634,7 +628,7 @@ where
             self.chain_ownership = Some(ownership);
             Ok(())
         } else {
-            Err(ChangeOwnershipError::NotPermitted)
+            Err(ManageChainError::NotPermitted)
         }
     }
 
@@ -643,7 +637,7 @@ where
     pub fn change_application_permissions(
         &mut self,
         application_permissions: ApplicationPermissions,
-    ) -> Result<(), ChangeApplicationPermissionsError> {
+    ) -> Result<(), ManageChainError> {
         let authorized = self.can_manage_chain.expect(
             "Authorization to manage the chain has not been mocked, \
             please call `MockContractRuntime::set_can_manage_chain` first",
@@ -657,7 +651,7 @@ where
             self.can_manage_chain = Some(application_permissions.can_manage_chain(&application_id));
             Ok(())
         } else {
-            Err(ChangeApplicationPermissionsError::NotPermitted)
+            Err(ManageChainError::NotPermitted)
         }
     }
 
