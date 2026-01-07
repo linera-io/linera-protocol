@@ -68,6 +68,17 @@ pub enum ControllerCommand {
     UpdateAllServices {
         services: Vec<(ManagedServiceId, Vec<ChainId>)>,
     },
+    /// Update the state of a particular chain to be listened to on the specific workers.
+    UpdateChain {
+        chain_id: ChainId,
+        workers: Vec<ChainId>,
+    },
+    /// Remove a chain from the map entirely.
+    RemoveChain { chain_id: ChainId },
+    /// Set the states of all chains at once, possibly removing some of them.
+    UpdateAllChains {
+        chains: Vec<(ChainId, Vec<ChainId>)>,
+    },
 }
 
 scalar!(ControllerCommand);

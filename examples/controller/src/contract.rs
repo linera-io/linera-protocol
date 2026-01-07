@@ -261,6 +261,19 @@ impl ControllerContract {
                         self.update_service(id, workers).await;
                     }
                 }
+                let chain_ids = self.state.chains.indices().await.expect("storage");
+                for id in chain_ids {
+                    let mut workers = self
+                        .state
+                        .chains
+                        .get(&id)
+                        .await
+                        .expect("storage")
+                        .expect("value should be present");
+                    if workers.remove(&worker_id) {
+                        self.update_chain(id, workers).await;
+                    }
+                }
             }
             ControllerCommand::UpdateService {
                 service_id,
@@ -287,6 +300,30 @@ impl ControllerContract {
                 }
                 for id in previous_ids {
                     self.update_service(id, HashSet::new()).await;
+                }
+            }
+            ControllerCommand::UpdateChain { chain_id, workers } => {
+                self.update_chain(chain_id, workers.into_iter().collect())
+                    .await;
+            }
+            ControllerCommand::RemoveChain { chain_id } => {
+                self.update_chain(chain_id, HashSet::new()).await;
+            }
+            ControllerCommand::UpdateAllChains { chains } => {
+                let mut previous_ids = self
+                    .state
+                    .chains
+                    .indices()
+                    .await
+                    .expect("storage")
+                    .into_iter()
+                    .collect::<HashSet<_>>();
+                for (id, workers) in chains {
+                    previous_ids.remove(&id);
+                    self.update_chain(id, workers.into_iter().collect()).await;
+                }
+                for id in previous_ids {
+                    self.update_chain(id, HashSet::new()).await;
                 }
             }
         }
@@ -327,6 +364,41 @@ impl ControllerContract {
             self.state
                 .services
                 .insert(&service_id, new_workers)
+                .expect("storage");
+        }
+    }
+
+    async fn update_chain(&mut self, chain_id: ChainId, new_workers: HashSet<ChainId>) {
+        let existing_workers = self
+            .state
+            .chains
+            .get(&chain_id)
+            .await
+            .expect("storage")
+            .unwrap_or_default();
+
+        let message = Message::FollowChain { chain_id };
+        for worker in &new_workers {
+            if !existing_workers.contains(worker) {
+                self.runtime
+                    .prepare_message(message.clone())
+                    .send_to(*worker);
+            }
+        }
+        let message = Message::ForgetChain { chain_id };
+        for worker in &existing_workers {
+            if !new_workers.contains(worker) {
+                self.runtime
+                    .prepare_message(message.clone())
+                    .send_to(*worker);
+            }
+        }
+        if new_workers.is_empty() {
+            self.state.chains.remove(&chain_id).expect("storage");
+        } else {
+            self.state
+                .chains
+                .insert(&chain_id, new_workers)
                 .expect("storage");
         }
     }

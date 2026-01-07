@@ -44,6 +44,7 @@ pub struct Controller<Ctx: ClientContext> {
     notifications: NotificationStream,
     operators: OperatorMap,
     processors: BTreeMap<ChainId, ProcessorHandle>,
+    listened_local_chains: BTreeSet<ChainId>,
     command_sender: UnboundedSender<ListenerCommand>,
 }
 
@@ -72,6 +73,7 @@ where
             notifications,
             operators,
             processors: BTreeMap::new(),
+            listened_local_chains: BTreeSet::new(),
             command_sender,
         }
     }
@@ -163,10 +165,33 @@ where
             }
         }
 
-        let new_chains: BTreeMap<_, _> = active_chains
-            .difference(&old_chains)
+        // Collect local_chains from state
+        let local_chains: BTreeSet<_> = state.local_chains.iter().cloned().collect();
+
+        // Compute all chains we were listening to (processors + local_chains)
+        let old_listened: BTreeSet<_> = old_chains
+            .union(&self.listened_local_chains)
+            .cloned()
+            .collect();
+
+        // Compute all chains we want to listen to (active services + local_chains)
+        let desired_listened: BTreeSet<_> = active_chains.union(&local_chains).cloned().collect();
+
+        // New chains to listen (neither had processor nor were in listened_local_chains)
+        let new_chains: BTreeMap<_, _> = desired_listened
+            .difference(&old_listened)
             .map(|chain_id| (*chain_id, ListeningMode::FullChain))
             .collect();
+
+        // Chains to stop listening (were listened but no longer needed)
+        let chains_to_stop: BTreeSet<_> = old_listened
+            .difference(&desired_listened)
+            .cloned()
+            .collect();
+
+        // Update listened_local_chains for next iteration
+        // These are local_chains that don't have services (not in active_chains)
+        self.listened_local_chains = local_chains.difference(&active_chains).cloned().collect();
 
         if let Err(err) = self
             .command_sender
@@ -176,7 +201,7 @@ where
         }
         if let Err(err) = self
             .command_sender
-            .send(ListenerCommand::StopListening(stale_chains))
+            .send(ListenerCommand::StopListening(chains_to_stop))
         {
             error!(%err, "error sending a command to chain listener");
         }
