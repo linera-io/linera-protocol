@@ -81,11 +81,11 @@ interface contract-runtime-api {
         not-permitted,
     }
 
-    enum close-chain-error {
+    enum change-ownership-error {
         not-permitted,
     }
 
-    enum change-ownership-error {
+    enum close-chain-error {
         not-permitted,
     }
 
