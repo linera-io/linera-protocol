@@ -255,11 +255,17 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     );
     let another_app_id = ApplicationId::from(&another_app);
 
+    // Set up permissions where both apps can execute and are mandatory, but neither is admin.
+    // This tests the mandatory_applications check without admin exemptions.
     let config = InitialChainConfig {
-        application_permissions: ApplicationPermissions::new_multiple(vec![
-            application_id,
-            another_app_id,
-        ]),
+        application_permissions: ApplicationPermissions {
+            execute_operations: Some(vec![application_id, another_app_id]),
+            mandatory_applications: vec![application_id, another_app_id],
+            admin: vec![],
+            change_application_permissions: vec![],
+            call_service_as_oracle: None,
+            make_http_requests: None,
+        },
         ..env.make_open_chain_config()
     };
     let chain_desc = env.make_child_chain_description_with_config(3, config);
