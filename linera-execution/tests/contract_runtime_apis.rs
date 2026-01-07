@@ -1091,3 +1091,154 @@ async fn test_callee_api_calls() -> anyhow::Result<()> {
     assert!(txn_outcome.outgoing_messages.is_empty());
     Ok(())
 }
+
+/// Tests the contract system API to change application permissions.
+#[test_case(true => matches Ok(_); "when authorized")]
+#[test_case(false => matches Err(ExecutionError::UnauthorizedApplication(_)); "when unauthorized")]
+#[test_log::test(tokio::test)]
+async fn test_change_application_permissions(authorized: bool) -> Result<(), ExecutionError> {
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    let mut view = SystemExecutionState {
+        ownership: ChainOwnership::default(),
+        balance: Amount::ONE,
+        balances: BTreeMap::new(),
+        ..SystemExecutionState::new(description)
+    }
+    .into_view()
+    .await;
+
+    let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
+    let service_blob = TransferTestEndpoint::sender_application_service_blob();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+
+    let application_description = TransferTestEndpoint::sender_application_description();
+    let application_description_blob = Blob::new_application_description(&application_description);
+    let app_desc_blob_id = application_description_blob.id();
+
+    let (application_id, application) = view
+        .register_mock_application_with(application_description, contract_blob, service_blob)
+        .await
+        .expect("should register mock application");
+
+    let change_application_permissions = if authorized {
+        vec![application_id]
+    } else {
+        vec![]
+    };
+
+    view.system
+        .application_permissions
+        .set(ApplicationPermissions {
+            change_application_permissions,
+            ..ApplicationPermissions::new_single(application_id)
+        });
+
+    let new_permissions = ApplicationPermissions::default();
+    application.expect_call(ExpectedCall::execute_operation({
+        let new_permissions = new_permissions.clone();
+        move |runtime, _operation| {
+            runtime.change_application_permissions(new_permissions)?;
+            Ok(vec![])
+        }
+    }));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = create_dummy_operation_context(chain_id);
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+
+    let mut txn_tracker = TransactionTracker::new_replaying(vec![
+        OracleResponse::Blob(app_desc_blob_id),
+        OracleResponse::Blob(contract_blob_id),
+        OracleResponse::Blob(service_blob_id),
+    ]);
+    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, operation)
+        .await?;
+
+    // Verify the permissions were actually changed.
+    assert_eq!(view.system.application_permissions.get(), &new_permissions);
+
+    Ok(())
+}
+
+/// Tests the contract system API to change chain ownership.
+#[test_case(true => matches Ok(_); "when authorized")]
+#[test_case(false => matches Err(ExecutionError::UnauthorizedApplication(_)); "when unauthorized")]
+#[test_log::test(tokio::test)]
+async fn test_change_ownership(authorized: bool) -> Result<(), ExecutionError> {
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    let mut view = SystemExecutionState {
+        ownership: ChainOwnership::default(),
+        balance: Amount::ONE,
+        balances: BTreeMap::new(),
+        ..SystemExecutionState::new(description)
+    }
+    .into_view()
+    .await;
+
+    let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
+    let service_blob = TransferTestEndpoint::sender_application_service_blob();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+
+    let application_description = TransferTestEndpoint::sender_application_description();
+    let application_description_blob = Blob::new_application_description(&application_description);
+    let app_desc_blob_id = application_description_blob.id();
+
+    let (application_id, application) = view
+        .register_mock_application_with(application_description, contract_blob, service_blob)
+        .await
+        .expect("should register mock application");
+
+    let change_ownership = if authorized {
+        vec![application_id]
+    } else {
+        vec![]
+    };
+
+    view.system
+        .application_permissions
+        .set(ApplicationPermissions {
+            change_ownership,
+            ..ApplicationPermissions::new_single(application_id)
+        });
+
+    let new_owner = AccountOwner::from(AccountPublicKey::test_key(1));
+    let new_ownership = ChainOwnership::single(new_owner);
+    application.expect_call(ExpectedCall::execute_operation({
+        let new_ownership = new_ownership.clone();
+        move |runtime, _operation| {
+            runtime.change_ownership(new_ownership)?;
+            Ok(vec![])
+        }
+    }));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = create_dummy_operation_context(chain_id);
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+
+    let mut txn_tracker = TransactionTracker::new_replaying(vec![
+        OracleResponse::Blob(app_desc_blob_id),
+        OracleResponse::Blob(contract_blob_id),
+        OracleResponse::Blob(service_blob_id),
+    ]);
+    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, operation)
+        .await?;
+
+    // Verify the ownership was actually changed.
+    assert_eq!(view.system.ownership.get(), &new_ownership);
+
+    Ok(())
+}
