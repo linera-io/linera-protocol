@@ -2799,7 +2799,7 @@ impl<Env: Environment> ChainClient<Env> {
                     // For EventsOnly mode, skip full sync - we'll lazily download
                     // event-relevant blocks when we receive notifications.
                     let remote_node = RemoteNode { public_key, node };
-                    if !matches!(listening_mode_for_sync, ListeningMode::EventsOnly(_)) {
+                    if listening_mode_for_sync.is_some_and(|mode| mode.should_sync_chain_state()) {
                         this.client
                             .synchronize_chain_state_from(&remote_node, this.chain_id)
                             .await?;

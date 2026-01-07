@@ -224,6 +224,13 @@ impl ListeningMode {
     pub fn is_full(&self) -> bool {
         matches!(self, ListeningMode::FullChain)
     }
+
+    pub fn should_sync_chain_state(&self) -> bool {
+        match self {
+            ListeningMode::FullChain | ListeningMode::FollowChain => true,
+            ListeningMode::EventsOnly(_) => false,
+        }
+    }
 }
 
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
@@ -964,7 +971,7 @@ impl<Env: Environment> Client<Env> {
     /// Downloads any missing event blocks that the given certificate references in its
     /// `previous_event_blocks` field, for the specified streams.
     ///
-    /// This is used for lazy synchronization of EventsOnly chains: instead of downloading
+    /// This is used for lazy synchronization of `EventsOnly` chains: instead of downloading
     /// all blocks upfront, we only download blocks that contain events for streams we care about.
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn download_missing_event_blocks(
