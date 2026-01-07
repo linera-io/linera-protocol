@@ -7,10 +7,10 @@
 use std::{
     collections::{BTreeMap, HashMap},
     mem,
+    ops::DerefMut,
     sync::{Arc, Mutex},
 };
 
-use derive_more::DerefMut;
 use linera_base::{
     data_types::Amount,
     ensure,
