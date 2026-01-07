@@ -638,7 +638,6 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     application.run_json_query(operation0_b).await?;
     tracing::info!("test_evm_end_to_end_child_subcontract, step 5");
 
-
     let operation1 = createCounterCall {
         initialValue: U256::from(149),
     };
@@ -731,9 +730,7 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     application.run_json_query(operation2).await?;
 
     // test_code_length
-    let operation3 = test_code_lengthCall {
-        index: U256::ZERO,
-    };
+    let operation3 = test_code_lengthCall { index: U256::ZERO };
     let operation3 = get_zero_operation(operation3)?;
     application.run_json_query(operation3).await?;
 
@@ -869,7 +866,10 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     // Transferring amount
 
     let amount = Amount::from_tokens(1);
-    tracing::info!("test_evm_end_to_end_balance_and_transfer, recipient={}", address2);
+    tracing::info!(
+        "test_evm_end_to_end_balance_and_transfer, recipient={}",
+        address2
+    );
     let operation = send_cashCall {
         recipient: address2,
         amount: amount.into(),

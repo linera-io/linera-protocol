@@ -6,9 +6,9 @@
 use std::str::FromStr;
 
 use allocative::Allocative;
+use alloy_primitives::U256;
 use async_graphql::scalar;
 use derive_more::Display;
-use alloy_primitives::U256;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
