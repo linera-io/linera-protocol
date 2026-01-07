@@ -14,7 +14,8 @@ use linera_base::{
         Account, AccountOwner, ApplicationId, ChainId, DataBlobHash, ModuleId, StreamName,
     },
     ownership::{
-        AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
+        AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError,
+        ChangeOwnershipError, CloseChainError,
     },
     vm::VmRuntime,
 };
@@ -335,6 +336,15 @@ where
     /// permission to do so.
     pub fn close_chain(&mut self) -> Result<(), CloseChainError> {
         contract_wit::close_chain().map_err(|error| error.into())
+    }
+
+    /// Changes the ownership of the current chain. Returns an error if the application doesn't
+    /// have permission to do so.
+    pub fn change_ownership(
+        &mut self,
+        ownership: ChainOwnership,
+    ) -> Result<(), ChangeOwnershipError> {
+        contract_wit::change_ownership(&ownership.into()).map_err(|error| error.into())
     }
 
     /// Changes the application permissions for the current chain.

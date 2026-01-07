@@ -19,7 +19,8 @@ use linera_base::{
         Account, AccountOwner, ApplicationId, BlobId, ChainId, DataBlobHash, ModuleId, StreamName,
     },
     ownership::{
-        AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
+        AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError,
+        ChangeOwnershipError, CloseChainError,
     },
     vm::VmRuntime,
 };
@@ -633,6 +634,25 @@ where
             Ok(())
         } else {
             Err(CloseChainError::NotPermitted)
+        }
+    }
+
+    /// Changes the ownership of the current chain. Returns an error if the application doesn't
+    /// have permission to do so.
+    pub fn change_ownership(
+        &mut self,
+        ownership: ChainOwnership,
+    ) -> Result<(), ChangeOwnershipError> {
+        let authorized = self.can_close_chain.expect(
+            "Authorization to change the chain ownership has not been mocked, \
+            please call `MockContractRuntime::set_can_close_chain` first",
+        );
+
+        if authorized {
+            self.chain_ownership = Some(ownership);
+            Ok(())
+        } else {
+            Err(ChangeOwnershipError::NotPermitted)
         }
     }
 

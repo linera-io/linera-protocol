@@ -992,6 +992,9 @@ pub trait ContractRuntime: BaseRuntime {
     /// Closes the current chain.
     fn close_chain(&mut self) -> Result<(), ExecutionError>;
 
+    /// Changes the ownership of the current chain.
+    fn change_ownership(&mut self, ownership: ChainOwnership) -> Result<(), ExecutionError>;
+
     /// Changes the application permissions on the current chain.
     fn change_application_permissions(
         &mut self,
