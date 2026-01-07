@@ -983,14 +983,11 @@ pub struct ApplicationPermissions {
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
     pub mandatory_applications: Vec<ApplicationId>,
-    /// These applications are allowed to close the current chain.
+    /// These applications are allowed to close the current chain, change the application
+    /// permissions, and change the ownership.
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
-    pub close_chain: Vec<ApplicationId>,
-    /// These applications are allowed to change the application permissions.
-    #[graphql(default)]
-    #[debug(skip_if = Vec::is_empty)]
-    pub change_application_permissions: Vec<ApplicationId>,
+    pub manage_chain: Vec<ApplicationId>,
     /// These applications are allowed to perform calls to services as oracles.
     #[graphql(default)]
     #[debug(skip_if = Option::is_none)]
@@ -1003,26 +1000,24 @@ pub struct ApplicationPermissions {
 
 impl ApplicationPermissions {
     /// Creates new `ApplicationPermissions` where the given application is the only one
-    /// whose operations are allowed and mandatory, and it can also close the chain.
+    /// whose operations are allowed and mandatory, and it can also manage the chain.
     pub fn new_single(app_id: ApplicationId) -> Self {
         Self {
             execute_operations: Some(vec![app_id]),
             mandatory_applications: vec![app_id],
-            close_chain: vec![app_id],
-            change_application_permissions: vec![app_id],
+            manage_chain: vec![app_id],
             call_service_as_oracle: Some(vec![app_id]),
             make_http_requests: Some(vec![app_id]),
         }
     }
 
     /// Creates new `ApplicationPermissions` where the given applications are the only ones
-    /// whose operations are allowed and mandatory, and they can also close the chain.
+    /// whose operations are allowed and mandatory, and they can also manage the chain.
     pub fn new_multiple(app_ids: Vec<ApplicationId>) -> Self {
         Self {
             execute_operations: Some(app_ids.clone()),
             mandatory_applications: app_ids.clone(),
-            close_chain: app_ids.clone(),
-            change_application_permissions: app_ids.clone(),
+            manage_chain: app_ids.clone(),
             call_service_as_oracle: Some(app_ids.clone()),
             make_http_requests: Some(app_ids),
         }
@@ -1037,15 +1032,10 @@ impl ApplicationPermissions {
         }
     }
 
-    /// Returns whether the given application is allowed to close this chain.
-    pub fn can_close_chain(&self, app_id: &ApplicationId) -> bool {
-        self.close_chain.contains(app_id)
-    }
-
-    /// Returns whether the given application is allowed to change the application
-    /// permissions for this chain.
-    pub fn can_change_application_permissions(&self, app_id: &ApplicationId) -> bool {
-        self.change_application_permissions.contains(app_id)
+    /// Returns whether the given application is allowed to manage this chain, i.e. close
+    /// it, change the application permissions, and change the ownership.
+    pub fn can_manage_chain(&self, app_id: &ApplicationId) -> bool {
+        self.manage_chain.contains(app_id)
     }
 
     /// Returns whether the given application can call services.

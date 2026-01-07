@@ -67,8 +67,7 @@ where
     chain_balance: Option<Amount>,
     owner_balances: Option<HashMap<AccountOwner, Amount>>,
     chain_ownership: Option<ChainOwnership>,
-    can_close_chain: Option<bool>,
-    can_change_application_permissions: Option<bool>,
+    can_manage_chain: Option<bool>,
     call_application_handler: Option<CallApplicationHandler>,
     send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Application::Message>>>>,
     outgoing_transfers: HashMap<Account, Amount>,
@@ -117,8 +116,7 @@ where
             chain_balance: None,
             owner_balances: None,
             chain_ownership: None,
-            can_close_chain: None,
-            can_change_application_permissions: None,
+            can_manage_chain: None,
             call_application_handler: None,
             send_message_requests: Arc::default(),
             outgoing_transfers: HashMap::new(),
@@ -592,44 +590,26 @@ where
         )
     }
 
-    /// Configures if the application being tested is allowed to close the chain its in.
-    pub fn with_can_close_chain(mut self, can_close_chain: bool) -> Self {
-        self.can_close_chain = Some(can_close_chain);
+    /// Configures if the application being tested is allowed to manage the chain, i.e. close
+    /// it, change the application permissions, and change the ownership.
+    pub fn with_can_manage_chain(mut self, can_manage_chain: bool) -> Self {
+        self.can_manage_chain = Some(can_manage_chain);
         self
     }
 
-    /// Configures if the application being tested is allowed to close the chain its in.
-    pub fn set_can_close_chain(&mut self, can_close_chain: bool) -> &mut Self {
-        self.can_close_chain = Some(can_close_chain);
-        self
-    }
-
-    /// Configures if the application being tested is allowed to change the application
-    /// permissions on the chain.
-    pub fn with_can_change_application_permissions(
-        mut self,
-        can_change_application_permissions: bool,
-    ) -> Self {
-        self.can_change_application_permissions = Some(can_change_application_permissions);
-        self
-    }
-
-    /// Configures if the application being tested is allowed to change the application
-    /// permissions on the chain.
-    pub fn set_can_change_application_permissions(
-        &mut self,
-        can_change_application_permissions: bool,
-    ) -> &mut Self {
-        self.can_change_application_permissions = Some(can_change_application_permissions);
+    /// Configures if the application being tested is allowed to manage the chain, i.e. close
+    /// it, change the application permissions, and change the ownership.
+    pub fn set_can_manage_chain(&mut self, can_manage_chain: bool) -> &mut Self {
+        self.can_manage_chain = Some(can_manage_chain);
         self
     }
 
     /// Closes the current chain. Returns an error if the application doesn't have
     /// permission to do so.
     pub fn close_chain(&mut self) -> Result<(), CloseChainError> {
-        let authorized = self.can_close_chain.expect(
-            "Authorization to close the chain has not been mocked, \
-            please call `MockContractRuntime::set_can_close_chain` first",
+        let authorized = self.can_manage_chain.expect(
+            "Authorization to manage the chain has not been mocked, \
+            please call `MockContractRuntime::set_can_manage_chain` first",
         );
 
         if authorized {
@@ -645,9 +625,9 @@ where
         &mut self,
         ownership: ChainOwnership,
     ) -> Result<(), ChangeOwnershipError> {
-        let authorized = self.can_close_chain.expect(
-            "Authorization to change the chain ownership has not been mocked, \
-            please call `MockContractRuntime::set_can_close_chain` first",
+        let authorized = self.can_manage_chain.expect(
+            "Authorization to manage the chain has not been mocked, \
+            please call `MockContractRuntime::set_can_manage_chain` first",
         );
 
         if authorized {
@@ -664,9 +644,9 @@ where
         &mut self,
         application_permissions: ApplicationPermissions,
     ) -> Result<(), ChangeApplicationPermissionsError> {
-        let authorized = self.can_change_application_permissions.expect(
-            "Authorization to change the application permissions has not been mocked, \
-            please call `MockContractRuntime::set_can_change_application_permissions` first",
+        let authorized = self.can_manage_chain.expect(
+            "Authorization to manage the chain has not been mocked, \
+            please call `MockContractRuntime::set_can_manage_chain` first",
         );
 
         if authorized {
@@ -674,9 +654,7 @@ where
                 .application_id
                 .expect("The application doesn't have an ID!")
                 .forget_abi();
-            self.can_close_chain = Some(application_permissions.can_close_chain(&application_id));
-            self.can_change_application_permissions =
-                Some(application_permissions.can_change_application_permissions(&application_id));
+            self.can_manage_chain = Some(application_permissions.can_manage_chain(&application_id));
             Ok(())
         } else {
             Err(ChangeApplicationPermissionsError::NotPermitted)

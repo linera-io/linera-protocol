@@ -1105,11 +1105,11 @@ async fn test_change_ownership_system_api() -> anyhow::Result<()> {
         ..ChainOwnership::default()
     };
 
-    // Grant the application permission to close the chain (required for change_ownership).
+    // Grant the application permission to manage the chain.
     view.system
         .application_permissions
         .set(ApplicationPermissions {
-            close_chain: vec![application_id],
+            manage_chain: vec![application_id],
             ..ApplicationPermissions::default()
         });
 
