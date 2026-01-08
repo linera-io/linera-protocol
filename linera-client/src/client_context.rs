@@ -556,8 +556,12 @@ impl<Env: Environment> ClientContext<Env> {
         // Try applying f optimistically without validator notifications. Return if committed.
         let result = f(client).await;
         self.update_wallet_from_client(client).await?;
-        if let ClientOutcome::Committed(t) = result? {
-            return Ok(t);
+        match result? {
+            ClientOutcome::Committed(t) => return Ok(t),
+            ClientOutcome::Conflict(certificate) => {
+                return Err(chain_client::Error::Conflict(certificate.hash()).into());
+            }
+            ClientOutcome::WaitForTimeout(_) => {}
         }
 
         // Start listening for notifications, so we learn about new rounds and blocks.
@@ -571,6 +575,9 @@ impl<Env: Environment> ClientContext<Env> {
             self.update_wallet_from_client(client).await?;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
+                ClientOutcome::Conflict(certificate) => {
+                    return Err(chain_client::Error::Conflict(certificate.hash()).into());
+                }
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             // Otherwise wait and try again in the next round.

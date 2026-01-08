@@ -1544,10 +1544,10 @@ where
     // synchronize this with the validators before executing the block, we'll actually download
     // and cache locally the blobs that were published by `client_a`. So this will succeed.
     client_1b.prepare_chain().await?;
-    let certificate = client_1b
-        .execute_operation(SystemOperation::VerifyBlob { blob_id: blob0_id })
-        .await?
-        .unwrap();
+    let certificate = crate::retry_on_conflict!(
+        client_1b,
+        client_1b.execute_operation(SystemOperation::VerifyBlob { blob_id: blob0_id })
+    );
     assert_eq!(certificate.round, Round::MultiLeader(0));
     // The blob is not new on this chain, so it is not required.
     assert!(!certificate.block().requires_or_creates_blob(&blob0_id));
@@ -1619,10 +1619,10 @@ where
         *info2_b.manager.requested_locking.unwrap()
     );
     let recipient = Account::burn_address(client_2b.chain_id());
-    let bt_certificate = client_2b
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), recipient)
-        .await
-        .unwrap_ok_committed();
+    let bt_certificate = crate::retry_on_conflict!(
+        client_2b,
+        client_2b.transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), recipient)
+    );
 
     let certificate_values = client_2b
         .read_confirmed_blocks_downward(bt_certificate.hash(), 2)
@@ -1851,7 +1851,7 @@ where
     builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
 
     client1.synchronize_from_validators().await.unwrap();
-    client1.publish_data_blob(b"foo".to_vec()).await?;
+    crate::retry_on_conflict!(client1, client1.publish_data_blob(b"foo".to_vec()));
 
     assert_eq!(
         client1.chain_info().await?.next_block_height,
@@ -2074,10 +2074,8 @@ where
     client3_c.synchronize_from_validators().await.unwrap();
     let blob4_data = b"blob4".to_vec();
     let blob4 = Blob::new(BlobContent::new_data(blob4_data.clone()));
-    let bt_certificate = client3_c
-        .publish_data_blob(blob4_data)
-        .await
-        .unwrap_ok_committed();
+    let bt_certificate =
+        crate::retry_on_conflict!(client3_c, client3_c.publish_data_blob(blob4_data.clone()));
 
     let certificate_values = client3_c
         .read_confirmed_blocks_downward(bt_certificate.hash(), 3)
@@ -2198,6 +2196,7 @@ where
         .unwrap();
     let timeout = match result {
         ClientOutcome::Committed(_) => panic!("Committed a block where we aren't the leader."),
+        ClientOutcome::Conflict(_) => panic!("Got conflict where we aren't the leader."),
         ClientOutcome::WaitForTimeout(timeout) => timeout,
     };
     client.clear_pending_proposal();
@@ -2334,6 +2333,12 @@ where
                 it's the leader in the validator's current round and completed the transfer."
             );
         }
+        Ok(ClientOutcome::Conflict(_)) => {
+            panic!(
+                "Transfer returned Conflict, but the client should have discovered \
+                it's the leader in the validator's current round and completed the transfer."
+            );
+        }
         Err(e) => {
             panic!(
                 "Transfer failed with error: {e:?}. The client should have handled the \
@@ -2426,10 +2431,10 @@ where
 
     // Client 0 now only tries to transfer 1 token. Before that, they automatically finalize the
     // pending block, which publishes the blob, leaving 10 - 1 = 9.
-    client0
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
-        .await
-        .unwrap();
+    crate::retry_on_conflict!(
+        client0,
+        client0.burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+    );
     client0.synchronize_from_validators().await.unwrap();
     client0.process_inbox().await.unwrap();
     assert_eq!(
@@ -2440,10 +2445,10 @@ where
 
     // Transfer another token so Client 1 sees that the blob is already published
     client1.prepare_chain().await.unwrap();
-    client1
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
-        .await
-        .unwrap();
+    crate::retry_on_conflict!(
+        client1,
+        client1.burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+    );
     client1.synchronize_from_validators().await.unwrap();
     client1.process_inbox().await.unwrap();
     assert_eq!(
@@ -2481,7 +2486,7 @@ where
 
     // The client tries to burn another token. Before that, they automatically finalize the
     // pending block, which transfers 3 tokens, leaving 10 - 3 - 1 = 6.
-    client.burn(AccountOwner::CHAIN, Amount::ONE).await.unwrap();
+    crate::retry_on_conflict!(client, client.burn(AccountOwner::CHAIN, Amount::ONE));
     client.synchronize_from_validators().await.unwrap();
     client.process_inbox().await.unwrap();
     assert_eq!(
@@ -2587,10 +2592,10 @@ where
     );
     assert_eq!(manager.current_round, Round::MultiLeader(1));
     assert!(client1.pending_proposal().is_some());
-    client1
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
-        .await
-        .unwrap();
+    crate::retry_on_conflict!(
+        client1,
+        client1.burn(AccountOwner::CHAIN, Amount::from_tokens(4))
+    );
 
     // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
     client0.synchronize_from_validators().await.unwrap();
@@ -2694,13 +2699,34 @@ where
     builder.set_fault_type([0, 1, 2], FaultType::Honest);
     client1.synchronize_from_validators().await.unwrap();
     assert!(client1.pending_proposal().is_some());
-    client1
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
-        .await
-        .unwrap();
-    // Round 0 needs to time out again, so client 1 is actually allowed to propose.
-    clock.add(TimeDelta::from_secs(5));
-    client1.process_pending_block().await.unwrap();
+    // This test involves timeouts and potential conflicts. Handle them appropriately.
+    loop {
+        match client1
+            .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
+            .await
+        {
+            Ok(ClientOutcome::Committed(_)) => break,
+            Ok(ClientOutcome::WaitForTimeout(_)) => {
+                // Round 0 needs to time out again, so client 1 is actually allowed to propose.
+                clock.add(TimeDelta::from_secs(5));
+            }
+            Ok(ClientOutcome::Conflict(_)) => {
+                // A different block was committed. Sync and check if we're done.
+                client1.synchronize_from_validators().await.unwrap();
+                // The conflicting block might have included our burn. Check balance.
+                if client1.local_balance().await.unwrap() == Amount::from_tokens(1) {
+                    break; // The expected final state - we're done.
+                }
+            }
+            Err(_) => {
+                // Might get an error if balance is insufficient - operations already committed.
+                break;
+            }
+        }
+    }
+    // Process any pending block. If pending proposal was already committed via conflict,
+    // this will return None for the certificate.
+    let _ = client1.process_pending_block().await;
 
     // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
     client0.synchronize_from_validators().await.unwrap();

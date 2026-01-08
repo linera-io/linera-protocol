@@ -1547,6 +1547,9 @@ impl Runnable for Job {
                     ClientOutcome::WaitForTimeout(timeout) => {
                         info!("Please try again at {}", timeout.timestamp)
                     }
+                    ClientOutcome::Conflict(certificate) => {
+                        info!("A different block was committed: {}", certificate.hash())
+                    }
                 }
                 context.update_wallet_from_client(&chain_client).await?;
                 info!(
