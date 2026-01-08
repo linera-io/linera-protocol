@@ -5,7 +5,7 @@
 //! Here we implement the Database traits of Revm.
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::HashMap,
     mem,
     ops::DerefMut,
     sync::{Arc, Mutex},
@@ -134,9 +134,9 @@ where
     }
 
     /// Reads the account info from the storage for a contract A
-    /// of address contract_address.
+    /// whose address is `address`.
     /// * The function `f` is accessing the state for an account
-    ///   whose address is different from contract_address (e.g.
+    ///   whose address is different from `contract_address` (e.g.
     ///   a contract created in the contract A or accessed by A,
     ///   e.g. ERC20).
     ///   For `ContractRuntime` and `ServiceRuntime` the method
@@ -147,6 +147,17 @@ where
     ///   created contract, the balance is the one of REVM. For
     ///   existing contract, the balance has to be accessed from
     ///   Linera.
+    ///
+    /// For Externally Owned Accounts, the function is indeed
+    /// called, but it does not access the storage. Instead it
+    /// creates a default `AccountInfo` whose balance is computed
+    /// from the one in Linera. This is the case both for the faucet
+    /// and for other accounts.
+    ///
+    /// For the contract for which address == contract_address we
+    /// access the `AccountInfo` locally from the storage. For other
+    /// contracts we need to access other contracts (with the
+    /// function `f`)
     fn read_basic_ref(
         &self,
         f: fn(&Self, Address) -> Result<Option<AccountInfo>, ExecutionError>,
@@ -392,7 +403,7 @@ impl<Runtime> InnerDatabase<Runtime>
 where
     Runtime: ContractRuntime,
 {
-    /// Getting the smart contract code if existing.
+    /// Gets the smart contract code if existing.
     fn get_contract_account_info(
         &self,
         address: Address,
@@ -405,7 +416,7 @@ where
         Ok(Some(account_info))
     }
 
-    /// Getting the storage value of another contract.
+    /// Gets the storage value of another contract.
     fn get_contract_storage_value(
         &self,
         address: Address,
@@ -570,7 +581,7 @@ where
         let code_hash = account.info.code_hash;
         // User accounts are not written. This is fine since the balance
         // is accessed from Linera and the nonce are not accessible in
-        // solidity smart contracts.
+        // EVM smart contracts.
         let code_empty = code_hash == KECCAK_EMPTY || code_hash.is_zero();
         !code_empty
     }
@@ -628,18 +639,18 @@ where
 
     /// Effectively commits changes to storage.
     /// This is done in the following way:
-    /// * Identify the balances that needs to be checked
-    /// * Write down the state of the contract for contract_address locally.
+    /// * Identify the balances that need to be checked
+    /// * Write down the state of the contract for `contract_address` locally.
     /// * For the other contracts, if it already created, commit it.
     ///
     /// If not insert them into the map.
-    /// * Iterates over the entry of the map and creates the contract in the
+    /// * Iterates over the entries of the map and creates the contract in the
     ///   right order.
     pub fn commit_changes(&mut self) -> Result<(), ExecutionError> {
         let changes = mem::take(&mut self.inner.changes);
         let mut balances = Vec::new();
         let map = mem::take(self.modules.lock().unwrap().deref_mut());
-        let mut map_creation = BTreeMap::<u32, (Address, revm_state::Account, ModuleId)>::new();
+        let mut contracts_to_create = vec![None; map.len()];
         for (address, account) in changes {
             if self.is_account_writable(&address, &account) {
                 let revm_balance = account.info.balance;
@@ -648,7 +659,7 @@ where
                 } else {
                     let application_id = address_to_user_application_id(address);
                     if let Some((module_id, index)) = map.get(&application_id) {
-                        map_creation.insert(*index, (address, account, *module_id));
+                        contracts_to_create[*index as usize] = Some((address, account, *module_id));
                     } else {
                         self.commit_remote_contract(address, account)?;
                     }
@@ -656,8 +667,12 @@ where
                 balances.push((address, revm_balance));
             }
         }
-        for (address, account, module_id) in map_creation.into_values() {
-            self.create_new_contract(address, account, module_id)?;
+        for entry in contracts_to_create {
+            if let Some((address, account, module_id)) = entry {
+                self.create_new_contract(address, account, module_id)?;
+            } else {
+                unreachable!();
+            };
         }
         for (address, revm_balance) in balances {
             self.check_balance(address, revm_balance)?;
@@ -713,13 +728,13 @@ where
     /// * Returns entries with "code: Some(...)"
     /// * Returns entries with "code: None".
     ///
-    /// Since we choose the first design, the "code_by_hash_ref" is not needed. There
-    /// is an example in revm source code of this kind.
+    /// Since we choose the first design, `code_by_hash_ref` is not needed. There
+    /// is an example in the Revm source code of this kind.
     fn code_by_hash_ref(&self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
         panic!("Returned AccountInfo should have code: Some(...) and so code_by_hash_ref should never be called");
     }
 
-    /// Access the storage by the relevant remote access function.
+    /// Accesses the storage by the relevant remote access function.
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, ExecutionError> {
         self.inner.read_storage(
             InnerDatabase::<Runtime>::get_contract_storage_value,
@@ -824,7 +839,7 @@ where
     /// * Returns entries with "code: None".
     ///
     /// Since we choose the first design, the "code_by_hash_ref" is not needed. There
-    /// is an example in revm source code of this kind.
+    /// is an example in the Revm source code of this kind.
     fn code_by_hash_ref(&self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
         panic!("Returned AccountInfo should have code: Some(...) and so code_by_hash_ref should never be called");
     }
