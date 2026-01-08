@@ -90,10 +90,8 @@ fn get_storage_key(index: U256) -> Vec<u8> {
 }
 
 /// Returns the tag associated with the contract.
-fn get_address_key(prefix: u8, address: Address) -> Vec<u8> {
-    let mut key = vec![prefix];
-    key.extend(address);
-    key
+fn get_address_key(category: KeyCategory) -> Vec<u8> {
+    vec![category as u8]
 }
 
 impl<Runtime> InnerDatabase<Runtime>
@@ -169,12 +167,9 @@ where
     }
 
     /// Reads the state from the local storage.
-    fn account_info_from_local_storage(
-        &self,
-        address: Address,
-    ) -> Result<Option<AccountInfo>, ExecutionError> {
+    fn account_info_from_local_storage(&self) -> Result<Option<AccountInfo>, ExecutionError> {
         let mut runtime = self.runtime.lock().unwrap();
-        let key_info = get_address_key(KeyCategory::AccountInfo as u8, address);
+        let key_info = get_address_key(KeyCategory::AccountInfo);
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
         Ok(from_bytes_option::<AccountInfo>(&result)?)
@@ -187,7 +182,7 @@ where
     /// service query. In that case we do not have
     /// any storage possible to access, just changes.
     ///
-    /// In the other case, we access 
+    /// In the other case, we access the storage directly
     fn account_info_from_inner_database(
         &self,
         address: Address,
@@ -201,7 +196,11 @@ where
             let account = self.changes.get(&address);
             return Ok(account.map(|account| account.info.clone()));
         }
-        self.account_info_from_local_storage(address)
+        if address == self.contract_address {
+            self.account_info_from_local_storage()
+        } else {
+            Ok(None)
+        }
     }
 
     /// Reads the state from local contract storage.
@@ -320,8 +319,7 @@ where
     /// `is_revm_initialized` and then returns the result.
     pub fn set_is_initialized(&mut self) -> Result<bool, ExecutionError> {
         let mut runtime = self.runtime.lock().unwrap();
-        let evm_address = runtime.application_id()?.evm_address();
-        let key_info = get_address_key(KeyCategory::AccountInfo as u8, evm_address);
+        let key_info = get_address_key(KeyCategory::AccountInfo);
         let promise = runtime.contains_key_new(key_info)?;
         let result = runtime.contains_key_wait(&promise)?;
         self.is_revm_instantiated = result;
@@ -500,10 +498,9 @@ where
     ) -> Result<(), ExecutionError> {
         let mut runtime = self.0.runtime.lock().unwrap();
         let mut batch = Batch::new();
-        let address = self.0.contract_address;
-        let key_prefix = get_address_key(KeyCategory::Storage as u8, address);
-        let key_info = get_address_key(KeyCategory::AccountInfo as u8, address);
-        let key_state = get_address_key(KeyCategory::AccountState as u8, address);
+        let key_prefix = get_address_key(KeyCategory::Storage);
+        let key_info = get_address_key(KeyCategory::AccountInfo);
+        let key_state = get_address_key(KeyCategory::AccountState);
         if account.is_selfdestructed() {
             batch.delete_key_prefix(key_prefix);
             batch.put_key_value(key_info, &AccountInfo::default())?;
