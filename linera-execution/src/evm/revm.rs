@@ -72,7 +72,7 @@ pub const COMMIT_CONTRACT_CHANGES_SELECTOR: &[u8] = &[5, 15, 52, 203];
 /// This does not correspond to a real EVM function.
 pub const ALREADY_CREATED_CONTRACT_SELECTOR: &[u8] = &[23, 47, 106, 235];
 
-/// The json serialization of a trivial vector.
+/// The JSON serialization of a trivial vector.
 pub const JSON_EMPTY_VECTOR: &[u8] = &[91, 93];
 
 #[cfg(with_metrics)]
@@ -478,7 +478,7 @@ fn get_evm_destination<Runtime: ContractRuntime>(
     context: &mut ContractCtx<'_, Runtime>,
     account: Account,
 ) -> Result<Option<Address>, ExecutionError> {
-    let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+    let mut runtime = context.db().0.inner.runtime.lock().unwrap();
     if runtime.chain_id()? != account.chain_id {
         return Ok(None);
     }
@@ -507,24 +507,24 @@ impl<'a> ContractPrecompile {
     ) -> Result<Vec<u8>, ExecutionError> {
         match request {
             ContractRuntimePrecompile::AuthenticatedOwner => {
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 let account_owner = runtime.authenticated_owner()?;
                 Ok(bcs::to_bytes(&account_owner)?)
             }
 
             ContractRuntimePrecompile::MessageOriginChainId => {
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 let origin_chain_id = runtime.message_origin_chain_id()?;
                 Ok(bcs::to_bytes(&origin_chain_id)?)
             }
 
             ContractRuntimePrecompile::MessageIsBouncing => {
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 let result = runtime.message_is_bouncing()?;
                 Ok(bcs::to_bytes(&result)?)
             }
             ContractRuntimePrecompile::AuthenticatedCallerId => {
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 let application_id = runtime.authenticated_caller_id()?;
                 Ok(bcs::to_bytes(&application_id)?)
             }
@@ -542,13 +542,13 @@ impl<'a> ContractPrecompile {
                     grant,
                     message,
                 };
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 runtime.send_message(send_message_request)?;
                 Ok(vec![])
             }
             ContractRuntimePrecompile::TryCallApplication { target, argument } => {
                 let authenticated = true;
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 ensure!(
                     target != runtime.application_id()?,
                     EvmExecutionError::NoSelfCall
@@ -556,7 +556,7 @@ impl<'a> ContractPrecompile {
                 runtime.try_call_application(authenticated, target, argument)
             }
             ContractRuntimePrecompile::Emit { stream_name, value } => {
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 let result = runtime.emit(stream_name, value)?;
                 Ok(bcs::to_bytes(&result)?)
             }
@@ -565,7 +565,7 @@ impl<'a> ContractPrecompile {
                 stream_name,
                 index,
             } => {
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 runtime.read_event(chain_id, stream_name, index)
             }
             ContractRuntimePrecompile::SubscribeToEvents {
@@ -573,7 +573,7 @@ impl<'a> ContractPrecompile {
                 application_id,
                 stream_name,
             } => {
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 runtime.subscribe_to_events(chain_id, application_id, stream_name)?;
                 Ok(vec![])
             }
@@ -582,7 +582,7 @@ impl<'a> ContractPrecompile {
                 application_id,
                 stream_name,
             } => {
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 runtime.unsubscribe_from_events(chain_id, application_id, stream_name)?;
                 Ok(vec![])
             }
@@ -590,7 +590,7 @@ impl<'a> ContractPrecompile {
                 application_id,
                 query,
             } => {
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 ensure!(
                     application_id != runtime.application_id()?,
                     EvmExecutionError::NoSelfCall
@@ -598,7 +598,7 @@ impl<'a> ContractPrecompile {
                 runtime.query_service(application_id, query)
             }
             ContractRuntimePrecompile::ValidationRound => {
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 let value = runtime.validation_round()?;
                 Ok(bcs::to_bytes(&value)?)
             }
@@ -609,7 +609,7 @@ impl<'a> ContractPrecompile {
                         destination.unwrap_or(FAUCET_ADDRESS)
                     };
                     let application_id = {
-                        let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                        let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                         let application_id = runtime.application_id()?;
                         let source = application_id.into();
                         let value = Amount::try_from(amount.0).map_err(EvmExecutionError::from)?;
@@ -631,7 +631,7 @@ impl<'a> ContractPrecompile {
         let input = get_precompile_argument(context, inputs)?;
         match bcs::from_bytes(&input)? {
             RuntimePrecompile::Base(base_tag) => {
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 base_runtime_call(base_tag, runtime.deref_mut())
             }
             RuntimePrecompile::Contract(contract_tag) => {
@@ -655,7 +655,7 @@ impl<'a> ServicePrecompile {
         request: ServiceRuntimePrecompile,
         context: &mut ServiceCtx<'a, Runtime>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+        let mut runtime = context.db().0.inner.runtime.lock().unwrap();
         match request {
             ServiceRuntimePrecompile::TryQueryApplication { target, argument } => {
                 ensure!(
@@ -674,7 +674,7 @@ impl<'a> ServicePrecompile {
         let input = get_precompile_argument(context, inputs)?;
         match bcs::from_bytes(&input)? {
             RuntimePrecompile::Base(base_tag) => {
-                let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
                 base_runtime_call(base_tag, runtime.deref_mut())
             }
             RuntimePrecompile::Contract(_) => Err(EvmExecutionError::PrecompileError(
@@ -810,7 +810,7 @@ impl<'a, Runtime: ContractRuntime> Inspector<ContractCtx<'a, Runtime>>
         inputs: &mut CreateInputs,
     ) -> Option<CreateOutcome> {
         let result = self.create_or_fail(context, inputs);
-        map_result_create_outcome(&self.db.0, result)
+        map_result_create_outcome(&self.db.inner, result)
     }
 
     fn call(
@@ -819,23 +819,23 @@ impl<'a, Runtime: ContractRuntime> Inspector<ContractCtx<'a, Runtime>>
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
         let result = self.call_or_fail(context, inputs);
-        map_result_call_outcome(&self.db.0, result)
+        map_result_call_outcome(&self.db.inner, result)
     }
 }
 
 impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// Gets the expected `ApplicationId` corresponding to the
     /// EVM contract being created.
-    /// module_id is the module being created.
+    /// `module_id` is the module being created.
     ///
-    /// The index num_apps is the index of the application being
+    /// The index `num_apps` is the index of the application being
     /// created. This is needed because the calls to `create_applications`
     /// are done at the end of the execution of the contract.
-    /// So, the peek_application_index always returns the same index
+    /// So, the `peek_application_index` always returns the same index
     /// during the execution.
     ///
     /// The parameters are empty because there is no argument
-    /// to the creation of the contract. In fact the .init_code
+    /// to the creation of the contract. In fact the `.init_code`
     /// contains the concatenation of the bytecode and the constructor
     /// argument so no additional argument needs to be added.
     fn get_expected_application_id(
@@ -843,7 +843,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         module_id: ModuleId,
         num_apps: u32,
     ) -> Result<ApplicationId, ExecutionError> {
-        let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+        let mut runtime = context.db().0.inner.runtime.lock().unwrap();
         let chain_id = runtime.chain_id()?;
         let block_height = runtime.block_height()?;
         let application_index = runtime.peek_application_index()? + num_apps;
@@ -860,7 +860,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         Ok(ApplicationId::from(&application_description))
     }
 
-    /// Publishes the init_code as a `ModuleId`.
+    /// Publishes the `inputs.init_code` as a `ModuleId`.
     /// There is no need for a separate blob for the service.
     fn publish_create_inputs(
         context: &mut ContractCtx<'_, Runtime>,
@@ -868,11 +868,11 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     ) -> Result<ModuleId, ExecutionError> {
         let contract = linera_base::data_types::Bytecode::new(inputs.init_code.to_vec());
         let service = linera_base::data_types::Bytecode::new(vec![]);
-        let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+        let mut runtime = context.db().0.inner.runtime.lock().unwrap();
         runtime.publish_module(contract, service, VmRuntime::Evm)
     }
 
-    /// The function `fn create` of the inspector trait is called
+    /// The function `create` of the `Inspector` trait is called
     /// when a contract is going to be instantiated. Since the
     /// function can have some error case which are not supported
     /// in `fn create`, we call a `fn create_or_fail` that can
@@ -885,7 +885,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// The inspector can do two things:
     /// * It can change the inputs in `CreateInputs`. Here we
     ///   change the address being created.
-    /// * It can return some specific CreateInput to be used.
+    /// * It can return some specific `CreateInputs` to be used.
     ///
     /// Therefore, the first case of the call is going to
     /// be about the creation of the contract with just the
@@ -905,25 +905,33 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     ///
     /// In relation to that, the following points are
     /// important:
-    /// * The inputs.init_code is formed by the concatenation
+    /// * The `inputs.init_code` is formed by the concatenation
     ///   of compiled bytecode + constructor argument.
     /// * It is impossible to separate the compiled bytecode
     ///   from the constructor argument. Think for example
     ///   of the following two contracts:
+    ///
+    ///   ```
     ///   constructor(uint a, uint b) {
     ///   value = a + b
     ///   }
+    ///   ```
+    ///
     ///   or
+    ///
+    ///   ```
     ///   constructor(uint b) {
     ///   value = 3 + b
     ///   }
+    ///   ```
+    ///
     ///   Calling the first constructor with (3,4) leads
     ///   to the same concatenation as the second constructor
     ///   with input (4).
     /// * It turns out that we do not need to determine the
     ///   constructor argument.
     /// * What needs to be determined is the deployed bytecode.
-    ///   This is stored in the AccountInfo entry. It is
+    ///   This is stored in the `AccountInfo` entry. It is
     ///   the result of the execution by the Revm interpreter
     ///   and there is no way to do it without doing the execution.
     ///
@@ -935,41 +943,41 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     ///   service bytecode (empty, but not used) and then publish
     ///   the module.
     /// * The parameters is empty because the constructor argument
-    ///   have already put in the init_code.
+    ///   have already been put in the `init_code`.
     /// * The instantiation argument is empty since an EVM contract
     ///   creating a new contract will not support Linera features.
     ///   This is simply not part of create/create2 in the EVM.
-    /// * The application_id is being computed and used to adjust
+    /// * The application ID is being computed and used to adjust
     ///   the contract creation.
     /// * The balance is adjusted so that when it gets created in
     ///   Linera it will have the correct balance.
-    /// * But that is the only change being done. We return Ok(None)
+    /// * But that is the only change being done. We return `Ok(None)`
     ///   which means that the contract creation is done as usual
-    ///   with REVM.
+    ///   with Revm.
     ///
     /// The instantiation in Linera of the separate contracts
     /// is done at the end of the contract execution. It goes
     /// in the following way.
-    /// * The HashMap<ApplicationId, (ModuleId, u32)> contains
+    /// * The `HashMap<ApplicationId, (ModuleId, u32)>` contains
     ///   the list of application to create and their index.
-    /// * The index and ModuleId allow the `create_application`
-    ///   to create a contract with the right application_id.
-    /// * The `create_application` is in that case just a
+    /// * The index and module ID allow `create_application`
+    ///   to create a contract with the right application ID.
+    /// * `create_application` is in that case just a
     ///   writing of the data to storage.
     fn create_or_fail(
         &mut self,
         context: &mut ContractCtx<'_, Runtime>,
         inputs: &mut CreateInputs,
     ) -> Result<Option<CreateOutcome>, ExecutionError> {
-        if !self.db.0.is_revm_instantiated {
-            self.db.0.is_revm_instantiated = true;
+        if !self.db.inner.is_revm_instantiated {
+            self.db.inner.is_revm_instantiated = true;
             inputs.scheme = CreateScheme::Custom {
                 address: self.contract_address,
             };
             return Ok(None);
         }
         let module_id = Self::publish_create_inputs(context, inputs)?;
-        let mut map = self.db.1.lock().unwrap();
+        let mut map = self.db.modules.lock().unwrap();
         let num_apps = map.len() as u32;
         let expected_application_id =
             Self::get_expected_application_id(context, module_id, num_apps)?;
@@ -977,7 +985,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         let address = expected_application_id.evm_address();
         if inputs.value != U256::ZERO {
             let value = Amount::try_from(inputs.value).map_err(EvmExecutionError::from)?;
-            let mut runtime = context.db().0 .0.runtime.lock().unwrap();
+            let mut runtime = context.db().0.inner.runtime.lock().unwrap();
             let application_id = runtime.application_id()?;
             let source = application_id.into();
             let chain_id = runtime.chain_id()?;
@@ -993,34 +1001,40 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
 
     /// Every call to a contract passes by this function.
     /// Three kinds:
-    /// --- Call to the EVM smart contract itself (the first call)
-    /// --- Call to the PRECOMPILE smart contract.
-    /// --- Call to other EVM smart contract
+    /// * Call to the EVM smart contract itself (the first call)
+    /// * Call to the PRECOMPILE smart contract.
+    /// * Call to other EVM smart contract
     ///
-    /// The first case is handled by using Revm. This is
-    /// when we call this contract.
+    /// All calls are handled by Revm. But the calls have
+    /// potentially a transfer associated to them.
     ///
-    /// Calling the precompile is also handled by using Revm
-    /// which would then use specific code for that purpose.
+    /// The first call is handled separately.
+    /// The precompile calls do not have associated transfers.
+    /// For other contract calls, the corresponding transfer
+    /// is executed in Linera.
     ///
-    /// Calling other EVM contracts is handled here and we have
-    /// to produce `Some(_)` as output. Note that in the Evm
-    /// transferring ethers is the same as calling a function.
-    ///
-    /// In Linera, transferring native tokens and calling a function are
-    /// different operations. However, the block is accepted
-    /// completely or not at all. Therefore, we can ensure the
-    /// atomicity of the operations.
+    /// Note that in the EVM transferring ethers is the same
+    /// as calling a function. In Linera, transferring native
+    /// tokens and calling a function are different operations.
+    /// However, the block is accepted completely or not at all.
+    /// Therefore, we can ensure the atomicity of the operations.
     fn call_or_fail(
         &mut self,
         _context: &mut ContractCtx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
-        if self.precompile_addresses.contains(&inputs.target_address)
-            || inputs.target_address == self.contract_address
-        {
+        let is_precompile = self.precompile_addresses.contains(&inputs.target_address);
+        let is_first_call = inputs.target_address == self.contract_address;
+        if is_precompile {
+            if let CallValue::Transfer(value) = inputs.value {
+                ensure!(
+                    value == U256::ZERO,
+                    EvmExecutionError::NonZeroTransferPrecompile
+                );
+            }
+        }
+        if is_precompile || is_first_call {
             // Precompile calls are handled by the precompile code.
-            // The EVM smart contract is being called
             return Ok(None);
         }
         // Handling the balances.
@@ -1028,7 +1042,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             if value != U256::ZERO {
                 let source: AccountOwner = inputs.caller.into();
                 let owner: AccountOwner = inputs.bytecode_address.into();
-                let mut runtime = self.db.0.runtime.lock().unwrap();
+                let mut runtime = self.db.inner.runtime.lock().unwrap();
                 let amount = Amount::try_from(value).map_err(EvmExecutionError::from)?;
                 let chain_id = runtime.chain_id()?;
                 let destination = Account { chain_id, owner };
@@ -1067,7 +1081,7 @@ impl<'a, Runtime: ServiceRuntime> Inspector<ServiceCtx<'a, Runtime>>
         inputs: &mut CreateInputs,
     ) -> Option<CreateOutcome> {
         let result = self.create_or_fail(context, inputs);
-        map_result_create_outcome(&self.db.0, result)
+        map_result_create_outcome(&self.db.inner, result)
     }
 }
 
@@ -1097,8 +1111,8 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         _context: &mut ServiceCtx<'_, Runtime>,
         inputs: &mut CreateInputs,
     ) -> Result<Option<CreateOutcome>, ExecutionError> {
-        if !self.db.0.is_revm_instantiated {
-            self.db.0.is_revm_instantiated = true;
+        if !self.db.inner.is_revm_instantiated {
+            self.db.inner.is_revm_instantiated = true;
             inputs.scheme = CreateScheme::Custom {
                 address: self.contract_address,
             };
@@ -1158,10 +1172,10 @@ where
     Runtime: ContractRuntime,
 {
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
-        self.db.0.set_contract_address()?;
+        self.db.inner.set_contract_address()?;
         let caller = self.get_msg_address()?;
         let instantiation_argument = serde_json::from_slice::<EvmInstantiation>(&argument)?;
-        // This is the case of a contract created by REVM by another contract. We only
+        // This is the case of a contract created by Revm by another contract. We only
         // need to write it to storage.
         if let Some(remainder) = instantiation_argument
             .argument
@@ -1180,23 +1194,23 @@ where
         Ok(())
     }
 
-    /// Execute the operation.
+    /// Executes the operation.
     /// The first 3 possibilities are internal calls
-    /// from another REVM instance:
+    /// from another Revm instance:
     /// * The `GET_ACCOUNT_INFO_SELECTOR` retrieves the
-    ///   AccountInfo of that EVM contract.
+    ///   `AccountInfo` of that EVM contract.
     /// * The `GET_CONTRACT_STORAGE_SELECTOR` is about
     ///   individual storage entries.
     /// * The `COMMIT_CONTRACT_CHANGES_SELECTOR` is about
     ///   committing the state
     ///
     /// If not in those cases, then the execution proceeds
-    /// normally and creates an REVM instance.
+    /// normally and creates an Revm instance.
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
-        self.db.0.set_contract_address()?;
+        self.db.inner.set_contract_address()?;
         ensure_message_length(operation.len(), 4)?;
         if operation == GET_ACCOUNT_INFO_SELECTOR {
-            let account_info = self.db.0.get_account_info()?;
+            let account_info = self.db.inner.get_account_info()?;
             return Ok(bcs::to_bytes(&account_info)?);
         }
         if let Some(remainder) = operation
@@ -1204,7 +1218,7 @@ where
             .strip_prefix(GET_CONTRACT_STORAGE_SELECTOR)
         {
             let index = bcs::from_bytes(remainder)?;
-            let value = self.db.0.read_from_local_storage(index)?;
+            let value = self.db.inner.read_from_local_storage(index)?;
             return Ok(bcs::to_bytes(&value)?);
         }
         if let Some(remainder) = operation
@@ -1226,7 +1240,7 @@ where
     }
 
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
-        self.db.0.set_contract_address()?;
+        self.db.inner.set_contract_address()?;
         ensure_selector_presence(
             &self.module,
             EXECUTE_MESSAGE_SELECTOR,
@@ -1239,7 +1253,7 @@ where
     }
 
     fn process_streams(&mut self, streams: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
-        self.db.0.set_contract_address()?;
+        self.db.inner.set_contract_address()?;
         let operation = get_revm_process_streams_bytes(streams);
         ensure_selector_presence(
             &self.module,
@@ -1331,7 +1345,7 @@ where
         // An application can be instantiated in Linera sense, but not in EVM sense,
         // that is the contract entries corresponding to the deployed contract may
         // be missing.
-        if !self.db.0.set_is_initialized()? {
+        if !self.db.inner.set_is_initialized()? {
             self.initialize_contract(U256::ZERO, caller)?;
         }
         self.transact_commit(EvmTxKind::Call, vec, value, caller)
@@ -1340,11 +1354,11 @@ where
     /// Initializes the contract.
     fn initialize_contract(&mut self, value: U256, caller: Address) -> Result<(), ExecutionError> {
         let mut vec_init = self.module.clone();
-        let constructor_argument = self.db.0.constructor_argument()?;
+        let constructor_argument = self.db.inner.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
         let result = self.transact_commit(EvmTxKind::Create, vec_init, value, caller)?;
         result
-            .check_contract_initialization(self.db.0.contract_address)
+            .check_contract_initialization(self.db.inner.contract_address)
             .map_err(EvmExecutionError::IncorrectContractCreation)?;
         self.write_logs(result.logs, "deploy")
     }
@@ -1362,7 +1376,7 @@ where
     /// on the EVM and that users and contracts outside of that realm can still
     /// call EVM smart contracts.
     fn get_msg_address(&self) -> Result<Address, ExecutionError> {
-        let mut runtime = self.db.0.runtime.lock().unwrap();
+        let mut runtime = self.db.inner.runtime.lock().unwrap();
         let application_id = runtime.authenticated_caller_id()?;
         if let Some(application_id) = application_id {
             return Ok(if application_id.is_evm() {
@@ -1385,10 +1399,10 @@ where
         value: U256,
         caller: Address,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
-        let contract_address = self.db.0.contract_address;
-        self.db.0.caller = caller;
-        self.db.0.value = value;
-        self.db.0.deposit_funds()?;
+        let contract_address = self.db.inner.contract_address;
+        self.db.inner.caller = caller;
+        self.db.inner.value = value;
+        self.db.inner.deposit_funds()?;
         let data = Bytes::from(input);
         let kind = match ch {
             EvmTxKind::Create => TxKind::Create,
@@ -1402,7 +1416,7 @@ where
         };
         let block_env = self.db.get_block_env()?;
         let (max_size_evm_contract, gas_limit) = {
-            let mut runtime = self.db.0.runtime.lock().unwrap();
+            let mut runtime = self.db.inner.runtime.lock().unwrap();
             let gas_limit = runtime.remaining_fuel(VmRuntime::Evm)?;
             let max_size_evm_contract = runtime.maximum_blob_size()? as usize;
             (max_size_evm_contract, gas_limit)
@@ -1446,20 +1460,20 @@ where
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;
-        self.db.0.process_any_error()?;
+        self.db.inner.process_any_error()?;
         self.db.commit_changes()?;
         Ok(process_execution_result(result)?)
     }
 
     fn consume_fuel(&mut self, gas_final: u64) -> Result<(), ExecutionError> {
-        let mut runtime = self.db.0.runtime.lock().unwrap();
+        let mut runtime = self.db.inner.runtime.lock().unwrap();
         runtime.consume_fuel(gas_final, VmRuntime::Evm)
     }
 
     fn write_logs(&mut self, logs: Vec<Log>, origin: &str) -> Result<(), ExecutionError> {
         // TODO(#3758): Extracting Ethereum events from the Linera events.
         if !logs.is_empty() {
-            let mut runtime = self.db.0.runtime.lock().unwrap();
+            let mut runtime = self.db.inner.runtime.lock().unwrap();
             let block_height = runtime.block_height()?;
             let stream_name = bcs::to_bytes("ethereum_event")?;
             let stream_name = StreamName(stream_name);
@@ -1482,7 +1496,7 @@ where
     Runtime: ServiceRuntime,
 {
     pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
-        let db = ServiceDatabase(InnerDatabase::new(runtime));
+        let db = ServiceDatabase::new(runtime);
         Self { module, db }
     }
 }
@@ -1492,25 +1506,25 @@ where
     Runtime: ServiceRuntime,
 {
     fn handle_query(&mut self, argument: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
-        self.db.0.set_contract_address()?;
+        self.db.inner.set_contract_address()?;
         let evm_query = serde_json::from_slice(&argument)?;
         let query = match evm_query {
             EvmQuery::AccountInfo => {
-                let account_info = self.db.0.get_account_info()?;
+                let account_info = self.db.inner.get_account_info()?;
                 return Ok(serde_json::to_vec(&account_info)?);
             }
             EvmQuery::Storage(index) => {
-                let value = self.db.0.read_from_local_storage(index)?;
+                let value = self.db.inner.read_from_local_storage(index)?;
                 return Ok(serde_json::to_vec(&value)?);
             }
             EvmQuery::Query(vec) => vec,
             EvmQuery::Operation(operation) => {
-                let mut runtime = self.db.0.runtime.lock().unwrap();
+                let mut runtime = self.db.inner.runtime.lock().unwrap();
                 runtime.schedule_operation(operation)?;
                 return Ok(Vec::new());
             }
             EvmQuery::Operations(operations) => {
-                let mut runtime = self.db.0.runtime.lock().unwrap();
+                let mut runtime = self.db.inner.runtime.lock().unwrap();
                 for operation in operations {
                     runtime.schedule_operation(operation)?;
                 }
@@ -1537,11 +1551,11 @@ where
         // In case of a shared application, we need to instantiate it first
         // However, since in ServiceRuntime, we cannot modify the storage,
         // therefore the compiled contract is saved in the changes.
-        let contract_address = self.db.0.contract_address;
-        if !self.db.0.set_is_initialized()? {
+        let contract_address = self.db.inner.contract_address;
+        if !self.db.inner.set_is_initialized()? {
             let changes = {
                 let mut vec_init = self.module.clone();
-                let constructor_argument = self.db.0.constructor_argument()?;
+                let constructor_argument = self.db.inner.constructor_argument()?;
                 vec_init.extend_from_slice(&constructor_argument);
                 let (result, changes) = self.transact(TxKind::Create, vec_init)?;
                 result
@@ -1549,7 +1563,7 @@ where
                     .map_err(EvmExecutionError::IncorrectContractCreation)?;
                 changes
             };
-            self.db.0.changes = changes;
+            self.db.inner.changes = changes;
         }
         ensure_message_length(vec.len(), 4)?;
         forbid_execute_operation_origin(&vec[..4])?;
@@ -1563,11 +1577,11 @@ where
         kind: TxKind,
         input: Vec<u8>,
     ) -> Result<(ExecutionResultSuccess, EvmState), ExecutionError> {
-        let contract_address = self.db.0.contract_address;
+        let contract_address = self.db.inner.contract_address;
         let caller = SERVICE_ADDRESS;
         let value = U256::ZERO;
-        self.db.0.caller = caller;
-        self.db.0.value = value;
+        self.db.inner.caller = caller;
+        self.db.inner.value = value;
         let data = Bytes::from(input);
         let block_env = self.db.get_block_env()?;
         let inspector = CallInterceptorService {
@@ -1576,7 +1590,7 @@ where
             precompile_addresses: precompile_addresses(),
         };
         let max_size_evm_contract = {
-            let mut runtime = self.db.0.runtime.lock().unwrap();
+            let mut runtime = self.db.inner.runtime.lock().unwrap();
             runtime.maximum_blob_size()? as usize
         };
         let nonce = self.db.get_nonce(&caller)?;
@@ -1618,7 +1632,7 @@ where
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;
-        self.db.0.process_any_error()?;
+        self.db.inner.process_any_error()?;
         let result = process_execution_result(result_state.result)?;
         Ok((result, result_state.state))
     }

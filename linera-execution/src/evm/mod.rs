@@ -43,6 +43,8 @@ pub enum EvmExecutionError {
     NoSelfCall,
     #[error("Incorrect ApplicationId")]
     IncorrectApplicationId,
+    #[error("Non-zero transfer precompile")]
+    NonZeroTransferPrecompile,
     #[error("Transact error {0}")]
     TransactError(String),
     #[error("Impossible to create contracts in services")]

@@ -159,6 +159,7 @@ where
             .account_info_from_storage(f, address)?
             .unwrap_or_default();
         if !is_newly_created {
+            // For EOA and old contract the balance comes from Linera.
             account_info.balance = self.get_start_balance(address)?;
         }
         // We return an account as there is no difference between
@@ -197,8 +198,10 @@ where
             return Ok(account.map(|account| account.info.clone()));
         }
         if address == self.contract_address {
+            // This is for the contract and its storage.
             self.account_info_from_local_storage()
         } else {
+            // This matches EOA and other contracts.
             Ok(None)
         }
     }
@@ -211,16 +214,21 @@ where
     ) -> Result<Option<AccountInfo>, ExecutionError> {
         let account_info = self.account_info_from_inner_database(address)?;
         if let Some(account_info) = account_info {
+            // This matches service calls or the contract itself.
             return Ok(Some(account_info));
         }
         if self.has_empty_storage(address)? {
+            // This matches EOA
             Ok(None)
         } else {
+            // This matches other EVM contracts.
             f(self, address)
         }
     }
 
     /// Returns whether the address has empty storage.
+    /// An address has an empty storage if and only if it is
+    /// an externally owned account(EOA).
     fn has_empty_storage(&self, address: Address) -> Result<bool, ExecutionError> {
         let application_id = address_to_user_application_id(address);
         let mut runtime = self.runtime.lock().unwrap();
@@ -467,10 +475,10 @@ where
     Runtime: ContractRuntime,
 {
     pub fn new(runtime: Runtime) -> Self {
-        Self(
-            InnerDatabase::new(runtime),
-            Arc::new(Mutex::new(HashMap::new())),
-        )
+        Self {
+            inner: InnerDatabase::new(runtime),
+            modules: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     /// Balances of the contracts have to be checked when
@@ -481,7 +489,7 @@ where
         address: Address,
         revm_balance: U256,
     ) -> Result<(), ExecutionError> {
-        let mut runtime = self.0.runtime.lock().unwrap();
+        let mut runtime = self.inner.runtime.lock().unwrap();
         let owner = address.into();
         let linera_balance: U256 = runtime.read_owner_balance(owner)?.into();
         ensure!(
@@ -496,7 +504,7 @@ where
         &mut self,
         account: &revm_state::Account,
     ) -> Result<(), ExecutionError> {
-        let mut runtime = self.0.runtime.lock().unwrap();
+        let mut runtime = self.inner.runtime.lock().unwrap();
         let mut batch = Batch::new();
         let key_prefix = get_address_key(KeyCategory::Storage);
         let key_info = get_address_key(KeyCategory::AccountInfo);
@@ -581,7 +589,7 @@ where
         let argument = serde_json::to_vec(&evm_instantiation)?;
         let parameters = JSON_EMPTY_VECTOR.to_vec(); // No constructor
         let required_application_ids = Vec::new();
-        let mut runtime = self.0.runtime.lock().unwrap();
+        let mut runtime = self.inner.runtime.lock().unwrap();
         let created_application_id = runtime.create_application(
             module_id,
             parameters,
@@ -605,7 +613,7 @@ where
         let application_id = address_to_user_application_id(address);
         let mut argument = COMMIT_CONTRACT_CHANGES_SELECTOR.to_vec();
         argument.extend(bcs::to_bytes(&account)?);
-        let mut runtime = self.0.runtime.lock().unwrap();
+        let mut runtime = self.inner.runtime.lock().unwrap();
         runtime.try_call_application(false, application_id, argument)?;
         Ok(())
     }
@@ -620,14 +628,14 @@ where
     /// * Iterates over the entry of the map and creates the contract in the
     ///   right order.
     pub fn commit_changes(&mut self) -> Result<(), ExecutionError> {
-        let changes = mem::take(&mut self.0.changes);
+        let changes = mem::take(&mut self.inner.changes);
         let mut balances = Vec::new();
-        let map = mem::take(self.1.lock().unwrap().deref_mut());
+        let map = mem::take(self.modules.lock().unwrap().deref_mut());
         let mut map_creation = BTreeMap::<u32, (Address, revm_state::Account, ModuleId)>::new();
         for (address, account) in changes {
             if self.is_account_writable(&address, &account) {
                 let revm_balance = account.info.balance;
-                if address == self.0.contract_address {
+                if address == self.inner.contract_address {
                     self.commit_contract_changes(&account)?;
                 } else {
                     let application_id = address_to_user_application_id(address);
@@ -657,16 +665,18 @@ pub enum KeyCategory {
     Storage,
 }
 
-// The Database for contracts
-
-pub(crate) struct ContractDatabase<Runtime>(
-    pub InnerDatabase<Runtime>,
-    pub Arc<Mutex<HashMap<ApplicationId, (ModuleId, u32)>>>,
-);
+/// The Database for contracts
+pub(crate) struct ContractDatabase<Runtime> {
+    pub inner: InnerDatabase<Runtime>,
+    pub modules: Arc<Mutex<HashMap<ApplicationId, (ModuleId, u32)>>>,
+}
 
 impl<Runtime> Clone for ContractDatabase<Runtime> {
     fn clone(&self) -> Self {
-        ContractDatabase(self.0.clone(), self.1.clone())
+        Self {
+            inner: self.inner.clone(),
+            modules: self.modules.clone(),
+        }
     }
 }
 
@@ -680,11 +690,11 @@ where
     /// The code `read_basic_ref` is used with the relevant access function.
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
         let is_newly_created = {
-            let map = self.1.lock().unwrap();
+            let map = self.modules.lock().unwrap();
             let application_id = address_to_user_application_id(address);
             map.contains_key(&application_id)
         };
-        self.0.read_basic_ref(
+        self.inner.read_basic_ref(
             InnerDatabase::<Runtime>::get_contract_account_info,
             address,
             is_newly_created,
@@ -703,7 +713,7 @@ where
 
     /// Access the storage by the relevant remote access function.
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, ExecutionError> {
-        self.0.read_storage(
+        self.inner.read_storage(
             InnerDatabase::<Runtime>::get_contract_storage_value,
             address,
             index,
@@ -743,7 +753,7 @@ where
     Runtime: ContractRuntime,
 {
     fn commit(&mut self, changes: EvmState) {
-        self.0.changes = changes;
+        self.inner.changes = changes;
     }
 }
 
@@ -752,8 +762,8 @@ where
     Runtime: ContractRuntime,
 {
     pub fn get_block_env(&self) -> Result<BlockEnv, ExecutionError> {
-        let mut block_env = self.0.get_block_env()?;
-        let mut runtime = self.0.runtime.lock().unwrap();
+        let mut block_env = self.inner.get_block_env()?;
+        let mut runtime = self.inner.runtime.lock().unwrap();
         // We use the gas_limit from the runtime
         let gas_limit = runtime.maximum_fuel_per_block(VmRuntime::Evm)?;
         block_env.gas_limit = gas_limit;
@@ -772,11 +782,15 @@ where
 
 // The Database for service
 
-pub(crate) struct ServiceDatabase<Runtime>(pub InnerDatabase<Runtime>);
+pub(crate) struct ServiceDatabase<Runtime> {
+    pub inner: InnerDatabase<Runtime>,
+}
 
 impl<Runtime> Clone for ServiceDatabase<Runtime> {
     fn clone(&self) -> Self {
-        ServiceDatabase(self.0.clone())
+        Self {
+            inner: self.inner.clone(),
+        }
     }
 }
 
@@ -790,7 +804,7 @@ where
     /// There is no newly created contracts for services.
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
         let is_newly_created = false; // No contract creation in service
-        self.0.read_basic_ref(
+        self.inner.read_basic_ref(
             InnerDatabase::<Runtime>::get_service_account_info,
             address,
             is_newly_created,
@@ -808,7 +822,7 @@ where
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, ExecutionError> {
-        self.0.read_storage(
+        self.inner.read_storage(
             InnerDatabase::<Runtime>::get_service_storage_value,
             address,
             index,
@@ -848,7 +862,7 @@ where
     Runtime: ServiceRuntime,
 {
     fn commit(&mut self, changes: EvmState) {
-        self.0.changes = changes;
+        self.inner.changes = changes;
     }
 }
 
@@ -856,8 +870,14 @@ impl<Runtime> ServiceDatabase<Runtime>
 where
     Runtime: ServiceRuntime,
 {
+    pub fn new(runtime: Runtime) -> Self {
+        Self {
+            inner: InnerDatabase::new(runtime),
+        }
+    }
+
     pub fn get_block_env(&self) -> Result<BlockEnv, ExecutionError> {
-        let mut block_env = self.0.get_block_env()?;
+        let mut block_env = self.inner.get_block_env()?;
         block_env.gas_limit = EVM_SERVICE_GAS_LIMIT;
         Ok(block_env)
     }
