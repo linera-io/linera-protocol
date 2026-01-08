@@ -569,7 +569,7 @@ where
 
     /// Returns whether the account is writable.
     /// We do not write the accounts of Externally Owned Accounts.
-    pub fn is_account_writable(&self, address: &Address, account: &revm_state::Account) -> bool {
+    fn is_account_writable(&self, address: &Address, account: &revm_state::Account) -> bool {
         if *address == FAUCET_ADDRESS {
             // We do not write the faucet address nor expect any coherency from it.
             return false;
@@ -584,6 +584,15 @@ where
         // EVM smart contracts.
         let code_empty = code_hash == KECCAK_EMPTY || code_hash.is_zero();
         !code_empty
+    }
+
+    /// Whether the balance of this account needs to be checked.
+    fn is_account_checkable(&self, address: &Address) -> bool {
+        if *address == FAUCET_ADDRESS {
+            // We do not check the FAUCET balance.
+            return false;
+        }
+        true
     }
 
     /// Creates a new contract. The `account` contains
@@ -652,8 +661,11 @@ where
         let map = mem::take(self.modules.lock().unwrap().deref_mut());
         let mut contracts_to_create = vec![None; map.len()];
         for (address, account) in changes {
-            if self.is_account_writable(&address, &account) {
+            if self.is_account_checkable(&address) {
                 let revm_balance = account.info.balance;
+                balances.push((address, revm_balance));
+            }
+            if self.is_account_writable(&address, &account) {
                 if address == self.inner.contract_address {
                     self.commit_contract_changes(&account)?;
                 } else {
@@ -664,7 +676,6 @@ where
                         self.commit_remote_contract(address, account)?;
                     }
                 }
-                balances.push((address, revm_balance));
             }
         }
         for entry in contracts_to_create {
