@@ -553,9 +553,7 @@ where
             for (index, value) in &account.storage {
                 if value.present_value() != value.original_value() {
                     let key = get_storage_key(*index);
-                    if value.original_value() == U256::ZERO {
-                        batch.put_key_value(key, &value.present_value())?;
-                    } else if value.present_value() == U256::ZERO {
+                    if value.present_value() == U256::ZERO {
                         batch.delete_key(key);
                     } else {
                         batch.put_key_value(key, &value.present_value())?;
