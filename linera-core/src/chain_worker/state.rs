@@ -39,7 +39,7 @@ use linera_views::{
     views::{ClonableView, ReplaceContext as _, RootView as _, View as _},
 };
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
-use tracing::{debug, info, instrument, trace, warn};
+use tracing::{debug, instrument, trace, warn};
 
 use super::{ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier, EventSubscriptionsResult};
 use crate::{
@@ -835,12 +835,6 @@ where
             self.storage
                 .write_blobs_and_certificate(blobs, &certificate)
                 .await?;
-            info!(
-                %chain_id,
-                %height,
-                hash = %certificate.hash(),
-                "Certificate written to storage"
-            );
             let events = block
                 .body
                 .events
