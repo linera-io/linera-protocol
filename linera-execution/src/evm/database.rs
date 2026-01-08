@@ -142,11 +142,11 @@ where
     ///   For `ContractRuntime` and `ServiceRuntime` the method
     ///   to access is different. So, the function has to be
     ///   provided as argument.
-    /// * The address in question being read.
-    /// * Whether the contract is newly created or not. For newly
-    ///   created contract, the balance is the one of REVM. For
-    ///   existing contract, the balance has to be accessed from
-    ///   Linera.
+    /// * `address`: The address being read.
+    /// * `is_newly_created`: Whether the contract is newly created
+    ///   or not. For newly created contract, the balance is the
+    ///   one of Revm. For existing contract, the balance has to
+    ///   be accessed from Linera.
     ///
     /// For Externally Owned Accounts, the function is indeed
     /// called, but it does not access the storage. Instead it
@@ -193,12 +193,12 @@ where
 
     /// Reads the state from the inner database.
     ///
-    /// If changes is not empty, then it means that
+    /// If `changes` is not empty, then it means that
     /// the contract has been instantiated for a
     /// service query. In that case we do not have
     /// any storage possible to access, just changes.
     ///
-    /// In the other case, we access the storage directly
+    /// In the other case, we access the storage directly.
     fn account_info_from_inner_database(
         &self,
         address: Address,
@@ -243,7 +243,7 @@ where
 
     /// Returns whether the address has empty storage.
     /// An address has an empty storage if and only if it is
-    /// an externally owned account(EOA).
+    /// an externally owned account (EOA).
     fn has_empty_storage(&self, address: Address) -> Result<bool, ExecutionError> {
         let application_id = address_to_user_application_id(address);
         let mut runtime = self.runtime.lock().unwrap();
@@ -263,7 +263,7 @@ where
         //   + Transfer according to the input.
         //   + Running the constructor.
         // * So, the transfer is done twice: One at deposit_funds.
-        //   Another in the transfer by REVM.
+        //   Another in the transfer by Revm.
         // * So, we need to correct the balances so that when Revm
         //   is doing the transfer, the balance are the ones after
         //   deposit_funds.
@@ -586,7 +586,7 @@ where
         !code_empty
     }
 
-    /// Creates a new contract. The account contains
+    /// Creates a new contract. The `account` contains
     /// the AccountInfo and the storage to be written.
     /// The parameters is empty because the constructor
     /// does not need to be concatenated as it has
@@ -644,7 +644,7 @@ where
     /// * For the other contracts, if it already created, commit it.
     ///
     /// If not insert them into the map.
-    /// * Iterates over the entries of the map and creates the contract in the
+    /// * Iterates over the entries of the map and creates the contracts in the
     ///   right order.
     pub fn commit_changes(&mut self) -> Result<(), ExecutionError> {
         let changes = mem::take(&mut self.inner.changes);
@@ -724,7 +724,7 @@ where
         )
     }
 
-    /// There are two ways to implements the trait:
+    /// There are two ways to implement the trait:
     /// * Returns entries with "code: Some(...)"
     /// * Returns entries with "code: None".
     ///
@@ -838,7 +838,7 @@ where
     /// * Returns entries with "code: Some(...)"
     /// * Returns entries with "code: None".
     ///
-    /// Since we choose the first design, the "code_by_hash_ref" is not needed. There
+    /// Since we choose the first design, `code_by_hash_ref` is not needed. There
     /// is an example in the Revm source code of this kind.
     fn code_by_hash_ref(&self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
         panic!("Returned AccountInfo should have code: Some(...) and so code_by_hash_ref should never be called");
