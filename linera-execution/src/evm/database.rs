@@ -114,6 +114,10 @@ where
         }
     }
 
+    pub fn lock_runtime(&self) -> std::sync::MutexGuard<'_, Runtime> {
+        self.runtime.lock().unwrap()
+    }
+
     /// Insert error into the database
     pub fn insert_error(&self, exec_error: ExecutionError) {
         let mut error = self.error.lock().unwrap();
@@ -479,6 +483,10 @@ where
             inner: InnerDatabase::new(runtime),
             modules: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    pub fn lock_runtime(&self) -> std::sync::MutexGuard<'_, Runtime> {
+        self.inner.lock_runtime()
     }
 
     /// Balances of the contracts have to be checked when
@@ -874,6 +882,10 @@ where
         Self {
             inner: InnerDatabase::new(runtime),
         }
+    }
+
+    pub fn lock_runtime(&self) -> std::sync::MutexGuard<'_, Runtime> {
+        self.inner.lock_runtime()
     }
 
     pub fn get_block_env(&self) -> Result<BlockEnv, ExecutionError> {

@@ -478,7 +478,7 @@ fn get_evm_destination<Runtime: ContractRuntime>(
     context: &mut ContractCtx<'_, Runtime>,
     account: Account,
 ) -> Result<Option<Address>, ExecutionError> {
-    let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+    let mut runtime = context.db().0.lock_runtime();
     if runtime.chain_id()? != account.chain_id {
         return Ok(None);
     }
@@ -507,24 +507,24 @@ impl<'a> ContractPrecompile {
     ) -> Result<Vec<u8>, ExecutionError> {
         match request {
             ContractRuntimePrecompile::AuthenticatedOwner => {
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 let account_owner = runtime.authenticated_owner()?;
                 Ok(bcs::to_bytes(&account_owner)?)
             }
 
             ContractRuntimePrecompile::MessageOriginChainId => {
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 let origin_chain_id = runtime.message_origin_chain_id()?;
                 Ok(bcs::to_bytes(&origin_chain_id)?)
             }
 
             ContractRuntimePrecompile::MessageIsBouncing => {
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 let result = runtime.message_is_bouncing()?;
                 Ok(bcs::to_bytes(&result)?)
             }
             ContractRuntimePrecompile::AuthenticatedCallerId => {
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 let application_id = runtime.authenticated_caller_id()?;
                 Ok(bcs::to_bytes(&application_id)?)
             }
@@ -542,13 +542,13 @@ impl<'a> ContractPrecompile {
                     grant,
                     message,
                 };
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 runtime.send_message(send_message_request)?;
                 Ok(vec![])
             }
             ContractRuntimePrecompile::TryCallApplication { target, argument } => {
                 let authenticated = true;
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 ensure!(
                     target != runtime.application_id()?,
                     EvmExecutionError::NoSelfCall
@@ -556,7 +556,7 @@ impl<'a> ContractPrecompile {
                 runtime.try_call_application(authenticated, target, argument)
             }
             ContractRuntimePrecompile::Emit { stream_name, value } => {
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 let result = runtime.emit(stream_name, value)?;
                 Ok(bcs::to_bytes(&result)?)
             }
@@ -565,7 +565,7 @@ impl<'a> ContractPrecompile {
                 stream_name,
                 index,
             } => {
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 runtime.read_event(chain_id, stream_name, index)
             }
             ContractRuntimePrecompile::SubscribeToEvents {
@@ -573,7 +573,7 @@ impl<'a> ContractPrecompile {
                 application_id,
                 stream_name,
             } => {
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 runtime.subscribe_to_events(chain_id, application_id, stream_name)?;
                 Ok(vec![])
             }
@@ -582,7 +582,7 @@ impl<'a> ContractPrecompile {
                 application_id,
                 stream_name,
             } => {
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 runtime.unsubscribe_from_events(chain_id, application_id, stream_name)?;
                 Ok(vec![])
             }
@@ -590,7 +590,7 @@ impl<'a> ContractPrecompile {
                 application_id,
                 query,
             } => {
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 ensure!(
                     application_id != runtime.application_id()?,
                     EvmExecutionError::NoSelfCall
@@ -598,7 +598,7 @@ impl<'a> ContractPrecompile {
                 runtime.query_service(application_id, query)
             }
             ContractRuntimePrecompile::ValidationRound => {
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 let value = runtime.validation_round()?;
                 Ok(bcs::to_bytes(&value)?)
             }
@@ -609,7 +609,7 @@ impl<'a> ContractPrecompile {
                         destination.unwrap_or(FAUCET_ADDRESS)
                     };
                     let application_id = {
-                        let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                        let mut runtime = context.db().0.lock_runtime();
                         let application_id = runtime.application_id()?;
                         let source = application_id.into();
                         let value = Amount::try_from(amount.0).map_err(EvmExecutionError::from)?;
@@ -631,7 +631,7 @@ impl<'a> ContractPrecompile {
         let input = get_precompile_argument(context, inputs)?;
         match bcs::from_bytes(&input)? {
             RuntimePrecompile::Base(base_tag) => {
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 base_runtime_call(base_tag, runtime.deref_mut())
             }
             RuntimePrecompile::Contract(contract_tag) => {
@@ -655,7 +655,7 @@ impl<'a> ServicePrecompile {
         request: ServiceRuntimePrecompile,
         context: &mut ServiceCtx<'a, Runtime>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+        let mut runtime = context.db().0.lock_runtime();
         match request {
             ServiceRuntimePrecompile::TryQueryApplication { target, argument } => {
                 ensure!(
@@ -674,7 +674,7 @@ impl<'a> ServicePrecompile {
         let input = get_precompile_argument(context, inputs)?;
         match bcs::from_bytes(&input)? {
             RuntimePrecompile::Base(base_tag) => {
-                let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+                let mut runtime = context.db().0.lock_runtime();
                 base_runtime_call(base_tag, runtime.deref_mut())
             }
             RuntimePrecompile::Contract(_) => Err(EvmExecutionError::PrecompileError(
@@ -843,7 +843,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         module_id: ModuleId,
         num_apps: u32,
     ) -> Result<ApplicationId, ExecutionError> {
-        let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+        let mut runtime = context.db().0.lock_runtime();
         let chain_id = runtime.chain_id()?;
         let block_height = runtime.block_height()?;
         let application_index = runtime.peek_application_index()? + num_apps;
@@ -868,7 +868,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     ) -> Result<ModuleId, ExecutionError> {
         let contract = linera_base::data_types::Bytecode::new(inputs.init_code.to_vec());
         let service = linera_base::data_types::Bytecode::new(vec![]);
-        let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+        let mut runtime = context.db().0.lock_runtime();
         runtime.publish_module(contract, service, VmRuntime::Evm)
     }
 
@@ -985,7 +985,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         let address = expected_application_id.evm_address();
         if inputs.value != U256::ZERO {
             let value = Amount::try_from(inputs.value).map_err(EvmExecutionError::from)?;
-            let mut runtime = context.db().0.inner.runtime.lock().unwrap();
+            let mut runtime = context.db().0.lock_runtime();
             let application_id = runtime.application_id()?;
             let source = application_id.into();
             let chain_id = runtime.chain_id()?;
@@ -1042,7 +1042,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             if value != U256::ZERO {
                 let source: AccountOwner = inputs.caller.into();
                 let owner: AccountOwner = inputs.bytecode_address.into();
-                let mut runtime = self.db.inner.runtime.lock().unwrap();
+                let mut runtime = self.db.lock_runtime();
                 let amount = Amount::try_from(value).map_err(EvmExecutionError::from)?;
                 let chain_id = runtime.chain_id()?;
                 let destination = Account { chain_id, owner };
@@ -1376,7 +1376,7 @@ where
     /// on the EVM and that users and contracts outside of that realm can still
     /// call EVM smart contracts.
     fn get_msg_address(&self) -> Result<Address, ExecutionError> {
-        let mut runtime = self.db.inner.runtime.lock().unwrap();
+        let mut runtime = self.db.lock_runtime();
         let application_id = runtime.authenticated_caller_id()?;
         if let Some(application_id) = application_id {
             return Ok(if application_id.is_evm() {
@@ -1416,7 +1416,7 @@ where
         };
         let block_env = self.db.get_block_env()?;
         let (max_size_evm_contract, gas_limit) = {
-            let mut runtime = self.db.inner.runtime.lock().unwrap();
+            let mut runtime = self.db.lock_runtime();
             let gas_limit = runtime.remaining_fuel(VmRuntime::Evm)?;
             let max_size_evm_contract = runtime.maximum_blob_size()? as usize;
             (max_size_evm_contract, gas_limit)
@@ -1466,14 +1466,14 @@ where
     }
 
     fn consume_fuel(&mut self, gas_final: u64) -> Result<(), ExecutionError> {
-        let mut runtime = self.db.inner.runtime.lock().unwrap();
+        let mut runtime = self.db.lock_runtime();
         runtime.consume_fuel(gas_final, VmRuntime::Evm)
     }
 
     fn write_logs(&mut self, logs: Vec<Log>, origin: &str) -> Result<(), ExecutionError> {
         // TODO(#3758): Extracting Ethereum events from the Linera events.
         if !logs.is_empty() {
-            let mut runtime = self.db.inner.runtime.lock().unwrap();
+            let mut runtime = self.db.lock_runtime();
             let block_height = runtime.block_height()?;
             let stream_name = bcs::to_bytes("ethereum_event")?;
             let stream_name = StreamName(stream_name);
@@ -1519,12 +1519,12 @@ where
             }
             EvmQuery::Query(vec) => vec,
             EvmQuery::Operation(operation) => {
-                let mut runtime = self.db.inner.runtime.lock().unwrap();
+                let mut runtime = self.db.lock_runtime();
                 runtime.schedule_operation(operation)?;
                 return Ok(Vec::new());
             }
             EvmQuery::Operations(operations) => {
-                let mut runtime = self.db.inner.runtime.lock().unwrap();
+                let mut runtime = self.db.lock_runtime();
                 for operation in operations {
                     runtime.schedule_operation(operation)?;
                 }
@@ -1590,7 +1590,7 @@ where
             precompile_addresses: precompile_addresses(),
         };
         let max_size_evm_contract = {
-            let mut runtime = self.db.inner.runtime.lock().unwrap();
+            let mut runtime = self.db.lock_runtime();
             runtime.maximum_blob_size()? as usize
         };
         let nonce = self.db.get_nonce(&caller)?;
