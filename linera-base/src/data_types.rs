@@ -439,6 +439,11 @@ macro_rules! impl_wrapped_number {
                 Self(self.0.abs_diff(other.0))
             }
 
+            /// Returns the midpoint of `self` and `other`, rounded down.
+            pub const fn midpoint(self, other: Self) -> Self {
+                Self(self.0.midpoint(other.0))
+            }
+
             /// Checked in-place addition.
             pub fn try_add_assign(&mut self, other: Self) -> Result<(), ArithmeticError> {
                 self.0 = self
