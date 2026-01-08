@@ -45,25 +45,65 @@ pub const EVM_SERVICE_GAS_LIMIT: u64 = 20_000_000;
 
 impl DBErrorMarker for ExecutionError {}
 
-/// This is the database common to the `ContractDatabase<Runtime>` and
-/// `ServiceDatabase<Runtime>`. It encapsulates the main data of the
-/// query, the contract address, who calls the contract with which value.
-/// It also store the error if one occurs, the access to the runtime.
+/// Core database implementation shared by both contract and service execution modes.
+///
+/// This structure bridges Linera's storage layer with Revm's database requirements,
+/// managing state for EVM contract execution. It is used as the foundation for both
+/// `ContractDatabase` (mutable operations) and `ServiceDatabase` (read-only queries).
+///
+/// # Lifecycle
+///
+/// 1. Created with `contract_address` set to `Address::ZERO`
+/// 2. Address updated via `set_contract_address()` once runtime is available
+/// 3. Execution proceeds with proper address context
+///
+/// # Error Handling
+///
+/// Errors during database operations are captured in the `error` field rather than
+/// immediately propagating, allowing Revm to complete its execution flow before
+/// error handling occurs.
 pub(crate) struct InnerDatabase<Runtime> {
-    /// This is the EVM address of the contract.
-    /// At the creation, it is set to `Address::ZERO` and then later set to the correct value.
+    /// The EVM address of the contract being executed.
+    ///
+    /// Initially set to `Address::ZERO` and updated to the actual contract address
+    /// derived from the Linera `ApplicationId` once the runtime becomes available.
     pub contract_address: Address,
-    /// The caller to the smart contract.
+
+    /// The address of the entity calling this smart contract.
+    ///
+    /// Corresponds to `msg.sender` in Solidity. May be an EOA address, another
+    /// contract address, or `Address::ZERO` for non-EVM callers.
     pub caller: Address,
-    /// The value of the call to the smart contract.
+
+    /// The amount of native tokens being transferred with this call.
+    ///
+    /// Corresponds to `msg.value` in Solidity.
     pub value: U256,
-    /// The runtime of the contract.
+
+    /// The Linera runtime providing access to storage and system operations.
+    ///
+    /// Wrapped in `Arc<Mutex<>>` to allow shared access across database clones
+    /// while maintaining safe mutation.
     pub runtime: Arc<Mutex<Runtime>>,
-    /// The uncommitted changes to the contract. It is used only for service calls.
+
+    /// Uncommitted state changes from EVM execution.
+    ///
+    /// For contract operations, accumulated during execution and committed at the end.
+    /// For service queries on uninitialized contracts, holds the temporary state
+    /// since persistent storage is not yet available.
     pub changes: EvmState,
-    /// Whether the contract has been instantiated in REVM.
+
+    /// Whether the contract has been instantiated in Revm's execution context.
+    ///
+    /// A contract may be instantiated in Linera (storage allocated) but not yet
+    /// in Revm (constructor not executed). This flag tracks the Revm state.
     pub is_revm_instantiated: bool,
-    /// The error that can occur during runtime.
+
+    /// Runtime errors captured during database operations.
+    ///
+    /// Errors are stored here rather than immediately returned to allow Revm
+    /// to complete its execution flow. Checked via `process_any_error()` after
+    /// execution completes.
     pub error: Arc<Mutex<Option<String>>>,
 }
 
@@ -89,8 +129,8 @@ fn get_storage_key(index: U256) -> Vec<u8> {
     key
 }
 
-/// Returns the tag associated with the contract.
-fn get_address_key(category: KeyCategory) -> Vec<u8> {
+/// Returns the storage key for a given category.
+fn get_category_key(category: KeyCategory) -> Vec<u8> {
     vec![category as u8]
 }
 
@@ -98,11 +138,13 @@ impl<Runtime> InnerDatabase<Runtime>
 where
     Runtime: BaseRuntime,
 {
-    /// Creates a new `DatabaseRuntime`.
+    /// Creates a new database instance with default values.
+    ///
+    /// The contract address is initially set to `Address::ZERO` and must be updated
+    /// later via `set_contract_address()` once the runtime can be safely accessed.
+    /// This deferred initialization is necessary because locking the runtime during
+    /// construction could cause issues.
     pub fn new(runtime: Runtime) -> Self {
-        // We cannot acquire a lock on runtime here.
-        // So, we set the contract_address to a default value
-        // and update it later.
         Self {
             contract_address: Address::ZERO,
             caller: Address::ZERO,
@@ -114,17 +156,38 @@ where
         }
     }
 
+    /// Acquires exclusive access to the runtime.
+    ///
+    /// # Returns
+    ///
+    /// A mutex guard providing mutable access to the runtime. The lock is
+    /// automatically released when the guard goes out of scope.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the mutex is poisoned (another thread panicked while holding the lock).
+    /// This should not occur in normal operation as the runtime is not shared across threads.
     pub fn lock_runtime(&self) -> std::sync::MutexGuard<'_, Runtime> {
         self.runtime.lock().unwrap()
     }
 
-    /// Insert error into the database
+    /// Captures an execution error for later processing.
+    ///
+    /// Errors are stored rather than immediately returned to allow Revm to complete
+    /// its execution flow. The error can be checked later via `process_any_error()`.
     pub fn insert_error(&self, exec_error: ExecutionError) {
         let mut error = self.error.lock().unwrap();
         *error = Some(format!("Runtime error {:?}", exec_error));
     }
 
-    /// Process the error.
+    /// Checks for and returns any captured errors.
+    ///
+    /// This should be called after Revm execution completes to handle any errors
+    /// that were captured during database operations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if one was previously captured via `insert_error()`.
     pub fn process_any_error(&self) -> Result<(), EvmExecutionError> {
         let error = self.error.lock().unwrap();
         if let Some(error) = error.clone() {
@@ -185,7 +248,7 @@ where
     /// Reads the state from the local storage.
     fn account_info_from_local_storage(&self) -> Result<Option<AccountInfo>, ExecutionError> {
         let mut runtime = self.runtime.lock().unwrap();
-        let key_info = get_address_key(KeyCategory::AccountInfo);
+        let key_info = get_category_key(KeyCategory::AccountInfo);
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
         Ok(from_bytes_option::<AccountInfo>(&result)?)
@@ -250,32 +313,42 @@ where
         runtime.has_empty_storage(application_id)
     }
 
-    /// Reads the starting balance
+    /// Reads the starting balance for an account, adjusting for double-transfer prevention.
+    ///
+    /// # Balance Adjustment Logic
+    ///
+    /// To prevent double-transfers, balances are adjusted based on the account role:
+    ///
+    /// 1. **Execution Flow:**
+    ///    - `deposit_funds()` transfers value from caller to contract (Linera layer)
+    ///    - Account balances are read (this function)
+    ///    - Revm performs its own transfer during execution
+    ///
+    /// 2. **Adjustments:**
+    ///    - **Caller:** Balance increased by `self.value` (compensates for pre-transfer)
+    ///    - **Contract:** Balance decreased by `self.value` (compensates for pre-receipt)
+    ///    - **Others:** Balance unchanged
+    ///
+    /// This ensures Revm sees the correct post-`deposit_funds` state when it
+    /// performs its transfer, avoiding double-counting.
     fn get_start_balance(&self, address: Address) -> Result<U256, ExecutionError> {
         let mut runtime = self.runtime.lock().unwrap();
         let account_owner = address.into();
         let balance = runtime.read_owner_balance(account_owner)?;
         let balance: U256 = balance.into();
-        // The design is the following:
-        // * The funds have been deposited in deposit_funds.
-        // * The order of the operations is the following:
-        //   + Access to the storage (this functions) of relevant accounts.
-        //   + Transfer according to the input.
-        //   + Running the constructor.
-        // * So, the transfer is done twice: One at deposit_funds.
-        //   Another in the transfer by Revm.
-        // * So, we need to correct the balances so that when Revm
-        //   is doing the transfer, the balance are the ones after
-        //   deposit_funds.
+
         Ok(if self.caller == address {
+            // Caller has already transferred funds, so we add them back
             balance + self.value
         } else if self.contract_address == address {
+            // Contract has already received funds, so we subtract them
             assert!(
                 balance >= self.value,
-                "We should have balance >= self.value"
+                "Contract balance should be >= transferred value"
             );
             balance - self.value
         } else {
+            // Other accounts are unaffected
             balance
         })
     }
@@ -325,8 +398,15 @@ where
         Ok(from_bytes_option::<U256>(&result)?.unwrap_or_default())
     }
 
-    /// Sets the EVM contract address from the value Address::ZERO.
-    /// The value is set from the `ApplicationId`.
+    /// Initializes the contract address from the Linera `ApplicationId`.
+    ///
+    /// During database construction, the contract address is set to `Address::ZERO`
+    /// because the runtime cannot be locked at that time. This method updates it to
+    /// the actual EVM address derived from the Linera `ApplicationId`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if some step fails.
     pub fn set_contract_address(&mut self) -> Result<(), ExecutionError> {
         let mut runtime = self.runtime.lock().unwrap();
         let application_id = runtime.application_id()?;
@@ -334,15 +414,28 @@ where
         Ok(())
     }
 
-    /// A contract is called initialized if the execution of the constructor
-    /// with the constructor argument yield the storage and the deployed
-    /// bytecode. The deployed bytecode is stored in the storage of the
-    /// bytecode address.
-    /// We determine whether the contract is already initialized, sets the
-    /// `is_revm_initialized` and then returns the result.
+    /// Checks whether the contract has been initialized in Revm and updates the flag.
+    ///
+    /// A contract is considered Revm-initialized if the constructor has been executed,
+    /// producing both the deployed bytecode and initial storage state. This is distinct
+    /// from Linera initialization, which only allocates storage without executing the
+    /// constructor.
+    ///
+    /// The initialization status is determined by checking for the presence of
+    /// `AccountInfo` in storage, which is written only after successful constructor
+    /// execution.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` if the contract is initialized (has `AccountInfo` in storage),
+    /// `false` otherwise. Also updates `self.is_revm_instantiated` with the result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if some step fails.
     pub fn set_is_initialized(&mut self) -> Result<bool, ExecutionError> {
         let mut runtime = self.runtime.lock().unwrap();
-        let key_info = get_address_key(KeyCategory::AccountInfo);
+        let key_info = get_category_key(KeyCategory::AccountInfo);
         let promise = runtime.contains_key_new(key_info)?;
         let result = runtime.contains_key_wait(&promise)?;
         self.is_revm_instantiated = result;
@@ -525,9 +618,9 @@ where
     ) -> Result<(), ExecutionError> {
         let mut runtime = self.inner.runtime.lock().unwrap();
         let mut batch = Batch::new();
-        let key_prefix = get_address_key(KeyCategory::Storage);
-        let key_info = get_address_key(KeyCategory::AccountInfo);
-        let key_state = get_address_key(KeyCategory::AccountState);
+        let key_prefix = get_category_key(KeyCategory::Storage);
+        let key_info = get_category_key(KeyCategory::AccountInfo);
+        let key_state = get_category_key(KeyCategory::AccountState);
         if account.is_selfdestructed() {
             batch.delete_key_prefix(key_prefix);
             batch.put_key_value(key_info, &AccountInfo::default())?;
@@ -690,10 +783,17 @@ where
     }
 }
 
+/// Categories for organizing different types of data in the storage.
+///
+/// Each category is prefixed with a unique byte when encoding storage keys,
+/// allowing different types of data to coexist without key collisions.
 #[repr(u8)]
 pub enum KeyCategory {
+    /// Account information including code hash, nonce, and balance.
     AccountInfo,
+    /// Account state (NotExisting, StorageCleared, or Touched).
     AccountState,
+    /// Contract storage values indexed by U256 keys.
     Storage,
 }
 

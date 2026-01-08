@@ -1,7 +1,33 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Code specific to the usage of the [Revm](https://bluealloy.github.io/revm/) runtime.
+//! Integration of the [Revm](https://bluealloy.github.io/revm/) EVM runtime with Linera.
+//!
+//! This module provides the glue between Linera's blockchain infrastructure and the
+//! Revm EVM interpreter, enabling Ethereum smart contracts to run on Linera chains.
+//!
+//! # Architecture
+//!
+//! The integration consists of several key components:
+//!
+//! - **Database Trait Implementations**: Adapts Linera's storage layer to Revm's
+//!   `Database` and `DatabaseRef` traits (see `database.rs`).
+//!
+//! - **Inspector Pattern**: Intercepts EVM operations like contract creation and calls
+//!   to bridge between Revm's execution model and Linera's runtime requirements.
+//!
+//! - **Precompiles**: Extends standard Ethereum precompiles with Linera-specific
+//!   functionality accessible from EVM contracts.
+//!
+//! - **Contract/Service Modules**: Provides both contract (mutable) and service
+//!   (read-only query) execution modes for EVM bytecode.
+//!
+//! # Cross-Contract Communication
+//!
+//! EVM contracts running on Linera can interact with each other using fictional
+//! selectors (see `GET_ACCOUNT_INFO_SELECTOR`, etc.) that don't correspond to real
+//! EVM functions but enable internal protocol operations like querying state from
+//! other contracts or committing changes across contract boundaries.
 
 use core::ops::Range;
 use std::{
@@ -56,23 +82,37 @@ use crate::{
     UserContractInstance, UserContractModule, UserService, UserServiceInstance, UserServiceModule,
 };
 
-/// The selector when accessing the account info. This is a fictional
-/// selector that does not correspond to a real EVM function.
+/// Fictional selector for internal cross-contract calls to retrieve account information.
+///
+/// This selector is used when one EVM contract needs to query the `AccountInfo`
+/// of another EVM contract. It does not correspond to any real EVM function,
+/// but is instead an internal protocol for inter-contract communication within Linera.
 pub const GET_ACCOUNT_INFO_SELECTOR: &[u8] = &[21, 34, 55, 89];
 
-/// The selector when accessing storage infos. This is a fictional
-/// selector that does not correspond to a real EVM function.
+/// Fictional selector for internal cross-contract calls to retrieve storage values.
+///
+/// This selector is used when one EVM contract needs to read a specific storage
+/// slot from another EVM contract. It does not correspond to any real EVM function,
+/// but is instead an internal protocol for inter-contract communication within Linera.
 pub const GET_CONTRACT_STORAGE_SELECTOR: &[u8] = &[5, 14, 42, 132];
 
-/// The selector when writing info to storage. This is a fictional
-/// selector that does not correspond to a real EVM function.
+/// Fictional selector for internal cross-contract calls to commit state changes.
+///
+/// This selector is used to propagate state changes from Revm to the storage layer
+/// of a remote contract. It does not correspond to any real EVM function,
+/// but is instead an internal protocol for state synchronization within Linera.
 pub const COMMIT_CONTRACT_CHANGES_SELECTOR: &[u8] = &[5, 15, 52, 203];
 
-/// The selector when creating a contract from an already full account.
-/// This does not correspond to a real EVM function.
+/// Fictional selector for creating a contract from a pre-populated account.
+///
+/// This selector is used when instantiating a contract that was already created
+/// and populated by Revm during execution. It bypasses the normal constructor flow
+/// since the account data is already complete. This does not correspond to any real EVM function.
 pub const ALREADY_CREATED_CONTRACT_SELECTOR: &[u8] = &[23, 47, 106, 235];
 
-/// The JSON serialization of a trivial vector.
+/// The JSON serialization of an empty vector: `[]`.
+///
+/// Used as a placeholder for constructor parameters when no arguments are needed.
 pub const JSON_EMPTY_VECTOR: &[u8] = &[91, 93];
 
 #[cfg(with_metrics)]
@@ -328,11 +368,24 @@ enum RuntimePrecompile {
     Service(ServiceRuntimePrecompile),
 }
 
+/// Creates an interpreter result for a successful precompile call with zero gas cost.
+///
+/// # Gas Accounting
+///
+/// Linera-specific precompiles appear to consume zero gas from Revm's perspective
+/// because their actual costs are tracked separately through Linera's fuel system.
+/// The gas is initialized to `gas_limit` with no consumption, making the precompile
+/// call effectively free within Revm's accounting model.
+///
+/// # Arguments
+///
+/// * `output` - The return data from the precompile execution
+/// * `gas_limit` - The gas limit for the call (returned unchanged as remaining gas)
+///
+/// # Returns
+///
+/// An `InterpreterResult` indicating success with the provided output and no gas usage.
 fn get_precompile_output(output: Vec<u8>, gas_limit: u64) -> InterpreterResult {
-    // The gas usage is set to `gas_limit` and no spending is being done on it.
-    // This means that for Revm, it looks like the precompile call costs nothing.
-    // This is because the costs of the EVM precompile calls is accounted for
-    // separately in Linera.
     let output = Bytes::from(output);
     let result = InstructionResult::default();
     let gas = Gas::new(gas_limit);
@@ -1128,16 +1181,23 @@ pub struct RevmContractInstance<Runtime> {
     db: ContractDatabase<Runtime>,
 }
 
+/// The type of EVM transaction being executed.
 #[derive(Debug)]
 enum EvmTxKind {
+    /// Contract creation transaction (deploys new contract).
     Create,
+    /// Contract call transaction (invokes existing contract).
     Call,
 }
 
+/// Successful EVM execution result with gas usage and output data.
 #[derive(Debug)]
 struct ExecutionResultSuccess {
+    /// Final gas consumed after applying refunds (per EIP-3529).
     gas_final: u64,
+    /// Event logs emitted during execution.
     logs: Vec<Log>,
+    /// Transaction output (contract address for Create, return data for Call).
     output: Output,
 }
 
@@ -1394,7 +1454,7 @@ where
 
     fn transact_commit(
         &mut self,
-        ch: EvmTxKind,
+        tx_kind: EvmTxKind,
         input: Vec<u8>,
         value: U256,
         caller: Address,
@@ -1404,7 +1464,7 @@ where
         self.db.inner.value = value;
         self.db.inner.deposit_funds()?;
         let data = Bytes::from(input);
-        let kind = match ch {
+        let kind = match tx_kind {
             EvmTxKind::Create => TxKind::Create,
             EvmTxKind::Call => TxKind::Call(contract_address),
         };
