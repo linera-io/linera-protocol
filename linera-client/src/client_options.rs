@@ -397,23 +397,35 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct ApplicationPermissionsConfig {
-    /// If present, only operations from the specified applications are allowed, and
-    /// no system operations. Otherwise all operations are allowed.
+    /// A JSON list of applications allowed to execute operations on this chain. If set to null, all
+    /// operations will be allowed. Otherwise, only operations from the specified applications are
+    /// allowed, and no system operations. Absence of the argument leaves current permissions
+    /// unchanged.
+    // NOTE (applies to all fields): we need the std::option:: and std::vec:: qualifiers in order
+    // to throw off the #[derive(Args)] macro's automatic inference of the type it should expect
+    // from the parser. Without it, it infers the inner type (so either ApplicationId or
+    // Vec<ApplicationId>), which is not what we want here - we want the parsers to return the full
+    // expected types.
     #[arg(long, value_parser = util::parse_json_optional_app_vec)]
     pub execute_operations: Option<std::option::Option<Vec<ApplicationId>>>,
-    /// At least one operation or incoming message from each of these applications must occur in
-    /// every block.
+    /// A JSON list of applications, such that at least one operation or incoming message from each
+    /// of these applications must occur in every block. Absence of the argument leaves
+    /// current mandatory applications unchanged.
     #[arg(long, value_parser = util::parse_json_app_vec)]
     pub mandatory_applications: Option<std::vec::Vec<ApplicationId>>,
-    /// These applications are allowed to close the current chain using the system API.
+    /// A JSON list of applications allowed to manage the chain: close it, change application
+    /// permissions, and change ownership. Absence of the argument leaves current managing
+    /// applications unchanged.
     #[arg(long, value_parser = util::parse_json_app_vec)]
     pub manage_chain: Option<std::vec::Vec<ApplicationId>>,
-    /// These applications are allowed to call services as oracles on the current chain using the
-    /// system API.
+    /// A JSON list of applications that are allowed to call services as oracles on the current
+    /// chain using the system API. If set to null, all applications will be able to do
+    /// so. Absence of the argument leaves the current value of the setting unchanged.
     #[arg(long, value_parser = util::parse_json_optional_app_vec)]
     pub call_service_as_oracle: Option<std::option::Option<Vec<ApplicationId>>>,
-    /// These applications are allowed to make HTTP requests on the current chain using the system
-    /// API.
+    /// A JSON list of applications that are allowed to make HTTP requests on the current chain
+    /// using the system API. If set to null, all applications will be able to do so.
+    /// Absence of the argument leaves the current value of the setting unchanged.
     #[arg(long, value_parser = util::parse_json_optional_app_vec)]
     pub make_http_requests: Option<std::option::Option<Vec<ApplicationId>>>,
 }
