@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, NetworkDescription, TimeDelta, Timestamp},
+    data_types::{Blob, BlockHeight, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
 };
 use linera_chain::{
@@ -351,6 +351,7 @@ pub(crate) enum RootKey {
     Placeholder,
     NetworkDescription,
     BlockExporterState(u32),
+    BlockByHeight(ChainId, BlockHeight),
 }
 
 const CHAIN_ID_TAG: u8 = 0;
@@ -449,6 +450,22 @@ mod tests {
         };
         let key = to_event_key(&event_id);
         assert!(key.starts_with(&prefix));
+    }
+
+    // The height index lookup depends on the serialization of RootKey::BlockByHeight.
+    #[test]
+    fn test_root_key_block_by_height_serialization() {
+        use linera_base::data_types::BlockHeight;
+
+        let hash = CryptoHash::default();
+        let chain_id = ChainId(hash);
+        let height = BlockHeight(42);
+        let root_key = RootKey::BlockByHeight(chain_id, height).bytes();
+
+        // Should be able to deserialize chain_id and height from the bytes
+        let deserialized: (ChainId, BlockHeight) = bcs::from_bytes(&root_key[1..]).unwrap();
+        assert_eq!(deserialized.0, chain_id);
+        assert_eq!(deserialized.1, height);
     }
 }
 
