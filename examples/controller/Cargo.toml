@@ -9,6 +9,7 @@ async-graphql = { workspace = true, default-features = false }
 bcs.workspace = true
 futures.workspace = true
 linera-sdk.workspace = true
+log.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
