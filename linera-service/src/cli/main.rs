@@ -272,13 +272,6 @@ impl Runnable for Job {
                 chain_id,
                 ownership_config,
             } => {
-                ensure!(
-                    !ownership_config.super_owners.is_empty()
-                        || !ownership_config.owners.is_empty(),
-                    "This command requires at least one owner or super owner to be set. \
-                     To close a chain, use `close-chain`. To show the current config, use `show-ownership`."
-                );
-
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
