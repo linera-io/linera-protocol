@@ -5,6 +5,16 @@
 alloy:
   controller:
     type: daemonset
+  # Expose OTLP receiver ports for traces ingestion
+  extraPorts:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
   configMap:
     create: true
     content: |-
@@ -202,6 +212,8 @@ alloy:
 
       {{- if eq (env "LINERA_HELMFILE_SET_TEMPO_ENABLED" | default "false") "true" }}
       // ==================== Tempo Traces Collection ====================
+      // Receives traces via OTLP and forwards to BOTH local Tempo (preserves local monitoring)
+      // AND central Tempo (external monitoring stack)
 
       // OTLP receiver for traces
       otelcol.receiver.otlp "default" {
@@ -214,11 +226,27 @@ alloy:
         }
 
         output {
-          traces  = [otelcol.exporter.otlphttp.central.input]
+          // Fan-out to both local and central Tempo
+          traces = [
+            otelcol.exporter.otlp.local_tempo.input,
+            otelcol.exporter.otlphttp.central.input,
+          ]
         }
       }
 
-      // Export traces to external Tempo
+      // Export traces to LOCAL Tempo (preserves existing local monitoring)
+      // Uses gRPC OTLP to local Tempo in tempo namespace
+      otelcol.exporter.otlp "local_tempo" {
+        client {
+          endpoint = "tempo.tempo.svc.cluster.local:4317"
+
+          tls {
+            insecure = true
+          }
+        }
+      }
+
+      // Export traces to external/central Tempo
       otelcol.exporter.otlphttp "central" {
         client {
           endpoint = env("TEMPO_OTLP_URL")
@@ -230,7 +258,7 @@ alloy:
         }
       }
 
-      // Basic auth for OTLP
+      // Basic auth for central OTLP
       otelcol.auth.basic "credentials" {
         username = env("TEMPO_OTLP_USER")
         password = env("TEMPO_OTLP_PASS")
