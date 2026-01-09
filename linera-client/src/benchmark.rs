@@ -126,9 +126,7 @@ impl<Env: Environment> Benchmark<Env> {
         let notifier = Arc::new(Notify::new());
         let barrier = Arc::new(Barrier::new(num_chains + 1));
 
-        let chain_listener_result = chain_listener
-            .run()
-            .await;
+        let chain_listener_result = chain_listener.run().await;
 
         let chain_listener_handle =
             tokio::spawn(async move { chain_listener_result?.await }.in_current_span());
