@@ -311,12 +311,12 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds
 
   Default value: `86400000`
-* `--execute-operations <EXECUTE_OPERATIONS>` — If present, only operations from the specified applications are allowed, and no system operations. Otherwise all operations are allowed
-* `--mandatory-applications <MANDATORY_APPLICATIONS>` — At least one operation or incoming message from each of these applications must occur in every block
-* `--close-chain <CLOSE_CHAIN>` — These applications are allowed to close the current chain using the system API
-* `--change-application-permissions <CHANGE_APPLICATION_PERMISSIONS>` — These applications are allowed to change the application permissions on the current chain using the system API
-* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — These applications are allowed to call services as oracles on the current chain using the system API
-* `--make-http-requests <MAKE_HTTP_REQUESTS>` — These applications are allowed to make HTTP requests on the current chain using the system API
+* `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the argument leaves current permissions unchanged
+* `--mandatory-applications <MANDATORY_APPLICATIONS>` — A JSON list of applications, such that at least one operation or incoming message from each of these applications must occur in every block. Absence of the argument leaves current mandatory applications unchanged
+* `--close-chain <CLOSE_CHAIN>` — A JSON list of applications allowed to close the chain. Absence of the argument leaves the current list unchanged
+* `--change-application-permissions <CHANGE_APPLICATION_PERMISSIONS>` — A JSON list of applications allowed to change the application permissions on the current chain using the system API. Absence of the argument leaves the current list unchanged
+* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — A JSON list of applications that are allowed to call services as oracles on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the argument leaves the current value of the setting unchanged
+* `--make-http-requests <MAKE_HTTP_REQUESTS>` — A JSON list of applications that are allowed to make HTTP requests on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the argument leaves the current value of the setting unchanged
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
@@ -388,12 +388,12 @@ Changes the application permissions configuration
 ###### **Options:**
 
 * `--chain-id <CHAIN_ID>` — The ID of the chain to which the new permissions will be applied
-* `--execute-operations <EXECUTE_OPERATIONS>` — If present, only operations from the specified applications are allowed, and no system operations. Otherwise all operations are allowed
-* `--mandatory-applications <MANDATORY_APPLICATIONS>` — At least one operation or incoming message from each of these applications must occur in every block
-* `--close-chain <CLOSE_CHAIN>` — These applications are allowed to close the current chain using the system API
-* `--change-application-permissions <CHANGE_APPLICATION_PERMISSIONS>` — These applications are allowed to change the application permissions on the current chain using the system API
-* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — These applications are allowed to call services as oracles on the current chain using the system API
-* `--make-http-requests <MAKE_HTTP_REQUESTS>` — These applications are allowed to make HTTP requests on the current chain using the system API
+* `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the argument leaves current permissions unchanged
+* `--mandatory-applications <MANDATORY_APPLICATIONS>` — A JSON list of applications, such that at least one operation or incoming message from each of these applications must occur in every block. Absence of the argument leaves current mandatory applications unchanged
+* `--close-chain <CLOSE_CHAIN>` — A JSON list of applications allowed to close the chain. Absence of the argument leaves the current list unchanged
+* `--change-application-permissions <CHANGE_APPLICATION_PERMISSIONS>` — A JSON list of applications allowed to change the application permissions on the current chain using the system API. Absence of the argument leaves the current list unchanged
+* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — A JSON list of applications that are allowed to call services as oracles on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the argument leaves the current value of the setting unchanged
+* `--make-http-requests <MAKE_HTTP_REQUESTS>` — A JSON list of applications that are allowed to make HTTP requests on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the argument leaves the current value of the setting unchanged
 
 
 

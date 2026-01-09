@@ -3567,6 +3567,23 @@ impl<Env: Environment> ChainClient<Env> {
         .await
     }
 
+    /// Returns the current application permissions on this chain.
+    #[instrument(level = "trace")]
+    pub async fn query_application_permissions(
+        &self,
+    ) -> Result<ApplicationPermissions, ChainClientError> {
+        Ok(self
+            .client
+            .local_node
+            .chain_state_view(self.chain_id)
+            .await?
+            .execution_state
+            .system
+            .application_permissions
+            .get()
+            .clone())
+    }
+
     /// Changes the application permissions configuration on this chain.
     #[instrument(level = "trace", skip(application_permissions))]
     pub async fn change_application_permissions(

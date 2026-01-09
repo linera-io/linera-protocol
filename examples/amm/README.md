@@ -257,9 +257,9 @@ linera --wait-for-outgoing-messages change-ownership \
     --owners $OWNER_AMM $OWNER_2
 
 linera --wait-for-outgoing-messages change-application-permissions \
-    --execute-operations $AMM_APPLICATION_ID \
-    --mandatory-applications $AMM_APPLICATION_ID \
-    --close-chain $AMM_APPLICATION_ID
+    --execute-operations "[\"$AMM_APPLICATION_ID\"]" \
+    --mandatory-applications "[\"$AMM_APPLICATION_ID\"]" \
+    --manage-chain "[\"$AMM_APPLICATION_ID\"]"
 
 linera service --port $PORT &
 ```
