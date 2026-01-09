@@ -293,6 +293,8 @@ impl MultiPartitionBatch {
             .with_label_values(&[])
             .inc();
         let hash = certificate.hash();
+
+        // Write certificate data by hash
         let root_key = RootKey::ConfirmedBlock(hash).bytes();
         let mut key_values = Vec::new();
         let key = LITE_CERTIFICATE_KEY.to_vec();
@@ -302,6 +304,14 @@ impl MultiPartitionBatch {
         let value = bcs::to_bytes(&certificate.value())?;
         key_values.push((key, value));
         self.put_key_values(root_key, key_values);
+
+        // Write height index: (chain_id, height) -> hash
+        let chain_id = certificate.value().block().header.chain_id;
+        let height = certificate.value().block().header.height;
+        let index_root_key = RootKey::BlockByHeight(chain_id, height).bytes();
+        let index_value = bcs::to_bytes(&hash)?;
+        self.put_key_value(index_root_key, vec![], index_value);
+
         Ok(())
     }
 
@@ -466,6 +476,82 @@ mod tests {
         let deserialized: (ChainId, BlockHeight) = bcs::from_bytes(&root_key[1..]).unwrap();
         assert_eq!(deserialized.0, chain_id);
         assert_eq!(deserialized.1, height);
+    }
+
+    #[cfg(with_testing)]
+    #[tokio::test]
+    async fn test_add_certificate_creates_height_index() {
+        use linera_base::{
+            crypto::TestString,
+            data_types::{BlockHeight, Epoch, Round, Timestamp},
+        };
+        use linera_chain::{
+            block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
+            types::ConfirmedBlockCertificate,
+        };
+        use linera_views::{
+            memory::MemoryDatabase,
+            store::{KeyValueDatabase, ReadableKeyValueStore as _},
+        };
+
+        use crate::{db_storage::MultiPartitionBatch, DbStorage, TestClock};
+
+        // Create test storage
+        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
+
+        // Create a test certificate at a specific height
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+        let height = BlockHeight(5);
+        let block = Block {
+            header: BlockHeader {
+                chain_id,
+                epoch: Epoch::ZERO,
+                height,
+                timestamp: Timestamp::from(0),
+                state_hash: CryptoHash::new(&TestString::new("state_hash")),
+                previous_block_hash: None,
+                authenticated_signer: None,
+                transactions_hash: CryptoHash::new(&TestString::new("transactions_hash")),
+                messages_hash: CryptoHash::new(&TestString::new("messages_hash")),
+                previous_message_blocks_hash: CryptoHash::new(&TestString::new(
+                    "prev_msg_blocks_hash",
+                )),
+                previous_event_blocks_hash: CryptoHash::new(&TestString::new(
+                    "prev_event_blocks_hash",
+                )),
+                oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_responses_hash")),
+                events_hash: CryptoHash::new(&TestString::new("events_hash")),
+                blobs_hash: CryptoHash::new(&TestString::new("blobs_hash")),
+                operation_results_hash: CryptoHash::new(&TestString::new("operation_results_hash")),
+            },
+            body: BlockBody {
+                transactions: vec![],
+                messages: vec![],
+                previous_message_blocks: Default::default(),
+                previous_event_blocks: Default::default(),
+                oracle_responses: vec![],
+                events: vec![],
+                blobs: vec![],
+                operation_results: vec![],
+            },
+        };
+        let confirmed_block = ConfirmedBlock::new(block);
+        let certificate = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
+
+        // Write certificate
+        let mut batch = MultiPartitionBatch::new();
+        batch.add_certificate(&certificate).unwrap();
+        storage.write_batch(batch).await.unwrap();
+
+        // Verify height index was created
+        let hash = certificate.hash();
+        let index_root_key = RootKey::BlockByHeight(chain_id, height).bytes();
+        let store = storage.database.open_shared(&index_root_key).unwrap();
+        let value_bytes = store.read_value_bytes(&[]).await.unwrap();
+
+        assert!(value_bytes.is_some(), "Height index was not created");
+        let stored_hash: CryptoHash = bcs::from_bytes(&value_bytes.unwrap()).unwrap();
+        assert_eq!(stored_hash, hash, "Height index contains wrong hash");
     }
 }
 
