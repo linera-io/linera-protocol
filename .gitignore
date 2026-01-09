@@ -40,3 +40,6 @@ linera-web/**/*-lock.json
 .claude
 CLAUDE.md
 .serena
+
+# Git worktrees
+.worktrees/
