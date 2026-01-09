@@ -597,7 +597,13 @@ impl<Env: Environment> ClientContext<Env> {
             "Changing ownership of a chain"
         );
         let time_start = Instant::now();
-        let ownership = ChainOwnership::try_from(ownership_config)?;
+        let mut ownership = chain_client.query_chain_ownership().await?;
+        ownership_config.update(&mut ownership)?;
+
+        if ownership.super_owners.is_empty() && ownership.owners.is_empty() {
+            tracing::error!("At least one owner or super owner of the chain has to be set.");
+            return Err(error::Inner::ChainOwnership.into());
+        }
 
         let certificate = self
             .apply_client_command(&chain_client, |chain_client| {

@@ -6,7 +6,7 @@ use std::{collections::HashSet, fmt, iter};
 use linera_base::{
     data_types::{ApplicationPermissions, TimeDelta},
     identifiers::{AccountOwner, ApplicationId, ChainId, GenericApplicationId},
-    ownership::{ChainOwnership, TimeoutConfig},
+    ownership::ChainOwnership,
     time::Duration,
 };
 use linera_core::{
@@ -289,29 +289,43 @@ impl Options {
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct ChainOwnershipConfig {
-    /// The new super owners.
-    #[arg(long, num_args(0..))]
-    pub super_owners: Vec<AccountOwner>,
+    /// A JSON list of the new super owners. Absence of the argument leaves the current
+    /// set of super owners unchanged.
+    // NOTE (applies to all fields): we need the std::option:: and std::vec:: qualifiers in order
+    // to throw off the #[derive(Args)] macro's automatic inference of the type it should expect
+    // from the parser. Without it, it infers the inner type (so either ApplicationId or
+    // Vec<ApplicationId>), which is not what we want here - we want the parsers to return the full
+    // expected types.
+    #[arg(long, value_parser = util::parse_json::<Vec<AccountOwner>>)]
+    pub super_owners: Option<std::vec::Vec<AccountOwner>>,
 
-    /// The new regular owners.
-    #[arg(long, num_args(0..))]
-    pub owners: Vec<AccountOwner>,
+    /// A JSON list of the new owners. Absence of the argument leaves the current list of
+    /// owners unchanged.
+    #[arg(long, value_parser = util::parse_json::<Vec<AccountOwner>>)]
+    pub owners: Option<std::vec::Vec<AccountOwner>>,
 
-    /// The leader of the first single-leader round. If not set, this is random like other rounds.
-    #[arg(long)]
-    pub first_leader: Option<AccountOwner>,
+    /// The leader of the first single-leader round. If set to null, this is random like other
+    /// rounds. Absence of the argument leaves the current setting unchanged.
+    #[arg(long, value_parser = util::parse_json::<Option<AccountOwner>>)]
+    pub first_leader: Option<std::option::Option<AccountOwner>>,
 
-    /// Weights for the new owners.
+    /// A JSON list of weights for the new owners.
     ///
     /// If they are specified there must be exactly one weight for each owner.
-    /// If no weights are given, every owner will have weight 100.
-    #[arg(long, num_args(0..))]
-    pub owner_weights: Vec<u64>,
+    ///
+    /// Absence of the argument gives each owner a weight of 100 if --owners is specified,
+    /// or leaves the owners unchanged if it is not specified.
+    ///
+    /// Note: if --owner is not specified, but this argument is, the weights will be
+    /// assigned to the existing owners in lexicographical order.
+    #[arg(long, value_parser = util::parse_json::<Vec<u64>>)]
+    pub owner_weights: Option<std::vec::Vec<u64>>,
 
     /// The number of rounds in which every owner can propose blocks, i.e. the first round
-    /// number in which only a single designated leader is allowed to propose blocks.
-    #[arg(long)]
-    pub multi_leader_rounds: Option<u32>,
+    /// number in which only a single designated leader is allowed to propose blocks. "null" is
+    /// equivalent to 2^32 - 1. Absence of the argument leaves the current setting unchanged.
+    #[arg(long, value_parser = util::parse_json::<Option<u32>>)]
+    pub multi_leader_rounds: Option<std::option::Option<u32>>,
 
     /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
     /// This should only be `true` on chains with restrictive application permissions and an
@@ -319,41 +333,39 @@ pub struct ChainOwnershipConfig {
     #[arg(long)]
     pub open_multi_leader_rounds: bool,
 
-    /// The duration of the fast round, in milliseconds.
-    #[arg(long = "fast-round-ms", value_parser = util::parse_millis_delta)]
-    pub fast_round_duration: Option<TimeDelta>,
+    /// The duration of the fast round, in milliseconds. "null" means the fast round will
+    /// not time out. Absence of the argument leaves the current setting unchanged.
+    #[arg(long = "fast-round-ms", value_parser = util::parse_json_optional_millis_delta)]
+    pub fast_round_duration: Option<std::option::Option<TimeDelta>>,
 
-    /// The duration of the first single-leader and all multi-leader rounds.
+    /// The duration of the first single-leader and all multi-leader rounds. Absence of
+    /// the argument leaves the current setting unchanged.
     #[arg(
         long = "base-timeout-ms",
-        default_value = "10000",
         value_parser = util::parse_millis_delta
     )]
-    pub base_timeout: TimeDelta,
+    pub base_timeout: Option<TimeDelta>,
 
     /// The number of milliseconds by which the timeout increases after each
-    /// single-leader round.
+    /// single-leader round. Absence of the argument leaves the current setting unchanged.
     #[arg(
         long = "timeout-increment-ms",
-        default_value = "1000",
         value_parser = util::parse_millis_delta
     )]
-    pub timeout_increment: TimeDelta,
+    pub timeout_increment: Option<TimeDelta>,
 
     /// The age of an incoming tracked or protected message after which the validators start
-    /// transitioning the chain to fallback mode, in milliseconds.
+    /// transitioning the chain to fallback mode, in milliseconds. Absence of the argument
+    /// leaves the current setting unchanged.
     #[arg(
         long = "fallback-duration-ms",
-        default_value = "86400000", // 1 day
         value_parser = util::parse_millis_delta
     )]
-    pub fallback_duration: TimeDelta,
+    pub fallback_duration: Option<TimeDelta>,
 }
 
-impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
-    type Error = Error;
-
-    fn try_from(config: ChainOwnershipConfig) -> Result<ChainOwnership, Error> {
+impl ChainOwnershipConfig {
+    pub fn update(self, chain_ownership: &mut ChainOwnership) -> Result<(), Error> {
         let ChainOwnershipConfig {
             super_owners,
             owners,
@@ -365,33 +377,59 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
             base_timeout,
             timeout_increment,
             fallback_duration,
-        } = config;
-        if !owner_weights.is_empty() && owner_weights.len() != owners.len() {
-            return Err(Error::MisalignedWeights {
-                public_keys: owners.len(),
-                weights: owner_weights.len(),
-            });
+        } = self;
+
+        if let Some(owner_weights) = owner_weights {
+            let owners = owners
+                .unwrap_or_else(|| chain_ownership.owners.keys().cloned().collect::<Vec<_>>());
+            if owner_weights.len() != owners.len() {
+                return Err(Error::MisalignedWeights {
+                    public_keys: owners.len(),
+                    weights: owner_weights.len(),
+                });
+            }
+            chain_ownership.owners = owners.into_iter().zip(owner_weights).collect();
+        } else if let Some(owners) = owners {
+            chain_ownership.owners = owners.into_iter().zip(iter::repeat(100)).collect();
         }
-        let super_owners = super_owners.into_iter().collect();
-        let owners = owners
-            .into_iter()
-            .zip(owner_weights.into_iter().chain(iter::repeat(100)))
-            .collect();
-        let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
-        let timeout_config = TimeoutConfig {
-            fast_round_duration,
-            base_timeout,
-            timeout_increment,
-            fallback_duration,
-        };
-        Ok(ChainOwnership {
-            super_owners,
-            owners,
-            first_leader,
-            multi_leader_rounds,
-            open_multi_leader_rounds,
-            timeout_config,
-        })
+
+        if let Some(super_owners) = super_owners {
+            chain_ownership.super_owners = super_owners.into_iter().collect();
+        }
+
+        if let Some(first_leader) = first_leader {
+            chain_ownership.first_leader = first_leader;
+        }
+        if let Some(multi_leader_rounds) = multi_leader_rounds {
+            chain_ownership.multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
+        }
+
+        chain_ownership.open_multi_leader_rounds = open_multi_leader_rounds;
+
+        if let Some(fast_round_duration) = fast_round_duration {
+            chain_ownership.timeout_config.fast_round_duration = fast_round_duration;
+        }
+        if let Some(base_timeout) = base_timeout {
+            chain_ownership.timeout_config.base_timeout = base_timeout;
+        }
+        if let Some(timeout_increment) = timeout_increment {
+            chain_ownership.timeout_config.timeout_increment = timeout_increment;
+        }
+        if let Some(fallback_duration) = fallback_duration {
+            chain_ownership.timeout_config.fallback_duration = fallback_duration;
+        }
+
+        Ok(())
+    }
+}
+
+impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
+    type Error = Error;
+
+    fn try_from(config: ChainOwnershipConfig) -> Result<ChainOwnership, Error> {
+        let mut chain_ownership = ChainOwnership::default();
+        config.update(&mut chain_ownership)?;
+        Ok(chain_ownership)
     }
 }
 
@@ -406,27 +444,27 @@ pub struct ApplicationPermissionsConfig {
     // from the parser. Without it, it infers the inner type (so either ApplicationId or
     // Vec<ApplicationId>), which is not what we want here - we want the parsers to return the full
     // expected types.
-    #[arg(long, value_parser = util::parse_json_optional_app_vec)]
+    #[arg(long, value_parser = util::parse_json::<Option<Vec<ApplicationId>>>)]
     pub execute_operations: Option<std::option::Option<Vec<ApplicationId>>>,
     /// A JSON list of applications, such that at least one operation or incoming message from each
     /// of these applications must occur in every block. Absence of the argument leaves
     /// current mandatory applications unchanged.
-    #[arg(long, value_parser = util::parse_json_app_vec)]
+    #[arg(long, value_parser = util::parse_json::<Vec<ApplicationId>>)]
     pub mandatory_applications: Option<std::vec::Vec<ApplicationId>>,
     /// A JSON list of applications allowed to manage the chain: close it, change application
     /// permissions, and change ownership. Absence of the argument leaves current managing
     /// applications unchanged.
-    #[arg(long, value_parser = util::parse_json_app_vec)]
+    #[arg(long, value_parser = util::parse_json::<Vec<ApplicationId>>)]
     pub manage_chain: Option<std::vec::Vec<ApplicationId>>,
     /// A JSON list of applications that are allowed to call services as oracles on the current
     /// chain using the system API. If set to null, all applications will be able to do
     /// so. Absence of the argument leaves the current value of the setting unchanged.
-    #[arg(long, value_parser = util::parse_json_optional_app_vec)]
+    #[arg(long, value_parser = util::parse_json::<Option<Vec<ApplicationId>>>)]
     pub call_service_as_oracle: Option<std::option::Option<Vec<ApplicationId>>>,
     /// A JSON list of applications that are allowed to make HTTP requests on the current chain
     /// using the system API. If set to null, all applications will be able to do so.
     /// Absence of the argument leaves the current value of the setting unchanged.
-    #[arg(long, value_parser = util::parse_json_optional_app_vec)]
+    #[arg(long, value_parser = util::parse_json::<Option<Vec<ApplicationId>>>)]
     pub make_http_requests: Option<std::option::Option<Vec<ApplicationId>>>,
 }
 
