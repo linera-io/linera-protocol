@@ -47,10 +47,10 @@ discovery.relabel "linera_metrics" {
     replacement   = env("VALIDATOR_NAME")
   }
 
-  // Use metrics port (21100)
+  // Keep pods with a port named "metrics" (covers shards 21100, proxy 21100, block-exporter 9091)
   rule {
-    source_labels = ["__meta_kubernetes_pod_container_port_number"]
-    regex         = "21100"
+    source_labels = ["__meta_kubernetes_pod_container_port_name"]
+    regex         = "metrics"
     action        = "keep"
   }
 
