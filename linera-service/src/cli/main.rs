@@ -728,6 +728,7 @@ impl Runnable for Job {
                         storage.clone(),
                         shutdown_notifier.clone(),
                         mpsc::unbounded_channel().1,
+                        true, // Enabling background sync for benchmarks
                     );
                     linera_client::benchmark::Benchmark::run_benchmark(
                         num_chains,

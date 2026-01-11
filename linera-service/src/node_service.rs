@@ -1017,8 +1017,9 @@ where
             storage,
             cancellation_token.clone(),
             command_receiver,
+            true,
         )
-        .run(true)
+        .run()
         .await?;
         let mut chain_listener = Box::pin(chain_listener).fuse();
         let tcp_listener =
