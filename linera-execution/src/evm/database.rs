@@ -21,7 +21,7 @@ use linera_views::common::from_bytes_option;
 use revm::{primitives::keccak256, Database, DatabaseCommit, DatabaseRef};
 use revm_context::BlockEnv;
 use revm_context_interface::block::BlobExcessGasAndPrice;
-use revm_database::{AccountState, DBErrorMarker};
+use revm_database::DBErrorMarker;
 use revm_primitives::{address, Address, B256, KECCAK_EMPTY, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
@@ -620,29 +620,11 @@ where
         let mut batch = Batch::new();
         let key_prefix = get_category_key(KeyCategory::Storage);
         let key_info = get_category_key(KeyCategory::AccountInfo);
-        let key_state = get_category_key(KeyCategory::AccountState);
         if account.is_selfdestructed() {
             batch.delete_key_prefix(key_prefix);
             batch.put_key_value(key_info, &AccountInfo::default())?;
-            batch.put_key_value(key_state, &AccountState::NotExisting)?;
         } else {
-            let is_newly_created = account.is_created();
-            // We write here the state of the user in question. But that does not matter
             batch.put_key_value(key_info, &account.info)?;
-            let account_state = if is_newly_created {
-                batch.delete_key_prefix(key_prefix.clone());
-                AccountState::StorageCleared
-            } else {
-                let promise = runtime.read_value_bytes_new(key_state.clone())?;
-                let result = runtime.read_value_bytes_wait(&promise)?;
-                let account_state = from_bytes_option::<AccountState>(&result)?.unwrap_or_default();
-                if account_state.is_storage_cleared() {
-                    AccountState::StorageCleared
-                } else {
-                    AccountState::Touched
-                }
-            };
-            batch.put_key_value(key_state, &account_state)?;
             for (index, value) in &account.storage {
                 if value.present_value() != value.original_value() {
                     let key = get_storage_key(*index);
@@ -791,8 +773,6 @@ where
 pub enum KeyCategory {
     /// Account information including code hash, nonce, and balance.
     AccountInfo,
-    /// Account state (NotExisting, StorageCleared, or Touched).
-    AccountState,
     /// Contract storage values indexed by U256 keys.
     Storage,
 }
