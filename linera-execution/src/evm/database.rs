@@ -90,7 +90,7 @@ pub(crate) struct InnerDatabase<Runtime> {
     ///
     /// For contract operations, accumulated during execution and committed at the end.
     /// For service queries on uninitialized contracts, holds the temporary state
-    /// since persistent storage is not yet available.
+    /// since persistent storage is not available.
     pub changes: EvmState,
 
     /// Whether the contract has been instantiated in Revm's execution context.
@@ -143,7 +143,7 @@ where
     /// The contract address is initially set to `Address::ZERO` and must be updated
     /// later via `set_contract_address()` once the runtime can be safely accessed.
     /// This deferred initialization is necessary because locking the runtime during
-    /// construction could cause issues.
+    /// construction is not possible in the use cases of this code.
     pub fn new(runtime: Runtime) -> Self {
         Self {
             contract_address: Address::ZERO,
@@ -217,7 +217,7 @@ where
     /// from the one in Linera. This is the case both for the faucet
     /// and for other accounts.
     ///
-    /// For the contract for which address == contract_address we
+    /// For the contract for which `address == contract_address` we
     /// access the `AccountInfo` locally from the storage. For other
     /// contracts we need to access other contracts (with the
     /// function `f`)
@@ -731,8 +731,8 @@ where
     pub fn commit_changes(&mut self) -> Result<(), ExecutionError> {
         let changes = mem::take(&mut self.inner.changes);
         let mut balances = Vec::new();
-        let map = mem::take(self.modules.lock().unwrap().deref_mut());
-        let mut contracts_to_create = vec![None; map.len()];
+        let modules = mem::take(self.modules.lock().unwrap().deref_mut());
+        let mut contracts_to_create = vec![None; modules.len()];
         for (address, account) in changes {
             if self.is_account_checkable(&address) {
                 let revm_balance = account.info.balance;
@@ -743,7 +743,7 @@ where
                     self.commit_contract_changes(&account)?;
                 } else {
                     let application_id = address_to_user_application_id(address);
-                    if let Some((module_id, index)) = map.get(&application_id) {
+                    if let Some((module_id, index)) = modules.get(&application_id) {
                         contracts_to_create[*index as usize] = Some((address, account, *module_id));
                     } else {
                         self.commit_remote_contract(address, account)?;
@@ -802,9 +802,9 @@ where
     /// The code `read_basic_ref` is used with the relevant access function.
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
         let is_newly_created = {
-            let map = self.modules.lock().unwrap();
+            let modules = self.modules.lock().unwrap();
             let application_id = address_to_user_application_id(address);
-            map.contains_key(&application_id)
+            modules.contains_key(&application_id)
         };
         self.inner.read_basic_ref(
             InnerDatabase::<Runtime>::get_contract_account_info,
