@@ -72,7 +72,8 @@ pub(crate) struct InnerDatabase<Runtime> {
     /// The address of the entity calling this smart contract.
     ///
     /// Corresponds to `msg.sender` in Solidity. May be an EOA address, another
-    /// contract address, or `Address::ZERO` for non-EVM callers.
+    /// contract address, or `Address::ZERO` for contracts for which the caller
+    /// does not have an EVM address or has not been authenticated.
     pub caller: Address,
 
     /// The amount of native tokens being transferred with this call.
