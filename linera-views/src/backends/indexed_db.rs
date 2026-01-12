@@ -37,6 +37,7 @@ const DATABASE_NAME: &str = "linera";
 
 /// A browser implementation of a key-value store using the [IndexedDB
 /// API](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API#:~:text=IndexedDB%20is%20a%20low%2Dlevel,larger%20amounts%20of%20structured%20data.).
+#[derive(Clone)]
 pub struct IndexedDbDatabase {
     /// The database used for storing the data.
     pub database: Rc<IdbDatabase>,
@@ -47,6 +48,7 @@ pub struct IndexedDbDatabase {
 }
 
 /// A logical partition of [`IndexedDbDatabase`]
+#[derive(Clone)]
 pub struct IndexedDbStore {
     /// The database used for storing the data.
     pub database: Rc<IdbDatabase>,
