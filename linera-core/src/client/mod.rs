@@ -428,6 +428,19 @@ impl<Env: Environment> Client<Env> {
             .insert(chain_id, mode);
     }
 
+    /// Extends the listening mode for a chain, combining with the existing mode if present.
+    /// Returns the resulting mode.
+    #[instrument(level = "trace", skip(self))]
+    pub fn extend_chain_mode(&self, chain_id: ChainId, mode: ListeningMode) -> ListeningMode {
+        let mut chain_modes = self
+            .chain_modes
+            .write()
+            .expect("Panics should not happen while holding a lock to `chain_modes`");
+        let entry = chain_modes.entry(chain_id).or_insert(mode.clone());
+        entry.extend(Some(mode));
+        entry.clone()
+    }
+
     /// Returns the listening mode for a chain, if it is tracked.
     pub fn chain_mode(&self, chain_id: ChainId) -> Option<ListeningMode> {
         self.chain_modes
