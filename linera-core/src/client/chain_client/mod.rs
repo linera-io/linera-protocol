@@ -2075,9 +2075,19 @@ impl<Env: Environment> ChainClient<Env> {
                 .and_then(|blobs| blobs.last())
                 .ok_or_else(|| Error::InternalError("Failed to create a new chain"))?;
             let description = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?;
-            // Add the new chain to the list of tracked chains with full participation.
-            self.client
-                .extend_chain_mode(description.id(), ListeningMode::FullChain);
+            // If we have a key for any owner, add it to the list of tracked chains.
+            for owner in ownership.all_owners() {
+                if self
+                    .signer()
+                    .contains_key(owner)
+                    .await
+                    .map_err(Error::signer_failure)?
+                {
+                    self.client
+                        .extend_chain_mode(description.id(), ListeningMode::FullChain);
+                    break;
+                }
+            }
             self.client
                 .local_node
                 .retry_pending_cross_chain_requests(self.chain_id)

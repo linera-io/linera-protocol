@@ -397,6 +397,9 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                             block.header.epoch,
                         )
                         .await?;
+                    context_guard
+                        .client()
+                        .extend_chain_mode(new_chain_id, ListeningMode::FullChain);
                     new_ids.insert(new_chain_id, ListeningMode::FullChain);
                 }
             }
