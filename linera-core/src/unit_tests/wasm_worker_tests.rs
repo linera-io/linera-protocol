@@ -205,7 +205,7 @@ where
         vec![OperationResult::default()],
     ));
 
-    env.write_blobs(&[application_description_blob.clone()])
+    env.write_blobs(std::slice::from_ref(&application_description_blob))
         .await?;
     let info = env
         .worker()

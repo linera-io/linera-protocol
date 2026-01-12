@@ -596,8 +596,7 @@ async fn nested_collection_map_view_check() -> Result<()> {
                 let count = submap.len();
                 if count > 0 {
                     let subkeys = submap
-                        .iter()
-                        .map(|(key, _)| key.clone())
+                        .keys().cloned()
                         .collect::<Vec<_>>();
                     let pos = rng.gen_range(0..count);
                     let key2 = subkeys[pos].clone();

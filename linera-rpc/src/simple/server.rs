@@ -386,6 +386,8 @@ where
         };
 
         self.server.packets_processed += 1;
+        // We allow this because `is_multiple_of` is still unstable in our MSRV.
+        #[allow(clippy::manual_is_multiple_of)]
         if self.server.packets_processed % 5000 == 0 {
             debug!(
                 "[{}] {}:{} (shard {}) has processed {} packets",

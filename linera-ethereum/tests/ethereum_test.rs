@@ -68,11 +68,11 @@ async fn test_event_numerics() -> anyhow::Result<()> {
         ],
         block_number: 1,
     };
-    assert_eq!(*events, [target_event.clone()]);
+    assert_eq!(*events, *std::slice::from_ref(&target_event));
     let events = ethereum_client_simp
         .read_events(&contract_address, event_name_expanded, from_block, to_block)
         .await?;
-    assert_eq!(*events, [target_event]);
+    assert_eq!(*events, *std::slice::from_ref(&target_event));
     Ok(())
 }
 
@@ -110,12 +110,12 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
         ],
         block_number: 2,
     };
-    assert_eq!(*events, [target_event.clone()]);
+    assert_eq!(*events, *std::slice::from_ref(&target_event));
     // Using the simplified client
     let events = ethereum_client_simp
         .read_events(&contract_address, event_name_expanded, from_block, to_block)
         .await?;
-    assert_eq!(*events, [target_event]);
+    assert_eq!(*events, *std::slice::from_ref(&target_event));
     Ok(())
 }
 
