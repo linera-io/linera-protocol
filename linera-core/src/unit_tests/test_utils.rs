@@ -48,7 +48,7 @@ use {
 };
 
 use crate::{
-    client::{ChainClientOptions, Client},
+    client::{ChainClientOptions, Client, ListeningMode},
     data_types::*,
     environment::{wallet::Chain, TestSigner, TestWallet},
     node::{
@@ -1060,7 +1060,7 @@ where
             },
             self.admin_id(),
             false,
-            [chain_id],
+            [(chain_id, ListeningMode::FullChain)],
             format!("Client node for {:.8}", chain_id),
             Duration::from_secs(30),
             Duration::from_secs(1),

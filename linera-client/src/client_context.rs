@@ -284,15 +284,20 @@ where
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
         });
-        let chain_ids: Vec<_> = wallet
-            .chain_ids()
+        let chain_modes: Vec<_> = wallet
+            .items()
+            .map_ok(|(id, _chain)| (id, ListeningMode::FullChain))
             .try_collect()
             .await
             .map_err(error::Inner::wallet)?;
-        let name = match chain_ids.len() {
+        let name = match chain_modes.len() {
             0 => "Client node".to_string(),
-            1 => format!("Client node for {:.8}", chain_ids[0]),
-            n => format!("Client node for {:.8} and {} others", chain_ids[0], n - 1),
+            1 => format!("Client node for {:.8}", chain_modes[0].0),
+            n => format!(
+                "Client node for {:.8} and {} others",
+                chain_modes[0].0,
+                n - 1
+            ),
         };
 
         let client = Client::new(
@@ -304,7 +309,7 @@ where
             },
             genesis_config.admin_id(),
             options.long_lived_services,
-            chain_ids,
+            chain_modes,
             name,
             options.chain_worker_ttl,
             options.sender_chain_worker_ttl,
@@ -448,8 +453,7 @@ impl<Env: Environment> ClientContext<Env> {
         }
 
         // Start listening for notifications, so we learn about new rounds and blocks.
-        let (listener, _listen_handle, mut notification_stream) =
-            chain_client.listen(ListeningMode::FullChain).await?;
+        let (listener, _listen_handle, mut notification_stream) = chain_client.listen().await?;
         self.chain_listeners.spawn_task(listener);
 
         loop {
@@ -472,7 +476,8 @@ impl<Env: Environment> ClientContext<Env> {
         chain_id: ChainId,
         owner: AccountOwner,
     ) -> Result<(), Error> {
-        self.client.track_chain(chain_id);
+        self.client
+            .extend_chain_mode(chain_id, ListeningMode::FullChain);
         let client = self.make_chain_client(chain_id).await?;
         let chain_description = client.get_chain_description().await?;
         let config = chain_description.config();
@@ -524,8 +529,7 @@ impl<Env: Environment> ClientContext<Env> {
         }
 
         // Start listening for notifications, so we learn about new rounds and blocks.
-        let (listener, _listen_handle, mut notification_stream) =
-            client.listen(ListeningMode::FullChain).await?;
+        let (listener, _listen_handle, mut notification_stream) = client.listen().await?;
         self.chain_listeners.spawn_task(listener);
 
         loop {
@@ -1067,7 +1071,8 @@ impl<Env: Environment> ClientContext<Env> {
                         .find(|blob| blob.id().blob_type == BlobType::ChainDescription)
                         .map(|blob| ChainId(blob.id().hash))
                         .expect("failed to create a new chain");
-                    self.client.track_chain(chain_id);
+                    self.client
+                        .extend_chain_mode(chain_id, ListeningMode::FullChain);
 
                     let mut chain_client = self.client.create_chain_client(
                         chain_id,

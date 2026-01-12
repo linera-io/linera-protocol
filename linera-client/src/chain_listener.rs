@@ -158,8 +158,6 @@ struct ListeningClient<C: ClientContext> {
     notification_stream: Arc<Mutex<NotificationStream>>,
     /// This is only `< u64::MAX` when the client is waiting for a timeout to process the inbox.
     timeout: Timestamp,
-    /// The mode of listening to this chain.
-    listening_mode: ListeningMode,
     /// The cancellation token for the background sync process, if started.
     maybe_sync_cancellation_token: Option<CancellationToken>,
 }
@@ -170,7 +168,6 @@ impl<C: ClientContext> ListeningClient<C> {
         abort_handle: AbortOnDrop,
         join_handle: NonBlockingFuture<()>,
         notification_stream: NotificationStream,
-        listening_mode: ListeningMode,
         maybe_sync_cancellation_token: Option<CancellationToken>,
     ) -> Self {
         Self {
@@ -180,7 +177,6 @@ impl<C: ClientContext> ListeningClient<C> {
             #[allow(clippy::arc_with_non_send_sync)] // Only `Send` with `futures-util/alloc`.
             notification_stream: Arc::new(Mutex::new(notification_stream)),
             timeout: Timestamp::from(u64::MAX),
-            listening_mode,
             maybe_sync_cancellation_token,
         }
     }
@@ -287,9 +283,8 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             loop {
                 match self.next_action().await? {
                     Action::ProcessInbox(chain_id) => self.maybe_process_inbox(chain_id).await?,
-                    Action::Notification(notification, listening_mode) => {
-                        self.process_notification(notification, &listening_mode)
-                            .await?
+                    Action::Notification(notification) => {
+                        self.process_notification(notification).await?
                     }
                     Action::Stop => break,
                 }
@@ -300,11 +295,22 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     }
 
     /// Processes a notification, updating local chains and validators as needed.
-    async fn process_notification(
-        &mut self,
-        notification: Notification,
-        listening_mode: &ListeningMode,
-    ) -> Result<(), Error> {
+    async fn process_notification(&mut self, notification: Notification) -> Result<(), Error> {
+        let Some(listening_client) = self.listening.get(&notification.chain_id) else {
+            warn!(
+                ?notification,
+                "ChainListener::process_notification: got a notification without listening to the chain"
+            );
+            return Ok(());
+        };
+        let Some(listening_mode) = listening_client.client.listening_mode() else {
+            warn!(
+                ?notification,
+                "ChainListener::process_notification: chain has no listening mode"
+            );
+            return Ok(());
+        };
+
         if !listening_mode.is_relevant(&notification.reason) {
             debug!(
                 reason = ?notification.reason,
@@ -322,7 +328,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             }
             Reason::NewBlock { hash, .. } => {
                 self.update_wallet(notification.chain_id).await?;
-                if matches!(listening_mode, ListeningMode::FullChain) {
+                if listening_mode.is_full() {
                     self.add_new_chains(*hash).await?;
                     let publishers = self
                         .update_event_subscriptions(notification.chain_id)
@@ -448,32 +454,31 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     async fn listen(
         &mut self,
         chain_id: ChainId,
-        mut listening_mode: ListeningMode,
+        listening_mode: ListeningMode,
     ) -> Result<BTreeMap<ChainId, ListeningMode>, Error> {
-        if self
-            .listening
-            .get(&chain_id)
-            .is_some_and(|existing_client| existing_client.listening_mode >= listening_mode)
+        let context_guard = self.context.lock().await;
+        let existing_mode = context_guard.client().chain_mode(chain_id);
+        // If we already have a listener with a sufficient mode, nothing to do.
+        if self.listening.contains_key(&chain_id)
+            && existing_mode.as_ref().is_some_and(|m| *m >= listening_mode)
         {
             return Ok(BTreeMap::new());
         }
-        listening_mode.extend(
-            self.listening
-                .get(&chain_id)
-                .map(|existing_client| existing_client.listening_mode.clone()),
-        );
+        // Extend the mode in the central map.
+        context_guard
+            .client()
+            .extend_chain_mode(chain_id, listening_mode);
+        drop(context_guard);
+
         // Start background tasks to sync received certificates, if enabled.
-        let maybe_sync_cancellation_token = self
-            .start_background_sync(chain_id, listening_mode.clone())
-            .await;
+        let maybe_sync_cancellation_token = self.start_background_sync(chain_id).await;
         let client = self
             .context
             .lock()
             .await
             .make_chain_client(chain_id)
             .await?;
-        let (listener, abort_handle, notification_stream) =
-            client.listen(listening_mode.clone()).await?;
+        let (listener, abort_handle, notification_stream) = client.listen().await?;
 
         let join_handle = linera_base::task::spawn(listener.in_current_span());
         let listening_client = ListeningClient::new(
@@ -481,7 +486,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             abort_handle,
             join_handle,
             notification_stream,
-            listening_mode,
             maybe_sync_cancellation_token,
         );
         self.listening.insert(chain_id, listening_client);
@@ -490,15 +494,18 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         Ok(publishing_chains)
     }
 
-    async fn start_background_sync(
-        &mut self,
-        chain_id: ChainId,
-        mode: ListeningMode,
-    ) -> Option<CancellationToken> {
+    async fn start_background_sync(&mut self, chain_id: ChainId) -> Option<CancellationToken> {
         if !self.enable_background_sync {
             return None;
         }
-        if mode != ListeningMode::FullChain {
+        let is_full = self
+            .context
+            .lock()
+            .await
+            .client()
+            .chain_mode(chain_id)
+            .is_some_and(|m| m.is_full());
+        if !is_full {
             return None;
         }
         let context = Arc::clone(&self.context);
@@ -599,14 +606,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                         listening_client.stop().await;
                         continue;
                     };
-                    let listening_mode = self
-                        .listening
-                        .values()
-                        .nth(index)
-                        .expect("missing listening client")
-                        .listening_mode
-                        .clone();
-                    return Ok(Action::Notification(notification, listening_mode));
+                    return Ok(Action::Notification(notification));
                 }
             }
         }
@@ -719,6 +719,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
 
 enum Action {
     ProcessInbox(ChainId),
-    Notification(Notification, ListeningMode),
+    Notification(Notification),
     Stop,
 }

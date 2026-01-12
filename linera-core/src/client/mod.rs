@@ -196,6 +196,18 @@ impl ListeningMode {
             (ListeningMode::FollowChain, _) => (),
         }
     }
+
+    /// Returns whether this mode implies follow-only behavior (i.e., not participating in
+    /// consensus rounds).
+    pub fn is_follow_only(&self) -> bool {
+        !matches!(self, ListeningMode::FullChain)
+    }
+
+    /// Returns whether this is a full chain mode (synchronizing sender chains and updating
+    /// inboxes).
+    pub fn is_full(&self) -> bool {
+        matches!(self, ListeningMode::FullChain)
+    }
 }
 
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
@@ -208,9 +220,9 @@ pub struct Client<Env: Environment> {
     requests_scheduler: RequestsScheduler<Env>,
     /// The admin chain ID.
     admin_id: ChainId,
-    /// Chains that should be tracked by the client.
-    // TODO(#2412): Merge with set of chains the client is receiving notifications from validators
-    tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
+    /// Chains that should be tracked by the client, along with their listening mode.
+    /// The presence of a chain in this map means it is tracked by the local node.
+    chain_modes: Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>,
     /// References to clients waiting for chain notifications.
     notifier: Arc<ChannelNotifier<Notification>>,
     /// Chain state for the managed chains.
@@ -227,18 +239,18 @@ impl<Env: Environment> Client<Env> {
         environment: Env,
         admin_id: ChainId,
         long_lived_services: bool,
-        tracked_chains: impl IntoIterator<Item = ChainId>,
+        chain_modes: impl IntoIterator<Item = (ChainId, ListeningMode)>,
         name: impl Into<String>,
         chain_worker_ttl: Duration,
         sender_chain_worker_ttl: Duration,
         options: ChainClientOptions,
         requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
     ) -> Self {
-        let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
+        let chain_modes = Arc::new(RwLock::new(chain_modes.into_iter().collect()));
         let state = WorkerState::new_for_client(
             name.into(),
             environment.storage().clone(),
-            tracked_chains.clone(),
+            chain_modes.clone(),
         )
         .with_long_lived_services(long_lived_services)
         .with_allow_inactive_chains(true)
@@ -254,7 +266,7 @@ impl<Env: Environment> Client<Env> {
             requests_scheduler,
             chains: papaya::HashMap::new(),
             admin_id,
-            tracked_chains,
+            chain_modes,
             notifier: Arc::new(ChannelNotifier::default()),
             options,
         }
@@ -297,13 +309,35 @@ impl<Env: Environment> Client<Env> {
         }
     }
 
-    /// Adds a chain to the set of chains tracked by the local node.
+    /// Extends the listening mode for a chain, combining with the existing mode if present.
+    /// Returns the resulting mode.
     #[instrument(level = "trace", skip(self))]
-    pub fn track_chain(&self, chain_id: ChainId) {
-        self.tracked_chains
+    pub fn extend_chain_mode(&self, chain_id: ChainId, mode: ListeningMode) -> ListeningMode {
+        let mut chain_modes = self
+            .chain_modes
             .write()
-            .expect("Panics should not happen while holding a lock to `tracked_chains`")
-            .insert(chain_id);
+            .expect("Panics should not happen while holding a lock to `chain_modes`");
+        let entry = chain_modes.entry(chain_id).or_insert(mode.clone());
+        entry.extend(Some(mode));
+        entry.clone()
+    }
+
+    /// Returns the listening mode for a chain, if it is tracked.
+    pub fn chain_mode(&self, chain_id: ChainId) -> Option<ListeningMode> {
+        self.chain_modes
+            .read()
+            .expect("Panics should not happen while holding a lock to `chain_modes`")
+            .get(&chain_id)
+            .cloned()
+    }
+
+    /// Returns whether a chain is fully tracked by the local node.
+    pub fn is_tracked(&self, chain_id: ChainId) -> bool {
+        self.chain_modes
+            .read()
+            .expect("Panics should not happen while holding a lock to `chain_modes`")
+            .get(&chain_id)
+            .is_some_and(ListeningMode::is_full)
     }
 
     /// Creates a new `ChainClient`.
@@ -3613,8 +3647,9 @@ impl<Env: Environment> ChainClient<Env> {
                 .and_then(|blobs| blobs.last())
                 .ok_or_else(|| ChainClientError::InternalError("Failed to create a new chain"))?;
             let description = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?;
-            // Add the new chain to the list of tracked chains
-            self.client.track_chain(description.id());
+            // Add the new chain to the list of tracked chains with full participation.
+            self.client
+                .extend_chain_mode(description.id(), ListeningMode::FullChain);
             self.client
                 .local_node
                 .retry_pending_cross_chain_requests(self.chain_id)
@@ -4041,16 +4076,12 @@ impl<Env: Environment> ChainClient<Env> {
             .await?)
     }
 
-    #[instrument(
-        level = "trace",
-        skip(remote_node, local_node, notification, _listening_mode)
-    )]
+    #[instrument(level = "trace", skip(remote_node, local_node, notification))]
     async fn process_notification(
         &self,
         remote_node: RemoteNode<Env::ValidatorNode>,
         mut local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
-        _listening_mode: &ListeningMode,
     ) -> Result<(), ChainClientError> {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
@@ -4137,19 +4168,21 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Returns whether this chain is tracked by the client, i.e. we are updating its inbox.
     pub fn is_tracked(&self) -> bool {
-        self.client
-            .tracked_chains
-            .read()
-            .unwrap()
-            .contains(&self.chain_id)
+        self.client.is_tracked(self.chain_id)
+    }
+
+    /// Returns the listening mode for this chain, if it is tracked.
+    pub fn listening_mode(&self) -> Option<ListeningMode> {
+        self.client.chain_mode(self.chain_id)
     }
 
     /// Spawns a task that listens to notifications about the current chain from all validators,
     /// and synchronizes the local state accordingly.
+    ///
+    /// The listening mode must be set in `Client::chain_modes` before calling this method.
     #[instrument(level = "trace", fields(chain_id = ?self.chain_id))]
     pub async fn listen(
         &self,
-        listening_mode: ListeningMode,
     ) -> Result<(impl Future<Output = ()>, AbortOnDrop, NotificationStream), ChainClientError> {
         use future::FutureExt as _;
 
@@ -4179,10 +4212,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mut process_notifications = FuturesUnordered::new();
 
-        match self
-            .update_notification_streams(&mut senders, &listening_mode)
-            .await
-        {
+        match self.update_notification_streams(&mut senders).await {
             Ok(handler) => process_notifications.push(handler),
             Err(error) => error!("Failed to update committee: {error}"),
         };
@@ -4197,8 +4227,7 @@ impl<Env: Environment> ChainClient<Env> {
             {
                 if let Reason::NewBlock { .. } = notification.reason {
                     match Box::pin(await_while_polling(
-                        this.update_notification_streams(&mut senders, &listening_mode)
-                            .fuse(),
+                        this.update_notification_streams(&mut senders).fuse(),
                         &mut process_notifications,
                     ))
                     .await
@@ -4220,11 +4249,10 @@ impl<Env: Environment> ChainClient<Env> {
         Ok((update_streams, AbortOnDrop(abort), notifications))
     }
 
-    #[instrument(level = "trace", skip(senders, listening_mode))]
+    #[instrument(level = "trace", skip(senders))]
     async fn update_notification_streams(
         &self,
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
-        listening_mode: &ListeningMode,
     ) -> Result<impl Future<Output = ()>, ChainClientError> {
         let (nodes, local_node) = {
             let committee = self.local_committee().await?;
@@ -4280,7 +4308,6 @@ impl<Env: Environment> ChainClient<Env> {
             let this = self.clone();
             let local_node = local_node.clone();
             let remote_node = RemoteNode { public_key, node };
-            let listening_mode_cloned = listening_mode.clone();
             validator_tasks.push(async move {
                 while let Some(notification) = stream.next().await {
                     if let Err(error) = this
@@ -4288,7 +4315,6 @@ impl<Env: Environment> ChainClient<Env> {
                             remote_node.clone(),
                             local_node.clone(),
                             notification.clone(),
-                            &listening_mode_cloned,
                         )
                         .await
                     {
@@ -4436,14 +4462,9 @@ impl<Env: Environment> ChainClient<Env> {
         let (public_key, node) = node_list.next().unwrap();
         let remote_node = RemoteNode { node, public_key };
         let local_node = self.client.local_node.clone();
-        self.process_notification(
-            remote_node,
-            local_node,
-            notification,
-            &ListeningMode::FullChain,
-        )
-        .await
-        .unwrap();
+        self.process_notification(remote_node, local_node, notification)
+            .await
+            .unwrap();
     }
 }
 
