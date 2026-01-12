@@ -591,41 +591,35 @@ mod tests {
                     epoch: Epoch::ZERO,
                     height: BlockHeight(height),
                     timestamp: Timestamp::from(0),
-                    state_hash: CryptoHash::new(&TestString::new(&format!(
-                        "state_hash_{}",
-                        height
-                    ))),
+                    state_hash: CryptoHash::new(&TestString::new(format!("state_hash_{}", height))),
                     previous_block_hash: None,
                     authenticated_signer: None,
-                    transactions_hash: CryptoHash::new(&TestString::new(&format!(
+                    transactions_hash: CryptoHash::new(&TestString::new(format!(
                         "tx_hash_{}",
                         height
                     ))),
-                    messages_hash: CryptoHash::new(&TestString::new(&format!(
+                    messages_hash: CryptoHash::new(&TestString::new(format!(
                         "msg_hash_{}",
                         height
                     ))),
-                    previous_message_blocks_hash: CryptoHash::new(&TestString::new(&format!(
+                    previous_message_blocks_hash: CryptoHash::new(&TestString::new(format!(
                         "pmb_hash_{}",
                         height
                     ))),
-                    previous_event_blocks_hash: CryptoHash::new(&TestString::new(&format!(
+                    previous_event_blocks_hash: CryptoHash::new(&TestString::new(format!(
                         "peb_hash_{}",
                         height
                     ))),
-                    oracle_responses_hash: CryptoHash::new(&TestString::new(&format!(
+                    oracle_responses_hash: CryptoHash::new(&TestString::new(format!(
                         "oracle_hash_{}",
                         height
                     ))),
-                    events_hash: CryptoHash::new(&TestString::new(&format!(
+                    events_hash: CryptoHash::new(&TestString::new(format!(
                         "events_hash_{}",
                         height
                     ))),
-                    blobs_hash: CryptoHash::new(&TestString::new(&format!(
-                        "blobs_hash_{}",
-                        height
-                    ))),
-                    operation_results_hash: CryptoHash::new(&TestString::new(&format!(
+                    blobs_hash: CryptoHash::new(&TestString::new(format!("blobs_hash_{}", height))),
+                    operation_results_hash: CryptoHash::new(&TestString::new(format!(
                         "op_results_hash_{}",
                         height
                     ))),
