@@ -1635,7 +1635,9 @@ impl Runnable for Job {
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
                 let start_time = Instant::now();
-                context.client.track_chain(chain_id);
+                context
+                    .client
+                    .set_chain_mode(chain_id, ListeningMode::FollowChain);
                 let chain_client = context.make_chain_client(chain_id).await?;
                 if sync {
                     chain_client.synchronize_chain_state(chain_id).await?;

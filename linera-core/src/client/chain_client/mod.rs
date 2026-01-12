@@ -2060,8 +2060,9 @@ impl<Env: Environment> ChainClient<Env> {
                 .and_then(|blobs| blobs.last())
                 .ok_or_else(|| Error::InternalError("Failed to create a new chain"))?;
             let description = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?;
-            // Add the new chain to the list of tracked chains
-            self.client.track_chain(description.id());
+            // Add the new chain to the list of tracked chains with full participation.
+            self.client
+                .set_chain_mode(description.id(), ListeningMode::FullChain);
             self.client
                 .local_node
                 .retry_pending_cross_chain_requests(self.chain_id)
@@ -2613,11 +2614,12 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Returns whether this chain is tracked by the client, i.e. we are updating its inbox.
     pub fn is_tracked(&self) -> bool {
-        self.client
-            .tracked_chains
-            .read()
-            .unwrap()
-            .contains(&self.chain_id)
+        self.client.is_tracked(self.chain_id)
+    }
+
+    /// Returns the listening mode for this chain, if it is tracked.
+    pub fn listening_mode(&self) -> Option<ListeningMode> {
+        self.client.chain_mode(self.chain_id)
     }
 
     /// Spawns a task that listens to notifications about the current chain from all validators,
