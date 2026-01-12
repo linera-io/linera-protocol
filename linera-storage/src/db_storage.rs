@@ -707,6 +707,260 @@ mod tests {
             .unwrap();
         assert_eq!(result.len(), 0);
     }
+
+    #[cfg(with_testing)]
+    #[tokio::test]
+    async fn test_read_certificates_by_heights_multiple_chains() {
+        use linera_base::{
+            crypto::TestString,
+            data_types::{BlockHeight, Epoch, Round, Timestamp},
+        };
+        use linera_chain::{
+            block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
+            types::ConfirmedBlockCertificate,
+        };
+        use linera_views::memory::MemoryDatabase;
+
+        use crate::{db_storage::MultiPartitionBatch, DbStorage, Storage, TestClock};
+
+        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
+
+        // Create certificates for two different chains at same heights
+        let chain_a = ChainId(CryptoHash::test_hash("chain_a"));
+        let chain_b = ChainId(CryptoHash::test_hash("chain_b"));
+
+        let mut batch = MultiPartitionBatch::new();
+
+        let block_a = Block {
+            header: BlockHeader {
+                chain_id: chain_a,
+                epoch: Epoch::ZERO,
+                height: BlockHeight(10),
+                timestamp: Timestamp::from(0),
+                state_hash: CryptoHash::new(&TestString::new("state_hash_a")),
+                previous_block_hash: None,
+                authenticated_signer: None,
+                transactions_hash: CryptoHash::new(&TestString::new("tx_hash_a")),
+                messages_hash: CryptoHash::new(&TestString::new("msg_hash_a")),
+                previous_message_blocks_hash: CryptoHash::new(&TestString::new("pmb_hash_a")),
+                previous_event_blocks_hash: CryptoHash::new(&TestString::new("peb_hash_a")),
+                oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_hash_a")),
+                events_hash: CryptoHash::new(&TestString::new("events_hash_a")),
+                blobs_hash: CryptoHash::new(&TestString::new("blobs_hash_a")),
+                operation_results_hash: CryptoHash::new(&TestString::new("op_results_hash_a")),
+            },
+            body: BlockBody {
+                transactions: vec![],
+                messages: vec![],
+                previous_message_blocks: Default::default(),
+                previous_event_blocks: Default::default(),
+                oracle_responses: vec![],
+                events: vec![],
+                blobs: vec![],
+                operation_results: vec![],
+            },
+        };
+        let confirmed_block_a = ConfirmedBlock::new(block_a);
+        let cert_a = ConfirmedBlockCertificate::new(confirmed_block_a, Round::Fast, vec![]);
+        batch.add_certificate(&cert_a).unwrap();
+
+        let block_b = Block {
+            header: BlockHeader {
+                chain_id: chain_b,
+                epoch: Epoch::ZERO,
+                height: BlockHeight(10),
+                timestamp: Timestamp::from(0),
+                state_hash: CryptoHash::new(&TestString::new("state_hash_b")),
+                previous_block_hash: None,
+                authenticated_signer: None,
+                transactions_hash: CryptoHash::new(&TestString::new("tx_hash_b")),
+                messages_hash: CryptoHash::new(&TestString::new("msg_hash_b")),
+                previous_message_blocks_hash: CryptoHash::new(&TestString::new("pmb_hash_b")),
+                previous_event_blocks_hash: CryptoHash::new(&TestString::new("peb_hash_b")),
+                oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_hash_b")),
+                events_hash: CryptoHash::new(&TestString::new("events_hash_b")),
+                blobs_hash: CryptoHash::new(&TestString::new("blobs_hash_b")),
+                operation_results_hash: CryptoHash::new(&TestString::new("op_results_hash_b")),
+            },
+            body: BlockBody {
+                transactions: vec![],
+                messages: vec![],
+                previous_message_blocks: Default::default(),
+                previous_event_blocks: Default::default(),
+                oracle_responses: vec![],
+                events: vec![],
+                blobs: vec![],
+                operation_results: vec![],
+            },
+        };
+        let confirmed_block_b = ConfirmedBlock::new(block_b);
+        let cert_b = ConfirmedBlockCertificate::new(confirmed_block_b, Round::Fast, vec![]);
+        batch.add_certificate(&cert_b).unwrap();
+
+        storage.write_batch(batch).await.unwrap();
+
+        // Read from chain A - should get cert A
+        let result = storage
+            .read_certificates_by_heights(chain_a, &[BlockHeight(10)])
+            .await
+            .unwrap();
+        assert_eq!(result[0].as_ref().unwrap().hash(), cert_a.hash());
+
+        // Read from chain B - should get cert B
+        let result = storage
+            .read_certificates_by_heights(chain_b, &[BlockHeight(10)])
+            .await
+            .unwrap();
+        assert_eq!(result[0].as_ref().unwrap().hash(), cert_b.hash());
+
+        // Read from chain A for height that only chain B has - should get None
+        let result = storage
+            .read_certificates_by_heights(chain_a, &[BlockHeight(20)])
+            .await
+            .unwrap();
+        assert!(result[0].is_none());
+    }
+
+    #[cfg(with_testing)]
+    #[tokio::test]
+    async fn test_read_certificates_by_heights_duplicates() {
+        use linera_base::{
+            crypto::TestString,
+            data_types::{BlockHeight, Epoch, Round, Timestamp},
+        };
+        use linera_chain::{
+            block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
+            types::ConfirmedBlockCertificate,
+        };
+        use linera_views::memory::MemoryDatabase;
+
+        use crate::{db_storage::MultiPartitionBatch, DbStorage, Storage, TestClock};
+
+        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+
+        // Write certificate at height 5
+        let mut batch = MultiPartitionBatch::new();
+        let block = Block {
+            header: BlockHeader {
+                chain_id,
+                epoch: Epoch::ZERO,
+                height: BlockHeight(5),
+                timestamp: Timestamp::from(0),
+                state_hash: CryptoHash::new(&TestString::new("state_hash")),
+                previous_block_hash: None,
+                authenticated_signer: None,
+                transactions_hash: CryptoHash::new(&TestString::new("tx_hash")),
+                messages_hash: CryptoHash::new(&TestString::new("msg_hash")),
+                previous_message_blocks_hash: CryptoHash::new(&TestString::new("pmb_hash")),
+                previous_event_blocks_hash: CryptoHash::new(&TestString::new("peb_hash")),
+                oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_hash")),
+                events_hash: CryptoHash::new(&TestString::new("events_hash")),
+                blobs_hash: CryptoHash::new(&TestString::new("blobs_hash")),
+                operation_results_hash: CryptoHash::new(&TestString::new("op_results_hash")),
+            },
+            body: BlockBody {
+                transactions: vec![],
+                messages: vec![],
+                previous_message_blocks: Default::default(),
+                previous_event_blocks: Default::default(),
+                oracle_responses: vec![],
+                events: vec![],
+                blobs: vec![],
+                operation_results: vec![],
+            },
+        };
+        let confirmed_block = ConfirmedBlock::new(block);
+        let cert = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
+        let expected_hash = cert.hash();
+        batch.add_certificate(&cert).unwrap();
+        storage.write_batch(batch).await.unwrap();
+
+        // Request same height multiple times [5, 5, 5]
+        let heights = vec![BlockHeight(5), BlockHeight(5), BlockHeight(5)];
+        let result = storage
+            .read_certificates_by_heights(chain_id, &heights)
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].as_ref().unwrap().hash(), expected_hash);
+        assert_eq!(result[1].as_ref().unwrap().hash(), expected_hash);
+        assert_eq!(result[2].as_ref().unwrap().hash(), expected_hash);
+    }
+
+    #[cfg(with_testing)]
+    #[tokio::test]
+    async fn test_read_certificates_by_heights_consistency() {
+        use linera_base::{
+            crypto::TestString,
+            data_types::{BlockHeight, Epoch, Round, Timestamp},
+        };
+        use linera_chain::{
+            block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
+            types::ConfirmedBlockCertificate,
+        };
+        use linera_views::memory::MemoryDatabase;
+
+        use crate::{db_storage::MultiPartitionBatch, DbStorage, Storage, TestClock};
+
+        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+
+        // Write certificate
+        let mut batch = MultiPartitionBatch::new();
+        let block = Block {
+            header: BlockHeader {
+                chain_id,
+                epoch: Epoch::ZERO,
+                height: BlockHeight(7),
+                timestamp: Timestamp::from(0),
+                state_hash: CryptoHash::new(&TestString::new("state_hash")),
+                previous_block_hash: None,
+                authenticated_signer: None,
+                transactions_hash: CryptoHash::new(&TestString::new("tx_hash")),
+                messages_hash: CryptoHash::new(&TestString::new("msg_hash")),
+                previous_message_blocks_hash: CryptoHash::new(&TestString::new("pmb_hash")),
+                previous_event_blocks_hash: CryptoHash::new(&TestString::new("peb_hash")),
+                oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_hash")),
+                events_hash: CryptoHash::new(&TestString::new("events_hash")),
+                blobs_hash: CryptoHash::new(&TestString::new("blobs_hash")),
+                operation_results_hash: CryptoHash::new(&TestString::new("op_results_hash")),
+            },
+            body: BlockBody {
+                transactions: vec![],
+                messages: vec![],
+                previous_message_blocks: Default::default(),
+                previous_event_blocks: Default::default(),
+                oracle_responses: vec![],
+                events: vec![],
+                blobs: vec![],
+                operation_results: vec![],
+            },
+        };
+        let confirmed_block = ConfirmedBlock::new(block);
+        let cert = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
+        let hash = cert.hash();
+        batch.add_certificate(&cert).unwrap();
+        storage.write_batch(batch).await.unwrap();
+
+        // Read by hash
+        let cert_by_hash = storage.read_certificate(hash).await.unwrap().unwrap();
+
+        // Read by height
+        let certs_by_height = storage
+            .read_certificates_by_heights(chain_id, &[BlockHeight(7)])
+            .await
+            .unwrap();
+        let cert_by_height = certs_by_height[0].as_ref().unwrap();
+
+        // Should be identical
+        assert_eq!(cert_by_hash.hash(), cert_by_height.hash());
+        assert_eq!(
+            cert_by_hash.value().block().header,
+            cert_by_height.value().block().header
+        );
+    }
 }
 
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the
@@ -1221,13 +1475,14 @@ where
         }
 
         // Step 2: Collect valid hashes and build index mapping
-        let mut hash_to_index = std::collections::HashMap::new();
+        let mut hash_to_indices: std::collections::HashMap<CryptoHash, Vec<usize>> =
+            std::collections::HashMap::new();
         let valid_hashes: Vec<CryptoHash> = hash_options
             .iter()
             .enumerate()
             .filter_map(|(idx, hash_opt)| {
                 hash_opt.map(|hash| {
-                    hash_to_index.insert(hash, idx);
+                    hash_to_indices.entry(hash).or_default().push(idx);
                     hash
                 })
             })
@@ -1240,8 +1495,10 @@ where
         let mut result = vec![None; heights.len()];
         for (cert_opt, hash) in certificates.into_iter().zip(valid_hashes) {
             if let Some(cert) = cert_opt {
-                if let Some(&idx) = hash_to_index.get(&hash) {
-                    result[idx] = Some(cert);
+                if let Some(indices) = hash_to_indices.get(&hash) {
+                    for &idx in indices {
+                        result[idx] = Some(cert.clone());
+                    }
                 }
             }
         }
