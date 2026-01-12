@@ -4,7 +4,7 @@
 //! An actor that runs a chain worker.
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     fmt,
     sync::{self, Arc, RwLock},
 };
@@ -35,6 +35,7 @@ use tracing::{debug, instrument, trace, Instrument as _};
 use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
 use crate::{
     chain_worker::BlockOutcome,
+    client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse},
     value_cache::ValueCache,
     worker::{NetworkActions, WorkerError},
@@ -264,7 +265,7 @@ where
     storage: StorageClient,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
-    tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
+    chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
     is_tracked: bool,
 }
@@ -317,7 +318,7 @@ where
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
         execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
-        tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
+        chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
         incoming_requests: mpsc::UnboundedReceiver<(
@@ -332,7 +333,7 @@ where
             storage,
             block_values,
             execution_state_cache,
-            tracked_chains,
+            chain_modes,
             delivery_notifier,
             chain_id,
             is_tracked,
@@ -393,7 +394,7 @@ where
                 self.storage.clone(),
                 self.block_values.clone(),
                 self.execution_state_cache.clone(),
-                self.tracked_chains.clone(),
+                self.chain_modes.clone(),
                 self.delivery_notifier.clone(),
                 self.chain_id,
                 service_runtime_endpoint,

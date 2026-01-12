@@ -10,7 +10,7 @@ use linera_base::{
 use linera_chain::data_types::ProposedBlock;
 use linera_client::{client_context::ClientContext, config::GenesisConfig};
 use linera_core::{
-    client::{Client, PendingProposal},
+    client::{Client, ListeningMode, PendingProposal},
     join_set_ext::JoinSet,
     test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
     wallet,
@@ -40,6 +40,7 @@ pub async fn new_test_client_context(
         max_retries,
     };
     let chain_ids: Vec<_> = wallet.chain_ids();
+    let chain_modes = chain_ids.iter().map(|id| (*id, ListeningMode::FullChain));
     let name = match chain_ids.len() {
         0 => "Client node".to_string(),
         1 => format!("Client node for {:.8}", chain_ids[0]),
@@ -58,7 +59,7 @@ pub async fn new_test_client_context(
             },
             genesis_config.admin_id(),
             false,
-            chain_ids,
+            chain_modes,
             name,
             chain_worker_ttl,
             sender_chain_worker_ttl,

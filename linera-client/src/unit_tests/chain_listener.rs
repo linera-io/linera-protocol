@@ -11,7 +11,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
-    client::{ChainClient, ChainClientOptions, Client},
+    client::{ChainClient, ChainClientOptions, Client, ListeningMode},
     environment,
     test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
     wallet,
@@ -112,7 +112,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             },
             admin_id,
             false,
-            [chain_id0],
+            [(chain_id0, ListeningMode::FullChain)],
             format!("Client node for {:.8}", chain_id0),
             Duration::from_secs(30),
             Duration::from_secs(1),
@@ -220,7 +220,10 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             },
             admin_id,
             false,
-            [chain_a_id, chain_b_id],
+            [
+                (chain_a_id, ListeningMode::FollowChain),
+                (chain_b_id, ListeningMode::FullChain),
+            ],
             "Client node with follow-only and owned chains".to_string(),
             Duration::from_secs(30),
             Duration::from_secs(1),
@@ -367,7 +370,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             },
             admin_id,
             false,
-            [],
+            std::iter::empty::<(ChainId, ListeningMode)>(),
             "Client node with no chains".to_string(),
             Duration::from_secs(30),
             Duration::from_secs(1),
