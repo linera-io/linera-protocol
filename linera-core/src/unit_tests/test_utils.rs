@@ -1439,24 +1439,3 @@ impl<T, E: std::fmt::Debug> ClientOutcomeResultExt<T, E> for Result<ClientOutcom
         }
     }
 }
-
-/// A macro to retry an async operation that returns `Result<ClientOutcome<T>, E>` on conflict.
-/// This is useful for tests where we expect potential conflicts but want to retry until success.
-#[macro_export]
-macro_rules! retry_on_conflict {
-    ($client:expr, $op:expr) => {{
-        loop {
-            match $op.await {
-                Ok(ClientOutcome::Committed(result)) => break result,
-                Ok(ClientOutcome::Conflict(_)) => {
-                    $client.synchronize_from_validators().await.unwrap();
-                    continue;
-                }
-                Ok(ClientOutcome::WaitForTimeout(timeout)) => {
-                    panic!("unexpected timeout: {timeout}")
-                }
-                Err(e) => panic!("operation failed: {e:?}"),
-            }
-        }
-    }};
-}
