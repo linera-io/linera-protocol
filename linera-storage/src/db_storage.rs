@@ -1481,9 +1481,8 @@ where
             .iter()
             .enumerate()
             .filter_map(|(idx, hash_opt)| {
-                hash_opt.map(|hash| {
-                    hash_to_indices.entry(hash).or_default().push(idx);
-                    hash
+                hash_opt.inspect(|hash| {
+                    hash_to_indices.entry(*hash).or_default().push(idx);
                 })
             })
             .collect();
