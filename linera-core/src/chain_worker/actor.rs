@@ -31,7 +31,7 @@ use linera_execution::{
 use linera_storage::{Clock as _, Storage};
 use linera_views::context::{Context, InactiveContext};
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
-use tracing::{debug, instrument, trace, Instrument as _};
+use tracing::{instrument, trace, Instrument as _};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
 use crate::{
@@ -393,7 +393,7 @@ where
         // Check if this request should be delayed.
         if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } = request {
             if let Some(delay_until) = self.delay_until(proposal) {
-                debug!(%delay_until, "delaying block proposal");
+                tracing::debug!(%delay_until, "delaying block proposal");
                 let sender = request_sender.clone();
                 let clock = self.storage.clock().clone();
                 task::spawn(async move {
