@@ -2062,7 +2062,7 @@ impl<Env: Environment> ChainClient<Env> {
             let description = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?;
             // Add the new chain to the list of tracked chains with full participation.
             self.client
-                .set_chain_mode(description.id(), ListeningMode::FullChain);
+                .extend_chain_mode(description.id(), ListeningMode::FullChain);
             self.client
                 .local_node
                 .retry_pending_cross_chain_requests(self.chain_id)

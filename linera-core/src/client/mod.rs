@@ -419,15 +419,6 @@ impl<Env: Environment> Client<Env> {
         self.environment.wallet()
     }
 
-    /// Sets the listening mode for a chain. This adds the chain to the set of tracked chains.
-    #[instrument(level = "trace", skip(self))]
-    pub fn set_chain_mode(&self, chain_id: ChainId, mode: ListeningMode) {
-        self.chain_modes
-            .write()
-            .expect("Panics should not happen while holding a lock to `chain_modes`")
-            .insert(chain_id, mode);
-    }
-
     /// Extends the listening mode for a chain, combining with the existing mode if present.
     /// Returns the resulting mode.
     #[instrument(level = "trace", skip(self))]

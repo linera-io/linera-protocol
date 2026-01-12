@@ -1636,7 +1636,7 @@ impl Runnable for Job {
                 let start_time = Instant::now();
                 context
                     .client
-                    .set_chain_mode(chain_id, ListeningMode::FollowChain);
+                    .extend_chain_mode(chain_id, ListeningMode::FollowChain);
                 let chain_client = context.make_chain_client(chain_id).await?;
                 if sync {
                     chain_client.synchronize_chain_state(chain_id).await?;

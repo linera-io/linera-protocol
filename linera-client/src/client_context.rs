@@ -507,7 +507,7 @@ impl<Env: Environment> ClientContext<Env> {
         owner: AccountOwner,
     ) -> Result<(), Error> {
         self.client
-            .set_chain_mode(chain_id, ListeningMode::FullChain);
+            .extend_chain_mode(chain_id, ListeningMode::FullChain);
         let client = self.make_chain_client(chain_id).await?;
         let chain_description = client.get_chain_description().await?;
         let config = chain_description.config();
@@ -1113,7 +1113,7 @@ impl<Env: Environment> ClientContext<Env> {
                         .map(|blob| ChainId(blob.id().hash))
                         .expect("failed to create a new chain");
                     self.client
-                        .set_chain_mode(chain_id, ListeningMode::FullChain);
+                        .extend_chain_mode(chain_id, ListeningMode::FullChain);
 
                     let mut chain_client = self.client.create_chain_client(
                         chain_id,
