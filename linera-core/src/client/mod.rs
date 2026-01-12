@@ -314,6 +314,18 @@ impl ListeningMode {
             }
         }
     }
+
+    /// Returns whether this mode implies follow-only behavior (i.e., not participating in
+    /// consensus rounds).
+    pub fn is_follow_only(&self) -> bool {
+        !matches!(self, ListeningMode::FullChain)
+    }
+
+    /// Returns whether this is a full chain mode (synchronizing sender chains and updating
+    /// inboxes).
+    pub fn is_full(&self) -> bool {
+        matches!(self, ListeningMode::FullChain)
+    }
 }
 
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
@@ -326,9 +338,9 @@ pub struct Client<Env: Environment> {
     requests_scheduler: RequestsScheduler<Env>,
     /// The admin chain ID.
     admin_id: ChainId,
-    /// Chains that should be tracked by the client.
-    // TODO(#2412): Merge with set of chains the client is receiving notifications from validators
-    tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
+    /// Chains that should be tracked by the client, along with their listening mode.
+    /// The presence of a chain in this map means it is tracked by the local node.
+    chain_modes: Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>,
     /// References to clients waiting for chain notifications.
     notifier: Arc<ChannelNotifier<Notification>>,
     /// Chain state for the managed chains.
@@ -345,7 +357,7 @@ impl<Env: Environment> Client<Env> {
         environment: Env,
         admin_id: ChainId,
         long_lived_services: bool,
-        tracked_chains: impl IntoIterator<Item = ChainId>,
+        chain_modes: impl IntoIterator<Item = (ChainId, ListeningMode)>,
         name: impl Into<String>,
         chain_worker_ttl: Duration,
         sender_chain_worker_ttl: Duration,
@@ -354,11 +366,11 @@ impl<Env: Environment> Client<Env> {
         execution_state_cache_size: usize,
         requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
     ) -> Self {
-        let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
+        let chain_modes = Arc::new(RwLock::new(chain_modes.into_iter().collect()));
         let state = WorkerState::new_for_client(
             name.into(),
             environment.storage().clone(),
-            tracked_chains.clone(),
+            chain_modes.clone(),
             block_cache_size,
             execution_state_cache_size,
         )
@@ -376,7 +388,7 @@ impl<Env: Environment> Client<Env> {
             requests_scheduler,
             chains: papaya::HashMap::new(),
             admin_id,
-            tracked_chains,
+            chain_modes,
             notifier: Arc::new(ChannelNotifier::default()),
             options,
         }
@@ -407,13 +419,35 @@ impl<Env: Environment> Client<Env> {
         self.environment.wallet()
     }
 
-    /// Adds a chain to the set of chains tracked by the local node.
+    /// Extends the listening mode for a chain, combining with the existing mode if present.
+    /// Returns the resulting mode.
     #[instrument(level = "trace", skip(self))]
-    pub fn track_chain(&self, chain_id: ChainId) {
-        self.tracked_chains
+    pub fn extend_chain_mode(&self, chain_id: ChainId, mode: ListeningMode) -> ListeningMode {
+        let mut chain_modes = self
+            .chain_modes
             .write()
-            .expect("Panics should not happen while holding a lock to `tracked_chains`")
-            .insert(chain_id);
+            .expect("Panics should not happen while holding a lock to `chain_modes`");
+        let entry = chain_modes.entry(chain_id).or_insert(mode.clone());
+        entry.extend(Some(mode));
+        entry.clone()
+    }
+
+    /// Returns the listening mode for a chain, if it is tracked.
+    pub fn chain_mode(&self, chain_id: ChainId) -> Option<ListeningMode> {
+        self.chain_modes
+            .read()
+            .expect("Panics should not happen while holding a lock to `chain_modes`")
+            .get(&chain_id)
+            .cloned()
+    }
+
+    /// Returns whether a chain is fully tracked by the local node.
+    pub fn is_tracked(&self, chain_id: ChainId) -> bool {
+        self.chain_modes
+            .read()
+            .expect("Panics should not happen while holding a lock to `chain_modes`")
+            .get(&chain_id)
+            .is_some_and(ListeningMode::is_full)
     }
 
     /// Creates a new `ChainClient`.

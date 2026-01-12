@@ -5,7 +5,7 @@
 
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::{self, Arc},
 };
 
@@ -45,6 +45,7 @@ use tracing::{debug, instrument, trace, warn};
 
 use super::{ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier, EventSubscriptionsResult};
 use crate::{
+    client::ListeningMode,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
     worker::{NetworkActions, Notification, Reason, WorkerError},
@@ -78,7 +79,7 @@ where
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
-    tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
+    chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
 }
@@ -104,7 +105,7 @@ where
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
         execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
-        tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
+        chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
         service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
@@ -119,7 +120,7 @@ where
             service_runtime_endpoint,
             block_values,
             execution_state_cache,
-            tracked_chains,
+            chain_modes,
             delivery_notifier,
             knows_chain_is_active: false,
         })
@@ -442,23 +443,27 @@ where
         Ok(maybe_blobs.into_iter().collect())
     }
 
-    /// Adds any newly created chains to the set of `tracked_chains`, if the parent chain is
-    /// also tracked.
+    /// Adds any newly created chains to the set of tracked chains, if the parent chain is
+    /// a full chain (i.e., we synchronize its sender chains and update its inbox).
     ///
-    /// Chains that are not tracked are usually processed only because they sent some message
-    /// to one of the tracked chains. In most use cases, their children won't be of interest.
+    /// Chains that are not full are usually processed only because they sent some message
+    /// to one of our full chains. In most use cases, their children won't be of interest.
     fn track_newly_created_chains(
         &self,
         proposed_block: &ProposedBlock,
         outcome: &BlockExecutionOutcome,
     ) {
-        if let Some(tracked_chains) = self.tracked_chains.as_ref() {
-            if !tracked_chains
-                .read()
-                .expect("Panics should not happen while holding a lock to `tracked_chains`")
-                .contains(&proposed_block.chain_id)
+        if let Some(chain_modes) = self.chain_modes.as_ref() {
             {
-                return; // The parent chain is not tracked; don't track the child.
+                let modes = chain_modes
+                    .read()
+                    .expect("Panics should not happen while holding a lock to `chain_modes`");
+                let is_full = modes
+                    .get(&proposed_block.chain_id)
+                    .is_some_and(ListeningMode::is_full);
+                if !is_full {
+                    return; // The parent chain is not a full chain; don't track the child.
+                }
             }
             let new_chain_ids = outcome
                 .created_blobs_ids()
@@ -466,10 +471,12 @@ where
                 .filter(|blob_id| blob_id.blob_type == BlobType::ChainDescription)
                 .map(|blob_id| ChainId(blob_id.hash));
 
-            tracked_chains
+            let mut modes = chain_modes
                 .write()
-                .expect("Panics should not happen while holding a lock to `tracked_chains`")
-                .extend(new_chain_ids);
+                .expect("Panics should not happen while holding a lock to `chain_modes`");
+            for chain_id in new_chain_ids {
+                modes.insert(chain_id, ListeningMode::FullChain);
+            }
         }
     }
 
@@ -485,11 +492,12 @@ where
         let _latency = metrics::CREATE_NETWORK_ACTIONS_LATENCY.measure_latency();
         let mut heights_by_recipient = BTreeMap::<_, Vec<_>>::new();
         let mut targets = self.chain.nonempty_outbox_chain_ids();
-        if let Some(tracked_chains) = self.tracked_chains.as_ref() {
-            let tracked_chains = tracked_chains
+        if let Some(chain_modes) = self.chain_modes.as_ref() {
+            let chain_modes = chain_modes
                 .read()
-                .expect("Panics should not happen while holding a lock to `tracked_chains`");
-            targets.retain(|target| tracked_chains.contains(target));
+                .expect("Panics should not happen while holding a lock to `chain_modes`");
+            // Only process outboxes for full chains (those whose inboxes we update).
+            targets.retain(|target| chain_modes.get(target).is_some_and(ListeningMode::is_full));
         }
         let outboxes = self.chain.load_outboxes(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
@@ -618,7 +626,7 @@ where
     }
 
     /// Returns true if there are no more outgoing messages in flight up to the given
-    /// block height.
+    /// block height for all tracked chains (those whose inboxes we update).
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         height = %height
@@ -630,13 +638,14 @@ where
         if self.chain.all_messages_delivered_up_to(height) {
             return Ok(true);
         }
-        let Some(tracked_chains) = self.tracked_chains.as_ref() else {
+        let Some(chain_modes) = self.chain_modes.as_ref() else {
             return Ok(false);
         };
         let mut targets = self.chain.nonempty_outbox_chain_ids();
         {
-            let tracked_chains = tracked_chains.read().unwrap();
-            targets.retain(|target| tracked_chains.contains(target));
+            let chain_modes = chain_modes.read().unwrap();
+            // Only consider full chains (those whose inboxes we update).
+            targets.retain(|target| chain_modes.get(target).is_some_and(ListeningMode::is_full));
         }
         let outboxes = self.chain.load_outboxes(&targets).await?;
         for outbox in outboxes {
