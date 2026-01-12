@@ -284,6 +284,14 @@ impl MultiPartitionBatch {
         Ok(())
     }
 
+    /// Adds a certificate to the batch.
+    ///
+    /// Writes both the certificate data (indexed by hash) and a height index
+    /// (mapping chain_id + height to hash).
+    ///
+    /// Note: If called multiple times with the same (chain_id, height), the height
+    /// index will be overwritten. The caller is responsible for ensuring that
+    /// certificates at the same height have the same hash.
     fn add_certificate(
         &mut self,
         certificate: &ConfirmedBlockCertificate,
