@@ -2624,11 +2624,6 @@ impl<Env: Environment> ChainClient<Env> {
         self.client.chain_mode(self.chain_id)
     }
 
-    /// Sets the listening mode for this chain.
-    pub fn set_listening_mode(&self, mode: ListeningMode) {
-        self.client.set_chain_mode(self.chain_id, mode);
-    }
-
     /// Spawns a task that listens to notifications about the current chain from all validators,
     /// and synchronizes the local state accordingly.
     ///
