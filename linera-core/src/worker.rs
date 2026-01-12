@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
@@ -44,6 +44,7 @@ use crate::{
     chain_worker::{
         BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier,
     },
+    client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
     notifier::Notifier,
@@ -368,8 +369,8 @@ where
     chain_worker_config: ChainWorkerConfig,
     block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
-    /// Chain IDs that should be tracked by a worker.
-    tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
+    /// Chains tracked by a worker, along with their listening modes.
+    chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
@@ -390,7 +391,7 @@ where
             chain_worker_config: self.chain_worker_config.clone(),
             block_cache: self.block_cache.clone(),
             execution_state_cache: self.execution_state_cache.clone(),
-            tracked_chains: self.tracked_chains.clone(),
+            chain_modes: self.chain_modes.clone(),
             delivery_notifiers: self.delivery_notifiers.clone(),
             chain_worker_tasks: self.chain_worker_tasks.clone(),
             chain_workers: self.chain_workers.clone(),
@@ -425,7 +426,7 @@ where
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
             block_cache: Arc::new(ValueCache::new(block_cache_size)),
             execution_state_cache: Arc::new(ValueCache::new(execution_state_cache_size)),
-            tracked_chains: None,
+            chain_modes: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
             chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
@@ -436,7 +437,7 @@ where
     pub fn new_for_client(
         nickname: String,
         storage: StorageClient,
-        tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
+        chain_modes: Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>,
         block_cache_size: usize,
         execution_state_cache_size: usize,
     ) -> Self {
@@ -446,7 +447,7 @@ where
             chain_worker_config: ChainWorkerConfig::default(),
             block_cache: Arc::new(ValueCache::new(block_cache_size)),
             execution_state_cache: Arc::new(ValueCache::new(execution_state_cache_size)),
-            tracked_chains: Some(tracked_chains),
+            chain_modes: Some(chain_modes),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
             chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
@@ -852,17 +853,20 @@ where
                 .or_default()
                 .clone();
 
-            let is_tracked = self
-                .tracked_chains
-                .as_ref()
-                .is_some_and(|tracked_chains| tracked_chains.read().unwrap().contains(&chain_id));
+            let is_tracked = self.chain_modes.as_ref().is_some_and(|chain_modes| {
+                chain_modes
+                    .read()
+                    .unwrap()
+                    .get(&chain_id)
+                    .is_some_and(ListeningMode::is_full)
+            });
 
             let actor_task = ChainWorkerActor::run(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
                 self.block_cache.clone(),
                 self.execution_state_cache.clone(),
-                self.tracked_chains.clone(),
+                self.chain_modes.clone(),
                 delivery_notifier,
                 chain_id,
                 receiver,

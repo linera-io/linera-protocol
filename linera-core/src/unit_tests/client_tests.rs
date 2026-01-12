@@ -45,7 +45,7 @@ use crate::test_utils::ServiceStorageBuilder;
 use crate::{
     client::{
         chain_client::{self, ChainClient},
-        BlanketMessagePolicy, ClientOutcome, ListeningMode, MessageAction, MessagePolicy,
+        BlanketMessagePolicy, ClientOutcome, MessageAction, MessagePolicy,
     },
     local_node::LocalNodeError,
     node::{
@@ -73,8 +73,7 @@ fn test_listener_is_send() {
     async fn check_listener(
         chain_client: ChainClient<impl Environment>,
     ) -> Result<(), chain_client::Error> {
-        let (listener, _abort_notifications, _notifications) =
-            chain_client.listen(ListeningMode::FullChain).await?;
+        let (listener, _abort_notifications, _notifications) = chain_client.listen().await?;
         ensure_send(&listener);
         Ok(())
     }
@@ -102,7 +101,7 @@ where
     let chain_2 = builder.add_root_chain(2, Amount::ZERO).await?;
     // Listen to the notifications on the sender chain.
     let mut notifications = sender.subscribe()?;
-    let (listener, _listen_handle, _) = sender.listen(ListeningMode::FullChain).await?;
+    let (listener, _listen_handle, _) = sender.listen().await?;
     tokio::spawn(listener);
     {
         let certificate = sender

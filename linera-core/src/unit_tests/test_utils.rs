@@ -1054,6 +1054,11 @@ where
         // the rest by asking validators.
         let storage = self.make_storage().await?;
         self.chain_client_storages.push(storage.clone());
+        let mode = if follow_only {
+            crate::client::ListeningMode::FollowChain
+        } else {
+            crate::client::ListeningMode::FullChain
+        };
         let client = Arc::new(Client::new(
             crate::environment::Impl {
                 network: self.make_node_provider(),
@@ -1063,7 +1068,7 @@ where
             },
             self.admin_id(),
             false,
-            [chain_id],
+            [(chain_id, mode)],
             format!("Client node for {:.8}", chain_id),
             Duration::from_secs(30),
             Duration::from_secs(1),

@@ -1137,8 +1137,7 @@ impl Runnable for Job {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id).await?;
                 info!("Watching for notifications for chain {:?}", chain_id);
-                let (listener, _listen_handle, mut notifications) =
-                    chain_client.listen(ListeningMode::FullChain).await?;
+                let (listener, _listen_handle, mut notifications) = chain_client.listen().await?;
                 join_set.spawn_task(listener);
                 while let Some(notification) = notifications.next().await {
                     if let Reason::NewBlock { .. } = notification.reason {
@@ -1635,7 +1634,9 @@ impl Runnable for Job {
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
                 let start_time = Instant::now();
-                context.client.track_chain(chain_id);
+                context
+                    .client
+                    .extend_chain_mode(chain_id, ListeningMode::FollowChain);
                 let chain_client = context.make_chain_client(chain_id).await?;
                 if sync {
                     chain_client.synchronize_chain_state(chain_id).await?;
