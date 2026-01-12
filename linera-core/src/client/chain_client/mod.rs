@@ -64,8 +64,7 @@ use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
 use super::{
     received_log::ReceivedLogs, validator_trackers::ValidatorTrackers, AbortOnDrop, Client,
-    ExecuteBlockOutcome, ListeningMode, MessagePolicy, PendingProposal, ReceiveCertificateMode,
-    TimingType,
+    ListeningMode, MessagePolicy, PendingProposal, ReceiveCertificateMode, TimingType,
 };
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
@@ -1190,19 +1189,19 @@ impl<Env: Environment> ChainClient<Env> {
             let execute_block_start = linera_base::time::Instant::now();
             // TODO(#2066): Remove boxing once the call-stack is shallower
             match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await {
-                Ok(ExecuteBlockOutcome::Executed(certificate)) => {
+                Ok(ClientOutcome::Committed(certificate)) => {
                     self.send_timing(execute_block_start, TimingType::ExecuteBlock);
                     break Ok(ClientOutcome::Committed(certificate));
                 }
-                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
+                Ok(ClientOutcome::WaitForTimeout(timeout)) => {
                     break Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
-                Ok(ExecuteBlockOutcome::Conflict(certificate)) => {
+                Ok(ClientOutcome::Conflict(certificate)) => {
                     info!(
                         height = %certificate.block().header.height,
                         "Another block was committed."
                     );
-                    break Ok(ClientOutcome::Conflict(Box::new(certificate)));
+                    break Ok(ClientOutcome::Conflict(certificate));
                 }
                 Err(Error::CommunicationError(CommunicationError::Trusted(
                     NodeError::UnexpectedBlockHeight {
@@ -1242,7 +1241,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
-    ) -> Result<ExecuteBlockOutcome, Error> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
         #[cfg(with_metrics)]
         let _latency = super::metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
 
@@ -1251,13 +1250,13 @@ impl<Env: Environment> ChainClient<Env> {
         // TODO(#5092): We shouldn't need to call this explicitly.
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
-                return Ok(ExecuteBlockOutcome::Conflict(certificate))
+                return Ok(ClientOutcome::Conflict(Box::new(certificate)))
             }
             ClientOutcome::WaitForTimeout(timeout) => {
-                return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
+                return Ok(ClientOutcome::WaitForTimeout(timeout))
             }
             ClientOutcome::Conflict(certificate) => {
-                return Ok(ExecuteBlockOutcome::Conflict(*certificate))
+                return Ok(ClientOutcome::Conflict(certificate))
             }
             ClientOutcome::Committed(None) => {}
         }
@@ -1277,19 +1276,17 @@ impl<Env: Environment> ChainClient<Env> {
 
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) if certificate.block() == &block => {
-                Ok(ExecuteBlockOutcome::Executed(certificate))
+                Ok(ClientOutcome::Committed(certificate))
             }
             ClientOutcome::Committed(Some(certificate)) => {
-                Ok(ExecuteBlockOutcome::Conflict(certificate))
+                Ok(ClientOutcome::Conflict(Box::new(certificate)))
             }
             // Should be unreachable: We did set a pending block.
             ClientOutcome::Committed(None) => {
                 Err(Error::BlockProposalError("Unexpected block proposal error"))
             }
-            ClientOutcome::WaitForTimeout(timeout) => {
-                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
-            }
-            ClientOutcome::Conflict(certificate) => Ok(ExecuteBlockOutcome::Conflict(*certificate)),
+            ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
+            ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
         }
     }
 
@@ -1977,19 +1974,7 @@ impl<Env: Environment> ChainClient<Env> {
             open_multi_leader_rounds: ownership.open_multi_leader_rounds,
             timeout_config: ownership.timeout_config,
         })];
-        match self.execute_block(operations, vec![]).await? {
-            ExecuteBlockOutcome::Executed(certificate) => Ok(ClientOutcome::Committed(certificate)),
-            ExecuteBlockOutcome::Conflict(certificate) => {
-                info!(
-                    height = %certificate.block().header.height,
-                    "Another block was committed."
-                );
-                Ok(ClientOutcome::Conflict(Box::new(certificate)))
-            }
-            ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-                Ok(ClientOutcome::WaitForTimeout(timeout))
-            }
-        }
+        self.execute_block(operations, vec![]).await
     }
 
     /// Changes the ownership of this chain. Fails if it would remove existing owners, unless
@@ -2052,11 +2037,11 @@ impl<Env: Environment> ChainClient<Env> {
         };
         let operation = Operation::system(SystemOperation::OpenChain(config));
         let certificate = match self.execute_block(vec![operation], vec![]).await? {
-            ExecuteBlockOutcome::Executed(certificate) => certificate,
-            ExecuteBlockOutcome::Conflict(certificate) => {
-                return Ok(ClientOutcome::Conflict(Box::new(certificate)));
+            ClientOutcome::Committed(certificate) => certificate,
+            ClientOutcome::Conflict(certificate) => {
+                return Ok(ClientOutcome::Conflict(certificate));
             }
-            ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+            ClientOutcome::WaitForTimeout(timeout) => {
                 return Ok(ClientOutcome::WaitForTimeout(timeout));
             }
         };
@@ -2290,9 +2275,9 @@ impl<Env: Environment> ChainClient<Env> {
             // will be epoch changes, receiving messages and processing event stream
             // updates, if any are pending.
             match self.execute_block(vec![], vec![]).await {
-                Ok(ExecuteBlockOutcome::Executed(certificate))
-                | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
-                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
+                Ok(ClientOutcome::Committed(certificate)) => certificates.push(certificate),
+                Ok(ClientOutcome::Conflict(certificate)) => certificates.push(*certificate),
+                Ok(ClientOutcome::WaitForTimeout(timeout)) => {
                     return Ok((certificates, Some(timeout)));
                 }
                 // Nothing in the inbox and no stream updates to be processed.

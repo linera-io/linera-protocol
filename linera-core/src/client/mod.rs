@@ -48,7 +48,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
-    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, RoundTimeout},
+    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     environment::Environment,
     local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNodeProvider as _},
@@ -1730,19 +1730,6 @@ where
         };
     }
     Err(err(errors))
-}
-
-/// The outcome of trying to commit a list of incoming messages and operations to the chain.
-#[derive(Debug)]
-enum ExecuteBlockOutcome {
-    /// A block with the messages and operations was committed.
-    Executed(ConfirmedBlockCertificate),
-    /// A different block was already proposed and got committed. Check whether the messages and
-    /// operations are still suitable, and try again at the next block height.
-    Conflict(ConfirmedBlockCertificate),
-    /// We are not the round leader and cannot do anything. Try again at the specified time or
-    /// or whenever the round or block height changes.
-    WaitForTimeout(RoundTimeout),
 }
 
 /// Wrapper for `AbortHandle` that aborts when its dropped.
