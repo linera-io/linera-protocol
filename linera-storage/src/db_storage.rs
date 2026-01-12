@@ -561,6 +561,152 @@ mod tests {
         let stored_hash: CryptoHash = bcs::from_bytes(&value_bytes.unwrap()).unwrap();
         assert_eq!(stored_hash, hash, "Height index contains wrong hash");
     }
+
+    #[cfg(with_testing)]
+    #[tokio::test]
+    async fn test_read_certificates_by_heights() {
+        use linera_base::{
+            crypto::TestString,
+            data_types::{BlockHeight, Epoch, Round, Timestamp},
+        };
+        use linera_chain::{
+            block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
+            types::ConfirmedBlockCertificate,
+        };
+        use linera_views::memory::MemoryDatabase;
+
+        use crate::{db_storage::MultiPartitionBatch, DbStorage, Storage, TestClock};
+
+        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+
+        // Write certificates at heights 1, 3, 5
+        let mut batch = MultiPartitionBatch::new();
+        let mut expected_certs = vec![];
+
+        for height in [1, 3, 5] {
+            let block = Block {
+                header: BlockHeader {
+                    chain_id,
+                    epoch: Epoch::ZERO,
+                    height: BlockHeight(height),
+                    timestamp: Timestamp::from(0),
+                    state_hash: CryptoHash::new(&TestString::new(&format!(
+                        "state_hash_{}",
+                        height
+                    ))),
+                    previous_block_hash: None,
+                    authenticated_signer: None,
+                    transactions_hash: CryptoHash::new(&TestString::new(&format!(
+                        "tx_hash_{}",
+                        height
+                    ))),
+                    messages_hash: CryptoHash::new(&TestString::new(&format!(
+                        "msg_hash_{}",
+                        height
+                    ))),
+                    previous_message_blocks_hash: CryptoHash::new(&TestString::new(&format!(
+                        "pmb_hash_{}",
+                        height
+                    ))),
+                    previous_event_blocks_hash: CryptoHash::new(&TestString::new(&format!(
+                        "peb_hash_{}",
+                        height
+                    ))),
+                    oracle_responses_hash: CryptoHash::new(&TestString::new(&format!(
+                        "oracle_hash_{}",
+                        height
+                    ))),
+                    events_hash: CryptoHash::new(&TestString::new(&format!(
+                        "events_hash_{}",
+                        height
+                    ))),
+                    blobs_hash: CryptoHash::new(&TestString::new(&format!(
+                        "blobs_hash_{}",
+                        height
+                    ))),
+                    operation_results_hash: CryptoHash::new(&TestString::new(&format!(
+                        "op_results_hash_{}",
+                        height
+                    ))),
+                },
+                body: BlockBody {
+                    transactions: vec![],
+                    messages: vec![],
+                    previous_message_blocks: Default::default(),
+                    previous_event_blocks: Default::default(),
+                    oracle_responses: vec![],
+                    events: vec![],
+                    blobs: vec![],
+                    operation_results: vec![],
+                },
+            };
+            let confirmed_block = ConfirmedBlock::new(block);
+            let cert = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
+            expected_certs.push((height, cert.clone()));
+            batch.add_certificate(&cert).unwrap();
+        }
+        storage.write_batch(batch).await.unwrap();
+
+        // Test: Read in order [1, 3, 5]
+        let heights = vec![BlockHeight(1), BlockHeight(3), BlockHeight(5)];
+        let result = storage
+            .read_certificates_by_heights(chain_id, &heights)
+            .await
+            .unwrap();
+        assert_eq!(result.len(), 3);
+        assert_eq!(
+            result[0].as_ref().unwrap().hash(),
+            expected_certs[0].1.hash()
+        );
+        assert_eq!(
+            result[1].as_ref().unwrap().hash(),
+            expected_certs[1].1.hash()
+        );
+        assert_eq!(
+            result[2].as_ref().unwrap().hash(),
+            expected_certs[2].1.hash()
+        );
+
+        // Test: Read out of order [5, 1, 3]
+        let heights = vec![BlockHeight(5), BlockHeight(1), BlockHeight(3)];
+        let result = storage
+            .read_certificates_by_heights(chain_id, &heights)
+            .await
+            .unwrap();
+        assert_eq!(result.len(), 3);
+        assert_eq!(
+            result[0].as_ref().unwrap().hash(),
+            expected_certs[2].1.hash()
+        );
+        assert_eq!(
+            result[1].as_ref().unwrap().hash(),
+            expected_certs[0].1.hash()
+        );
+        assert_eq!(
+            result[2].as_ref().unwrap().hash(),
+            expected_certs[1].1.hash()
+        );
+
+        // Test: Read with missing heights [1, 2, 3]
+        let heights = vec![BlockHeight(1), BlockHeight(2), BlockHeight(3)];
+        let result = storage
+            .read_certificates_by_heights(chain_id, &heights)
+            .await
+            .unwrap();
+        assert_eq!(result.len(), 3);
+        assert!(result[0].is_some());
+        assert!(result[1].is_none()); // Height 2 doesn't exist
+        assert!(result[2].is_some());
+
+        // Test: Empty heights
+        let heights = vec![];
+        let result = storage
+            .read_certificates_by_heights(chain_id, &heights)
+            .await
+            .unwrap();
+        assert_eq!(result.len(), 0);
+    }
 }
 
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the
@@ -1049,6 +1195,58 @@ where
                 Some((lite_cert_bytes.clone(), confirmed_block_bytes.clone()))
             })
             .collect())
+    }
+
+    #[instrument(skip_all, fields(%chain_id, heights_len = heights.len()))]
+    async fn read_certificates_by_heights(
+        &self,
+        chain_id: ChainId,
+        heights: &[BlockHeight],
+    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
+        if heights.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Step 1: Read all hashes from the height index
+        let mut hash_options = Vec::with_capacity(heights.len());
+        for height in heights {
+            let index_root_key = RootKey::BlockByHeight(chain_id, *height).bytes();
+            let store = self.database.open_shared(&index_root_key)?;
+            let value_bytes = store.read_value_bytes(&[]).await?;
+
+            let hash_option = value_bytes
+                .map(|bytes| bcs::from_bytes::<CryptoHash>(&bytes))
+                .transpose()?;
+            hash_options.push(hash_option);
+        }
+
+        // Step 2: Collect valid hashes and build index mapping
+        let mut hash_to_index = std::collections::HashMap::new();
+        let valid_hashes: Vec<CryptoHash> = hash_options
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, hash_opt)| {
+                hash_opt.map(|hash| {
+                    hash_to_index.insert(hash, idx);
+                    hash
+                })
+            })
+            .collect();
+
+        // Step 3: Batch read certificates using existing method
+        let certificates = self.read_certificates(valid_hashes.clone()).await?;
+
+        // Step 4: Build result vector maintaining original order
+        let mut result = vec![None; heights.len()];
+        for (cert_opt, hash) in certificates.into_iter().zip(valid_hashes) {
+            if let Some(cert) = cert_opt {
+                if let Some(&idx) = hash_to_index.get(&hash) {
+                    result[idx] = Some(cert);
+                }
+            }
+        }
+
+        Ok(result)
     }
 
     #[instrument(skip_all, fields(event_id = ?event_id))]
