@@ -471,23 +471,21 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         {
             return Ok(BTreeMap::new());
         }
-        // Extend the mode in the central map and get the effective mode.
-        let effective_mode = context_guard
+        // Extend the mode in the central map.
+        context_guard
             .client()
             .extend_chain_mode(chain_id, listening_mode);
         drop(context_guard);
 
         // Start background tasks to sync received certificates, if enabled.
-        let maybe_sync_cancellation_token = self
-            .start_background_sync(chain_id, effective_mode.clone())
-            .await;
+        let maybe_sync_cancellation_token = self.start_background_sync(chain_id).await;
         let client = self
             .context
             .lock()
             .await
             .make_chain_client(chain_id)
             .await?;
-        let (listener, abort_handle, notification_stream) = client.listen(effective_mode).await?;
+        let (listener, abort_handle, notification_stream) = client.listen().await?;
         let join_handle = linera_base::task::spawn(listener.in_current_span());
         let listening_client = ListeningClient::new(
             client,
@@ -502,15 +500,18 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         Ok(publishing_chains)
     }
 
-    async fn start_background_sync(
-        &mut self,
-        chain_id: ChainId,
-        mode: ListeningMode,
-    ) -> Option<CancellationToken> {
+    async fn start_background_sync(&mut self, chain_id: ChainId) -> Option<CancellationToken> {
         if !self.enable_background_sync {
             return None;
         }
-        if mode != ListeningMode::FullChain {
+        let is_full = self
+            .context
+            .lock()
+            .await
+            .client()
+            .chain_mode(chain_id)
+            .is_some_and(|m| m.is_full());
+        if !is_full {
             return None;
         }
         let context = Arc::clone(&self.context);

@@ -483,8 +483,8 @@ impl<Env: Environment> ClientContext<Env> {
         }
 
         // Start listening for notifications, so we learn about new rounds and blocks.
-        let (listener, _listen_handle, mut notification_stream) =
-            chain_client.listen(ListeningMode::FullChain).await?;
+        chain_client.set_listening_mode(ListeningMode::FullChain);
+        let (listener, _listen_handle, mut notification_stream) = chain_client.listen().await?;
         self.chain_listeners.spawn_task(listener);
 
         loop {
@@ -574,8 +574,8 @@ impl<Env: Environment> ClientContext<Env> {
         }
 
         // Start listening for notifications, so we learn about new rounds and blocks.
-        let (listener, _listen_handle, mut notification_stream) =
-            client.listen(ListeningMode::FullChain).await?;
+        client.set_listening_mode(ListeningMode::FullChain);
+        let (listener, _listen_handle, mut notification_stream) = client.listen().await?;
         self.chain_listeners.spawn_task(listener);
 
         loop {
