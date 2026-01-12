@@ -902,12 +902,12 @@ impl ClientWrapper {
             .arg("open-multi-owner-chain")
             .args(["--from", &from.to_string()])
             .arg("--owners")
-            .args(owners.iter().map(AccountOwner::to_string))
+            .arg(serde_json::to_string(&owners)?)
             .args(["--base-timeout-ms", &base_timeout_ms.to_string()]);
         if !weights.is_empty() {
             command
                 .arg("--owner-weights")
-                .args(weights.iter().map(u64::to_string));
+                .arg(serde_json::to_string(&weights)?);
         };
         command
             .args(["--multi-leader-rounds", &multi_leader_rounds.to_string()])
@@ -930,16 +930,10 @@ impl ClientWrapper {
         command
             .arg("change-ownership")
             .args(["--chain-id", &chain_id.to_string()]);
-        if !super_owners.is_empty() {
-            command
-                .arg("--super-owners")
-                .args(super_owners.iter().map(AccountOwner::to_string));
-        }
-        if !owners.is_empty() {
-            command
-                .arg("--owners")
-                .args(owners.iter().map(AccountOwner::to_string));
-        }
+        command
+            .arg("--super-owners")
+            .arg(serde_json::to_string(&super_owners)?);
+        command.arg("--owners").arg(serde_json::to_string(&owners)?);
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }
