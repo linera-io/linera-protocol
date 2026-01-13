@@ -7,6 +7,7 @@ interface base-runtime-api {
     get-application-creator-chain-id: func() -> chain-id;
     application-parameters: func() -> list<u8>;
     get-chain-ownership: func() -> chain-ownership;
+    get-application-permissions: func() -> application-permissions;
     read-system-timestamp: func() -> timestamp;
     read-chain-balance: func() -> amount;
     read-owner-balance: func(owner: account-owner) -> amount;
@@ -65,6 +66,14 @@ interface base-runtime-api {
         multi-leader-rounds: u32,
         open-multi-leader-rounds: bool,
         timeout-config: timeout-config,
+    }
+
+    record application-permissions {
+        execute-operations: option<list<application-id>>,
+        mandatory-applications: list<application-id>,
+        manage-chain: list<application-id>,
+        call-service-as-oracle: option<list<application-id>>,
+        make-http-requests: option<list<application-id>>,
     }
 
     record crypto-hash {
