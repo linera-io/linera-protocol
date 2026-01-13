@@ -6,6 +6,7 @@
 use std::str::FromStr;
 
 use allocative::Allocative;
+use alloy_primitives::U256;
 use async_graphql::scalar;
 use derive_more::Display;
 use linera_witty::{WitLoad, WitStore, WitType};
@@ -64,6 +65,10 @@ pub struct InvalidVmRuntime(String);
 /// The possible types of queries for an EVM contract
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum EvmQuery {
+    /// Account state
+    AccountInfo,
+    /// Storage query
+    Storage(U256),
     /// A read-only query.
     Query(Vec<u8>),
     /// A request to schedule an operation that can mutate the application state.
@@ -103,7 +108,7 @@ impl EvmOperation {
 
 /// The instantiation argument to EVM smart contracts.
 /// `value` is the amount being transferred.
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct EvmInstantiation {
     /// The initial value put in the instantiation of the contract.
     pub value: alloy_primitives::U256,
