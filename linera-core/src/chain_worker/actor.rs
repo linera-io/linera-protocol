@@ -55,8 +55,6 @@ where
 {
     /// The timestamp when this proposal should be processed.
     timestamp: Timestamp,
-    /// Sequence number to maintain FIFO order among proposals with the same timestamp.
-    sequence: u64,
     /// The block proposal request.
     request: ChainWorkerRequest<Ctx>,
     /// The tracing span for this request.
@@ -70,7 +68,7 @@ where
     Ctx: Context + Clone + 'static,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.timestamp == other.timestamp && self.sequence == other.sequence
+        self.timestamp == other.timestamp
     }
 }
 
@@ -90,11 +88,7 @@ where
     Ctx: Context + Clone + 'static,
 {
     fn cmp(&self, other: &Self) -> Ordering {
-        // Order by timestamp first, then by sequence number.
-        // Earlier timestamps and lower sequence numbers come first.
-        self.timestamp
-            .cmp(&other.timestamp)
-            .then_with(|| self.sequence.cmp(&other.sequence))
+        self.timestamp.cmp(&other.timestamp)
     }
 }
 
@@ -473,7 +467,6 @@ where
         // Queue for block proposals with future timestamps.
         let mut delayed_proposals: BinaryHeap<Reverse<DelayedProposal<StorageClient::Context>>> =
             BinaryHeap::new();
-        let mut next_sequence: u64 = 0;
 
         while let Some((request, span, _queued_at)) = incoming_requests.recv().await {
             // Record how long the request waited in queue (in milliseconds)
@@ -512,12 +505,10 @@ where
                     debug!(delay_until = %timestamp, "delaying block proposal");
                     delayed_proposals.push(Reverse(DelayedProposal {
                         timestamp,
-                        sequence: next_sequence,
                         request,
                         span,
                         _queued_at,
                     }));
-                    next_sequence += 1;
                 } else {
                     Box::pin(worker.handle_request(request))
                         .instrument(span)
@@ -592,12 +583,10 @@ where
                                 );
                                 delayed_proposals.push(Reverse(DelayedProposal {
                                     timestamp,
-                                    sequence: next_sequence,
                                     request,
                                     span,
                                     _queued_at,
                                 }));
-                                next_sequence += 1;
                                 continue;
                             }
                         }
