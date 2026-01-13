@@ -161,12 +161,13 @@ impl EvmContractModule {
 
     /// Creates a new [`EvmContractModule`] using the EVM module in `contract_bytecode_file`.
     #[cfg(with_fs)]
-    pub fn from_file(
+    pub async fn from_file(
         contract_bytecode_file: impl AsRef<std::path::Path>,
         runtime: EvmRuntime,
     ) -> Result<Self, EvmExecutionError> {
         Self::new(
             Bytecode::load_from_file(contract_bytecode_file)
+                .await
                 .map_err(anyhow::Error::from)
                 .map_err(EvmExecutionError::LoadContractModule)?,
             runtime,
@@ -217,12 +218,13 @@ impl EvmServiceModule {
 
     /// Creates a new [`EvmServiceModule`] using the EVM module in `service_bytecode_file`.
     #[cfg(with_fs)]
-    pub fn from_file(
+    pub async fn from_file(
         service_bytecode_file: impl AsRef<std::path::Path>,
         runtime: EvmRuntime,
     ) -> Result<Self, EvmExecutionError> {
         Self::new(
             Bytecode::load_from_file(service_bytecode_file)
+                .await
                 .map_err(anyhow::Error::from)
                 .map_err(EvmExecutionError::LoadServiceModule)?,
             runtime,

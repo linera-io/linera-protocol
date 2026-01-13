@@ -100,8 +100,8 @@ where
     // Load the bytecode files for a module.
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
-    let contract_bytecode = Bytecode::load_from_file(contract_path)?;
-    let service_bytecode = Bytecode::load_from_file(service_path)?;
+    let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
+    let service_bytecode = Bytecode::load_from_file(service_path).await?;
 
     let contract_blob = Blob::new_contract_bytecode(contract_bytecode.clone().compress());
     let service_blob = Blob::new_service_bytecode(service_bytecode.compress());
