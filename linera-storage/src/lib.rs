@@ -52,7 +52,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     type Context: Context<Extra = ChainRuntimeContext<Self>> + Clone + 'static;
 
     /// The clock type being used.
-    type Clock: Clock;
+    type Clock: Clock + Clone + Send + Sync;
 
     /// The low-level storage implementation in use by the block exporter.
     type BlockExporterContext: Context<Extra = u32> + Clone;

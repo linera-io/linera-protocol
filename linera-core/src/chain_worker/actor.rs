@@ -4,8 +4,7 @@
 //! An actor that runs a chain worker.
 
 use std::{
-    cmp::{Ordering, Reverse},
-    collections::{BTreeMap, BinaryHeap, HashMap},
+    collections::{BTreeMap, HashMap},
     fmt,
     sync::{self, Arc, RwLock},
 };
@@ -45,52 +44,13 @@ use crate::{
 /// Type alias for event subscriptions result.
 pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscriptions)>;
 
-/// A block proposal request that is delayed until its timestamp is reached.
-///
-/// Block proposals with future timestamps (within the grace period) are queued
-/// and processed when their timestamp arrives, rather than blocking the actor.
-struct DelayedProposal<Ctx>
-where
-    Ctx: Context + Clone + 'static,
-{
-    /// The timestamp when this proposal should be processed.
-    timestamp: Timestamp,
-    /// The block proposal request.
-    request: ChainWorkerRequest<Ctx>,
-    /// The tracing span for this request.
-    span: tracing::Span,
-    /// When the request was originally queued (for metrics).
-    _queued_at: Instant,
-}
+/// Type alias for the request channel sender.
+pub(crate) type ChainWorkerRequestSender<Ctx> =
+    mpsc::UnboundedSender<(ChainWorkerRequest<Ctx>, tracing::Span, Instant)>;
 
-impl<Ctx> PartialEq for DelayedProposal<Ctx>
-where
-    Ctx: Context + Clone + 'static,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.timestamp == other.timestamp
-    }
-}
-
-impl<Ctx> Eq for DelayedProposal<Ctx> where Ctx: Context + Clone + 'static {}
-
-impl<Ctx> PartialOrd for DelayedProposal<Ctx>
-where
-    Ctx: Context + Clone + 'static,
-{
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<Ctx> Ord for DelayedProposal<Ctx>
-where
-    Ctx: Context + Clone + 'static,
-{
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.timestamp.cmp(&other.timestamp)
-    }
-}
+/// Type alias for the request channel receiver.
+pub(crate) type ChainWorkerRequestReceiver<Ctx> =
+    mpsc::UnboundedReceiver<(ChainWorkerRequest<Ctx>, tracing::Span, Instant)>;
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -362,11 +322,8 @@ where
         chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
-        incoming_requests: mpsc::UnboundedReceiver<(
-            ChainWorkerRequest<StorageClient::Context>,
-            tracing::Span,
-            Instant,
-        )>,
+        request_sender: ChainWorkerRequestSender<StorageClient::Context>,
+        request_receiver: ChainWorkerRequestReceiver<StorageClient::Context>,
         is_tracked: bool,
     ) {
         let actor = ChainWorkerActor {
@@ -379,7 +336,10 @@ where
             chain_id,
             is_tracked,
         };
-        if let Err(err) = actor.handle_requests(incoming_requests).await {
+        if let Err(err) = actor
+            .handle_requests(request_sender, request_receiver)
+            .await
+        {
             tracing::error!("Chain actor error: {err}");
         }
     }
@@ -418,37 +378,6 @@ where
         (delta > TimeDelta::ZERO && delta <= grace_period).then_some(block_timestamp)
     }
 
-    /// Computes the next wakeup time considering both TTL and delayed proposals.
-    fn next_wakeup_time(
-        &self,
-        delayed_proposals: &BinaryHeap<Reverse<DelayedProposal<StorageClient::Context>>>,
-    ) -> Timestamp {
-        let ttl_timeout = self.ttl_timeout();
-        match delayed_proposals.peek() {
-            Some(Reverse(proposal)) => ttl_timeout.min(proposal.timestamp),
-            None => ttl_timeout,
-        }
-    }
-
-    /// Pops all delayed proposals that are ready to be processed.
-    fn pop_ready_delayed(
-        &self,
-        delayed_proposals: &mut BinaryHeap<Reverse<DelayedProposal<StorageClient::Context>>>,
-    ) -> Vec<DelayedProposal<StorageClient::Context>> {
-        let now = self.storage.clock().current_time();
-        let mut ready = Vec::new();
-        while let Some(Reverse(proposal)) = delayed_proposals.peek() {
-            if proposal.timestamp <= now {
-                if let Some(Reverse(proposal)) = delayed_proposals.pop() {
-                    ready.push(proposal);
-                }
-            } else {
-                break;
-            }
-        }
-        ready
-    }
-
     /// Runs the worker until there are no more incoming requests.
     #[instrument(
         skip_all,
@@ -456,23 +385,32 @@ where
     )]
     async fn handle_requests(
         self,
-        mut incoming_requests: mpsc::UnboundedReceiver<(
-            ChainWorkerRequest<StorageClient::Context>,
-            tracing::Span,
-            Instant,
-        )>,
+        request_sender: ChainWorkerRequestSender<StorageClient::Context>,
+        mut incoming_requests: ChainWorkerRequestReceiver<StorageClient::Context>,
     ) -> Result<(), WorkerError> {
         trace!("Starting `ChainWorkerActor`");
 
-        // Queue for block proposals with future timestamps.
-        let mut delayed_proposals: BinaryHeap<Reverse<DelayedProposal<StorageClient::Context>>> =
-            BinaryHeap::new();
+        while let Some((request, span, queued_at)) = incoming_requests.recv().await {
+            // Check if this request should be delayed.
+            if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } = request {
+                if let Some(delay_until) = self.delay_until(proposal) {
+                    debug!(%delay_until, "delaying block proposal");
+                    let sender = request_sender.clone();
+                    let clock = self.storage.clock().clone();
+                    tokio::spawn(async move {
+                        clock.sleep_until(delay_until).await;
+                        // Re-insert the request into the queue. If the channel is closed,
+                        // the actor is shutting down, so we can ignore the error.
+                        let _ = sender.send((request, span, queued_at));
+                    });
+                    continue;
+                }
+            }
 
-        while let Some((request, span, _queued_at)) = incoming_requests.recv().await {
-            // Record how long the request waited in queue (in milliseconds)
+            // Record how long the request waited in queue (in milliseconds).
             #[cfg(with_metrics)]
             {
-                let queue_wait_time_ms = _queued_at.elapsed().as_secs_f64() * 1000.0;
+                let queue_wait_time_ms = queued_at.elapsed().as_secs_f64() * 1000.0;
                 metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
             }
 
@@ -499,96 +437,43 @@ where
             .instrument(span.clone())
             .await?;
 
-            // Check if the first request should be delayed.
-            if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } = request {
-                if let Some(timestamp) = self.delay_until(proposal) {
-                    debug!(delay_until = %timestamp, "delaying block proposal");
-                    delayed_proposals.push(Reverse(DelayedProposal {
-                        timestamp,
-                        request,
-                        span,
-                        _queued_at,
-                    }));
-                } else {
-                    Box::pin(worker.handle_request(request))
-                        .instrument(span)
-                        .await;
-                }
-            } else {
-                Box::pin(worker.handle_request(request))
-                    .instrument(span)
-                    .await;
-            }
+            Box::pin(worker.handle_request(request))
+                .instrument(span)
+                .await;
 
             loop {
-                // Process any delayed proposals that are now ready.
-                for ready in self.pop_ready_delayed(&mut delayed_proposals) {
-                    #[cfg(with_metrics)]
-                    {
-                        let queue_wait_time_ms = ready._queued_at.elapsed().as_secs_f64() * 1000.0;
-                        metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
-                    }
-                    Box::pin(worker.handle_request(ready.request))
-                        .instrument(ready.span)
-                        .await;
-                }
-
-                // Compute the next wakeup time (minimum of TTL and earliest delayed proposal).
-                let wakeup_time = self.next_wakeup_time(&delayed_proposals);
                 let ttl_timeout = self.ttl_timeout();
 
                 futures::select! {
-                    () = self.storage.clock().sleep_until(wakeup_time).fuse() => {
-                        // Check if any delayed proposals are now ready.
-                        let ready_proposals = self.pop_ready_delayed(&mut delayed_proposals);
-                        if !ready_proposals.is_empty() {
-                            for ready in ready_proposals {
-                                #[cfg(with_metrics)]
-                                {
-                                    let queue_wait_time_ms =
-                                        ready._queued_at.elapsed().as_secs_f64() * 1000.0;
-                                    metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME
-                                        .observe(queue_wait_time_ms);
-                                }
-                                Box::pin(worker.handle_request(ready.request))
-                                    .instrument(ready.span)
-                                    .await;
-                            }
-                        } else if wakeup_time >= ttl_timeout && delayed_proposals.is_empty() {
-                            // TTL expired and no delayed proposals waiting.
-                            break;
-                        }
-                        // Otherwise, there are still delayed proposals waiting; continue the loop.
+                    () = self.storage.clock().sleep_until(ttl_timeout).fuse() => {
+                        break;
                     }
                     maybe_request = incoming_requests.recv().fuse() => {
-                        let Some((request, span, _queued_at)) = maybe_request else {
+                        let Some((request, span, queued_at)) = maybe_request else {
                             break; // Request sender was dropped.
                         };
-
-                        // Record how long the request waited in queue (in milliseconds)
-                        #[cfg(with_metrics)]
-                        {
-                            let queue_wait_time_ms = _queued_at.elapsed().as_secs_f64() * 1000.0;
-                            metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
-                        }
 
                         // Check if this request should be delayed.
                         if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } =
                             request
                         {
-                            if let Some(timestamp) = self.delay_until(proposal) {
-                                debug!(
-                                    "Delaying block proposal until timestamp {}",
-                                    timestamp
-                                );
-                                delayed_proposals.push(Reverse(DelayedProposal {
-                                    timestamp,
-                                    request,
-                                    span,
-                                    _queued_at,
-                                }));
+                            if let Some(delay_until) = self.delay_until(proposal) {
+                                debug!(%delay_until, "delaying block proposal");
+                                let sender = request_sender.clone();
+                                let clock = self.storage.clock().clone();
+                                tokio::spawn(async move {
+                                    clock.sleep_until(delay_until).await;
+                                    let _ = sender.send((request, span, queued_at));
+                                });
                                 continue;
                             }
+                        }
+
+                        // Record how long the request waited in queue (in milliseconds).
+                        #[cfg(with_metrics)]
+                        {
+                            let queue_wait_time_ms = queued_at.elapsed().as_secs_f64() * 1000.0;
+                            metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
                         }
 
                         Box::pin(worker.handle_request(request)).instrument(span).await;
