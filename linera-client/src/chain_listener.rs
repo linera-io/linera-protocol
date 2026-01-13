@@ -198,8 +198,9 @@ impl<C: ClientContext> ListeningClient<C> {
 
 /// Commands to the chain listener.
 pub enum ListenerCommand {
-    /// Command: start listening to the given chains, using specified listening modes.
-    Listen(BTreeMap<ChainId, ListeningMode>),
+    /// Command: start listening to the given chains. If the chain must produce blocks,
+    /// an owner is required.
+    Listen(BTreeMap<ChainId, Option<AccountOwner>>),
     /// Command: stop listening to the given chains.
     StopListening(BTreeSet<ChainId>),
 }
@@ -587,7 +588,56 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     match command {
                         ListenerCommand::Listen(new_chains) => {
                             debug!(?new_chains, "received command to listen to new chains");
-                            self.listen_recursively(new_chains).await?;
+                            let mut chains = BTreeMap::new();
+                            let context_guard = self.context.lock().await;
+                            for (chain_id, owner) in new_chains {
+                                if let Some(owner) = owner {
+                                    if context_guard
+                                        .client()
+                                        .signer()
+                                        .contains_key(&owner)
+                                        .await
+                                        .map_err(chain_client::Error::signer_failure)?
+                                    {
+                                        context_guard
+                                            .client()
+                                            .extend_chain_mode(chain_id, ListeningMode::FullChain);
+                                        let chain_description = context_guard
+                                            .client()
+                                            .get_chain_description(chain_id)
+                                            .await?;
+                                        // Try to modify existing chain entry, setting the owner.
+                                        let timestamp = chain_description.timestamp();
+                                        let epoch = chain_description.config().epoch;
+                                        let modified = context_guard
+                                            .wallet()
+                                            .modify(chain_id, |chain| chain.owner = Some(owner))
+                                            .await
+                                            .map_err(error::Inner::wallet)?;
+                                        // If the chain didn't exist, insert a new entry.
+                                        if modified.is_none() {
+                                            context_guard.wallet()
+                                                .insert(
+                                                    chain_id,
+                                                    linera_core::wallet::Chain {
+                                                        owner: Some(owner),
+                                                        timestamp,
+                                                        epoch: Some(epoch),
+                                                        ..Default::default()
+                                                    },
+                                                )
+                                                .await
+                                                .map_err(error::Inner::wallet)?;
+                                        }
+
+                                        chains.insert(chain_id, ListeningMode::FullChain);
+                                        continue;
+                                    }
+                                }
+                                chains.insert(chain_id, ListeningMode::FollowChain);
+                            }
+                            drop(context_guard);
+                            self.listen_recursively(chains).await?;
                         }
                         ListenerCommand::StopListening(chains) => {
                             debug!(?chains, "received command to stop listening to chains");
