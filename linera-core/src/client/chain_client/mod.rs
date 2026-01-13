@@ -352,6 +352,11 @@ impl<Env: Environment> ChainClient<Env> {
         self.client.signer()
     }
 
+    /// Returns whether the signer has a key for the given owner.
+    pub async fn has_key_for(&self, owner: &AccountOwner) -> Result<bool, Error> {
+        self.client.has_key_for(owner).await
+    }
+
     /// Gets a mutable reference to the per-`ChainClient` options.
     #[instrument(level = "trace", skip(self))]
     pub fn options_mut(&mut self) -> &mut Options {
@@ -650,11 +655,7 @@ impl<Env: Environment> ChainClient<Env> {
             return Err(Error::NotAnOwner(self.chain_id));
         }
 
-        let has_signer = self
-            .signer()
-            .contains_key(&preferred_owner)
-            .await
-            .map_err(Error::signer_failure)?;
+        let has_signer = self.has_key_for(&preferred_owner).await?;
 
         if !has_signer {
             warn!(%self.chain_id, ?preferred_owner,
@@ -2077,12 +2078,7 @@ impl<Env: Environment> ChainClient<Env> {
             let description = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?;
             // If we have a key for any owner, add it to the list of tracked chains.
             for owner in ownership.all_owners() {
-                if self
-                    .signer()
-                    .contains_key(owner)
-                    .await
-                    .map_err(Error::signer_failure)?
-                {
+                if self.has_key_for(owner).await? {
                     self.client
                         .extend_chain_mode(description.id(), ListeningMode::FullChain);
                     break;

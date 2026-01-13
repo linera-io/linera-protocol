@@ -13,7 +13,7 @@ use futures::{
     Future, FutureExt as _, StreamExt,
 };
 use linera_base::{
-    crypto::{CryptoHash, Signer},
+    crypto::CryptoHash,
     data_types::{ChainDescription, Epoch, Timestamp},
     identifiers::{AccountOwner, BlobType, ChainId},
     task::NonBlockingFuture,
@@ -382,13 +382,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         let mut context_guard = self.context.lock().await;
         for (new_chain_id, chain_desc) in new_chains {
             for chain_owner in chain_desc.config().ownership.all_owners() {
-                if context_guard
-                    .client()
-                    .signer()
-                    .contains_key(chain_owner)
-                    .await
-                    .map_err(chain_client::Error::signer_failure)?
-                {
+                if context_guard.client().has_key_for(chain_owner).await? {
                     context_guard
                         .update_wallet_for_new_chain(
                             new_chain_id,

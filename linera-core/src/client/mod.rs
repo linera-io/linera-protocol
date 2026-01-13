@@ -16,7 +16,7 @@ use futures::{
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
-    crypto::{CryptoHash, ValidatorPublicKey},
+    crypto::{CryptoHash, Signer as _, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, TimeDelta},
     ensure,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, GenericApplicationId, StreamId},
@@ -412,6 +412,14 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip(self))]
     pub fn signer(&self) -> &Env::Signer {
         self.environment.signer()
+    }
+
+    /// Returns whether the signer has a key for the given owner.
+    pub async fn has_key_for(&self, owner: &AccountOwner) -> Result<bool, chain_client::Error> {
+        self.signer()
+            .contains_key(owner)
+            .await
+            .map_err(chain_client::Error::signer_failure)
     }
 
     /// Returns a reference to the client's [`Wallet`][crate::environment::Wallet].
