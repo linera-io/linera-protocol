@@ -313,7 +313,7 @@ impl MultiPartitionBatch {
         key_values.push((key, value));
         self.put_key_values(root_key, key_values);
 
-        // Write height index: `chain_id`` -> `height `-> hash
+        // Write height index: chain_id -> height -> hash
         let chain_id = certificate.value().block().header.chain_id;
         let height = certificate.value().block().header.height;
         let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
