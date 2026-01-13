@@ -407,7 +407,7 @@ where
     /// Returns `Some(timestamp)` if the proposal should be delayed until that timestamp,
     /// or `None` if it should be processed immediately (either because the timestamp is
     /// not in the future, or because it's beyond the grace period and should error).
-    fn should_delay_proposal(&self, proposal: &BlockProposal) -> Option<Timestamp> {
+    fn delay_until(&self, proposal: &BlockProposal) -> Option<Timestamp> {
         // Only validators need to wait for the timestamp.
         self.config.key_pair.as_ref()?;
 
@@ -508,7 +508,7 @@ where
 
             // Check if the first request should be delayed.
             if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } = request {
-                if let Some(timestamp) = self.should_delay_proposal(proposal) {
+                if let Some(timestamp) = self.delay_until(proposal) {
                     debug!("Delaying block proposal until timestamp {}", timestamp);
                     delayed_proposals.push(Reverse(DelayedProposal {
                         timestamp,
@@ -585,7 +585,7 @@ where
                         if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } =
                             request
                         {
-                            if let Some(timestamp) = self.should_delay_proposal(proposal) {
+                            if let Some(timestamp) = self.delay_until(proposal) {
                                 debug!(
                                     "Delaying block proposal until timestamp {}",
                                     timestamp
