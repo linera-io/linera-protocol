@@ -805,14 +805,15 @@ where
 
         let certificates = storage.read_certificates(hashes.clone()).await?;
 
-        // Write back the height->hash indices we learned from the fallback
-        let indices: Vec<_> = heights.into_iter().zip(hashes.clone()).collect();
-        storage
-            .write_certificate_height_indices(chain_id, &indices)
-            .await?;
-
-        match ResultReadCertificates::new(certificates, hashes) {
-            ResultReadCertificates::Certificates(certs) => Ok(certs),
+        match ResultReadCertificates::new(certificates, hashes.clone()) {
+            ResultReadCertificates::Certificates(certs) => {
+                // Write back the height->hash indices we learned from the fallback
+                let indices: Vec<_> = heights.into_iter().zip(hashes.clone()).collect();
+                storage
+                    .write_certificate_height_indices(chain_id, &indices)
+                    .await?;
+                Ok(certs)
+            }
             ResultReadCertificates::InvalidHashes(hashes) => {
                 Err(ChainClientError::ReadCertificatesError(hashes))
             }
