@@ -602,13 +602,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                                         context_guard
                                             .client()
                                             .extend_chain_mode(chain_id, ListeningMode::FullChain);
-                                        let chain_description = context_guard
-                                            .client()
-                                            .get_chain_description(chain_id)
-                                            .await?;
                                         // Try to modify existing chain entry, setting the owner.
-                                        let timestamp = chain_description.timestamp();
-                                        let epoch = chain_description.config().epoch;
                                         let modified = context_guard
                                             .wallet()
                                             .modify(chain_id, |chain| chain.owner = Some(owner))
@@ -616,6 +610,12 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                                             .map_err(error::Inner::wallet)?;
                                         // If the chain didn't exist, insert a new entry.
                                         if modified.is_none() {
+                                            let chain_description = context_guard
+                                                .client()
+                                                .get_chain_description(chain_id)
+                                                .await?;
+                                            let timestamp = chain_description.timestamp();
+                                            let epoch = chain_description.config().epoch;
                                             context_guard.wallet()
                                                 .insert(
                                                     chain_id,
