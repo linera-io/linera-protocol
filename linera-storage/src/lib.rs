@@ -154,7 +154,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
 
     /// Reads certificates by heights for a given chain.
     /// Returns a vector where each element corresponds to the input height.
-    /// Elements are None if no certificate exists at that height.
+    /// Elements are `None` if no certificate exists at that height.
     async fn read_certificates_by_heights(
         &self,
         chain_id: ChainId,

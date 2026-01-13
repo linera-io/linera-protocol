@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Debug, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 #[cfg(with_metrics)]
@@ -289,7 +289,7 @@ impl MultiPartitionBatch {
     /// Writes both the certificate data (indexed by hash) and a height index
     /// (mapping chain_id + height to hash).
     ///
-    /// Note: If called multiple times with the same (chain_id, height), the height
+    /// Note: If called multiple times with the same `(chain_id, height)`, the height
     /// index will be overwritten. The caller is responsible for ensuring that
     /// certificates at the same height have the same hash.
     fn add_certificate(
@@ -405,14 +405,26 @@ fn is_chain_state(root_key: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use linera_base::{
-        crypto::CryptoHash,
+        crypto::{CryptoHash, TestString},
+        data_types::{BlockHeight, Epoch, Round, Timestamp},
         identifiers::{
             ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId,
             StreamName,
         },
     };
+    use linera_chain::{
+        block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
+        types::ConfirmedBlockCertificate,
+    };
+    use linera_views::{
+        memory::MemoryDatabase,
+        store::{KeyValueDatabase, ReadableKeyValueStore as _},
+    };
 
-    use crate::db_storage::{to_event_key, RootKey, BLOB_ID_TAG, CHAIN_ID_TAG};
+    use crate::{
+        db_storage::{to_event_key, MultiPartitionBatch, RootKey, BLOB_ID_TAG, CHAIN_ID_TAG},
+        DbStorage, Storage, TestClock,
+    };
 
     // Several functionalities of the storage rely on the way that the serialization
     // is done. Thus we need to check that the serialization works in the way that
@@ -489,21 +501,6 @@ mod tests {
     #[cfg(with_testing)]
     #[tokio::test]
     async fn test_add_certificate_creates_height_index() {
-        use linera_base::{
-            crypto::TestString,
-            data_types::{BlockHeight, Epoch, Round, Timestamp},
-        };
-        use linera_chain::{
-            block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
-            types::ConfirmedBlockCertificate,
-        };
-        use linera_views::{
-            memory::MemoryDatabase,
-            store::{KeyValueDatabase, ReadableKeyValueStore as _},
-        };
-
-        use crate::{db_storage::MultiPartitionBatch, DbStorage, TestClock};
-
         // Create test storage
         let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
 
@@ -565,18 +562,6 @@ mod tests {
     #[cfg(with_testing)]
     #[tokio::test]
     async fn test_read_certificates_by_heights() {
-        use linera_base::{
-            crypto::TestString,
-            data_types::{BlockHeight, Epoch, Round, Timestamp},
-        };
-        use linera_chain::{
-            block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
-            types::ConfirmedBlockCertificate,
-        };
-        use linera_views::memory::MemoryDatabase;
-
-        use crate::{db_storage::MultiPartitionBatch, DbStorage, Storage, TestClock};
-
         let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
         let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
 
@@ -591,38 +576,25 @@ mod tests {
                     epoch: Epoch::ZERO,
                     height: BlockHeight(height),
                     timestamp: Timestamp::from(0),
-                    state_hash: CryptoHash::new(&TestString::new(format!("state_hash_{}", height))),
+                    state_hash: CryptoHash::new(&TestString::new("state_hash_{height}")),
                     previous_block_hash: None,
                     authenticated_signer: None,
-                    transactions_hash: CryptoHash::new(&TestString::new(format!(
-                        "tx_hash_{}",
-                        height
-                    ))),
-                    messages_hash: CryptoHash::new(&TestString::new(format!(
-                        "msg_hash_{}",
-                        height
-                    ))),
-                    previous_message_blocks_hash: CryptoHash::new(&TestString::new(format!(
-                        "pmb_hash_{}",
-                        height
-                    ))),
-                    previous_event_blocks_hash: CryptoHash::new(&TestString::new(format!(
-                        "peb_hash_{}",
-                        height
-                    ))),
-                    oracle_responses_hash: CryptoHash::new(&TestString::new(format!(
-                        "oracle_hash_{}",
-                        height
-                    ))),
-                    events_hash: CryptoHash::new(&TestString::new(format!(
-                        "events_hash_{}",
-                        height
-                    ))),
-                    blobs_hash: CryptoHash::new(&TestString::new(format!("blobs_hash_{}", height))),
-                    operation_results_hash: CryptoHash::new(&TestString::new(format!(
-                        "op_results_hash_{}",
-                        height
-                    ))),
+                    transactions_hash: CryptoHash::new(&TestString::new("tx_hash_{height}")),
+                    messages_hash: CryptoHash::new(&TestString::new("msg_hash_{height}")),
+                    previous_message_blocks_hash: CryptoHash::new(&TestString::new(
+                        "pmb_hash_{height}",
+                    )),
+                    previous_event_blocks_hash: CryptoHash::new(&TestString::new(
+                        "peb_hash_{height}",
+                    )),
+                    oracle_responses_hash: CryptoHash::new(&TestString::new(
+                        "oracle_hash_{height}",
+                    )),
+                    events_hash: CryptoHash::new(&TestString::new("events_hash_{height}")),
+                    blobs_hash: CryptoHash::new(&TestString::new("blobs_hash_{height}")),
+                    operation_results_hash: CryptoHash::new(&TestString::new(
+                        "op_results_hash_{height}",
+                    )),
                 },
                 body: BlockBody {
                     transactions: vec![],
@@ -683,15 +655,25 @@ mod tests {
         );
 
         // Test: Read with missing heights [1, 2, 3]
-        let heights = vec![BlockHeight(1), BlockHeight(2), BlockHeight(3)];
+        let heights = vec![
+            BlockHeight(1),
+            BlockHeight(2),
+            BlockHeight(3),
+            BlockHeight(3),
+        ];
         let result = storage
             .read_certificates_by_heights(chain_id, &heights)
             .await
             .unwrap();
-        assert_eq!(result.len(), 3);
+        assert_eq!(result.len(), 4); // BlockHeight(3) was duplicated.
         assert!(result[0].is_some());
         assert!(result[1].is_none()); // Height 2 doesn't exist
         assert!(result[2].is_some());
+        assert!(result[3].is_some());
+        assert_eq!(
+            result[2].as_ref().unwrap().hash(),
+            result[3].as_ref().unwrap().hash()
+        ); // Both correspond to height 3
 
         // Test: Empty heights
         let heights = vec![];
@@ -705,18 +687,6 @@ mod tests {
     #[cfg(with_testing)]
     #[tokio::test]
     async fn test_read_certificates_by_heights_multiple_chains() {
-        use linera_base::{
-            crypto::TestString,
-            data_types::{BlockHeight, Epoch, Round, Timestamp},
-        };
-        use linera_chain::{
-            block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
-            types::ConfirmedBlockCertificate,
-        };
-        use linera_views::memory::MemoryDatabase;
-
-        use crate::{db_storage::MultiPartitionBatch, DbStorage, Storage, TestClock};
-
         let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
 
         // Create certificates for two different chains at same heights
@@ -817,87 +787,7 @@ mod tests {
 
     #[cfg(with_testing)]
     #[tokio::test]
-    async fn test_read_certificates_by_heights_duplicates() {
-        use linera_base::{
-            crypto::TestString,
-            data_types::{BlockHeight, Epoch, Round, Timestamp},
-        };
-        use linera_chain::{
-            block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
-            types::ConfirmedBlockCertificate,
-        };
-        use linera_views::memory::MemoryDatabase;
-
-        use crate::{db_storage::MultiPartitionBatch, DbStorage, Storage, TestClock};
-
-        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
-        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
-
-        // Write certificate at height 5
-        let mut batch = MultiPartitionBatch::new();
-        let block = Block {
-            header: BlockHeader {
-                chain_id,
-                epoch: Epoch::ZERO,
-                height: BlockHeight(5),
-                timestamp: Timestamp::from(0),
-                state_hash: CryptoHash::new(&TestString::new("state_hash")),
-                previous_block_hash: None,
-                authenticated_signer: None,
-                transactions_hash: CryptoHash::new(&TestString::new("tx_hash")),
-                messages_hash: CryptoHash::new(&TestString::new("msg_hash")),
-                previous_message_blocks_hash: CryptoHash::new(&TestString::new("pmb_hash")),
-                previous_event_blocks_hash: CryptoHash::new(&TestString::new("peb_hash")),
-                oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_hash")),
-                events_hash: CryptoHash::new(&TestString::new("events_hash")),
-                blobs_hash: CryptoHash::new(&TestString::new("blobs_hash")),
-                operation_results_hash: CryptoHash::new(&TestString::new("op_results_hash")),
-            },
-            body: BlockBody {
-                transactions: vec![],
-                messages: vec![],
-                previous_message_blocks: Default::default(),
-                previous_event_blocks: Default::default(),
-                oracle_responses: vec![],
-                events: vec![],
-                blobs: vec![],
-                operation_results: vec![],
-            },
-        };
-        let confirmed_block = ConfirmedBlock::new(block);
-        let cert = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
-        let expected_hash = cert.hash();
-        batch.add_certificate(&cert).unwrap();
-        storage.write_batch(batch).await.unwrap();
-
-        // Request same height multiple times [5, 5, 5]
-        let heights = vec![BlockHeight(5), BlockHeight(5), BlockHeight(5)];
-        let result = storage
-            .read_certificates_by_heights(chain_id, &heights)
-            .await
-            .unwrap();
-
-        assert_eq!(result.len(), 3);
-        assert_eq!(result[0].as_ref().unwrap().hash(), expected_hash);
-        assert_eq!(result[1].as_ref().unwrap().hash(), expected_hash);
-        assert_eq!(result[2].as_ref().unwrap().hash(), expected_hash);
-    }
-
-    #[cfg(with_testing)]
-    #[tokio::test]
     async fn test_read_certificates_by_heights_consistency() {
-        use linera_base::{
-            crypto::TestString,
-            data_types::{BlockHeight, Epoch, Round, Timestamp},
-        };
-        use linera_chain::{
-            block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
-            types::ConfirmedBlockCertificate,
-        };
-        use linera_views::memory::MemoryDatabase;
-
-        use crate::{db_storage::MultiPartitionBatch, DbStorage, Storage, TestClock};
-
         let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
         let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
 
@@ -1469,8 +1359,7 @@ where
         }
 
         // Step 2: Collect valid hashes and build index mapping
-        let mut hash_to_indices: std::collections::HashMap<CryptoHash, Vec<usize>> =
-            std::collections::HashMap::new();
+        let mut hash_to_indices: HashMap<CryptoHash, Vec<usize>> = HashMap::new();
         let valid_hashes: Vec<CryptoHash> = hash_options
             .iter()
             .enumerate()
