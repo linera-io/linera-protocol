@@ -1467,8 +1467,8 @@ impl NodeService {
         service: PathBuf,
         vm_runtime: VmRuntime,
     ) -> Result<ModuleId<Abi, Parameters, InstantiationArgument>> {
-        let contract_code = Bytecode::load_from_file(&contract)?;
-        let service_code = Bytecode::load_from_file(&service)?;
+        let contract_code = Bytecode::load_from_file(&contract).await?;
+        let service_code = Bytecode::load_from_file(&service).await?;
         let query = format!(
             "mutation {{ publishModule(chainId: {}, contract: {}, service: {}, vmRuntime: {}) }}",
             chain_id.to_value(),

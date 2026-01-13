@@ -469,8 +469,10 @@ impl ActiveChain {
         let service_path = base_path.join(format!("{}.wasm", service_binary));
 
         let contract = Bytecode::load_from_file(contract_path)
+            .await
             .expect("Failed to load contract bytecode from file");
         let service = Bytecode::load_from_file(service_path)
+            .await
             .expect("Failed to load service bytecode from file");
         (contract, service)
     }

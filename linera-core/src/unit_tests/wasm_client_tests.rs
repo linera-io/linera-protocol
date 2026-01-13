@@ -70,8 +70,8 @@ trait ChainClientExt {
 impl<Env: Environment> ChainClientExt for ChainClient<Env> {
     async fn publish_wasm_example(&self, name: &str) -> anyhow::Result<ModuleId> {
         let (contract_path, service_path) = wasm_test::get_example_bytecode_paths(name)?;
-        let contract_bytecode = Bytecode::load_from_file(contract_path)?;
-        let service_bytecode = Bytecode::load_from_file(service_path)?;
+        let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
+        let service_bytecode = Bytecode::load_from_file(service_path).await?;
         let (module_id, _cert) = self
             .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
             .await
@@ -131,8 +131,8 @@ where
     let vm_runtime = VmRuntime::Wasm;
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
-    let contract_bytecode = Bytecode::load_from_file(contract_path)?;
-    let service_bytecode = Bytecode::load_from_file(service_path)?;
+    let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
+    let service_bytecode = Bytecode::load_from_file(service_path).await?;
     let contract_compressed_len = contract_bytecode.compress().compressed_bytes.len();
     let service_compressed_len = service_bytecode.compress().compressed_bytes.len();
 
