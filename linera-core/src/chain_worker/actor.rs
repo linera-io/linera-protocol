@@ -16,6 +16,7 @@ use linera_base::{
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, BlobId, ChainId, StreamId},
+    task,
     time::Instant,
 };
 use linera_chain::{
@@ -397,12 +398,12 @@ where
                     debug!(%delay_until, "delaying block proposal");
                     let sender = request_sender.clone();
                     let clock = self.storage.clock().clone();
-                    tokio::spawn(async move {
+                    drop(task::spawn(async move {
                         clock.sleep_until(delay_until).await;
                         // Re-insert the request into the queue. If the channel is closed,
                         // the actor is shutting down, so we can ignore the error.
                         let _ = sender.send((request, span, queued_at));
-                    });
+                    }));
                     continue;
                 }
             }
@@ -461,10 +462,10 @@ where
                                 debug!(%delay_until, "delaying block proposal");
                                 let sender = request_sender.clone();
                                 let clock = self.storage.clock().clone();
-                                tokio::spawn(async move {
+                                drop(task::spawn(async move {
                                     clock.sleep_until(delay_until).await;
                                     let _ = sender.send((request, span, queued_at));
-                                });
+                                }));
                                 continue;
                             }
                         }
