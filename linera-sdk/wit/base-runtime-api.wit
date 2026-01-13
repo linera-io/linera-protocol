@@ -45,6 +45,14 @@ interface base-runtime-api {
         application-description-hash: crypto-hash,
     }
 
+    record application-permissions {
+        execute-operations: option<list<application-id>>,
+        mandatory-applications: list<application-id>,
+        manage-chain: list<application-id>,
+        call-service-as-oracle: option<list<application-id>>,
+        make-http-requests: option<list<application-id>>,
+    }
+
     record array20 {
         part1: u64,
         part2: u64,
@@ -66,14 +74,6 @@ interface base-runtime-api {
         multi-leader-rounds: u32,
         open-multi-leader-rounds: bool,
         timeout-config: timeout-config,
-    }
-
-    record application-permissions {
-        execute-operations: option<list<application-id>>,
-        mandatory-applications: list<application-id>,
-        manage-chain: list<application-id>,
-        call-service-as-oracle: option<list<application-id>>,
-        make-http-requests: option<list<application-id>>,
     }
 
     record crypto-hash {
