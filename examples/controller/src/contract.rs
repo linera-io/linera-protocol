@@ -93,7 +93,11 @@ impl Contract for ControllerContract {
                     self.execute_worker_command_locally(owner, command, creator_chain_id)
                         .await;
                 } else {
-                    log::info!("Sending worker command from {} to {creator_chain_id} for remote execution: {owner} {command:?}", self.runtime.chain_id());
+                    log::info!(
+                        "Sending worker command from {} to {creator_chain_id} \
+                                for remote execution: {owner} {command:?}",
+                        self.runtime.chain_id()
+                    );
                     self.runtime
                         .prepare_message(Message::ExecuteWorkerCommand { owner, command })
                         .send_to(creator_chain_id);
@@ -108,7 +112,11 @@ impl Contract for ControllerContract {
                     self.execute_controller_command_locally(admin, command)
                         .await;
                 } else {
-                    log::info!("Sending controller command from {} to {creator_chain_id} for remote execution: {admin} {command:?}", self.runtime.chain_id());
+                    log::info!(
+                        "Sending controller command from {} to {creator_chain_id} \
+                                for remote execution: {admin} {command:?}",
+                        self.runtime.chain_id()
+                    );
                     self.runtime
                         .prepare_message(Message::ExecuteControllerCommand { admin, command })
                         .send_to(creator_chain_id);
