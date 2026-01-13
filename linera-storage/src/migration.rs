@@ -546,6 +546,9 @@ mod tests {
                         let key_values = store.find_key_values_by_prefix(&[]).await?;
                         block_exporter_states.insert(index, key_values);
                     }
+                    RootKey::BlockByHeight(_) => {
+                        // Nothing to be done
+                    }
                 }
             }
         }
