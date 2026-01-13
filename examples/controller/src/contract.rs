@@ -78,7 +78,10 @@ impl Contract for ControllerContract {
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
-        log::info!("Processing operation on chain {}: {operation:?}", self.runtime.chain_id());
+        log::info!(
+            "Processing operation on chain {}: {operation:?}",
+            self.runtime.chain_id()
+        );
         match operation {
             Operation::ExecuteWorkerCommand { owner, command } => {
                 self.runtime
@@ -115,7 +118,10 @@ impl Contract for ControllerContract {
     }
 
     async fn execute_message(&mut self, message: Self::Message) {
-        log::info!("Processing message on chain {}: {message:?}", self.runtime.chain_id());
+        log::info!(
+            "Processing message on chain {}: {message:?}",
+            self.runtime.chain_id()
+        );
         match message {
             Message::ExecuteWorkerCommand { owner, command } => {
                 assert_eq!(
