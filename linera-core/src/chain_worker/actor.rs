@@ -4,7 +4,8 @@
 //! An actor that runs a chain worker.
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    cmp::{Ordering, Reverse},
+    collections::{BTreeMap, BinaryHeap, HashMap},
     fmt,
     sync::{self, Arc, RwLock},
 };
@@ -28,7 +29,7 @@ use linera_execution::{
     ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::{Clock as _, Storage};
-use linera_views::context::InactiveContext;
+use linera_views::context::{Context, InactiveContext};
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{debug, instrument, trace, Instrument as _};
 
@@ -43,6 +44,59 @@ use crate::{
 
 /// Type alias for event subscriptions result.
 pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscriptions)>;
+
+/// A block proposal request that is delayed until its timestamp is reached.
+///
+/// Block proposals with future timestamps (within the grace period) are queued
+/// and processed when their timestamp arrives, rather than blocking the actor.
+struct DelayedProposal<Ctx>
+where
+    Ctx: Context + Clone + 'static,
+{
+    /// The timestamp when this proposal should be processed.
+    timestamp: Timestamp,
+    /// Sequence number to maintain FIFO order among proposals with the same timestamp.
+    sequence: u64,
+    /// The block proposal request.
+    request: ChainWorkerRequest<Ctx>,
+    /// The tracing span for this request.
+    span: tracing::Span,
+    /// When the request was originally queued (for metrics).
+    _queued_at: Instant,
+}
+
+impl<Ctx> PartialEq for DelayedProposal<Ctx>
+where
+    Ctx: Context + Clone + 'static,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.timestamp == other.timestamp && self.sequence == other.sequence
+    }
+}
+
+impl<Ctx> Eq for DelayedProposal<Ctx> where Ctx: Context + Clone + 'static {}
+
+impl<Ctx> PartialOrd for DelayedProposal<Ctx>
+where
+    Ctx: Context + Clone + 'static,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<Ctx> Ord for DelayedProposal<Ctx>
+where
+    Ctx: Context + Clone + 'static,
+{
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Order by timestamp first, then by sequence number.
+        // Earlier timestamps and lower sequence numbers come first.
+        self.timestamp
+            .cmp(&other.timestamp)
+            .then_with(|| self.sequence.cmp(&other.sequence))
+    }
+}
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -62,9 +116,9 @@ mod metrics {
 
 /// A request for the [`ChainWorkerActor`].
 #[derive(Debug)]
-pub(crate) enum ChainWorkerRequest<Context>
+pub(crate) enum ChainWorkerRequest<Ctx>
 where
-    Context: linera_views::context::Context + Clone + 'static,
+    Ctx: Context + Clone + 'static,
 {
     /// Reads the certificate for a requested [`BlockHeight`].
     #[cfg(with_testing)]
@@ -77,8 +131,7 @@ where
     /// Request a read-only view of the [`ChainStateView`].
     GetChainStateView {
         #[debug(skip)]
-        callback:
-            oneshot::Sender<Result<OwnedRwLockReadGuard<ChainStateView<Context>>, WorkerError>>,
+        callback: oneshot::Sender<Result<OwnedRwLockReadGuard<ChainStateView<Ctx>>, WorkerError>>,
     },
 
     /// Query an application's state.
@@ -337,8 +390,8 @@ where
         }
     }
 
-    /// Sleeps for the configured TTL.
-    pub(super) async fn sleep_until_timeout(&self) {
+    /// Returns the TTL timeout timestamp.
+    fn ttl_timeout(&self) -> Timestamp {
         let now = self.storage.clock().current_time();
         let timeout = if self.is_tracked {
             self.config.sender_chain_ttl
@@ -346,8 +399,60 @@ where
             self.config.ttl
         };
         let ttl = TimeDelta::from_micros(u64::try_from(timeout.as_micros()).unwrap_or(u64::MAX));
-        let timeout = now.saturating_add(ttl);
-        self.storage.clock().sleep_until(timeout).await
+        now.saturating_add(ttl)
+    }
+
+    /// Checks if a block proposal should be delayed because its timestamp is in the future.
+    ///
+    /// Returns `Some(timestamp)` if the proposal should be delayed until that timestamp,
+    /// or `None` if it should be processed immediately (either because the timestamp is
+    /// not in the future, or because it's beyond the grace period and should error).
+    fn should_delay_proposal(&self, proposal: &BlockProposal) -> Option<Timestamp> {
+        // Only validators need to wait for the timestamp.
+        self.config.key_pair.as_ref()?;
+
+        let block_timestamp = proposal.content.block.timestamp;
+        let now = self.storage.clock().current_time();
+        let delta = block_timestamp.delta_since(now);
+
+        // Only delay if the timestamp is in the future but within the grace period.
+        // If it's beyond the grace period, process immediately to return an error.
+        // This prevents malicious clients from filling our delay queue with far-future proposals.
+        let grace_period = TimeDelta::from_micros(
+            u64::try_from(self.config.block_time_grace_period.as_micros()).unwrap_or(u64::MAX),
+        );
+        (delta > TimeDelta::ZERO && delta <= grace_period).then_some(block_timestamp)
+    }
+
+    /// Computes the next wakeup time considering both TTL and delayed proposals.
+    fn next_wakeup_time(
+        &self,
+        delayed_proposals: &BinaryHeap<Reverse<DelayedProposal<StorageClient::Context>>>,
+    ) -> Timestamp {
+        let ttl_timeout = self.ttl_timeout();
+        match delayed_proposals.peek() {
+            Some(Reverse(proposal)) => ttl_timeout.min(proposal.timestamp),
+            None => ttl_timeout,
+        }
+    }
+
+    /// Pops all delayed proposals that are ready to be processed.
+    fn pop_ready_delayed(
+        &self,
+        delayed_proposals: &mut BinaryHeap<Reverse<DelayedProposal<StorageClient::Context>>>,
+    ) -> Vec<DelayedProposal<StorageClient::Context>> {
+        let now = self.storage.clock().current_time();
+        let mut ready = Vec::new();
+        while let Some(Reverse(proposal)) = delayed_proposals.peek() {
+            if proposal.timestamp <= now {
+                if let Some(Reverse(proposal)) = delayed_proposals.pop() {
+                    ready.push(proposal);
+                }
+            } else {
+                break;
+            }
+        }
+        ready
     }
 
     /// Runs the worker until there are no more incoming requests.
@@ -364,6 +469,11 @@ where
         )>,
     ) -> Result<(), WorkerError> {
         trace!("Starting `ChainWorkerActor`");
+
+        // Queue for block proposals with future timestamps.
+        let mut delayed_proposals: BinaryHeap<Reverse<DelayedProposal<StorageClient::Context>>> =
+            BinaryHeap::new();
+        let mut next_sequence: u64 = 0;
 
         while let Some((request, span, _queued_at)) = incoming_requests.recv().await {
             // Record how long the request waited in queue (in milliseconds)
@@ -396,13 +506,69 @@ where
             .instrument(span.clone())
             .await?;
 
-            Box::pin(worker.handle_request(request))
-                .instrument(span)
-                .await;
+            // Check if the first request should be delayed.
+            if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } = request {
+                if let Some(timestamp) = self.should_delay_proposal(proposal) {
+                    debug!("Delaying block proposal until timestamp {}", timestamp);
+                    delayed_proposals.push(Reverse(DelayedProposal {
+                        timestamp,
+                        sequence: next_sequence,
+                        request,
+                        span,
+                        _queued_at,
+                    }));
+                    next_sequence += 1;
+                } else {
+                    Box::pin(worker.handle_request(request))
+                        .instrument(span)
+                        .await;
+                }
+            } else {
+                Box::pin(worker.handle_request(request))
+                    .instrument(span)
+                    .await;
+            }
 
             loop {
+                // Process any delayed proposals that are now ready.
+                for ready in self.pop_ready_delayed(&mut delayed_proposals) {
+                    #[cfg(with_metrics)]
+                    {
+                        let queue_wait_time_ms = ready._queued_at.elapsed().as_secs_f64() * 1000.0;
+                        metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
+                    }
+                    Box::pin(worker.handle_request(ready.request))
+                        .instrument(ready.span)
+                        .await;
+                }
+
+                // Compute the next wakeup time (minimum of TTL and earliest delayed proposal).
+                let wakeup_time = self.next_wakeup_time(&delayed_proposals);
+                let ttl_timeout = self.ttl_timeout();
+
                 futures::select! {
-                    () = self.sleep_until_timeout().fuse() => break,
+                    () = self.storage.clock().sleep_until(wakeup_time).fuse() => {
+                        // Check if any delayed proposals are now ready.
+                        let ready_proposals = self.pop_ready_delayed(&mut delayed_proposals);
+                        if !ready_proposals.is_empty() {
+                            for ready in ready_proposals {
+                                #[cfg(with_metrics)]
+                                {
+                                    let queue_wait_time_ms =
+                                        ready._queued_at.elapsed().as_secs_f64() * 1000.0;
+                                    metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME
+                                        .observe(queue_wait_time_ms);
+                                }
+                                Box::pin(worker.handle_request(ready.request))
+                                    .instrument(ready.span)
+                                    .await;
+                            }
+                        } else if wakeup_time >= ttl_timeout && delayed_proposals.is_empty() {
+                            // TTL expired and no delayed proposals waiting.
+                            break;
+                        }
+                        // Otherwise, there are still delayed proposals waiting; continue the loop.
+                    }
                     maybe_request = incoming_requests.recv().fuse() => {
                         let Some((request, span, _queued_at)) = maybe_request else {
                             break; // Request sender was dropped.
@@ -413,6 +579,27 @@ where
                         {
                             let queue_wait_time_ms = _queued_at.elapsed().as_secs_f64() * 1000.0;
                             metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
+                        }
+
+                        // Check if this request should be delayed.
+                        if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } =
+                            request
+                        {
+                            if let Some(timestamp) = self.should_delay_proposal(proposal) {
+                                debug!(
+                                    "Delaying block proposal until timestamp {}",
+                                    timestamp
+                                );
+                                delayed_proposals.push(Reverse(DelayedProposal {
+                                    timestamp,
+                                    sequence: next_sequence,
+                                    request,
+                                    span,
+                                    _queued_at,
+                                }));
+                                next_sequence += 1;
+                                continue;
+                            }
                         }
 
                         Box::pin(worker.handle_request(request)).instrument(span).await;
