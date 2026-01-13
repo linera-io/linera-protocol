@@ -753,11 +753,9 @@ where
             }
         }
         for entry in contracts_to_create {
-            if let Some((address, account, module_id)) = entry {
-                self.create_new_contract(address, account, module_id)?;
-            } else {
-                unreachable!();
-            };
+            let (address, account, module_id) =
+                entry.expect("An entry since all have been matched above");
+            self.create_new_contract(address, account, module_id)?;
         }
         for (address, revm_balance) in balances {
             self.check_balance(address, revm_balance)?;
