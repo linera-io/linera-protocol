@@ -278,7 +278,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         }
     }
 
-    /// Creates a [`linera_sdk::UserContract`] instance using the bytecode in storage referenced
+    /// Creates a [`UserServiceCode`] instance using the bytecode in storage referenced
     /// by the `application_description`.
     async fn load_service(
         &self,
