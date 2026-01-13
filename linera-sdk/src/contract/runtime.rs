@@ -136,6 +136,11 @@ where
         base_wit::get_chain_ownership().into()
     }
 
+    /// Retrieves the application permissions for the current chain.
+    pub fn application_permissions(&mut self) -> ApplicationPermissions {
+        base_wit::get_application_permissions().into()
+    }
+
     /// Makes an HTTP `request` as an oracle and returns the HTTP response.
     ///
     /// Should only be used with queries where it is very likely that all validators will receive
