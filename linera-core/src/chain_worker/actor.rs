@@ -509,7 +509,7 @@ where
             // Check if the first request should be delayed.
             if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } = request {
                 if let Some(timestamp) = self.delay_until(proposal) {
-                    debug!("Delaying block proposal until timestamp {}", timestamp);
+                    debug!(delay_until = %timestamp, "delaying block proposal");
                     delayed_proposals.push(Reverse(DelayedProposal {
                         timestamp,
                         sequence: next_sequence,
