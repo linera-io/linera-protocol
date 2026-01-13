@@ -12,8 +12,8 @@ use itertools::Itertools;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, NetworkDescription,
-        TimeDelta, Timestamp,
+        ApplicationDescription, Blob, BlockHeight, ChainDescription, CompressedBytecode,
+        NetworkDescription, TimeDelta, Timestamp,
     },
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
@@ -156,6 +156,24 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         &self,
         hashes: I,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError>;
+
+    /// Reads certificates by heights for a given chain.
+    /// Returns a vector where each element corresponds to the input height.
+    /// Elements are `None` if no certificate exists at that height.
+    async fn read_certificates_by_heights(
+        &self,
+        chain_id: ChainId,
+        heights: &[BlockHeight],
+    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError>;
+
+    /// Writes certificate height index entries for a given chain.
+    /// This is used to populate the height->hash index when certificates are found
+    /// via alternative methods (e.g., from chain state).
+    async fn write_certificate_height_indices(
+        &self,
+        chain_id: ChainId,
+        indices: &[(BlockHeight, CryptoHash)],
+    ) -> Result<(), ViewError>;
 
     /// Reads the event with the given ID.
     async fn read_event(&self, id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
