@@ -858,6 +858,103 @@ mod tests {
             cert_by_height.value().block().header
         );
     }
+
+    /// Tests that `write_certificate_height_indices` correctly populates the reverse index
+    /// so that `read_certificates_by_heights` can find certificates that were written
+    /// without the height index (simulating old data or fallback scenarios).
+    #[cfg(with_testing)]
+    #[tokio::test]
+    async fn test_write_certificate_height_indices_populates_reverse_index() {
+        use linera_views::{batch::Batch, store::WritableKeyValueStore as _};
+
+        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+
+        // Create a certificate but write ONLY the certificate data, NOT the height index.
+        // This simulates old data written before the height index feature existed.
+        let block = Block {
+            header: BlockHeader {
+                chain_id,
+                epoch: Epoch::ZERO,
+                height: BlockHeight(10),
+                timestamp: Timestamp::from(0),
+                state_hash: CryptoHash::new(&TestString::new("state_hash")),
+                previous_block_hash: None,
+                authenticated_signer: None,
+                transactions_hash: CryptoHash::new(&TestString::new("tx_hash")),
+                messages_hash: CryptoHash::new(&TestString::new("msg_hash")),
+                previous_message_blocks_hash: CryptoHash::new(&TestString::new("pmb_hash")),
+                previous_event_blocks_hash: CryptoHash::new(&TestString::new("peb_hash")),
+                oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_hash")),
+                events_hash: CryptoHash::new(&TestString::new("events_hash")),
+                blobs_hash: CryptoHash::new(&TestString::new("blobs_hash")),
+                operation_results_hash: CryptoHash::new(&TestString::new("op_results_hash")),
+            },
+            body: BlockBody {
+                transactions: vec![],
+                messages: vec![],
+                previous_message_blocks: Default::default(),
+                previous_event_blocks: Default::default(),
+                oracle_responses: vec![],
+                events: vec![],
+                blobs: vec![],
+                operation_results: vec![],
+            },
+        };
+        let confirmed_block = ConfirmedBlock::new(block);
+        let cert = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
+        let hash = cert.hash();
+        let height = BlockHeight(10);
+
+        // Write certificate data directly (bypassing add_certificate which writes the index)
+        let root_key = RootKey::ConfirmedBlock(hash).bytes();
+        let store = storage.database.open_shared(&root_key).unwrap();
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(
+            crate::db_storage::LITE_CERTIFICATE_KEY.to_vec(),
+            bcs::to_bytes(&cert.lite_certificate()).unwrap(),
+        );
+        batch.put_key_value_bytes(
+            crate::db_storage::BLOCK_KEY.to_vec(),
+            bcs::to_bytes(&cert.value()).unwrap(),
+        );
+        store.write_batch(batch).await.unwrap();
+
+        // Verify height index does NOT exist yet
+        let result = storage
+            .read_certificates_by_heights(chain_id, &[height])
+            .await
+            .unwrap();
+        assert!(
+            result[0].is_none(),
+            "Height index should not exist before write_certificate_height_indices"
+        );
+
+        // Verify certificate can still be read by hash
+        let cert_by_hash = storage.read_certificate(hash).await.unwrap();
+        assert!(cert_by_hash.is_some(), "Certificate should exist by hash");
+
+        // Write the height index (simulating what updater does after fallback)
+        storage
+            .write_certificate_height_indices(chain_id, &[(height, hash)])
+            .await
+            .unwrap();
+
+        // Verify read_certificates_by_heights NOW returns the certificate
+        let result = storage
+            .read_certificates_by_heights(chain_id, &[height])
+            .await
+            .unwrap();
+        assert!(
+            result[0].is_some(),
+            "Height index should exist after write_certificate_height_indices"
+        );
+        assert_eq!(
+            result[0].as_ref().unwrap().hash(),
+            hash,
+            "Certificate retrieved by height should match original"
+        );
+    }
 }
 
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the
@@ -1399,6 +1496,30 @@ where
         }
 
         Ok(result)
+    }
+
+    #[instrument(skip_all, fields(%chain_id, indices_len = indices.len()))]
+    async fn write_certificate_height_indices(
+        &self,
+        chain_id: ChainId,
+        indices: &[(BlockHeight, CryptoHash)],
+    ) -> Result<(), ViewError> {
+        if indices.is_empty() {
+            return Ok(());
+        }
+
+        let mut batch = MultiPartitionBatch::new();
+        let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
+        let key_values: Vec<(Vec<u8>, Vec<u8>)> = indices
+            .iter()
+            .map(|(height, hash)| {
+                let height_key = to_height_key(*height);
+                let hash_value = bcs::to_bytes(hash).unwrap();
+                (height_key, hash_value)
+            })
+            .collect();
+        batch.put_key_values(index_root_key, key_values);
+        self.write_batch(batch).await
     }
 
     #[instrument(skip_all, fields(event_id = ?event_id))]

@@ -773,6 +773,9 @@ where
     /// First attempts to use the optimized `read_certificates_by_heights` method.
     /// Falls back to the traditional `get_block_hashes` + `read_certificates` approach
     /// if the direct height lookup doesn't return all certificates.
+    ///
+    /// When using the fallback, writes the discovered height->hash indices back to storage
+    /// so subsequent lookups can use the optimized path.
     async fn read_certificates_for_heights(
         &self,
         chain_id: ChainId,
@@ -797,10 +800,17 @@ where
         let hashes = self
             .client
             .local_node
-            .get_block_hashes(chain_id, heights)
+            .get_block_hashes(chain_id, heights.clone())
             .await?;
 
         let certificates = storage.read_certificates(hashes.clone()).await?;
+
+        // Write back the height->hash indices we learned from the fallback
+        let indices: Vec<_> = heights.into_iter().zip(hashes.clone()).collect();
+        storage
+            .write_certificate_height_indices(chain_id, &indices)
+            .await?;
+
         match ResultReadCertificates::new(certificates, hashes) {
             ResultReadCertificates::Certificates(certs) => Ok(certs),
             ResultReadCertificates::InvalidHashes(hashes) => {
