@@ -191,7 +191,7 @@ impl Order {
         let full_value = (quantity.upper_half() as u128) << 64 | (quantity.lower_half() as u128);
 
         // We allow this because `is_multiple_of` is still unstable in our MSRV.
-        #[allow(clippy::unknown_lints)]
+        #[allow(unknown_lints)]
         #[allow(clippy::manual_is_multiple_of)]
         // Check if the quantity is divisible by the minimum unit
         // This ensures it doesn't use more than (DECIMAL_PLACES - price_decimals) decimal places
