@@ -45,7 +45,7 @@ use crate::test_utils::ServiceStorageBuilder;
 use crate::{
     client::{
         chain_client::{self, ChainClient},
-        BlanketMessagePolicy, ClientOutcome, MessageAction, MessagePolicy,
+        BlanketMessagePolicy, ClientOutcome, ListeningMode, MessageAction, MessagePolicy,
     },
     local_node::LocalNodeError,
     node::{
@@ -3319,6 +3319,79 @@ where
     assert!(
         clock.current_time() >= future_time,
         "Clock should have advanced to at least the block timestamp"
+    );
+
+    Ok(())
+}
+
+/// Tests that when a chain is opened for a key we own, the new chain is automatically
+/// tracked as a full chain and its inbox is updated when messages are sent to it.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_open_chain_for_owned_key_is_fully_tracked<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+        .await?
+        .with_policy(ResourceControlPolicy::only_fuel());
+
+    // New chains use the admin chain to verify their creation certificate.
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
+    let parent = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let sender = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
+
+    // Generate a new key in the same signer that the parent uses.
+    let new_public_key = builder.signer.generate_new();
+
+    // Open a new chain for the key we own.
+    let (new_description, _certificate) = parent
+        .open_chain(
+            ChainOwnership::single(new_public_key.into()),
+            ApplicationPermissions::default(),
+            Amount::from_tokens(1),
+        )
+        .await
+        .unwrap_ok_committed();
+    let new_chain_id = new_description.id();
+
+    // Verify the new chain is tracked as FullChain.
+    assert_eq!(
+        parent.client.chain_mode(new_chain_id),
+        Some(ListeningMode::FullChain),
+        "New chain should be tracked as FullChain since we own the key"
+    );
+
+    // Create a client for the new chain.
+    let mut new_chain_client = builder
+        .make_client(new_chain_id, None, BlockHeight::ZERO)
+        .await?;
+    new_chain_client.set_preferred_owner(new_public_key.into());
+
+    // Send a transfer from `sender` to the new chain.
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(new_chain_id),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Synchronize the new chain and process its inbox.
+    new_chain_client.synchronize_from_validators().await?;
+    new_chain_client.process_inbox().await?;
+
+    // Verify the new chain received the funds (initial 1 token + 3 transferred).
+    let balance = new_chain_client.local_balance().await?;
+    assert!(
+        balance >= Amount::from_tokens(3),
+        "New chain should have received the transferred funds, got {balance}"
     );
 
     Ok(())
