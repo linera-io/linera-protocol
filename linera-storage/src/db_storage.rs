@@ -313,12 +313,13 @@ impl MultiPartitionBatch {
         key_values.push((key, value));
         self.put_key_values(root_key, key_values);
 
-        // Write height index: (chain_id, height) -> hash
+        // Write height index: `chain_id`` -> `height `-> hash
         let chain_id = certificate.value().block().header.chain_id;
         let height = certificate.value().block().header.height;
-        let index_root_key = RootKey::BlockByHeight(chain_id, height).bytes();
+        let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
+        let height_key = to_height_key(height);
         let index_value = bcs::to_bytes(&hash)?;
-        self.put_key_value(index_root_key, vec![], index_value);
+        self.put_key_value(index_root_key, height_key, index_value);
 
         Ok(())
     }
@@ -369,7 +370,7 @@ pub(crate) enum RootKey {
     Placeholder,
     NetworkDescription,
     BlockExporterState(u32),
-    BlockByHeight(ChainId, BlockHeight),
+    BlockByHeight(ChainId),
 }
 
 const CHAIN_ID_TAG: u8 = 0;
@@ -393,6 +394,10 @@ pub(crate) fn to_event_key(event_id: &EventId) -> Vec<u8> {
         index: event_id.index,
     };
     bcs::to_bytes(&restricted_event_id).unwrap()
+}
+
+pub(crate) fn to_height_key(height: BlockHeight) -> Vec<u8> {
+    bcs::to_bytes(&height).unwrap()
 }
 
 fn is_chain_state(root_key: &[u8]) -> bool {
@@ -422,7 +427,9 @@ mod tests {
     };
 
     use crate::{
-        db_storage::{to_event_key, MultiPartitionBatch, RootKey, BLOB_ID_TAG, CHAIN_ID_TAG},
+        db_storage::{
+            to_event_key, to_height_key, MultiPartitionBatch, RootKey, BLOB_ID_TAG, CHAIN_ID_TAG,
+        },
         DbStorage, Storage, TestClock,
     };
 
@@ -482,7 +489,8 @@ mod tests {
         assert!(key.starts_with(&prefix));
     }
 
-    // The height index lookup depends on the serialization of RootKey::BlockByHeight.
+    // The height index lookup depends on the serialization of RootKey::BlockByHeight
+    // and to_height_key, following the same pattern as Event.
     #[test]
     fn test_root_key_block_by_height_serialization() {
         use linera_base::data_types::BlockHeight;
@@ -490,12 +498,16 @@ mod tests {
         let hash = CryptoHash::default();
         let chain_id = ChainId(hash);
         let height = BlockHeight(42);
-        let root_key = RootKey::BlockByHeight(chain_id, height).bytes();
 
-        // Should be able to deserialize chain_id and height from the bytes
-        let deserialized: (ChainId, BlockHeight) = bcs::from_bytes(&root_key[1..]).unwrap();
-        assert_eq!(deserialized.0, chain_id);
-        assert_eq!(deserialized.1, height);
+        // RootKey::BlockByHeight uses only ChainId for partitioning (like Event)
+        let root_key = RootKey::BlockByHeight(chain_id).bytes();
+        let deserialized_chain_id: ChainId = bcs::from_bytes(&root_key[1..]).unwrap();
+        assert_eq!(deserialized_chain_id, chain_id);
+
+        // Height is encoded as a key (like index in Event)
+        let height_key = to_height_key(height);
+        let deserialized_height: BlockHeight = bcs::from_bytes(&height_key).unwrap();
+        assert_eq!(deserialized_height, height);
     }
 
     #[cfg(with_testing)]
@@ -548,11 +560,12 @@ mod tests {
         batch.add_certificate(&certificate).unwrap();
         storage.write_batch(batch).await.unwrap();
 
-        // Verify height index was created
+        // Verify height index was created (following Event pattern)
         let hash = certificate.hash();
-        let index_root_key = RootKey::BlockByHeight(chain_id, height).bytes();
+        let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
         let store = storage.database.open_shared(&index_root_key).unwrap();
-        let value_bytes = store.read_value_bytes(&[]).await.unwrap();
+        let height_key = to_height_key(height);
+        let value_bytes = store.read_value_bytes(&height_key).await.unwrap();
 
         assert!(value_bytes.is_some(), "Height index was not created");
         let stored_hash: CryptoHash = bcs::from_bytes(&value_bytes.unwrap()).unwrap();
@@ -1345,18 +1358,18 @@ where
             return Ok(Vec::new());
         }
 
-        // Step 1: Read all hashes from the height index
-        let mut hash_options = Vec::with_capacity(heights.len());
-        for height in heights {
-            let index_root_key = RootKey::BlockByHeight(chain_id, *height).bytes();
-            let store = self.database.open_shared(&index_root_key)?;
-            let value_bytes = store.read_value_bytes(&[]).await?;
-
-            let hash_option = value_bytes
-                .map(|bytes| bcs::from_bytes::<CryptoHash>(&bytes))
-                .transpose()?;
-            hash_options.push(hash_option);
-        }
+        // Step 1: Read all hashes from the height index (following event pattern)
+        let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
+        let store = self.database.open_shared(&index_root_key)?;
+        let height_keys: Vec<Vec<u8>> = heights.iter().map(|h| to_height_key(*h)).collect();
+        let hash_bytes = store.read_multi_values_bytes(&height_keys).await?;
+        let hash_options: Vec<Option<CryptoHash>> = hash_bytes
+            .into_iter()
+            .map(|opt| {
+                opt.map(|bytes| bcs::from_bytes::<CryptoHash>(&bytes))
+                    .transpose()
+            })
+            .collect::<Result<_, _>>()?;
 
         // Step 2: Collect valid hashes and build index mapping
         let mut hash_to_indices: HashMap<CryptoHash, Vec<usize>> = HashMap::new();
