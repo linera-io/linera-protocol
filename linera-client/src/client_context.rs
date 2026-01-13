@@ -490,6 +490,7 @@ impl<Env: Environment> ClientContext<Env> {
             return Err(error::Inner::ChainOwnership.into());
         }
 
+        // TODO(#5247): Do not reset preexisting epoch and timestamp.
         self.wallet()
             .insert(
                 chain_id,

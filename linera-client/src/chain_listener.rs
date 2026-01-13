@@ -611,6 +611,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                                         chain.timestamp = chain_description.timestamp();
                                         chain.epoch = Some(chain_description.config().epoch);
                                         // Insert (overwrites if already exists)
+                                        // TODO(#5247): Do not reset preexisting epoch and timestamp.
                                         context_guard
                                             .wallet()
                                             .insert(chain_id, chain)
