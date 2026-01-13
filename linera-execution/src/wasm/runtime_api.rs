@@ -139,6 +139,17 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Retrieves the application permissions for the current chain.
+    fn get_application_permissions(
+        caller: &mut Caller,
+    ) -> Result<ApplicationPermissions, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .application_permissions()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.
     fn read_system_timestamp(caller: &mut Caller) -> Result<Timestamp, RuntimeError> {
         caller

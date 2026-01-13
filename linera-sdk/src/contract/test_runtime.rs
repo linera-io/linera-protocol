@@ -67,6 +67,7 @@ where
     chain_balance: Option<Amount>,
     owner_balances: Option<HashMap<AccountOwner, Amount>>,
     chain_ownership: Option<ChainOwnership>,
+    application_permissions: Option<ApplicationPermissions>,
     can_close_chain: Option<bool>,
     can_change_application_permissions: Option<bool>,
     call_application_handler: Option<CallApplicationHandler>,
@@ -116,6 +117,7 @@ where
             chain_balance: None,
             owner_balances: None,
             chain_ownership: None,
+            application_permissions: None,
             can_close_chain: None,
             can_change_application_permissions: None,
             call_application_handler: None,
@@ -587,6 +589,32 @@ where
         self.chain_ownership.clone().expect(
             "Chain ownership has not been mocked, \
             please call `MockContractRuntime::set_chain_ownership` first",
+        )
+    }
+
+    /// Configures the application permissions to return during the test.
+    pub fn with_application_permissions(
+        mut self,
+        application_permissions: ApplicationPermissions,
+    ) -> Self {
+        self.application_permissions = Some(application_permissions);
+        self
+    }
+
+    /// Configures the application permissions to return during the test.
+    pub fn set_application_permissions(
+        &mut self,
+        application_permissions: ApplicationPermissions,
+    ) -> &mut Self {
+        self.application_permissions = Some(application_permissions);
+        self
+    }
+
+    /// Retrieves the application permissions for the current chain.
+    pub fn application_permissions(&mut self) -> ApplicationPermissions {
+        self.application_permissions.clone().expect(
+            "Application permissions have not been mocked, \
+            please call `MockContractRuntime::set_application_permissions` first",
         )
     }
 
