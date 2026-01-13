@@ -78,6 +78,7 @@ tracing-web = { optional = true, workspace = true }
 chrono.workspace = true
 rand = { workspace = true, features = ["getrandom", "std", "std_rng"] }
 tokio = { workspace = true, features = [
+    "fs",
     "process",
     "rt-multi-thread",
     "signal",

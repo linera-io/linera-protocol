@@ -801,8 +801,10 @@ impl<Env: Environment> ClientContext<Env> {
     ) -> Result<ModuleId, Error> {
         info!("Loading bytecode files");
         let contract_bytecode = Bytecode::load_from_file(&contract)
+            .await
             .with_context(|| format!("failed to load contract bytecode from {:?}", &contract))?;
         let service_bytecode = Bytecode::load_from_file(&service)
+            .await
             .with_context(|| format!("failed to load service bytecode from {:?}", &service))?;
 
         info!("Publishing module");

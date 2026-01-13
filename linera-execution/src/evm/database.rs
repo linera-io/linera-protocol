@@ -6,20 +6,34 @@
 
 use std::{
     collections::HashMap,
+    mem,
+    ops::DerefMut,
     sync::{Arc, Mutex},
 };
 
-use linera_base::{data_types::Amount, ensure, identifiers::Account, vm::VmRuntime};
+use linera_base::{
+    data_types::Amount,
+    ensure,
+    identifiers::{self, ApplicationId, ModuleId},
+    vm::{EvmInstantiation, EvmQuery, VmRuntime},
+};
 use linera_views::common::from_bytes_option;
 use revm::{primitives::keccak256, Database, DatabaseCommit, DatabaseRef};
 use revm_context::BlockEnv;
 use revm_context_interface::block::BlobExcessGasAndPrice;
-use revm_database::{AccountState, DBErrorMarker};
-use revm_primitives::{address, Address, B256, U256};
+use revm_database::DBErrorMarker;
+use revm_primitives::{address, Address, B256, KECCAK_EMPTY, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
 use crate::{
-    evm::inputs::{FAUCET_ADDRESS, FAUCET_BALANCE, ZERO_ADDRESS},
+    evm::{
+        inputs::{FAUCET_ADDRESS, FAUCET_BALANCE, ZERO_ADDRESS},
+        revm::{
+            address_to_user_application_id, ALREADY_CREATED_CONTRACT_SELECTOR,
+            COMMIT_CONTRACT_CHANGES_SELECTOR, GET_ACCOUNT_INFO_SELECTOR,
+            GET_CONTRACT_STORAGE_SELECTOR, JSON_EMPTY_VECTOR,
+        },
+    },
     BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError, ServiceRuntime,
 };
 
@@ -29,72 +43,74 @@ use crate::{
 // We set up the limit similarly to Infura to 20 million.
 pub const EVM_SERVICE_GAS_LIMIT: u64 = 20_000_000;
 
-/// The cost of loading from storage.
-const SLOAD_COST: u64 = 2100;
+impl DBErrorMarker for ExecutionError {}
 
-/// The cost of storing a non-zero value in the storage for the first time.
-const SSTORE_COST_SET: u64 = 20000;
-
-/// The cost of not changing the state of the variable in the storage.
-const SSTORE_COST_NO_OPERATION: u64 = 100;
-
-/// The cost of overwriting the storage to a different value.
-const SSTORE_COST_RESET: u64 = 2900;
-
-/// The refund from releasing data.
-const SSTORE_REFUND_RELEASE: u64 = 4800;
-
-/// The number of key writes, reads, release, and no change in EVM has to be accounted for.
-/// Then we remove those costs from the final bill.
-#[derive(Clone, Default)]
-pub(crate) struct StorageStats {
-    key_no_operation: u64,
-    key_reset: u64,
-    key_set: u64,
-    key_release: u64,
-    key_read: u64,
-}
-
-impl StorageStats {
-    pub fn storage_costs(&self) -> u64 {
-        let mut storage_costs = 0;
-        storage_costs += self.key_no_operation * SSTORE_COST_NO_OPERATION;
-        storage_costs += self.key_reset * SSTORE_COST_RESET;
-        storage_costs += self.key_set * SSTORE_COST_SET;
-        storage_costs += self.key_read * SLOAD_COST;
-        storage_costs
-    }
-
-    pub fn storage_refund(&self) -> u64 {
-        self.key_release * SSTORE_REFUND_RELEASE
-    }
-}
-
-/// This is the encapsulation of the `Runtime` corresponding to the contract.
-pub(crate) struct DatabaseRuntime<Runtime> {
-    /// This is the storage statistics of the read/write in order to adjust gas costs.
-    storage_stats: Arc<Mutex<StorageStats>>,
-    /// This is the EVM address of the contract.
-    /// At the creation, it is set to `Address::ZERO` and then later set to the correct value.
+/// Core database implementation shared by both contract and service execution modes.
+///
+/// This structure bridges Linera's storage layer with Revm's database requirements,
+/// managing state for EVM contract execution. It is used as the foundation for both
+/// `ContractDatabase` (mutable operations) and `ServiceDatabase` (read-only queries).
+///
+/// # Lifecycle
+///
+/// 1. Created with `contract_address` set to `Address::ZERO`
+/// 2. Address updated via `set_contract_address()` once runtime is available
+/// 3. Execution proceeds with proper address context
+///
+/// # Error Handling
+///
+/// Errors during database operations are captured in the `error` field rather than
+/// immediately propagating, allowing Revm to complete its execution flow before
+/// error handling occurs.
+pub(crate) struct InnerDatabase<Runtime> {
+    /// The EVM address of the contract being executed.
+    ///
+    /// Initially set to `Address::ZERO` and updated to the actual contract address
+    /// derived from the Linera `ApplicationId` once the runtime becomes available.
     pub contract_address: Address,
-    /// The caller to the smart contract.
+
+    /// The address of the entity calling this smart contract.
+    ///
+    /// Corresponds to `msg.sender` in Solidity. May be an EOA address, another
+    /// contract address, or `Address::ZERO` for contracts for which the caller
+    /// does not have an EVM address or has not been authenticated.
     pub caller: Address,
-    /// The value of the call to the smart contract.
+
+    /// The amount of native tokens being transferred with this call.
+    ///
+    /// Corresponds to `msg.value` in Solidity.
     pub value: U256,
-    /// The runtime of the contract.
+
+    /// The Linera runtime providing access to storage and system operations.
+    ///
+    /// Wrapped in `Arc<Mutex<>>` to allow shared access across database clones
+    /// while maintaining safe mutation.
     pub runtime: Arc<Mutex<Runtime>>,
-    /// The uncommitted changes to the contract.
+
+    /// Uncommitted state changes from EVM execution.
+    ///
+    /// For contract operations, accumulated during execution and committed at the end.
+    /// For service queries on uninitialized contracts, holds the temporary state
+    /// since persistent storage is not available.
     pub changes: EvmState,
-    /// Whether the contract has been instantiated in REVM.
+
+    /// Whether the contract has been instantiated in Revm's execution context.
+    ///
+    /// A contract may be instantiated in Linera (storage allocated) but not yet
+    /// in Revm (constructor not executed). This flag tracks the Revm state.
     pub is_revm_instantiated: bool,
-    /// The error that can occur during runtime.
+
+    /// Runtime errors captured during database operations.
+    ///
+    /// Errors are stored here rather than immediately returned to allow Revm
+    /// to complete its execution flow. Checked via `process_any_error()` after
+    /// execution completes.
     pub error: Arc<Mutex<Option<String>>>,
 }
 
-impl<Runtime> Clone for DatabaseRuntime<Runtime> {
+impl<Runtime> Clone for InnerDatabase<Runtime> {
     fn clone(&self) -> Self {
         Self {
-            storage_stats: self.storage_stats.clone(),
             contract_address: self.contract_address,
             caller: self.caller,
             value: self.value,
@@ -106,37 +122,31 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
     }
 }
 
-#[repr(u8)]
-pub enum KeyCategory {
-    AccountInfo,
-    AccountState,
-    Storage,
+/// Encodes the `index` of the EVM storage associated with the smart contract
+/// in a Linera key.
+fn get_storage_key(index: U256) -> Vec<u8> {
+    let mut key = vec![KeyCategory::Storage as u8];
+    key.extend(index.as_le_slice());
+    key
 }
 
-impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
-    /// Encodes the `index` of the EVM storage associated to the smart contract
-    /// in a Linera key.
-    fn get_linera_key(key_prefix: &[u8], index: U256) -> Vec<u8> {
-        let mut key = key_prefix.to_vec();
-        key.extend(index.as_le_slice());
-        key
-    }
+/// Returns the storage key for a given category.
+fn get_category_key(category: KeyCategory) -> Vec<u8> {
+    vec![category as u8]
+}
 
-    /// Returns the tag associated to the contract.
-    fn get_address_key(prefix: u8, address: Address) -> Vec<u8> {
-        let mut key = vec![prefix];
-        key.extend(address);
-        key
-    }
-
-    /// Creates a new `DatabaseRuntime`.
+impl<Runtime> InnerDatabase<Runtime>
+where
+    Runtime: BaseRuntime,
+{
+    /// Creates a new database instance with default values.
+    ///
+    /// The contract address is initially set to `Address::ZERO` and must be updated
+    /// later via `set_contract_address()` once the runtime can be safely accessed.
+    /// This deferred initialization is necessary because locking the runtime during
+    /// construction is not possible in the use cases of this code.
     pub fn new(runtime: Runtime) -> Self {
-        let storage_stats = StorageStats::default();
-        // We cannot acquire a lock on runtime here.
-        // So, we set the contract_address to a default value
-        // and update it later.
         Self {
-            storage_stats: Arc::new(Mutex::new(storage_stats)),
             contract_address: Address::ZERO,
             caller: Address::ZERO,
             value: U256::ZERO,
@@ -147,21 +157,38 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
         }
     }
 
-    /// Returns the current storage states and clears it to default.
-    pub fn take_storage_stats(&self) -> StorageStats {
-        let mut storage_stats_read = self.storage_stats.lock().unwrap();
-        let storage_stats = storage_stats_read.clone();
-        *storage_stats_read = StorageStats::default();
-        storage_stats
+    /// Acquires exclusive access to the runtime.
+    ///
+    /// # Returns
+    ///
+    /// A mutex guard providing mutable access to the runtime. The lock is
+    /// automatically released when the guard goes out of scope.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the mutex is poisoned (another thread panicked while holding the lock).
+    /// This should not occur in normal operation as the runtime is not shared across threads.
+    pub fn lock_runtime(&self) -> std::sync::MutexGuard<'_, Runtime> {
+        self.runtime.lock().unwrap()
     }
 
-    /// Insert error into the database
+    /// Captures an execution error for later processing.
+    ///
+    /// Errors are stored rather than immediately returned to allow Revm to complete
+    /// its execution flow. The error can be checked later via `process_any_error()`.
     pub fn insert_error(&self, exec_error: ExecutionError) {
         let mut error = self.error.lock().unwrap();
         *error = Some(format!("Runtime error {:?}", exec_error));
     }
 
-    /// Process the error.
+    /// Checks for and returns any captured errors.
+    ///
+    /// This should be called after Revm execution completes to handle any errors
+    /// that were captured during database operations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if one was previously captured via `insert_error()`.
     pub fn process_any_error(&self) -> Result<(), EvmExecutionError> {
         let error = self.error.lock().unwrap();
         if let Some(error) = error.clone() {
@@ -169,56 +196,77 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
         }
         Ok(())
     }
-}
 
-impl DBErrorMarker for ExecutionError {}
-
-impl<Runtime> Database for DatabaseRuntime<Runtime>
-where
-    Runtime: BaseRuntime,
-{
-    type Error = ExecutionError;
-
-    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
-        self.basic_ref(address)
-    }
-
-    fn code_by_hash(&mut self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
-        panic!("Functionality code_by_hash not implemented");
-    }
-
-    fn storage(&mut self, address: Address, index: U256) -> Result<U256, ExecutionError> {
-        self.storage_ref(address, index)
-    }
-
-    fn block_hash(&mut self, number: u64) -> Result<B256, ExecutionError> {
-        <Self as DatabaseRef>::block_hash_ref(self, number)
-    }
-}
-
-impl<Runtime> DatabaseCommit for DatabaseRuntime<Runtime>
-where
-    Runtime: BaseRuntime,
-{
-    fn commit(&mut self, changes: EvmState) {
-        self.changes = changes;
-    }
-}
-
-impl<Runtime> DatabaseRef for DatabaseRuntime<Runtime>
-where
-    Runtime: BaseRuntime,
-{
-    type Error = ExecutionError;
-
-    /// The `basic_ref` is the function for reading the state of the application.
-    fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
+    /// Reads the account info from the storage for a contract A
+    /// whose address is `address`.
+    /// * The function `f` is accessing the state for an account
+    ///   whose address is different from `contract_address` (e.g.
+    ///   a contract created in the contract A or accessed by A,
+    ///   e.g. ERC20).
+    ///   For `ContractRuntime` and `ServiceRuntime` the method
+    ///   to access is different. So, the function has to be
+    ///   provided as argument.
+    /// * `address`: The address being read.
+    /// * `is_newly_created`: Whether the contract is newly created
+    ///   or not. For newly created contract, the balance is the
+    ///   one of Revm. For existing contract, the balance has to
+    ///   be accessed from Linera.
+    ///
+    /// For Externally Owned Accounts, the function is indeed
+    /// called, but it does not access the storage. Instead it
+    /// creates a default `AccountInfo` whose balance is computed
+    /// from the one in Linera. This is the case both for the faucet
+    /// and for other accounts.
+    ///
+    /// For the contract for which `address == contract_address` we
+    /// access the `AccountInfo` locally from the storage. For other
+    /// contracts we need to access other contracts (with the
+    /// function `f`)
+    fn read_basic_ref(
+        &self,
+        f: fn(&Self, Address) -> Result<Option<AccountInfo>, ExecutionError>,
+        address: Address,
+        is_newly_created: bool,
+    ) -> Result<Option<AccountInfo>, ExecutionError> {
         if address == FAUCET_ADDRESS {
             return Ok(Some(AccountInfo {
                 balance: FAUCET_BALANCE,
                 ..AccountInfo::default()
             }));
         }
+        let mut account_info = self
+            .account_info_from_storage(f, address)?
+            .unwrap_or_default();
+        if !is_newly_created {
+            // For EOA and old contract the balance comes from Linera.
+            account_info.balance = self.get_start_balance(address)?;
+        }
+        // We return an account as there is no difference between
+        // a default account and the absence of account.
+        Ok(Some(account_info))
+    }
+
+    /// Reads the state from the local storage.
+    fn account_info_from_local_storage(&self) -> Result<Option<AccountInfo>, ExecutionError> {
+        let mut runtime = self.runtime.lock().unwrap();
+        let key_info = get_category_key(KeyCategory::AccountInfo);
+        let promise = runtime.read_value_bytes_new(key_info)?;
+        let result = runtime.read_value_bytes_wait(&promise)?;
+        Ok(from_bytes_option::<AccountInfo>(&result)?)
+    }
+
+    /// Reads the state from the inner database.
+    ///
+    /// If `changes` is not empty, then it means that
+    /// the contract has been instantiated for a
+    /// service query. In that case we do not have
+    /// any storage possible to access, just changes.
+    ///
+    /// In the other case, we access the storage directly.
+    fn account_info_from_inner_database(
+        &self,
+        address: Address,
+    ) -> Result<Option<AccountInfo>, ExecutionError> {
         if !self.changes.is_empty() {
             // This case occurs in only one scenario:
             // * A service call to a contract that has not yet been
@@ -228,182 +276,138 @@ where
             let account = self.changes.get(&address);
             return Ok(account.map(|account| account.info.clone()));
         }
+        if address == self.contract_address {
+            // This is for the contract and its storage.
+            self.account_info_from_local_storage()
+        } else {
+            // This matches EOA and other contracts.
+            Ok(None)
+        }
+    }
+
+    /// Reads the state from local contract storage.
+    fn account_info_from_storage(
+        &self,
+        f: fn(&Self, Address) -> Result<Option<AccountInfo>, ExecutionError>,
+        address: Address,
+    ) -> Result<Option<AccountInfo>, ExecutionError> {
+        let account_info = self.account_info_from_inner_database(address)?;
+        if let Some(account_info) = account_info {
+            // This matches service calls or the contract itself.
+            return Ok(Some(account_info));
+        }
+        if self.has_empty_storage(address)? {
+            // This matches EOA
+            Ok(None)
+        } else {
+            // This matches other EVM contracts.
+            f(self, address)
+        }
+    }
+
+    /// Returns whether the address has empty storage.
+    /// An address has an empty storage if and only if it is
+    /// an externally owned account (EOA).
+    fn has_empty_storage(&self, address: Address) -> Result<bool, ExecutionError> {
+        let application_id = address_to_user_application_id(address);
+        let mut runtime = self.runtime.lock().unwrap();
+        runtime.has_empty_storage(application_id)
+    }
+
+    /// Reads the starting balance for an account, adjusting for double-transfer prevention.
+    ///
+    /// # Balance Adjustment Logic
+    ///
+    /// To prevent double-transfers, balances are adjusted based on the account role:
+    ///
+    /// 1. **Execution Flow:**
+    ///    - `deposit_funds()` transfers value from caller to contract (Linera layer)
+    ///    - Account balances are read (this function)
+    ///    - Revm performs its own transfer during execution
+    ///
+    /// 2. **Adjustments:**
+    ///    - **Caller:** Balance increased by `self.value` (compensates for pre-transfer)
+    ///    - **Contract:** Balance decreased by `self.value` (compensates for pre-receipt)
+    ///    - **Others:** Balance unchanged
+    ///
+    /// This ensures Revm sees the correct post-`deposit_funds` state when it
+    /// performs its transfer, avoiding double-counting.
+    fn get_start_balance(&self, address: Address) -> Result<U256, ExecutionError> {
         let mut runtime = self.runtime.lock().unwrap();
         let account_owner = address.into();
-        // The balances being used are the ones of Linera. So, we need to
-        // access them at first.
         let balance = runtime.read_owner_balance(account_owner)?;
-
         let balance: U256 = balance.into();
-        let key_info = Self::get_address_key(KeyCategory::AccountInfo as u8, address);
-        let promise = runtime.read_value_bytes_new(key_info)?;
-        let result = runtime.read_value_bytes_wait(&promise)?;
-        let mut account_info = match result {
-            None => AccountInfo::default(),
-            Some(bytes) => bcs::from_bytes(&bytes)?,
-        };
-        // The design is the following:
-        // * The funds have been deposited in deposit_funds.
-        // * The order of the operations is the following:
-        //   + Access to the storage (this functions) of relevant accounts.
-        //   + Transfer according to the input.
-        //   + Running the constructor.
-        // * So, the transfer is done twice: One at deposit_funds.
-        //   Another in the transfer by REVM.
-        // * So, we need to correct the balances so that when Revm
-        //   is doing the transfer, the balance are the ones after
-        //   deposit_funds.
-        let start_balance = if self.caller == address {
+
+        Ok(if self.caller == address {
+            // Caller has already transferred funds, so we add them back
             balance + self.value
         } else if self.contract_address == address {
+            // Contract has already received funds, so we subtract them
             assert!(
                 balance >= self.value,
-                "We should have balance >= self.value"
+                "Contract balance should be >= transferred value"
             );
             balance - self.value
         } else {
+            // Other accounts are unaffected
             balance
-        };
-        account_info.balance = start_balance;
-        // We return an account as there is no difference between
-        // a default account and the absence of account.
-        Ok(Some(account_info))
+        })
     }
 
-    fn code_by_hash_ref(&self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
-        panic!("Functionality code_by_hash_ref not implemented");
+    pub fn get_account_info(&self) -> Result<AccountInfo, ExecutionError> {
+        let address = self.contract_address;
+        let account_info = self.account_info_from_inner_database(address)?;
+        let mut account_info = account_info.ok_or(EvmExecutionError::MissingAccountInfo)?;
+        account_info.balance = self.get_start_balance(address)?;
+        Ok(account_info)
     }
 
-    fn storage_ref(&self, address: Address, index: U256) -> Result<U256, ExecutionError> {
+    /// Reads the storage entry.
+    /// * The function `f` is about accessing a storage value.
+    ///   The function varies for `Contract` and `Service`.
+    /// * The `address` and `index` are the one of the query.
+    fn read_storage(
+        &self,
+        f: fn(&Self, Address, U256) -> Result<U256, ExecutionError>,
+        address: Address,
+        index: U256,
+    ) -> Result<U256, ExecutionError> {
         if !self.changes.is_empty() {
+            // This is the case of a contract instantiated for a service call.
+            // The storage values are accessed there.
             let account = self.changes.get(&address).unwrap();
             return Ok(match account.storage.get(&index) {
                 None => U256::ZERO,
                 Some(slot) => slot.present_value(),
             });
         }
-        let key_prefix = Self::get_address_key(KeyCategory::Storage as u8, address);
-        let key = Self::get_linera_key(&key_prefix, index);
-        {
-            let mut storage_stats = self.storage_stats.lock().unwrap();
-            storage_stats.key_read += 1;
+        if address == self.contract_address {
+            // In that case we access the value from the
+            // local storage.
+            return self.read_from_local_storage(index);
         }
-        let result = {
-            let mut runtime = self.runtime.lock().unwrap();
-            let promise = runtime.read_value_bytes_new(key)?;
-            runtime.read_value_bytes_wait(&promise)
-        }?;
+        // Use the function for accessing the value.
+        f(self, address, index)
+    }
+
+    /// Reads the value from the local storage.
+    pub fn read_from_local_storage(&self, index: U256) -> Result<U256, ExecutionError> {
+        let key = get_storage_key(index);
+        let mut runtime = self.runtime.lock().unwrap();
+        let promise = runtime.read_value_bytes_new(key)?;
+        let result = runtime.read_value_bytes_wait(&promise)?;
         Ok(from_bytes_option::<U256>(&result)?.unwrap_or_default())
     }
 
-    fn block_hash_ref(&self, number: u64) -> Result<B256, ExecutionError> {
-        Ok(keccak256(number.to_string().as_bytes()))
-    }
-}
-
-impl<Runtime> DatabaseRuntime<Runtime>
-where
-    Runtime: ContractRuntime,
-{
-    /// Effectively commits changes to storage.
-    pub fn commit_changes(&mut self) -> Result<(), ExecutionError> {
-        let mut storage_stats = self.storage_stats.lock().unwrap();
-        let mut runtime = self.runtime.lock().unwrap();
-        let mut batch = Batch::new();
-        for (address, account) in &self.changes {
-            if address == &FAUCET_ADDRESS {
-                // We do not write the faucet address nor expect any coherency from it.
-                continue;
-            }
-            let owner = (*address).into();
-            let linera_balance: U256 = runtime.read_owner_balance(owner)?.into();
-            let revm_balance = account.info.balance;
-            ensure!(
-                linera_balance == revm_balance,
-                EvmExecutionError::IncoherentBalances(*address, linera_balance, revm_balance)
-            );
-            if !account.is_touched() {
-                continue;
-            }
-            let key_prefix = Self::get_address_key(KeyCategory::Storage as u8, *address);
-            let key_info = Self::get_address_key(KeyCategory::AccountInfo as u8, *address);
-            let key_state = Self::get_address_key(KeyCategory::AccountState as u8, *address);
-            if account.is_selfdestructed() {
-                batch.delete_key_prefix(key_prefix);
-                batch.put_key_value(key_info, &AccountInfo::default())?;
-                batch.put_key_value(key_state, &AccountState::NotExisting)?;
-            } else {
-                let is_newly_created = account.is_created();
-                // We write here the state of the user in question. But that does not matter
-                batch.put_key_value(key_info, &account.info)?;
-                let account_state = if is_newly_created {
-                    batch.delete_key_prefix(key_prefix.clone());
-                    AccountState::StorageCleared
-                } else {
-                    let promise = runtime.read_value_bytes_new(key_state.clone())?;
-                    let result = runtime.read_value_bytes_wait(&promise)?;
-                    let account_state =
-                        from_bytes_option::<AccountState>(&result)?.unwrap_or_default();
-                    if account_state.is_storage_cleared() {
-                        AccountState::StorageCleared
-                    } else {
-                        AccountState::Touched
-                    }
-                };
-                batch.put_key_value(key_state, &account_state)?;
-                for (index, value) in &account.storage {
-                    if value.present_value() == value.original_value() {
-                        storage_stats.key_no_operation += 1;
-                    } else {
-                        let key = Self::get_linera_key(&key_prefix, *index);
-                        if value.original_value() == U256::ZERO {
-                            batch.put_key_value(key, &value.present_value())?;
-                            storage_stats.key_set += 1;
-                        } else if value.present_value() == U256::ZERO {
-                            batch.delete_key(key);
-                            storage_stats.key_release += 1;
-                        } else {
-                            batch.put_key_value(key, &value.present_value())?;
-                            storage_stats.key_reset += 1;
-                        }
-                    }
-                }
-            }
-        }
-        runtime.write_batch(batch)?;
-        self.changes.clear();
-        Ok(())
-    }
-}
-
-impl<Runtime> DatabaseRuntime<Runtime>
-where
-    Runtime: BaseRuntime,
-{
-    /// Reads the nonce of the user
-    pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
-        let account_info: Option<AccountInfo> = self.basic_ref(*address)?;
-        Ok(match account_info {
-            None => 0,
-            Some(account_info) => account_info.nonce,
-        })
-    }
-
-    pub fn get_deployed_bytecode(&self) -> Result<Vec<u8>, ExecutionError> {
-        let account_info = self.basic_ref(self.contract_address)?;
-        Ok(match account_info {
-            None => Vec::new(),
-            Some(account_info) => {
-                let bytecode = account_info
-                    .code
-                    .ok_or(EvmExecutionError::MissingBytecode)?;
-                bytecode.bytes_ref().to_vec()
-            }
-        })
-    }
-
-    /// Sets the EVM contract address from the value Address::ZERO.
-    /// The value is set from the `ApplicationId`.
+    /// Initializes the contract address from the Linera `ApplicationId`.
+    ///
+    /// During database construction, the contract address is set to `Address::ZERO`
+    /// because the runtime cannot be locked at that time. This method updates it to
+    /// the actual EVM address derived from the Linera `ApplicationId`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if some step fails.
     pub fn set_contract_address(&mut self) -> Result<(), ExecutionError> {
         let mut runtime = self.runtime.lock().unwrap();
         let application_id = runtime.application_id()?;
@@ -411,16 +415,28 @@ where
         Ok(())
     }
 
-    /// A contract is called initialized if the execution of the constructor
-    /// with the constructor argument yield the storage and the deployed
-    /// bytecode. The deployed bytecode is stored in the storage of the
-    /// bytecode address.
-    /// We determine whether the contract is already initialized, sets the
-    /// `is_revm_initialized` and then returns the result.
+    /// Checks whether the contract has been initialized in Revm and updates the flag.
+    ///
+    /// A contract is considered Revm-initialized if the constructor has been executed,
+    /// producing both the deployed bytecode and initial storage state. This is distinct
+    /// from Linera initialization, which only allocates storage without executing the
+    /// constructor.
+    ///
+    /// The initialization status is determined by checking for the presence of
+    /// `AccountInfo` in storage, which is written only after successful constructor
+    /// execution.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` if the contract is initialized (has `AccountInfo` in storage),
+    /// `false` otherwise. Also updates `self.is_revm_instantiated` with the result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if some step fails.
     pub fn set_is_initialized(&mut self) -> Result<bool, ExecutionError> {
         let mut runtime = self.runtime.lock().unwrap();
-        let evm_address = runtime.application_id()?.evm_address();
-        let key_info = Self::get_address_key(KeyCategory::AccountInfo as u8, evm_address);
+        let key_info = get_category_key(KeyCategory::AccountInfo);
         let promise = runtime.contains_key_new(key_info)?;
         let result = runtime.contains_key_wait(&promise)?;
         self.is_revm_instantiated = result;
@@ -477,17 +493,36 @@ where
     }
 }
 
-impl<Runtime> DatabaseRuntime<Runtime>
+impl<Runtime> InnerDatabase<Runtime>
 where
     Runtime: ContractRuntime,
 {
-    pub fn get_contract_block_env(&self) -> Result<BlockEnv, ExecutionError> {
-        let mut block_env = self.get_block_env()?;
+    /// Gets the smart contract code if existing.
+    fn get_contract_account_info(
+        &self,
+        address: Address,
+    ) -> Result<Option<AccountInfo>, ExecutionError> {
+        let application_id = address_to_user_application_id(address);
+        let argument = GET_ACCOUNT_INFO_SELECTOR.to_vec();
         let mut runtime = self.runtime.lock().unwrap();
-        // We use the gas_limit from the runtime
-        let gas_limit = runtime.maximum_fuel_per_block(VmRuntime::Evm)?;
-        block_env.gas_limit = gas_limit;
-        Ok(block_env)
+        let account_info = runtime.try_call_application(false, application_id, argument)?;
+        let account_info = bcs::from_bytes(&account_info)?;
+        Ok(Some(account_info))
+    }
+
+    /// Gets the storage value of another contract.
+    fn get_contract_storage_value(
+        &self,
+        address: Address,
+        index: U256,
+    ) -> Result<U256, ExecutionError> {
+        let application_id = address_to_user_application_id(address);
+        let mut argument = GET_CONTRACT_STORAGE_SELECTOR.to_vec();
+        argument.extend(bcs::to_bytes(&index)?);
+        let mut runtime = self.runtime.lock().unwrap();
+        let value = runtime.try_call_application(false, application_id, argument)?;
+        let value = bcs::from_bytes(&value)?;
+        Ok(value)
     }
 
     pub fn deposit_funds(&self) -> Result<(), ExecutionError> {
@@ -502,7 +537,7 @@ where
             let chain_id = runtime.chain_id()?;
             let application_id = runtime.application_id()?;
             let owner = application_id.into();
-            let destination = Account { chain_id, owner };
+            let destination = identifiers::Account { chain_id, owner };
             let authenticated_caller = runtime.authenticated_caller_id()?;
             if authenticated_caller.is_none() {
                 runtime.transfer(source, destination, amount)?;
@@ -512,13 +547,462 @@ where
     }
 }
 
-impl<Runtime> DatabaseRuntime<Runtime>
+impl<Runtime> InnerDatabase<Runtime>
 where
     Runtime: ServiceRuntime,
 {
-    pub fn get_service_block_env(&self) -> Result<BlockEnv, ExecutionError> {
-        let mut block_env = self.get_block_env()?;
+    /// Gets the account info via a service query.
+    fn get_service_account_info(
+        &self,
+        address: Address,
+    ) -> Result<Option<AccountInfo>, ExecutionError> {
+        let application_id = address_to_user_application_id(address);
+        let argument = serde_json::to_vec(&EvmQuery::AccountInfo)?;
+        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let account_info = runtime.try_query_application(application_id, argument)?;
+        let account_info = serde_json::from_slice::<AccountInfo>(&account_info)?;
+        Ok(Some(account_info))
+    }
+
+    /// Gets the storage value by doing a storage service query.
+    fn get_service_storage_value(
+        &self,
+        address: Address,
+        index: U256,
+    ) -> Result<U256, ExecutionError> {
+        let application_id = address_to_user_application_id(address);
+        let argument = serde_json::to_vec(&EvmQuery::Storage(index))?;
+        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let value = runtime.try_query_application(application_id, argument)?;
+        let value = serde_json::from_slice::<U256>(&value)?;
+        Ok(value)
+    }
+}
+
+impl<Runtime> ContractDatabase<Runtime>
+where
+    Runtime: ContractRuntime,
+{
+    pub fn new(runtime: Runtime) -> Self {
+        Self {
+            inner: InnerDatabase::new(runtime),
+            modules: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn lock_runtime(&self) -> std::sync::MutexGuard<'_, Runtime> {
+        self.inner.lock_runtime()
+    }
+
+    /// Balances of the contracts have to be checked when
+    /// writing. There is a balance in Linera and a balance
+    /// in EVM and they have to be coherent.
+    fn check_balance(
+        &mut self,
+        address: Address,
+        revm_balance: U256,
+    ) -> Result<(), ExecutionError> {
+        let mut runtime = self.inner.runtime.lock().unwrap();
+        let owner = address.into();
+        let linera_balance: U256 = runtime.read_owner_balance(owner)?.into();
+        ensure!(
+            linera_balance == revm_balance,
+            EvmExecutionError::IncoherentBalances(address, linera_balance, revm_balance)
+        );
+        Ok(())
+    }
+
+    /// Effectively commits changes to storage.
+    pub fn commit_contract_changes(
+        &mut self,
+        account: &revm_state::Account,
+    ) -> Result<(), ExecutionError> {
+        let mut runtime = self.inner.runtime.lock().unwrap();
+        let mut batch = Batch::new();
+        let key_prefix = get_category_key(KeyCategory::Storage);
+        let key_info = get_category_key(KeyCategory::AccountInfo);
+        if account.is_selfdestructed() {
+            batch.delete_key_prefix(key_prefix);
+            batch.put_key_value(key_info, &AccountInfo::default())?;
+        } else {
+            batch.put_key_value(key_info, &account.info)?;
+            for (index, value) in &account.storage {
+                if value.present_value() != value.original_value() {
+                    let key = get_storage_key(*index);
+                    if value.present_value() == U256::ZERO {
+                        batch.delete_key(key);
+                    } else {
+                        batch.put_key_value(key, &value.present_value())?;
+                    }
+                }
+            }
+        }
+        runtime.write_batch(batch)?;
+        Ok(())
+    }
+
+    /// Returns whether the account is writable.
+    /// We do not write the accounts of Externally Owned Accounts.
+    fn is_account_writable(&self, address: &Address, account: &revm_state::Account) -> bool {
+        if *address == FAUCET_ADDRESS {
+            // We do not write the faucet address nor expect any coherency from it.
+            return false;
+        }
+        if !account.is_touched() {
+            // Not modified accounts do not need to be written down.
+            return false;
+        }
+        let code_hash = account.info.code_hash;
+        // User accounts are not written. This is fine since the balance
+        // is accessed from Linera and the nonce are not accessible in
+        // EVM smart contracts.
+        let code_empty = code_hash == KECCAK_EMPTY || code_hash.is_zero();
+        !code_empty
+    }
+
+    /// Whether the balance of this account needs to be checked.
+    fn is_account_checkable(&self, address: &Address) -> bool {
+        if *address == FAUCET_ADDRESS {
+            // We do not check the FAUCET balance.
+            return false;
+        }
+        true
+    }
+
+    /// Creates a new contract. The `account` contains
+    /// the AccountInfo and the storage to be written.
+    /// The parameters is empty because the constructor
+    /// does not need to be concatenated as it has
+    /// already been concatenated to the bytecode in the
+    /// init_code.
+    fn create_new_contract(
+        &mut self,
+        address: Address,
+        account: revm_state::Account,
+        module_id: ModuleId,
+    ) -> Result<(), ExecutionError> {
+        let application_id = address_to_user_application_id(address);
+        let mut argument = ALREADY_CREATED_CONTRACT_SELECTOR.to_vec();
+        argument.extend(bcs::to_bytes(&account)?);
+        let evm_instantiation = EvmInstantiation {
+            value: U256::ZERO,
+            argument,
+        };
+        let argument = serde_json::to_vec(&evm_instantiation)?;
+        let parameters = JSON_EMPTY_VECTOR.to_vec(); // No constructor
+        let required_application_ids = Vec::new();
+        let mut runtime = self.inner.runtime.lock().unwrap();
+        let created_application_id = runtime.create_application(
+            module_id,
+            parameters,
+            argument,
+            required_application_ids,
+        )?;
+        ensure!(
+            application_id == created_application_id,
+            EvmExecutionError::IncorrectApplicationId
+        );
+        Ok(())
+    }
+
+    /// Commits the changes to another contract.
+    /// This is done by doing a call application.
+    fn commit_remote_contract(
+        &mut self,
+        address: Address,
+        account: revm_state::Account,
+    ) -> Result<(), ExecutionError> {
+        let application_id = address_to_user_application_id(address);
+        let mut argument = COMMIT_CONTRACT_CHANGES_SELECTOR.to_vec();
+        argument.extend(bcs::to_bytes(&account)?);
+        let mut runtime = self.inner.runtime.lock().unwrap();
+        runtime.try_call_application(false, application_id, argument)?;
+        Ok(())
+    }
+
+    /// Effectively commits changes to storage.
+    /// This is done in the following way:
+    /// * Identify the balances that need to be checked
+    /// * Write down the state of the contract for `contract_address` locally.
+    /// * For the other contracts, if it already created, commit it.
+    ///
+    /// If not insert them into the map.
+    /// * Iterates over the entries of the map and creates the contracts in the
+    ///   right order.
+    pub fn commit_changes(&mut self) -> Result<(), ExecutionError> {
+        let changes = mem::take(&mut self.inner.changes);
+        let mut balances = Vec::new();
+        let modules = mem::take(self.modules.lock().unwrap().deref_mut());
+        let mut contracts_to_create = vec![None; modules.len()];
+        for (address, account) in changes {
+            if self.is_account_checkable(&address) {
+                let revm_balance = account.info.balance;
+                balances.push((address, revm_balance));
+            }
+            if self.is_account_writable(&address, &account) {
+                if address == self.inner.contract_address {
+                    self.commit_contract_changes(&account)?;
+                } else {
+                    let application_id = address_to_user_application_id(address);
+                    if let Some((module_id, index)) = modules.get(&application_id) {
+                        contracts_to_create[*index as usize] = Some((address, account, *module_id));
+                    } else {
+                        self.commit_remote_contract(address, account)?;
+                    }
+                }
+            }
+        }
+        for entry in contracts_to_create {
+            let (address, account, module_id) =
+                entry.expect("An entry since all have been matched above");
+            self.create_new_contract(address, account, module_id)?;
+        }
+        for (address, revm_balance) in balances {
+            self.check_balance(address, revm_balance)?;
+        }
+        Ok(())
+    }
+}
+
+/// Categories for organizing different types of data in the storage.
+///
+/// Each category is prefixed with a unique byte when encoding storage keys,
+/// allowing different types of data to coexist without key collisions.
+#[repr(u8)]
+pub enum KeyCategory {
+    /// Account information including code hash, nonce, and balance.
+    AccountInfo,
+    /// Contract storage values indexed by U256 keys.
+    Storage,
+}
+
+/// The Database for contracts
+pub(crate) struct ContractDatabase<Runtime> {
+    pub inner: InnerDatabase<Runtime>,
+    pub modules: Arc<Mutex<HashMap<ApplicationId, (ModuleId, u32)>>>,
+}
+
+impl<Runtime> Clone for ContractDatabase<Runtime> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            modules: self.modules.clone(),
+        }
+    }
+}
+
+impl<Runtime> DatabaseRef for ContractDatabase<Runtime>
+where
+    Runtime: ContractRuntime,
+{
+    type Error = ExecutionError;
+
+    /// The `basic_ref` is the function for reading the state of the application.
+    /// The code `read_basic_ref` is used with the relevant access function.
+    fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
+        let is_newly_created = {
+            let modules = self.modules.lock().unwrap();
+            let application_id = address_to_user_application_id(address);
+            modules.contains_key(&application_id)
+        };
+        self.inner.read_basic_ref(
+            InnerDatabase::<Runtime>::get_contract_account_info,
+            address,
+            is_newly_created,
+        )
+    }
+
+    /// There are two ways to implement the trait:
+    /// * Returns entries with "code: Some(...)"
+    /// * Returns entries with "code: None".
+    ///
+    /// Since we choose the first design, `code_by_hash_ref` is not needed. There
+    /// is an example in the Revm source code of this kind.
+    fn code_by_hash_ref(&self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
+        panic!("Returned AccountInfo should have code: Some(...) and so code_by_hash_ref should never be called");
+    }
+
+    /// Accesses the storage by the relevant remote access function.
+    fn storage_ref(&self, address: Address, index: U256) -> Result<U256, ExecutionError> {
+        self.inner.read_storage(
+            InnerDatabase::<Runtime>::get_contract_storage_value,
+            address,
+            index,
+        )
+    }
+
+    fn block_hash_ref(&self, number: u64) -> Result<B256, ExecutionError> {
+        Ok(keccak256(number.to_string().as_bytes()))
+    }
+}
+
+impl<Runtime> Database for ContractDatabase<Runtime>
+where
+    Runtime: ContractRuntime,
+{
+    type Error = ExecutionError;
+
+    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
+        self.basic_ref(address)
+    }
+
+    fn code_by_hash(&mut self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
+        panic!("Returned AccountInfo should have code: Some(...) and so code_by_hash should never be called");
+    }
+
+    fn storage(&mut self, address: Address, index: U256) -> Result<U256, ExecutionError> {
+        self.storage_ref(address, index)
+    }
+
+    fn block_hash(&mut self, number: u64) -> Result<B256, ExecutionError> {
+        <Self as DatabaseRef>::block_hash_ref(self, number)
+    }
+}
+
+impl<Runtime> DatabaseCommit for ContractDatabase<Runtime>
+where
+    Runtime: ContractRuntime,
+{
+    fn commit(&mut self, changes: EvmState) {
+        self.inner.changes = changes;
+    }
+}
+
+impl<Runtime> ContractDatabase<Runtime>
+where
+    Runtime: ContractRuntime,
+{
+    pub fn get_block_env(&self) -> Result<BlockEnv, ExecutionError> {
+        let mut block_env = self.inner.get_block_env()?;
+        let mut runtime = self.inner.runtime.lock().unwrap();
+        // We use the gas_limit from the runtime
+        let gas_limit = runtime.maximum_fuel_per_block(VmRuntime::Evm)?;
+        block_env.gas_limit = gas_limit;
+        Ok(block_env)
+    }
+
+    /// Reads the nonce of the user
+    pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
+        let account_info = self.basic_ref(*address)?;
+        Ok(match account_info {
+            None => 0,
+            Some(account_info) => account_info.nonce,
+        })
+    }
+}
+
+// The Database for service
+
+pub(crate) struct ServiceDatabase<Runtime> {
+    pub inner: InnerDatabase<Runtime>,
+}
+
+impl<Runtime> Clone for ServiceDatabase<Runtime> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<Runtime> DatabaseRef for ServiceDatabase<Runtime>
+where
+    Runtime: ServiceRuntime,
+{
+    type Error = ExecutionError;
+
+    /// The `basic_ref` is the function for reading the state of the application.
+    /// There is no newly created contracts for services.
+    fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
+        let is_newly_created = false; // No contract creation in service
+        self.inner.read_basic_ref(
+            InnerDatabase::<Runtime>::get_service_account_info,
+            address,
+            is_newly_created,
+        )
+    }
+
+    /// There are two ways to implements the trait:
+    /// * Returns entries with "code: Some(...)"
+    /// * Returns entries with "code: None".
+    ///
+    /// Since we choose the first design, `code_by_hash_ref` is not needed. There
+    /// is an example in the Revm source code of this kind.
+    fn code_by_hash_ref(&self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
+        panic!("Returned AccountInfo should have code: Some(...) and so code_by_hash_ref should never be called");
+    }
+
+    fn storage_ref(&self, address: Address, index: U256) -> Result<U256, ExecutionError> {
+        self.inner.read_storage(
+            InnerDatabase::<Runtime>::get_service_storage_value,
+            address,
+            index,
+        )
+    }
+
+    fn block_hash_ref(&self, number: u64) -> Result<B256, ExecutionError> {
+        Ok(keccak256(number.to_string().as_bytes()))
+    }
+}
+
+impl<Runtime> Database for ServiceDatabase<Runtime>
+where
+    Runtime: ServiceRuntime,
+{
+    type Error = ExecutionError;
+
+    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
+        self.basic_ref(address)
+    }
+
+    fn code_by_hash(&mut self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
+        panic!("Returned AccountInfo should have code: Some(...) and so code_by_hash should never be called");
+    }
+
+    fn storage(&mut self, address: Address, index: U256) -> Result<U256, ExecutionError> {
+        self.storage_ref(address, index)
+    }
+
+    fn block_hash(&mut self, number: u64) -> Result<B256, ExecutionError> {
+        <Self as DatabaseRef>::block_hash_ref(self, number)
+    }
+}
+
+impl<Runtime> DatabaseCommit for ServiceDatabase<Runtime>
+where
+    Runtime: ServiceRuntime,
+{
+    fn commit(&mut self, changes: EvmState) {
+        self.inner.changes = changes;
+    }
+}
+
+impl<Runtime> ServiceDatabase<Runtime>
+where
+    Runtime: ServiceRuntime,
+{
+    pub fn new(runtime: Runtime) -> Self {
+        Self {
+            inner: InnerDatabase::new(runtime),
+        }
+    }
+
+    pub fn lock_runtime(&self) -> std::sync::MutexGuard<'_, Runtime> {
+        self.inner.lock_runtime()
+    }
+
+    pub fn get_block_env(&self) -> Result<BlockEnv, ExecutionError> {
+        let mut block_env = self.inner.get_block_env()?;
         block_env.gas_limit = EVM_SERVICE_GAS_LIMIT;
         Ok(block_env)
+    }
+
+    /// Reads the nonce of the user
+    pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
+        let account_info = self.basic_ref(*address)?;
+        Ok(match account_info {
+            None => 0,
+            Some(account_info) => account_info.nonce,
+        })
     }
 }

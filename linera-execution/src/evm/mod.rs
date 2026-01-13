@@ -25,8 +25,6 @@ pub enum EvmExecutionError {
     LoadContractModule(#[source] anyhow::Error),
     #[error("Failed to load service EVM module: {_0}")]
     LoadServiceModule(#[source] anyhow::Error),
-    #[error("Commit error {0}")]
-    CommitError(String),
     #[error("It is illegal to call {0} from an operation")]
     IllegalOperationCall(String),
     #[error("runtime error")]
@@ -35,22 +33,18 @@ pub enum EvmExecutionError {
     IncoherentBalances(Address, U256, U256),
     #[error("Unknown signer")]
     UnknownSigner,
-    #[error("No delegate call")]
-    NoDelegateCall,
-    #[error("No transfer in services")]
-    NoTransferInServices,
-    #[error("No transfer in Wasm application call")]
-    NoTransferInRuntimeCall,
     #[error("The function {0} is being called but is missing from the bytecode API")]
     MissingFunction(String),
     #[error("Incorrect contract creation: {0}")]
     IncorrectContractCreation(String),
     #[error("The operation should contain the evm selector and so have length 4 or more")]
     OperationIsTooShort,
-    #[error("Missing bytecode")]
-    MissingBytecode,
     #[error("Contracts cannot call themselves")]
     NoSelfCall,
+    #[error("Incorrect ApplicationId")]
+    IncorrectApplicationId,
+    #[error("Non-zero transfer precompile")]
+    NonZeroTransferPrecompile,
     #[error("Transact error {0}")]
     TransactError(String),
     #[error("Impossible to create contracts in services")]
@@ -59,6 +53,8 @@ pub enum EvmExecutionError {
     TransactCommitError(String),
     #[error("Precompile error: {0}")]
     PrecompileError(String),
+    #[error("Missing account info")]
+    MissingAccountInfo,
     #[error("The operation was reverted with {gas_used} gas used and output {output:?}")]
     Revert {
         gas_used: u64,
