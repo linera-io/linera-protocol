@@ -363,6 +363,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             .await?
             .ok_or(chain_client::Error::MissingConfirmedBlock(hash))?
             .into_block();
+        let parent_chain_id = block.header.chain_id;
         let blobs = block.created_blobs().into_iter();
         let new_chains = blobs
             .filter_map(|(blob_id, blob)| {
@@ -397,6 +398,15 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     new_ids.insert(new_chain_id, ListeningMode::FullChain);
                 }
             }
+        }
+        // Re-process the parent chain's outboxes now that the new chains are tracked.
+        // This ensures cross-chain messages to newly created chains are delivered.
+        if !new_ids.is_empty() {
+            context_guard
+                .client()
+                .local_node
+                .retry_pending_cross_chain_requests(parent_chain_id)
+                .await?;
         }
         drop(context_guard);
         self.listen_recursively(new_ids).await?;
