@@ -92,7 +92,7 @@ async fn test_bouncing_tokens() {
     let receiver_chain = validator.new_chain().await;
     let receiver_account = AccountOwner::from(receiver_chain.public_key());
 
-    let certificate = sender_chain
+    let (certificate, _) = sender_chain
         .add_block(|block| {
             block.with_operation(
                 application_id,
