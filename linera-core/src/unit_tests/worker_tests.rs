@@ -784,10 +784,7 @@ where
         .stage_block_execution(proposed_block, None, vec![])
         .await?;
     // Past timestamp should be handled immediately (and succeed).
-    let result = env
-        .worker()
-        .handle_block_proposal(block_proposal)
-        .await;
+    let result = env.worker().handle_block_proposal(block_proposal).await;
     assert!(result.is_ok(), "Past timestamp should be accepted");
     let certificate = env.make_certificate(ConfirmedBlock::new(block));
     env.worker()
@@ -810,10 +807,7 @@ where
         .worker()
         .stage_block_execution(proposed_block, None, vec![])
         .await?;
-    let result = env
-        .worker()
-        .handle_block_proposal(block_proposal)
-        .await;
+    let result = env.worker().handle_block_proposal(block_proposal).await;
     assert!(result.is_ok(), "Current timestamp should be accepted");
     let certificate = env.make_certificate(ConfirmedBlock::new(block));
     env.worker()
@@ -879,9 +873,7 @@ where
         .unwrap();
     // Far-future timestamp should be rejected immediately.
     assert_matches!(
-        env.worker()
-            .handle_block_proposal(block_proposal)
-            .await,
+        env.worker().handle_block_proposal(block_proposal).await,
         Err(WorkerError::InvalidTimestamp { .. })
     );
 
