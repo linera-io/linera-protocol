@@ -363,9 +363,6 @@ where
     /// or `None` if it should be processed immediately (either because the timestamp is
     /// not in the future, or because it's beyond the grace period and should error).
     fn delay_until(&self, proposal: &BlockProposal) -> Option<Timestamp> {
-        // Only validators need to wait for the timestamp.
-        self.config.key_pair.as_ref()?;
-
         let block_timestamp = proposal.content.block.timestamp;
         let now = self.storage.clock().current_time();
         let delta = block_timestamp.delta_since(now);
