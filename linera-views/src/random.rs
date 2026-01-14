@@ -42,7 +42,7 @@ pub fn make_nondeterministic_rng() -> NonDeterministicRng {
     }
 }
 
-/// Get a random alphanumeric string that can be used for all tests.
+/// Gets a random alphanumeric string that can be used for all tests.
 pub fn generate_random_alphanumeric_string(length: usize, charset: &[u8]) -> String {
     (0..length)
         .map(|_| {
