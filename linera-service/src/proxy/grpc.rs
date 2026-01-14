@@ -665,14 +665,12 @@ where
             .map(linera_base::crypto::CryptoHash::try_from)
             .collect::<Result<Vec<linera_base::crypto::CryptoHash>, _>>()?;
 
-        // Use 70% of the max message size as a buffer capacity.
-        // Leave 30% as overhead.
-        let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
+        let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
             GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
 
         let mut returned_certificates = vec![];
 
-        'outer: for batch in hashes.chunks(100) {
+        for batch in hashes.chunks(100) {
             let certificates = self
                 .0
                 .storage
@@ -685,12 +683,17 @@ where
                     return Err(Status::not_found(format!("{:?}", hashes)))
                 }
             };
-            for certificate in certificates {
-                if grpc_message_limiter.fits::<Certificate>(certificate.clone().into())? {
-                    returned_certificates.push(linera_chain::types::Certificate::from(certificate));
-                } else {
-                    break 'outer;
-                }
+
+            let batch_size = certificates.len();
+            let batch_result = limiter.take_if(certificates, |lim, certificate| {
+                let cert: linera_chain::types::Certificate = certificate.into();
+                Ok(lim.fits::<Certificate>(cert.clone())?.then_some(cert))
+            })?;
+            let took_all = batch_result.len() == batch_size;
+            returned_certificates.extend(batch_result);
+
+            if !took_all {
+                break;
             }
         }
 
@@ -725,21 +728,16 @@ where
             && certificates_by_height.iter().all(|c| c.is_some());
 
         if all_found {
-            // Use 70% of the max message size as a buffer capacity.
-            // Leave 30% as overhead.
-            let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
+            let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
                 GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
 
-            let mut returned_certificates = vec![];
-
-            for certificate in certificates_by_height.into_iter().flatten() {
-                let cert: linera_chain::types::Certificate = certificate.into();
-                if grpc_message_limiter.fits::<Certificate>(cert.clone())? {
-                    returned_certificates.push(cert);
-                } else {
-                    break;
-                }
-            }
+            let returned_certificates = limiter.take_if(
+                certificates_by_height.into_iter().flatten(),
+                |lim, certificate| {
+                    let cert: linera_chain::types::Certificate = certificate.into();
+                    Ok(lim.fits::<Certificate>(cert.clone())?.then_some(cert))
+                },
+            )?;
 
             return Ok(Response::new(CertificatesBatchResponse::try_from(
                 returned_certificates,
@@ -780,26 +778,24 @@ where
         // Check if we got all certificates (no None values)
         let all_found = raw_certificates_by_height.len() == heights.len();
 
+        // Closure to check if raw certificate fits and transform it
+        let try_take_raw = |lim: &mut GrpcMessageLimiter<linera_chain::types::Certificate>,
+                            (lite_cert_bytes, confirmed_block_bytes): (Vec<u8>, Vec<u8>)|
+         -> Result<Option<RawCertificate>, Status> {
+            Ok(lim
+                .fits_raw(lite_cert_bytes.len() + confirmed_block_bytes.len())
+                .then_some(RawCertificate {
+                    lite_certificate: lite_cert_bytes,
+                    confirmed_block: confirmed_block_bytes,
+                }))
+        };
+
         if all_found {
-            // Use 70% of the max message size as a buffer capacity.
-            // Leave 30% as overhead.
-            let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
+            let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
                 GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
 
-            let mut returned_certificates = vec![];
-
-            for (lite_cert_bytes, confirmed_block_bytes) in raw_certificates_by_height {
-                if grpc_message_limiter
-                    .fits_raw(lite_cert_bytes.len() + confirmed_block_bytes.len())
-                {
-                    returned_certificates.push(RawCertificate {
-                        lite_certificate: lite_cert_bytes,
-                        confirmed_block: confirmed_block_bytes,
-                    });
-                } else {
-                    break;
-                }
-            }
+            let returned_certificates =
+                limiter.take_if(raw_certificates_by_height, &try_take_raw)?;
 
             return Ok(Response::new(RawCertificatesBatch {
                 certificates: returned_certificates,
@@ -811,14 +807,12 @@ where
             .get_certificate_hashes_by_heights_fallback(chain_id, heights)
             .await?;
 
-        // Use 70% of the max message size as a buffer capacity.
-        // Leave 30% as overhead.
-        let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
+        let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
             GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
 
         let mut returned_certificates = vec![];
 
-        'outer: for batch in hashes.chunks(100) {
+        for batch in hashes.chunks(100) {
             let certificates: Vec<(Vec<u8>, Vec<u8>)> = self
                 .0
                 .storage
@@ -828,17 +822,14 @@ where
                 .into_iter()
                 .flatten()
                 .collect();
-            for (lite_cert_bytes, confirmed_block_bytes) in certificates {
-                if grpc_message_limiter
-                    .fits_raw(lite_cert_bytes.len() + confirmed_block_bytes.len())
-                {
-                    returned_certificates.push(RawCertificate {
-                        lite_certificate: lite_cert_bytes,
-                        confirmed_block: confirmed_block_bytes,
-                    });
-                } else {
-                    break 'outer;
-                }
+
+            let batch_size = certificates.len();
+            let batch_result = limiter.take_if(certificates, &try_take_raw)?;
+            let took_all = batch_result.len() == batch_size;
+            returned_certificates.extend(batch_result);
+
+            if !took_all {
+                break;
             }
         }
 
@@ -952,6 +943,27 @@ impl<T> GrpcMessageLimiter<T> {
         }
         self.remaining = self.remaining.saturating_sub(bytes_len);
         true
+    }
+
+    /// Collects items while the predicate returns `Some`.
+    ///
+    /// The `try_take` closure should check if the item should be taken and return:
+    /// - `Ok(Some(output))` to take the item (transformed)
+    /// - `Ok(None)` to stop collection
+    /// - `Err(_)` on error
+    fn take_if<I, O, F>(&mut self, items: I, mut try_take: F) -> Result<Vec<O>, Status>
+    where
+        I: IntoIterator,
+        F: FnMut(&mut Self, I::Item) -> Result<Option<O>, Status>,
+    {
+        let mut result = vec![];
+        for item in items {
+            match try_take(self, item)? {
+                Some(output) => result.push(output),
+                None => break,
+            }
+        }
+        Ok(result)
     }
 }
 
