@@ -57,7 +57,7 @@ impl From<ChainDescription> for Chain {
 }
 
 impl Chain {
-    /// Create a chain that we haven't interacted with before.
+    /// Creates a chain that we haven't interacted with before.
     pub fn new(owner: Option<AccountOwner>, current_epoch: Epoch, now: Timestamp) -> Self {
         Self {
             owner,

@@ -86,9 +86,10 @@ pub trait IndexerDatabase: Send + Sync {
         Ok(())
     }
 
-    /// Start a new transaction
+    /// Starts a new transaction.
     async fn begin_transaction(&self) -> Result<Self::Transaction<'_>, Self::Error>;
 
+    /// Inserts a blob within a transaction.
     async fn insert_blob_tx(
         &self,
         tx: &mut Self::Transaction<'_>,
@@ -96,7 +97,7 @@ pub trait IndexerDatabase: Send + Sync {
         data: &[u8],
     ) -> Result<(), Self::Error>;
 
-    /// Insert a block within a transaction
+    /// Inserts a block within a transaction.
     async fn insert_block_tx(
         &self,
         tx: &mut Self::Transaction<'_>,
@@ -107,22 +108,22 @@ pub trait IndexerDatabase: Send + Sync {
         data: &[u8],
     ) -> Result<(), Self::Error>;
 
-    /// Commit a transaction
+    /// Commits a transaction.
     async fn commit_transaction(&self, tx: Self::Transaction<'_>) -> Result<(), Self::Error>;
 
-    /// Get a block by hash
+    /// Gets a block by hash.
     async fn get_block(&self, hash: &CryptoHash) -> Result<Vec<u8>, Self::Error>;
 
-    /// Get a blob by blob_id
+    /// Gets a blob by blob ID.
     async fn get_blob(&self, blob_id: &BlobId) -> Result<Vec<u8>, Self::Error>;
 
-    /// Get the latest block for a chain
+    /// Gets the latest block for a chain.
     async fn get_latest_block_for_chain(
         &self,
         chain_id: &ChainId,
     ) -> Result<Option<(CryptoHash, BlockHeight, Vec<u8>)>, Self::Error>;
 
-    /// Get blocks for a chain within a height range
+    /// Gets blocks for a chain within a height range.
     async fn get_blocks_for_chain_range(
         &self,
         chain_id: &ChainId,
@@ -130,25 +131,25 @@ pub trait IndexerDatabase: Send + Sync {
         end_height: BlockHeight,
     ) -> Result<Vec<(CryptoHash, BlockHeight, Vec<u8>)>, Self::Error>;
 
-    /// Check if a blob exists
+    /// Checks if a blob exists.
     async fn blob_exists(&self, blob_id: &BlobId) -> Result<bool, Self::Error>;
 
-    /// Check if a block exists
+    /// Checks if a block exists.
     async fn block_exists(&self, hash: &CryptoHash) -> Result<bool, Self::Error>;
 
-    /// Get incoming bundles for a specific block
+    /// Gets incoming bundles for a specific block.
     async fn get_incoming_bundles_for_block(
         &self,
         block_hash: &CryptoHash,
     ) -> Result<Vec<(i64, IncomingBundleInfo)>, Self::Error>;
 
-    /// Get posted messages for a specific bundle
+    /// Gets posted messages for a specific bundle.
     async fn get_posted_messages_for_bundle(
         &self,
         bundle_id: i64,
     ) -> Result<Vec<PostedMessageInfo>, Self::Error>;
 
-    /// Get all bundles from a specific origin chain
+    /// Gets all bundles from a specific origin chain.
     async fn get_bundles_from_origin_chain(
         &self,
         origin_chain_id: &ChainId,
