@@ -2082,11 +2082,11 @@ impl<Env: Environment> ChainClient<Env> {
         if has_key {
             self.client
                 .extend_chain_mode(description.id(), ListeningMode::FullChain);
+            self.client
+                .local_node
+                .retry_pending_cross_chain_requests(self.chain_id)
+                .await?;
         }
-        self.client
-            .local_node
-            .retry_pending_cross_chain_requests(self.chain_id)
-            .await?;
         Ok(ClientOutcome::Committed((description, certificate)))
     }
 
