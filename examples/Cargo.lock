@@ -1596,6 +1596,7 @@ dependencies = [
  "bcs",
  "futures",
  "linera-sdk",
+ "log",
  "serde",
  "serde_json",
  "tokio",
