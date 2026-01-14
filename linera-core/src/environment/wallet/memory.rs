@@ -107,4 +107,12 @@ impl Wallet for Memory {
     fn items(&self) -> impl Stream<Item = Result<(ChainId, Chain), Self::Error>> {
         futures::stream::iter(self.items()).map(Ok)
     }
+
+    async fn modify(
+        &self,
+        id: ChainId,
+        f: impl FnMut(&mut Chain) + Send,
+    ) -> Result<Option<()>, Self::Error> {
+        Ok(self.mutate(id, f))
+    }
 }

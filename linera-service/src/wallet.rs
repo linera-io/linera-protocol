@@ -129,6 +129,14 @@ impl linera_core::Wallet for Wallet {
         self.save()?;
         Ok(chain)
     }
+
+    async fn modify(
+        &self,
+        id: ChainId,
+        f: impl FnMut(&mut wallet::Chain) + Send,
+    ) -> Result<Option<()>, Self::Error> {
+        self.mutate(id, f).transpose()
+    }
 }
 
 impl Extend<(ChainId, wallet::Chain)> for Wallet {

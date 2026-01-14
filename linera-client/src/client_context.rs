@@ -490,20 +490,30 @@ impl<Env: Environment> ClientContext<Env> {
             return Err(error::Inner::ChainOwnership.into());
         }
 
-        // TODO(#5247): Do not reset preexisting epoch and timestamp.
-        self.wallet()
-            .insert(
-                chain_id,
-                wallet::Chain {
-                    owner: Some(owner),
-                    timestamp: chain_description.timestamp(),
-                    epoch: Some(chain_description.config().epoch),
-                    ..Default::default()
-                },
-            )
+        // Try to modify existing chain entry, setting the owner.
+        let timestamp = chain_description.timestamp();
+        let epoch = chain_description.config().epoch;
+        let modified = self
+            .wallet()
+            .modify(chain_id, |chain| chain.owner = Some(owner))
             .await
-            .map_err(error::Inner::wallet)
-            .context("assigning new chain")?;
+            .map_err(error::Inner::wallet)?;
+        // If the chain didn't exist, insert a new entry.
+        if modified.is_none() {
+            self.wallet()
+                .insert(
+                    chain_id,
+                    wallet::Chain {
+                        owner: Some(owner),
+                        timestamp,
+                        epoch: Some(epoch),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .map_err(error::Inner::wallet)
+                .context("assigning new chain")?;
+        }
         Ok(())
     }
 
