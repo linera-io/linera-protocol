@@ -734,6 +734,159 @@ where
     Ok(())
 }
 
+/// Tests that proposals with future timestamps are delayed until the timestamp is reached,
+/// while other requests can still be processed.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_block_proposal_timestamp_delay<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use std::task::Poll;
+
+    use futures::{future::poll_fn, Future as _};
+    use tokio::task::yield_now;
+
+    let mut signer = InMemorySigner::new(None);
+    let public_key = signer.generate_new();
+    let owner = public_key.into();
+    let balance = Amount::from_tokens(5);
+    let small_transfer = Amount::from_micros(1);
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let clock = storage_builder.clock();
+    let chain_1_desc = env.add_root_chain(1, owner, balance).await;
+    let chain_2_desc = env.add_root_chain(2, owner, balance).await;
+    let chain_1 = chain_1_desc.id();
+    let chain_2 = chain_2_desc.id();
+
+    // Start at time 0.
+    clock.set(Timestamp::from(0));
+
+    // Case 1: Timestamp in the past - should be handled immediately.
+    let past_timestamp = Timestamp::from(0);
+    clock.set(Timestamp::from(1000)); // Current time is 1000.
+    let proposed_block = make_first_block(chain_1)
+        .with_simple_transfer(chain_2, small_transfer)
+        .with_authenticated_owner(Some(owner))
+        .with_timestamp(past_timestamp);
+    let block_proposal = proposed_block
+        .clone()
+        .into_first_proposal(owner, &signer)
+        .await
+        .unwrap();
+    // Stage execution to get the block for certificate creation.
+    let (block, _) = env
+        .executing_worker()
+        .stage_block_execution(proposed_block, None, vec![])
+        .await?;
+    // Past timestamp should be handled immediately (and succeed).
+    let result = env
+        .executing_worker()
+        .handle_block_proposal(block_proposal)
+        .await;
+    assert!(result.is_ok(), "Past timestamp should be accepted");
+    let certificate = env.make_certificate(ConfirmedBlock::new(block));
+    env.executing_worker()
+        .fully_handle_certificate_with_notifications(certificate.clone(), &())
+        .await?;
+
+    // Case 2: Timestamp at current time - should be handled immediately.
+    let current_timestamp = Timestamp::from(2000);
+    clock.set(current_timestamp);
+    let proposed_block = make_child_block(&certificate.clone().into_value())
+        .with_simple_transfer(chain_2, small_transfer)
+        .with_authenticated_owner(Some(owner))
+        .with_timestamp(current_timestamp);
+    let block_proposal = proposed_block
+        .clone()
+        .into_first_proposal(owner, &signer)
+        .await
+        .unwrap();
+    let (block, _) = env
+        .executing_worker()
+        .stage_block_execution(proposed_block, None, vec![])
+        .await?;
+    let result = env
+        .executing_worker()
+        .handle_block_proposal(block_proposal)
+        .await;
+    assert!(result.is_ok(), "Current timestamp should be accepted");
+    let certificate = env.make_certificate(ConfirmedBlock::new(block));
+    env.executing_worker()
+        .fully_handle_certificate_with_notifications(certificate.clone(), &())
+        .await?;
+
+    // Case 3: Timestamp in the future (within grace period) - should be delayed.
+    let future_timestamp = Timestamp::from(3000 + TEST_GRACE_PERIOD_MICROS / 2);
+    clock.set(Timestamp::from(3000));
+    let proposed_block = make_child_block(&certificate.clone().into_value())
+        .with_simple_transfer(chain_2, small_transfer)
+        .with_authenticated_owner(Some(owner))
+        .with_timestamp(future_timestamp);
+    let block_proposal = proposed_block
+        .clone()
+        .into_first_proposal(owner, &signer)
+        .await
+        .unwrap();
+    let (block, _) = env
+        .executing_worker()
+        .stage_block_execution(proposed_block, None, vec![])
+        .await?;
+
+    // Spawn the proposal handling. It should not complete immediately.
+    let worker = env.executing_worker().clone();
+    let mut future = Box::pin(worker.handle_block_proposal(block_proposal));
+
+    // Give the task a chance to run.
+    yield_now().await;
+
+    // The future should not be ready yet (the proposal is delayed).
+    let is_pending = poll_fn(|cx| match future.as_mut().poll(cx) {
+        Poll::Pending => Poll::Ready(true),
+        Poll::Ready(_) => Poll::Ready(false),
+    })
+    .await;
+    assert!(is_pending, "Future-timestamp proposal should be delayed");
+
+    // Advance the clock to the block timestamp.
+    clock.set(future_timestamp);
+
+    // Now the future should complete.
+    let result = future.as_mut().await;
+    assert!(
+        result.is_ok(),
+        "Future timestamp within grace period should succeed after delay"
+    );
+    let certificate = env.make_certificate(ConfirmedBlock::new(block));
+    env.executing_worker()
+        .fully_handle_certificate_with_notifications(certificate.clone(), &())
+        .await?;
+
+    // Case 4: Timestamp far in the future (beyond grace period) - should be rejected immediately.
+    let far_future_timestamp = Timestamp::from(4000 + TEST_GRACE_PERIOD_MICROS + 1_000_000);
+    clock.set(Timestamp::from(4000));
+    let proposed_block = make_child_block(&certificate.into_value())
+        .with_simple_transfer(chain_2, small_transfer)
+        .with_authenticated_owner(Some(owner))
+        .with_timestamp(far_future_timestamp);
+    let block_proposal = proposed_block
+        .into_first_proposal(owner, &signer)
+        .await
+        .unwrap();
+    // Far-future timestamp should be rejected immediately.
+    assert_matches!(
+        env.executing_worker()
+            .handle_block_proposal(block_proposal)
+            .await,
+        Err(WorkerError::InvalidTimestamp { .. })
+    );
+
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
