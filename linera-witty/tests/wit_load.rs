@@ -4,7 +4,7 @@
 //! Tests for the `WitLoad` derive macro.
 
 #[path = "common/types.rs"]
-mod types;
+pub mod types;
 
 use std::{fmt::Debug, iter, rc::Rc, sync::Arc};
 

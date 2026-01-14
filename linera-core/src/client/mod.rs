@@ -676,7 +676,7 @@ impl<Env: Environment> Client<Env> {
             .await
         {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                self.download_blobs(&[remote_node.clone()], &blob_ids)
+                self.download_blobs(std::slice::from_ref(remote_node), &blob_ids)
                     .await?;
             }
             x => {
@@ -688,7 +688,7 @@ impl<Env: Environment> Client<Env> {
             info = Some(
                 match self.handle_certificate(certificate.clone()).await {
                     Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                        self.download_blobs(&[remote_node.clone()], &blob_ids)
+                        self.download_blobs(std::slice::from_ref(remote_node), &blob_ids)
                             .await?;
                         self.handle_certificate(certificate).await?
                     }
@@ -1517,7 +1517,7 @@ impl<Env: Environment> Client<Env> {
                     if let LocalNodeError::BlobsNotFound(blob_ids) = &err {
                         self.update_local_node_with_blobs_from(
                             blob_ids.clone(),
-                            &[remote_node.clone()],
+                            std::slice::from_ref(remote_node),
                         )
                         .await?;
                         // We found the missing blobs: retry.

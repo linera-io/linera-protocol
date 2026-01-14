@@ -374,7 +374,7 @@ impl<D1, D2, A> TestKeyValueDatabase for DualDatabase<D1, D2, A>
 where
     D1: TestKeyValueDatabase,
     D2: TestKeyValueDatabase,
-    A: DualStoreRootKeyAssignment,
+    A: DualStoreRootKeyAssignment + linera_base::util::traits::AutoTraits,
 {
     async fn new_test_config() -> Result<Self::Config, Self::Error> {
         let first_config = D1::new_test_config().await.map_err(DualStoreError::First)?;

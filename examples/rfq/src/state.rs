@@ -74,12 +74,6 @@ pub struct RequestData {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, SimpleObject)]
-pub struct TempChainTokenHolder {
-    pub account_owner: AccountOwner,
-    pub chain_id: ChainId,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, SimpleObject)]
 pub struct TempChainState {
     request_id: RequestId,
     initiator: ChainId,
