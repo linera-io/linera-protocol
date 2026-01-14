@@ -3584,6 +3584,21 @@ impl<Env: Environment> ChainClient<Env> {
         }
     }
 
+    /// Returns the current ownership settings on this chain.
+    #[instrument(level = "trace")]
+    pub async fn query_chain_ownership(&self) -> Result<ChainOwnership, ChainClientError> {
+        Ok(self
+            .client
+            .local_node
+            .chain_state_view(self.chain_id)
+            .await?
+            .execution_state
+            .system
+            .ownership
+            .get()
+            .clone())
+    }
+
     /// Changes the ownership of this chain. Fails if it would remove existing owners, unless
     /// `remove_owners` is `true`.
     #[instrument(level = "trace")]
@@ -3599,6 +3614,23 @@ impl<Env: Environment> ChainClient<Env> {
             timeout_config: ownership.timeout_config.clone(),
         }))
         .await
+    }
+
+    /// Returns the current application permissions on this chain.
+    #[instrument(level = "trace")]
+    pub async fn query_application_permissions(
+        &self,
+    ) -> Result<ApplicationPermissions, ChainClientError> {
+        Ok(self
+            .client
+            .local_node
+            .chain_state_view(self.chain_id)
+            .await?
+            .execution_state
+            .system
+            .application_permissions
+            .get()
+            .clone())
     }
 
     /// Changes the application permissions configuration on this chain.

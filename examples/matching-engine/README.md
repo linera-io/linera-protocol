@@ -183,11 +183,11 @@ Engine to close the chain.
 kill %% && sleep 1    # Kill the service so we can use CLI commands for chain 1.
 
 linera --wait-for-outgoing-messages change-ownership \
-    --owners $OWNER_1 $OWNER_2
+    --owners "[\"$OWNER_1\",\"$OWNER_2\"]"
 
 linera --wait-for-outgoing-messages change-application-permissions \
-    --execute-operations $MATCHING_ENGINE \
-    --close-chain $MATCHING_ENGINE
+    --execute-operations "[\"$MATCHING_ENGINE\"]" \
+    --close-chain "[\"$MATCHING_ENGINE\"]"
 
 linera service --port $PORT &
 ```
