@@ -19,12 +19,12 @@ use linera_base::{
     },
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, IncomingBundle, MessageAction, MessageBundle,
-        OriginalProposal, ProposalContent, ProposedBlock,
+        BlockProposal, IncomingBundle, MessageAction, MessageBundle, OriginalProposal,
+        ProposalContent, ProposedBlock,
     },
     manager,
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
@@ -441,43 +441,6 @@ where
             maybe_blobs[index].1 = blob;
         }
         Ok(maybe_blobs.into_iter().collect())
-    }
-
-    /// Adds any newly created chains to the set of tracked chains, if the parent chain is
-    /// a full chain (i.e., we synchronize its sender chains and update its inbox).
-    ///
-    /// Chains that are not full are usually processed only because they sent some message
-    /// to one of our full chains. In most use cases, their children won't be of interest.
-    fn track_newly_created_chains(
-        &self,
-        proposed_block: &ProposedBlock,
-        outcome: &BlockExecutionOutcome,
-    ) {
-        if let Some(chain_modes) = self.chain_modes.as_ref() {
-            {
-                let modes = chain_modes
-                    .read()
-                    .expect("Panics should not happen while holding a lock to `chain_modes`");
-                let is_full = modes
-                    .get(&proposed_block.chain_id)
-                    .is_some_and(ListeningMode::is_full);
-                if !is_full {
-                    return; // The parent chain is not a full chain; don't track the child.
-                }
-            }
-            let new_chain_ids = outcome
-                .created_blobs_ids()
-                .into_iter()
-                .filter(|blob_id| blob_id.blob_type == BlobType::ChainDescription)
-                .map(|blob_id| ChainId(blob_id.hash));
-
-            let mut modes = chain_modes
-                .write()
-                .expect("Panics should not happen while holding a lock to `chain_modes`");
-            for chain_id in new_chain_ids {
-                modes.insert(chain_id, ListeningMode::FullChain);
-            }
-        }
     }
 
     /// Loads pending cross-chain requests, and adds `NewRound` notifications where appropriate.
@@ -1014,7 +977,6 @@ where
         let updated_streams = chain
             .apply_confirmed_block(certificate.value(), local_time)
             .await?;
-        self.track_newly_created_chains(&proposed_block, &outcome);
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
         let hash = certificate.hash();

@@ -310,7 +310,7 @@ impl Github {
         Ok(jobs_filtered)
     }
 
-    pub fn workflows_handler(&self) -> WorkflowsHandler {
+    pub fn workflows_handler(&self) -> WorkflowsHandler<'_> {
         self.octocrab.workflows(
             self.context.repository.owner.clone(),
             self.context.repository.name.clone(),

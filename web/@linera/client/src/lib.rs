@@ -15,6 +15,8 @@ well as a demo implementation (not recommended for production use) that stores a
 key directly in memory and uses it to sign.
 */
 
+// This crate is only for compiling to the Web.
+#![cfg(target_arch = "wasm32")]
 // We sometimes need functions in this module to be async in order to
 // ensure the generated code will return a `Promise`.
 #![allow(clippy::unused_async)]

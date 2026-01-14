@@ -264,7 +264,7 @@ impl LruPrefixCache {
         }
     }
 
-    /// Remove an entry from the queue and update the sizes.
+    /// Removes an entry from the queue and updates the sizes.
     fn remove_cache_key(&mut self, cache_key: &CacheKey) {
         let size = self
             .queue
@@ -273,7 +273,7 @@ impl LruPrefixCache {
         self.decrease_sizes(cache_key, size);
     }
 
-    /// Remove an entry from the queue if it exists.
+    /// Removes an entry from the queue if it exists.
     fn remove_cache_key_if_exists(&mut self, cache_key: &CacheKey) {
         let size = self.queue.remove(cache_key);
         if let Some(size) = size {
@@ -293,7 +293,7 @@ impl LruPrefixCache {
         self.update_sizes(cache_key, old_size, new_size);
     }
 
-    /// Insert a cache_key into the queue and update sizes.
+    /// Inserts a cache key into the queue and updates sizes.
     fn insert_cache_key(&mut self, cache_key: CacheKey, size: usize) {
         self.increase_sizes(&cache_key, size);
         assert!(self.queue.insert(cache_key, size).is_none());
@@ -316,8 +316,8 @@ impl LruPrefixCache {
     /// Then define `S = { s in set | s <= key }` for the lexicographic ordering.
     /// First of all the expression `self.find_keys_map.range(..=key.to_vec())` corresponds
     /// to S and `self.find_keys_map.range(..=key.to_vec()).next_back()` is
-    /// * None if S is empty.
-    /// * Some(M) with M the maximum of S if S is non-empty.
+    /// * `None` if S is empty.
+    /// * `Some(M)` with M the maximum of S if S is non-empty.
     ///
     /// First, if `self.get_existing_find_keys_entry(key) == Some(stored_key)` then given the code,
     /// clearly `stored_key` is a prefix of key.

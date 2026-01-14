@@ -36,7 +36,7 @@ use linera_views::{context::InactiveContext, ViewError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
-use tracing::{error, instrument, trace, warn};
+use tracing::{instrument, trace, warn};
 
 /// Re-export of [`EventSubscriptionsResult`] for use by other crate modules.
 pub(crate) use crate::chain_worker::{

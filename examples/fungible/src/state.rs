@@ -28,7 +28,7 @@ impl FungibleTokenState {
         }
     }
 
-    /// Obtains the balance for an `account`, returning None if there's no entry for the account.
+    /// Obtains the balance for an `account`, returning `None` if there's no entry for the account.
     pub(crate) async fn balance(&self, account: &AccountOwner) -> Option<Amount> {
         self.accounts
             .get(account)

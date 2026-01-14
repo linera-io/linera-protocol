@@ -2726,7 +2726,8 @@ where
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     // `PublishCommitteeBlob` is tested e.g. in `client_tests::test_change_voting_rights`, so we
     // just write it directly to storage here for simplicity.
-    env.write_blobs(&[committee_blob.clone()]).await?;
+    env.write_blobs(std::slice::from_ref(&committee_blob))
+        .await?;
     let blob_hash = committee_blob.id().hash;
     let proposal1 = make_child_block(&certificate0.clone().into_value())
         .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
@@ -2902,7 +2903,8 @@ where
     // Have the admin chain create a new epoch without retiring the old one.
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     let blob_hash = committee_blob.id().hash;
-    env.write_blobs(&[committee_blob.clone()]).await?;
+    env.write_blobs(std::slice::from_ref(&committee_blob))
+        .await?;
     let proposal1 = make_first_block(admin_id).with_operation(SystemOperation::Admin(
         AdminOperation::CreateCommittee {
             epoch: Epoch::from(1),
@@ -3012,7 +3014,8 @@ where
     // Have the admin chain create a new epoch and retire the old one immediately.
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     let blob_hash = committee_blob.id().hash;
-    env.write_blobs(&[committee_blob.clone()]).await?;
+    env.write_blobs(std::slice::from_ref(&committee_blob))
+        .await?;
 
     let proposal1 = make_first_block(admin_id)
         .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {

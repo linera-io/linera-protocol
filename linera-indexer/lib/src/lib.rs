@@ -8,6 +8,8 @@
 //! - the runner struct (runner.rs)
 //! - the gRPC server implementation (grpc_server.rs)
 
+#![recursion_limit = "256"]
+
 pub mod common;
 pub mod indexer;
 pub mod plugin;

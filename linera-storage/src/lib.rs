@@ -278,7 +278,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         }
     }
 
-    /// Creates a [`linera-sdk::UserContract`] instance using the bytecode in storage referenced
+    /// Creates a [`UserServiceCode`] instance using the bytecode in storage referenced
     /// by the `application_description`.
     async fn load_service(
         &self,
@@ -631,7 +631,9 @@ mod tests {
         assert_eq!(missing_blobs, vec![missing_blob_id]);
 
         // Test maybe_write_blobs (should return false as blobs don't have blob states yet)
-        let write_results = storage.maybe_write_blobs(&[test_blob1.clone()]).await?;
+        let write_results = storage
+            .maybe_write_blobs(std::slice::from_ref(&test_blob1))
+            .await?;
         assert_eq!(write_results, vec![false]);
 
         // Test blob state operations
@@ -677,7 +679,9 @@ mod tests {
         assert_eq!(read_blob_states[1], Some(blob_state2));
 
         // Test maybe_write_blobs now that blob states exist (should return true)
-        let write_results = storage.maybe_write_blobs(&[test_blob1.clone()]).await?;
+        let write_results = storage
+            .maybe_write_blobs(std::slice::from_ref(&test_blob1))
+            .await?;
         assert_eq!(write_results, vec![true]);
 
         Ok(())

@@ -109,7 +109,7 @@ pub struct SystemOperationMetadata {
 }
 
 impl SystemOperationMetadata {
-    /// Creates a new metadata with the given operation type and all fields set to None.
+    /// Creates a new metadata with the given operation type and all fields set to `None`.
     fn new(system_operation_type: &str) -> Self {
         SystemOperationMetadata {
             system_operation_type: system_operation_type.to_string(),

@@ -1648,7 +1648,7 @@ where
 }
 
 impl<C: Context, I: CustomSerialize, V> CustomMapView<C, I, V> {
-    /// Insert or resets a value.
+    /// Inserts or resets a value.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
