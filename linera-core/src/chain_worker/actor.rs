@@ -379,6 +379,46 @@ where
         (delta > TimeDelta::ZERO && delta <= grace_period).then_some(block_timestamp)
     }
 
+    /// If the request is a block proposal that should be delayed, spawns a task to
+    /// re-queue it and returns `None`. Otherwise, records queue wait metrics and
+    /// returns the request for immediate processing.
+    fn preprocess_request(
+        &self,
+        request: ChainWorkerRequest<StorageClient::Context>,
+        span: tracing::Span,
+        queued_at: Instant,
+        request_sender: &ChainWorkerRequestSender<StorageClient::Context>,
+    ) -> Option<(
+        ChainWorkerRequest<StorageClient::Context>,
+        tracing::Span,
+        Instant,
+    )> {
+        // Check if this request should be delayed.
+        if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } = request {
+            if let Some(delay_until) = self.delay_until(proposal) {
+                debug!(%delay_until, "delaying block proposal");
+                let sender = request_sender.clone();
+                let clock = self.storage.clock().clone();
+                drop(task::spawn(async move {
+                    clock.sleep_until(delay_until).await;
+                    // Re-insert the request into the queue. If the channel is closed,
+                    // the actor is shutting down, so we can ignore the error.
+                    let _ = sender.send((request, span, queued_at));
+                }));
+                return None;
+            }
+        }
+
+        // Record how long the request waited in queue (in milliseconds).
+        #[cfg(with_metrics)]
+        {
+            let queue_wait_time_ms = queued_at.elapsed().as_secs_f64() * 1000.0;
+            metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
+        }
+
+        Some((request, span, queued_at))
+    }
+
     /// Runs the worker until there are no more incoming requests.
     #[instrument(
         skip_all,
@@ -392,28 +432,11 @@ where
         trace!("Starting `ChainWorkerActor`");
 
         while let Some((request, span, queued_at)) = incoming_requests.recv().await {
-            // Check if this request should be delayed.
-            if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } = request {
-                if let Some(delay_until) = self.delay_until(proposal) {
-                    debug!(%delay_until, "delaying block proposal");
-                    let sender = request_sender.clone();
-                    let clock = self.storage.clock().clone();
-                    drop(task::spawn(async move {
-                        clock.sleep_until(delay_until).await;
-                        // Re-insert the request into the queue. If the channel is closed,
-                        // the actor is shutting down, so we can ignore the error.
-                        let _ = sender.send((request, span, queued_at));
-                    }));
-                    continue;
-                }
-            }
-
-            // Record how long the request waited in queue (in milliseconds).
-            #[cfg(with_metrics)]
-            {
-                let queue_wait_time_ms = queued_at.elapsed().as_secs_f64() * 1000.0;
-                metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
-            }
+            let Some((request, span, _)) =
+                self.preprocess_request(request, span, queued_at, &request_sender)
+            else {
+                continue;
+            };
 
             let (service_runtime_task, service_runtime_endpoint) =
                 if self.config.long_lived_services {
@@ -453,29 +476,11 @@ where
                         let Some((request, span, queued_at)) = maybe_request else {
                             break; // Request sender was dropped.
                         };
-
-                        // Check if this request should be delayed.
-                        if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } =
-                            request
-                        {
-                            if let Some(delay_until) = self.delay_until(proposal) {
-                                debug!(%delay_until, "delaying block proposal");
-                                let sender = request_sender.clone();
-                                let clock = self.storage.clock().clone();
-                                drop(task::spawn(async move {
-                                    clock.sleep_until(delay_until).await;
-                                    let _ = sender.send((request, span, queued_at));
-                                }));
-                                continue;
-                            }
-                        }
-
-                        // Record how long the request waited in queue (in milliseconds).
-                        #[cfg(with_metrics)]
-                        {
-                            let queue_wait_time_ms = queued_at.elapsed().as_secs_f64() * 1000.0;
-                            metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
-                        }
+                        let Some((request, span, _)) =
+                            self.preprocess_request(request, span, queued_at, &request_sender)
+                        else {
+                            continue;
+                        };
 
                         Box::pin(worker.handle_request(request)).instrument(span).await;
                     }
