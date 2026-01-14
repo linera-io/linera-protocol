@@ -17,6 +17,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::{data_types::BlockHeight, identifiers::ChainId};
+use linera_chain::types::{ConfirmedBlock, LiteCertificate as ChainLiteCertificate};
 use linera_core::{
     data_types::{CertificatesByHeightRequest, ChainInfo, ChainInfoQuery},
     node::NodeError,
@@ -45,7 +46,7 @@ use linera_rpc::{
     },
 };
 use linera_sdk::{linera_base_types::Blob, views::ViewError};
-use linera_storage::{ResultReadCertificates, Storage};
+use linera_storage::Storage;
 use prost::Message;
 use tokio::{select, task::JoinSet};
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -424,6 +425,50 @@ where
 
         Ok(hashes)
     }
+
+    /// Collects raw certificates by hashes with message limiting.
+    async fn collect_raw_certificates_by_hashes(
+        &self,
+        hashes: Vec<linera_base::crypto::CryptoHash>,
+    ) -> Result<Vec<RawCertificate>, Status> {
+        let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
+            GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
+
+        let mut result = vec![];
+
+        for batch in hashes.chunks(100) {
+            let certificates: Vec<(Vec<u8>, Vec<u8>)> = self
+                .0
+                .storage
+                .read_certificates_raw(batch.to_vec())
+                .await
+                .map_err(Self::view_error_to_status)?
+                .into_iter()
+                .flatten()
+                .collect();
+
+            let batch_size = certificates.len();
+            let batch_result = limiter.take_if(
+                certificates,
+                |lim, (lite_cert_bytes, confirmed_block_bytes)| {
+                    Ok(lim
+                        .fits_raw(lite_cert_bytes.len() + confirmed_block_bytes.len())
+                        .then_some(RawCertificate {
+                            lite_certificate: lite_cert_bytes,
+                            confirmed_block: confirmed_block_bytes,
+                        }))
+                },
+            )?;
+            let took_all = batch_result.len() == batch_size;
+            result.extend(batch_result);
+
+            if !took_all {
+                break;
+            }
+        }
+
+        Ok(result)
+    }
 }
 
 #[async_trait]
@@ -665,40 +710,28 @@ where
             .map(linera_base::crypto::CryptoHash::try_from)
             .collect::<Result<Vec<linera_base::crypto::CryptoHash>, _>>()?;
 
-        let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
-            GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
+        let raw_certificates = self.collect_raw_certificates_by_hashes(hashes).await?;
 
-        let mut returned_certificates = vec![];
-
-        for batch in hashes.chunks(100) {
-            let certificates = self
-                .0
-                .storage
-                .read_certificates(batch.to_vec())
-                .await
-                .map_err(Self::view_error_to_status)?;
-            let certificates = match ResultReadCertificates::new(certificates, batch.to_vec()) {
-                ResultReadCertificates::Certificates(certificates) => certificates,
-                ResultReadCertificates::InvalidHashes(hashes) => {
-                    return Err(Status::not_found(format!("{:?}", hashes)))
-                }
-            };
-
-            let batch_size = certificates.len();
-            let batch_result = limiter.take_if(certificates, |lim, certificate| {
-                let cert: linera_chain::types::Certificate = certificate.into();
-                Ok(lim.fits::<Certificate>(cert.clone())?.then_some(cert))
-            })?;
-            let took_all = batch_result.len() == batch_size;
-            returned_certificates.extend(batch_result);
-
-            if !took_all {
-                break;
-            }
-        }
+        let certificates: Vec<linera_chain::types::Certificate> = raw_certificates
+            .into_iter()
+            .map(|raw| {
+                let lite_cert = bcs::from_bytes::<ChainLiteCertificate>(&raw.lite_certificate)
+                    .map_err(|e| {
+                        Status::internal(format!("Failed to deserialize lite certificate: {}", e))
+                    })?;
+                let confirmed_block = bcs::from_bytes::<ConfirmedBlock>(&raw.confirmed_block)
+                    .map_err(|e| {
+                        Status::internal(format!("Failed to deserialize confirmed block: {}", e))
+                    })?;
+                lite_cert
+                    .with_value(confirmed_block)
+                    .ok_or_else(|| Status::internal("Invalid certificate"))
+                    .map(Into::into)
+            })
+            .collect::<Result<_, _>>()?;
 
         Ok(Response::new(CertificatesBatchResponse::try_from(
-            returned_certificates,
+            certificates,
         )?))
     }
 
@@ -778,28 +811,21 @@ where
         // Check if we got all certificates (no None values)
         let all_found = raw_certificates_by_height.len() == heights.len();
 
-        // Closure to check if raw certificate fits and transform it
-        let try_take_raw = |lim: &mut GrpcMessageLimiter<linera_chain::types::Certificate>,
-                            (lite_cert_bytes, confirmed_block_bytes): (Vec<u8>, Vec<u8>)|
-         -> Result<Option<RawCertificate>, Status> {
-            Ok(lim
-                .fits_raw(lite_cert_bytes.len() + confirmed_block_bytes.len())
-                .then_some(RawCertificate {
-                    lite_certificate: lite_cert_bytes,
-                    confirmed_block: confirmed_block_bytes,
-                }))
-        };
-
         if all_found {
             let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
                 GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
 
-            let returned_certificates =
-                limiter.take_if(raw_certificates_by_height, &try_take_raw)?;
+            let certificates =
+                limiter.take_if(raw_certificates_by_height, |lim, (lite, block)| {
+                    Ok(lim
+                        .fits_raw(lite.len() + block.len())
+                        .then_some(RawCertificate {
+                            lite_certificate: lite,
+                            confirmed_block: block,
+                        }))
+                })?;
 
-            return Ok(Response::new(RawCertificatesBatch {
-                certificates: returned_certificates,
-            }));
+            return Ok(Response::new(RawCertificatesBatch { certificates }));
         }
 
         // Fallback to the traditional approach using chain info query
@@ -807,35 +833,9 @@ where
             .get_certificate_hashes_by_heights_fallback(chain_id, heights)
             .await?;
 
-        let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
-            GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
+        let certificates = self.collect_raw_certificates_by_hashes(hashes).await?;
 
-        let mut returned_certificates = vec![];
-
-        for batch in hashes.chunks(100) {
-            let certificates: Vec<(Vec<u8>, Vec<u8>)> = self
-                .0
-                .storage
-                .read_certificates_raw(batch.to_vec())
-                .await
-                .map_err(Self::view_error_to_status)?
-                .into_iter()
-                .flatten()
-                .collect();
-
-            let batch_size = certificates.len();
-            let batch_result = limiter.take_if(certificates, &try_take_raw)?;
-            let took_all = batch_result.len() == batch_size;
-            returned_certificates.extend(batch_result);
-
-            if !took_all {
-                break;
-            }
-        }
-
-        Ok(Response::new(RawCertificatesBatch {
-            certificates: returned_certificates,
-        }))
+        Ok(Response::new(RawCertificatesBatch { certificates }))
     }
 
     #[instrument(skip_all, err(level = Level::WARN), fields(
