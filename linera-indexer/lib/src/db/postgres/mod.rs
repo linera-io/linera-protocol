@@ -59,7 +59,7 @@ pub struct PostgresDatabase {
 }
 
 impl PostgresDatabase {
-    /// Create a new PostgreSQL database connection
+    /// Creates a new PostgreSQL database connection.
     pub async fn new(database_url: &str) -> Result<Self, PostgresError> {
         tracing::info!(?database_url, "connecting to PostgreSQL database");
 
@@ -109,12 +109,12 @@ impl PostgresDatabase {
         Ok(self.pool.begin().await?)
     }
 
-    /// Commit a transaction
+    /// Commits a transaction.
     async fn commit_transaction(&self, tx: Transaction<'_, Postgres>) -> Result<(), PostgresError> {
         tx.commit().await.map_err(PostgresError::Database)
     }
 
-    /// Insert a blob within a transaction
+    /// Inserts a blob within a transaction.
     async fn insert_blob_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -137,7 +137,7 @@ impl PostgresDatabase {
         Ok(())
     }
 
-    /// Insert a block within a transaction
+    /// Inserts a block within a transaction.
     async fn insert_block_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -259,7 +259,7 @@ impl PostgresDatabase {
         Ok(())
     }
 
-    /// Insert an operation within a transaction
+    /// Inserts an operation within a transaction.
     async fn insert_operation_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -322,7 +322,7 @@ impl PostgresDatabase {
         Ok(())
     }
 
-    /// Insert an outgoing message within a transaction
+    /// Inserts an outgoing message within a transaction.
     async fn insert_outgoing_message_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -370,7 +370,7 @@ impl PostgresDatabase {
         Ok(())
     }
 
-    /// Insert an event within a transaction
+    /// Inserts an event within a transaction.
     async fn insert_event_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -401,7 +401,7 @@ impl PostgresDatabase {
         Ok(())
     }
 
-    /// Insert an oracle response within a transaction
+    /// Inserts an oracle response within a transaction.
     async fn insert_oracle_response_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -470,7 +470,7 @@ impl PostgresDatabase {
         Ok(())
     }
 
-    /// Insert an incoming bundle within a transaction and return the bundle ID
+    /// Inserts an incoming bundle within a transaction and returns the bundle ID.
     async fn insert_incoming_bundle_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -508,7 +508,7 @@ impl PostgresDatabase {
         Ok(result.get("id"))
     }
 
-    /// Insert a posted message within a transaction
+    /// Inserts a posted message within a transaction.
     async fn insert_bundle_message_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -552,7 +552,7 @@ impl PostgresDatabase {
         Ok(())
     }
 
-    /// Get a block by hash
+    /// Gets a block by hash.
     pub async fn get_block(&self, hash: &CryptoHash) -> Result<Vec<u8>, PostgresError> {
         let hash_str = hash.to_string();
         let row = sqlx::query("SELECT data FROM blocks WHERE hash = $1")
@@ -566,7 +566,7 @@ impl PostgresDatabase {
         }
     }
 
-    /// Get a blob by blob_id
+    /// Gets a blob by blob ID.
     pub async fn get_blob(&self, blob_id: &BlobId) -> Result<Vec<u8>, PostgresError> {
         let blob_id_str = blob_id.hash.to_string();
         let row = sqlx::query("SELECT data FROM blobs WHERE hash = $1")
@@ -580,7 +580,7 @@ impl PostgresDatabase {
         }
     }
 
-    /// Get the latest block for a chain
+    /// Gets the latest block for a chain.
     pub async fn get_latest_block_for_chain(
         &self,
         chain_id: &ChainId,
@@ -607,7 +607,7 @@ impl PostgresDatabase {
         }
     }
 
-    /// Get blocks for a chain within a height range
+    /// Gets blocks for a chain within a height range.
     pub async fn get_blocks_for_chain_range(
         &self,
         chain_id: &ChainId,
@@ -637,7 +637,7 @@ impl PostgresDatabase {
         Ok(result)
     }
 
-    /// Check if a blob exists
+    /// Checks if a blob exists.
     pub async fn blob_exists(&self, blob_id: &BlobId) -> Result<bool, PostgresError> {
         let blob_id_str = blob_id.hash.to_string();
         let row = sqlx::query("SELECT 1 FROM blobs WHERE hash = $1 LIMIT 1")
@@ -647,7 +647,7 @@ impl PostgresDatabase {
         Ok(row.is_some())
     }
 
-    /// Check if a block exists
+    /// Checks if a block exists.
     pub async fn block_exists(&self, hash: &CryptoHash) -> Result<bool, PostgresError> {
         let hash_str = hash.to_string();
         let row = sqlx::query("SELECT 1 FROM blocks WHERE hash = $1 LIMIT 1")
@@ -657,7 +657,7 @@ impl PostgresDatabase {
         Ok(row.is_some())
     }
 
-    /// Get incoming bundles for a specific block
+    /// Gets incoming bundles for a specific block.
     pub async fn get_incoming_bundles_for_block(
         &self,
         block_hash: &CryptoHash,
@@ -703,7 +703,7 @@ impl PostgresDatabase {
         Ok(bundles)
     }
 
-    /// Get posted messages for a specific bundle
+    /// Gets posted messages for a specific bundle.
     pub async fn get_posted_messages_for_bundle(
         &self,
         bundle_id: i64,
@@ -736,7 +736,7 @@ impl PostgresDatabase {
         Ok(messages)
     }
 
-    /// Get all bundles from a specific origin chain
+    /// Gets all bundles from a specific origin chain.
     pub async fn get_bundles_from_origin_chain(
         &self,
         origin_chain_id: &ChainId,
@@ -786,7 +786,7 @@ impl PostgresDatabase {
         Ok(bundles)
     }
 
-    /// Get operations for a specific block
+    /// Gets operations for a specific block.
     pub async fn get_operations_for_block(
         &self,
         block_hash: &CryptoHash,
@@ -816,7 +816,7 @@ impl PostgresDatabase {
         Ok(operations)
     }
 
-    /// Get outgoing messages for a specific block
+    /// Gets outgoing messages for a specific block.
     pub async fn get_outgoing_messages_for_block(
         &self,
         block_hash: &CryptoHash,
@@ -863,7 +863,7 @@ impl PostgresDatabase {
         Ok(messages)
     }
 
-    /// Get events for a specific block
+    /// Gets events for a specific block.
     pub async fn get_events_for_block(
         &self,
         block_hash: &CryptoHash,
@@ -962,7 +962,7 @@ impl PostgresDatabase {
         Ok(results)
     }
 
-    /// Get block summary (header fields without full data)
+    /// Gets block summary (header fields without full data).
     pub async fn get_block_summary(
         &self,
         hash: &CryptoHash,

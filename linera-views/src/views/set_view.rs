@@ -143,7 +143,7 @@ impl<C: Context> ClonableView for ByteSetView<C> {
 }
 
 impl<C: Context> ByteSetView<C> {
-    /// Insert a value. If already present then it has no effect.
+    /// Inserts a value. If already present then it has no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::{context::MemoryContext, set_view::ByteSetView};
