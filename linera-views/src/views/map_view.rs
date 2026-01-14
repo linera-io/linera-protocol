@@ -1648,14 +1648,14 @@ where
 }
 
 impl<C: Context, I: CustomSerialize, V> CustomMapView<C, I, V> {
-    /// Insert or resets a value.
+    /// Inserts or resets a value.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::map_view::MapView;
+    /// # use linera_views::map_view::CustomMapView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut map: MapView<_, u128, _> = MapView::load(context).await.unwrap();
+    /// let mut map: CustomMapView<_, u128, _> = CustomMapView::load(context).await.unwrap();
     /// map.insert(&(24 as u128), String::from("Hello"));
     /// assert_eq!(
     ///     map.get(&(24 as u128)).await.unwrap(),
@@ -1666,7 +1666,7 @@ impl<C: Context, I: CustomSerialize, V> CustomMapView<C, I, V> {
     pub fn insert<Q>(&mut self, index: &Q, value: V) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
-        Q: Serialize + CustomSerialize,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.map.insert(short_key, value);
@@ -1677,10 +1677,11 @@ impl<C: Context, I: CustomSerialize, V> CustomMapView<C, I, V> {
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::map_view::MapView;
+    /// # use linera_views::map_view::CustomMapView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut map = MapView::<_, u128, String>::load(context).await.unwrap();
+    /// let mut map = CustomMapView::<_, u128, _>::load(context).await.unwrap();
+    /// map.insert(&(37 as u128), String::from("Hello"));
     /// map.remove(&(37 as u128));
     /// assert_eq!(map.get(&(37 as u128)).await.unwrap(), None);
     /// # })
@@ -1688,7 +1689,7 @@ impl<C: Context, I: CustomSerialize, V> CustomMapView<C, I, V> {
     pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
-        Q: Serialize + CustomSerialize,
+        Q: CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.map.remove(short_key);
@@ -1704,21 +1705,21 @@ impl<C: Context, I: CustomSerialize, V> CustomMapView<C, I, V> {
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::map_view::MapView;
+    /// # use linera_views::map_view::CustomMapView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut map = MapView::<_, u128, String>::load(context).await.unwrap();
-    /// map.insert(&(37 as u128), String::from("Hello"));
-    /// assert!(map.contains_key(&(37 as u128)).await.unwrap());
-    /// assert!(!map.contains_key(&(34 as u128)).await.unwrap());
+    /// let mut map = CustomMapView::<_, u128, _>::load(context).await.unwrap();
+    /// map.insert(&(24 as u128), String::from("Hello"));
+    /// assert!(map.contains_key(&(24 as u128)).await.unwrap());
+    /// assert!(!map.contains_key(&(23 as u128)).await.unwrap());
     /// # })
     /// ```
     pub async fn contains_key<Q>(&self, index: &Q) -> Result<bool, ViewError>
     where
         I: Borrow<Q>,
-        Q: Serialize + ?Sized,
+        Q: CustomSerialize,
     {
-        let short_key = BaseKey::derive_short_key(index)?;
+        let short_key = index.to_custom_bytes()?;
         self.map.contains_key(&short_key).await
     }
 }
@@ -1736,8 +1737,7 @@ where
     /// # use linera_views::map_view::CustomMapView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut map: CustomMapView<MemoryContext<()>, u128, String> =
-    ///     CustomMapView::load(context).await.unwrap();
+    /// let mut map = CustomMapView::<_, u128, _>::load(context).await.unwrap();
     /// map.insert(&(34 as u128), String::from("Hello"));
     /// assert_eq!(
     ///     map.get(&(34 as u128)).await.unwrap(),
@@ -1761,8 +1761,7 @@ where
     /// # use linera_views::map_view::CustomMapView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut map: CustomMapView<MemoryContext<()>, u128, String> =
-    ///     CustomMapView::load(context).await.unwrap();
+    /// let mut map = CustomMapView::<_, u128, _>::load(context).await.unwrap();
     /// map.insert(&(34 as u128), String::from("Hello"));
     /// map.insert(&(12 as u128), String::from("Hi"));
     /// assert_eq!(
@@ -1795,8 +1794,7 @@ where
     /// # use linera_views::map_view::CustomMapView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut map: CustomMapView<MemoryContext<()>, u128, String> =
-    ///     CustomMapView::load(context).await.unwrap();
+    /// let mut map = CustomMapView::<_, u128, _>::load(context).await.unwrap();
     /// map.insert(&(34 as u128), String::from("Hello"));
     /// map.insert(&(12 as u128), String::from("Hi"));
     /// assert_eq!(
@@ -1831,7 +1829,7 @@ where
     /// # use linera_views::map_view::CustomMapView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut map: CustomMapView<_, u128, String> = CustomMapView::load(context).await.unwrap();
+    /// let mut map = CustomMapView::<_, u128, _>::load(context).await.unwrap();
     /// map.insert(&(34 as u128), String::from("Hello"));
     /// let value = map.get_mut(&(34 as u128)).await.unwrap().unwrap();
     /// *value = String::from("Hola");
@@ -1862,10 +1860,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::map_view::MapView;
+    /// # use linera_views::map_view::CustomMapView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut map: MapView<_, u128, String> = MapView::load(context).await.unwrap();
+    /// let mut map = CustomMapView::<_, u128, _>::load(context).await.unwrap();
     /// map.insert(&(34 as u128), String::from("Hello"));
     /// map.insert(&(37 as u128), String::from("Bonjour"));
     /// assert_eq!(map.indices().await.unwrap(), vec![34 as u128, 37 as u128]);
@@ -2007,7 +2005,7 @@ where
     /// # use linera_views::map_view::CustomMapView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut map: CustomMapView<_, u128, String> = CustomMapView::load(context).await.unwrap();
+    /// let mut map = CustomMapView::<_, u128, _>::load(context).await.unwrap();
     /// map.insert(&(34 as u128), String::from("Hello"));
     /// map.insert(&(37 as u128), String::from("Hola"));
     /// let mut indices = Vec::<u128>::new();
@@ -2048,16 +2046,13 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::map_view::MapView;
+    /// # use linera_views::map_view::CustomMapView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut map: MapView<_, String, _> = MapView::load(context).await.unwrap();
-    /// map.insert("Italian", String::from("Ciao"));
+    /// let mut map = CustomMapView::<_, u128, _>::load(context).await.unwrap();
+    /// map.insert(&(24 as u128), String::from("Ciao"));
     /// let index_values = map.index_values().await.unwrap();
-    /// assert_eq!(
-    ///     index_values,
-    ///     vec![("Italian".to_string(), "Ciao".to_string())]
-    /// );
+    /// assert_eq!(index_values, vec![(24 as u128, "Ciao".to_string())]);
     /// # })
     /// ```
     pub async fn index_values(&self) -> Result<Vec<(I, V)>, ViewError> {
@@ -2075,12 +2070,12 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::map_view::MapView;
+    /// # use linera_views::map_view::CustomMapView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut map: MapView<_, String, _> = MapView::load(context).await.unwrap();
-    /// map.insert("Italian", String::from("Ciao"));
-    /// map.insert("French", String::from("Bonjour"));
+    /// let mut map = CustomMapView::<_, u128, _>::load(context).await.unwrap();
+    /// map.insert(&(24 as u128), String::from("Ciao"));
+    /// map.insert(&(37 as u128), String::from("Bonjour"));
     /// assert_eq!(map.count().await.unwrap(), 2);
     /// # })
     /// ```
@@ -2103,7 +2098,8 @@ where
     /// # use linera_views::map_view::CustomMapView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut map: CustomMapView<_, u128, String> = CustomMapView::load(context).await.unwrap();
+    /// let mut map = CustomMapView::<_, u128, _>::load(context).await.unwrap();
+    /// map.insert(&(24 as u128), String::from("Hello"));
     /// assert_eq!(
     ///     *map.get_mut_or_default(&(34 as u128)).await.unwrap(),
     ///     String::new()

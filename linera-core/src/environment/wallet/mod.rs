@@ -23,11 +23,6 @@ pub struct Chain {
     pub timestamp: Timestamp,
     pub pending_proposal: Option<PendingProposal>,
     pub epoch: Option<Epoch>,
-    /// If true, we only follow this chain's blocks without downloading sender chain blocks
-    /// or participating in consensus rounds. Use this for chains we're interested in observing
-    /// but don't intend to propose blocks for.
-    #[serde(default)]
-    pub follow_only: bool,
 }
 
 impl From<&ChainInfo> for Chain {
@@ -39,7 +34,6 @@ impl From<&ChainInfo> for Chain {
             timestamp: info.timestamp,
             pending_proposal: None,
             epoch: Some(info.epoch),
-            follow_only: false,
         }
     }
 }
@@ -63,7 +57,7 @@ impl From<ChainDescription> for Chain {
 }
 
 impl Chain {
-    /// Create a chain that we haven't interacted with before.
+    /// Creates a chain that we haven't interacted with before.
     pub fn new(owner: Option<AccountOwner>, current_epoch: Epoch, now: Timestamp) -> Self {
         Self {
             owner,
@@ -72,8 +66,15 @@ impl Chain {
             next_block_height: BlockHeight::ZERO,
             pending_proposal: None,
             epoch: Some(current_epoch),
-            follow_only: false,
         }
+    }
+
+    /// Returns `true` if we only follow this chain's blocks without participating in consensus.
+    ///
+    /// A chain is follow-only if there is no key pair configured for it, i.e., if `owner` is
+    /// `None`.
+    pub fn is_follow_only(&self) -> bool {
+        self.owner.is_none()
     }
 }
 

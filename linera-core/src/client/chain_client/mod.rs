@@ -357,6 +357,11 @@ impl<Env: Environment> ChainClient<Env> {
         self.client.signer()
     }
 
+    /// Returns whether the signer has a key for the given owner.
+    pub async fn has_key_for(&self, owner: &AccountOwner) -> Result<bool, Error> {
+        self.client.has_key_for(owner).await
+    }
+
     /// Gets a mutable reference to the per-`ChainClient` options.
     #[instrument(level = "trace", skip(self))]
     pub fn options_mut(&mut self) -> &mut Options {
@@ -655,11 +660,7 @@ impl<Env: Environment> ChainClient<Env> {
             return Err(Error::NotAnOwner(self.chain_id));
         }
 
-        let has_signer = self
-            .signer()
-            .contains_key(&preferred_owner)
-            .await
-            .map_err(Error::signer_failure)?;
+        let has_signer = self.has_key_for(&preferred_owner).await?;
 
         if !has_signer {
             warn!(%self.chain_id, ?preferred_owner,
@@ -1977,6 +1978,21 @@ impl<Env: Environment> ChainClient<Env> {
         self.execute_block(operations, vec![]).await
     }
 
+    /// Returns the current ownership settings on this chain.
+    #[instrument(level = "trace")]
+    pub async fn query_chain_ownership(&self) -> Result<ChainOwnership, Error> {
+        Ok(self
+            .client
+            .local_node
+            .chain_state_view(self.chain_id)
+            .await?
+            .execution_state
+            .system
+            .ownership
+            .get()
+            .clone())
+    }
+
     /// Changes the ownership of this chain. Fails if it would remove existing owners, unless
     /// `remove_owners` is `true`.
     #[instrument(level = "trace")]
@@ -2031,7 +2047,7 @@ impl<Env: Environment> ChainClient<Env> {
         balance: Amount,
     ) -> Result<ClientOutcome<(ChainDescription, ConfirmedBlockCertificate)>, Error> {
         let config = OpenChainConfig {
-            ownership,
+            ownership: ownership.clone(),
             balance,
             application_permissions,
         };
@@ -2054,9 +2070,14 @@ impl<Env: Environment> ChainClient<Env> {
             .and_then(|blobs| blobs.last())
             .ok_or_else(|| Error::InternalError("Failed to create a new chain"))?;
         let description = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?;
-        // Add the new chain to the list of tracked chains            // Add the new chain to the list of tracked chains with full participation.
-        self.client
-            .extend_chain_mode(description.id(), ListeningMode::FullChain);
+        // If we have a key for any owner, add it to the list of tracked chains.
+        for owner in ownership.all_owners() {
+            if self.has_key_for(owner).await? {
+                self.client
+                    .extend_chain_mode(description.id(), ListeningMode::FullChain);
+                break;
+            }
+        }
         self.client
             .local_node
             .retry_pending_cross_chain_requests(self.chain_id)

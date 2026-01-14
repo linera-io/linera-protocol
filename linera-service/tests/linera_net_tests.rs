@@ -574,6 +574,9 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
         function increment();
         function remote_increment(uint256 index);
         function remote_value(uint256 index);
+        function reentrant_test(uint256 index, uint256 value);
+        function test_code_length(uint256 index);
+        function create_two_counters(uint256 initialValue);
     }
 
     let constructor_argument = Vec::new();
@@ -613,17 +616,22 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
 
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
-
     let application = node_service.make_application(&chain_id, &application_id)?;
     let address_app = application_id.evm_address();
 
     // Creating the subcontracts
 
-    let operation0 = createCounterCall {
+    let operation0_a = createCounterCall {
         initialValue: U256::from(42),
     };
-    let operation0 = get_zero_operation(operation0)?;
-    application.run_json_query(operation0).await?;
+    let operation0_a = get_zero_operation(operation0_a)?;
+    application.run_json_query(operation0_a).await?;
+
+    let operation0_b = remote_incrementCall {
+        index: U256::from(0),
+    };
+    let operation0_b = get_zero_operation(operation0_b)?;
+    application.run_json_query(operation0_b).await?;
 
     let operation1 = createCounterCall {
         initialValue: U256::from(149),
@@ -649,7 +657,6 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     // Creating the applications
 
     // The balance in Linera and EVM have to match.
-
     let application0 = ApplicationId::from(address0).with_abi::<EvmAbi>();
     let application0 = node_service.make_application(&chain_id, &application0)?;
 
@@ -659,7 +666,7 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     let query = get_valueCall {};
     let query = EvmQuery::Query(query.abi_encode());
     let result = application0.run_json_query(query.clone()).await?;
-    assert_eq!(read_evm_u256_entry(result), U256::from(42));
+    assert_eq!(read_evm_u256_entry(result), U256::from(43));
 
     let result = application1.run_json_query(query).await?;
     assert_eq!(read_evm_u256_entry(result), U256::from(149));
@@ -700,14 +707,34 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     let query = get_valueCall {};
     let query = EvmQuery::Query(query.abi_encode());
     let result = application0.run_json_query(query.clone()).await?;
-    assert_eq!(read_evm_u256_entry(result), U256::from(44));
+    assert_eq!(read_evm_u256_entry(result), U256::from(45));
 
     let query = remote_valueCall {
         index: U256::from(0),
     };
     let query = EvmQuery::Query(query.abi_encode());
     let result = application.run_json_query(query.clone()).await?;
-    assert_eq!(read_evm_u256_entry(result), U256::from(44));
+    assert_eq!(read_evm_u256_entry(result), U256::from(45));
+
+    // Doing some reentrant call
+    let operation2 = reentrant_testCall {
+        index: U256::ZERO,
+        value: U256::from(73),
+    };
+    let operation2 = get_zero_operation(operation2)?;
+    application.run_json_query(operation2).await?;
+
+    // test_code_length
+    let operation3 = test_code_lengthCall { index: U256::ZERO };
+    let operation3 = get_zero_operation(operation3)?;
+    application.run_json_query(operation3).await?;
+
+    // create two contracts in one operation.
+    let operation4 = create_two_countersCall {
+        initialValue: U256::from(91),
+    };
+    let operation4 = get_zero_operation(operation4)?;
+    application.run_json_query(operation4).await?;
 
     node_service.ensure_is_running()?;
 
@@ -829,6 +856,10 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     // Transferring amount
 
     let amount = Amount::from_tokens(1);
+    tracing::info!(
+        "test_evm_end_to_end_balance_and_transfer, recipient={}",
+        address2
+    );
     let operation = send_cashCall {
         recipient: address2,
         amount: amount.into(),

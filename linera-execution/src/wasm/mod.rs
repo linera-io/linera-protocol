@@ -102,6 +102,7 @@ impl WasmContractModule {
     ) -> Result<Self, WasmExecutionError> {
         Self::new(
             Bytecode::load_from_file(contract_bytecode_file)
+                .await
                 .map_err(anyhow::Error::from)
                 .map_err(WasmExecutionError::LoadContractModule)?,
             runtime,
@@ -164,6 +165,7 @@ impl WasmServiceModule {
     ) -> Result<Self, WasmExecutionError> {
         Self::new(
             Bytecode::load_from_file(service_bytecode_file)
+                .await
                 .map_err(anyhow::Error::from)
                 .map_err(WasmExecutionError::LoadServiceModule)?,
             runtime,

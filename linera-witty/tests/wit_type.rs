@@ -4,7 +4,7 @@
 //! Tests for the `WitType` derive macro.
 
 #[path = "common/types.rs"]
-mod types;
+pub mod types;
 
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 

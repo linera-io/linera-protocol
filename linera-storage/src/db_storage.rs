@@ -544,7 +544,7 @@ impl TestClock {
         self.lock().sleep_callback = None;
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<TestClockInner> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, TestClockInner> {
         self.0.lock().expect("poisoned TestClock mutex")
     }
 }

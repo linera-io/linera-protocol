@@ -4,7 +4,19 @@
 lineraImage: {{ env "LINERA_HELMFILE_LINERA_IMAGE" | default "linera:latest" }}
 lineraImagePullPolicy: Never
 logLevel: "debug"
-otlpExporterEndpoint: {{ env "LINERA_HELMFILE_SET_OTLP_EXPORTER_ENDPOINT" | default "" }}
+# OTLP Exporter Endpoint configuration:
+# - If observability-alloy is enabled with traces, route through Alloy for fan-out to both local and central
+# - Otherwise, use the direct endpoint (local Tempo or empty to disable)
+{{- $observabilityAlloyEnabled := eq (env "LINERA_HELMFILE_SET_ENABLE_OBSERVABILITY_ALLOY" | default "false") "true" }}
+{{- $tempoEnabled := eq (env "LINERA_HELMFILE_SET_TEMPO_ENABLED" | default "false") "true" }}
+{{- $explicitEndpoint := env "LINERA_HELMFILE_SET_OTLP_EXPORTER_ENDPOINT" }}
+{{- if and $observabilityAlloyEnabled $tempoEnabled }}
+# Observability-alloy is enabled with traces - route through Alloy for dual forwarding (local + central)
+otlpExporterEndpoint: {{ $explicitEndpoint | default "http://observability-alloy.monitoring.svc.cluster.local:4317" }}
+{{- else }}
+# Direct endpoint (local Tempo or disabled)
+otlpExporterEndpoint: {{ $explicitEndpoint | default "" }}
+{{- end }}
 proxyPort: 19100
 metricsPort: 21100
 numShards: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}

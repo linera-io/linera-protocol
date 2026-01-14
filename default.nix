@@ -21,6 +21,7 @@
     git
     wasm-bindgen-cli
     pnpm
+    rust-jemalloc-sys
   ];
   checkInputs = with pkgs; [
     jq

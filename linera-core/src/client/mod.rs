@@ -16,7 +16,7 @@ use futures::{
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
-    crypto::{CryptoHash, ValidatorPublicKey},
+    crypto::{CryptoHash, Signer as _, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, TimeDelta},
     ensure,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, GenericApplicationId, StreamId},
@@ -414,6 +414,14 @@ impl<Env: Environment> Client<Env> {
         self.environment.signer()
     }
 
+    /// Returns whether the signer has a key for the given owner.
+    pub async fn has_key_for(&self, owner: &AccountOwner) -> Result<bool, chain_client::Error> {
+        self.signer()
+            .contains_key(owner)
+            .await
+            .map_err(chain_client::Error::signer_failure)
+    }
+
     /// Returns a reference to the client's [`Wallet`][crate::environment::Wallet].
     pub fn wallet(&self) -> &Env::Wallet {
         self.environment.wallet()
@@ -668,7 +676,7 @@ impl<Env: Environment> Client<Env> {
             .await
         {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                self.download_blobs(&[remote_node.clone()], &blob_ids)
+                self.download_blobs(std::slice::from_ref(remote_node), &blob_ids)
                     .await?;
             }
             x => {
@@ -680,7 +688,7 @@ impl<Env: Environment> Client<Env> {
             info = Some(
                 match self.handle_certificate(certificate.clone()).await {
                     Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                        self.download_blobs(&[remote_node.clone()], &blob_ids)
+                        self.download_blobs(std::slice::from_ref(remote_node), &blob_ids)
                             .await?;
                         self.handle_certificate(certificate).await?
                     }
@@ -1509,7 +1517,7 @@ impl<Env: Environment> Client<Env> {
                     if let LocalNodeError::BlobsNotFound(blob_ids) = &err {
                         self.update_local_node_with_blobs_from(
                             blob_ids.clone(),
-                            &[remote_node.clone()],
+                            std::slice::from_ref(remote_node),
                         )
                         .await?;
                         // We found the missing blobs: retry.

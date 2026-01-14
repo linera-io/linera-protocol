@@ -47,7 +47,7 @@ use serde_json::json;
 use tokio::sync::{mpsc::UnboundedReceiver, OwnedRwLockReadGuard};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
-use tracing::{debug, error, info, instrument, trace};
+use tracing::{debug, info, instrument, trace};
 
 use crate::util;
 

@@ -288,7 +288,7 @@ where
         let chain_modes: Vec<_> = wallet
             .items()
             .map_ok(|(id, chain)| {
-                let mode = if chain.follow_only {
+                let mode = if chain.is_follow_only() {
                     ListeningMode::FollowChain
                 } else {
                     ListeningMode::FullChain
@@ -411,20 +411,11 @@ impl<Env: Environment> ClientContext<Env> {
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
         let chain_id = info.chain_id;
-        let mut new_chain = wallet::Chain {
+        let new_chain = wallet::Chain {
             pending_proposal: client.pending_proposal().clone(),
             owner: client.preferred_owner(),
             ..info.as_ref().into()
         };
-
-        if let Some(chain) = self
-            .wallet()
-            .get(chain_id)
-            .await
-            .map_err(error::Inner::wallet)?
-        {
-            new_chain.follow_only = chain.follow_only;
-        }
 
         self.wallet()
             .insert(chain_id, new_chain)
@@ -450,17 +441,6 @@ impl<Env: Environment> ClientContext<Env> {
             )
             .await
             .map_err(error::Inner::wallet)?;
-        Ok(())
-    }
-
-    /// Sets the `follow_only` flag for a chain in both the wallet and the in-memory client state.
-    pub async fn set_follow_only(&self, chain_id: ChainId, follow_only: bool) -> Result<(), Error> {
-        self.wallet()
-            .modify(chain_id, |chain| chain.follow_only = follow_only)
-            .await
-            .map_err(error::Inner::wallet)?
-            .ok_or_else(|| error::Inner::UnknownChainId(chain_id))?;
-        self.client.set_chain_follow_only(chain_id, follow_only);
         Ok(())
     }
 
@@ -519,15 +499,12 @@ impl<Env: Environment> ClientContext<Env> {
             return Err(error::Inner::ChainOwnership.into());
         }
 
-        // Try to modify existing chain entry, setting the owner and disabling follow-only mode.
+        // Try to modify existing chain entry, setting the owner.
         let timestamp = chain_description.timestamp();
         let epoch = chain_description.config().epoch;
         let modified = self
             .wallet()
-            .modify(chain_id, |chain| {
-                chain.owner = Some(owner);
-                chain.follow_only = false;
-            })
+            .modify(chain_id, |chain| chain.owner = Some(owner))
             .await
             .map_err(error::Inner::wallet)?;
         // If the chain didn't exist, insert a new entry.
@@ -614,7 +591,13 @@ impl<Env: Environment> ClientContext<Env> {
             "Changing ownership of a chain"
         );
         let time_start = Instant::now();
-        let ownership = ChainOwnership::try_from(ownership_config)?;
+        let mut ownership = chain_client.query_chain_ownership().await?;
+        ownership_config.update(&mut ownership)?;
+
+        if ownership.super_owners.is_empty() && ownership.owners.is_empty() {
+            tracing::error!("At least one owner or super owner of the chain has to be set.");
+            return Err(error::Inner::ChainOwnership.into());
+        }
 
         let certificate = self
             .apply_client_command(&chain_client, |chain_client| {
@@ -801,8 +784,10 @@ impl<Env: Environment> ClientContext<Env> {
     ) -> Result<ModuleId, Error> {
         info!("Loading bytecode files");
         let contract_bytecode = Bytecode::load_from_file(&contract)
+            .await
             .with_context(|| format!("failed to load contract bytecode from {:?}", &contract))?;
         let service_bytecode = Bytecode::load_from_file(&service)
+            .await
             .with_context(|| format!("failed to load service bytecode from {:?}", &service))?;
 
         info!("Publishing module");
