@@ -60,8 +60,14 @@ done
 # Backup ScyllaDB data volume info (for reference)
 echo ""
 echo "→ Getting volume information..."
-docker volume inspect linera-scylla-data 2>/dev/null >scylla-volume-info.json ||
-	echo "  ⚠️  ScyllaDB volume not found"
+
+SCYLLA_VOLUME_NAME=$(docker volume ls --format '{{.Name}}' | grep 'linera-scylla-data' | head -n1)
+if [ -n "$SCYLLA_VOLUME_NAME" ]; then
+    docker volume inspect "$SCYLLA_VOLUME_NAME" > scylla-volume-info.json
+    echo "  ✅ Found volume: $SCYLLA_VOLUME_NAME"
+else
+    echo "  ⚠️  ScyllaDB volume not found"
+fi
 
 # Backup docker-compose environment
 echo ""
@@ -113,7 +119,7 @@ Look for these files in your backup:
 ## Emergency Recovery
 
 If volumes are corrupted, you may need to:
-1. Delete the old volumes: `docker volume rm linera-scylla-data`
+1. Delete the old volumes: `docker volume rm $SCYLLA_VOLUME_NAME`
 2. Recreate from this backup
 3. Re-sync with the network
 

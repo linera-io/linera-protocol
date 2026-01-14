@@ -23,7 +23,7 @@ services:
       - /sys:/host/sys
       - /etc/sysctl.d:/host/sysctl.d
       - ./compose-scylla-setup.sh:/setup.sh:ro
-    command: ["/bin/bash", "/setup.sh", "--persist"]
+    command: [ "/bin/bash", "/setup.sh", "--persist" ]
     restart: "no"
 
   scylla:
@@ -52,7 +52,7 @@ services:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:latest}"
     container_name: proxy
     ports:
-      - "19100:19100"
+      - "19100:443"
     command:
       - ./linera-proxy
       - --storage
@@ -230,7 +230,7 @@ services:
     container_name: watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: ["--interval", "30"]
+    command: [ "--interval", "30" ]
 
 volumes:
   linera-scylla-data:
