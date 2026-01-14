@@ -1389,38 +1389,31 @@ where
         hashes: I,
     ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
         let hashes = hashes.into_iter().collect::<Vec<_>>();
-        if hashes.is_empty() {
-            return Ok(Vec::new());
-        }
-        let root_keys = Self::get_root_keys_for_certificates(&hashes);
-        let mut values = Vec::new();
-        for root_key in root_keys {
-            let store = self.database.open_shared(&root_key)?;
-            values.extend(store.read_multi_values_bytes(&get_block_keys()).await?);
-        }
-        #[cfg(with_metrics)]
-        metrics::READ_CERTIFICATES_COUNTER
-            .with_label_values(&[])
-            .inc_by(hashes.len() as u64);
-        let mut certificates = Vec::new();
-        for (pair, hash) in values.chunks_exact(2).zip(hashes) {
-            let certificate = Self::deserialize_certificate(pair, hash)?;
-            certificates.push(certificate);
-        }
-        Ok(certificates)
+        let raw_certs = self.read_certificates_raw(hashes.clone()).await?;
+
+        raw_certs
+            .into_iter()
+            .zip(hashes)
+            .map(|(maybe_raw, hash)| {
+                let Some((lite_cert_bytes, confirmed_block_bytes)) = maybe_raw else {
+                    return Ok(None);
+                };
+                let cert = bcs::from_bytes::<LiteCertificate>(&lite_cert_bytes)?;
+                let value = bcs::from_bytes::<ConfirmedBlock>(&confirmed_block_bytes)?;
+                assert_eq!(value.hash(), hash);
+                let certificate = cert
+                    .with_value(value)
+                    .ok_or(ViewError::InconsistentEntries)?;
+                Ok(Some(certificate))
+            })
+            .collect()
     }
 
-    /// Reads certificates by hashes.
-    ///
-    /// Returns a vector of tuples where the first element is a lite certificate
-    /// and the second element is confirmed block.
-    ///
-    /// It does not check if all hashes all returned.
     #[instrument(skip_all)]
     async fn read_certificates_raw<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
+    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError> {
         let hashes = hashes.into_iter().collect::<Vec<_>>();
         if hashes.is_empty() {
             return Ok(Vec::new());
@@ -1437,7 +1430,7 @@ where
             .inc_by(hashes.len() as u64);
         Ok(values
             .chunks_exact(2)
-            .filter_map(|chunk| {
+            .map(|chunk| {
                 let lite_cert_bytes = chunk[0].as_ref()?;
                 let confirmed_block_bytes = chunk[1].as_ref()?;
                 Some((lite_cert_bytes.clone(), confirmed_block_bytes.clone()))
@@ -1479,8 +1472,12 @@ where
             .read_certificate_hashes_by_heights(chain_id, heights)
             .await?;
 
-        self.read_certificates_raw(hashes.into_iter().flatten())
-            .await
+        Ok(self
+            .read_certificates_raw(hashes.into_iter().flatten())
+            .await?
+            .into_iter()
+            .flatten()
+            .collect())
     }
 
     #[instrument(skip_all, fields(%chain_id, heights_len = heights.len()))]

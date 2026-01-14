@@ -826,6 +826,7 @@ where
                 .await
                 .map_err(Self::view_error_to_status)?
                 .into_iter()
+                .flatten()
                 .collect();
             for (lite_cert_bytes, confirmed_block_bytes) in certificates {
                 if grpc_message_limiter

@@ -141,16 +141,15 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         hashes: I,
     ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError>;
 
-    /// Reads certificates by hashes.
+    /// Reads raw certificate bytes by hashes.
     ///
-    /// Returns a vector of tuples where the first element is a lite certificate
-    /// and the second element is confirmed block.
-    ///
-    /// It does not check if all hashes all returned.
+    /// Returns a vector where each element corresponds to the input hash.
+    /// Elements are `None` if no certificate exists for that hash.
+    /// Each found certificate is returned as `Some((lite_certificate_bytes, confirmed_block_bytes))`.
     async fn read_certificates_raw<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError>;
+    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError>;
 
     /// Reads certificates by heights for a given chain.
     /// Returns a vector where each element corresponds to the input height.
