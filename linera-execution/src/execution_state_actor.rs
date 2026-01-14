@@ -233,6 +233,11 @@ where
                 callback.respond(ownership);
             }
 
+            ApplicationPermissions { callback } => {
+                let permissions = self.state.system.application_permissions.get().clone();
+                callback.respond(permissions);
+            }
+
             ContainsKey { id, key, callback } => {
                 let view = self.state.users.try_load_entry(&id).await?;
                 let result = match view {
@@ -1155,6 +1160,11 @@ pub enum ExecutionRequest {
     ChainOwnership {
         #[debug(skip)]
         callback: Sender<ChainOwnership>,
+    },
+
+    ApplicationPermissions {
+        #[debug(skip)]
+        callback: Sender<ApplicationPermissions>,
     },
 
     ReadValueBytes {

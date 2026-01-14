@@ -470,7 +470,7 @@ impl Runnable for Job {
                 let follow_only = context
                     .wallet()
                     .get(chain_id)
-                    .is_some_and(|chain| chain.follow_only);
+                    .is_some_and(|chain| chain.is_follow_only());
                 if follow_only {
                     anyhow::bail!(
                         "Cannot process inbox for follow-only chain {chain_id}. \
@@ -1637,7 +1637,8 @@ impl Runnable for Job {
                     chain_client.fetch_chain_info().await?;
                 }
                 context.update_wallet_from_client(&chain_client).await?;
-                context.set_follow_only(chain_id, true).await?;
+                // Update the in-memory state to follow-only mode.
+                context.client.set_chain_follow_only(chain_id, true);
                 info!(
                     "Chain followed and added in {} ms",
                     start_time.elapsed().as_millis()

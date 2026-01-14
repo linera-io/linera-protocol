@@ -185,3 +185,31 @@ releases:
     installed: {{ env "LINERA_HELMFILE_SET_TEMPO_ENABLED" | default "false" }}
     values:
       - {{ env "LINERA_HELMFILE_VALUES_LINERA_CORE" | default "values-local.yaml.gotmpl" }}
+  - name: observability-alloy
+    version: 1.3.1
+    namespace: monitoring
+    chart: grafana/alloy
+    timeout: 900
+    installed: {{ eq (env "LINERA_HELMFILE_SET_ENABLE_OBSERVABILITY_ALLOY" | default "false") "true" }}
+    values:
+      - {{ env "LINERA_HELMFILE_VALUES_OBSERVABILITY_ALLOY" | default "values-observability-alloy.yaml.gotmpl" }}
+    hooks:
+      - events: ["presync"]
+        showlogs: true
+        command: bash
+        args:
+          - -c
+          - |
+            set -euxo pipefail
+
+            kube_args=(
+              {{- if .Values.kubeContext }}
+              --context {{ .Values.kubeContext }}
+              {{- end }}
+              {{- if .Values.kubeConfigPath }}
+              --kubeconfig {{ .Values.kubeConfigPath }}
+              {{- end }}
+            )
+
+            echo "Ensuring monitoring namespace exists..."
+            kubectl "${kube_args[@]}" create namespace monitoring 2>/dev/null || true

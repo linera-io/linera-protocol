@@ -699,6 +699,15 @@ where
         Ok(chain_ownership)
     }
 
+    fn application_permissions(&mut self) -> Result<ApplicationPermissions, ExecutionError> {
+        let this = self.inner();
+        let application_permissions = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::ApplicationPermissions { callback })?
+            .recv_response()?;
+        Ok(application_permissions)
+    }
+
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
         let mut this = self.inner();
         let id = this.current_application().id;

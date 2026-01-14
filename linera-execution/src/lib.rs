@@ -731,6 +731,9 @@ pub trait BaseRuntime {
     /// Reads the current ownership configuration for this chain.
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError>;
 
+    /// Reads the current application permissions for this chain.
+    fn application_permissions(&mut self) -> Result<ApplicationPermissions, ExecutionError>;
+
     /// Tests whether a key exists in the key-value store
     #[cfg(feature = "test")]
     fn contains_key(&mut self, key: Vec<u8>) -> Result<bool, ExecutionError> {

@@ -70,13 +70,11 @@ impl chain_listener::ClientContext for ClientContext {
         let info = client.chain_info().await?;
         let client_owner = client.preferred_owner();
         let pending_proposal = client.pending_proposal().clone();
-        let follow_only = client.is_follow_only();
         self.wallet().insert(
             info.chain_id,
             wallet::Chain {
                 pending_proposal,
                 owner: client_owner,
-                follow_only,
                 ..info.as_ref().into()
             },
         );
@@ -240,21 +238,20 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
         )),
     };
 
-    // Add chain A as follow-only. We *do* own it, but follow_only should prevent inbox processing.
+    // Add chain A as follow-only (no owner configured).
     context.wallet().insert(
         chain_a_id,
         wallet::Chain {
-            owner: chain_a.preferred_owner(),
+            owner: None,
             block_hash: chain_a_info.block_hash,
             next_block_height: chain_a_info.next_block_height,
             timestamp: clock.current_time(),
             pending_proposal: None,
             epoch: Some(chain_a_info.epoch),
-            follow_only: true,
         },
     );
 
-    // Add chain B as FullChain mode.
+    // Add chain B with an owner (not follow-only).
     context.wallet().insert(
         chain_b_id,
         wallet::Chain {
@@ -264,7 +261,6 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             timestamp: clock.current_time(),
             pending_proposal: None,
             epoch: Some(chain_b_info.epoch),
-            follow_only: false,
         },
     );
 
@@ -351,11 +347,11 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
         }
     }
 
-    // Verify the wallet was updated and follow_only is preserved.
+    // Verify the wallet was updated and chain A is still follow-only (no owner).
     let wallet_chain_a = context.lock().await.wallet().get(chain_a_id).unwrap();
     assert!(
-        wallet_chain_a.follow_only,
-        "follow_only flag should be preserved in wallet"
+        wallet_chain_a.is_follow_only(),
+        "chain A should still be follow-only (no owner)"
     );
 
     cancellation_token.cancel();

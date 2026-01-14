@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, TimeDelta, Timestamp},
     http,
     identifiers::{AccountOwner, ApplicationId, ChainId, DataBlobHash},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -134,6 +134,31 @@ macro_rules! impl_from_wit {
                     multi_leader_rounds,
                     open_multi_leader_rounds,
                     timeout_config: timeout_config.into(),
+                }
+            }
+        }
+
+        impl From<$wit_base_api::ApplicationPermissions> for ApplicationPermissions {
+            fn from(guest: $wit_base_api::ApplicationPermissions) -> ApplicationPermissions {
+                let $wit_base_api::ApplicationPermissions {
+                    execute_operations,
+                    mandatory_applications,
+                    manage_chain,
+                    call_service_as_oracle,
+                    make_http_requests,
+                } = guest;
+                ApplicationPermissions {
+                    execute_operations: execute_operations
+                        .map(|apps| apps.into_iter().map(Into::into).collect()),
+                    mandatory_applications: mandatory_applications
+                        .into_iter()
+                        .map(Into::into)
+                        .collect(),
+                    manage_chain: manage_chain.into_iter().map(Into::into).collect(),
+                    call_service_as_oracle: call_service_as_oracle
+                        .map(|apps| apps.into_iter().map(Into::into).collect()),
+                    make_http_requests: make_http_requests
+                        .map(|apps| apps.into_iter().map(Into::into).collect()),
                 }
             }
         }

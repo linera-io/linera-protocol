@@ -1,0 +1,290 @@
+# Values for observability-alloy - External metrics/logs/traces export
+# Deployed in monitoring namespace, scrapes from default namespace
+# This is COMPLETELY SEPARATE from pyroscope-alloy (eBPF profiling)
+
+alloy:
+  controller:
+    type: daemonset
+  # Expose OTLP receiver ports for traces ingestion
+  extraPorts:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+  configMap:
+    create: true
+    content: |-
+      // Grafana Alloy configuration for Linera validator observability
+      // Collects metrics, logs, and traces and forwards to central stack
+
+      // ==================== Prometheus Metrics Scraping ====================
+
+      // Discover Kubernetes pods for scraping (in default namespace)
+      discovery.kubernetes "pods" {
+        role = "pod"
+        namespaces {
+          names = ["default"]
+        }
+      }
+
+      // Relabel discovered pods to scrape all pods in namespace
+      discovery.relabel "linera_metrics" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "job"
+          replacement   = "linera-${1}"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "instance"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+
+        rule {
+          target_label  = "cluster"
+          replacement   = env("CLUSTER_NAME")
+        }
+
+        rule {
+          target_label  = "validator"
+          replacement   = env("VALIDATOR_NAME")
+        }
+
+        // Keep pods with a port named "metrics" (covers shards 21100, proxy 21100, block-exporter 9091)
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_port_name"]
+          regex         = "metrics"
+          action        = "keep"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_ip", "__meta_kubernetes_pod_container_port_number"]
+          separator     = ":"
+          target_label  = "__address__"
+        }
+      }
+
+      {{- if eq (env "LINERA_HELMFILE_SET_PROMETHEUS_ENABLED" | default "false") "true" }}
+      // ==================== Prometheus Metrics Export ====================
+
+      // Scrape metrics and forward to Prometheus exporter
+      prometheus.scrape "linera_metrics" {
+        targets = discovery.relabel.linera_metrics.output
+        forward_to = [otelcol.receiver.prometheus.default.receiver]
+        scrape_interval = "15s"
+        scrape_timeout  = "10s"
+      }
+
+      prometheus.exporter.self "alloy" {}
+
+      prometheus.scrape "alloy_metrics" {
+        targets    = prometheus.exporter.self.alloy.targets
+        forward_to = [otelcol.receiver.prometheus.default.receiver]
+      }
+
+      // Convert Prometheus metrics to OTLP format
+      otelcol.receiver.prometheus "default" {
+        output {
+          metrics = [otelcol.exporter.otlphttp.prometheus.input]
+        }
+      }
+
+      // Export Prometheus metrics as OTLP
+      otelcol.exporter.otlphttp "prometheus" {
+        client {
+          endpoint = env("PROMETHEUS_OTLP_URL")
+          auth = otelcol.auth.basic.prometheus_credentials.handler
+
+          tls {
+            insecure_skip_verify = false
+          }
+
+          compression = "gzip"
+        }
+      }
+
+      // Basic auth for Prometheus OTLP
+      otelcol.auth.basic "prometheus_credentials" {
+        username = env("PROMETHEUS_OTLP_USER")
+        password = env("PROMETHEUS_OTLP_PASS")
+      }
+      {{- else }}
+      // Prometheus export disabled - scrape but don't forward
+      prometheus.scrape "linera_metrics" {
+        targets = discovery.relabel.linera_metrics.output
+        forward_to = []
+        scrape_interval = "15s"
+        scrape_timeout  = "10s"
+      }
+
+      prometheus.exporter.self "alloy" {}
+
+      prometheus.scrape "alloy_metrics" {
+        targets    = prometheus.exporter.self.alloy.targets
+        forward_to = []
+      }
+      {{- end }}
+
+      {{- if eq (env "LINERA_HELMFILE_SET_LOKI_ENABLED" | default "false") "true" }}
+      // ==================== Loki Logs Collection ====================
+
+      // Discover Kubernetes pods for log collection (in default namespace)
+      discovery.kubernetes "pod_logs" {
+        role = "pod"
+        namespaces {
+          names = ["default"]
+        }
+      }
+
+      // Relabel discovered pods for log collection
+      discovery.relabel "pod_logs" {
+        targets = discovery.kubernetes.pod_logs.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+
+        rule {
+          target_label  = "cluster"
+          replacement   = env("CLUSTER_NAME")
+        }
+
+        rule {
+          target_label  = "validator"
+          replacement   = env("VALIDATOR_NAME")
+        }
+      }
+
+      // Read pod logs and forward to Loki
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pod_logs.output
+        forward_to = [loki.write.central.receiver]
+      }
+
+      // Write logs to external Loki
+      loki.write "central" {
+        endpoint {
+          url = env("LOKI_PUSH_URL")
+
+          basic_auth {
+            username = env("LOKI_PUSH_USER")
+            password = env("LOKI_PUSH_PASS")
+          }
+
+          tls_config {
+            insecure_skip_verify = false
+          }
+        }
+
+        external_labels = {
+          cluster   = env("CLUSTER_NAME"),
+          validator = env("VALIDATOR_NAME"),
+        }
+      }
+      {{- end }}
+
+      {{- if eq (env "LINERA_HELMFILE_SET_TEMPO_ENABLED" | default "false") "true" }}
+      // ==================== Tempo Traces Collection ====================
+      // Receives traces via OTLP and forwards to BOTH local Tempo (preserves local monitoring)
+      // AND central Tempo (external monitoring stack)
+
+      // OTLP receiver for traces
+      otelcol.receiver.otlp "default" {
+        grpc {
+          endpoint = "0.0.0.0:4317"
+        }
+
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+
+        output {
+          // Fan-out to both local and central Tempo
+          traces = [
+            otelcol.exporter.otlp.local_tempo.input,
+            otelcol.exporter.otlphttp.central.input,
+          ]
+        }
+      }
+
+      // Export traces to LOCAL Tempo (preserves existing local monitoring)
+      // Uses gRPC OTLP to local Tempo in tempo namespace
+      otelcol.exporter.otlp "local_tempo" {
+        client {
+          endpoint = "tempo.tempo.svc.cluster.local:4317"
+
+          tls {
+            insecure = true
+          }
+        }
+      }
+
+      // Export traces to external/central Tempo
+      otelcol.exporter.otlphttp "central" {
+        client {
+          endpoint = env("TEMPO_OTLP_URL")
+          auth = otelcol.auth.basic.credentials.handler
+
+          tls {
+            insecure_skip_verify = false
+          }
+        }
+      }
+
+      // Basic auth for central OTLP
+      otelcol.auth.basic "credentials" {
+        username = env("TEMPO_OTLP_USER")
+        password = env("TEMPO_OTLP_PASS")
+      }
+      {{- end }}
+  extraEnv:
+    - name: CLUSTER_NAME
+      value: {{ env "LINERA_HELMFILE_SET_NETWORK_NAME" | default "" | quote }}
+    - name: VALIDATOR_NAME
+      value: {{ env "LINERA_HELMFILE_VALIDATOR_DOMAIN_NAME" | default "" | quote }}
+    - name: PROMETHEUS_ENABLED
+      value: {{ env "LINERA_HELMFILE_SET_PROMETHEUS_ENABLED" | default "false" | quote }}
+    - name: PROMETHEUS_OTLP_URL
+      value: {{ env "LINERA_HELMFILE_SET_PROMETHEUS_OTLP_URL" | default "" | quote }}
+    - name: PROMETHEUS_OTLP_USER
+      value: {{ env "LINERA_HELMFILE_SET_PROMETHEUS_OTLP_USER" | default "" | quote }}
+    - name: PROMETHEUS_OTLP_PASS
+      value: {{ env "LINERA_HELMFILE_SET_PROMETHEUS_OTLP_PASS" | default "" | quote }}
+    - name: LOKI_ENABLED
+      value: {{ env "LINERA_HELMFILE_SET_LOKI_ENABLED" | default "false" | quote }}
+    - name: LOKI_PUSH_URL
+      value: {{ env "LINERA_HELMFILE_SET_LOKI_PUSH_URL" | default "" | quote }}
+    - name: LOKI_PUSH_USER
+      value: {{ env "LINERA_HELMFILE_SET_LOKI_PUSH_USER" | default "" | quote }}
+    - name: LOKI_PUSH_PASS
+      value: {{ env "LINERA_HELMFILE_SET_LOKI_PUSH_PASS" | default "" | quote }}
+    - name: TEMPO_ENABLED
+      value: {{ env "LINERA_HELMFILE_SET_TEMPO_ENABLED" | default "false" | quote }}
+    - name: TEMPO_OTLP_URL
+      value: {{ env "LINERA_HELMFILE_SET_TEMPO_OTLP_URL" | default "" | quote }}
+    - name: TEMPO_OTLP_USER
+      value: {{ env "LINERA_HELMFILE_SET_TEMPO_OTLP_USER" | default "" | quote }}
+    - name: TEMPO_OTLP_PASS
+      value: {{ env "LINERA_HELMFILE_SET_TEMPO_OTLP_PASS" | default "" | quote }}
