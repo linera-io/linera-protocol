@@ -292,6 +292,14 @@ impl<Env: Environment> Client<Env> {
         self.environment.signer()
     }
 
+    /// Returns whether the signer has a key for the given owner.
+    pub async fn has_key_for(&self, owner: &AccountOwner) -> Result<bool, ChainClientError> {
+        self.signer()
+            .contains_key(owner)
+            .await
+            .map_err(ChainClientError::signer_failure)
+    }
+
     /// Returns a reference to the client's [`Wallet`][crate::environment::Wallet].
     pub fn wallet(&self) -> &Env::Wallet {
         self.environment.wallet()
@@ -3679,9 +3687,14 @@ impl<Env: Environment> ChainClient<Env> {
                 .and_then(|blobs| blobs.last())
                 .ok_or_else(|| ChainClientError::InternalError("Failed to create a new chain"))?;
             let description = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?;
-            // Add the new chain to the list of tracked chains with full participation.
-            self.client
-                .extend_chain_mode(description.id(), ListeningMode::FullChain);
+            // If we have a key for any owner, add it to the list of tracked chains.
+            for owner in ownership.all_owners() {
+                if self.client.has_key_for(owner).await? {
+                    self.client
+                        .extend_chain_mode(description.id(), ListeningMode::FullChain);
+                    break;
+                }
+            }
             self.client
                 .local_node
                 .retry_pending_cross_chain_requests(self.chain_id)

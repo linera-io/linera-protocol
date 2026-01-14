@@ -13,7 +13,7 @@ use futures::{
     Future, FutureExt as _, StreamExt,
 };
 use linera_base::{
-    crypto::{CryptoHash, Signer},
+    crypto::CryptoHash,
     data_types::{ChainDescription, Timestamp},
     identifiers::{AccountOwner, BlobType, ChainId},
     task::NonBlockingFuture,
@@ -356,6 +356,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             .await?
             .ok_or(ChainClientError::MissingConfirmedBlock(hash))?
             .into_block();
+        let parent_chain_id = block.header.chain_id;
         let blobs = block.created_blobs().into_iter();
         let new_chains = blobs
             .filter_map(|(blob_id, blob)| {
@@ -377,13 +378,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         let mut context_guard = self.context.lock().await;
         for (new_chain_id, owners, epoch) in new_chains {
             for chain_owner in owners {
-                if context_guard
-                    .client()
-                    .signer()
-                    .contains_key(&chain_owner)
-                    .await
-                    .map_err(ChainClientError::signer_failure)?
-                {
+                if context_guard.client().has_key_for(&chain_owner).await? {
                     context_guard
                         .update_wallet_for_new_chain(
                             new_chain_id,
@@ -392,9 +387,21 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                             epoch,
                         )
                         .await?;
+                    context_guard
+                        .client()
+                        .extend_chain_mode(new_chain_id, ListeningMode::FullChain);
                     new_ids.insert(new_chain_id, ListeningMode::FullChain);
                 }
             }
+        }
+        // Re-process the parent chain's outboxes now that the new chains are tracked.
+        // This ensures cross-chain messages to newly created chains are delivered.
+        if !new_ids.is_empty() {
+            context_guard
+                .client()
+                .local_node
+                .retry_pending_cross_chain_requests(parent_chain_id)
+                .await?;
         }
         drop(context_guard);
         self.listen_recursively(new_ids).await?;
@@ -585,13 +592,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                             let context_guard = self.context.lock().await;
                             for (chain_id, owner) in new_chains {
                                 if let Some(owner) = owner {
-                                    if context_guard
-                                        .client()
-                                        .signer()
-                                        .contains_key(&owner)
-                                        .await
-                                        .map_err(ChainClientError::signer_failure)?
-                                    {
+                                    if context_guard.client().has_key_for(&owner).await? {
                                         context_guard
                                             .client()
                                             .extend_chain_mode(chain_id, ListeningMode::FullChain);
