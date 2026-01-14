@@ -374,6 +374,56 @@ where
         status.set_source(Arc::new(err));
         status
     }
+
+    /// Fallback method to get certificate hashes by heights using ChainInfoQuery.
+    /// Also writes the height→hash indices back to storage for future lookups.
+    async fn get_certificate_hashes_by_heights_fallback(
+        &self,
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    ) -> Result<Vec<linera_base::crypto::CryptoHash>, Status> {
+        let chain_info_request =
+            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(heights.clone());
+
+        let chain_info_response = self
+            .handle_chain_info_query(Request::new(chain_info_request.try_into()?))
+            .await?;
+
+        let chain_info_result = chain_info_response.into_inner();
+
+        let hashes: Vec<linera_base::crypto::CryptoHash> = match chain_info_result.inner {
+            Some(api::chain_info_result::Inner::ChainInfoResponse(response)) => {
+                let chain_info: ChainInfo =
+                    bincode::deserialize(&response.chain_info).map_err(|e| {
+                        Status::internal(format!("Failed to deserialize ChainInfo: {}", e))
+                    })?;
+                chain_info.requested_sent_certificate_hashes
+            }
+            Some(api::chain_info_result::Inner::Error(error)) => {
+                let error =
+                    bincode::deserialize(&error).unwrap_or_else(|err| NodeError::GrpcError {
+                        error: format!("failed to unmarshal error message: {}", err),
+                    });
+                return Err(Status::internal(format!(
+                    "Chain info query failed: {error}"
+                )));
+            }
+            None => {
+                return Err(Status::internal("Empty chain info result"));
+            }
+        };
+
+        // Write back the height->hash indices we learned from the fallback
+        let indices: Vec<(BlockHeight, linera_base::crypto::CryptoHash)> =
+            heights.into_iter().zip(hashes.iter().copied()).collect();
+        self.0
+            .storage
+            .write_certificate_height_indices(chain_id, &indices)
+            .await
+            .map_err(Self::view_error_to_status)?;
+
+        Ok(hashes)
+    }
 }
 
 #[async_trait]
@@ -697,48 +747,9 @@ where
         }
 
         // Fallback to the traditional approach using chain info query
-        let chain_info_request =
-            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(heights.clone());
-
-        // Use handle_chain_info_query to get the certificate hashes
-        let chain_info_response = self
-            .handle_chain_info_query(Request::new(chain_info_request.try_into()?))
+        let hashes = self
+            .get_certificate_hashes_by_heights_fallback(chain_id, heights)
             .await?;
-
-        // Extract the ChainInfoResult from the response
-        let chain_info_result = chain_info_response.into_inner();
-
-        // Extract the certificate hashes from the ChainInfo
-        let hashes: Vec<linera_base::crypto::CryptoHash> = match chain_info_result.inner {
-            Some(api::chain_info_result::Inner::ChainInfoResponse(response)) => {
-                let chain_info: ChainInfo =
-                    bincode::deserialize(&response.chain_info).map_err(|e| {
-                        Status::internal(format!("Failed to deserialize ChainInfo: {}", e))
-                    })?;
-                chain_info.requested_sent_certificate_hashes
-            }
-            Some(api::chain_info_result::Inner::Error(error)) => {
-                let error =
-                    bincode::deserialize(&error).unwrap_or_else(|err| NodeError::GrpcError {
-                        error: format!("failed to unmarshal error message: {}", err),
-                    });
-                return Err(Status::internal(format!(
-                    "Chain info query failed: {error}"
-                )));
-            }
-            None => {
-                return Err(Status::internal("Empty chain info result"));
-            }
-        };
-
-        // Write back the height->hash indices we learned from the fallback
-        let indices: Vec<(BlockHeight, linera_base::crypto::CryptoHash)> =
-            heights.into_iter().zip(hashes.iter().copied()).collect();
-        self.0
-            .storage
-            .write_certificate_height_indices(chain_id, &indices)
-            .await
-            .map_err(Self::view_error_to_status)?;
 
         // Use download_certificates to get the actual certificates
         let certificates_request = CertificatesBatchRequest {
@@ -796,48 +807,9 @@ where
         }
 
         // Fallback to the traditional approach using chain info query
-        let chain_info_request =
-            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(heights.clone());
-
-        // Use handle_chain_info_query to get the certificate hashes
-        let chain_info_response = self
-            .handle_chain_info_query(Request::new(chain_info_request.try_into()?))
+        let hashes = self
+            .get_certificate_hashes_by_heights_fallback(chain_id, heights)
             .await?;
-
-        // Extract the ChainInfoResult from the response
-        let chain_info_result = chain_info_response.into_inner();
-
-        // Extract the certificate hashes from the ChainInfo
-        let hashes: Vec<linera_base::crypto::CryptoHash> = match chain_info_result.inner {
-            Some(api::chain_info_result::Inner::ChainInfoResponse(response)) => {
-                let chain_info: ChainInfo =
-                    bincode::deserialize(&response.chain_info).map_err(|e| {
-                        Status::internal(format!("Failed to deserialize ChainInfo: {}", e))
-                    })?;
-                chain_info.requested_sent_certificate_hashes
-            }
-            Some(api::chain_info_result::Inner::Error(error)) => {
-                let error =
-                    bincode::deserialize(&error).unwrap_or_else(|err| NodeError::GrpcError {
-                        error: format!("failed to unmarshal error message: {}", err),
-                    });
-                return Err(Status::internal(format!(
-                    "Chain info query failed: {error}"
-                )));
-            }
-            None => {
-                return Err(Status::internal("Empty chain info result"));
-            }
-        };
-
-        // Write back the height->hash indices we learned from the fallback
-        let indices: Vec<(BlockHeight, linera_base::crypto::CryptoHash)> =
-            heights.into_iter().zip(hashes.iter().copied()).collect();
-        self.0
-            .storage
-            .write_certificate_height_indices(chain_id, &indices)
-            .await
-            .map_err(Self::view_error_to_status)?;
 
         // Use 70% of the max message size as a buffer capacity.
         // Leave 30% as overhead.
