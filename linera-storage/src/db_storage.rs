@@ -1469,30 +1469,55 @@ where
         Ok(hash_options)
     }
 
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, hash_opt)| {
-                hash_opt.inspect(|hash| {
-                    hash_to_indices.entry(*hash).or_default().push(idx);
-                })
-            })
-            .collect();
+    #[instrument(skip_all)]
+    async fn read_certificates_by_heights_raw(
+        &self,
+        chain_id: ChainId,
+        heights: &[BlockHeight],
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
+        let hashes: Vec<Option<CryptoHash>> = self
+            .read_certificate_hashes_by_heights(chain_id, heights)
+            .await?;
 
-        // Step 3: Batch read certificates using existing method
-        let certificates = self.read_certificates(valid_hashes.clone()).await?;
+        self.read_certificates_raw(hashes.into_iter().flatten())
+            .await
+    }
 
-        // Step 4: Build result vector maintaining original order
-        let mut result = vec![None; heights.len()];
-        for (cert_opt, hash) in certificates.into_iter().zip(valid_hashes) {
-            if let Some(cert) = cert_opt {
-                if let Some(indices) = hash_to_indices.get(&hash) {
-                    for &idx in indices {
-                        result[idx] = Some(cert.clone());
-                    }
-                }
+    #[instrument(skip_all, fields(%chain_id, heights_len = heights.len()))]
+    async fn read_certificates_by_heights(
+        &self,
+        chain_id: ChainId,
+        heights: &[BlockHeight],
+    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
+        let valid_hashes: Vec<Option<CryptoHash>> = self
+            .read_certificate_hashes_by_heights(chain_id, heights)
+            .await?;
+
+        let mut indices = HashMap::new();
+        for (index, maybe_hash) in valid_hashes.iter().enumerate() {
+            if let Some(hash) = maybe_hash {
+                indices.insert(*hash, index);
             }
         }
 
+        let mut result: Vec<Option<ConfirmedBlockCertificate>> = vec![None; heights.len()];
+
+        for certificate in self
+            .read_certificates(valid_hashes.into_iter().flatten())
+            .await?
+            .into_iter()
+            .flatten()
+        {
+            if let Some(index) = indices.get(&certificate.hash()) {
+                result[*index] = Some(certificate);
+            } else {
+                // This should not happen, but log a warning if it does.
+                tracing::warn!(
+                    hash=?certificate.hash(),
+                    "certificate hash not found in indices map",
+                );
+            }
+        }
         Ok(result)
     }
 

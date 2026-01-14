@@ -755,16 +755,60 @@ where
         request: Request<api::DownloadCertificatesByHeightsRequest>,
     ) -> Result<Response<api::RawCertificatesBatch>, Status> {
         let original_request: CertificatesByHeightRequest = request.into_inner().try_into()?;
-        let chain_info_request = ChainInfoQuery::new(original_request.chain_id)
-            .with_sent_certificate_hashes_by_heights(original_request.heights);
+        let chain_id = original_request.chain_id;
+        let heights = original_request.heights;
+
+        // First, try the direct height-based lookup
+        let raw_certificates_by_height = self
+            .0
+            .storage
+            .read_certificates_by_heights_raw(chain_id, &heights)
+            .await
+            .map_err(Self::view_error_to_status)?;
+
+        // Check if we got all certificates (no None values)
+        let all_found = raw_certificates_by_height.len() == heights.len();
+
+        if all_found {
+            // Use 70% of the max message size as a buffer capacity.
+            // Leave 30% as overhead.
+            let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
+                GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
+
+            let mut returned_certificates = vec![];
+
+            for (lite_cert_bytes, confirmed_block_bytes) in raw_certificates_by_height {
+                if grpc_message_limiter
+                    .fits_raw(lite_cert_bytes.len() + confirmed_block_bytes.len())
+                {
+                    returned_certificates.push(RawCertificate {
+                        lite_certificate: lite_cert_bytes,
+                        confirmed_block: confirmed_block_bytes,
+                    });
+                } else {
+                    break;
+                }
+            }
+
+            return Ok(Response::new(RawCertificatesBatch {
+                certificates: returned_certificates,
+            }));
+        }
+
+        // Fallback to the traditional approach using chain info query
+        let chain_info_request =
+            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(heights.clone());
+
         // Use handle_chain_info_query to get the certificate hashes
         let chain_info_response = self
             .handle_chain_info_query(Request::new(chain_info_request.try_into()?))
             .await?;
+
         // Extract the ChainInfoResult from the response
         let chain_info_result = chain_info_response.into_inner();
+
         // Extract the certificate hashes from the ChainInfo
-        let hashes = match chain_info_result.inner {
+        let hashes: Vec<linera_base::crypto::CryptoHash> = match chain_info_result.inner {
             Some(api::chain_info_result::Inner::ChainInfoResponse(response)) => {
                 let chain_info: ChainInfo =
                     bincode::deserialize(&response.chain_info).map_err(|e| {
@@ -785,6 +829,15 @@ where
                 return Err(Status::internal("Empty chain info result"));
             }
         };
+
+        // Write back the height->hash indices we learned from the fallback
+        let indices: Vec<(BlockHeight, linera_base::crypto::CryptoHash)> =
+            heights.into_iter().zip(hashes.iter().copied()).collect();
+        self.0
+            .storage
+            .write_certificate_height_indices(chain_id, &indices)
+            .await
+            .map_err(Self::view_error_to_status)?;
 
         // Use 70% of the max message size as a buffer capacity.
         // Leave 30% as overhead.

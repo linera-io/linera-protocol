@@ -161,6 +161,16 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         heights: &[BlockHeight],
     ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError>;
 
+    /// Reads raw certificates by heights for a given chain.
+    /// Returns a vector where each element corresponds to the input height.
+    /// Elements are `None` if no certificate exists at that height.
+    /// Each found certificate is returned as a tuple of (lite_certificate_bytes, confirmed_block_bytes).
+    async fn read_certificates_by_heights_raw(
+        &self,
+        chain_id: ChainId,
+        heights: &[BlockHeight],
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError>;
+
     /// Returns a vector of certificate hashes for the requested chain and heights.
     /// The resulting vector maintains the order of the input `heights` argument.
     /// Elements are `None` if no certificate exists at that height.
