@@ -1445,17 +1445,15 @@ where
             .collect())
     }
 
-    #[instrument(skip_all, fields(%chain_id, heights_len = heights.len()))]
-    async fn read_certificates_by_heights(
+    async fn read_certificate_hashes_by_heights(
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
+    ) -> Result<Vec<Option<CryptoHash>>, ViewError> {
         if heights.is_empty() {
             return Ok(Vec::new());
         }
 
-        // Step 1: Read all hashes from the height index (following event pattern)
         let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
         let store = self.database.open_shared(&index_root_key)?;
         let height_keys: Vec<Vec<u8>> = heights.iter().map(|h| to_height_key(*h)).collect();
@@ -1468,9 +1466,9 @@ where
             })
             .collect::<Result<_, _>>()?;
 
-        // Step 2: Collect valid hashes and build index mapping
-        let mut hash_to_indices: HashMap<CryptoHash, Vec<usize>> = HashMap::new();
-        let valid_hashes: Vec<CryptoHash> = hash_options
+        Ok(hash_options)
+    }
+
             .iter()
             .enumerate()
             .filter_map(|(idx, hash_opt)| {
