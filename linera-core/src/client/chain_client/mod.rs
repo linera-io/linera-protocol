@@ -2046,8 +2046,16 @@ impl<Env: Environment> ChainClient<Env> {
         application_permissions: ApplicationPermissions,
         balance: Amount,
     ) -> Result<ClientOutcome<(ChainDescription, ConfirmedBlockCertificate)>, Error> {
+        // Check if we have a key for any owner before consuming ownership.
+        let mut has_key = false;
+        for owner in ownership.all_owners() {
+            if self.has_key_for(owner).await? {
+                has_key = true;
+                break;
+            }
+        }
         let config = OpenChainConfig {
-            ownership: ownership.clone(),
+            ownership,
             balance,
             application_permissions,
         };
@@ -2071,12 +2079,9 @@ impl<Env: Environment> ChainClient<Env> {
             .ok_or_else(|| Error::InternalError("Failed to create a new chain"))?;
         let description = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?;
         // If we have a key for any owner, add it to the list of tracked chains.
-        for owner in ownership.all_owners() {
-            if self.has_key_for(owner).await? {
-                self.client
-                    .extend_chain_mode(description.id(), ListeningMode::FullChain);
-                break;
-            }
+        if has_key {
+            self.client
+                .extend_chain_mode(description.id(), ListeningMode::FullChain);
         }
         self.client
             .local_node
