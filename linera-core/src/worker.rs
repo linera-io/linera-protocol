@@ -39,7 +39,9 @@ use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, warn};
 
 /// Re-export of [`EventSubscriptionsResult`] for use by other crate modules.
-pub(crate) use crate::chain_worker::EventSubscriptionsResult;
+pub(crate) use crate::chain_worker::{
+    ChainWorkerRequestReceiver, ChainWorkerRequestSender, EventSubscriptionsResult,
+};
 use crate::{
     chain_worker::{
         BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier,
@@ -841,10 +843,10 @@ where
         let request = request_builder(callback);
 
         // Call the endpoint, possibly a new one.
-        let new_receiver = self.call_and_maybe_create_chain_worker_endpoint(chain_id, request)?;
+        let new_channel = self.call_and_maybe_create_chain_worker_endpoint(chain_id, request)?;
 
-        // We just created an endpoint: spawn the actor.
-        if let Some(receiver) = new_receiver {
+        // We just created a channel: spawn the actor.
+        if let Some((sender, receiver)) = new_channel {
             let delivery_notifier = self
                 .delivery_notifiers
                 .lock()
@@ -869,6 +871,7 @@ where
                 self.chain_modes.clone(),
                 delivery_notifier,
                 chain_id,
+                sender,
                 receiver,
                 is_tracked,
             );
@@ -893,6 +896,9 @@ where
     }
 
     /// Find an endpoint and call it. Create the endpoint if necessary.
+    ///
+    /// Returns `Some((sender, receiver))` if a new channel was created and the actor needs to be
+    /// spawned, or `None` if an existing endpoint was used.
     #[instrument(level = "trace", skip(self), fields(
         nickname = %self.nickname,
         chain_id = %chain_id
@@ -903,22 +909,19 @@ where
         chain_id: ChainId,
         request: ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<
-        Option<
-            mpsc::UnboundedReceiver<(
-                ChainWorkerRequest<StorageClient::Context>,
-                tracing::Span,
-                Instant,
-            )>,
-        >,
+        Option<(
+            ChainWorkerRequestSender<StorageClient::Context>,
+            ChainWorkerRequestReceiver<StorageClient::Context>,
+        )>,
         WorkerError,
     > {
         let mut chain_workers = self.chain_workers.lock().unwrap();
 
-        let (sender, new_receiver) = if let Some(endpoint) = chain_workers.remove(&chain_id) {
+        let (sender, new_channel) = if let Some(endpoint) = chain_workers.remove(&chain_id) {
             (endpoint, None)
         } else {
             let (sender, receiver) = mpsc::unbounded_channel();
-            (sender, Some(receiver))
+            (sender.clone(), Some((sender, receiver)))
         };
 
         if let Err(e) = sender.send((request, tracing::Span::current(), Instant::now())) {
@@ -932,7 +935,7 @@ where
         // Put back the sender in the cache for next time.
         chain_workers.insert(chain_id, sender);
 
-        Ok(new_receiver)
+        Ok(new_channel)
     }
 
     #[instrument(skip_all, fields(
