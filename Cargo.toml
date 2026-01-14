@@ -65,7 +65,7 @@ exclude = ["examples", "scripts"]
 resolver = "2"
 
 [workspace.package]
-version = "0.15.8"
+version = "0.15.9"
 authors = ["Linera <contact@linera.io>"]
 repository = "https://github.com/linera-io/linera-protocol"
 homepage = "https://linera.dev"
