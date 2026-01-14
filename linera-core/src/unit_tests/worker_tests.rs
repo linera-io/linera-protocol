@@ -751,12 +751,13 @@ where
     use tokio::task::yield_now;
 
     let mut signer = InMemorySigner::new(None);
+    let storage = storage_builder.build().await?;
+    let clock = storage_builder.clock();
     let public_key = signer.generate_new();
     let owner = public_key.into();
     let balance = Amount::from_tokens(5);
     let small_transfer = Amount::from_micros(1);
-    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
-    let clock = storage_builder.clock();
+    let mut env = TestEnvironment::new(storage, false, false).await;
     let chain_1_desc = env.add_root_chain(1, owner, balance).await;
     let chain_2_desc = env.add_root_chain(2, owner, balance).await;
     let chain_1 = chain_1_desc.id();
@@ -770,7 +771,7 @@ where
     clock.set(Timestamp::from(1000)); // Current time is 1000.
     let proposed_block = make_first_block(chain_1)
         .with_simple_transfer(chain_2, small_transfer)
-        .with_authenticated_owner(Some(owner))
+        .with_authenticated_signer(Some(owner))
         .with_timestamp(past_timestamp);
     let block_proposal = proposed_block
         .clone()
@@ -779,17 +780,17 @@ where
         .unwrap();
     // Stage execution to get the block for certificate creation.
     let (block, _) = env
-        .executing_worker()
+        .worker()
         .stage_block_execution(proposed_block, None, vec![])
         .await?;
     // Past timestamp should be handled immediately (and succeed).
     let result = env
-        .executing_worker()
+        .worker()
         .handle_block_proposal(block_proposal)
         .await;
     assert!(result.is_ok(), "Past timestamp should be accepted");
     let certificate = env.make_certificate(ConfirmedBlock::new(block));
-    env.executing_worker()
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
@@ -798,7 +799,7 @@ where
     clock.set(current_timestamp);
     let proposed_block = make_child_block(&certificate.clone().into_value())
         .with_simple_transfer(chain_2, small_transfer)
-        .with_authenticated_owner(Some(owner))
+        .with_authenticated_signer(Some(owner))
         .with_timestamp(current_timestamp);
     let block_proposal = proposed_block
         .clone()
@@ -806,16 +807,16 @@ where
         .await
         .unwrap();
     let (block, _) = env
-        .executing_worker()
+        .worker()
         .stage_block_execution(proposed_block, None, vec![])
         .await?;
     let result = env
-        .executing_worker()
+        .worker()
         .handle_block_proposal(block_proposal)
         .await;
     assert!(result.is_ok(), "Current timestamp should be accepted");
     let certificate = env.make_certificate(ConfirmedBlock::new(block));
-    env.executing_worker()
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
@@ -824,7 +825,7 @@ where
     clock.set(Timestamp::from(3000));
     let proposed_block = make_child_block(&certificate.clone().into_value())
         .with_simple_transfer(chain_2, small_transfer)
-        .with_authenticated_owner(Some(owner))
+        .with_authenticated_signer(Some(owner))
         .with_timestamp(future_timestamp);
     let block_proposal = proposed_block
         .clone()
@@ -832,12 +833,12 @@ where
         .await
         .unwrap();
     let (block, _) = env
-        .executing_worker()
+        .worker()
         .stage_block_execution(proposed_block, None, vec![])
         .await?;
 
     // Spawn the proposal handling. It should not complete immediately.
-    let worker = env.executing_worker().clone();
+    let worker = env.worker().clone();
     let mut future = Box::pin(worker.handle_block_proposal(block_proposal));
 
     // Give the task a chance to run.
@@ -861,7 +862,7 @@ where
         "Future timestamp within grace period should succeed after delay"
     );
     let certificate = env.make_certificate(ConfirmedBlock::new(block));
-    env.executing_worker()
+    env.worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
@@ -870,7 +871,7 @@ where
     clock.set(Timestamp::from(4000));
     let proposed_block = make_child_block(&certificate.into_value())
         .with_simple_transfer(chain_2, small_transfer)
-        .with_authenticated_owner(Some(owner))
+        .with_authenticated_signer(Some(owner))
         .with_timestamp(far_future_timestamp);
     let block_proposal = proposed_block
         .into_first_proposal(owner, &signer)
@@ -878,7 +879,7 @@ where
         .unwrap();
     // Far-future timestamp should be rejected immediately.
     assert_matches!(
-        env.executing_worker()
+        env.worker()
             .handle_block_proposal(block_proposal)
             .await,
         Err(WorkerError::InvalidTimestamp { .. })
