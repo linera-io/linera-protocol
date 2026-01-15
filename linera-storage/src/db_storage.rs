@@ -1465,17 +1465,41 @@ where
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
+    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError> {
         let hashes: Vec<Option<CryptoHash>> = self
             .read_certificate_hashes_by_heights(chain_id, heights)
             .await?;
 
-        Ok(self
-            .read_certificates_raw(hashes.into_iter().flatten())
+        // Map from hash to index in the heights array
+        let mut indices = HashMap::new();
+        for (index, maybe_hash) in hashes.iter().enumerate() {
+            if let Some(hash) = maybe_hash {
+                indices.insert(*hash, index);
+            }
+        }
+
+        let existing_hashes = hashes.into_iter().flatten().collect::<Vec<_>>();
+
+        let mut result = vec![None; heights.len()];
+
+        for (raw_cert, hash) in self
+            .read_certificates_raw(&existing_hashes)
             .await?
             .into_iter()
-            .flatten()
-            .collect())
+            .zip(existing_hashes)
+        {
+            if let Some(index) = indices.get(&hash) {
+                result[*index] = raw_cert;
+            } else {
+                // This should not happen, but log a warning if it does.
+                tracing::warn!(
+                    hash=?hash,
+                    "certificate hash not found in indices map",
+                );
+            }
+        }
+
+        Ok(result)
     }
 
     #[instrument(skip_all, fields(%chain_id, heights_len = heights.len()))]

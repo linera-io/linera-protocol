@@ -168,7 +168,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError>;
+    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError>;
 
     /// Returns a vector of certificate hashes for the requested chain and heights.
     /// The resulting vector maintains the order of the input `heights` argument.
