@@ -957,30 +957,18 @@ where
             async move {
                 // Get all block hashes for this chain at the specified heights in one call
                 let heights_vec: Vec<_> = heights.into_iter().collect();
-                let hashes = updater
-                    .client
-                    .local_node
-                    .get_block_hashes(chain_id, heights_vec.clone())
-                    .await?;
-
-                if hashes.len() != heights_vec.len() {
-                    return Err(chain_client::Error::InternalError(
-                        "send_chain_info_at_heights called with invalid heights",
-                    ));
-                }
-
-                // Read all certificates in one call
                 let certificates = updater
                     .client
                     .local_node
                     .storage_client()
-                    .read_certificates(&hashes)
-                    .await?;
+                    .read_certificates_by_heights(chain_id, &heights_vec)
+                    .await?
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
 
                 // Send each certificate
-                for (hash, certificate) in hashes.into_iter().zip(certificates) {
-                    let certificate = certificate
-                        .ok_or_else(|| chain_client::Error::MissingConfirmedBlock(hash))?;
+                for certificate in certificates {
                     updater
                         .send_confirmed_certificate(certificate, delivery)
                         .await?;

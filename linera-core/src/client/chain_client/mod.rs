@@ -51,7 +51,7 @@ use linera_execution::{
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
-use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
+use linera_storage::{Clock as _, Storage as _};
 use linera_views::ViewError;
 use rand::seq::SliceRandom;
 use serde::Serialize;
@@ -2824,24 +2824,15 @@ impl<Env: Environment> ChainClient<Env> {
             .map(BlockHeight)
             .collect();
 
-        let missing_certificate_hashes = self
-            .client
-            .local_node
-            .get_block_hashes(self.chain_id, heights)
-            .await?;
-
         let certificates = self
             .client
             .storage_client()
-            .read_certificates(&missing_certificate_hashes)
-            .await?;
-        let certificates =
-            match ResultReadCertificates::new(certificates, missing_certificate_hashes) {
-                ResultReadCertificates::Certificates(certificates) => certificates,
-                ResultReadCertificates::InvalidHashes(hashes) => {
-                    return Err(Error::ReadCertificatesError(hashes))
-                }
-            };
+            .read_certificates_by_heights(self.chain_id, &heights)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
         for certificate in certificates {
             match remote_node
                 .handle_confirmed_certificate(
