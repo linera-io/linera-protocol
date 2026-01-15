@@ -4400,24 +4400,15 @@ impl<Env: Environment> ChainClient<Env> {
             .map(BlockHeight)
             .collect();
 
-        let missing_certificate_hashes = self
-            .client
-            .local_node
-            .get_block_hashes(self.chain_id, heights)
-            .await?;
-
         let certificates = self
             .client
             .storage_client()
-            .read_certificates(&missing_certificate_hashes)
-            .await?;
-        let certificates =
-            match ResultReadCertificates::new(certificates, missing_certificate_hashes) {
-                ResultReadCertificates::Certificates(certificates) => certificates,
-                ResultReadCertificates::InvalidHashes(hashes) => {
-                    return Err(ChainClientError::ReadCertificatesError(hashes))
-                }
-            };
+            .read_certificates_by_heights(self.chain_id, &heights)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
         for certificate in certificates {
             match remote_node
                 .handle_confirmed_certificate(
