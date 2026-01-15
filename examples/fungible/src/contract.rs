@@ -42,7 +42,7 @@ impl Contract for FungibleTokenContract {
 
     async fn instantiate(&mut self, state: Self::InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
-        let _ = self.runtime.application_parameters();
+        let _parameters = self.runtime.application_parameters();
 
         let mut total_supply = Amount::ZERO;
         for value in state.accounts.values() {

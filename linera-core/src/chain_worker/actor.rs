@@ -400,7 +400,7 @@ where
                     clock.sleep_until(delay_until).await;
                     // Re-insert the request into the queue. If the channel is closed,
                     // the actor is shutting down, so we can ignore the error.
-                    let _ = sender.send((request, span, queued_at));
+                    sender.send((request, span, queued_at)).ok();
                 })
                 .forget();
                 return None;

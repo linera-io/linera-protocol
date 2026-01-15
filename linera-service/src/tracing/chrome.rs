@@ -47,6 +47,7 @@ pub fn build(
 /// In that case, tracing may not work as expected.
 pub fn init(log_name: &str, writer: impl std::io::Write + Send + 'static) -> ChromeTraceGuard {
     let (subscriber, guard) = build(log_name, writer);
-    let _ = subscriber.try_init();
+    // May fail if a global subscriber is already set.
+    subscriber.try_init().ok();
     guard
 }

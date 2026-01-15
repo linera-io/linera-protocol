@@ -183,7 +183,7 @@ async fn test_faucet_rate_limiting() {
 
     // Clean up
     cancellation_token.cancel();
-    let _ = processor_task.await;
+    processor_task.await.unwrap();
 }
 
 #[test]
@@ -393,7 +393,7 @@ async fn test_faucet_persistence() {
 
     // Stop the batch processor
     cancellation_token.cancel();
-    let _ = processor_task.await;
+    processor_task.await.unwrap();
 
     // Drop the first faucet instance to simulate shutdown
     drop(root);
@@ -513,7 +513,7 @@ async fn test_faucet_persistence() {
 
     // Clean up
     cancellation_token_2.cancel();
-    let _ = processor_task_2.await;
+    processor_task_2.await.unwrap();
 }
 
 #[test_log::test(tokio::test)]
@@ -614,7 +614,7 @@ async fn test_blockchain_sync_after_database_deletion() {
 
     // Stop the batch processor and clean up first instance
     cancellation_token.cancel();
-    let _ = processor_task.await;
+    processor_task.await.unwrap();
     drop(root);
     drop(faucet_storage);
 
@@ -724,5 +724,5 @@ async fn test_blockchain_sync_after_database_deletion() {
 
     // Clean up
     cancellation_token_2.cancel();
-    let _ = processor_task_2.await;
+    processor_task_2.await.unwrap();
 }
