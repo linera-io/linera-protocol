@@ -749,28 +749,28 @@ where
         let heights = original_request.heights;
 
         // First, try the direct height-based lookup
-        let certificates_by_height = self
+        let certificates_by_height: Vec<_> = self
             .0
             .storage
             .read_certificates_by_heights(chain_id, &heights)
             .await
-            .map_err(Self::view_error_to_status)?;
+            .map_err(Self::view_error_to_status)?
+            .into_iter()
+            .flatten()
+            .collect();
 
         // Check if we got all certificates (no None values)
-        let all_found = certificates_by_height.len() == heights.len()
-            && certificates_by_height.iter().all(|c| c.is_some());
+        let all_found = certificates_by_height.len() == heights.len();
 
         if all_found {
             let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
                 GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
 
-            let returned_certificates = limiter.take_if(
-                certificates_by_height.into_iter().flatten(),
-                |lim, certificate| {
+            let returned_certificates =
+                limiter.take_if(certificates_by_height, |lim, certificate| {
                     let cert: linera_chain::types::Certificate = certificate.into();
                     Ok(lim.fits::<Certificate>(cert.clone())?.then_some(cert))
-                },
-            )?;
+                })?;
 
             return Ok(Response::new(CertificatesBatchResponse::try_from(
                 returned_certificates,
