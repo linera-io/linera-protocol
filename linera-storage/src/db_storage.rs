@@ -1508,36 +1508,21 @@ where
         chain_id: ChainId,
         heights: &[BlockHeight],
     ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
-        let valid_hashes: Vec<Option<CryptoHash>> = self
-            .read_certificate_hashes_by_heights(chain_id, heights)
-            .await?;
-
-        let mut indices = HashMap::new();
-        for (index, maybe_hash) in valid_hashes.iter().enumerate() {
-            if let Some(hash) = maybe_hash {
-                indices.insert(*hash, index);
-            }
-        }
-
-        let mut result: Vec<Option<ConfirmedBlockCertificate>> = vec![None; heights.len()];
-
-        for certificate in self
-            .read_certificates(&valid_hashes.into_iter().flatten().collect::<Vec<_>>())
+        self.read_certificates_by_heights_raw(chain_id, heights)
             .await?
             .into_iter()
-            .flatten()
-        {
-            if let Some(index) = indices.get(&certificate.hash()) {
-                result[*index] = Some(certificate);
-            } else {
-                // This should not happen, but log a warning if it does.
-                tracing::warn!(
-                    hash=?certificate.hash(),
-                    "certificate hash not found in indices map",
-                );
-            }
-        }
-        Ok(result)
+            .map(|maybe_raw| match maybe_raw {
+                None => Ok(None),
+                Some((lite_cert_bytes, confirmed_block_bytes)) => {
+                    let cert = bcs::from_bytes::<LiteCertificate>(&lite_cert_bytes)?;
+                    let value = bcs::from_bytes::<ConfirmedBlock>(&confirmed_block_bytes)?;
+                    let certificate = cert
+                        .with_value(value)
+                        .ok_or(ViewError::InconsistentEntries)?;
+                    Ok(Some(certificate))
+                }
+            })
+            .collect()
     }
 
     #[instrument(skip_all, fields(%chain_id, indices_len = indices.len()))]
