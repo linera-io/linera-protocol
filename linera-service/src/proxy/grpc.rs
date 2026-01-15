@@ -440,7 +440,7 @@ where
             let certificates: Vec<(Vec<u8>, Vec<u8>)> = self
                 .0
                 .storage
-                .read_certificates_raw(batch.to_vec())
+                .read_certificates_raw(batch)
                 .await
                 .map_err(Self::view_error_to_status)?
                 .into_iter()
@@ -806,9 +806,12 @@ where
             .storage
             .read_certificates_by_heights_raw(chain_id, &heights)
             .await
-            .map_err(Self::view_error_to_status)?;
+            .map_err(Self::view_error_to_status)?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<(Vec<u8>, Vec<u8>)>>();
 
-        // Check if we got all certificates (no None values)
+        // Check if we got all certificates.
         let all_found = raw_certificates_by_height.len() == heights.len();
 
         if all_found {

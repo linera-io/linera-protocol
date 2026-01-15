@@ -498,10 +498,7 @@ where
         }
 
         if !uncached_hashes.is_empty() {
-            let certificates = self
-                .storage
-                .read_certificates(uncached_hashes.clone())
-                .await?;
+            let certificates = self.storage.read_certificates(&uncached_hashes).await?;
             let certificates = match ResultReadCertificates::new(certificates, uncached_hashes) {
                 ResultReadCertificates::Certificates(certificates) => certificates,
                 ResultReadCertificates::InvalidHashes(hashes) => {

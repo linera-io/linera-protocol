@@ -1384,12 +1384,11 @@ where
     }
 
     #[instrument(skip_all)]
-    async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
+    async fn read_certificates(
         &self,
-        hashes: I,
+        hashes: &[CryptoHash],
     ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
-        let hashes = hashes.into_iter().collect::<Vec<_>>();
-        let raw_certs = self.read_certificates_raw(hashes.clone()).await?;
+        let raw_certs = self.read_certificates_raw(hashes).await?;
 
         raw_certs
             .into_iter()
@@ -1400,7 +1399,7 @@ where
                 };
                 let cert = bcs::from_bytes::<LiteCertificate>(&lite_cert_bytes)?;
                 let value = bcs::from_bytes::<ConfirmedBlock>(&confirmed_block_bytes)?;
-                assert_eq!(value.hash(), hash);
+                assert_eq!(&value.hash(), hash);
                 let certificate = cert
                     .with_value(value)
                     .ok_or(ViewError::InconsistentEntries)?;
@@ -1410,15 +1409,14 @@ where
     }
 
     #[instrument(skip_all)]
-    async fn read_certificates_raw<I: IntoIterator<Item = CryptoHash> + Send>(
+    async fn read_certificates_raw(
         &self,
-        hashes: I,
+        hashes: &[CryptoHash],
     ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError> {
-        let hashes = hashes.into_iter().collect::<Vec<_>>();
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        let root_keys = Self::get_root_keys_for_certificates(&hashes);
+        let root_keys = Self::get_root_keys_for_certificates(hashes);
         let mut values = Vec::new();
         for root_key in root_keys {
             let store = self.database.open_shared(&root_key)?;
@@ -1500,7 +1498,7 @@ where
         let mut result: Vec<Option<ConfirmedBlockCertificate>> = vec![None; heights.len()];
 
         for certificate in self
-            .read_certificates(valid_hashes.into_iter().flatten())
+            .read_certificates(&valid_hashes.into_iter().flatten().collect::<Vec<_>>())
             .await?
             .into_iter()
             .flatten()
