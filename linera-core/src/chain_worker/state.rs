@@ -1517,18 +1517,18 @@ where
             outcome,
         } = content;
 
-        if self.config.key_pair().is_some() {
-            if block.timestamp.duration_since(local_time) > self.config.block_time_grace_period {
-                return Err(WorkerError::InvalidTimestamp {
-                    local_time,
-                    block_timestamp: block.timestamp,
-                    block_time_grace_period: self.config.block_time_grace_period,
-                });
-            }
-
-            self.storage.clock().sleep_until(block.timestamp).await;
+        if self.config.key_pair().is_some()
+            && block.timestamp.duration_since(local_time) > self.config.block_time_grace_period
+        {
+            return Err(WorkerError::InvalidTimestamp {
+                local_time,
+                block_timestamp: block.timestamp,
+                block_time_grace_period: self.config.block_time_grace_period,
+            });
         }
-        let local_time = self.storage.clock().current_time();
+        // Note: The actor delays processing proposals with future timestamps (within the grace
+        // period) so that other requests can be handled in the meantime. By the time we reach
+        // here, the block timestamp should be in the past or very close to the current time.
 
         self.chain
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
