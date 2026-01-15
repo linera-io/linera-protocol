@@ -1618,14 +1618,15 @@ impl<I: CustomSerialize + Send, W: View> CustomCollectionView<W::Context, I, W> 
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::collection_view::CollectionView;
+    /// # use linera_views::collection_view::CustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view: CollectionView<_, u64, RegisterView<_, String>> =
-    ///     CollectionView::load(context).await.unwrap();
-    /// view.load_entry_mut(&23).await.unwrap();
-    /// view.load_entry_mut(&25).await.unwrap();
+    /// let mut view = CustomCollectionView::<_, u128, RegisterView<_, String>>::load(context)
+    ///     .await
+    ///     .unwrap();
+    /// view.load_entry_mut(&(23 as u128)).await.unwrap();
+    /// view.load_entry_mut(&(25 as u128)).await.unwrap();
     /// assert_eq!(view.count().await.unwrap(), 2);
     /// # })
     /// ```
