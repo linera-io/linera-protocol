@@ -678,7 +678,7 @@ mod tests {
             .read_certificates_by_heights(chain_id, &heights)
             .await
             .unwrap();
-        assert_eq!(result.len(), 3); // BlockHeight(3) was duplicated.
+        assert_eq!(result.len(), 4); // BlockHeight(3) was duplicated.
         assert!(result[0].is_some());
         assert!(result[1].is_none()); // Height 2 doesn't exist
         assert!(result[2].is_some());
@@ -1469,26 +1469,29 @@ where
             .read_certificate_hashes_by_heights(chain_id, heights)
             .await?;
 
-        // Map from hash to index in the heights array
-        let mut indices = HashMap::new();
+        // Map from hash to all indices in the heights array (handles duplicates)
+        let mut indices: HashMap<CryptoHash, Vec<usize>> = HashMap::new();
         for (index, maybe_hash) in hashes.iter().enumerate() {
             if let Some(hash) = maybe_hash {
-                indices.insert(*hash, index);
+                indices.entry(*hash).or_default().push(index);
             }
         }
 
-        let existing_hashes = hashes.into_iter().flatten().collect::<Vec<_>>();
+        // Deduplicate hashes for the storage query
+        let unique_hashes = indices.keys().copied().collect::<Vec<_>>();
 
         let mut result = vec![None; heights.len()];
 
         for (raw_cert, hash) in self
-            .read_certificates_raw(&existing_hashes)
+            .read_certificates_raw(&unique_hashes)
             .await?
             .into_iter()
-            .zip(existing_hashes)
+            .zip(unique_hashes)
         {
-            if let Some(index) = indices.get(&hash) {
-                result[*index] = raw_cert;
+            if let Some(idx_list) = indices.get(&hash) {
+                for &index in idx_list {
+                    result[index] = raw_cert.clone();
+                }
             } else {
                 // This should not happen, but log a warning if it does.
                 tracing::warn!(
