@@ -1615,9 +1615,13 @@ where
         let block = if let Some(outcome) = outcome {
             outcome.clone().with(proposal.content.block.clone())
         } else {
-            let (executed_block, _resource_tracker) =
-                Box::pin(self.execute_block(block, local_time, round.multi_leader(), &published_blobs))
-                    .await?;
+            let (executed_block, _resource_tracker) = Box::pin(self.execute_block(
+                block,
+                local_time,
+                round.multi_leader(),
+                &published_blobs,
+            ))
+            .await?;
             executed_block
         };
 
