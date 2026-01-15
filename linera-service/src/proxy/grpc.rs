@@ -16,7 +16,8 @@ use std::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
-use linera_base::identifiers::ChainId;
+use linera_base::{data_types::BlockHeight, identifiers::ChainId};
+use linera_chain::types::{ConfirmedBlock, LiteCertificate as ChainLiteCertificate};
 use linera_core::{
     data_types::{CertificatesByHeightRequest, ChainInfo, ChainInfoQuery},
     node::NodeError,
@@ -45,7 +46,7 @@ use linera_rpc::{
     },
 };
 use linera_sdk::{linera_base_types::Blob, views::ViewError};
-use linera_storage::{ResultReadCertificates, Storage};
+use linera_storage::Storage;
 use prost::Message;
 use tokio::{select, task::JoinSet};
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -376,6 +377,100 @@ where
         status.set_source(Arc::new(err));
         status
     }
+
+    /// Fallback method to get certificate hashes by heights using `ChainInfoQuery`.
+    /// Also writes the height→hash indices back to storage for future lookups.
+    async fn get_certificate_hashes_by_heights_fallback(
+        &self,
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    ) -> Result<Vec<linera_base::crypto::CryptoHash>, Status> {
+        let chain_info_request =
+            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(heights.clone());
+
+        let chain_info_response = self
+            .handle_chain_info_query(Request::new(chain_info_request.try_into()?))
+            .await?;
+
+        let chain_info_result = chain_info_response.into_inner();
+
+        let hashes: Vec<linera_base::crypto::CryptoHash> = match chain_info_result.inner {
+            Some(api::chain_info_result::Inner::ChainInfoResponse(response)) => {
+                let chain_info: ChainInfo =
+                    bincode::deserialize(&response.chain_info).map_err(|e| {
+                        Status::internal(format!("Failed to deserialize ChainInfo: {}", e))
+                    })?;
+                chain_info.requested_sent_certificate_hashes
+            }
+            Some(api::chain_info_result::Inner::Error(error)) => {
+                let error =
+                    bincode::deserialize(&error).unwrap_or_else(|err| NodeError::GrpcError {
+                        error: format!("failed to unmarshal error message: {}", err),
+                    });
+                return Err(Status::internal(format!(
+                    "Chain info query failed: {error}"
+                )));
+            }
+            None => {
+                return Err(Status::internal("Empty chain info result"));
+            }
+        };
+
+        // Write back the height->hash indices we learned from the fallback
+        let indices: Vec<(BlockHeight, linera_base::crypto::CryptoHash)> =
+            heights.into_iter().zip(hashes.iter().copied()).collect();
+        self.0
+            .storage
+            .write_certificate_height_indices(chain_id, &indices)
+            .await
+            .map_err(Self::view_error_to_status)?;
+
+        Ok(hashes)
+    }
+
+    /// Collects raw certificates by hashes with message limiting.
+    async fn collect_raw_certificates_by_hashes(
+        &self,
+        hashes: Vec<linera_base::crypto::CryptoHash>,
+    ) -> Result<Vec<RawCertificate>, Status> {
+        let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
+            GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
+
+        let mut result = vec![];
+
+        for batch in hashes.chunks(100) {
+            let certificates: Vec<(Vec<u8>, Vec<u8>)> = self
+                .0
+                .storage
+                .read_certificates_raw(batch)
+                .await
+                .map_err(Self::view_error_to_status)?
+                .into_iter()
+                .flatten()
+                .collect();
+
+            let batch_size = certificates.len();
+            let batch_result = limiter.take_if(
+                certificates,
+                |lim, (lite_cert_bytes, confirmed_block_bytes)| {
+                    Ok(lim
+                        .fits_raw(lite_cert_bytes.len() + confirmed_block_bytes.len())
+                        .then_some(RawCertificate {
+                            lite_certificate: lite_cert_bytes,
+                            confirmed_block: confirmed_block_bytes,
+                        }))
+                },
+            )?;
+            let took_all = batch_result.len() == batch_size;
+            result.extend(batch_result);
+
+            if !took_all {
+                break;
+            }
+        }
+
+        Ok(result)
+    }
 }
 
 #[async_trait]
@@ -634,37 +729,28 @@ where
             .map(linera_base::crypto::CryptoHash::try_from)
             .collect::<Result<Vec<linera_base::crypto::CryptoHash>, _>>()?;
 
-        // Use 70% of the max message size as a buffer capacity.
-        // Leave 30% as overhead.
-        let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
-            GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
+        let raw_certificates = self.collect_raw_certificates_by_hashes(hashes).await?;
 
-        let mut returned_certificates = vec![];
-
-        'outer: for batch in hashes.chunks(100) {
-            let certificates = self
-                .0
-                .storage
-                .read_certificates(batch.to_vec())
-                .await
-                .map_err(Self::view_error_to_status)?;
-            let certificates = match ResultReadCertificates::new(certificates, batch.to_vec()) {
-                ResultReadCertificates::Certificates(certificates) => certificates,
-                ResultReadCertificates::InvalidHashes(hashes) => {
-                    return Err(Status::not_found(format!("{:?}", hashes)))
-                }
-            };
-            for certificate in certificates {
-                if grpc_message_limiter.fits::<Certificate>(certificate.clone().into())? {
-                    returned_certificates.push(linera_chain::types::Certificate::from(certificate));
-                } else {
-                    break 'outer;
-                }
-            }
-        }
+        let certificates: Vec<linera_chain::types::Certificate> = raw_certificates
+            .into_iter()
+            .map(|raw| {
+                let lite_cert = bcs::from_bytes::<ChainLiteCertificate>(&raw.lite_certificate)
+                    .map_err(|e| {
+                        Status::internal(format!("Failed to deserialize lite certificate: {}", e))
+                    })?;
+                let confirmed_block = bcs::from_bytes::<ConfirmedBlock>(&raw.confirmed_block)
+                    .map_err(|e| {
+                        Status::internal(format!("Failed to deserialize confirmed block: {}", e))
+                    })?;
+                lite_cert
+                    .with_value(confirmed_block)
+                    .ok_or_else(|| Status::internal("Invalid certificate"))
+                    .map(Into::into)
+            })
+            .collect::<Result<_, _>>()?;
 
         Ok(Response::new(CertificatesBatchResponse::try_from(
-            returned_certificates,
+            certificates,
         )?))
     }
 
@@ -678,39 +764,42 @@ where
         request: Request<api::DownloadCertificatesByHeightsRequest>,
     ) -> Result<Response<CertificatesBatchResponse>, Status> {
         let original_request: CertificatesByHeightRequest = request.into_inner().try_into()?;
-        let chain_info_request = ChainInfoQuery::new(original_request.chain_id)
-            .with_sent_certificate_hashes_by_heights(original_request.heights);
+        let chain_id = original_request.chain_id;
+        let heights = original_request.heights;
 
-        // Use handle_chain_info_query to get the certificate hashes
-        let chain_info_response = self
-            .handle_chain_info_query(Request::new(chain_info_request.try_into()?))
+        // First, try the direct height-based lookup
+        let certificates_by_height: Vec<_> = self
+            .0
+            .storage
+            .read_certificates_by_heights(chain_id, &heights)
+            .await
+            .map_err(Self::view_error_to_status)?
+            .into_iter()
+            .flatten()
+            .collect();
+
+        // Check if we got all certificates (no None values)
+        let all_found = certificates_by_height.len() == heights.len();
+
+        if all_found {
+            let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
+                GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
+
+            let returned_certificates =
+                limiter.take_if(certificates_by_height, |lim, certificate| {
+                    let cert: linera_chain::types::Certificate = certificate.into();
+                    Ok(lim.fits::<Certificate>(cert.clone())?.then_some(cert))
+                })?;
+
+            return Ok(Response::new(CertificatesBatchResponse::try_from(
+                returned_certificates,
+            )?));
+        }
+
+        // Fallback to the traditional approach using chain info query
+        let hashes = self
+            .get_certificate_hashes_by_heights_fallback(chain_id, heights)
             .await?;
-
-        // Extract the ChainInfoResult from the response
-        let chain_info_result = chain_info_response.into_inner();
-
-        // Extract the certificate hashes from the ChainInfo
-        let hashes = match chain_info_result.inner {
-            Some(api::chain_info_result::Inner::ChainInfoResponse(response)) => {
-                let chain_info: ChainInfo =
-                    bincode::deserialize(&response.chain_info).map_err(|e| {
-                        Status::internal(format!("Failed to deserialize ChainInfo: {}", e))
-                    })?;
-                chain_info.requested_sent_certificate_hashes
-            }
-            Some(api::chain_info_result::Inner::Error(error)) => {
-                let error =
-                    bincode::deserialize(&error).unwrap_or_else(|err| NodeError::GrpcError {
-                        error: format!("failed to unmarshal error message: {}", err),
-                    });
-                return Err(Status::internal(format!(
-                    "Chain info query failed: {error}"
-                )));
-            }
-            None => {
-                return Err(Status::internal("Empty chain info result"));
-            }
-        };
 
         // Use download_certificates to get the actual certificates
         let certificates_request = CertificatesBatchRequest {
@@ -727,70 +816,48 @@ where
         request: Request<api::DownloadCertificatesByHeightsRequest>,
     ) -> Result<Response<api::RawCertificatesBatch>, Status> {
         let original_request: CertificatesByHeightRequest = request.into_inner().try_into()?;
-        let chain_info_request = ChainInfoQuery::new(original_request.chain_id)
-            .with_sent_certificate_hashes_by_heights(original_request.heights);
-        // Use handle_chain_info_query to get the certificate hashes
-        let chain_info_response = self
-            .handle_chain_info_query(Request::new(chain_info_request.try_into()?))
-            .await?;
-        // Extract the ChainInfoResult from the response
-        let chain_info_result = chain_info_response.into_inner();
-        // Extract the certificate hashes from the ChainInfo
-        let hashes = match chain_info_result.inner {
-            Some(api::chain_info_result::Inner::ChainInfoResponse(response)) => {
-                let chain_info: ChainInfo =
-                    bincode::deserialize(&response.chain_info).map_err(|e| {
-                        Status::internal(format!("Failed to deserialize ChainInfo: {}", e))
-                    })?;
-                chain_info.requested_sent_certificate_hashes
-            }
-            Some(api::chain_info_result::Inner::Error(error)) => {
-                let error =
-                    bincode::deserialize(&error).unwrap_or_else(|err| NodeError::GrpcError {
-                        error: format!("failed to unmarshal error message: {}", err),
-                    });
-                return Err(Status::internal(format!(
-                    "Chain info query failed: {error}"
-                )));
-            }
-            None => {
-                return Err(Status::internal("Empty chain info result"));
-            }
-        };
+        let chain_id = original_request.chain_id;
+        let heights = original_request.heights;
 
-        // Use 70% of the max message size as a buffer capacity.
-        // Leave 30% as overhead.
-        let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
-            GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
+        // First, try the direct height-based lookup
+        let raw_certificates_by_height = self
+            .0
+            .storage
+            .read_certificates_by_heights_raw(chain_id, &heights)
+            .await
+            .map_err(Self::view_error_to_status)?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<(Vec<u8>, Vec<u8>)>>();
 
-        let mut returned_certificates = vec![];
+        // Check if we got all certificates.
+        let all_found = raw_certificates_by_height.len() == heights.len();
 
-        'outer: for batch in hashes.chunks(100) {
-            let certificates: Vec<(Vec<u8>, Vec<u8>)> = self
-                .0
-                .storage
-                .read_certificates_raw(batch.to_vec())
-                .await
-                .map_err(Self::view_error_to_status)?
-                .into_iter()
-                .collect();
-            for (lite_cert_bytes, confirmed_block_bytes) in certificates {
-                if grpc_message_limiter
-                    .fits_raw(lite_cert_bytes.len() + confirmed_block_bytes.len())
-                {
-                    returned_certificates.push(RawCertificate {
-                        lite_certificate: lite_cert_bytes,
-                        confirmed_block: confirmed_block_bytes,
-                    });
-                } else {
-                    break 'outer;
-                }
-            }
+        if all_found {
+            let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
+                GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
+
+            let certificates =
+                limiter.take_if(raw_certificates_by_height, |lim, (lite, block)| {
+                    Ok(lim
+                        .fits_raw(lite.len() + block.len())
+                        .then_some(RawCertificate {
+                            lite_certificate: lite,
+                            confirmed_block: block,
+                        }))
+                })?;
+
+            return Ok(Response::new(RawCertificatesBatch { certificates }));
         }
 
-        Ok(Response::new(RawCertificatesBatch {
-            certificates: returned_certificates,
-        }))
+        // Fallback to the traditional approach using chain info query
+        let hashes = self
+            .get_certificate_hashes_by_heights_fallback(chain_id, heights)
+            .await?;
+
+        let certificates = self.collect_raw_certificates_by_hashes(hashes).await?;
+
+        Ok(Response::new(RawCertificatesBatch { certificates }))
     }
 
     #[instrument(skip_all, err(level = Level::WARN), fields(
@@ -900,6 +967,27 @@ impl<T> GrpcMessageLimiter<T> {
         }
         self.remaining = self.remaining.saturating_sub(bytes_len);
         true
+    }
+
+    /// Collects items while the predicate returns `Some`.
+    ///
+    /// The `try_take` closure should check if the item should be taken and return:
+    /// - `Ok(Some(output))` to take the item (transformed)
+    /// - `Ok(None)` to stop collection
+    /// - `Err(_)` on error
+    fn take_if<I, O, F>(&mut self, items: I, mut try_take: F) -> Result<Vec<O>, Status>
+    where
+        I: IntoIterator,
+        F: FnMut(&mut Self, I::Item) -> Result<Option<O>, Status>,
+    {
+        let mut result = vec![];
+        for item in items {
+            match try_take(self, item)? {
+                Some(output) => result.push(output),
+                None => break,
+            }
+        }
+        Ok(result)
     }
 }
 

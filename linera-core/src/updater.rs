@@ -792,7 +792,7 @@ where
             .get_block_hashes(chain_id, heights.clone())
             .await?;
 
-        let certificates = storage.read_certificates(hashes.clone()).await?;
+        let certificates = storage.read_certificates(&hashes).await?;
 
         match ResultReadCertificates::new(certificates, hashes.clone()) {
             ResultReadCertificates::Certificates(certs) => {
@@ -974,7 +974,7 @@ where
                     .client
                     .local_node
                     .storage_client()
-                    .read_certificates(hashes.clone())
+                    .read_certificates(&hashes)
                     .await?;
 
                 // Send each certificate

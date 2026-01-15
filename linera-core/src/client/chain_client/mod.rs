@@ -2833,7 +2833,7 @@ impl<Env: Environment> ChainClient<Env> {
         let certificates = self
             .client
             .storage_client()
-            .read_certificates(missing_certificate_hashes.clone())
+            .read_certificates(&missing_certificate_hashes)
             .await?;
         let certificates =
             match ResultReadCertificates::new(certificates, missing_certificate_hashes) {

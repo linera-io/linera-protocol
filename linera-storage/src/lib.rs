@@ -141,21 +141,20 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     ) -> Result<Option<ConfirmedBlockCertificate>, ViewError>;
 
     /// Reads a number of certificates
-    async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
+    async fn read_certificates(
         &self,
-        hashes: I,
+        hashes: &[CryptoHash],
     ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError>;
 
-    /// Reads certificates by hashes.
+    /// Reads raw certificate bytes by hashes.
     ///
-    /// Returns a vector of tuples where the first element is a lite certificate
-    /// and the second element is confirmed block.
-    ///
-    /// It does not check if all hashes all returned.
-    async fn read_certificates_raw<I: IntoIterator<Item = CryptoHash> + Send>(
+    /// Returns a vector where each element corresponds to the input hash.
+    /// Elements are `None` if no certificate exists for that hash.
+    /// Each found certificate is returned as `Some((lite_certificate_bytes, confirmed_block_bytes))`.
+    async fn read_certificates_raw(
         &self,
-        hashes: I,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError>;
+        hashes: &[CryptoHash],
+    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError>;
 
     /// Reads certificates by heights for a given chain.
     /// Returns a vector where each element corresponds to the input height.
@@ -165,6 +164,25 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         chain_id: ChainId,
         heights: &[BlockHeight],
     ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError>;
+
+    /// Reads raw certificates by heights for a given chain.
+    /// Returns a vector where each element corresponds to the input height.
+    /// Elements are `None` if no certificate exists at that height.
+    /// Each found certificate is returned as a tuple of (lite_certificate_bytes, confirmed_block_bytes).
+    async fn read_certificates_by_heights_raw(
+        &self,
+        chain_id: ChainId,
+        heights: &[BlockHeight],
+    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError>;
+
+    /// Returns a vector of certificate hashes for the requested chain and heights.
+    /// The resulting vector maintains the order of the input `heights` argument.
+    /// Elements are `None` if no certificate exists at that height.
+    async fn read_certificate_hashes_by_heights(
+        &self,
+        chain_id: ChainId,
+        heights: &[BlockHeight],
+    ) -> Result<Vec<Option<CryptoHash>>, ViewError>;
 
     /// Writes certificate height index entries for a given chain.
     /// This is used to populate the height->hash index when certificates are found
@@ -719,13 +737,13 @@ mod tests {
 
         // Test reading multiple certificates
         let cert_hashes = vec![cert_hash, CryptoHash::test_hash("cert2")];
-        let certs_result = storage.read_certificates(cert_hashes.clone()).await?;
+        let certs_result = storage.read_certificates(&cert_hashes).await?;
         assert_eq!(certs_result.len(), 2);
         assert!(certs_result[0].is_none());
         assert!(certs_result[1].is_none());
 
         // Test raw certificate reading
-        let raw_certs_result = storage.read_certificates_raw(cert_hashes).await?;
+        let raw_certs_result = storage.read_certificates_raw(&cert_hashes).await?;
         assert!(raw_certs_result.is_empty()); // No certificates exist
 
         // Test confirmed block reading
