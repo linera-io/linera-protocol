@@ -868,7 +868,7 @@ where
         .await
         .unwrap();
     // Stage execution to get the block for certificate creation.
-    let (block, _) = env
+    let (block, _, _) = env
         .executing_worker()
         .stage_block_execution(proposed_block, None, vec![])
         .await?;
@@ -895,7 +895,7 @@ where
         .into_first_proposal(owner, &signer)
         .await
         .unwrap();
-    let (block, _) = env
+    let (block, _, _) = env
         .executing_worker()
         .stage_block_execution(proposed_block, None, vec![])
         .await?;
@@ -921,7 +921,7 @@ where
         .into_first_proposal(owner, &signer)
         .await
         .unwrap();
-    let (block, _) = env
+    let (block, _, _) = env
         .executing_worker()
         .stage_block_execution(proposed_block, None, vec![])
         .await?;
