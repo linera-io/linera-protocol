@@ -80,6 +80,13 @@ pub trait Wallet {
     async fn insert(&self, id: ChainId, chain: Chain) -> Result<Option<Chain>, Self::Error>;
     async fn try_insert(&self, id: ChainId, chain: Chain) -> Result<Option<Chain>, Self::Error>;
 
+    /// Modifies a chain in the wallet. Returns `Ok(None)` if the chain doesn't exist.
+    async fn modify(
+        &self,
+        id: ChainId,
+        f: impl FnMut(&mut Chain) + Send,
+    ) -> Result<Option<()>, Self::Error>;
+
     fn chain_ids(&self) -> impl Stream<Item = Result<ChainId, Self::Error>> {
         self.items().map(|result| result.map(|kv| kv.0))
     }
@@ -119,5 +126,13 @@ impl<W: Deref<Target: Wallet> + linera_base::util::traits::AutoTraits> Wallet fo
 
     fn owned_chain_ids(&self) -> impl Stream<Item = Result<ChainId, Self::Error>> {
         self.deref().owned_chain_ids()
+    }
+
+    async fn modify(
+        &self,
+        id: ChainId,
+        f: impl FnMut(&mut Chain) + Send,
+    ) -> Result<Option<()>, Self::Error> {
+        self.deref().modify(id, f).await
     }
 }
