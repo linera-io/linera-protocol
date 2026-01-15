@@ -655,7 +655,8 @@ async fn route_aux(
             let page_result = page(page_name, &node, &indexer, chain_id, &args).await;
             if chain_changed {
                 if let Some(ws) = WEBSOCKET.get() {
-                    let _ = ws.close().await;
+                    // Ignore close errors; we're switching to a new connection anyway.
+                    ws.close().await.ok();
                 }
                 let address = url(&data.config, Protocol::Websocket, AddressKind::Node);
                 subscribe_chain(app, &address, chain_id).await;
@@ -765,7 +766,8 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
             }
         }
     });
-    let _ = WEBSOCKET.set(ws);
+    // Ignore if already set; this can happen during re-subscription.
+    WEBSOCKET.set(ws).ok();
 }
 
 /// Initializes pages and subscribes to notifications.
@@ -789,7 +791,7 @@ pub async fn start(app: JsValue) {
         }
         Ok(default_chain) => {
             let indexer = url(&data.config, Protocol::Http, AddressKind::Indexer);
-            let _ = plugins(&app, &indexer).await;
+            plugins(&app, &indexer).await;
             let uri = web_sys::window()
                 .expect("window object not found")
                 .location()
