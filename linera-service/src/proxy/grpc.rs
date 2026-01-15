@@ -376,7 +376,7 @@ where
         status
     }
 
-    /// Fallback method to get certificate hashes by heights using ChainInfoQuery.
+    /// Fallback method to get certificate hashes by heights using `ChainInfoQuery`.
     /// Also writes the height→hash indices back to storage for future lookups.
     async fn get_certificate_hashes_by_heights_fallback(
         &self,

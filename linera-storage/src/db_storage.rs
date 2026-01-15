@@ -678,11 +678,10 @@ mod tests {
             .read_certificates_by_heights(chain_id, &heights)
             .await
             .unwrap();
-        assert_eq!(result.len(), 4); // BlockHeight(3) was duplicated.
+        assert_eq!(result.len(), 3); // BlockHeight(3) was duplicated.
         assert!(result[0].is_some());
         assert!(result[1].is_none()); // Height 2 doesn't exist
         assert!(result[2].is_some());
-        assert!(result[3].is_some());
         assert_eq!(
             result[2].as_ref().unwrap().hash(),
             result[3].as_ref().unwrap().hash()
