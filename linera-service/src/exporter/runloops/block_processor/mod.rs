@@ -248,7 +248,7 @@ mod test {
         );
         let (block_ids, state) = make_state(&storage).await;
         for id in block_ids {
-            let _ = tx.send(id);
+            tx.send(id).ok();
         }
 
         tokio::select! {
@@ -383,7 +383,7 @@ mod test {
             false,
         );
         let (block_id, state) = make_state_2(&storage).await;
-        let _ = tx.send(block_id);
+        tx.send(block_id).ok();
 
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs(10)) => {},
@@ -499,7 +499,7 @@ mod test {
             false,
         );
         let (block_id, state) = make_state_3(&storage).await;
-        let _ = tx.send(block_id);
+        tx.send(block_id).ok();
 
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs(10)) => {},
@@ -586,7 +586,7 @@ mod test {
             false,
         );
         let (block_id, state) = make_state_4(&storage).await;
-        let _ = tx.send(block_id);
+        tx.send(block_id).ok();
 
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs(10)) => {},
@@ -695,7 +695,7 @@ mod test {
             false,
         );
         let (block_id, expected_state) = make_simple_state_with_blobs(&storage).await;
-        let _ = tx.send(block_id);
+        tx.send(block_id).ok();
 
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs(10)) => {},

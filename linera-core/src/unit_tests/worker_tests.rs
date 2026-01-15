@@ -216,7 +216,7 @@ where
         index: u32,
     ) -> Result<(ApplicationId, MockApplication), anyhow::Error> {
         let mut chain = self.worker.storage.load_chain(chain_id).await?;
-        let _ = chain
+        chain
             .execution_state
             .register_mock_application(index)
             .await?;
@@ -4253,8 +4253,7 @@ where
         .into_first_proposal(owner, &signer)
         .await
         .unwrap();
-    let _ = env
-        .executing_worker()
+    env.executing_worker()
         .handle_block_proposal(block_proposal)
         .await?;
 
@@ -4279,7 +4278,7 @@ where
     }
     .into_view()
     .await;
-    let _ = state.register_mock_application(0).await?;
+    state.register_mock_application(0).await?;
 
     let certificate = env.execute_proposal(block.clone(), vec![]).await?;
 
