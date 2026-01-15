@@ -452,10 +452,7 @@ impl<Env: Environment> Client<Env> {
             .local_node
             .get_preprocessed_block_hashes(chain_id, next_height, stop)
             .await?;
-        let certificates = self
-            .storage_client()
-            .read_certificates(hashes.clone())
-            .await?;
+        let certificates = self.storage_client().read_certificates(&hashes).await?;
         let certificates = match ResultReadCertificates::new(certificates, hashes) {
             ResultReadCertificates::Certificates(certificates) => certificates,
             ResultReadCertificates::InvalidHashes(hashes) => {
@@ -4406,12 +4403,15 @@ impl<Env: Environment> ChainClient<Env> {
         let certificates = self
             .client
             .storage_client()
-            .read_certificates_by_heights(self.chain_id, &heights)
-            .await?
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-
+            .read_certificates(&missing_certificate_hashes)
+            .await?;
+        let certificates =
+            match ResultReadCertificates::new(certificates, missing_certificate_hashes) {
+                ResultReadCertificates::Certificates(certificates) => certificates,
+                ResultReadCertificates::InvalidHashes(hashes) => {
+                    return Err(ChainClientError::ReadCertificatesError(hashes))
+                }
+            };
         for certificate in certificates {
             match remote_node
                 .handle_confirmed_certificate(
