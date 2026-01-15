@@ -682,7 +682,6 @@ mod tests {
         assert!(result[0].is_some());
         assert!(result[1].is_none()); // Height 2 doesn't exist
         assert!(result[2].is_some());
-        assert!(result[3].is_some());
         assert_eq!(
             result[2].as_ref().unwrap().hash(),
             result[3].as_ref().unwrap().hash()
@@ -1384,48 +1383,39 @@ where
     }
 
     #[instrument(skip_all)]
-    async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
+    async fn read_certificates(
         &self,
-        hashes: I,
+        hashes: &[CryptoHash],
     ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
-        let hashes = hashes.into_iter().collect::<Vec<_>>();
-        if hashes.is_empty() {
-            return Ok(Vec::new());
-        }
-        let root_keys = Self::get_root_keys_for_certificates(&hashes);
-        let mut values = Vec::new();
-        for root_key in root_keys {
-            let store = self.database.open_shared(&root_key)?;
-            values.extend(store.read_multi_values_bytes(&get_block_keys()).await?);
-        }
-        #[cfg(with_metrics)]
-        metrics::READ_CERTIFICATES_COUNTER
-            .with_label_values(&[])
-            .inc_by(hashes.len() as u64);
-        let mut certificates = Vec::new();
-        for (pair, hash) in values.chunks_exact(2).zip(hashes) {
-            let certificate = Self::deserialize_certificate(pair, hash)?;
-            certificates.push(certificate);
-        }
-        Ok(certificates)
+        let raw_certs = self.read_certificates_raw(hashes).await?;
+
+        raw_certs
+            .into_iter()
+            .zip(hashes)
+            .map(|(maybe_raw, hash)| {
+                let Some((lite_cert_bytes, confirmed_block_bytes)) = maybe_raw else {
+                    return Ok(None);
+                };
+                let cert = bcs::from_bytes::<LiteCertificate>(&lite_cert_bytes)?;
+                let value = bcs::from_bytes::<ConfirmedBlock>(&confirmed_block_bytes)?;
+                assert_eq!(&value.hash(), hash);
+                let certificate = cert
+                    .with_value(value)
+                    .ok_or(ViewError::InconsistentEntries)?;
+                Ok(Some(certificate))
+            })
+            .collect()
     }
 
-    /// Reads certificates by hashes.
-    ///
-    /// Returns a vector of tuples where the first element is a lite certificate
-    /// and the second element is confirmed block.
-    ///
-    /// It does not check if all hashes all returned.
     #[instrument(skip_all)]
-    async fn read_certificates_raw<I: IntoIterator<Item = CryptoHash> + Send>(
+    async fn read_certificates_raw(
         &self,
-        hashes: I,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
-        let hashes = hashes.into_iter().collect::<Vec<_>>();
+        hashes: &[CryptoHash],
+    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError> {
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        let root_keys = Self::get_root_keys_for_certificates(&hashes);
+        let root_keys = Self::get_root_keys_for_certificates(hashes);
         let mut values = Vec::new();
         for root_key in root_keys {
             let store = self.database.open_shared(&root_key)?;
@@ -1437,7 +1427,7 @@ where
             .inc_by(hashes.len() as u64);
         Ok(values
             .chunks_exact(2)
-            .filter_map(|chunk| {
+            .map(|chunk| {
                 let lite_cert_bytes = chunk[0].as_ref()?;
                 let confirmed_block_bytes = chunk[1].as_ref()?;
                 Some((lite_cert_bytes.clone(), confirmed_block_bytes.clone()))
@@ -1445,17 +1435,15 @@ where
             .collect())
     }
 
-    #[instrument(skip_all, fields(%chain_id, heights_len = heights.len()))]
-    async fn read_certificates_by_heights(
+    async fn read_certificate_hashes_by_heights(
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
+    ) -> Result<Vec<Option<CryptoHash>>, ViewError> {
         if heights.is_empty() {
             return Ok(Vec::new());
         }
 
-        // Step 1: Read all hashes from the height index (following event pattern)
         let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
         let store = self.database.open_shared(&index_root_key)?;
         let height_keys: Vec<Vec<u8>> = heights.iter().map(|h| to_height_key(*h)).collect();
@@ -1468,34 +1456,75 @@ where
             })
             .collect::<Result<_, _>>()?;
 
-        // Step 2: Collect valid hashes and build index mapping
-        let mut hash_to_indices: HashMap<CryptoHash, Vec<usize>> = HashMap::new();
-        let valid_hashes: Vec<CryptoHash> = hash_options
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, hash_opt)| {
-                hash_opt.inspect(|hash| {
-                    hash_to_indices.entry(*hash).or_default().push(idx);
-                })
-            })
-            .collect();
+        Ok(hash_options)
+    }
 
-        // Step 3: Batch read certificates using existing method
-        let certificates = self.read_certificates(valid_hashes.clone()).await?;
+    #[instrument(skip_all)]
+    async fn read_certificates_by_heights_raw(
+        &self,
+        chain_id: ChainId,
+        heights: &[BlockHeight],
+    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError> {
+        let hashes: Vec<Option<CryptoHash>> = self
+            .read_certificate_hashes_by_heights(chain_id, heights)
+            .await?;
 
-        // Step 4: Build result vector maintaining original order
+        // Map from hash to all indices in the heights array (handles duplicates)
+        let mut indices: HashMap<CryptoHash, Vec<usize>> = HashMap::new();
+        for (index, maybe_hash) in hashes.iter().enumerate() {
+            if let Some(hash) = maybe_hash {
+                indices.entry(*hash).or_default().push(index);
+            }
+        }
+
+        // Deduplicate hashes for the storage query
+        let unique_hashes = indices.keys().copied().collect::<Vec<_>>();
+
         let mut result = vec![None; heights.len()];
-        for (cert_opt, hash) in certificates.into_iter().zip(valid_hashes) {
-            if let Some(cert) = cert_opt {
-                if let Some(indices) = hash_to_indices.get(&hash) {
-                    for &idx in indices {
-                        result[idx] = Some(cert.clone());
-                    }
+
+        for (raw_cert, hash) in self
+            .read_certificates_raw(&unique_hashes)
+            .await?
+            .into_iter()
+            .zip(unique_hashes)
+        {
+            if let Some(idx_list) = indices.get(&hash) {
+                for &index in idx_list {
+                    result[index] = raw_cert.clone();
                 }
+            } else {
+                // This should not happen, but log a warning if it does.
+                tracing::warn!(
+                    hash=?hash,
+                    "certificate hash not found in indices map",
+                );
             }
         }
 
         Ok(result)
+    }
+
+    #[instrument(skip_all, fields(%chain_id, heights_len = heights.len()))]
+    async fn read_certificates_by_heights(
+        &self,
+        chain_id: ChainId,
+        heights: &[BlockHeight],
+    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
+        self.read_certificates_by_heights_raw(chain_id, heights)
+            .await?
+            .into_iter()
+            .map(|maybe_raw| match maybe_raw {
+                None => Ok(None),
+                Some((lite_cert_bytes, confirmed_block_bytes)) => {
+                    let cert = bcs::from_bytes::<LiteCertificate>(&lite_cert_bytes)?;
+                    let value = bcs::from_bytes::<ConfirmedBlock>(&confirmed_block_bytes)?;
+                    let certificate = cert
+                        .with_value(value)
+                        .ok_or(ViewError::InconsistentEntries)?;
+                    Ok(Some(certificate))
+                }
+            })
+            .collect()
     }
 
     #[instrument(skip_all, fields(%chain_id, indices_len = indices.len()))]

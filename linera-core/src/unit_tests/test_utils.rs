@@ -575,7 +575,7 @@ where
         let certificates = validator
             .state
             .storage_client()
-            .read_certificates(hashes.clone())
+            .read_certificates(&hashes)
             .await
             .map_err(Into::into);
 
