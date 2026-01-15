@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use async_graphql::{scalar, Request, Response, SimpleObject};
+pub use linera_core::client::{BlanketMessagePolicy, MessagePolicy};
 use linera_sdk_derive::GraphQLMutationRootInCrate;
 use serde::{Deserialize, Serialize};
 
@@ -123,6 +126,8 @@ pub struct LocalWorkerState {
     /// The chains currently followed locally (besides ours and the active service
     /// chains).
     pub local_chains: Vec<ChainId>,
+    /// The message policy that should be followed by the worker.
+    pub local_message_policy: BTreeMap<ChainId, MessagePolicy>,
 }
 
 scalar!(LocalWorkerState);

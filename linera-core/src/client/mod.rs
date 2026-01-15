@@ -131,7 +131,9 @@ pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
 
 /// Policies for automatically handling incoming messages.
-#[derive(Clone, Debug)]
+#[derive(
+    Clone, Debug, Default, serde::Serialize, serde::Deserialize, async_graphql::SimpleObject,
+)]
 pub struct MessagePolicy {
     /// The blanket policy applied to all messages.
     blanket: BlanketMessagePolicy,
@@ -147,7 +149,19 @@ pub struct MessagePolicy {
     reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
 }
 
-#[derive(Default, Copy, Clone, Debug, clap::ValueEnum, serde::Deserialize, tsify::Tsify)]
+#[derive(
+    Default,
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    clap::ValueEnum,
+    serde::Serialize,
+    serde::Deserialize,
+    tsify::Tsify,
+    async_graphql::Enum,
+)]
 pub enum BlanketMessagePolicy {
     /// Automatically accept all incoming messages. Reject them only if execution fails.
     #[default]
