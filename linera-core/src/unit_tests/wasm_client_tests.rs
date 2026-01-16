@@ -24,8 +24,8 @@ use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
     crypto::{CryptoHash, InMemorySigner},
     data_types::{
-        Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse, Round,
-        TimeDelta, Timestamp,
+        Amount, BlanketMessagePolicy, BlobContent, BlockHeight, Bytecode, ChainDescription, Event,
+        MessagePolicy, OracleResponse, Round, TimeDelta, Timestamp,
     },
     identifiers::{
         Account, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName,
@@ -54,7 +54,7 @@ use crate::{
     client::{
         chain_client::{self, ChainClient},
         client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
-        BlanketMessagePolicy, ClientOutcome, MessagePolicy,
+        ClientOutcome,
     },
     local_node::LocalNodeError,
     test_utils::{ClientOutcomeResultExt as _, FaultType},

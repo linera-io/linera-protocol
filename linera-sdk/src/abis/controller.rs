@@ -4,12 +4,11 @@
 use std::collections::BTreeMap;
 
 use async_graphql::{scalar, Request, Response, SimpleObject};
-pub use linera_core::client::{BlanketMessagePolicy, MessagePolicy};
 use linera_sdk_derive::GraphQLMutationRootInCrate;
 use serde::{Deserialize, Serialize};
 
 use crate::linera_base_types::{
-    AccountOwner, ApplicationId, ChainId, ContractAbi, DataBlobHash, ServiceAbi,
+    AccountOwner, ApplicationId, ChainId, ContractAbi, DataBlobHash, MessagePolicy, ServiceAbi,
 };
 
 pub struct ControllerAbi;

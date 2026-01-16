@@ -14,7 +14,7 @@ use futures::{
 };
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{ChainDescription, Epoch, Timestamp},
+    data_types::{ChainDescription, Epoch, MessagePolicy, Timestamp},
     identifiers::{AccountOwner, BlobType, ChainId},
     task::NonBlockingFuture,
     util::future::FutureSyncExt as _,
@@ -22,7 +22,7 @@ use linera_base::{
 use linera_core::{
     client::{
         chain_client::{self, ChainClient},
-        AbortOnDrop, ListeningMode, MessagePolicy,
+        AbortOnDrop, ListeningMode,
     },
     node::NotificationStream,
     worker::{Notification, Reason},

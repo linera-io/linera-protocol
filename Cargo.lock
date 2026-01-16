@@ -5258,6 +5258,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "chrono",
+ "clap",
  "custom_debug_derive",
  "derive_more 1.0.0",
  "ed25519-dalek",
