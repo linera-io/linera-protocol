@@ -63,6 +63,10 @@ spec:
         - name: linera-proxy-initializer
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
+          {{- with .Values.proxyResources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command:
             - sh
             - -c
@@ -93,6 +97,10 @@ spec:
         - name: linera-proxy
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           image: {{ .Values.lineraImage }}
+          {{- with .Values.proxyResources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - containerPort: {{ .Values.proxyPort }}
               name: linera-port
