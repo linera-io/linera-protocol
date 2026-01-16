@@ -1612,12 +1612,12 @@ pub struct MessagePolicy {
     Debug,
     PartialEq,
     Eq,
-    clap::ValueEnum,
     serde::Serialize,
     serde::Deserialize,
     async_graphql::Enum,
 )]
 #[cfg_attr(web, derive(tsify::Tsify), tsify(from_wasm_abi, into_wasm_abi))]
+#[cfg_attr(not(target_arch = "wasm32"), derive(clap::ValueEnum))]
 pub enum BlanketMessagePolicy {
     /// Automatically accept all incoming messages. Reject them only if execution fails.
     #[default]

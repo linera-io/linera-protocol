@@ -40,7 +40,6 @@ async-trait.workspace = true
 bcs.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
-clap.workspace = true
 custom_debug_derive.workspace = true
 derive_more = { workspace = true, features = ["display", "from_str"] }
 ed25519-dalek.workspace = true
@@ -77,6 +76,7 @@ tracing-web = { optional = true, workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono.workspace = true
+clap.workspace = true
 rand = { workspace = true, features = ["getrandom", "std", "std_rng"] }
 tokio = { workspace = true, features = [
     "fs",
