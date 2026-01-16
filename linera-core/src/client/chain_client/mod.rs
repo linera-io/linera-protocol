@@ -22,7 +22,7 @@ use linera_base::{
     crypto::{signer, AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, Epoch, Round, Timestamp,
+        ChainDescription, Epoch, MessagePolicy, Round, Timestamp,
     },
     ensure,
     identifiers::{
@@ -33,10 +33,7 @@ use linera_base::{
     time::{Duration, Instant},
 };
 #[cfg(not(target_arch = "wasm32"))]
-use linera_base::{
-    data_types::{Bytecode, MessagePolicy},
-    vm::VmRuntime,
-};
+use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
     data_types::{BlockProposal, ChainAndHeight, IncomingBundle, ProposedBlock, Transaction},
     manager::LockingBlock,
