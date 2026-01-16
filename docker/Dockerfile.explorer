@@ -3,7 +3,9 @@
 FROM node:18-alpine AS frontend-builder
 
 # Build argument for API base URL (injected at build time)
-ARG VITE_API_BASE_URL=http://localhost:3002/api
+# Default to relative URL for production deployments (proxied via ingress)
+# For local dev, override with: --build-arg VITE_API_BASE_URL=http://localhost:3002/api
+ARG VITE_API_BASE_URL=/api
 
 RUN apk add --no-cache python3 make g++
 
