@@ -88,6 +88,11 @@ pub struct Options {
     #[arg(long)]
     pub wait_for_outgoing_messages: bool,
 
+    /// Whether to allow creating blocks in the fast round. Fast blocks have lower latency but
+    /// must be used carefully so that there are never any conflicting fast block proposals.
+    #[arg(long)]
+    pub allow_fast_blocks: bool,
+
     /// (EXPERIMENTAL) Whether application services can persist in some cases between queries.
     #[arg(long)]
     pub long_lived_services: bool,
@@ -260,6 +265,7 @@ impl Options {
             certificate_download_batch_size: self.certificate_download_batch_size,
             sender_certificate_download_batch_size: self.sender_certificate_download_batch_size,
             max_joined_tasks: self.max_joined_tasks,
+            allow_fast_blocks: self.allow_fast_blocks,
         }
     }
 
