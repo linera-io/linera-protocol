@@ -58,8 +58,7 @@ impl chain_listener::ClientContext for ClientContext {
         epoch: Epoch,
     ) -> Result<(), Error> {
         // Ignore if chain already exists in wallet; test mock doesn't care.
-        let _insert_result = self
-            .wallet()
+        self.wallet()
             .try_insert(chain_id, wallet::Chain::new(owner, epoch, timestamp));
         Ok(())
     }
