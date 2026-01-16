@@ -1,0 +1,72 @@
+{{- if .Values.otelCollector.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: otel-collector-sampler
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: otel-collector-sampler
+spec:
+  serviceName: otel-collector-sampler-headless
+  replicas: {{ .Values.otelCollector.sampler.replicas }}
+  selector:
+    matchLabels:
+      app: otel-collector-sampler
+  template:
+    metadata:
+      labels:
+        app: otel-collector-sampler
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/otel-collector-sampler-config.yaml") . | sha256sum }}
+    spec:
+      {{- if .Values.otelCollector.sampler.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.otelCollector.sampler.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.otelCollector.sampler.tolerations }}
+      tolerations:
+        {{- toYaml .Values.otelCollector.sampler.tolerations | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: otel-collector-sampler
+          image: {{ .Values.otelCollector.sampler.image }}:{{ .Values.otelCollector.sampler.imageTag }}
+          imagePullPolicy: {{ .Values.otelCollector.sampler.imagePullPolicy | default "IfNotPresent" }}
+          args:
+            - "--config=/conf/otel-collector-config.yaml"
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+          resources:
+            requests:
+              memory: {{ .Values.otelCollector.sampler.resources.requests.memory }}
+              cpu: {{ .Values.otelCollector.sampler.resources.requests.cpu }}
+            limits:
+              memory: {{ .Values.otelCollector.sampler.resources.limits.memory }}
+              cpu: {{ .Values.otelCollector.sampler.resources.limits.cpu }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: health
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-sampler-config
+{{- end }}
