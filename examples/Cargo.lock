@@ -3708,7 +3708,6 @@ dependencies = [
  "bcs",
  "cfg-if",
  "cfg_aliases",
- "clap",
  "custom_debug_derive",
  "futures",
  "linera-base",
@@ -3735,7 +3734,6 @@ dependencies = [
  "tracing",
  "trait-set",
  "trait-variant",
- "tsify",
  "wasm-bindgen",
  "web-thread-pool",
 ]
