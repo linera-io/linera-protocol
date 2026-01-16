@@ -360,3 +360,56 @@ otelCollector:
   # Tempo endpoint (where Tier 2 exports to)
   tempoEndpoint: "tempo.tempo.svc.cluster.local:4317"
   tempoInsecure: true
+
+# ============================================================================
+# NodeLocal DNSCache - Reduces CoreDNS load by caching DNS at node level
+# ============================================================================
+# Deploys a DaemonSet that runs a DNS cache on every node, reducing
+# latency and load on the cluster's CoreDNS pods.
+
+nodeLocalDns:
+  # Enable/disable NodeLocal DNSCache
+  enabled: false
+
+  # Local DNS IP - link-local address for the node cache
+  # Must not conflict with any existing cluster IPs
+  localDnsIp: "169.254.20.10"
+
+  # kube-dns service IP - REQUIRED for iptables interception
+  # Get this with: kubectl get svc kube-dns -n kube-system -o jsonpath='{.spec.clusterIP}'
+  # For GKE, typically 10.x.0.10 where x depends on your service CIDR
+  kubeDnsIp: ""
+
+  # kube-dns-upstream service IP - Used for forwarding DNS queries
+  # This service bypasses NOTRACK iptables rules, allowing NAT to work properly
+  # If empty, Helm will look up the service IP automatically (requires service to exist)
+  # On first deploy, falls back to kubeDnsIp (requires second helm upgrade to fix)
+  kubeDnsUpstreamIp: ""
+
+  # Image configuration
+  image: "registry.k8s.io/dns/k8s-dns-node-cache"
+  imageTag: "1.23.1"
+  imagePullPolicy: "IfNotPresent"
+
+  # Resource limits - lineractl calculates proportional values based on VM vCPUs
+  # Shard nodes have high DNS load from ScyllaDB connection queries
+  resources:
+    requests:
+      cpu: "400m"
+      memory: "64Mi"
+    limits:
+      cpu: "1200m"
+      memory: "256Mi"
+
+  # DNS configuration
+  # Cluster DNS domain (usually cluster.local)
+  clusterDomain: "cluster.local"
+
+  # Upstream DNS servers for external queries (empty = use node's resolv.conf)
+  upstreamServers: ""
+
+  # Cache TTL settings (in seconds)
+  # How long to cache successful DNS responses
+  successTtl: 30
+  # How long to cache negative DNS responses (NXDOMAIN)
+  denialTtl: 5
