@@ -1615,9 +1615,9 @@ pub struct MessagePolicy {
     clap::ValueEnum,
     serde::Serialize,
     serde::Deserialize,
-    tsify::Tsify,
     async_graphql::Enum,
 )]
+#[cfg_attr(web, derive(tsify::Tsify), tsify(from_wasm_abi, into_wasm_abi))]
 pub enum BlanketMessagePolicy {
     /// Automatically accept all incoming messages. Reject them only if execution fails.
     #[default]
