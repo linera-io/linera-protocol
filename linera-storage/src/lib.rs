@@ -744,7 +744,7 @@ mod tests {
 
         // Test raw certificate reading
         let raw_certs_result = storage.read_certificates_raw(&cert_hashes).await?;
-        assert!(raw_certs_result.is_empty()); // No certificates exist
+        assert!(raw_certs_result.iter().all(|cert| cert.is_none())); // No certificates exist
 
         // Test confirmed block reading
         let block_hash = CryptoHash::test_hash("block");
