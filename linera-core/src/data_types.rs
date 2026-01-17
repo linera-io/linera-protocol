@@ -16,6 +16,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{ChainAndHeight, IncomingBundle, MessageBundle},
     manager::ChainManagerInfo,
+    types::ConfirmedBlockCertificate,
     ChainStateView,
 };
 use linera_execution::{committee::Committee, ExecutionRuntimeContext};
@@ -355,6 +356,8 @@ pub enum ClientOutcome<T> {
     /// We are not the round leader and cannot do anything. Try again at the specified time
     /// or whenever the round or block height changes.
     WaitForTimeout(RoundTimeout),
+    /// A different block was committed at the current block height.
+    Conflict(Box<ConfirmedBlockCertificate>),
 }
 
 #[derive(Debug)]
@@ -380,13 +383,16 @@ impl<T> ClientOutcome<T> {
         match self {
             ClientOutcome::Committed(t) => t,
             ClientOutcome::WaitForTimeout(timeout) => panic!("unexpected timeout: {timeout}"),
+            ClientOutcome::Conflict(certificate) => {
+                panic!("unexpected conflict: {}", certificate.hash())
+            }
         }
     }
 
     pub fn expect(self, msg: &'static str) -> T {
         match self {
             ClientOutcome::Committed(t) => t,
-            ClientOutcome::WaitForTimeout(_) => panic!("{}", msg),
+            ClientOutcome::WaitForTimeout(_) | ClientOutcome::Conflict(_) => panic!("{}", msg),
         }
     }
 
@@ -397,6 +403,7 @@ impl<T> ClientOutcome<T> {
         match self {
             ClientOutcome::Committed(t) => ClientOutcome::Committed(f(t)),
             ClientOutcome::WaitForTimeout(timeout) => ClientOutcome::WaitForTimeout(timeout),
+            ClientOutcome::Conflict(certificate) => ClientOutcome::Conflict(certificate),
         }
     }
 
@@ -407,6 +414,7 @@ impl<T> ClientOutcome<T> {
         match self {
             ClientOutcome::Committed(t) => Ok(ClientOutcome::Committed(f(t)?)),
             ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
+            ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
         }
     }
 }
