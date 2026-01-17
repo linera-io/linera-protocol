@@ -46,7 +46,6 @@ pub enum StoreInUse {
 }
 
 /// The trait for a (static) root key assignment.
-#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait DualStoreRootKeyAssignment {
     /// Obtains the store assigned to this root key.
     fn assigned_store(root_key: &[u8]) -> Result<StoreInUse, bcs::Error>;
@@ -231,7 +230,7 @@ impl<D1, D2, A> KeyValueDatabase for DualDatabase<D1, D2, A>
 where
     D1: KeyValueDatabase,
     D2: KeyValueDatabase,
-    A: DualStoreRootKeyAssignment,
+    A: DualStoreRootKeyAssignment + linera_base::util::traits::AutoTraits,
 {
     type Config = DualStoreConfig<D1::Config, D2::Config>;
     type Store = DualStore<D1::Store, D2::Store>;
