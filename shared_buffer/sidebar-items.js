@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MmapError"],"struct":["OwnedBuffer","OwnedIntoIter"]};

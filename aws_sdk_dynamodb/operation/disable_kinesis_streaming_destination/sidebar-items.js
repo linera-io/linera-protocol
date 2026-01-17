@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DisableKinesisStreamingDestinationError"],"mod":["builders"],"struct":["DisableKinesisStreamingDestination","DisableKinesisStreamingDestinationInput","DisableKinesisStreamingDestinationOutput"]};

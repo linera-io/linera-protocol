@@ -1,0 +1,87 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Find the offset in bytes of the given `$field` of `$Type`. Requires an already initialized `$instance` value to work with."><title>offset_of in bytemuck - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="bytemuck" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../bytemuck/index.html">bytemuck</a><span class="version">1.23.2</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">offset_<wbr>of</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a><ul><li><a href="#3-arg-usage" title="3-arg Usage">3-arg Usage</a></li><li><a href="#2-arg-usage" title="2-arg Usage">2-arg Usage</a></li></ul></li><li><a href="#usage-with-reprpacked-structs" title="Usage with `#[repr(packed)]` structs">Usage with <code>#[repr(packed)]</code> structs</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate bytemuck</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">bytemuck</a></div><h1>Macro <span class="macro">offset_of</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/bytemuck/offset_of.rs.html#115-135">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! offset_of {
+    ($instance:expr, $Type:path, $field:tt) =&gt; { ... };
+    ($Type:path, $field:tt) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Find the offset in bytes of the given <code>$field</code> of <code>$Type</code>. Requires an
+already initialized <code>$instance</code> value to work with.</p>
+<p>This is similar to the macro from <a href="https://docs.rs/memoffset"><code>memoffset</code></a>,
+however it uses no <code>unsafe</code> code.</p>
+<p>This macro has a 3-argument and 2-argument version.</p>
+<ul>
+<li>In the 3-arg version you specify an instance of the type, the type itself,
+and the field name.</li>
+<li>In the 2-arg version the macro will call the <a href="https://doc.rust-lang.org/1.86.0/core/default/trait.Default.html#tymethod.default" title="associated function core::default::Default::default"><code>default</code></a>
+method to make a temporary instance of the type for you.</li>
+</ul>
+<p>The output of this macro is the byte offset of the field (as a <code>usize</code>). The
+calculations of the macro are fixed across the entire program, but if the
+type used is <code>repr(Rust)</code> then they’re <em>not</em> fixed across compilations or
+compilers.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3><h4 id="3-arg-usage"><a class="doc-anchor" href="#3-arg-usage">§</a>3-arg Usage</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// enums can't derive default, and for this example we don't pick one
+</span><span class="kw">enum </span>MyExampleEnum {
+  A,
+  B,
+  C,
+}
+
+<span class="comment">// so now our struct here doesn't have Default
+</span><span class="attr">#[repr(C)]
+</span><span class="kw">struct </span>MyNotDefaultType {
+  <span class="kw">pub </span>counter: i32,
+  <span class="kw">pub </span>some_field: MyExampleEnum,
+}
+
+<span class="comment">// but we provide an instance of the type and it's all good.
+</span><span class="kw">let </span>val = MyNotDefaultType { counter: <span class="number">5</span>, some_field: MyExampleEnum::A };
+<span class="macro">assert_eq!</span>(<span class="macro">offset_of!</span>(val, MyNotDefaultType, some_field), <span class="number">4</span>);</code></pre></div>
+<h4 id="2-arg-usage"><a class="doc-anchor" href="#2-arg-usage">§</a>2-arg Usage</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Default)]
+#[repr(C)]
+</span><span class="kw">struct </span>Vertex {
+  <span class="kw">pub </span>loc: [f32; <span class="number">3</span>],
+  <span class="kw">pub </span>color: [f32; <span class="number">3</span>],
+}
+<span class="comment">// if the type impls Default the macro can make its own default instance.
+</span><span class="macro">assert_eq!</span>(<span class="macro">offset_of!</span>(Vertex, loc), <span class="number">0</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">offset_of!</span>(Vertex, color), <span class="number">12</span>);</code></pre></div>
+<h2 id="usage-with-reprpacked-structs"><a class="doc-anchor" href="#usage-with-reprpacked-structs">§</a>Usage with <code>#[repr(packed)]</code> structs</h2>
+<p>Attempting to compute the offset of a <code>#[repr(packed)]</code> struct with
+<code>bytemuck::offset_of!</code> requires an <code>unsafe</code> block. We hope to relax this in
+the future, but currently it is required to work around a soundness hole in
+Rust (See <a href="https://github.com/rust-lang/rust/issues/27060">rust-lang/rust#27060</a>).</p>
+<p style="background:rgba(255,181,77,0.16);padding:0.75em;">
+<strong>Warning:</strong> This is only true for versions of bytemuck >
+1.4.0. Previous versions of
+<code style="background:rgba(41,24,0,0.1);">bytemuck::offset_of!</code>
+will only emit a warning when used on the field of a packed struct in safe
+code, which can lead to unsoundness.
+</p>
+<p>For example, the following will fail to compile:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[repr(C, packed)]
+#[derive(Default)]
+</span><span class="kw">struct </span>Example {
+  field: u32,
+}
+<span class="comment">// Doesn't compile:
+</span><span class="kw">let </span>_offset = <span class="macro">bytemuck::offset_of!</span>(Example, field);</code></pre></div>
+<p>While the error message this generates will mention the
+<code>safe_packed_borrows</code> lint, the macro will still fail to compile even if
+that lint is <code>#[allow]</code>ed:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// Still doesn't compile:
+</span><span class="attr">#[allow(safe_packed_borrows)]
+</span>{
+  <span class="kw">let </span>_offset = <span class="macro">bytemuck::offset_of!</span>(Example, field);
+}</code></pre></div>
+<p>This <em>can</em> be worked around by using <code>unsafe</code>, but it is only sound to do so
+if you can guarantee that taking a reference to the field is sound.</p>
+<p>In practice, this means it only works for fields of align(1) types, or if
+you know the field’s offset in advance (defeating the point of <code>offset_of</code>)
+and can prove that the struct’s alignment and the field’s offset are enough
+to prove the field’s alignment.</p>
+<p>Once the <code>raw_ref</code> macros are available, a future version of this crate will
+use them to lift the limitations of packed structs. For the duration of the
+<code>1.x</code> version of this crate that will be behind an on-by-default cargo
+feature (to maintain minimum rust version support).</p>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,108 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Utilities for working with global telemetry primitives"><title>opentelemetry::global - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="opentelemetry" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../opentelemetry/index.html"><img src="https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/main/assets/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../opentelemetry/index.html"><img src="https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/main/assets/logo.svg" alt="logo"></a><h2><a href="../../opentelemetry/index.html">opentelemetry</a><span class="version">0.30.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module global</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#global-trace-api" title="Global Trace API">Global Trace API</a><ul><li><a href="#usage-in-applications" title="Usage in Applications">Usage in Applications</a></li><li><a href="#usage-in-libraries" title="Usage in Libraries">Usage in Libraries</a></li></ul></li><li><a href="#global-metrics-api" title="Global Metrics API">Global Metrics API</a><ul><li><a href="#usage-in-applications-and-libraries" title="Usage in Applications and libraries">Usage in Applications and libraries</a></li><li><a href="#usage-in-applications-1" title="Usage in Applications">Usage in Applications</a></li></ul></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate opentelemetry</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">opentelemetry</a></div><h1>Module <span>global</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/opentelemetry/global/mod.rs.html#1-149">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Utilities for working with global telemetry primitives</p>
+<h3 id="global-trace-api"><a class="doc-anchor" href="#global-trace-api">§</a>Global Trace API</h3>
+<p>The global trace API <strong>provides applications access to their configured
+<a href="../trace/trait.TracerProvider.html" title="trait opentelemetry::trace::TracerProvider"><code>TracerProvider</code></a> instance from anywhere in the codebase</strong>. This allows
+applications to be less coupled to the specific Open Telemetry SDK while not
+manually passing references to each part of the code that needs to create
+<a href="../trace/trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a>s. Additionally, <strong>3rd party middleware</strong> or <strong>library code</strong> can be
+written against this generic API and not constrain users to a specific
+implementation choice.</p>
+<h4 id="usage-in-applications"><a class="doc-anchor" href="#usage-in-applications">§</a>Usage in Applications</h4>
+<p>Applications configure their tracer either by installing a trace pipeline,
+or calling <a href="fn.set_tracer_provider.html" title="fn opentelemetry::global::set_tracer_provider"><code>set_tracer_provider</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::trace::{Tracer, noop::NoopTracerProvider};
+<span class="kw">use </span>opentelemetry::global;
+
+<span class="kw">fn </span>init_tracer() {
+    <span class="comment">// Swap this no-op provider for your tracing service of choice (jaeger, zipkin, etc)
+    </span><span class="kw">let </span>provider = NoopTracerProvider::new();
+
+    <span class="comment">// Configure the global `TracerProvider` singleton when your app starts
+    // (there is a no-op default if this is not set by your application)
+    </span><span class="kw">let _ </span>= global::set_tracer_provider(provider);
+}
+
+<span class="kw">fn </span>do_something_tracked() {
+    <span class="comment">// Then you can get a named tracer instance anywhere in your codebase.
+    </span><span class="kw">let </span>tracer = global::tracer(<span class="string">"my-component"</span>);
+
+    tracer.in_span(<span class="string">"doing_work"</span>, |cx| {
+        <span class="comment">// Traced app logic here...
+    </span>});
+}
+
+<span class="comment">// in main or other app start
+</span>init_tracer();
+do_something_tracked();</code></pre></div>
+<h4 id="usage-in-libraries"><a class="doc-anchor" href="#usage-in-libraries">§</a>Usage in Libraries</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>opentelemetry::trace::Tracer;
+<span class="kw">use </span>opentelemetry::global;
+<span class="kw">use </span>opentelemetry::InstrumentationScope;
+
+<span class="kw">pub fn </span>my_traced_library_function() {
+    <span class="comment">// End users of your library will configure their global tracer provider
+    // so you can use the global tracer without any setup
+
+    </span><span class="kw">let </span>scope = InstrumentationScope::builder(<span class="string">"my_library-name"</span>)
+        .with_version(<span class="macro">env!</span>(<span class="string">"CARGO_PKG_VERSION"</span>))
+        .with_schema_url(<span class="string">"https://opentelemetry.io/schemas/1.17.0"</span>)
+        .build();
+
+    <span class="kw">let </span>tracer = global::tracer_with_scope(scope);
+
+    tracer.in_span(<span class="string">"doing_library_work"</span>, |cx| {
+        <span class="comment">// Traced library logic here...
+    </span>});
+}</code></pre></div>
+<h3 id="global-metrics-api"><a class="doc-anchor" href="#global-metrics-api">§</a>Global Metrics API</h3>
+<p>The global metrics API <strong>provides applications access to their configured
+<a href="../metrics/trait.MeterProvider.html" title="trait opentelemetry::metrics::MeterProvider"><code>MeterProvider</code></a> instance from anywhere in the codebase</strong>. This allows
+applications to be less coupled to the specific Open Telemetry SDK while not
+manually passing references to each part of the code that needs to create
+metric instruments. Additionally, <strong>3rd party middleware</strong> or <strong>library code</strong> can be
+written against this generic API and not constrain users to a specific
+implementation choice.</p>
+<h4 id="usage-in-applications-and-libraries"><a class="doc-anchor" href="#usage-in-applications-and-libraries">§</a>Usage in Applications and libraries</h4>
+<p>Applications and libraries can obtain meter from the global meter provider,
+and use the meter to create instruments to emit measurements.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::metrics::{Meter};
+<span class="kw">use </span>opentelemetry::{global, KeyValue};
+
+   <span class="kw">fn </span>do_something_instrumented() {
+    <span class="kw">let </span>meter = global::meter(<span class="string">"my-component"</span>);
+    <span class="comment">// It is recommended to reuse the same counter instance for the
+    // lifetime of the application
+    </span><span class="kw">let </span>counter = meter.u64_counter(<span class="string">"my_counter"</span>).build();
+
+    <span class="comment">// record measurements
+    </span>counter.add(<span class="number">1</span>, <span class="kw-2">&amp;</span>[KeyValue::new(<span class="string">"mykey"</span>, <span class="string">"myvalue"</span>)]);
+    }
+}</code></pre></div>
+<h4 id="usage-in-applications-1"><a class="doc-anchor" href="#usage-in-applications-1">§</a>Usage in Applications</h4>
+<p>Application owners have the responsibility to set the global meter provider.
+The global meter provider can be set using the <a href="fn.set_meter_provider.html" title="fn opentelemetry::global::set_meter_provider"><code>set_meter_provider</code></a> function.
+As set_meter_provider takes ownership of the provider, it is recommended to
+provide a clone of the provider, if the application needs to use the provider
+later to perform operations like shutdown.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>opentelemetry::{global, KeyValue};
+
+<span class="kw">fn </span>main() {
+   <span class="comment">// Set the global meter provider
+   // global::set_meter_provider(my_meter_provider().clone());
+</span>}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.BoxedSpan.html" title="struct opentelemetry::global::BoxedSpan">Boxed<wbr>Span</a></dt><dd>Wraps the <a href="struct.BoxedTracer.html" title="struct opentelemetry::global::BoxedTracer"><code>BoxedTracer</code></a>’s <a href="../trace/trait.Span.html" title="trait opentelemetry::trace::Span"><code>Span</code></a> so it can be used generically by
+applications without knowing the underlying type.</dd><dt><a class="struct" href="struct.BoxedTracer.html" title="struct opentelemetry::global::BoxedTracer">Boxed<wbr>Tracer</a></dt><dd>Wraps the <a href="struct.GlobalTracerProvider.html" title="struct opentelemetry::global::GlobalTracerProvider"><code>GlobalTracerProvider</code></a>’s <a href="../trace/trait.Tracer.html" title="trait opentelemetry::trace::Tracer"><code>Tracer</code></a> so it can be used generically by
+applications without knowing the underlying type.</dd><dt><a class="struct" href="struct.GlobalTracerProvider.html" title="struct opentelemetry::global::GlobalTracerProvider">Global<wbr>Tracer<wbr>Provider</a></dt><dd>Represents the globally configured <a href="../trace/trait.TracerProvider.html" title="trait opentelemetry::trace::TracerProvider"><code>TracerProvider</code></a> instance for this
+application. This allows generic tracing through the returned
+<a href="struct.BoxedTracer.html" title="struct opentelemetry::global::BoxedTracer"><code>BoxedTracer</code></a> instances.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.ObjectSafeSpan.html" title="trait opentelemetry::global::ObjectSafeSpan">Object<wbr>Safe<wbr>Span</a></dt><dd>Allows a specific <a href="../trace/trait.Span.html" title="trait opentelemetry::trace::Span"><code>crate::trace::Span</code></a> to be used generically by <a href="struct.BoxedSpan.html" title="struct opentelemetry::global::BoxedSpan"><code>BoxedSpan</code></a>
+instances by mirroring the interface and boxing the return types.</dd><dt><a class="trait" href="trait.ObjectSafeTracer.html" title="trait opentelemetry::global::ObjectSafeTracer">Object<wbr>Safe<wbr>Tracer</a></dt><dd>Allows a specific <a href="../trace/trait.Tracer.html" title="trait opentelemetry::trace::Tracer"><code>Tracer</code></a> to be used generically by <a href="struct.BoxedTracer.html" title="struct opentelemetry::global::BoxedTracer"><code>BoxedTracer</code></a>
+instances by mirroring the interface and boxing the return types.</dd><dt><a class="trait" href="trait.ObjectSafeTracerProvider.html" title="trait opentelemetry::global::ObjectSafeTracerProvider">Object<wbr>Safe<wbr>Tracer<wbr>Provider</a></dt><dd>Allows a specific <a href="../trace/trait.TracerProvider.html" title="trait opentelemetry::trace::TracerProvider"><code>TracerProvider</code></a> to be used generically by the
+<a href="struct.GlobalTracerProvider.html" title="struct opentelemetry::global::GlobalTracerProvider"><code>GlobalTracerProvider</code></a> by mirroring the interface and boxing the return types.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.get_text_map_propagator.html" title="fn opentelemetry::global::get_text_map_propagator">get_<wbr>text_<wbr>map_<wbr>propagator</a></dt><dd>Executes a closure with a reference to the current global <a href="../propagation/text_map_propagator/trait.TextMapPropagator.html" title="trait opentelemetry::propagation::text_map_propagator::TextMapPropagator"><code>TextMapPropagator</code></a> propagator.</dd><dt><a class="fn" href="fn.meter.html" title="fn opentelemetry::global::meter">meter</a></dt><dd>Creates a named <a href="../metrics/struct.Meter.html" title="struct opentelemetry::metrics::Meter"><code>Meter</code></a> via the currently configured global <a href="../metrics/trait.MeterProvider.html" title="trait opentelemetry::metrics::MeterProvider"><code>MeterProvider</code></a>.</dd><dt><a class="fn" href="fn.meter_provider.html" title="fn opentelemetry::global::meter_provider">meter_<wbr>provider</a></dt><dd>Returns an instance of the currently configured global <a href="../metrics/trait.MeterProvider.html" title="trait opentelemetry::metrics::MeterProvider"><code>MeterProvider</code></a>.</dd><dt><a class="fn" href="fn.meter_with_scope.html" title="fn opentelemetry::global::meter_with_scope">meter_<wbr>with_<wbr>scope</a></dt><dd>Creates a <a href="../metrics/struct.Meter.html" title="struct opentelemetry::metrics::Meter"><code>Meter</code></a> with the given instrumentation scope.</dd><dt><a class="fn" href="fn.set_meter_provider.html" title="fn opentelemetry::global::set_meter_provider">set_<wbr>meter_<wbr>provider</a></dt><dd>Sets the given <a href="../metrics/trait.MeterProvider.html" title="trait opentelemetry::metrics::MeterProvider"><code>MeterProvider</code></a> instance as the current global meter
+provider.
+Libraries should NOT call this function. It is intended for applications/executables.</dd><dt><a class="fn" href="fn.set_text_map_propagator.html" title="fn opentelemetry::global::set_text_map_propagator">set_<wbr>text_<wbr>map_<wbr>propagator</a></dt><dd>Sets the given <a href="../propagation/text_map_propagator/trait.TextMapPropagator.html" title="trait opentelemetry::propagation::text_map_propagator::TextMapPropagator"><code>TextMapPropagator</code></a> propagator as the current global propagator.</dd><dt><a class="fn" href="fn.set_tracer_provider.html" title="fn opentelemetry::global::set_tracer_provider">set_<wbr>tracer_<wbr>provider</a></dt><dd>Sets the given <a href="../trace/trait.TracerProvider.html" title="trait opentelemetry::trace::TracerProvider"><code>TracerProvider</code></a> instance as the current global provider.</dd><dt><a class="fn" href="fn.tracer.html" title="fn opentelemetry::global::tracer">tracer</a></dt><dd>Creates a named instance of <a href="../trace/trait.Tracer.html" title="trait opentelemetry::trace::Tracer"><code>Tracer</code></a> via the configured <a href="struct.GlobalTracerProvider.html" title="struct opentelemetry::global::GlobalTracerProvider"><code>GlobalTracerProvider</code></a>.</dd><dt><a class="fn" href="fn.tracer_provider.html" title="fn opentelemetry::global::tracer_provider">tracer_<wbr>provider</a></dt><dd>Returns an instance of the currently configured global <a href="../trace/trait.TracerProvider.html" title="trait opentelemetry::trace::TracerProvider"><code>TracerProvider</code></a> through
+<a href="struct.GlobalTracerProvider.html" title="struct opentelemetry::global::GlobalTracerProvider"><code>GlobalTracerProvider</code></a>.</dd><dt><a class="fn" href="fn.tracer_with_scope.html" title="fn opentelemetry::global::tracer_with_scope">tracer_<wbr>with_<wbr>scope</a></dt><dd>Creates a <a href="../trace/trait.Tracer.html" title="trait opentelemetry::trace::Tracer"><code>Tracer</code></a> with the given instrumentation scope
+via the configured <a href="struct.GlobalTracerProvider.html" title="struct opentelemetry::global::GlobalTracerProvider"><code>GlobalTracerProvider</code></a>.</dd></dl></section></div></main></body></html>

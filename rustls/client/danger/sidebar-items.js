@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["DangerousClientConfig","DangerousClientConfigBuilder","HandshakeSignatureValid","ServerCertVerified"],"trait":["ServerCertVerifier"]};

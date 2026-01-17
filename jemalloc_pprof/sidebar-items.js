@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["activate_jemalloc_profiling","deactivate_jemalloc_profiling"],"static":["PROF_CTL"],"struct":["FlamegraphOptions","JemallocProfCtl","JemallocProfMetadata"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EIP1559_TX_TYPE_ID","EIP2930_TX_TYPE_ID","EIP4844_TX_TYPE_ID","EIP7702_TX_TYPE_ID","LEGACY_TX_TYPE_ID"],"enum":["Eip2718Error"],"struct":["WithEncoded"],"trait":["Decodable2718","Eip2718Envelope","Encodable2718","IsTyped2718","Typed2718"],"type":["Eip2718Result"]};

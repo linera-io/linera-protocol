@@ -1,0 +1,63 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`rustix` provides efficient memory-safe and I/O-safe wrappers to POSIX-like, Unix-like, Linux, and Winsock syscall-like APIs, with configurable backends."><title>rustix - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="rustix" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../rustix/index.html">rustix</a><span class="version">1.0.8</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#macros" title="Macros">Macros</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>rustix</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/rustix/lib.rs.html#1-426">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>rustix</code> provides efficient memory-safe and <a href="https://github.com/rust-lang/rfcs/blob/master/text/3128-io-safety.md">I/O-safe</a> wrappers to
+POSIX-like, Unix-like, Linux, and Winsock syscall-like APIs, with
+configurable backends.</p>
+<p>With rustix, you can write code like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>(nread, _received) = rustix::net::recv(<span class="kw-2">&amp;</span>sock, buf, RecvFlags::PEEK)<span class="question-mark">?</span>;</code></pre></div>
+<p>instead of like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>nread = <span class="kw">unsafe </span>{
+    <span class="attr">#[cfg(any(unix, target_os = <span class="string">"wasi"</span>))]
+    </span><span class="kw">let </span>raw = sock.as_raw_fd();
+    <span class="attr">#[cfg(windows)]
+    </span><span class="kw">let </span>raw = sock.as_raw_socket();
+    <span class="kw">match </span>libc::recv(
+        raw <span class="kw">as _</span>,
+        buf.as_mut_ptr().cast(),
+        buf.len().try_into().unwrap_or(i32::MAX <span class="kw">as _</span>),
+        MSG_PEEK,
+    ) {
+        -<span class="number">1 </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::last_os_error()),
+        nread =&gt; nread <span class="kw">as </span>usize,
+    }
+};</code></pre></div>
+<p>rustix’s APIs perform the following tasks:</p>
+<ul>
+<li>Error values are translated to <a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a>s.</li>
+<li>Buffers are passed as Rust slices.</li>
+<li>Out-parameters are presented as return values.</li>
+<li>Path arguments use <a href="path/trait.Arg.html" title="trait rustix::path::Arg"><code>Arg</code></a>, so they accept any string type.</li>
+<li>File descriptors are passed and returned via <a href="fd/trait.AsFd.html" title="trait rustix::fd::AsFd"><code>AsFd</code></a> and <a href="fd/struct.OwnedFd.html" title="struct rustix::fd::OwnedFd"><code>OwnedFd</code></a>
+instead of bare integers, ensuring I/O safety.</li>
+<li>Constants use <code>enum</code>s and <a href="../bitflags/index.html" title="mod bitflags"><code>bitflags</code></a> types, and enable <a href="../bitflags/index.html#externally-defined-flags" title="mod bitflags">support for
+externally defined flags</a>.</li>
+<li>Multiplexed functions (eg. <code>fcntl</code>, <code>ioctl</code>, etc.) are de-multiplexed.</li>
+<li>Variadic functions (eg. <code>openat</code>, etc.) are presented as non-variadic.</li>
+<li>Functions that return strings automatically allocate sufficient memory
+and retry the syscall as needed to determine the needed length.</li>
+<li>Functions and types which need <code>l</code> prefixes or <code>64</code> suffixes to enable
+large-file support (LFS) are used automatically. File sizes and offsets
+are always presented as <code>u64</code> and <code>i64</code>.</li>
+<li>Behaviors that depend on the sizes of C types like <code>long</code> are hidden.</li>
+<li>In some places, more human-friendly and less historical-accident names
+are used (and documentation aliases are used so that the original names
+can still be searched for).</li>
+<li>Provide y2038 compatibility, on platforms which support this.</li>
+<li>Correct selected platform bugs, such as behavioral differences when
+running under seccomp.</li>
+<li>Use <code>timespec</code> for timestamps and timeouts instead of <code>timeval</code> and
+<code>c_int</code> milliseconds.</li>
+</ul>
+<p>Things they don’t do include:</p>
+<ul>
+<li>Detecting whether functions are supported at runtime, except in specific
+cases where new interfaces need to be detected to support y2038 and LFS.</li>
+<li>Hiding significant differences between platforms.</li>
+<li>Restricting ambient authorities.</li>
+<li>Imposing sandboxing features such as filesystem path or network address
+sandboxing.</li>
+</ul>
+<p>See <a href="https://crates.io/crates/cap-std"><code>cap-std</code></a>, <a href="https://crates.io/crates/system-interface"><code>system-interface</code></a>, and <a href="https://crates.io/crates/io-streams"><code>io-streams</code></a> for libraries
+which do hide significant differences between platforms, and <a href="https://crates.io/crates/cap-std"><code>cap-std</code></a>
+which does perform sandboxing and restricts ambient authorities.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="buffer/index.html" title="mod rustix::buffer">buffer</a></dt><dd>Utilities for functions that return data via buffers.</dd><dt><a class="mod" href="fd/index.html" title="mod rustix::fd">fd</a></dt><dd>Export the <code>*Fd</code> types and traits that are used in rustix’s public API.</dd><dt><a class="mod" href="ffi/index.html" title="mod rustix::ffi">ffi</a></dt><dd>Utilities related to FFI bindings.</dd><dt><a class="mod" href="fs/index.html" title="mod rustix::fs">fs</a></dt><dd>Filesystem operations.</dd><dt><a class="mod" href="io/index.html" title="mod rustix::io">io</a></dt><dd>I/O operations.</dd><dt><a class="mod" href="ioctl/index.html" title="mod rustix::ioctl">ioctl</a></dt><dd>Unsafe <code>ioctl</code> API.</dd><dt><a class="mod" href="not_implemented/index.html" title="mod rustix::not_implemented">not_<wbr>implemented</a></dt><dd>Documentation about unimplemented functions.</dd><dt><a class="mod" href="path/index.html" title="mod rustix::path">path</a></dt><dd>Filesystem path operations.</dd></dl><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.cstr.html" title="macro rustix::cstr">cstr</a></dt><dd>A macro for <a href="ffi/struct.CStr.html" title="struct rustix::ffi::CStr"><code>CStr</code></a> literals.</dd></dl></section></div></main></body></html>

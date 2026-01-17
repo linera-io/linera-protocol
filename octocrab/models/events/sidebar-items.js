@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EventType"],"mod":["payload"],"struct":["Actor","Event","Org","Repository"]};

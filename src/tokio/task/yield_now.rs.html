@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.47.1/src/task/yield_now.rs`."><title>yield_now.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">tokio/task/</div>yield_now.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-2"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">crate</span>::runtime::context;
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>std::future::Future;
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>std::pin::Pin;
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>std::task::{ready, Context, Poll};
+<a href=#6 id=6 data-nosnippet>6</a>
+<a href=#7 id=7 data-nosnippet>7</a><span class="doccomment">/// Yields execution back to the Tokio runtime.
+<a href=#8 id=8 data-nosnippet>8</a>///
+<a href=#9 id=9 data-nosnippet>9</a>/// A task yields by awaiting on `yield_now()`, and may resume when that future
+<a href=#10 id=10 data-nosnippet>10</a>/// completes (with no output.) The current task will be re-added as a pending
+<a href=#11 id=11 data-nosnippet>11</a>/// task at the _back_ of the pending queue. Any other pending tasks will be
+<a href=#12 id=12 data-nosnippet>12</a>/// scheduled. No other waking is required for the task to continue.
+<a href=#13 id=13 data-nosnippet>13</a>///
+<a href=#14 id=14 data-nosnippet>14</a>/// See also the usage example in the [task module](index.html#yield_now).
+<a href=#15 id=15 data-nosnippet>15</a>///
+<a href=#16 id=16 data-nosnippet>16</a>/// ## Non-guarantees
+<a href=#17 id=17 data-nosnippet>17</a>///
+<a href=#18 id=18 data-nosnippet>18</a>/// This function may not yield all the way up to the executor if there are any
+<a href=#19 id=19 data-nosnippet>19</a>/// special combinators above it in the call stack. For example, if a
+<a href=#20 id=20 data-nosnippet>20</a>/// [`tokio::select!`] has another branch complete during the same poll as the
+<a href=#21 id=21 data-nosnippet>21</a>/// `yield_now()`, then the yield is not propagated all the way up to the
+<a href=#22 id=22 data-nosnippet>22</a>/// runtime.
+<a href=#23 id=23 data-nosnippet>23</a>///
+<a href=#24 id=24 data-nosnippet>24</a>/// It is generally not guaranteed that the runtime behaves like you expect it
+<a href=#25 id=25 data-nosnippet>25</a>/// to when deciding which task to schedule next after a call to `yield_now()`.
+<a href=#26 id=26 data-nosnippet>26</a>/// In particular, the runtime may choose to poll the task that just ran
+<a href=#27 id=27 data-nosnippet>27</a>/// `yield_now()` again immediately without polling any other tasks first. For
+<a href=#28 id=28 data-nosnippet>28</a>/// example, the runtime will not drive the IO driver between every poll of a
+<a href=#29 id=29 data-nosnippet>29</a>/// task, and this could result in the runtime polling the current task again
+<a href=#30 id=30 data-nosnippet>30</a>/// immediately even if there is another task that could make progress if that
+<a href=#31 id=31 data-nosnippet>31</a>/// other task is waiting for a notification from the IO driver.
+<a href=#32 id=32 data-nosnippet>32</a>///
+<a href=#33 id=33 data-nosnippet>33</a>/// In general, changes to the order in which the runtime polls tasks is not
+<a href=#34 id=34 data-nosnippet>34</a>/// considered a breaking change, and your program should be correct no matter
+<a href=#35 id=35 data-nosnippet>35</a>/// which order the runtime polls your tasks in.
+<a href=#36 id=36 data-nosnippet>36</a>///
+<a href=#37 id=37 data-nosnippet>37</a>/// [`tokio::select!`]: macro@crate::select
+<a href=#38 id=38 data-nosnippet>38</a></span><span class="attr">#[cfg_attr(docsrs, doc(cfg(feature = <span class="string">"rt"</span>)))]
+<a href=#39 id=39 data-nosnippet>39</a></span><span class="kw">pub async fn </span>yield_now() {
+<a href=#40 id=40 data-nosnippet>40</a>    <span class="doccomment">/// Yield implementation
+<a href=#41 id=41 data-nosnippet>41</a>    </span><span class="kw">struct </span>YieldNow {
+<a href=#42 id=42 data-nosnippet>42</a>        yielded: bool,
+<a href=#43 id=43 data-nosnippet>43</a>    }
+<a href=#44 id=44 data-nosnippet>44</a>
+<a href=#45 id=45 data-nosnippet>45</a>    <span class="kw">impl </span>Future <span class="kw">for </span>YieldNow {
+<a href=#46 id=46 data-nosnippet>46</a>        <span class="kw">type </span>Output = ();
+<a href=#47 id=47 data-nosnippet>47</a>
+<a href=#48 id=48 data-nosnippet>48</a>        <span class="kw">fn </span>poll(<span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; Poll&lt;()&gt; {
+<a href=#49 id=49 data-nosnippet>49</a>            <span class="macro">ready!</span>(<span class="kw">crate</span>::trace::trace_leaf(cx));
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a>            <span class="kw">if </span><span class="self">self</span>.yielded {
+<a href=#52 id=52 data-nosnippet>52</a>                <span class="kw">return </span>Poll::Ready(());
+<a href=#53 id=53 data-nosnippet>53</a>            }
+<a href=#54 id=54 data-nosnippet>54</a>
+<a href=#55 id=55 data-nosnippet>55</a>            <span class="self">self</span>.yielded = <span class="bool-val">true</span>;
+<a href=#56 id=56 data-nosnippet>56</a>
+<a href=#57 id=57 data-nosnippet>57</a>            context::defer(cx.waker());
+<a href=#58 id=58 data-nosnippet>58</a>
+<a href=#59 id=59 data-nosnippet>59</a>            Poll::Pending
+<a href=#60 id=60 data-nosnippet>60</a>        }
+<a href=#61 id=61 data-nosnippet>61</a>    }
+<a href=#62 id=62 data-nosnippet>62</a>
+<a href=#63 id=63 data-nosnippet>63</a>    YieldNow { yielded: <span class="bool-val">false </span>}.<span class="kw">await</span>;
+<a href=#64 id=64 data-nosnippet>64</a>}</code></pre></div></section></main></body></html>

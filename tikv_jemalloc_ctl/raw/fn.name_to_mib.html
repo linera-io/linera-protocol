@@ -1,0 +1,29 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Translates `name` to a `mib` (Management Information Base)"><title>name_to_mib in tikv_jemalloc_ctl::raw - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tikv_jemalloc_ctl" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tikv_jemalloc_ctl/index.html">tikv_<wbr>jemalloc_<wbr>ctl</a><span class="version">0.6.0</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"><h2><a href="index.html">In tikv_<wbr>jemalloc_<wbr>ctl::<wbr>raw</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">tikv_jemalloc_ctl</a>::<wbr><a href="index.html">raw</a></div><h1>Function <span class="fn">name_to_mib</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/tikv_jemalloc_ctl/raw.rs.html#40-53">Source</a> </span></div><pre class="rust item-decl"><code>pub fn name_to_mib(name: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>], mib: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>]) -&gt; <a class="type" href="../type.Result.html" title="type tikv_jemalloc_ctl::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.unit.html">()</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Translates <code>name</code> to a <code>mib</code> (Management Information Base)</p>
+<p><code>mib</code>s are used to avoid repeated name lookups for applications that
+repeatedly query the same portion of <code>jemalloc</code>s <code>mallctl</code> namespace.</p>
+<p>On success, <code>mib</code> contains an array of integers. It is possible to pass
+<code>mib</code> with a length smaller than the number of period-separated name
+components. This results in a partial MIB that can be used as the basis for
+constructing a complete MIB.</p>
+<p>For name components that are integers (e.g. the <code>2</code> in <code>arenas.bin.2.size</code>),
+the corresponding MIB component will always be that integer. Therefore, it
+is legitimate to construct code like the following:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[global_allocator]
+</span><span class="kw">static </span>ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+<span class="kw">fn </span>main() {
+    <span class="kw">use </span>tikv_jemalloc_ctl::raw;
+    <span class="kw">use </span>libc::{c_uint, c_char};
+    <span class="kw">unsafe </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>mib = [<span class="number">0</span>; <span class="number">4</span>];
+        <span class="kw">let </span>nbins: c_uint = raw::read(<span class="string">b"arenas.nbins\0"</span>).unwrap();
+        raw::name_to_mib(<span class="string">b"arenas.bin.0.size\0"</span>, <span class="kw-2">&amp;mut </span>mib).unwrap();
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">4 </span>{
+            mib[<span class="number">2</span>] = i;
+            <span class="kw">let </span>bin_size: usize = raw::read_mib(<span class="kw-2">&amp;mut </span>mib).unwrap();
+            <span class="macro">println!</span>(<span class="string">"arena bin {} has size {}"</span>, i, bin_size);
+        }
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

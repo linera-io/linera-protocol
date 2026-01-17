@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_telemetry_provider","set_telemetry_provider"]};

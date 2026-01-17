@@ -1,0 +1,96 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Execute a single SQL query as a prepared statement (transparently cached)."><title>query in sqlx_core::query - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sqlx_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sqlx_core/index.html">sqlx_<wbr>core</a><span class="version">0.8.6</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">query</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#dynamic-input-use-query-parameters-prevents-sql-injection" title="Dynamic Input: Use Query Parameters (Prevents SQL Injection)">Dynamic Input: Use Query Parameters (Prevents SQL Injection)</a><ul><li><a href="#you-should-always-prefer-query-parameters-for-dynamic-input" title="You should always prefer query parameters for dynamic input.">You should always prefer query parameters for dynamic input.</a></li><li><a href="#the-value-bound-to-a-query-parameter-is-entirely-separate-from-the-query-and-does-not-affect-its-syntax" title="The value bound to a query parameter is entirely separate from the query and does not affect its syntax.">The value bound to a query parameter is entirely separate from the query and does not affect its syntax.</a></li><li><a href="#sqlx-supports-many-different-types-for-parameter-binding-not-just-strings" title="SQLx supports many different types for parameter binding, not just strings.">SQLx supports many different types for parameter binding, not just strings.</a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In sqlx_<wbr>core::<wbr>query</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">sqlx_core</a>::<wbr><a href="index.html">query</a></div><h1>Function <span class="fn">query</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sqlx_core/query.rs.html#655-665">Source</a> </span></div><pre class="rust item-decl"><code>pub fn query&lt;DB&gt;(sql: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>) -&gt; <a class="struct" href="struct.Query.html" title="struct sqlx_core::query::Query">Query</a>&lt;'_, DB, &lt;DB as <a class="trait" href="../database/trait.Database.html" title="trait sqlx_core::database::Database">Database</a>&gt;::<a class="associatedtype" href="../database/trait.Database.html#associatedtype.Arguments" title="type sqlx_core::database::Database::Arguments">Arguments</a>&lt;'_&gt;&gt;<div class="where">where
+    DB: <a class="trait" href="../database/trait.Database.html" title="trait sqlx_core::database::Database">Database</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Execute a single SQL query as a prepared statement (transparently cached).</p>
+<p>The query string may only contain a single DML statement: <code>SELECT</code>, <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code> and variants.
+The SQLite driver does not currently follow this restriction, but that behavior is deprecated.</p>
+<p>The connection will transparently prepare and cache the statement, which means it only needs to be parsed once
+in the connection’s lifetime, and any generated query plans can be retained.
+Thus, the overhead of executing the statement is amortized.</p>
+<p>Some third-party databases that speak a supported protocol, e.g. CockroachDB or PGBouncer that speak Postgres,
+may have issues with the transparent caching of prepared statements. If you are having trouble,
+try setting <a href="struct.Query.html#method.persistent" title="method sqlx_core::query::Query::persistent"><code>.persistent(false)</code></a>.</p>
+<p>See the <a href="struct.Query.html" title="struct sqlx_core::query::Query"><code>Query</code></a> type for the methods you may call.</p>
+<h4 id="dynamic-input-use-query-parameters-prevents-sql-injection"><a class="doc-anchor" href="#dynamic-input-use-query-parameters-prevents-sql-injection">§</a>Dynamic Input: Use Query Parameters (Prevents SQL Injection)</h4>
+<p>At some point, you’ll likely want to include some form of dynamic input in your query, possibly from the user.</p>
+<p>Your first instinct might be to do something like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Imagine this is input from the user, e.g. a search form on a website.
+</span><span class="kw">let </span>user_input = <span class="string">"possibly untrustworthy input!"</span>;
+
+<span class="comment">// DO NOT DO THIS unless you're ABSOLUTELY CERTAIN it's what you need!
+</span><span class="kw">let </span>query = <span class="macro">format!</span>(<span class="string">"SELECT * FROM articles WHERE content LIKE '%{user_input}%'"</span>);
+<span class="comment">// where `conn` is `PgConnection` or `MySqlConnection`
+// or some other type that implements `Executor`.
+</span><span class="kw">let </span>results = sqlx::query(<span class="kw-2">&amp;</span>query).fetch_all(<span class="kw-2">&amp;mut </span>conn).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>The example above showcases a <strong>SQL injection vulnerability</strong>, because it’s trivial for a malicious user to craft
+an input that can “break out” of the string literal.</p>
+<p>For example, if they send the input <code>foo'; DELETE FROM articles; --</code>
+then your application would send the following to the database server (line breaks added for clarity):</p>
+<div class="example-wrap"><pre class="language-sql"><code>SELECT * FROM articles WHERE content LIKE &#39;%foo&#39;;
+DELETE FROM articles;
+--%&#39;</code></pre></div>
+<p>In this case, because this interface <em>always</em> uses prepared statements, you would likely be fine because prepared
+statements <em>generally</em> (see above) are only allowed to contain a single query. This would simply return an error.</p>
+<p>However, it would also break on legitimate user input.
+What if someone wanted to search for the string <code>Alice's Apples</code>? It would also return an error because
+the database would receive a query with a broken string literal (line breaks added for clarity):</p>
+<div class="example-wrap"><pre class="language-sql"><code>SELECT * FROM articles WHERE content LIKE &#39;%Alice&#39;
+s Apples%&#39;</code></pre></div>
+<p>Of course, it’s possible to make this syntactically valid by escaping the apostrophe, but there’s a better way.</p>
+<h6 id="you-should-always-prefer-query-parameters-for-dynamic-input"><a class="doc-anchor" href="#you-should-always-prefer-query-parameters-for-dynamic-input">§</a>You should always prefer query parameters for dynamic input.</h6>
+<p>When using query parameters, you add placeholders to your query where a value
+should be substituted at execution time, then call <a href="struct.Query.html#method.bind" title="method sqlx_core::query::Query::bind"><code>.bind()</code></a> with that value.</p>
+<p>The syntax for placeholders is unfortunately not standardized and depends on the database:</p>
+<ul>
+<li>Postgres and SQLite: use <code>$1</code>, <code>$2</code>, <code>$3</code>, etc.
+<ul>
+<li>The number is the Nth bound value, starting from one.</li>
+<li>The same placeholder can be used arbitrarily many times to refer to the same bound value.</li>
+<li>SQLite technically supports MySQL’s syntax as well as others, but we recommend using this syntax
+as SQLx’s SQLite driver is written with it in mind.</li>
+</ul>
+</li>
+<li>MySQL and MariaDB: use <code>?</code>.
+<ul>
+<li>Placeholders are purely positional, similar to <code>println!("{}, {}", foo, bar)</code>.</li>
+<li>The order of bindings must match the order of placeholders in the query.</li>
+<li>To use a value in multiple places, you must bind it multiple times.</li>
+</ul>
+</li>
+</ul>
+<p>In both cases, the placeholder syntax acts as a variable expression representing the bound value:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>user_input = <span class="string">"Alice's Apples"</span>;
+
+<span class="comment">// Postgres and SQLite
+</span><span class="kw">let </span>results = sqlx::query(
+    <span class="comment">// Notice how we only have to bind the argument once and we can use it multiple times:
+    </span><span class="string">"SELECT * FROM articles
+     WHERE title LIKE '%' || $1 || '%'
+     OR content LIKE '%' || $1 || '%'"
+</span>)
+    .bind(user_input)
+    .fetch_all(<span class="kw-2">&amp;mut </span>conn)
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="comment">// MySQL and MariaDB
+</span><span class="kw">let </span>results = sqlx::query(
+    <span class="string">"SELECT * FROM articles
+     WHERE title LIKE CONCAT('%', ?, '%')
+     OR content LIKE CONCAT('%', ?, '%')"
+</span>)
+    <span class="comment">// If we want to reference the same value multiple times, we have to bind it multiple times:
+    </span>.bind(user_input)
+    .bind(user_input)
+    .fetch_all(<span class="kw-2">&amp;mut </span>conn)
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<h6 id="the-value-bound-to-a-query-parameter-is-entirely-separate-from-the-query-and-does-not-affect-its-syntax"><a class="doc-anchor" href="#the-value-bound-to-a-query-parameter-is-entirely-separate-from-the-query-and-does-not-affect-its-syntax">§</a>The value bound to a query parameter is entirely separate from the query and does not affect its syntax.</h6>
+<p>Thus, SQL injection is impossible (barring shenanigans like calling a SQL function that lets you execute a string
+as a statement) and <em>all</em> strings are valid.</p>
+<p>This also means you cannot use query parameters to add conditional SQL fragments.</p>
+<p><strong>SQLx does not substitute placeholders on the client side</strong>. It is done by the database server itself.</p>
+<h6 id="sqlx-supports-many-different-types-for-parameter-binding-not-just-strings"><a class="doc-anchor" href="#sqlx-supports-many-different-types-for-parameter-binding-not-just-strings">§</a>SQLx supports many different types for parameter binding, not just strings.</h6>
+<p>Any type that implements <a href="../encode/trait.Encode.html" title="trait sqlx_core::encode::Encode"><code>Encode&lt;DB&gt;</code></a> and <a href="../types/trait.Type.html" title="trait sqlx_core::types::Type"><code>Type&lt;DB&gt;</code></a> can be bound as a parameter.</p>
+<p>See <a href="../types/index.html" title="mod sqlx_core::types">the <code>types</code> module</a> (links to <code>sqlx_core::types</code> but you should use <code>sqlx::types</code>) for details.</p>
+<p>As an additional benefit, query parameters are usually sent in a compact binary encoding instead of a human-readable
+text encoding, which saves bandwidth.</p>
+</div></details></section></div></main></body></html>

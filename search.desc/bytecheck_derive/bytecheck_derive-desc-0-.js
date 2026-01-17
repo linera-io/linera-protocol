@@ -1,0 +1,1 @@
+searchState.loadedDescShard("bytecheck_derive", 0, "Procedural macros for bytecheck.\nDerives <code>CheckBytes</code> for the labeled type.")
