@@ -52,12 +52,10 @@ metrics = [
     "linera-faucet-server/metrics",
     "linera-metrics",
 ]
-jemalloc = ["tikv-jemallocator"]
-memory-profiling = [
-    "metrics",
-    "jemalloc",
+jemalloc = [
+    "tikv-jemallocator",
     "tikv-jemallocator/profiling",
-    "linera-metrics/memory-profiling",
+    "linera-metrics/jemalloc",
 ]
 storage-service = ["linera-storage-service"]
 

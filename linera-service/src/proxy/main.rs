@@ -6,20 +6,21 @@
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 // jemalloc configuration for memory profiling with jemalloc_pprof
-// prof:true,prof_active:true - Enable profiling from start
+// prof:true - Enable profiling infrastructure
+// prof_active:false - Sampling disabled by default, enabled via --enable-memory-profiling
 // lg_prof_sample:19 - Sample every 512KB for good detail/overhead balance
 
 // Linux/other platforms: use unprefixed malloc (with unprefixed_malloc_on_supported_platforms)
-#[cfg(all(feature = "memory-profiling", not(target_os = "macos")))]
+#[cfg(all(feature = "jemalloc", not(target_os = "macos")))]
 #[allow(non_upper_case_globals)]
 #[export_name = "malloc_conf"]
-pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+pub static malloc_conf: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
 // macOS: use prefixed malloc (without unprefixed_malloc_on_supported_platforms)
-#[cfg(all(feature = "memory-profiling", target_os = "macos"))]
+#[cfg(all(feature = "jemalloc", target_os = "macos"))]
 #[allow(non_upper_case_globals)]
 #[export_name = "_rjem_malloc_conf"]
-pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+pub static malloc_conf: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
@@ -100,6 +101,11 @@ pub struct ProxyOptions {
     /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
     #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
     otlp_exporter_endpoint: Option<String>,
+
+    /// Enable memory profiling (requires jemalloc feature and metrics).
+    /// Exposes /debug/pprof and /debug/flamegraph endpoints on the metrics server.
+    #[arg(long, env = "LINERA_ENABLE_MEMORY_PROFILING")]
+    enable_memory_profiling: bool,
 }
 
 /// A Linera Proxy, either gRPC or over 'Simple Transport', meaning TCP or UDP.
@@ -118,6 +124,7 @@ struct ProxyContext {
     send_timeout: Duration,
     recv_timeout: Duration,
     id: usize,
+    enable_memory_profiling: bool,
 }
 
 impl ProxyContext {
@@ -128,6 +135,7 @@ impl ProxyContext {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
             id: options.id.unwrap_or(0),
+            enable_memory_profiling: options.enable_memory_profiling,
         })
     }
 }
@@ -140,12 +148,35 @@ impl Runnable for ProxyContext {
     where
         S: Storage + Clone + Send + Sync + 'static,
     {
+        // Activate memory profiling if requested
+        if self.enable_memory_profiling {
+            #[cfg(feature = "jemalloc")]
+            {
+                linera_metrics::memory_profiler::MemoryProfiler::activate()
+                    .await
+                    .expect("Failed to activate memory profiling");
+            }
+            #[cfg(not(feature = "jemalloc"))]
+            {
+                bail!("--enable-memory-profiling requires the binary to be compiled with the 'jemalloc' feature");
+            }
+        }
+
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+        let enable_memory_profiling = self.enable_memory_profiling;
         let proxy = Proxy::from_context(self, storage)?;
         match proxy {
-            Proxy::Simple(simple_proxy) => simple_proxy.run(shutdown_notifier).await,
-            Proxy::Grpc(grpc_proxy) => grpc_proxy.run(shutdown_notifier).await,
+            Proxy::Simple(simple_proxy) => {
+                simple_proxy
+                    .run(shutdown_notifier, enable_memory_profiling)
+                    .await
+            }
+            Proxy::Grpc(grpc_proxy) => {
+                grpc_proxy
+                    .run(shutdown_notifier, enable_memory_profiling)
+                    .await
+            }
         }
     }
 }
@@ -263,13 +294,21 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     #[instrument(name = "SimpleProxy::run", skip_all, fields(port = self.public_config.port, metrics_port = self.metrics_port()), err)]
-    async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
+    async fn run(
+        self,
+        shutdown_signal: CancellationToken,
+        _enable_memory_profiling: bool,
+    ) -> Result<()> {
         info!("Starting proxy");
         let mut join_set = JoinSet::new();
         let address = self.get_listen_address();
 
         #[cfg(with_metrics)]
-        monitoring_server::start_metrics(address, shutdown_signal.clone());
+        monitoring_server::start_metrics(
+            address,
+            shutdown_signal.clone(),
+            _enable_memory_profiling.into(),
+        );
 
         self.public_config
             .protocol
