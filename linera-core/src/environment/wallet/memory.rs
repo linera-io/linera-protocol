@@ -3,6 +3,7 @@
 
 use futures::{Stream, StreamExt as _};
 use linera_base::identifiers::ChainId;
+use serde::{ser::SerializeMap, Serialize, Serializer};
 
 use super::{Chain, Wallet};
 
@@ -11,8 +12,21 @@ use super::{Chain, Wallet};
 ///
 /// This can be used as-is as an ephemeral wallet for testing or ephemeral clients, or as
 /// a building block for more complex wallets that layer persistence on top of it.
-#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Clone, serde::Deserialize)]
 pub struct Memory(papaya::HashMap<ChainId, Chain>);
+
+/// Custom Serialize implementation that ensures stable ordering by sorting entries by ChainId.
+impl Serialize for Memory {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut items: Vec<_> = self.0.pin().iter().map(|(k, v)| (*k, v.clone())).collect();
+        items.sort_by_key(|(k, _)| *k);
+        let mut map = serializer.serialize_map(Some(items.len()))?;
+        for (k, v) in items {
+            map.serialize_entry(&k, &v)?;
+        }
+        map.end()
+    }
+}
 
 impl Memory {
     pub fn get(&self, id: ChainId) -> Option<Chain> {
@@ -114,5 +128,70 @@ impl Wallet for Memory {
         f: impl FnMut(&mut Chain) + Send,
     ) -> Result<Option<()>, Self::Error> {
         Ok(self.mutate(id, f))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_base::{crypto::CryptoHash, data_types::Timestamp};
+
+    use super::*;
+
+    fn make_chain(height: u64) -> Chain {
+        Chain {
+            owner: None,
+            block_hash: None,
+            next_block_height: height.into(),
+            timestamp: Timestamp::from(0),
+            pending_proposal: None,
+            epoch: None,
+        }
+    }
+
+    #[test]
+    fn test_memory_serialization_roundtrip() {
+        let memory = Memory::default();
+
+        // Insert chains in non-sorted order using different hashes
+        let id1 = ChainId(CryptoHash::test_hash("chain1"));
+        let id2 = ChainId(CryptoHash::test_hash("chain2"));
+        let id3 = ChainId(CryptoHash::test_hash("chain3"));
+
+        memory.insert(id2, make_chain(2));
+        memory.insert(id1, make_chain(1));
+        memory.insert(id3, make_chain(3));
+
+        // Serialize to JSON
+        let json = serde_json::to_string_pretty(&memory).unwrap();
+
+        // Deserialize back
+        let restored: Memory = serde_json::from_str(&json).unwrap();
+
+        // Verify data matches
+        assert_eq!(restored.get(id1).unwrap().next_block_height, 1.into());
+        assert_eq!(restored.get(id2).unwrap().next_block_height, 2.into());
+        assert_eq!(restored.get(id3).unwrap().next_block_height, 3.into());
+    }
+
+    #[test]
+    fn test_memory_serialization_is_stable() {
+        let memory = Memory::default();
+
+        let id1 = ChainId(CryptoHash::test_hash("a"));
+        let id2 = ChainId(CryptoHash::test_hash("b"));
+        let id3 = ChainId(CryptoHash::test_hash("c"));
+
+        // Insert in non-sorted order
+        memory.insert(id3, make_chain(3));
+        memory.insert(id1, make_chain(1));
+        memory.insert(id2, make_chain(2));
+
+        // Serialize multiple times and verify output is identical
+        let json1 = serde_json::to_string(&memory).unwrap();
+        let json2 = serde_json::to_string(&memory).unwrap();
+        let json3 = serde_json::to_string(&memory).unwrap();
+
+        assert_eq!(json1, json2);
+        assert_eq!(json2, json3);
     }
 }
