@@ -9,11 +9,7 @@ use std::{
 use futures::{lock::Mutex, stream::StreamExt, FutureExt};
 use linera_base::identifiers::{ApplicationId, ChainId};
 use linera_client::chain_listener::{ClientContext, ListenerCommand};
-use linera_core::{
-    client::{ChainClient, ListeningMode},
-    node::NotificationStream,
-    worker::Reason,
-};
+use linera_core::{client::ChainClient, node::NotificationStream, worker::Reason};
 use linera_sdk::abis::controller::{LocalWorkerState, Operation, WorkerCommand};
 use serde_json::json;
 use tokio::{
@@ -178,9 +174,10 @@ where
         let desired_listened: BTreeSet<_> = active_chains.union(&local_chains).cloned().collect();
 
         // New chains to listen (neither had processor nor were in listened_local_chains)
+        let owner = worker.owner;
         let new_chains: BTreeMap<_, _> = desired_listened
             .difference(&old_listened)
-            .map(|chain_id| (*chain_id, ListeningMode::FullChain))
+            .map(|chain_id| (*chain_id, Some(owner)))
             .collect();
 
         // Chains to stop listening (were listened but no longer needed)
