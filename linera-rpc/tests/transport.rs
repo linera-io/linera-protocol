@@ -24,7 +24,7 @@ async fn client() {
         timeout: Some(Duration::from_millis(100)),
     };
     let channel = create_channel(address.clone(), &options).unwrap();
-    let _ = GrpcClient::new(address, channel, retry_delay, max_retries)
+    GrpcClient::new(address, channel, retry_delay, max_retries)
         .get_version_info()
         .await
         .unwrap();

@@ -139,7 +139,7 @@ where
     }
 
     fn increment_destination_state(&self) {
-        let _ = self.destination_state.fetch_add(1, Ordering::Release);
+        self.destination_state.fetch_add(1, Ordering::Release);
         #[cfg(with_metrics)]
         crate::metrics::DESTINATION_STATE_COUNTER
             .with_label_values(&[self.node.address()])
@@ -172,7 +172,7 @@ where
             }
         });
 
-        let _ = try_join_all(tasks).await?;
+        try_join_all(tasks).await?;
 
         Ok(())
     }
@@ -256,7 +256,8 @@ where
         }
 
         while let Some(certificate) = futures.next().await.transpose()? {
-            let _ = self.buffer.send(certificate).await;
+            // Ignore send errors; the receiver may have been dropped during shutdown.
+            self.buffer.send(certificate).await.ok();
             futures.push_back(self.get_block_task(index));
             index += 1;
         }

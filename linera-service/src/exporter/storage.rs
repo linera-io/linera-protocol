@@ -112,7 +112,7 @@ where
                 let block = self.storage.read_certificate(hash).await?;
                 let block = block.ok_or_else(|| ExporterError::ReadCertificateError(hash))?;
                 let heaped_block = Arc::new(block);
-                let _ = guard.insert(heaped_block.clone());
+                guard.insert(heaped_block.clone()).ok();
                 Ok(heaped_block)
             }
         }
@@ -126,7 +126,7 @@ where
                 metrics::GET_BLOB_HISTOGRAM.measure_latency();
                 let blob = self.storage.read_blob(blob_id).await?.unwrap();
                 let heaped_blob = Arc::new(blob);
-                let _ = guard.insert(heaped_blob.clone());
+                guard.insert(heaped_blob.clone()).ok();
                 Ok(heaped_blob)
             }
         }
@@ -454,7 +454,7 @@ where
                         .ok_or(ExporterError::UnprocessedBlock)?
                 };
 
-                let _ = guard.insert(block.clone());
+                guard.insert(block.clone()).ok();
                 Ok(block)
             }
         }

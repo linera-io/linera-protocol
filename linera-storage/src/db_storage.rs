@@ -1013,7 +1013,8 @@ impl TestClockInner {
         self.time = time;
         let senders = self.sleeps.split_off(&Reverse(time));
         for sender in senders.into_values().flatten() {
-            let _ = sender.send(());
+            // Receiver may have been dropped if the sleep was cancelled.
+            sender.send(()).ok();
         }
     }
 
@@ -1031,9 +1032,11 @@ impl TestClockInner {
         if should_auto_advance && time > self.time {
             // Auto-advance mode: immediately advance the clock and complete the sleep.
             self.set(time);
-            let _ = sender.send(());
+            // Receiver may have been dropped if the sleep was cancelled.
+            sender.send(()).ok();
         } else if self.time >= time {
-            let _ = sender.send(());
+            // Receiver may have been dropped if the sleep was cancelled.
+            sender.send(()).ok();
         } else {
             self.sleeps.entry(Reverse(time)).or_default().push(sender);
         }
@@ -1060,12 +1063,14 @@ impl Clock for TestClock {
             return;
         }
         let receiver = self.lock().add_sleep(delta);
-        let _ = receiver.await;
+        // Sender may have been dropped if the clock was dropped; just stop waiting.
+        receiver.await.ok();
     }
 
     async fn sleep_until(&self, timestamp: Timestamp) {
         let receiver = self.lock().add_sleep_until(timestamp);
-        let _ = receiver.await;
+        // Sender may have been dropped if the clock was dropped; just stop waiting.
+        receiver.await.ok();
     }
 }
 

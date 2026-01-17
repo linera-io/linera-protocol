@@ -4193,7 +4193,7 @@ where
         .into_first_proposal(owner, &signer)
         .await
         .unwrap();
-    let _ = env.worker().handle_block_proposal(block_proposal).await?;
+    env.worker().handle_block_proposal(block_proposal).await?;
 
     for local_time in queries_before_confirmation {
         clock.set(local_time);
@@ -4216,7 +4216,7 @@ where
     }
     .into_view()
     .await;
-    let _ = state.register_mock_application(0).await?;
+    state.register_mock_application(0).await?;
 
     let value = ConfirmedBlock::new(
         BlockExecutionOutcome {

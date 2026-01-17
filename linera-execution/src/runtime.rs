@@ -953,10 +953,10 @@ where
     #[cfg(web)]
     fn send_log(&mut self, message: String, level: tracing::log::Level) {
         let this = self.inner();
-        // Fire-and-forget: ignore errors since logging shouldn't affect execution
-        let _ = this
-            .execution_state_sender
-            .unbounded_send(ExecutionRequest::Log { message, level });
+        // Fire-and-forget: ignore errors since logging shouldn't affect execution.
+        this.execution_state_sender
+            .unbounded_send(ExecutionRequest::Log { message, level })
+            .ok();
     }
 }
 

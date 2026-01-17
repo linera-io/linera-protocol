@@ -80,7 +80,7 @@ impl Extend<(ChainId, Chain)> for Memory {
     fn extend<It: IntoIterator<Item = (ChainId, Chain)>>(&mut self, chains: It) {
         let map = self.0.pin();
         for (id, chain) in chains {
-            let _ = map.insert(id, chain);
+            map.insert(id, chain);
         }
     }
 }

@@ -130,7 +130,7 @@ impl AcknowledgementTask {
     }
 
     fn increment_destination_state(&self) {
-        let _ = self.destination_state.fetch_add(1, Ordering::Release);
+        self.destination_state.fetch_add(1, Ordering::Release);
     }
 }
 

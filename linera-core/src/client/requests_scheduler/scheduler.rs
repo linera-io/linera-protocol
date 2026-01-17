@@ -1326,7 +1326,7 @@ mod tests {
         // Wait for all requests to complete
         let _result1 = first_request.await.unwrap();
         for handle in handles {
-            let _ = handle.await.unwrap();
+            handle.await.unwrap().ok();
         }
 
         // After completion, the in-flight entry should be removed
