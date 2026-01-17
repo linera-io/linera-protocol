@@ -42,3 +42,6 @@ CLAUDE.md
 .serena
 docs/
 /.zed/
+
+# Git worktrees
+.worktrees/

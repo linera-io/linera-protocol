@@ -150,6 +150,10 @@ pub trait ValidatorNode {
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError>;
 
     /// Requests a batch of certificates from a specific chain by heights.
+    ///
+    /// Returns certificates in ascending order by height. This method does not guarantee
+    /// that all requested heights will be returned; if some certificates are missing,
+    /// the caller must handle that.
     async fn download_certificates_by_heights(
         &self,
         chain_id: ChainId,
