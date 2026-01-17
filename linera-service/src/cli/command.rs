@@ -1215,6 +1215,20 @@ pub enum WalletCommand {
         set_default: bool,
     },
 
+    /// Export the genesis configuration to a JSON file.
+    ///
+    /// By default, exports the genesis config from the current wallet. Alternatively,
+    /// use `--faucet` to retrieve the genesis config directly from a faucet URL.
+    ExportGenesis {
+        /// Path to save the genesis configuration JSON file.
+        output: PathBuf,
+
+        /// The address of a faucet to retrieve the genesis config from.
+        /// If not specified, the genesis config is read from the current wallet.
+        #[arg(long)]
+        faucet: Option<String>,
+    },
+
     /// Add a new followed chain (i.e. a chain without keypair) to the wallet.
     FollowChain {
         /// The chain ID.

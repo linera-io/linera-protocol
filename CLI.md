@@ -42,6 +42,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera wallet set-default`↴](#linera-wallet-set-default)
 * [`linera wallet init`↴](#linera-wallet-init)
 * [`linera wallet request-chain`↴](#linera-wallet-request-chain)
+* [`linera wallet export-genesis`↴](#linera-wallet-export-genesis)
 * [`linera wallet follow-chain`↴](#linera-wallet-follow-chain)
 * [`linera wallet forget-keys`↴](#linera-wallet-forget-keys)
 * [`linera wallet forget-chain`↴](#linera-wallet-forget-chain)
@@ -914,6 +915,7 @@ Show the contents of the wallet
 * `set-default` — Change the wallet default chain
 * `init` — Initialize a wallet from the genesis configuration
 * `request-chain` — Request a new chain from a faucet and add it to the wallet
+* `export-genesis` — Export the genesis configuration to a JSON file
 * `follow-chain` — Add a new followed chain (i.e. a chain without keypair) to the wallet
 * `forget-keys` — Forgets the specified chain's keys. The chain will still be followed by the wallet
 * `forget-chain` — Forgets the specified chain, including the associated key pair
@@ -973,6 +975,24 @@ Request a new chain from a faucet and add it to the wallet
 
 * `--faucet <FAUCET>` — The address of a faucet
 * `--set-default` — Whether this chain should become the default chain
+
+
+
+## `linera wallet export-genesis`
+
+Export the genesis configuration to a JSON file.
+
+By default, exports the genesis config from the current wallet. Alternatively, use `--faucet` to retrieve the genesis config directly from a faucet URL.
+
+**Usage:** `linera wallet export-genesis [OPTIONS] <OUTPUT>`
+
+###### **Arguments:**
+
+* `<OUTPUT>` — Path to save the genesis configuration JSON file
+
+###### **Options:**
+
+* `--faucet <FAUCET>` — The address of a faucet to retrieve the genesis config from. If not specified, the genesis config is read from the current wallet
 
 
 
