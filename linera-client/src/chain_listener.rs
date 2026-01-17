@@ -14,7 +14,7 @@ use futures::{
 };
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{ChainDescription, Epoch, Timestamp},
+    data_types::{ChainDescription, Epoch, MessagePolicy, Timestamp},
     identifiers::{AccountOwner, BlobType, ChainId},
     task::NonBlockingFuture,
     util::future::FutureSyncExt as _,
@@ -202,6 +202,8 @@ pub enum ListenerCommand {
     Listen(BTreeMap<ChainId, ListeningMode>),
     /// Command: stop listening to the given chains.
     StopListening(BTreeSet<ChainId>),
+    /// Command: set the message policies of some chain clients.
+    SetMessagePolicy(BTreeMap<ChainId, MessagePolicy>),
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
@@ -605,6 +607,20 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                                     continue;
                                 };
                                 listening_client.stop().await;
+                            }
+                        }
+                        ListenerCommand::SetMessagePolicy(policies) => {
+                            debug!(?policies, "received command to set message policies");
+                            for (chain_id, policy) in policies {
+                                let Some(listening_client) = self.listening.get_mut(&chain_id) else {
+                                    error!(
+                                        %chain_id,
+                                        "attempted to set the message policy of a non-existent \
+                                        listener"
+                                    );
+                                    continue;
+                                };
+                                listening_client.client.options_mut().message_policy = policy;
                             }
                         }
                     }

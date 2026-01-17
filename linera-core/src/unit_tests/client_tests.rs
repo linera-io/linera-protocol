@@ -45,7 +45,7 @@ use crate::test_utils::ServiceStorageBuilder;
 use crate::{
     client::{
         chain_client::{self, ChainClient},
-        BlanketMessagePolicy, ClientOutcome, ListeningMode, MessageAction, MessagePolicy,
+        ClientOutcome, ListeningMode, MessageAction,
     },
     local_node::LocalNodeError,
     node::{

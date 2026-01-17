@@ -4,14 +4,14 @@
 use std::{collections::HashSet, fmt, iter};
 
 use linera_base::{
-    data_types::{ApplicationPermissions, TimeDelta},
+    data_types::{ApplicationPermissions, BlanketMessagePolicy, MessagePolicy, TimeDelta},
     identifiers::{AccountOwner, ApplicationId, ChainId, GenericApplicationId},
     ownership::ChainOwnership,
     time::Duration,
 };
 use linera_core::{
     client::{
-        chain_client, BlanketMessagePolicy, MessagePolicy, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+        chain_client, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
