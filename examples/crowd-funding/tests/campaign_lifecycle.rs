@@ -69,7 +69,7 @@ async fn collect_pledges() {
     let mut pledges_and_transfers = Vec::new();
 
     for (backer_chain, backer_account, _balance) in &backers {
-        let pledge_certificate = backer_chain
+        let (pledge_certificate, _) = backer_chain
             .add_block(|block| {
                 block.with_operation(
                     campaign_id,
@@ -171,7 +171,7 @@ async fn cancel_successful_campaign() {
     let mut pledges_and_transfers = Vec::new();
 
     for (backer_chain, backer_account, _balance) in &backers {
-        let pledge_certificate = backer_chain
+        let (pledge_certificate, _) = backer_chain
             .add_block(|block| {
                 block.with_operation(
                     campaign_id,

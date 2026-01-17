@@ -19,7 +19,7 @@ use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_core::worker::WorkerError;
-use linera_execution::{system::SystemOperation, Operation};
+use linera_execution::{system::SystemOperation, Operation, ResourceTracker};
 
 use super::TestValidator;
 
@@ -200,11 +200,12 @@ impl BlockBuilder {
     }
 
     /// Tries to sign the prepared block with the [`TestValidator`]'s keys and return the
-    /// resulting [`Certificate`]. Returns an error if block execution fails.
+    /// resulting [`Certificate`] and the [`ResourceTracker`] with execution costs.
+    /// Returns an error if block execution fails.
     pub(crate) async fn try_sign(
         self,
         blobs: &[Blob],
-    ) -> Result<ConfirmedBlockCertificate, WorkerError> {
+    ) -> Result<(ConfirmedBlockCertificate, ResourceTracker), WorkerError> {
         let published_blobs = self
             .block
             .published_blob_ids()
@@ -217,7 +218,7 @@ impl BlockBuilder {
                     .clone()
             })
             .collect();
-        let (block, _) = self
+        let (block, _, resource_tracker) = self
             .validator
             .worker()
             .stage_block_execution(self.block, None, published_blobs)
@@ -237,6 +238,6 @@ impl BlockBuilder {
             .expect("Failed to sign block")
             .expect("Committee has more than one test validator");
 
-        Ok(certificate)
+        Ok((certificate, resource_tracker))
     }
 }

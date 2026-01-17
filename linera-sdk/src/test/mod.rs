@@ -24,7 +24,7 @@ pub use {
         data_types::MessageAction, test::HttpServer, ChainError, ChainExecutionContext,
     },
     linera_core::worker::WorkerError,
-    linera_execution::{ExecutionError, QueryOutcome, WasmExecutionError},
+    linera_execution::{ExecutionError, QueryOutcome, ResourceTracker, WasmExecutionError},
 };
 
 #[cfg(with_testing)]

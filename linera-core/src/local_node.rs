@@ -18,7 +18,7 @@ use linera_chain::{
     types::{Block, GenericCertificate},
     ChainStateView,
 };
-use linera_execution::{committee::Committee, BlobState, Query, QueryOutcome};
+use linera_execution::{committee::Committee, BlobState, Query, QueryOutcome, ResourceTracker};
 use linera_storage::Storage;
 use linera_views::ViewError;
 use thiserror::Error;
@@ -139,7 +139,7 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse), LocalNodeError> {
+    ) -> Result<(Block, ChainInfoResponse, ResourceTracker), LocalNodeError> {
         Ok(self
             .node
             .state
