@@ -177,14 +177,6 @@ releases:
     set:
       - name: crds.enabled
         value: "true"
-  - name: tempo
-    version: 1.23.3
-    namespace: tempo
-    chart: grafana/tempo
-    timeout: 900
-    installed: {{ env "LINERA_HELMFILE_SET_TEMPO_ENABLED" | default "false" }}
-    values:
-      - {{ env "LINERA_HELMFILE_VALUES_LINERA_CORE" | default "values-local.yaml.gotmpl" }}
   - name: observability-alloy
     version: 1.3.1
     namespace: monitoring
