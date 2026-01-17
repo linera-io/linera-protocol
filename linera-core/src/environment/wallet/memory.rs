@@ -18,11 +18,12 @@ pub struct Memory(papaya::HashMap<ChainId, Chain>);
 /// Custom Serialize implementation that ensures stable ordering by sorting entries by ChainId.
 impl Serialize for Memory {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut items: Vec<_> = self.0.pin().iter().map(|(k, v)| (*k, v.clone())).collect();
+        let guard = self.0.pin();
+        let mut items: Vec<_> = guard.iter().collect();
         items.sort_by_key(|(k, _)| *k);
         let mut map = serializer.serialize_map(Some(items.len()))?;
         for (k, v) in items {
-            map.serialize_entry(&k, &v)?;
+            map.serialize_entry(k, v)?;
         }
         map.end()
     }
@@ -174,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn test_memory_serialization_is_stable() {
+    fn test_memory_serialization_is_sorted() {
         let memory = Memory::default();
 
         let id1 = ChainId(CryptoHash::test_hash("a"));
@@ -186,12 +187,12 @@ mod tests {
         memory.insert(id1, make_chain(1));
         memory.insert(id2, make_chain(2));
 
-        // Serialize multiple times and verify output is identical
-        let json1 = serde_json::to_string(&memory).unwrap();
-        let json2 = serde_json::to_string(&memory).unwrap();
-        let json3 = serde_json::to_string(&memory).unwrap();
-
-        assert_eq!(json1, json2);
-        assert_eq!(json2, json3);
+        // Serialize and verify output keys are sorted
+        let json = serde_json::to_string(&memory).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let keys: Vec<_> = value.as_object().unwrap().keys().collect();
+        let mut sorted_keys = keys.clone();
+        sorted_keys.sort();
+        assert_eq!(keys, sorted_keys);
     }
 }
