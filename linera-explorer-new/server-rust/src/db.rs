@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
