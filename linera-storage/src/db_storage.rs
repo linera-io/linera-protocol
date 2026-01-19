@@ -984,10 +984,7 @@ where
                 }
             } else {
                 // This should not happen, but log a warning if it does.
-                tracing::warn!(
-                    hash=?hash,
-                    "certificate hash not found in indices map",
-                );
+                tracing::error!(?hash, "certificate hash not found in indices map",);
             }
         }
 
