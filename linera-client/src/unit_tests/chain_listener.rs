@@ -61,6 +61,7 @@ impl chain_listener::ClientContext for ClientContext {
         // Generate a default name if not provided.
         let name = match name {
             Some(n) => n,
+            None if chain_id == self.client.admin_chain() => "admin".to_string(),
             None => wallet::next_default_chain_name(self.wallet()).await?,
         };
         // Ignore if chain already exists in wallet; test mock doesn't care.
@@ -78,6 +79,7 @@ impl chain_listener::ClientContext for ClientContext {
         let chain_id = info.chain_id;
         let existing_name = match self.wallet().get(chain_id) {
             Some(c) => c.name.clone(),
+            None if chain_id == self.client.admin_chain() => "admin".to_string(),
             None => wallet::next_default_chain_name(self.wallet()).await?,
         };
         let client_owner = client.preferred_owner();

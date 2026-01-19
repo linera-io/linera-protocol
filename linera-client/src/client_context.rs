@@ -364,6 +364,20 @@ impl<Env: Environment> ClientContext<Env> {
         self.client.admin_chain()
     }
 
+    /// Returns the default name for a chain.
+    ///
+    /// Returns "admin" for the admin chain, otherwise generates "user-N" where N is
+    /// one more than the highest existing user number.
+    async fn default_chain_name(&self, chain_id: ChainId) -> Result<String, Error> {
+        if chain_id == self.admin_chain() {
+            return Ok("admin".to_string());
+        }
+        wallet::next_default_chain_name(self.wallet())
+            .await
+            .map_err(error::Inner::wallet)
+            .map_err(Error::from)
+    }
+
     /// Retrieve the default account. Current this is the common account of the default
     /// chain.
     pub fn default_account(&self) -> Account {
@@ -421,9 +435,7 @@ impl<Env: Environment> ClientContext<Env> {
             .map_err(error::Inner::wallet)?;
         let name = match existing {
             Some(chain) => chain.name,
-            None => wallet::next_default_chain_name(self.wallet())
-                .await
-                .map_err(error::Inner::wallet)?,
+            None => self.default_chain_name(chain_id).await?,
         };
         let new_chain = wallet::Chain {
             name,
@@ -445,8 +457,8 @@ impl<Env: Environment> ClientContext<Env> {
 
     /// Remembers the new chain and its owner (if any) in the wallet.
     ///
-    /// If `name` is `None`, generates a default name like "user-N" where N is
-    /// one more than the highest existing user number.
+    /// If `name` is `None`, generates a default name: "admin" for the admin chain,
+    /// or "user-N" where N is one more than the highest existing user number.
     pub async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
@@ -457,9 +469,7 @@ impl<Env: Environment> ClientContext<Env> {
     ) -> Result<(), Error> {
         let name = match name {
             Some(n) => n,
-            None => wallet::next_default_chain_name(self.wallet())
-                .await
-                .map_err(error::Inner::wallet)?,
+            None => self.default_chain_name(chain_id).await?,
         };
         self.wallet()
             .try_insert(chain_id, wallet::Chain::new(name, owner, epoch, timestamp))
@@ -539,9 +549,7 @@ impl<Env: Environment> ClientContext<Env> {
         if modified.is_none() {
             let name = match name {
                 Some(n) => n,
-                None => wallet::next_default_chain_name(self.wallet())
-                    .await
-                    .map_err(error::Inner::wallet)?,
+                None => self.default_chain_name(chain_id).await?,
             };
             self.wallet()
                 .insert(
@@ -996,9 +1004,7 @@ impl<Env: Environment> ClientContext<Env> {
                     .map_err(error::Inner::wallet)?;
                 let name = match existing {
                     Some(chain) => chain.name,
-                    None => wallet::next_default_chain_name(self.wallet())
-                        .await
-                        .map_err(error::Inner::wallet)?,
+                    None => self.default_chain_name(chain_id).await?,
                 };
                 let client_owner = chain_client.preferred_owner();
                 let pending_proposal = chain_client.pending_proposal().clone();
