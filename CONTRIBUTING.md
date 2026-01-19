@@ -67,7 +67,7 @@ Contributions should generally follow the [Rust API guidelines](https://rust-lan
 * Re-exports (`pub use foo = bar::foo`) should be limited to definitions that would be private otherwise.
 
 * Avoid `let _ = ...` to discard values, because it can hide important information like
-  unawaited futures or unhandled errors.
+  unawaited futures or unhandled errors. `let _x =` should only be used for RAII guards.
 
 
 ## Formatting and linting
