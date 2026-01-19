@@ -20,6 +20,7 @@ reqwest = ["dep:reqwest"]
 revm = []
 test = ["test-strategy", "proptest"]
 web = [
+    "clap",
     "getrandom/js",
     "linera-kywasmtime",
     "rand/getrandom",
@@ -71,6 +72,7 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+clap = { optional = true, workspace = true }
 ruzstd.workspace = true
 tracing-web = { optional = true, workspace = true }
 

@@ -1617,7 +1617,7 @@ pub struct MessagePolicy {
     async_graphql::Enum,
 )]
 #[cfg_attr(web, derive(tsify::Tsify), tsify(from_wasm_abi, into_wasm_abi))]
-#[cfg_attr(not(target_arch = "wasm32"), derive(clap::ValueEnum))]
+#[cfg_attr(any(web, not(target_arch = "wasm32")), derive(clap::ValueEnum))]
 pub enum BlanketMessagePolicy {
     /// Automatically accept all incoming messages. Reject them only if execution fails.
     #[default]
