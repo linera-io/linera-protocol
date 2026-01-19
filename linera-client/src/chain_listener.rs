@@ -106,24 +106,37 @@ pub trait ClientContext {
                 .get(chain_id)
                 .make_sync()
                 .await
-                .map_err(error::Inner::wallet)?
+                .map_err(error::Inner::wallet)?;
+            let (block_hash, next_block_height, pending_proposal, owner) = chain
+                .map(|c| {
+                    (
+                        c.block_hash,
+                        c.next_block_height,
+                        c.pending_proposal,
+                        c.owner,
+                    )
+                })
                 .unwrap_or_default();
-            let follow_only = chain.is_follow_only();
+            let follow_only = owner.is_none();
             Ok(self.client().create_chain_client(
                 chain_id,
-                chain.block_hash,
-                chain.next_block_height,
-                chain.pending_proposal,
-                chain.owner,
+                block_hash,
+                next_block_height,
+                pending_proposal,
+                owner,
                 self.timing_sender(),
                 follow_only,
             ))
         }
     }
 
+    /// Updates the wallet with a new chain.
+    ///
+    /// If `name` is `None`, a default name will be generated (e.g., "user-N").
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
+        name: Option<String>,
         owner: Option<AccountOwner>,
         timestamp: Timestamp,
         epoch: Epoch,
@@ -388,6 +401,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     context_guard
                         .update_wallet_for_new_chain(
                             new_chain_id,
+                            None, // Will auto-generate a default name.
                             Some(*chain_owner),
                             block.header.timestamp,
                             block.header.epoch,

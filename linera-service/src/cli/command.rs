@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, num::NonZeroU16, path::PathBuf};
+use std::{borrow::Cow, fmt, num::NonZeroU16, path::PathBuf, str::FromStr};
 
 use chrono::{DateTime, Utc};
 use linera_base::{
@@ -95,8 +95,8 @@ impl ChainIdOrName {
     }
 }
 
-impl std::fmt::Display for ChainIdOrName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for ChainIdOrName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ChainIdOrName::ChainId(id) => write!(f, "{id}"),
             ChainIdOrName::Name(name) => write!(f, "{name}"),
@@ -104,16 +104,22 @@ impl std::fmt::Display for ChainIdOrName {
     }
 }
 
-impl std::str::FromStr for ChainIdOrName {
-    type Err = std::convert::Infallible;
+impl FromStr for ChainIdOrName {
+    type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // Try to parse as a chain ID first. Chain IDs are 64 hex characters.
         if let Ok(chain_id) = s.parse::<ChainId>() {
-            Ok(ChainIdOrName::ChainId(chain_id))
-        } else {
-            Ok(ChainIdOrName::Name(s.to_string()))
+            return Ok(ChainIdOrName::ChainId(chain_id));
         }
+        // Otherwise treat as a name, but validate the length.
+        anyhow::ensure!(
+            s.len() <= crate::wallet::MAX_CHAIN_NAME_LENGTH,
+            "chain name is too long ({} characters, maximum is {})",
+            s.len(),
+            crate::wallet::MAX_CHAIN_NAME_LENGTH
+        );
+        Ok(ChainIdOrName::Name(s.to_string()))
     }
 }
 

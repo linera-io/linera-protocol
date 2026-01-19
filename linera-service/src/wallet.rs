@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeMap,
     iter::IntoIterator,
     sync::{Arc, RwLock},
 };
@@ -25,14 +24,9 @@ struct Data {
     pub chains: wallet::Memory,
     default: Arc<RwLock<Option<ChainId>>>,
     genesis_config: GenesisConfig,
-    /// Explicit chain name mappings. Names that are not in this map will be computed
-    /// automatically ("admin" for the admin chain, "user-N" for user chains).
-    #[serde(default)]
-    chain_names: Arc<RwLock<BTreeMap<String, ChainId>>>,
 }
 
 struct ChainDetails {
-    name: Option<String>,
     is_default: bool,
     is_admin: bool,
     origin: Option<ChainOrigin>,
@@ -41,12 +35,11 @@ struct ChainDetails {
 }
 
 impl ChainDetails {
-    fn new(chain_id: ChainId, wallet: &Data, chain_name: Option<String>) -> Self {
+    fn new(chain_id: ChainId, wallet: &Data) -> Self {
         let Some(user_chain) = wallet.chains.get(chain_id) else {
             panic!("Chain {} not found.", chain_id);
         };
         ChainDetails {
-            name: chain_name,
             is_default: Some(chain_id) == *wallet.default.read().unwrap(),
             is_admin: chain_id == wallet.genesis_config.admin_id(),
             chain_id,
@@ -62,9 +55,7 @@ impl ChainDetails {
 
     fn print_paragraph(&self) {
         println!("-----------------------");
-        if let Some(name) = &self.name {
-            println!("{:<20}  {}", "Name:", name);
-        }
+        println!("{:<20}  {}", "Name:", self.user_chain.name);
         println!("{:<20}  {}", "Chain ID:", self.chain_id);
 
         let mut tags = Vec::new();
@@ -237,7 +228,6 @@ impl Wallet {
                 chains: wallet::Memory::default(),
                 default: Arc::new(RwLock::new(None)),
                 genesis_config,
-                chain_names: Arc::new(RwLock::new(BTreeMap::new())),
             },
         )?))
     }
@@ -254,114 +244,76 @@ impl Wallet {
         self.0.genesis_config.admin_id()
     }
 
-    /// Returns the name of a chain, if any.
-    ///
-    /// This looks up explicit names first, then falls back to default names:
-    /// - "admin" for the admin chain
-    /// - "user-N" for the N-th user chain (0-indexed, in wallet order, excluding admin)
+    /// Returns the name of a chain, if it exists in the wallet.
     pub fn chain_name(&self, chain_id: ChainId) -> Option<String> {
-        // Check for explicit name first.
-        let chain_names = self.0.chain_names.read().unwrap();
-        for (name, id) in chain_names.iter() {
-            if *id == chain_id {
-                return Some(name.clone());
-            }
-        }
-        drop(chain_names);
-        // Compute default name.
-        if chain_id == self.genesis_admin_chain() {
-            return Some("admin".to_string());
-        }
-        // Find the index of this chain among non-admin chains.
-        let admin_id = self.genesis_admin_chain();
-        for (index, id) in self
-            .0
-            .chains
-            .chain_ids()
-            .into_iter()
-            .filter(|id| *id != admin_id)
-            .enumerate()
-        {
-            if id == chain_id {
-                return Some(format!("user-{index}"));
-            }
-        }
-        None
+        self.0.chains.get(chain_id).map(|chain| chain.name)
     }
 
     /// Resolves a chain name to a chain ID.
     ///
-    /// This looks up explicit names first, then checks default names:
-    /// - "admin" resolves to the admin chain
-    /// - "user-N" resolves to the N-th user chain (0-indexed, excluding admin)
+    /// Looks up chains by their stored name.
     pub fn resolve_chain_name(&self, name: &str) -> Option<ChainId> {
-        // Check for explicit name first.
-        let chain_names = self.0.chain_names.read().unwrap();
-        if let Some(chain_id) = chain_names.get(name) {
-            return Some(*chain_id);
-        }
-        drop(chain_names);
-        // Check for default names.
-        if name == "admin" {
-            return Some(self.genesis_admin_chain());
-        }
-        if let Some(index_str) = name.strip_prefix("user-") {
-            if let Ok(index) = index_str.parse::<usize>() {
-                let admin_id = self.genesis_admin_chain();
-                return self
-                    .0
-                    .chains
-                    .chain_ids()
-                    .into_iter()
-                    .filter(|id| *id != admin_id)
-                    .nth(index);
+        for (chain_id, chain) in self.items() {
+            if chain.name == name {
+                return Some(chain_id);
             }
         }
         None
     }
 
-    /// Sets or removes the name of a chain.
+    /// Returns the next available default name for a new chain.
     ///
-    /// If `name` is `Some`, sets the chain's name. If `name` is `None`, removes any
-    /// explicit name (the chain will use its default name).
+    /// If `chain_id` is the admin chain, returns "admin".
+    /// Otherwise, returns "user-N" where N is one more than the highest existing user number.
+    pub fn next_default_name(&self, chain_id: ChainId) -> String {
+        if chain_id == self.genesis_admin_chain() {
+            return "admin".to_string();
+        }
+        // Find the highest existing "user-N" number.
+        let mut max_user_num: i64 = -1;
+        for (_, chain) in self.items() {
+            if let Some(num_str) = chain.name.strip_prefix("user-") {
+                if let Ok(num) = num_str.parse::<i64>() {
+                    max_user_num = max_user_num.max(num);
+                }
+            }
+        }
+        format!("user-{}", max_user_num + 1)
+    }
+
+    /// Sets the name of a chain.
+    ///
+    /// If `name` is `Some`, sets the chain's name. If `name` is `None`, generates
+    /// a default name using `next_default_name`.
     ///
     /// Returns an error if the name is too long, if the chain doesn't exist in the wallet,
     /// or if the name is already used by another chain.
     pub fn set_chain_name(&self, chain_id: ChainId, name: Option<String>) -> anyhow::Result<()> {
-        // Verify the chain exists.
-        if self.0.chains.get(chain_id).is_none() {
-            anyhow::bail!("chain `{chain_id}` not found in wallet");
+        // Determine the new name.
+        let new_name = match name {
+            Some(name) => name,
+            None => self.next_default_name(chain_id),
+        };
+        // Validate the name.
+        anyhow::ensure!(
+            new_name.len() <= MAX_CHAIN_NAME_LENGTH,
+            "chain name is too long ({} characters, maximum is {})",
+            new_name.len(),
+            MAX_CHAIN_NAME_LENGTH
+        );
+        anyhow::ensure!(!new_name.is_empty(), "chain name cannot be empty");
+        // Check if the name is already used by another chain.
+        if let Some(existing_chain_id) = self.resolve_chain_name(&new_name) {
+            anyhow::ensure!(
+                existing_chain_id == chain_id,
+                "chain name `{new_name}` is already used by another chain"
+            );
         }
-        let mut chain_names = self.0.chain_names.write().unwrap();
-        // Remove any existing name for this chain.
-        chain_names.retain(|_, id| *id != chain_id);
-        if let Some(name) = name {
-            // Validate the name.
-            if name.len() > MAX_CHAIN_NAME_LENGTH {
-                anyhow::bail!(
-                    "chain name is too long ({} characters, maximum is {})",
-                    name.len(),
-                    MAX_CHAIN_NAME_LENGTH
-                );
-            }
-            if name.is_empty() {
-                anyhow::bail!("chain name cannot be empty");
-            }
-            // Check if the name is already used.
-            if chain_names.contains_key(&name) {
-                anyhow::bail!("chain name `{name}` is already used by another chain");
-            }
-            // Check if it conflicts with a default name (need to drop lock first).
-            drop(chain_names);
-            if self.resolve_chain_name(&name).is_some()
-                && self.resolve_chain_name(&name) != Some(chain_id)
-            {
-                anyhow::bail!("chain name `{name}` conflicts with a default name");
-            }
-            // Re-acquire the lock and insert.
-            let mut chain_names = self.0.chain_names.write().unwrap();
-            chain_names.insert(name, chain_id);
-        }
+        // Update the chain's name.
+        let modified = self.0.chains.mutate(chain_id, |chain| {
+            chain.name.clone_from(&new_name);
+        });
+        anyhow::ensure!(modified.is_some(), "chain `{chain_id}` not found in wallet");
         self.0.save()?;
         Ok(())
     }
@@ -381,10 +333,7 @@ impl Wallet {
 
         let mut chains = chain_ids
             .into_iter()
-            .map(|chain_id| {
-                let name = self.chain_name(chain_id);
-                ChainDetails::new(chain_id, &self.0, name)
-            })
+            .map(|chain_id| ChainDetails::new(chain_id, &self.0))
             .collect::<Vec<_>>();
         // Print first the default, then the admin chain, then other root chains, and finally the
         // child chains.

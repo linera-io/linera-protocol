@@ -29,6 +29,21 @@ struct ClientContext {
     client: Arc<Client<environment::Test>>,
 }
 
+impl ClientContext {
+    /// Generates the next available default chain name ("user-N").
+    fn next_default_chain_name(&self) -> String {
+        let mut max_user_num: i64 = -1;
+        for (_, chain) in self.client.wallet().items() {
+            if let Some(num_str) = chain.name.strip_prefix("user-") {
+                if let Ok(num) = num_str.parse::<i64>() {
+                    max_user_num = max_user_num.max(num);
+                }
+            }
+        }
+        format!("user-{}", max_user_num + 1)
+    }
+}
+
 impl chain_listener::ClientContext for ClientContext {
     type Environment = environment::Test;
 
@@ -53,14 +68,17 @@ impl chain_listener::ClientContext for ClientContext {
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
+        name: Option<String>,
         owner: Option<AccountOwner>,
         timestamp: Timestamp,
         epoch: Epoch,
     ) -> Result<(), Error> {
+        // Generate a default name if not provided.
+        let name = name.unwrap_or_else(|| self.next_default_chain_name());
         // Ignore if chain already exists in wallet; test mock doesn't care.
         let _insert_result = self
             .wallet()
-            .try_insert(chain_id, wallet::Chain::new(owner, epoch, timestamp));
+            .try_insert(chain_id, wallet::Chain::new(name, owner, epoch, timestamp));
         Ok(())
     }
 
@@ -69,14 +87,24 @@ impl chain_listener::ClientContext for ClientContext {
         client: &ChainClient<environment::Test>,
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
+        let chain_id = info.chain_id;
+        let existing_name = self
+            .wallet()
+            .get(chain_id)
+            .map(|c| c.name.clone())
+            .unwrap_or_else(|| self.next_default_chain_name());
         let client_owner = client.preferred_owner();
         let pending_proposal = client.pending_proposal().clone();
         self.wallet().insert(
-            info.chain_id,
+            chain_id,
             wallet::Chain {
+                name: existing_name,
                 pending_proposal,
                 owner: client_owner,
-                ..info.as_ref().into()
+                block_hash: info.block_hash,
+                next_block_height: info.next_block_height,
+                timestamp: info.timestamp,
+                epoch: Some(info.epoch),
             },
         );
         Ok(())
@@ -126,11 +154,18 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         )),
     };
     context
-        .update_wallet_for_new_chain(chain_id0, Some(owner), clock.current_time(), epoch0)
+        .update_wallet_for_new_chain(
+            chain_id0,
+            Some("chain-0".to_string()),
+            Some(owner),
+            clock.current_time(),
+            epoch0,
+        )
         .await?;
     context
         .update_wallet_for_new_chain(
             client1.chain_id(),
+            Some("chain-1".to_string()),
             client1.preferred_owner(),
             clock.current_time(),
             epoch1,
@@ -243,6 +278,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     context.wallet().insert(
         chain_a_id,
         wallet::Chain {
+            name: "chain-a".to_string(),
             owner: None,
             block_hash: chain_a_info.block_hash,
             next_block_height: chain_a_info.next_block_height,
@@ -256,6 +292,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     context.wallet().insert(
         chain_b_id,
         wallet::Chain {
+            name: "chain-b".to_string(),
             owner: chain_b.preferred_owner(),
             block_hash: chain_b_info.block_hash,
             next_block_height: chain_b_info.next_block_height,

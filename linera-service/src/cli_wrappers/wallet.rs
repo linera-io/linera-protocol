@@ -870,6 +870,63 @@ impl ClientWrapper {
             .await
     }
 
+    /// Runs `linera open-chain` with an optional name.
+    pub async fn open_chain_with_name(
+        &self,
+        from: ChainId,
+        owner: Option<AccountOwner>,
+        initial_balance: Amount,
+        name: Option<&str>,
+    ) -> Result<(ChainId, AccountOwner)> {
+        let mut command = self.command().await?;
+        command
+            .arg("open-chain")
+            .args(["--from", &from.to_string()])
+            .args(["--initial-balance", &initial_balance.to_string()]);
+
+        if let Some(owner) = owner {
+            command.args(["--owner", &owner.to_string()]);
+        }
+
+        if let Some(name) = name {
+            command.args(["--name", name]);
+        }
+
+        let stdout = command.spawn_and_wait_for_stdout().await?;
+        let mut split = stdout.split('\n');
+        let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
+        let new_owner = AccountOwner::from_str(split.next().context("no owner in output")?)?;
+        if let Some(owner) = owner {
+            assert_eq!(owner, new_owner);
+        }
+        Ok((chain_id, new_owner))
+    }
+
+    /// Runs `linera wallet rename-chain`.
+    pub async fn rename_chain(&self, chain_id: ChainId, name: &str) -> Result<()> {
+        self.command()
+            .await?
+            .args(["wallet", "rename-chain"])
+            .args(["--chain-id", &chain_id.to_string()])
+            .args(["--name", name])
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
+    }
+
+    /// Runs `linera transfer` using chain names instead of IDs.
+    pub async fn transfer_by_name(&self, amount: Amount, from: &str, to: &str) -> Result<()> {
+        self.command()
+            .await?
+            .arg("transfer")
+            .arg(amount.to_string())
+            .args(["--from", from])
+            .args(["--to", to])
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
+    }
+
     /// Runs `linera open-chain` then `linera assign`.
     pub async fn open_and_assign(
         &self,

@@ -15,8 +15,10 @@ use crate::{client::PendingProposal, data_types::ChainInfo};
 mod memory;
 pub use memory::Memory;
 
-#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Chain {
+    /// The name of this chain in the wallet.
+    pub name: String,
     pub owner: Option<AccountOwner>,
     pub block_hash: Option<CryptoHash>,
     pub next_block_height: BlockHeight,
@@ -25,47 +27,45 @@ pub struct Chain {
     pub epoch: Option<Epoch>,
 }
 
-impl From<&ChainInfo> for Chain {
-    fn from(info: &ChainInfo) -> Self {
-        Self {
-            owner: None,
-            block_hash: info.block_hash,
-            next_block_height: info.next_block_height,
-            timestamp: info.timestamp,
-            pending_proposal: None,
-            epoch: Some(info.epoch),
-        }
-    }
-}
-
-impl From<ChainInfo> for Chain {
-    fn from(info: ChainInfo) -> Self {
-        Self::from(&info)
-    }
-}
-
-impl From<&ChainDescription> for Chain {
-    fn from(description: &ChainDescription) -> Self {
-        Self::new(None, description.config().epoch, description.timestamp())
-    }
-}
-
-impl From<ChainDescription> for Chain {
-    fn from(description: ChainDescription) -> Self {
-        (&description).into()
-    }
-}
-
 impl Chain {
     /// Creates a chain that we haven't interacted with before.
-    pub fn new(owner: Option<AccountOwner>, current_epoch: Epoch, now: Timestamp) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        owner: Option<AccountOwner>,
+        current_epoch: Epoch,
+        now: Timestamp,
+    ) -> Self {
         Self {
+            name: name.into(),
             owner,
             block_hash: None,
             timestamp: now,
             next_block_height: BlockHeight::ZERO,
             pending_proposal: None,
             epoch: Some(current_epoch),
+        }
+    }
+
+    /// Creates a chain from a chain description.
+    pub fn from_description(name: impl Into<String>, description: &ChainDescription) -> Self {
+        Self::new(
+            name,
+            None,
+            description.config().epoch,
+            description.timestamp(),
+        )
+    }
+
+    /// Creates a chain from chain info.
+    pub fn from_info(name: impl Into<String>, info: &ChainInfo) -> Self {
+        Self {
+            name: name.into(),
+            owner: None,
+            block_hash: info.block_hash,
+            next_block_height: info.next_block_height,
+            timestamp: info.timestamp,
+            pending_proposal: None,
+            epoch: Some(info.epoch),
         }
     }
 

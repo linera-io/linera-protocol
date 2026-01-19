@@ -238,11 +238,8 @@ impl Runnable for Job {
                 let epoch = certificate.block().header.epoch;
                 let id = description.id();
                 context
-                    .update_wallet_for_new_chain(id, Some(new_owner), timestamp, epoch)
+                    .update_wallet_for_new_chain(id, name, Some(new_owner), timestamp, epoch)
                     .await?;
-                if let Some(name) = name {
-                    context.wallet().set_chain_name(id, Some(name))?;
-                }
                 let time_total = time_start.elapsed();
                 info!(
                     "Opening a new chain confirmed after {} ms",
@@ -295,11 +292,8 @@ impl Runnable for Job {
                 let timestamp = certificate.block().header.timestamp;
                 let epoch = certificate.block().header.epoch;
                 context
-                    .update_wallet_for_new_chain(id, owner, timestamp, epoch)
+                    .update_wallet_for_new_chain(id, name, owner, timestamp, epoch)
                     .await?;
-                if let Some(name) = name {
-                    context.wallet().set_chain_name(id, Some(name))?;
-                }
                 let time_total = time_start.elapsed();
                 info!(
                     "Opening a new multi-owner chain confirmed after {} ms",
@@ -1493,7 +1487,9 @@ impl Runnable for Job {
                     "Linking chain {chain_id} to its corresponding key in the wallet, owned by \
                     {owner}",
                 );
-                context.assign_new_chain_to_key(chain_id, owner).await?;
+                context
+                    .assign_new_chain_to_key(chain_id, None, owner)
+                    .await?;
                 info!(
                     "Chain linked to owner in {} ms",
                     start_time.elapsed().as_millis()
@@ -1611,17 +1607,11 @@ impl Runnable for Job {
                     );
                 }
 
-                wallet.insert(
-                    description.id(),
-                    wallet::Chain {
-                        owner: Some(owner),
-                        ..(&description).into()
-                    },
-                )?;
-
-                if let Some(name) = name {
-                    wallet.set_chain_name(description.id(), Some(name))?;
-                }
+                let chain_id = description.id();
+                let name = name.unwrap_or_else(|| wallet.next_default_name(chain_id));
+                let mut chain = wallet::Chain::from_description(&name, &description);
+                chain.owner = Some(owner);
+                wallet.insert(chain_id, chain)?;
 
                 if set_default {
                     wallet.set_default_chain(description.id())?;
@@ -1674,23 +1664,21 @@ impl Runnable for Job {
                 sync,
                 name,
             }) => {
-                // Set the chain name before context creation if provided.
-                if let Some(ref name) = name {
-                    // Insert a placeholder entry for the chain to allow set_chain_name to work.
-                    // The actual chain info will be populated by update_wallet_from_client.
-                    wallet.try_insert(
-                        chain_id,
-                        wallet::Chain {
-                            owner: None,
-                            timestamp: linera_base::data_types::Timestamp::default(),
-                            next_block_height: linera_base::data_types::BlockHeight::ZERO,
-                            pending_proposal: None,
-                            block_hash: None,
-                            epoch: None,
-                        },
-                    )?;
-                    wallet.set_chain_name(chain_id, Some(name.clone()))?;
-                }
+                // Insert a placeholder entry with the chain name.
+                // The actual chain info will be populated by update_wallet_from_client.
+                let name = name.unwrap_or_else(|| wallet.next_default_name(chain_id));
+                wallet.try_insert(
+                    chain_id,
+                    wallet::Chain {
+                        name,
+                        owner: None,
+                        timestamp: linera_base::data_types::Timestamp::default(),
+                        next_block_height: linera_base::data_types::BlockHeight::ZERO,
+                        pending_proposal: None,
+                        block_hash: None,
+                        epoch: None,
+                    },
+                )?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -2137,21 +2125,27 @@ async fn run(options: &Options) -> Result<i32, Error> {
             let mut chains = vec![(
                 admin_chain_description.id(),
                 wallet::Chain {
+                    name: "admin".to_string(),
                     owner: Some(admin_public_key.into()),
                     epoch: Some(admin_chain_description.config().epoch),
                     timestamp,
-                    ..wallet::Chain::default()
+                    block_hash: None,
+                    next_block_height: linera_base::data_types::BlockHeight::ZERO,
+                    pending_proposal: None,
                 },
             )];
-            for _ in 0..*num_other_initial_chains {
+            for i in 0..*num_other_initial_chains {
                 // Create keys.
                 let public_key = signer.mutate(|s| s.generate_new()).await?;
                 let description = genesis_config.add_root_chain(public_key, *initial_funding);
                 let chain = wallet::Chain {
+                    name: format!("user-{i}"),
                     owner: Some(public_key.into()),
                     epoch: Some(description.config().epoch),
                     timestamp,
-                    ..wallet::Chain::default()
+                    block_hash: None,
+                    next_block_height: linera_base::data_types::BlockHeight::ZERO,
+                    pending_proposal: None,
                 };
                 chains.push((description.id(), chain));
             }

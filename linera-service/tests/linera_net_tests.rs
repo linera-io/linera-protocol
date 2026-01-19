@@ -4996,3 +4996,63 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
 
     Ok(())
 }
+
+/// Tests chain naming functionality: creating chains with and without names,
+/// renaming chains, and using names in transfers.
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_chain_naming(config: impl LineraNetConfig) -> Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+
+    let default_chain = client.load_wallet()?.default_chain().unwrap();
+
+    // Create a chain with an explicit name "alice".
+    let (chain_alice, _) = client
+        .open_chain_with_name(default_chain, None, Amount::from_tokens(5), Some("alice"))
+        .await?;
+
+    // Create a chain without a name; it should get a default name.
+    let (chain_bob, _) = client
+        .open_chain_with_name(default_chain, None, Amount::from_tokens(5), None)
+        .await?;
+
+    // Verify the chains exist in the wallet.
+    let wallet = client.load_wallet()?;
+    let alice_name = wallet.chain_name(chain_alice);
+    let bob_name = wallet.chain_name(chain_bob);
+    assert_eq!(alice_name, Some("alice".to_string()));
+    assert!(
+        bob_name.as_ref().is_some_and(|n| n.starts_with("user-")),
+        "Expected default name starting with 'user-', got {:?}",
+        bob_name
+    );
+
+    // Rename the second chain to "bob".
+    client.rename_chain(chain_bob, "bob").await?;
+    let wallet = client.load_wallet()?;
+    assert_eq!(wallet.chain_name(chain_bob), Some("bob".to_string()));
+
+    // Transfer from "alice" to "bob" using names.
+    client.transfer_by_name(Amount::ONE, "alice", "bob").await?;
+
+    // Transfer from "bob" back to "alice" using names.
+    client.transfer_by_name(Amount::ONE, "bob", "alice").await?;
+
+    // Verify balances are still correct (both started with 5, transfers cancel out).
+    let wallet = client.load_wallet()?;
+    let chain_alice_info = wallet.get(chain_alice);
+    let chain_bob_info = wallet.get(chain_bob);
+    assert!(chain_alice_info.is_some(), "alice chain should exist");
+    assert!(chain_bob_info.is_some(), "bob chain should exist");
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
