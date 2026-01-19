@@ -265,20 +265,17 @@ impl Wallet {
     ///
     /// If `chain_id` is the admin chain, returns "admin".
     /// Otherwise, returns "user-N" where N is one more than the highest existing user number.
-    pub fn next_default_name(&self, chain_id: ChainId) -> String {
+    pub async fn next_default_name(&self, chain_id: ChainId) -> String {
         if chain_id == self.genesis_admin_chain() {
             return "admin".to_string();
         }
-        // Find the highest existing "user-N" number.
-        let mut max_user_num: i64 = -1;
-        for (_, chain) in self.items() {
-            if let Some(num_str) = chain.name.strip_prefix("user-") {
-                if let Ok(num) = num_str.parse::<i64>() {
-                    max_user_num = max_user_num.max(num);
-                }
+        match wallet::next_default_chain_name(self).await {
+            Ok(name) => name,
+            Err(error) => {
+                tracing::warn!(%error, "Failed to compute next default chain name; using fallback");
+                "user-0".to_string()
             }
         }
-        format!("user-{}", max_user_num + 1)
     }
 
     /// Sets the name of a chain.
@@ -288,11 +285,15 @@ impl Wallet {
     ///
     /// Returns an error if the name is too long, if the chain doesn't exist in the wallet,
     /// or if the name is already used by another chain.
-    pub fn set_chain_name(&self, chain_id: ChainId, name: Option<String>) -> anyhow::Result<()> {
+    pub async fn set_chain_name(
+        &self,
+        chain_id: ChainId,
+        name: Option<String>,
+    ) -> anyhow::Result<()> {
         // Determine the new name.
         let new_name = match name {
             Some(name) => name,
-            None => self.next_default_name(chain_id),
+            None => self.next_default_name(chain_id).await,
         };
         // Validate the name.
         anyhow::ensure!(

@@ -41,7 +41,7 @@ use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt as _};
 use linera_base::{
     crypto::Signer,
-    data_types::{ApplicationPermissions, Timestamp},
+    data_types::{ApplicationPermissions, BlockHeight, Timestamp},
     identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
@@ -1608,7 +1608,10 @@ impl Runnable for Job {
                 }
 
                 let chain_id = description.id();
-                let name = name.unwrap_or_else(|| wallet.next_default_name(chain_id));
+                let name = match name {
+                    Some(n) => n,
+                    None => wallet.next_default_name(chain_id).await,
+                };
                 let mut chain = wallet::Chain::from_description(&name, &description);
                 chain.owner = Some(owner);
                 wallet.insert(chain_id, chain)?;
@@ -1666,14 +1669,17 @@ impl Runnable for Job {
             }) => {
                 // Insert a placeholder entry with the chain name.
                 // The actual chain info will be populated by update_wallet_from_client.
-                let name = name.unwrap_or_else(|| wallet.next_default_name(chain_id));
+                let name = match name {
+                    Some(n) => n,
+                    None => wallet.next_default_name(chain_id).await,
+                };
                 wallet.try_insert(
                     chain_id,
                     wallet::Chain {
                         name,
                         owner: None,
-                        timestamp: linera_base::data_types::Timestamp::default(),
-                        next_block_height: linera_base::data_types::BlockHeight::ZERO,
+                        timestamp: Timestamp::default(),
+                        next_block_height: BlockHeight::ZERO,
                         pending_proposal: None,
                         block_hash: None,
                         epoch: None,
@@ -2130,7 +2136,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     epoch: Some(admin_chain_description.config().epoch),
                     timestamp,
                     block_hash: None,
-                    next_block_height: linera_base::data_types::BlockHeight::ZERO,
+                    next_block_height: BlockHeight::ZERO,
                     pending_proposal: None,
                 },
             )];
@@ -2144,7 +2150,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     epoch: Some(description.config().epoch),
                     timestamp,
                     block_hash: None,
-                    next_block_height: linera_base::data_types::BlockHeight::ZERO,
+                    next_block_height: BlockHeight::ZERO,
                     pending_proposal: None,
                 };
                 chains.push((description.id(), chain));
@@ -2389,20 +2395,11 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 let start_time = Instant::now();
                 let wallet = options.wallet()?;
                 let chain_id = chain_id.resolve(&wallet)?;
-                wallet.set_chain_name(chain_id, name.clone())?;
-                if let Some(name) = name {
-                    info!(
-                        "Chain {} renamed to `{name}` in {} ms",
-                        chain_id,
-                        start_time.elapsed().as_millis()
-                    );
-                } else {
-                    info!(
-                        "Chain {} name reset to default in {} ms",
-                        chain_id,
-                        start_time.elapsed().as_millis()
-                    );
-                }
+                wallet.set_chain_name(chain_id, Some(name.clone())).await?;
+                info!(
+                    "Chain {chain_id} renamed to `{name}` in {} ms",
+                    start_time.elapsed().as_millis()
+                );
                 Ok(0)
             }
 

@@ -1047,7 +1047,7 @@ Add a new followed chain (i.e. a chain without keypair) to the wallet
 
 Rename a chain in the wallet
 
-**Usage:** `linera wallet rename-chain [OPTIONS] <CHAIN_ID>`
+**Usage:** `linera wallet rename-chain --name <NAME> <CHAIN_ID>`
 
 ###### **Arguments:**
 
@@ -1055,7 +1055,7 @@ Rename a chain in the wallet
 
 ###### **Options:**
 
-* `--name <NAME>` — The new name for the chain. If not specified, removes any explicit name and uses the default name
+* `--name <NAME>` — The new name for the chain
 
 
 

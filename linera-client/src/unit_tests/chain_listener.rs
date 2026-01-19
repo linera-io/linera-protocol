@@ -29,21 +29,6 @@ struct ClientContext {
     client: Arc<Client<environment::Test>>,
 }
 
-impl ClientContext {
-    /// Generates the next available default chain name ("user-N").
-    fn next_default_chain_name(&self) -> String {
-        let mut max_user_num: i64 = -1;
-        for (_, chain) in self.client.wallet().items() {
-            if let Some(num_str) = chain.name.strip_prefix("user-") {
-                if let Ok(num) = num_str.parse::<i64>() {
-                    max_user_num = max_user_num.max(num);
-                }
-            }
-        }
-        format!("user-{}", max_user_num + 1)
-    }
-}
-
 impl chain_listener::ClientContext for ClientContext {
     type Environment = environment::Test;
 
@@ -74,7 +59,10 @@ impl chain_listener::ClientContext for ClientContext {
         epoch: Epoch,
     ) -> Result<(), Error> {
         // Generate a default name if not provided.
-        let name = name.unwrap_or_else(|| self.next_default_chain_name());
+        let name = match name {
+            Some(n) => n,
+            None => wallet::next_default_chain_name(self.wallet()).await?,
+        };
         // Ignore if chain already exists in wallet; test mock doesn't care.
         let _insert_result = self
             .wallet()
@@ -88,11 +76,10 @@ impl chain_listener::ClientContext for ClientContext {
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
         let chain_id = info.chain_id;
-        let existing_name = self
-            .wallet()
-            .get(chain_id)
-            .map(|c| c.name.clone())
-            .unwrap_or_else(|| self.next_default_chain_name());
+        let existing_name = match self.wallet().get(chain_id) {
+            Some(c) => c.name.clone(),
+            None => wallet::next_default_chain_name(self.wallet()).await?,
+        };
         let client_owner = client.preferred_owner();
         let pending_proposal = client.pending_proposal().clone();
         self.wallet().insert(

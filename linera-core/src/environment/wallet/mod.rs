@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
+use std::{ops::Deref, pin::pin};
 
 use futures::{Stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
@@ -143,4 +143,25 @@ impl<W: Deref<Target: Wallet> + linera_base::util::traits::AutoTraits> Wallet fo
     ) -> Result<Option<()>, Self::Error> {
         self.deref().modify(id, f).await
     }
+}
+
+/// Generates the next available default chain name ("user-N").
+///
+/// Scans existing chains for names matching "user-N" pattern and returns
+/// "user-(max+1)" where max is the highest N found, or "user-0" if none exist.
+///
+/// Note: This is a free function rather than a default trait method because the
+/// `trait_variant::make(Send)` macro doesn't support default async implementations.
+pub async fn next_default_chain_name<W: Wallet>(wallet: &W) -> Result<String, W::Error> {
+    let mut next_user_num = 0;
+    let mut items = pin!(wallet.items());
+    while let Some(result) = items.next().await {
+        let (_, chain) = result?;
+        if let Some(num_str) = chain.name.strip_prefix("user-") {
+            if let Ok(num) = num_str.parse::<u128>() {
+                next_user_num = next_user_num.max(num.saturating_add(1))
+            }
+        }
+    }
+    Ok(format!("user-{}", next_user_num))
 }

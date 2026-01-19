@@ -823,6 +823,7 @@ impl ClientWrapper {
         owner: Option<AccountOwner>,
         initial_balance: Amount,
         super_owner: bool,
+        name: Option<&str>,
     ) -> Result<(ChainId, AccountOwner)> {
         let mut command = self.command().await?;
         command
@@ -836,6 +837,10 @@ impl ClientWrapper {
 
         if super_owner {
             command.arg("--super-owner");
+        }
+
+        if let Some(name) = name {
+            command.args(["--name", name]);
         }
 
         let stdout = command.spawn_and_wait_for_stdout().await?;
@@ -855,7 +860,7 @@ impl ClientWrapper {
         owner: Option<AccountOwner>,
         initial_balance: Amount,
     ) -> Result<(ChainId, AccountOwner)> {
-        self.open_chain_internal(from, owner, initial_balance, true)
+        self.open_chain_internal(from, owner, initial_balance, true, None)
             .await
     }
 
@@ -866,7 +871,7 @@ impl ClientWrapper {
         owner: Option<AccountOwner>,
         initial_balance: Amount,
     ) -> Result<(ChainId, AccountOwner)> {
-        self.open_chain_internal(from, owner, initial_balance, false)
+        self.open_chain_internal(from, owner, initial_balance, false, None)
             .await
     }
 
@@ -878,28 +883,8 @@ impl ClientWrapper {
         initial_balance: Amount,
         name: Option<&str>,
     ) -> Result<(ChainId, AccountOwner)> {
-        let mut command = self.command().await?;
-        command
-            .arg("open-chain")
-            .args(["--from", &from.to_string()])
-            .args(["--initial-balance", &initial_balance.to_string()]);
-
-        if let Some(owner) = owner {
-            command.args(["--owner", &owner.to_string()]);
-        }
-
-        if let Some(name) = name {
-            command.args(["--name", name]);
-        }
-
-        let stdout = command.spawn_and_wait_for_stdout().await?;
-        let mut split = stdout.split('\n');
-        let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
-        let new_owner = AccountOwner::from_str(split.next().context("no owner in output")?)?;
-        if let Some(owner) = owner {
-            assert_eq!(owner, new_owner);
-        }
-        Ok((chain_id, new_owner))
+        self.open_chain_internal(from, owner, initial_balance, false, name)
+            .await
     }
 
     /// Runs `linera wallet rename-chain`.

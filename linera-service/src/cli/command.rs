@@ -1359,10 +1359,9 @@ pub enum WalletCommand {
     RenameChain {
         /// The chain ID or current name.
         chain_id: ChainIdOrName,
-        /// The new name for the chain. If not specified, removes any explicit name
-        /// and uses the default name.
+        /// The new name for the chain.
         #[arg(long)]
-        name: Option<String>,
+        name: String,
     },
 
     /// Forgets the specified chain's keys. The chain will still be followed by the
