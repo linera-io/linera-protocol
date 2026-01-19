@@ -3677,6 +3677,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "chrono",
+ "clap",
  "custom_debug_derive",
  "derive_more 1.0.0",
  "ed25519-dalek",
@@ -3749,7 +3750,6 @@ dependencies = [
  "bcs",
  "cfg-if",
  "cfg_aliases",
- "clap",
  "custom_debug_derive",
  "futures",
  "linera-base",
@@ -3776,7 +3776,6 @@ dependencies = [
  "tracing",
  "trait-set",
  "trait-variant",
- "tsify",
  "wasm-bindgen",
  "web-thread-pool",
 ]

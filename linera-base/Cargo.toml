@@ -21,6 +21,7 @@ revm = []
 opentelemetry = ["opentelemetry-otlp"]
 test = ["test-strategy", "proptest"]
 web = [
+    "clap",
     "getrandom/js",
     "linera-kywasmtime",
     "rand/getrandom",
@@ -74,11 +75,13 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+clap = { optional = true, workspace = true }
 ruzstd.workspace = true
 tracing-web = { optional = true, workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono.workspace = true
+clap.workspace = true
 opentelemetry.workspace = true
 opentelemetry-otlp = { workspace = true, optional = true }
 opentelemetry_sdk = { workspace = true, features = ["testing"] }

@@ -7,6 +7,7 @@
 #[cfg(with_testing)]
 use std::ops;
 use std::{
+    collections::HashSet,
     fmt::{self, Display},
     fs,
     hash::Hash,
@@ -25,6 +26,7 @@ use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::{serde_as, Bytes};
 use thiserror::Error;
+use tracing::instrument;
 
 #[cfg(with_metrics)]
 use crate::prometheus_util::MeasureLatency as _;
@@ -1567,6 +1569,91 @@ impl StreamUpdate {
 }
 
 impl BcsHashable<'_> for Event {}
+
+/// Policies for automatically handling incoming messages.
+#[derive(
+    Clone, Debug, Default, serde::Serialize, serde::Deserialize, async_graphql::SimpleObject,
+)]
+pub struct MessagePolicy {
+    /// The blanket policy applied to all messages.
+    pub blanket: BlanketMessagePolicy,
+    /// A collection of chains which restrict the origin of messages to be
+    /// accepted. `Option::None` means that messages from all chains are accepted. An empty
+    /// `HashSet` denotes that messages from no chains are accepted.
+    pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
+    /// A collection of applications: If `Some`, only bundles with at least one message by any
+    /// of these applications will be accepted.
+    pub reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
+    /// A collection of applications: If `Some`, only bundles all of whose messages are by these
+    /// applications will be accepted.
+    pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
+}
+
+/// A blanket policy to apply to all messages by default.
+#[derive(
+    Default,
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    async_graphql::Enum,
+)]
+#[cfg_attr(web, derive(tsify::Tsify), tsify(from_wasm_abi, into_wasm_abi))]
+#[cfg_attr(any(web, not(target_arch = "wasm32")), derive(clap::ValueEnum))]
+pub enum BlanketMessagePolicy {
+    /// Automatically accept all incoming messages. Reject them only if execution fails.
+    #[default]
+    Accept,
+    /// Automatically reject tracked messages, ignore or skip untracked messages, but accept
+    /// protected ones.
+    Reject,
+    /// Don't include any messages in blocks, and don't make any decision whether to accept or
+    /// reject.
+    Ignore,
+}
+
+impl MessagePolicy {
+    /// Constructs a new `MessagePolicy`.
+    pub fn new(
+        blanket: BlanketMessagePolicy,
+        restrict_chain_ids_to: Option<HashSet<ChainId>>,
+        reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
+        reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
+    ) -> Self {
+        Self {
+            blanket,
+            restrict_chain_ids_to,
+            reject_message_bundles_without_application_ids,
+            reject_message_bundles_with_other_application_ids,
+        }
+    }
+
+    /// Constructs a new `MessagePolicy` that accepts all messages.
+    #[cfg(with_testing)]
+    pub fn new_accept_all() -> Self {
+        Self {
+            blanket: BlanketMessagePolicy::Accept,
+            restrict_chain_ids_to: None,
+            reject_message_bundles_without_application_ids: None,
+            reject_message_bundles_with_other_application_ids: None,
+        }
+    }
+
+    /// Returns `true` if the blanket policy is to ignore messages.
+    #[instrument(level = "trace", skip(self))]
+    pub fn is_ignore(&self) -> bool {
+        matches!(self.blanket, BlanketMessagePolicy::Ignore)
+    }
+
+    /// Returns `true` if the blanket policy is to reject messages.
+    #[instrument(level = "trace", skip(self))]
+    pub fn is_reject(&self) -> bool {
+        matches!(self.blanket, BlanketMessagePolicy::Reject)
+    }
+}
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(Amount, "A non-negative amount of tokens.");

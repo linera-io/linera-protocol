@@ -97,10 +97,18 @@ impl ControllerState {
             .expect("storage")
             .into_iter()
             .collect();
+        let local_message_policy = self
+            .local_message_policy
+            .index_values()
+            .await
+            .expect("storage")
+            .into_iter()
+            .collect();
         LocalWorkerState {
             local_worker,
             local_services,
             local_chains,
+            local_message_policy,
         }
     }
 }
