@@ -30,7 +30,7 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN npm run build
 
 # Stage 2: Build Rust server
-FROM rust:1.83-alpine AS rust-builder
+FROM rust:1.85-alpine AS rust-builder
 
 RUN apk add --no-cache musl-dev
 
