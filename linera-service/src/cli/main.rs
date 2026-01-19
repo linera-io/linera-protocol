@@ -1613,11 +1613,13 @@ impl Runnable for Job {
 async fn kill_all_processes(pids: &[u32]) {
     for &pid in pids {
         info!("Killing benchmark process (pid {})", pid);
-        let _ = Command::new("kill")
+        // Ignore kill errors; the process may have already exited.
+        Command::new("kill")
             .arg("-9")
             .arg(pid.to_string())
             .status()
-            .await;
+            .await
+            .ok();
     }
 }
 
