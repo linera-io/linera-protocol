@@ -45,8 +45,8 @@ use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
     client::{
-        BlanketMessagePolicy, ChainClient, ChainClientError, ChainClientOptions, ClientOutcome,
-        ListeningMode, MessageAction, MessagePolicy,
+        ChainClient, ChainClientError, ChainClientOptions, ClientOutcome, ListeningMode,
+        MessageAction,
     },
     environment::wallet::Chain,
     local_node::LocalNodeError,

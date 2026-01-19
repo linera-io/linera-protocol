@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap},
     convert::Infallible,
     iter,
     sync::{Arc, RwLock},
@@ -23,12 +23,12 @@ use linera_base::{
     crypto::{signer, AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, Epoch, Round, TimeDelta, Timestamp,
+        ChainDescription, Epoch, MessagePolicy, Round, TimeDelta, Timestamp,
     },
     ensure,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId,
-        GenericApplicationId, IndexAndEvent, ModuleId, StreamId,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent,
+        ModuleId, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
     time::{Duration, Instant},
@@ -1568,105 +1568,6 @@ impl<Env: Environment> Client<Env> {
     }
 }
 
-/// Policies for automatically handling incoming messages.
-#[derive(Clone, Debug)]
-pub struct MessagePolicy {
-    /// The blanket policy applied to all messages.
-    blanket: BlanketMessagePolicy,
-    /// A collection of chains which restrict the origin of messages to be
-    /// accepted. `Option::None` means that messages from all chains are accepted. An empty
-    /// `HashSet` denotes that messages from no chains are accepted.
-    restrict_chain_ids_to: Option<HashSet<ChainId>>,
-    /// A collection of applications: If `Some`, only bundles with at least one message by any
-    /// of these applications will be accepted.
-    reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
-    /// A collection of applications: If `Some`, only bundles all of whose messages are by these
-    /// applications will be accepted.
-    reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
-}
-
-#[derive(Default, Copy, Clone, Debug, clap::ValueEnum, serde::Deserialize, tsify::Tsify)]
-pub enum BlanketMessagePolicy {
-    /// Automatically accept all incoming messages. Reject them only if execution fails.
-    #[default]
-    Accept,
-    /// Automatically reject tracked messages, ignore or skip untracked messages, but accept
-    /// protected ones.
-    Reject,
-    /// Don't include any messages in blocks, and don't make any decision whether to accept or
-    /// reject.
-    Ignore,
-}
-
-impl MessagePolicy {
-    pub fn new(
-        blanket: BlanketMessagePolicy,
-        restrict_chain_ids_to: Option<HashSet<ChainId>>,
-        reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
-        reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
-    ) -> Self {
-        Self {
-            blanket,
-            restrict_chain_ids_to,
-            reject_message_bundles_without_application_ids,
-            reject_message_bundles_with_other_application_ids,
-        }
-    }
-
-    #[cfg(with_testing)]
-    pub fn new_accept_all() -> Self {
-        Self {
-            blanket: BlanketMessagePolicy::Accept,
-            restrict_chain_ids_to: None,
-            reject_message_bundles_without_application_ids: None,
-            reject_message_bundles_with_other_application_ids: None,
-        }
-    }
-
-    #[instrument(level = "trace", skip(self))]
-    fn apply(&self, mut bundle: IncomingBundle) -> Option<IncomingBundle> {
-        if let Some(chain_ids) = &self.restrict_chain_ids_to {
-            if !chain_ids.contains(&bundle.origin) {
-                return None;
-            }
-        }
-        if let Some(app_ids) = &self.reject_message_bundles_without_application_ids {
-            if !bundle
-                .messages()
-                .any(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
-            {
-                return None;
-            }
-        }
-        if let Some(app_ids) = &self.reject_message_bundles_with_other_application_ids {
-            if !bundle
-                .messages()
-                .all(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
-            {
-                return None;
-            }
-        }
-        if self.is_reject() {
-            if bundle.bundle.is_skippable() {
-                return None;
-            } else if !bundle.bundle.is_protected() {
-                bundle.action = MessageAction::Reject;
-            }
-        }
-        Some(bundle)
-    }
-
-    #[instrument(level = "trace", skip(self))]
-    fn is_ignore(&self) -> bool {
-        matches!(self.blanket, BlanketMessagePolicy::Ignore)
-    }
-
-    #[instrument(level = "trace", skip(self))]
-    fn is_reject(&self) -> bool {
-        matches!(self.blanket, BlanketMessagePolicy::Reject)
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum TimingType {
     ExecuteOperations,
@@ -2083,7 +1984,7 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
-            .filter_map(|bundle| self.options.message_policy.apply(bundle))
+            .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
             .take(self.options.max_pending_message_bundles)
             .collect())
     }
