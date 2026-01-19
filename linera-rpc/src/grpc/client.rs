@@ -412,9 +412,11 @@ impl ValidatorNode for GrpcClient {
         while !missing_hashes.is_empty() {
             // Macro doesn't compile if we pass `missing_hashes.clone()` directly to `client_delegate!`.
             let missing = missing_hashes.clone();
-            let mut received: Vec<ConfirmedBlockCertificate> = Vec::<Certificate>::try_from(
-                client_delegate!(self, download_certificates, missing)?,
-            )?
+            let mut received: Vec<_> = Vec::<Certificate>::try_from(client_delegate!(
+                self,
+                download_certificates,
+                missing
+            )?)?
             .into_iter()
             .map(|cert| {
                 ConfirmedBlockCertificate::try_from(cert)
@@ -444,14 +446,14 @@ impl ValidatorNode for GrpcClient {
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        let mut missing: BTreeSet<BlockHeight> = heights.into_iter().collect();
+        let mut missing = heights.into_iter().collect::<BTreeSet<_>>();
         let mut certs_collected = vec![];
         while !missing.is_empty() {
             let request = CertificatesByHeightRequest {
                 chain_id,
                 heights: missing.iter().copied().collect(),
             };
-            let mut received: Vec<ConfirmedBlockCertificate> =
+            let mut received: Vec<_> =
                 client_delegate!(self, download_raw_certificates_by_heights, request)?
                     .certificates
                     .into_iter()
