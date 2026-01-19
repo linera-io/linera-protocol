@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt, future::Future, iter};
+use std::{collections::BTreeSet, fmt, future::Future, iter};
 
 use futures::{future, stream, StreamExt};
 use linera_base::{
@@ -412,9 +412,11 @@ impl ValidatorNode for GrpcClient {
         while !missing_hashes.is_empty() {
             // Macro doesn't compile if we pass `missing_hashes.clone()` directly to `client_delegate!`.
             let missing = missing_hashes.clone();
-            let mut received: Vec<ConfirmedBlockCertificate> = Vec::<Certificate>::try_from(
-                client_delegate!(self, download_certificates, missing)?,
-            )?
+            let mut received: Vec<_> = Vec::<Certificate>::try_from(client_delegate!(
+                self,
+                download_certificates,
+                missing
+            )?)?
             .into_iter()
             .map(|cert| {
                 ConfirmedBlockCertificate::try_from(cert)
@@ -444,14 +446,14 @@ impl ValidatorNode for GrpcClient {
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        let mut missing = heights;
+        let mut missing = heights.into_iter().collect::<BTreeSet<_>>();
         let mut certs_collected = vec![];
         while !missing.is_empty() {
             let request = CertificatesByHeightRequest {
                 chain_id,
-                heights: missing.clone(),
+                heights: missing.iter().copied().collect(),
             };
-            let mut received: Vec<ConfirmedBlockCertificate> =
+            let mut received: Vec<_> =
                 client_delegate!(self, download_raw_certificates_by_heights, request)?
                     .certificates
                     .into_iter()
@@ -476,11 +478,13 @@ impl ValidatorNode for GrpcClient {
                 break;
             }
 
-            // Honest validator should return certificates in the same order as the requested hashes.
-            missing = missing[received.len()..].to_vec();
+            // Remove only the heights we actually received from missing set.
+            for cert in &received {
+                missing.remove(&cert.inner().height());
+            }
             certs_collected.append(&mut received);
         }
-
+        certs_collected.sort_by_key(|cert| cert.inner().height());
         Ok(certs_collected)
     }
 

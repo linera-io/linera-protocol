@@ -27,7 +27,7 @@ use linera_chain::{
     types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
-use linera_storage::{Clock, ResultReadCertificates, Storage};
+use linera_storage::{Clock, Storage};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::{instrument, Level};
@@ -711,24 +711,15 @@ where
         let certificate = if let Some(cert) = latest_certificate {
             cert
         } else {
-            let hash = self
-                .client
-                .local_node
-                .get_block_hashes(chain_id, vec![height])
+            self.read_certificates_for_heights(chain_id, vec![height])
                 .await?
                 .into_iter()
                 .next()
                 .ok_or_else(|| {
                     chain_client::Error::InternalError(
-                        "send_chain_information called with invalid target_block_height",
+                        "failed to read latest certificate for height sync",
                     )
-                })?;
-            self.client
-                .local_node
-                .storage_client()
-                .read_certificate(hash)
-                .await?
-                .ok_or_else(|| chain_client::Error::MissingConfirmedBlock(hash))?
+                })?
         };
 
         // Optimistically try sending just the last certificate
@@ -754,31 +745,31 @@ where
         }
 
         // Send any additional missing certificates in order
-        let validator_missing_hashes = self
-            .client
-            .local_node
-            .get_block_hashes(chain_id, heights)
+        let certificates = self
+            .read_certificates_for_heights(chain_id, heights)
             .await?;
 
-        let certificates = self
-            .client
-            .local_node
-            .storage_client()
-            .read_certificates(validator_missing_hashes.clone())
-            .await?;
-        let certificates = match ResultReadCertificates::new(certificates, validator_missing_hashes)
-        {
-            ResultReadCertificates::Certificates(certificates) => certificates,
-            ResultReadCertificates::InvalidHashes(hashes) => {
-                return Err(chain_client::Error::ReadCertificatesError(hashes))
-            }
-        };
         for certificate in certificates {
             self.send_confirmed_certificate(certificate, delivery)
                 .await?;
         }
 
         Ok(info)
+    }
+
+    /// Reads certificates for the given heights from storage.
+    async fn read_certificates_for_heights(
+        &self,
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    ) -> Result<Vec<GenericCertificate<ConfirmedBlock>>, chain_client::Error> {
+        let storage = self.client.local_node.storage_client();
+
+        let certificates_by_height = storage
+            .read_certificates_by_heights(chain_id, &heights)
+            .await?;
+
+        Ok(certificates_by_height.into_iter().flatten().collect())
     }
 
     /// Initializes a new chain on the validator by sending the chain description and dependencies.
@@ -929,30 +920,18 @@ where
             async move {
                 // Get all block hashes for this chain at the specified heights in one call
                 let heights_vec: Vec<_> = heights.into_iter().collect();
-                let hashes = updater
-                    .client
-                    .local_node
-                    .get_block_hashes(chain_id, heights_vec.clone())
-                    .await?;
-
-                if hashes.len() != heights_vec.len() {
-                    return Err(chain_client::Error::InternalError(
-                        "send_chain_info_at_heights called with invalid heights",
-                    ));
-                }
-
-                // Read all certificates in one call
                 let certificates = updater
                     .client
                     .local_node
                     .storage_client()
-                    .read_certificates(hashes.clone())
-                    .await?;
+                    .read_certificates_by_heights(chain_id, &heights_vec)
+                    .await?
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
 
                 // Send each certificate
-                for (hash, certificate) in hashes.into_iter().zip(certificates) {
-                    let certificate = certificate
-                        .ok_or_else(|| chain_client::Error::MissingConfirmedBlock(hash))?;
+                for certificate in certificates {
                     updater
                         .send_confirmed_certificate(certificate, delivery)
                         .await?;

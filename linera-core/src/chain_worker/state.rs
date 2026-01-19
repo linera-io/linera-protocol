@@ -35,7 +35,7 @@ use linera_execution::{
     Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
     ServiceRuntimeEndpoint,
 };
-use linera_storage::{Clock as _, ResultReadConfirmedBlocks, Storage};
+use linera_storage::{Clock as _, ResultReadCertificates, Storage};
 use linera_views::{
     context::{Context, InactiveContext},
     views::{ClonableView, ReplaceContext as _, RootView as _, View as _},
@@ -546,19 +546,16 @@ where
         }
 
         if !uncached_hashes.is_empty() {
-            let blocks = self
-                .storage
-                .read_confirmed_blocks(uncached_hashes.clone())
-                .await?;
-            let blocks = match ResultReadConfirmedBlocks::new(blocks, uncached_hashes) {
-                ResultReadConfirmedBlocks::Blocks(blocks) => blocks,
-                ResultReadConfirmedBlocks::InvalidHashes(hashes) => {
+            let certificates = self.storage.read_certificates(&uncached_hashes).await?;
+            let certificates = match ResultReadCertificates::new(certificates, uncached_hashes) {
+                ResultReadCertificates::Certificates(certificates) => certificates,
+                ResultReadCertificates::InvalidHashes(hashes) => {
                     return Err(WorkerError::ReadCertificatesError(hashes))
                 }
             };
 
-            for block in blocks {
-                let hashed_block = block.into_inner();
+            for cert in certificates {
+                let hashed_block = cert.into_value().into_inner();
                 let height = hashed_block.inner().header.height;
                 self.block_values.insert(Cow::Owned(hashed_block.clone()));
                 height_to_blocks.insert(height, hashed_block);

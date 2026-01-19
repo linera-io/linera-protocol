@@ -506,10 +506,7 @@ impl<Env: Environment> Client<Env> {
             .local_node
             .get_preprocessed_block_hashes(chain_id, next_height, stop)
             .await?;
-        let certificates = self
-            .storage_client()
-            .read_certificates(hashes.clone())
-            .await?;
+        let certificates = self.storage_client().read_certificates(&hashes).await?;
         let certificates = match ResultReadCertificates::new(certificates, hashes) {
             ResultReadCertificates::Certificates(certificates) => certificates,
             ResultReadCertificates::InvalidHashes(hashes) => {
