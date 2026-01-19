@@ -254,7 +254,7 @@ with empty blocks.
 kill %% && sleep 1    # Kill the service so we can use CLI commands for chain 1.
 
 linera --wait-for-outgoing-messages change-ownership \
-    --owners "[\"$OWNER_AMM\",\"$OWNER_2\"]"
+    --owners "{\"$OWNER_AMM\":100,\"$OWNER_2\":100}"
 
 linera --wait-for-outgoing-messages change-application-permissions \
     --execute-operations "[\"$AMM_APPLICATION_ID\"]" \

@@ -2303,8 +2303,9 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
     let chain2 = client1
         .open_multi_owner_chain(
             chain1,
-            vec![owner1, owner2, owner3],
-            vec![100, 100, 100],
+            vec![(owner1, 100), (owner2, 100), (owner3, 100)]
+                .into_iter()
+                .collect(),
             u32::MAX,
             Amount::from_tokens(6),
             10_000,
@@ -4289,8 +4290,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
     let chain2 = client1
         .open_multi_owner_chain(
             chain1,
-            vec![owner1, owner2],
-            vec![100, 100],
+            vec![(owner1, 100), (owner2, 100)].into_iter().collect(),
             u32::MAX,
             Amount::from_tokens(6),
             10_000,
@@ -4805,8 +4805,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
     let chain2 = client1
         .open_multi_owner_chain(
             chain1,
-            vec![owner1, owner2],
-            vec![100, 100],            // Both owners have equal weight.
+            vec![(owner1, 100), (owner2, 100)].into_iter().collect(),
             0,                         // No multi-leader rounds.
             Amount::from_millis(8900), // Only 8 transfers can be made.
             u64::MAX,                  // 585 million years
