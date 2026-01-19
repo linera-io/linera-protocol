@@ -1698,6 +1698,9 @@ pub struct ChainClientOptions {
     pub sender_certificate_download_batch_size: usize,
     /// Maximum number of tasks that can be joined concurrently using buffer_unordered.
     pub max_joined_tasks: usize,
+    /// Whether to allow creating blocks in the fast round. Fast blocks have lower latency but
+    /// must be used carefully so that there are never any conflicting fast block proposals.
+    pub allow_fast_blocks: bool,
 }
 
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
@@ -1718,6 +1721,7 @@ impl ChainClientOptions {
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             max_joined_tasks: 100,
+            allow_fast_blocks: false,
         }
     }
 }
@@ -3475,14 +3479,17 @@ impl<Env: Environment> ChainClient<Env> {
             .await?;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
-        // Similarly, we cannot propose a block that uses oracles in the fast round.
+        // Similarly, we cannot propose a block that uses oracles in the fast round, and also
+        // skip the fast round if fast blocks are not allowed.
+        let skip_fast = manager.current_round.is_fast()
+            && (has_oracle_responses || !self.options.allow_fast_blocks);
         let conflict = manager
             .requested_signed_proposal
             .as_ref()
             .into_iter()
             .chain(&manager.requested_proposed)
             .any(|proposal| proposal.content.round == manager.current_round)
-            || (manager.current_round.is_fast() && has_oracle_responses);
+            || skip_fast;
         let round = if !conflict {
             manager.current_round
         } else if let Some(round) = manager
