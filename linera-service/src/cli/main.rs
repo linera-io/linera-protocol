@@ -68,8 +68,8 @@ use linera_persistent::{self as persistent, Persist, PersistExt as _};
 use linera_service::{
     cli::{
         command::{
-            BenchmarkCommand, BenchmarkOptions, ChainCommand, ChainIdOrName, ClientCommand,
-            DatabaseToolCommand, NetCommand, ProjectCommand, WalletCommand,
+            BenchmarkCommand, BenchmarkOptions, ChainCommand, ClientCommand, DatabaseToolCommand,
+            NetCommand, ProjectCommand, WalletCommand,
         },
         net_up_utils,
     },
@@ -208,9 +208,7 @@ impl Runnable for Job {
             } => {
                 let new_owner = owner.unwrap_or_else(|| signer.generate_new().into());
                 signer.persist().await?;
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let chain_id =
-                    ChainIdOrName::resolve_or(chain_id.as_ref(), &wallet, default_chain)?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -258,9 +256,7 @@ impl Runnable for Job {
                 application_permissions_config,
                 name,
             } => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let chain_id =
-                    ChainIdOrName::resolve_or(chain_id.as_ref(), &wallet, default_chain)?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -337,9 +333,7 @@ impl Runnable for Job {
                 chain_id,
                 application_permissions_config,
             } => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let chain_id =
-                    ChainIdOrName::resolve_or(chain_id.as_ref(), &wallet, default_chain)?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -458,9 +452,7 @@ impl Runnable for Job {
             }
 
             Sync { chain_id } => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let chain_id =
-                    ChainIdOrName::resolve_or(chain_id.as_ref(), &wallet, default_chain)?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -477,9 +469,7 @@ impl Runnable for Job {
             }
 
             ProcessInbox { chain_id } => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let chain_id =
-                    ChainIdOrName::resolve_or(chain_id.as_ref(), &wallet, default_chain)?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1139,9 +1129,7 @@ impl Runnable for Job {
             },
 
             Watch { chain_id, raw } => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let chain_id =
-                    ChainIdOrName::resolve_or(chain_id.as_ref(), &wallet, default_chain)?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1296,9 +1284,7 @@ impl Runnable for Job {
                 vm_runtime,
                 publisher,
             } => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let publisher =
-                    ChainIdOrName::resolve_or(publisher.as_ref(), &wallet, default_chain)?;
+                let publisher = wallet.resolve_or_default(publisher.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1321,9 +1307,7 @@ impl Runnable for Job {
                 stream_id,
                 start_index,
             } => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let chain_id =
-                    ChainIdOrName::resolve_or(chain_id.as_ref(), &wallet, default_chain)?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let _context = options
                     .create_client_context(storage.clone(), wallet, signer.into_value())
                     .await?;
@@ -1339,9 +1323,7 @@ impl Runnable for Job {
                 blob_path,
                 publisher,
             } => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let publisher =
-                    ChainIdOrName::resolve_or(publisher.as_ref(), &wallet, default_chain)?;
+                let publisher = wallet.resolve_or_default(publisher.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1359,8 +1341,7 @@ impl Runnable for Job {
 
             // TODO(#2490): Consider removing or renaming this.
             ReadDataBlob { hash, reader } => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let reader = ChainIdOrName::resolve_or(reader.as_ref(), &wallet, default_chain)?;
+                let reader = wallet.resolve_or_default(reader.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1381,8 +1362,7 @@ impl Runnable for Job {
                 json_argument_path,
                 required_application_ids,
             } => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let creator = ChainIdOrName::resolve_or(creator.as_ref(), &wallet, default_chain)?;
+                let creator = wallet.resolve_or_default(creator.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1434,9 +1414,7 @@ impl Runnable for Job {
                 json_argument_path,
                 required_application_ids,
             } => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let publisher =
-                    ChainIdOrName::resolve_or(publisher.as_ref(), &wallet, default_chain)?;
+                let publisher = wallet.resolve_or_default(publisher.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1508,9 +1486,7 @@ impl Runnable for Job {
                     json_argument_path,
                     required_application_ids,
                 } => {
-                    let default_chain = wallet.default_chain().expect("No default chain");
-                    let publisher =
-                        ChainIdOrName::resolve_or(publisher.as_ref(), &wallet, default_chain)?;
+                    let publisher = wallet.resolve_or_default(publisher.as_ref())?;
                     let mut context = options
                         .create_client_context(storage, wallet, signer.into_value())
                         .await?;
@@ -1559,9 +1535,7 @@ impl Runnable for Job {
             },
 
             RetryPendingBlock { chain_id } => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let chain_id =
-                    ChainIdOrName::resolve_or(chain_id.as_ref(), &wallet, default_chain)?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1708,9 +1682,7 @@ impl Runnable for Job {
             }
 
             Chain(ChainCommand::ShowBlock { chain_id, height }) => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let chain_id =
-                    ChainIdOrName::resolve_or(chain_id.as_ref(), &wallet, default_chain)?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1732,9 +1704,7 @@ impl Runnable for Job {
             }
 
             Chain(ChainCommand::ShowChainDescription { chain_id }) => {
-                let default_chain = wallet.default_chain().expect("No default chain");
-                let chain_id =
-                    ChainIdOrName::resolve_or(chain_id.as_ref(), &wallet, default_chain)?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;

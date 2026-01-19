@@ -15,6 +15,8 @@ use linera_client::config::GenesisConfig;
 use linera_core::wallet;
 use linera_persistent as persistent;
 
+use crate::cli::command::ChainIdOrName;
+
 /// The maximum length of a chain name. Chain names must be shorter than a chain ID
 /// (which is 64 hex characters) to avoid ambiguity.
 pub const MAX_CHAIN_NAME_LENGTH: usize = 63;
@@ -259,6 +261,19 @@ impl Wallet {
             }
         }
         None
+    }
+
+    /// Resolves an optional chain ID or name to a chain ID, using the default if not specified.
+    ///
+    /// If `chain` is `Some`, resolves the chain ID or name.
+    /// If `chain` is `None`, returns the wallet's default chain.
+    /// Returns an error if resolution fails or no default chain exists.
+    pub fn resolve_or_default(&self, chain: Option<&ChainIdOrName>) -> anyhow::Result<ChainId> {
+        chain
+            .map(|c| c.resolve(self))
+            .transpose()?
+            .or_else(|| self.default_chain())
+            .ok_or_else(|| anyhow::anyhow!("No default chain"))
     }
 
     /// Returns the next available default name for a new chain.

@@ -79,20 +79,6 @@ impl ChainIdOrName {
                 .ok_or_else(|| anyhow::anyhow!("unknown chain name: `{name}`")),
         }
     }
-
-    /// Resolves an optional chain ID or name to a chain ID.
-    ///
-    /// If `self` is `None`, returns the provided default chain ID.
-    pub fn resolve_or(
-        chain: Option<&Self>,
-        wallet: &crate::wallet::Wallet,
-        default: ChainId,
-    ) -> anyhow::Result<ChainId> {
-        match chain {
-            Some(chain) => chain.resolve(wallet),
-            None => Ok(default),
-        }
-    }
 }
 
 impl fmt::Display for ChainIdOrName {
