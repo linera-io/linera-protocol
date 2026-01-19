@@ -27,7 +27,7 @@ use linera_chain::{
     types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
-use linera_storage::{Clock, ResultReadCertificates, Storage};
+use linera_storage::{Clock, Storage};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::{instrument, Level};
@@ -758,13 +758,6 @@ where
     }
 
     /// Reads certificates for the given heights from storage.
-    ///
-    /// First attempts to use the optimized `read_certificates_by_heights` method.
-    /// Falls back to the traditional `get_block_hashes` + `read_certificates` approach
-    /// if the direct height lookup doesn't return all certificates.
-    ///
-    /// When using the fallback, writes the discovered height->hash indices back to storage
-    /// so subsequent lookups can use the optimized path.
     async fn read_certificates_for_heights(
         &self,
         chain_id: ChainId,
@@ -772,41 +765,20 @@ where
     ) -> Result<Vec<GenericCertificate<ConfirmedBlock>>, chain_client::Error> {
         let storage = self.client.local_node.storage_client();
 
-        // First, try the direct height-based lookup
         let certificates_by_height = storage
             .read_certificates_by_heights(chain_id, &heights)
             .await?;
 
-        // Check if we got all certificates (no None values)
-        let all_found = certificates_by_height.len() == heights.len()
-            && certificates_by_height.iter().all(|c| c.is_some());
+        // Verify we got all certificates
+        let certificates: Vec<_> = certificates_by_height.into_iter().flatten().collect();
 
-        if all_found {
-            return Ok(certificates_by_height.into_iter().flatten().collect());
+        if certificates.len() != heights.len() {
+            return Err(chain_client::Error::InternalError(
+                "failed to read all certificates for heights",
+            ));
         }
 
-        // Fallback to the traditional approach
-        let hashes = self
-            .client
-            .local_node
-            .get_block_hashes(chain_id, heights.clone())
-            .await?;
-
-        let certificates = storage.read_certificates(&hashes).await?;
-
-        match ResultReadCertificates::new(certificates, hashes.clone()) {
-            ResultReadCertificates::Certificates(certs) => {
-                // Write back the height->hash indices we learned from the fallback
-                let indices: Vec<_> = heights.into_iter().zip(hashes.clone()).collect();
-                storage
-                    .write_certificate_height_indices(chain_id, &indices)
-                    .await?;
-                Ok(certs)
-            }
-            ResultReadCertificates::InvalidHashes(hashes) => {
-                Err(chain_client::Error::ReadCertificatesError(hashes))
-            }
-        }
+        Ok(certificates)
     }
 
     /// Initializes a new chain on the validator by sending the chain description and dependencies.

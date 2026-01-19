@@ -184,15 +184,6 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         heights: &[BlockHeight],
     ) -> Result<Vec<Option<CryptoHash>>, ViewError>;
 
-    /// Writes certificate height index entries for a given chain.
-    /// This is used to populate the height->hash index when certificates are found
-    /// via alternative methods (e.g., from chain state).
-    async fn write_certificate_height_indices(
-        &self,
-        chain_id: ChainId,
-        indices: &[(BlockHeight, CryptoHash)],
-    ) -> Result<(), ViewError>;
-
     /// Reads the event with the given ID.
     async fn read_event(&self, id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
 
