@@ -296,14 +296,7 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 
 * `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
 * `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the argument leaves the current set of super owners unchanged
-* `--owners <OWNERS>` — A JSON list of the new owners. Absence of the argument leaves the current list of owners unchanged
-* `--owner-weights <OWNER_WEIGHTS>` — A JSON list of weights for the new owners.
-
-   If they are specified there must be exactly one weight for each owner.
-
-   Absence of the argument gives each owner a weight of 100 if --owners is specified, or leaves the owners unchanged if it is not specified.
-
-   Note: if --owner is not specified, but this argument is, the weights will be assigned to the existing owners in lexicographical order.
+* `--owners <OWNERS>` — A JSON map of the new owners to their weights. Absence of the argument leaves the current set of owners unchanged
 * `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the argument leaves the current setting unchanged
 * `--open-multi-leader-rounds` — Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners. This should only be `true` on chains with restrictive application permissions and an application-based mechanism to select block proposers
 * `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the argument leaves the current setting unchanged
@@ -346,14 +339,7 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 
 * `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
 * `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the argument leaves the current set of super owners unchanged
-* `--owners <OWNERS>` — A JSON list of the new owners. Absence of the argument leaves the current list of owners unchanged
-* `--owner-weights <OWNER_WEIGHTS>` — A JSON list of weights for the new owners.
-
-   If they are specified there must be exactly one weight for each owner.
-
-   Absence of the argument gives each owner a weight of 100 if --owners is specified, or leaves the owners unchanged if it is not specified.
-
-   Note: if --owner is not specified, but this argument is, the weights will be assigned to the existing owners in lexicographical order.
+* `--owners <OWNERS>` — A JSON map of the new owners to their weights. Absence of the argument leaves the current set of owners unchanged
 * `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the argument leaves the current setting unchanged
 * `--open-multi-leader-rounds` — Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners. This should only be `true` on chains with restrictive application permissions and an application-based mechanism to select block proposers
 * `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the argument leaves the current setting unchanged

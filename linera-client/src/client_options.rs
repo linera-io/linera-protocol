@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, fmt, iter};
+use std::{
+    collections::{BTreeMap, HashSet},
+    fmt,
+};
 
 use linera_base::{
     data_types::{ApplicationPermissions, TimeDelta},
@@ -305,22 +308,10 @@ pub struct ChainOwnershipConfig {
     #[arg(long, value_parser = util::parse_json::<Vec<AccountOwner>>)]
     pub super_owners: Option<std::vec::Vec<AccountOwner>>,
 
-    /// A JSON list of the new owners. Absence of the argument leaves the current list of
-    /// owners unchanged.
-    #[arg(long, value_parser = util::parse_json::<Vec<AccountOwner>>)]
-    pub owners: Option<std::vec::Vec<AccountOwner>>,
-
-    /// A JSON list of weights for the new owners.
-    ///
-    /// If they are specified there must be exactly one weight for each owner.
-    ///
-    /// Absence of the argument gives each owner a weight of 100 if --owners is specified,
-    /// or leaves the owners unchanged if it is not specified.
-    ///
-    /// Note: if --owner is not specified, but this argument is, the weights will be
-    /// assigned to the existing owners in lexicographical order.
-    #[arg(long, value_parser = util::parse_json::<Vec<u64>>)]
-    pub owner_weights: Option<std::vec::Vec<u64>>,
+    /// A JSON map of the new owners to their weights. Absence of the argument leaves the current
+    /// set of owners unchanged.
+    #[arg(long, value_parser = util::parse_json::<BTreeMap<AccountOwner, u64>>)]
+    pub owners: Option<BTreeMap<AccountOwner, u64>>,
 
     /// The number of rounds in which every owner can propose blocks, i.e. the first round
     /// number in which only a single designated leader is allowed to propose blocks. "null" is
@@ -370,7 +361,6 @@ impl ChainOwnershipConfig {
         let ChainOwnershipConfig {
             super_owners,
             owners,
-            owner_weights,
             multi_leader_rounds,
             fast_round_duration,
             open_multi_leader_rounds,
@@ -379,18 +369,8 @@ impl ChainOwnershipConfig {
             fallback_duration,
         } = self;
 
-        if let Some(owner_weights) = owner_weights {
-            let owners = owners
-                .unwrap_or_else(|| chain_ownership.owners.keys().cloned().collect::<Vec<_>>());
-            if owner_weights.len() != owners.len() {
-                return Err(Error::MisalignedWeights {
-                    public_keys: owners.len(),
-                    weights: owner_weights.len(),
-                });
-            }
-            chain_ownership.owners = owners.into_iter().zip(owner_weights).collect();
-        } else if let Some(owners) = owners {
-            chain_ownership.owners = owners.into_iter().zip(iter::repeat(100)).collect();
+        if let Some(owners) = owners {
+            chain_ownership.owners = owners;
         }
 
         if let Some(super_owners) = super_owners {
