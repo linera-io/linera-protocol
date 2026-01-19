@@ -193,22 +193,22 @@ where
         // These are local_chains that don't have services (not in active_chains)
         self.listened_local_chains = local_chains.difference(&active_chains).cloned().collect();
 
-        if let Err(err) = self.command_sender.send(ListenerCommand::SetMessagePolicy(
+        if let Err(error) = self.command_sender.send(ListenerCommand::SetMessagePolicy(
             state.local_message_policy,
         )) {
-            error!(%err, "error sending a command to chain listener");
+            error!(%error, "error sending a command to chain listener");
         }
-        if let Err(err) = self
+        if let Err(error) = self
             .command_sender
             .send(ListenerCommand::Listen(new_chains))
         {
-            error!(%err, "error sending a command to chain listener");
+            error!(%error, "error sending a command to chain listener");
         }
-        if let Err(err) = self
+        if let Err(error) = self
             .command_sender
             .send(ListenerCommand::StopListening(chains_to_stop))
         {
-            error!(%err, "error sending a command to chain listener");
+            error!(%error, "error sending a command to chain listener");
         }
     }
 
