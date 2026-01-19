@@ -22,7 +22,7 @@ use linera_base::{
     crypto::{signer, AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, Epoch, Round, Timestamp,
+        ChainDescription, Epoch, MessagePolicy, Round, Timestamp,
     },
     ensure,
     identifiers::{
@@ -64,8 +64,7 @@ use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
 use super::{
     received_log::ReceivedLogs, validator_trackers::ValidatorTrackers, AbortOnDrop, Client,
-    ExecuteBlockOutcome, ListeningMode, MessagePolicy, PendingProposal, ReceiveCertificateMode,
-    TimingType,
+    ExecuteBlockOutcome, ListeningMode, PendingProposal, ReceiveCertificateMode, TimingType,
 };
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
@@ -531,7 +530,7 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
-            .filter_map(|bundle| self.options.message_policy.apply(bundle))
+            .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
             .take(self.options.max_pending_message_bundles)
             .collect())
     }
