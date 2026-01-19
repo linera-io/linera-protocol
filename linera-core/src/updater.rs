@@ -769,16 +769,7 @@ where
             .read_certificates_by_heights(chain_id, &heights)
             .await?;
 
-        // Verify we got all certificates
-        let certificates: Vec<_> = certificates_by_height.into_iter().flatten().collect();
-
-        if certificates.len() != heights.len() {
-            return Err(chain_client::Error::InternalError(
-                "failed to read all certificates for heights",
-            ));
-        }
-
-        Ok(certificates)
+        Ok(certificates_by_height.into_iter().flatten().collect())
     }
 
     /// Initializes a new chain on the validator by sending the chain description and dependencies.
