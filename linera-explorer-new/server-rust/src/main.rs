@@ -1,11 +1,9 @@
 mod db;
+mod metrics;
 mod models;
 mod routes;
 
-use axum::{
-    routing::get,
-    Router,
-};
+use axum::{middleware, routing::get, Router};
 use sqlx::postgres::PgPoolOptions;
 use std::env;
 use std::net::SocketAddr;
@@ -59,6 +57,8 @@ async fn main() {
         .route("/api/chains/{chainId}", get(routes::get_chain_by_id))
         .route("/api/chains/{chainId}/blocks", get(routes::get_chain_blocks))
         .route("/api/chains/{chainId}/blocks/count", get(routes::get_chain_block_count))
+        .route("/metrics", get(metrics::serve_metrics))
+        .layer(middleware::from_fn(metrics::track_metrics))
         .layer(cors)
         .with_state(pool);
 
