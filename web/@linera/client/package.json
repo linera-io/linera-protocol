@@ -17,7 +17,7 @@
   "type": "module",
   "scripts": {
     "install": "true",
-    "build": "bash build.bash --release",
+    "build": "bash build.bash",
     "prepare": "pnpm build",
     "lint": "pnpm build && cargo fmt --check && cargo clippy",
     "test": "pnpm exec vitest --run",
