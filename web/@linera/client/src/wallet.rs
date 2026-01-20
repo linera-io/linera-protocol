@@ -18,11 +18,13 @@ pub struct Wallet(pub(crate) Rc<wallet::Memory>);
 
 impl Wallet {
     /// Returns a reference to the genesis configuration.
+    #[must_use]
     pub fn genesis_config(&self) -> &GenesisConfig {
         self.0.genesis_config()
     }
 
     /// Returns the default chain ID, if one is set.
+    #[must_use]
     pub fn default_chain(&self) -> Option<ChainId> {
         self.0.default_chain()
     }
