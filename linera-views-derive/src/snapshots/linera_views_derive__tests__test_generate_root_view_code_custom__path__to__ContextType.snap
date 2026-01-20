@@ -8,8 +8,8 @@ where
 {
     async fn save(&mut self) -> Result<(), linera_views::ViewError> {
         use linera_views::{
-            context::Context, batch::Batch, store::WritableKeyValueStore as _,
-            views::View,
+            context::Context as _, batch::Batch, store::WritableKeyValueStore as _,
+            views::View as _,
         };
         let mut batch = Batch::new();
         self.pre_save(&mut batch)?;

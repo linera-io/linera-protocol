@@ -114,6 +114,22 @@ mod metrics {
             &[],
         )
     });
+
+    pub static NOTIFICATIONS_SKIPPED_RECEIVER_LAG: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "notifications_skipped_receiver_lag",
+            "Number of notifications skipped because receiver lagged behind sender",
+            &[],
+        )
+    });
+
+    pub static NOTIFICATIONS_DROPPED_NO_RECEIVER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "notifications_dropped_no_receiver",
+            "Number of notifications dropped because no receiver was available",
+            &[],
+        )
+    });
 }
 
 #[derive(Clone)]
@@ -353,6 +369,10 @@ where
                         nickname,
                         skipped_count, "notification receiver lagged, messages were skipped"
                     );
+                    #[cfg(with_metrics)]
+                    metrics::NOTIFICATIONS_SKIPPED_RECEIVER_LAG
+                        .with_label_values(&[])
+                        .inc_by(skipped_count);
                     continue;
                 }
                 Err(RecvError::Closed) => {
@@ -433,7 +453,10 @@ where
             trace!("Scheduling notification query");
             if let Err(error) = notification_sender.send(notification) {
                 error!(%error, "dropping notification");
-                break;
+                #[cfg(with_metrics)]
+                metrics::NOTIFICATIONS_DROPPED_NO_RECEIVER
+                    .with_label_values(&[])
+                    .inc();
             }
         }
     }

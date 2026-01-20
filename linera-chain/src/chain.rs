@@ -86,7 +86,7 @@ pub(crate) mod metrics {
             "message_execution_latency",
             "Message execution latency",
             &[],
-            exponential_bucket_interval(0.1_f64, 50_000.0),
+            exponential_bucket_interval(0.1_f64, 1_000_000.0),
         )
     });
 
@@ -95,7 +95,7 @@ pub(crate) mod metrics {
             "operation_execution_latency",
             "Operation execution latency",
             &[],
-            exponential_bucket_interval(0.1_f64, 50_000.0),
+            exponential_bucket_interval(0.1_f64, 1_000_000.0),
         )
     });
 
