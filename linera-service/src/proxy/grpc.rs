@@ -32,9 +32,9 @@ use linera_rpc::{
             validator_worker_client::ValidatorWorkerClient,
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
             CertificatesBatchResponse, ChainInfoResult, CryptoHash, HandlePendingBlobRequest,
-            LiteCertificate, NetworkDescription, Notification, PendingBlobRequest,
-            PendingBlobResult, RawCertificate, RawCertificatesBatch, SubscriptionRequest,
-            VersionInfo,
+            LiteCertificate, NetworkDescription, Notification, NotificationBatch,
+            PendingBlobRequest, PendingBlobResult, RawCertificate, RawCertificatesBatch,
+            SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
@@ -791,15 +791,19 @@ impl<S> NotifierService for GrpcProxy<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[instrument(skip_all, err(Display), fields(method = "notify"))]
-    async fn notify(&self, request: Request<Notification>) -> Result<Response<()>, Status> {
-        let notification = request.into_inner();
-        let chain_id = notification
-            .chain_id
-            .clone()
-            .ok_or_else(|| Status::invalid_argument("Missing field: chain_id."))?
-            .try_into()?;
-        self.0.notifier.notify_chain(&chain_id, &Ok(notification));
+    #[instrument(skip_all, err(Display), fields(method = "notify_batch"))]
+    async fn notify_batch(
+        &self,
+        request: Request<NotificationBatch>,
+    ) -> Result<Response<()>, Status> {
+        for notification in request.into_inner().notifications {
+            let chain_id = notification
+                .chain_id
+                .clone()
+                .ok_or_else(|| Status::invalid_argument("Missing field: chain_id."))?
+                .try_into()?;
+            self.0.notifier.notify_chain(&chain_id, &Ok(notification));
+        }
         Ok(Response::new(()))
     }
 }

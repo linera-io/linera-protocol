@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use linera_core::worker::Reason;
 use linera_rpc::grpc::api::{
     notifier_service_server::{NotifierService, NotifierServiceServer},
-    Notification,
+    Notification, NotificationBatch,
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::sync::CancellationToken;
@@ -20,29 +20,33 @@ pub(crate) struct ExporterService {
 
 #[async_trait]
 impl NotifierService for ExporterService {
-    async fn notify(&self, request: Request<Notification>) -> Result<Response<()>, Status> {
-        let notification = request.into_inner();
-        let block_id =
-            match parse_notification(notification).map_err(|e| Status::from_error(e.into())) {
-                Ok(block_id) => {
-                    tracing::debug!(
-                        ?block_id,
-                        "received new block notification from notifier service"
-                    );
-                    block_id
-                }
-                Err(status) => {
-                    // We assume errors when parsing are not critical and just log them.
-                    tracing::warn!(error=?status, "received bad notification");
-                    return Ok(Response::new(()));
-                }
-            };
+    async fn notify_batch(
+        &self,
+        request: Request<NotificationBatch>,
+    ) -> Result<Response<()>, Status> {
+        for notification in request.into_inner().notifications {
+            let block_id =
+                match parse_notification(notification).map_err(|e| Status::from_error(e.into())) {
+                    Ok(block_id) => {
+                        tracing::debug!(
+                            ?block_id,
+                            "received new block notification from notifier service"
+                        );
+                        block_id
+                    }
+                    Err(error) => {
+                        // We assume errors when parsing are not critical and just log them.
+                        tracing::warn!(?error, "received bad notification");
+                        continue;
+                    }
+                };
 
-        #[cfg(with_metrics)]
-        crate::metrics::EXPORTER_NOTIFICATION_QUEUE_LENGTH.inc();
-        self.block_processor_sender
-            .send(block_id)
-            .expect("sender should never fail");
+            #[cfg(with_metrics)]
+            crate::metrics::EXPORTER_NOTIFICATION_QUEUE_LENGTH.inc();
+            self.block_processor_sender
+                .send(block_id)
+                .expect("sender should never fail");
+        }
 
         Ok(Response::new(()))
     }
@@ -139,8 +143,11 @@ mod test {
             reason,
         };
 
+        let notification_batch = linera_rpc::grpc::api::NotificationBatch {
+            notifications: vec![request.try_into().unwrap()],
+        };
         assert!(client
-            .notify(Request::new(request.try_into().unwrap()))
+            .notify_batch(Request::new(notification_batch))
             .await
             .is_ok());
 
