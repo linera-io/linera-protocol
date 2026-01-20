@@ -48,7 +48,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, RoundTimeout},
-    environment::Environment,
+    environment::{wallet::Wallet as _, Environment},
     local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNodeProvider as _},
     notifier::{ChannelNotifier, Notifier as _},
@@ -236,8 +236,6 @@ pub struct Client<Env: Environment> {
     pub local_node: LocalNodeClient<Env::Storage>,
     /// Manages the requests sent to validator nodes.
     requests_scheduler: RequestsScheduler<Env>,
-    /// The admin chain ID.
-    admin_id: ChainId,
     /// Chains that should be tracked by the client, along with their listening mode.
     /// The presence of a chain in this map means it is tracked by the local node.
     chain_modes: Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>,
@@ -255,7 +253,6 @@ impl<Env: Environment> Client<Env> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         environment: Env,
-        admin_id: ChainId,
         long_lived_services: bool,
         chain_modes: impl IntoIterator<Item = (ChainId, ListeningMode)>,
         name: impl Into<String>,
@@ -287,7 +284,6 @@ impl<Env: Environment> Client<Env> {
             local_node,
             requests_scheduler,
             chains: papaya::HashMap::new(),
-            admin_id,
             chain_modes,
             notifier: Arc::new(ChannelNotifier::default()),
             options,
@@ -296,7 +292,7 @@ impl<Env: Environment> Client<Env> {
 
     /// Returns the chain ID of the admin chain.
     pub fn admin_chain(&self) -> ChainId {
-        self.admin_id
+        self.wallet().admin_id()
     }
 
     /// Returns the storage client used by this client's local node.
@@ -415,7 +411,7 @@ impl<Env: Environment> Client<Env> {
             Ok(info) => Ok(info),
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
                 // Make sure the admin chain is up to date.
-                self.synchronize_chain_state(self.admin_id).await?;
+                self.synchronize_chain_state(self.admin_chain()).await?;
                 // If the chain is missing then the error is a WorkerError
                 // and so a BlobsNotFound
                 self.update_local_node_with_blobs_from(blob_ids, validators)
@@ -623,13 +619,13 @@ impl<Env: Environment> Client<Env> {
     async fn admin_committees(
         &self,
     ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
-        let info = self.chain_info_with_committees(self.admin_id).await?;
+        let info = self.chain_info_with_committees(self.admin_chain()).await?;
         Ok((info.epoch, info.into_committees()?))
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.
     pub async fn admin_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
-        let info = self.chain_info_with_committees(self.admin_id).await?;
+        let info = self.chain_info_with_committees(self.admin_chain()).await?;
         Ok((info.epoch, info.into_current_committee()?))
     }
 
@@ -670,7 +666,7 @@ impl<Env: Environment> Client<Env> {
             return Ok(bcs::from_bytes(blob.bytes())?);
         };
         // Recover history from the current validators, according to the admin chain.
-        self.synchronize_chain_state(self.admin_id).await?;
+        self.synchronize_chain_state(self.admin_chain()).await?;
         let nodes = self.validator_nodes().await?;
         let blob = self
             .update_local_node_with_blobs_from(vec![chain_desc_id], &nodes)
@@ -814,7 +810,6 @@ impl<Env: Environment> Client<Env> {
                 let mut updater = ValidatorUpdater {
                     remote_node,
                     client: self.clone(),
-                    admin_id: self.admin_id,
                 };
                 let certificate = latest_certificate.clone();
                 Box::pin(async move {
@@ -850,7 +845,6 @@ impl<Env: Environment> Client<Env> {
                 let mut updater = ValidatorUpdater {
                     remote_node,
                     client: self.clone(),
-                    admin_id: self.admin_id,
                 };
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })

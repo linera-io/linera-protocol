@@ -58,7 +58,6 @@ use {
 use crate::{
     chain_listener::{self, ClientContext as _},
     client_options::{ChainOwnershipConfig, Options},
-    config::GenesisConfig,
     error, util, Error,
 };
 
@@ -204,15 +203,11 @@ impl ValidatorQueryResults {
 
 pub struct ClientContext<Env: Environment> {
     pub client: Arc<Client<Env>>,
-    // TODO(#5083): this doesn't really need to be stored
-    pub genesis_config: crate::config::GenesisConfig,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
     pub retry_delay: Duration,
     pub max_retries: u32,
     pub chain_listeners: JoinSet,
-    // TODO(#5082): move this into the upstream UI layers (maybe just the CLI)
-    pub default_chain: Option<ChainId>,
     #[cfg(not(web))]
     pub client_metrics: Option<ClientMetrics>,
 }
@@ -264,17 +259,11 @@ where
     Si: linera_core::environment::Signer,
     W: linera_core::environment::Wallet,
 {
-    // not worth refactoring this because
-    // https://github.com/linera-io/linera-protocol/issues/5082
-    // https://github.com/linera-io/linera-protocol/issues/5083
-    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         storage: S,
         wallet: W,
         signer: Si,
         options: &Options,
-        default_chain: Option<ChainId>,
-        genesis_config: GenesisConfig,
         block_cache_size: usize,
         execution_state_cache_size: usize,
     ) -> Result<Self, Error> {
@@ -316,7 +305,6 @@ where
                 signer,
                 wallet,
             },
-            genesis_config.admin_id(),
             options.long_lived_services,
             chain_modes,
             name,
@@ -337,8 +325,6 @@ where
 
         Ok(ClientContext {
             client: Arc::new(client),
-            default_chain,
-            genesis_config,
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
             retry_delay: options.retry_delay,
@@ -371,7 +357,8 @@ impl<Env: Environment> ClientContext<Env> {
 
     /// Retrieve the default chain.
     pub fn default_chain(&self) -> ChainId {
-        self.default_chain
+        self.wallet()
+            .default_chain()
             .expect("default chain requested but none set")
     }
 
@@ -657,7 +644,7 @@ impl<Env: Environment> ClientContext<Env> {
         address: &str,
         node: &impl ValidatorNode,
     ) -> Result<CryptoHash, Error> {
-        let network_description = self.genesis_config.network_description();
+        let network_description = self.wallet().genesis_config().network_description();
         match node.get_network_description().await {
             Ok(description) => {
                 if description == network_description {
@@ -747,7 +734,8 @@ impl<Env: Environment> ClientContext<Env> {
     ) -> Result<ValidatorQueryResults, Error> {
         let version_info = Ok(linera_version::VERSION_INFO.clone());
         let genesis_config_hash = Ok(self
-            .genesis_config
+            .wallet()
+            .genesis_config()
             .network_description()
             .genesis_config_hash);
         let chain_info = self

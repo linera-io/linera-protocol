@@ -47,9 +47,7 @@ pub async fn new_test_client_context(
         n => format!("Client node for {:.8} and {} others", chain_ids[0], n - 1),
     };
 
-    let genesis_config = wallet.genesis_config().clone();
     Ok(ClientContext {
-        default_chain: wallet.default_chain(),
         client: Client::new(
             linera_core::environment::Impl {
                 storage,
@@ -57,7 +55,6 @@ pub async fn new_test_client_context(
                 signer,
                 wallet,
             },
-            genesis_config.admin_id(),
             false,
             chain_modes,
             name,
@@ -72,7 +69,6 @@ pub async fn new_test_client_context(
             linera_core::client::RequestsSchedulerConfig::default(),
         )
         .into(),
-        genesis_config,
         send_timeout: send_recv_timeout,
         recv_timeout: send_recv_timeout,
         retry_delay,

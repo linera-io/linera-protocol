@@ -82,11 +82,23 @@ impl Chain {
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait Wallet {
     type Error: std::error::Error + Send + Sync;
+
+    /// Returns the genesis configuration for this wallet.
+    fn genesis_config(&self) -> &crate::GenesisConfig;
+
+    /// Returns the default chain ID, if one is set.
+    fn default_chain(&self) -> Option<ChainId>;
+
     async fn get(&self, id: ChainId) -> Result<Option<Chain>, Self::Error>;
     async fn remove(&self, id: ChainId) -> Result<Option<Chain>, Self::Error>;
     fn items(&self) -> impl Stream<Item = Result<(ChainId, Chain), Self::Error>>;
     async fn insert(&self, id: ChainId, chain: Chain) -> Result<Option<Chain>, Self::Error>;
     async fn try_insert(&self, id: ChainId, chain: Chain) -> Result<Option<Chain>, Self::Error>;
+
+    /// Returns the admin chain ID from the genesis configuration.
+    fn admin_id(&self) -> ChainId {
+        self.genesis_config().admin_id()
+    }
 
     fn chain_ids(&self) -> impl Stream<Item = Result<ChainId, Self::Error>> {
         self.items().map(|result| result.map(|kv| kv.0))
@@ -107,6 +119,14 @@ pub trait Wallet {
 
 impl<W: Deref<Target: Wallet> + linera_base::util::traits::AutoTraits> Wallet for W {
     type Error = <W::Target as Wallet>::Error;
+
+    fn genesis_config(&self) -> &crate::GenesisConfig {
+        self.deref().genesis_config()
+    }
+
+    fn default_chain(&self) -> Option<ChainId> {
+        self.deref().default_chain()
+    }
 
     async fn get(&self, id: ChainId) -> Result<Option<Chain>, Self::Error> {
         self.deref().get(id).await

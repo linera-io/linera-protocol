@@ -38,10 +38,10 @@ if [ "$(grep 'linera-service/src/cli/main.rs' "$USAGES_FILE" | wc -l)" -eq 1 ]; 
     sed -i -e '/linera-service\/src\/cli\/main\.rs/d' "$USAGES_FILE"
 fi
 
-# The linera-client uses `create_chain` to initialize the storage from the genesis configuration,
+# The genesis config uses `create_chain` to initialize the storage from the genesis configuration,
 # and this is only called by the `database_tool`
-if [ "$(grep 'linera-client/src/config.rs' "$USAGES_FILE" | wc -l)" -eq 1 ]; then
-    sed -i -e '/linera-client\/src\/config\.rs/d' "$USAGES_FILE"
+if [ "$(grep 'linera-core/src/genesis_config.rs' "$USAGES_FILE" | wc -l)" -eq 1 ]; then
+    sed -i -e '/linera-core\/src\/genesis_config\.rs/d' "$USAGES_FILE"
 fi
 
 cat "$USAGES_FILE"

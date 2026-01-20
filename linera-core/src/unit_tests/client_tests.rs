@@ -3168,7 +3168,7 @@ where
         .await?
         .with_policy(ResourceControlPolicy::testnet());
     let admin = builder.add_root_chain(1, Amount::from_tokens(2)).await?;
-    let user = builder.add_root_chain(1, Amount::ZERO).await?;
+    let user = builder.add_root_chain(2, Amount::ZERO).await?;
     let user_reject = builder
         .make_client_with_options(
             user.chain_id(),

@@ -89,8 +89,6 @@ impl Client {
             wallet.0.clone(),
             signer,
             &options,
-            wallet.default_chain(),
-            wallet.genesis_config().clone(),
             BLOCK_CACHE_SIZE,
             EXECUTION_STATE_CACHE_SIZE,
         )

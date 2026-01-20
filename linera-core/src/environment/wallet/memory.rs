@@ -187,6 +187,14 @@ impl Extend<(ChainId, Chain)> for Memory {
 impl Wallet for Memory {
     type Error = std::convert::Infallible;
 
+    fn genesis_config(&self) -> &GenesisConfig {
+        self.genesis_config()
+    }
+
+    fn default_chain(&self) -> Option<ChainId> {
+        self.default_chain()
+    }
+
     async fn get(&self, id: ChainId) -> Result<Option<Chain>, Self::Error> {
         Ok(self.get(id))
     }

@@ -98,7 +98,6 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
     // Start a chain listener for chain 0 with a new key.
     let genesis_config = builder.genesis_config();
-    let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
     let epoch0 = client0.chain_info().await?.epoch;
     let epoch1 = client1.chain_info().await?.epoch;
@@ -111,7 +110,6 @@ async fn test_chain_listener() -> anyhow::Result<()> {
                 signer,
                 wallet: wallet::Memory::new(genesis_config.clone()),
             },
-            admin_id,
             false,
             [(chain_id0, ListeningMode::FullChain)],
             format!("Client node for {:.8}", chain_id0),
@@ -208,7 +206,6 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     let chain_b_id = chain_b.chain_id();
 
     let genesis_config = builder.genesis_config();
-    let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
     let chain_a_info = chain_a.chain_info().await?;
     let chain_b_info = chain_b.chain_info().await?;
@@ -221,7 +218,6 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
                 signer,
                 wallet: wallet::Memory::new(genesis_config.clone()),
             },
-            admin_id,
             false,
             [
                 (chain_a_id, ListeningMode::FollowChain),
@@ -368,7 +364,6 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
     let client0 = builder.add_root_chain(0, Amount::ONE).await?;
     let genesis_config = builder.genesis_config();
-    let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
 
     let context = ClientContext {
@@ -379,7 +374,6 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
                 signer,
                 wallet: wallet::Memory::new(genesis_config.clone()),
             },
-            admin_id,
             false,
             std::iter::empty::<(ChainId, ListeningMode)>(),
             "Client node with no chains".to_string(),

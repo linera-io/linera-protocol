@@ -98,6 +98,14 @@ pub struct Wallet(persistent::File<wallet::Memory>);
 impl linera_core::Wallet for Wallet {
     type Error = persistent::file::Error;
 
+    fn genesis_config(&self) -> &linera_core::GenesisConfig {
+        self.0.genesis_config()
+    }
+
+    fn default_chain(&self) -> Option<ChainId> {
+        self.0.default_chain()
+    }
+
     async fn get(&self, id: ChainId) -> Result<Option<wallet::Chain>, Self::Error> {
         Ok(self.get(id))
     }

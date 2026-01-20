@@ -1085,7 +1085,6 @@ where
                 signer: self.signer.clone(),
                 wallet: crate::wallet::Memory::new(self.genesis_config()),
             },
-            self.admin_id(),
             false,
             [(chain_id, mode)],
             format!("Client node for {:.8}", chain_id),

@@ -112,15 +112,11 @@ impl Options {
         S: linera_core::environment::Storage,
         Si: linera_core::environment::Signer,
     {
-        let genesis_config = wallet.genesis_config().clone();
-        let default_chain = wallet.default_chain();
         Ok(ClientContext::new(
             storage,
             wallet,
             signer,
             &self.client_options,
-            default_chain,
-            genesis_config,
             self.block_cache_size,
             self.execution_state_cache_size,
         )
