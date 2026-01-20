@@ -21,7 +21,6 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     chain_listener::{self, ChainListener, ChainListenerConfig, ClientContext as _},
-    config::{GenesisConfig, GenesisConfigTestExt as _},
     Error,
 };
 
@@ -98,7 +97,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let chain_id0 = client0.chain_id();
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
     // Start a chain listener for chain 0 with a new key.
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = builder.genesis_config();
     let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
     let epoch0 = client0.chain_info().await?.epoch;
@@ -208,7 +207,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     let chain_a_id = chain_a.chain_id();
     let chain_b_id = chain_b.chain_id();
 
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = builder.genesis_config();
     let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
     let chain_a_info = chain_a.chain_info().await?;
@@ -368,7 +367,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     let storage_builder = MemoryStorageBuilder::default();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
     let client0 = builder.add_root_chain(0, Amount::ONE).await?;
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = builder.genesis_config();
     let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
 
