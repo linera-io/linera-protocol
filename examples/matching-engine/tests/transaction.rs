@@ -146,7 +146,7 @@ async fn single_transaction() {
             price,
         };
         let operation = Operation::ExecuteOrder { order };
-        let bid_certificate = user_chain_a
+        let (bid_certificate, _) = user_chain_a
             .add_block(|block| {
                 block.with_operation(matching_id, operation);
             })
@@ -198,7 +198,7 @@ async fn single_transaction() {
             price,
         };
         let operation = Operation::ExecuteOrder { order };
-        let ask_certificate = user_chain_b
+        let (ask_certificate, _) = user_chain_b
             .add_block(|block| {
                 block.with_operation(matching_id, operation);
             })
@@ -251,7 +251,7 @@ async fn single_transaction() {
         order_id: order_ids_a[0],
     };
     let operation = Operation::ExecuteOrder { order };
-    let order_certificate = user_chain_a
+    let (order_certificate, _) = user_chain_a
         .add_block(|block| {
             block.with_operation(matching_id, operation);
         })
