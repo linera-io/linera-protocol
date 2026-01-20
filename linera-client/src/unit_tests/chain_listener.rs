@@ -436,8 +436,6 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
     let client0 = builder.add_root_chain(0, Amount::ONE).await?;
     let chain_id0 = client0.chain_id();
 
-    let genesis_config = GenesisConfig::new_testing(&builder);
-    let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
 
     let context = ClientContext {
@@ -446,9 +444,8 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
                 storage: storage.clone(),
                 network: builder.make_node_provider(),
                 signer,
-                wallet: environment::TestWallet::default(),
+                wallet: wallet::Memory::new(builder.genesis_config()),
             },
-            admin_id,
             false,
             std::iter::empty::<(ChainId, ListeningMode)>(),
             "Client node with no chains".to_string(),
