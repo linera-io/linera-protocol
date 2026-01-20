@@ -76,7 +76,8 @@ where
             }
         }
 
-        let states = DestinationStates::new(destinations);
+        // Return the stored states (which include any newly added destinations)
+        let states = view.destination_states.get().clone();
         let canonical_state = view.canonical_state.clone_unchecked()?;
 
         Ok((view, canonical_state, states))
@@ -206,16 +207,6 @@ impl<'de> Deserialize<'de> for DestinationStates {
 }
 
 impl DestinationStates {
-    fn new(destinations: Vec<DestinationId>) -> Self {
-        let states = destinations
-            .into_iter()
-            .map(|id| (id, Arc::new(AtomicU64::new(0))))
-            .collect::<papaya::HashMap<_, _>>();
-        Self {
-            states: Arc::from(states),
-        }
-    }
-
     pub fn load_state(&self, id: &DestinationId) -> Arc<AtomicU64> {
         let pinned = self.states.pin();
         pinned
