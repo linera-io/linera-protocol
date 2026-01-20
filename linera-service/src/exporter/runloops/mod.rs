@@ -7,7 +7,7 @@ use block_processor::BlockProcessor;
 use indexer::indexer_exporter::Exporter as IndexerExporter;
 use linera_execution::committee::Committee;
 use linera_rpc::NodeOptions;
-use linera_service::config::{DestinationConfig, DestinationId, LimitsConfig};
+use linera_service::config::{DestinationConfig, DestinationId, DestinationKind, LimitsConfig};
 use linera_storage::Storage;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use validator_exporter::Exporter as ValidatorExporter;
@@ -105,9 +105,13 @@ where
         .iter()
         .map(|destination| destination.id())
         .collect::<Vec<_>>();
-    let (mut block_processor_storage, mut exporter_storage) =
-        BlockProcessorStorage::load(storage.clone(), block_exporter_id, destination_ids, limits)
-            .await?;
+    let (mut block_processor_storage, mut exporter_storage) = BlockProcessorStorage::load(
+        storage.clone(),
+        block_exporter_id,
+        destination_ids.clone(),
+        limits,
+    )
+    .await?;
 
     // Load persisted committee destinations from storage if available
     let persisted_committee_destinations =
@@ -121,15 +125,25 @@ where
         destination_config.destinations.clone(),
     );
 
-    // Start committee exporters from persisted state if committee_destination is enabled
+    // Start committee exporters from persisted state and configured destinations
     if destination_config.committee_destination {
-        if let Some(committee_destinations) = persisted_committee_destinations {
+        // Combine persisted committee destinations with configured destinations
+        let mut all_committee_destinations = persisted_committee_destinations.unwrap_or_default();
+        for dest_id in &destination_ids {
+            if dest_id.kind() == DestinationKind::Validator
+                && !all_committee_destinations.contains(dest_id)
+            {
+                all_committee_destinations.push(dest_id.clone());
+            }
+        }
+
+        if !all_committee_destinations.is_empty() {
             tracing::info!(
-                ?committee_destinations,
-                "Starting committee exporters from persisted state"
+                ?all_committee_destinations,
+                "Starting committee exporters from persisted state and config"
             );
-            block_processor_storage.new_committee(committee_destinations.clone());
-            tracker.start_committee_exporters(committee_destinations);
+            block_processor_storage.new_committee(all_committee_destinations.clone());
+            tracker.start_committee_exporters(all_committee_destinations);
         }
     }
 
