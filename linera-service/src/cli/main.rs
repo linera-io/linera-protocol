@@ -1641,24 +1641,6 @@ impl Runnable for Job {
                 sync,
                 name,
             }) => {
-                // Insert a placeholder entry with the chain name.
-                // The actual chain info will be populated by update_wallet_from_client.
-                let name = match name {
-                    Some(n) => n,
-                    None => wallet.next_default_name(chain_id).await,
-                };
-                wallet.try_insert(
-                    chain_id,
-                    wallet::Chain {
-                        name,
-                        owner: None,
-                        timestamp: Timestamp::default(),
-                        next_block_height: BlockHeight::ZERO,
-                        pending_proposal: None,
-                        block_hash: None,
-                        epoch: None,
-                    },
-                )?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1673,6 +1655,9 @@ impl Runnable for Job {
                     chain_client.fetch_chain_info().await?;
                 }
                 context.update_wallet_from_client(&chain_client).await?;
+                if name.is_some() {
+                    context.wallet().set_chain_name(chain_id, name).await?;
+                }
                 // Update the in-memory state to follow-only mode.
                 context.client.set_chain_follow_only(chain_id, true);
                 info!(
