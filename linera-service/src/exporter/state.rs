@@ -39,6 +39,9 @@ pub struct BlockExporterStateView<C> {
     chain_states: MapView<C, ChainId, LiteBlockId>,
     /// The exporter state per destination.
     destination_states: RegisterView<C, DestinationStates>,
+    /// The latest committee blob ID processed by the exporter.
+    /// Used to restore committee exporters on startup.
+    latest_committee_blob: RegisterView<C, Option<BlobId>>,
 }
 
 impl<C> BlockExporterStateView<C>
@@ -128,6 +131,14 @@ where
 
     pub fn set_destination_states(&mut self, destination_states: DestinationStates) {
         self.destination_states.set(destination_states);
+    }
+
+    pub fn set_latest_committee_blob(&mut self, blob_id: BlobId) {
+        self.latest_committee_blob.set(Some(blob_id));
+    }
+
+    pub fn get_latest_committee_blob(&self) -> Option<BlobId> {
+        *self.latest_committee_blob.get()
     }
 }
 

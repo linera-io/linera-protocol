@@ -5,8 +5,9 @@ use std::future::{Future, IntoFuture};
 
 use block_processor::BlockProcessor;
 use indexer::indexer_exporter::Exporter as IndexerExporter;
+use linera_execution::committee::Committee;
 use linera_rpc::NodeOptions;
-use linera_service::config::{DestinationConfig, LimitsConfig};
+use linera_service::config::{DestinationConfig, DestinationId, LimitsConfig};
 use linera_storage::Storage;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use validator_exporter::Exporter as ValidatorExporter;
@@ -104,17 +105,33 @@ where
         .iter()
         .map(|destination| destination.id())
         .collect::<Vec<_>>();
-    let (block_processor_storage, mut exporter_storage) =
+    let (mut block_processor_storage, mut exporter_storage) =
         BlockProcessorStorage::load(storage.clone(), block_exporter_id, destination_ids, limits)
             .await?;
 
-    let tracker = ExportersTracker::new(
+    // Load persisted committee destinations from storage if available
+    let persisted_committee_destinations =
+        load_persisted_committee_destinations(&storage, &block_processor_storage).await;
+
+    let mut tracker = ExportersTracker::new(
         options,
         limits.work_queue_size.into(),
         shutdown_signal.clone(),
         exporter_storage.clone()?,
         destination_config.destinations.clone(),
     );
+
+    // Start committee exporters from persisted state if committee_destination is enabled
+    if destination_config.committee_destination {
+        if let Some(committee_destinations) = persisted_committee_destinations {
+            tracing::info!(
+                ?committee_destinations,
+                "Starting committee exporters from persisted state"
+            );
+            block_processor_storage.new_committee(committee_destinations.clone());
+            tracker.start_committee_exporters(committee_destinations);
+        }
+    }
 
     let mut block_processor = BlockProcessor::new(
         tracker,
@@ -130,6 +147,59 @@ where
     block_processor.pool_state().join_all().await;
 
     Ok(())
+}
+
+/// Loads the persisted committee destinations from storage.
+/// Returns None if no committee blob ID is persisted or if reading fails.
+async fn load_persisted_committee_destinations<S>(
+    storage: &S,
+    block_processor_storage: &BlockProcessorStorage<S>,
+) -> Option<Vec<DestinationId>>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
+    let committee_blob_id = block_processor_storage.get_latest_committee_blob()?;
+
+    tracing::info!(?committee_blob_id, "Found persisted committee blob ID");
+
+    // TODO: Should the errors below be panics?
+    let blob = match storage.read_blob(committee_blob_id).await {
+        Ok(Some(blob)) => blob,
+        Ok(None) => {
+            tracing::error!(
+                ?committee_blob_id,
+                "Persisted committee blob ID not found in storage"
+            );
+            return None;
+        }
+        Err(e) => {
+            tracing::error!(
+                ?committee_blob_id,
+                error = ?e,
+                "Failed to read persisted committee blob"
+            );
+            return None;
+        }
+    };
+
+    let committee: Committee = match bcs::from_bytes(blob.bytes()) {
+        Ok(committee) => committee,
+        Err(e) => {
+            tracing::error!(
+                ?committee_blob_id,
+                error = ?e,
+                "Failed to deserialize committee blob"
+            );
+            return None;
+        }
+    };
+
+    let destinations: Vec<DestinationId> = committee
+        .validator_addresses()
+        .map(|(_, address)| DestinationId::validator(address.to_owned()))
+        .collect();
+
+    Some(destinations)
 }
 
 #[cfg(test)]
