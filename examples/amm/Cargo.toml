@@ -12,6 +12,7 @@ num-traits.workspace = true
 serde.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+fungible = { workspace = true, features = ["test"] }
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 tokio = { workspace = true, features = ["rt", "sync"] }
 
