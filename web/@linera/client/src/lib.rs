@@ -80,17 +80,17 @@ impl Client {
 
         let mut storage = storage::get_storage().await?;
         wallet
-            .genesis_config
+            .genesis_config()
             .initialize_storage(&mut storage)
             .await?;
 
         let client = linera_client::ClientContext::new(
             storage.clone(),
-            wallet.chains.clone(),
+            wallet.0.clone(),
             signer,
             &options,
-            wallet.default,
-            wallet.genesis_config.clone(),
+            wallet.default_chain(),
+            wallet.genesis_config().clone(),
             BLOCK_CACHE_SIZE,
             EXECUTION_STATE_CACHE_SIZE,
         )

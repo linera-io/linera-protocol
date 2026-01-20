@@ -21,7 +21,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     chain_listener::{self, ChainListener, ChainListenerConfig, ClientContext as _},
-    config::GenesisConfig,
+    config::{GenesisConfig, GenesisConfigTestExt as _},
     Error,
 };
 
@@ -110,7 +110,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
                 storage: storage.clone(),
                 network: builder.make_node_provider(),
                 signer,
-                wallet: environment::TestWallet::default(),
+                wallet: wallet::Memory::new(genesis_config.clone()),
             },
             admin_id,
             false,
@@ -220,7 +220,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
                 storage: storage.clone(),
                 network: builder.make_node_provider(),
                 signer,
-                wallet: environment::TestWallet::default(),
+                wallet: wallet::Memory::new(genesis_config.clone()),
             },
             admin_id,
             false,
@@ -378,7 +378,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
                 storage: storage.clone(),
                 network: builder.make_node_provider(),
                 signer,
-                wallet: environment::TestWallet::default(),
+                wallet: wallet::Memory::new(genesis_config.clone()),
             },
             admin_id,
             false,

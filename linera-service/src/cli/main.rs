@@ -50,7 +50,7 @@ use linera_base::{
 use linera_client::{
     benchmark::BenchmarkConfig,
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
-    config::{CommitteeConfig, GenesisConfig},
+    config::{CommitteeConfig, GenesisConfig, GenesisConfigExt as _},
 };
 use linera_core::{
     client::{chain_client, ListeningMode},

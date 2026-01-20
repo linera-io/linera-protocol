@@ -8,7 +8,10 @@ use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Epoch},
 };
 use linera_chain::data_types::ProposedBlock;
-use linera_client::{client_context::ClientContext, config::GenesisConfig};
+use linera_client::{
+    client_context::ClientContext,
+    config::{GenesisConfig, GenesisConfigTestExt as _},
+};
 use linera_core::{
     client::{Client, ListeningMode, PendingProposal},
     join_set_ext::JoinSet,

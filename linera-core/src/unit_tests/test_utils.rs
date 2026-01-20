@@ -50,7 +50,7 @@ use {
 use crate::{
     client::{chain_client, Client},
     data_types::*,
-    environment::{TestSigner, TestWallet},
+    environment::TestSigner,
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
@@ -1019,6 +1019,25 @@ where
         self.admin_description.as_ref()
     }
 
+    /// Creates a `GenesisConfig` from this test builder.
+    pub fn genesis_config(&self) -> crate::GenesisConfig {
+        let mut chains = self.genesis_chains().into_iter();
+        let (admin_public_key, admin_balance) = chains
+            .next()
+            .expect("at least one genesis chain is required");
+        let mut genesis_config = crate::GenesisConfig::new_from_committee(
+            self.initial_committee.clone(),
+            Timestamp::from(0),
+            "test".to_string(),
+            admin_public_key,
+            admin_balance,
+        );
+        for (public_key, balance) in chains {
+            genesis_config.add_root_chain(public_key, balance);
+        }
+        genesis_config
+    }
+
     pub fn make_node_provider(&self) -> NodeProvider<B::Storage> {
         self.node_provider.clone()
     }
@@ -1064,7 +1083,7 @@ where
                 network: self.make_node_provider(),
                 storage,
                 signer: self.signer.clone(),
-                wallet: TestWallet::default(),
+                wallet: crate::wallet::Memory::new(self.genesis_config()),
             },
             self.admin_id(),
             false,

@@ -12,6 +12,8 @@ mod chain_worker;
 pub mod client;
 pub use client::Client;
 pub mod data_types;
+mod genesis_config;
+pub use genesis_config::{GenesisConfig, GenesisConfigError};
 pub mod join_set_ext;
 mod local_node;
 pub mod node;
