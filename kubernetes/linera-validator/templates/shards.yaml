@@ -133,7 +133,13 @@ spec:
                 --storage {{ .Values.storage | quote }} \
                 --server /config/server.json \
                 --shard $ORDINAL \
-                --storage-replication-factor {{ .Values.storageReplicationFactor | quote }}
+                --storage-replication-factor {{ .Values.storageReplicationFactor | quote }} \
+                {{- if .Values.crossChainQueueSize }}
+                --cross-chain-queue-size {{ .Values.crossChainQueueSize }}
+                {{- end }}
+                {{- if .Values.notificationQueueSize }}
+                --notification-queue-size {{ .Values.notificationQueueSize }}
+                {{- end }}
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
