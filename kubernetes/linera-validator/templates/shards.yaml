@@ -38,6 +38,19 @@ spec:
         value: "true"
         effect: NoSchedule
       {{- end }}
+      {{- if .Values.nodeLocalDns.enabled }}
+      dnsPolicy: None
+      dnsConfig:
+        nameservers:
+          - {{ .Values.nodeLocalDns.localDnsIp }}
+        searches:
+          - {{ .Release.Namespace }}.svc.cluster.local
+          - svc.cluster.local
+          - cluster.local
+        options:
+          - name: ndots
+            value: "5"
+      {{- end }}
       terminationGracePeriodSeconds: 10
       initContainers:
         - name: linera-server-initializer

@@ -1,0 +1,18 @@
+{{- if .Values.nodeLocalDns.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-local-dns
+  namespace: kube-system
+  labels:
+    app: node-local-dns
+spec:
+  clusterIP: None
+  selector:
+    app: node-local-dns
+  ports:
+    - name: metrics
+      port: 9253
+      targetPort: 9253
+      protocol: TCP
+{{- end }}
