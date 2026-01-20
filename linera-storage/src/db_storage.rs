@@ -186,7 +186,7 @@ pub mod metrics {
             "load_chain_latency",
             "The latency to load a chain state",
             &[],
-            exponential_bucket_latencies(10.0),
+            exponential_bucket_latencies(1000.0),
         )
     });
 
