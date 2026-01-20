@@ -9,19 +9,8 @@ use fungible::{FungibleTokenAbi, InitialState, InitialStateBuilder, Parameters};
 use linera_sdk::{
     abis::fungible::FungibleOperation,
     linera_base_types::{Account, AccountOwner, Amount},
-    test::{MessageAction, ResourceTracker, TestValidator},
+    test::{MessageAction, TestValidator},
 };
-
-/// Prints the resource usage from a block execution.
-fn print_resources(label: &str, resources: &ResourceTracker) {
-    println!("=== {label} ===");
-    println!("  Wasm fuel: {}", resources.wasm_fuel);
-    println!("  Read operations: {}", resources.read_operations);
-    println!("  Write operations: {}", resources.write_operations);
-    println!("  Bytes read: {}", resources.bytes_read);
-    println!("  Bytes written: {}", resources.bytes_written);
-    println!("  Bytes stored: {}", resources.bytes_stored);
-}
 
 /// Test transferring tokens across microchains.
 ///
@@ -64,7 +53,7 @@ async fn test_cross_chain_transfer() {
             );
         })
         .await;
-    print_resources("Transfer block", &resources);
+    println!("Transfer block: {resources}");
 
     assert_eq!(
         fungible::query_account(application_id, &sender_chain, sender_account).await,
@@ -119,7 +108,7 @@ async fn test_bouncing_tokens() {
             );
         })
         .await;
-    print_resources("Sender transfer block", &resources);
+    println!("Sender transfer block: {resources}");
 
     assert_eq!(
         fungible::query_account(application_id, &sender_chain, sender_account).await,
@@ -133,7 +122,7 @@ async fn test_bouncing_tokens() {
             block.with_messages_from_by_action(&certificate, MessageAction::Reject);
         })
         .await;
-    print_resources("Receiver reject block", &resources);
+    println!("Receiver reject block: {resources}");
 
     assert_eq!(
         fungible::query_account(application_id, &receiver_chain, receiver_account).await,
