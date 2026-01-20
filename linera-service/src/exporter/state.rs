@@ -56,23 +56,27 @@ where
             .await
             .map_err(ExporterError::StateError)?;
 
-        let stored_destinations = {
-            let pinned = view.destination_states.get().states.pin();
-            pinned.iter().map(|(id, _)| id).cloned().collect::<Vec<_>>()
-        };
-
         tracing::info!(
             init_destinations=?destinations,
-            ?stored_destinations,
             "initialized exporter state with destinations",
         );
 
-        if view.destination_states.get().states.is_empty() {
-            let states = DestinationStates::new(destinations);
-            view.destination_states.set(states);
+        // Update stored destination states with new if not exist
+        for destination in &destinations {
+            if !view
+                .destination_states
+                .get()
+                .states
+                .pin()
+                .contains_key(destination)
+            {
+                let mut states = view.destination_states.get().clone();
+                states.insert(destination.clone(), Arc::new(AtomicU64::new(0)));
+                view.destination_states.set(states);
+            }
         }
 
-        let states = view.destination_states.get().clone();
+        let states = DestinationStates::new(destinations);
         let canonical_state = view.canonical_state.clone_unchecked()?;
 
         Ok((view, canonical_state, states))
