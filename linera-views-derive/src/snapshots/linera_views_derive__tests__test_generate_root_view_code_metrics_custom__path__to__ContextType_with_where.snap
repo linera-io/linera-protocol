@@ -21,7 +21,16 @@ where
         let mut batch = Batch::new();
         self.pre_save(&mut batch)?;
         if !batch.is_empty() {
+            #[cfg(not(target_arch = "wasm32"))]
+            let start = std::time::Instant::now();
             self.context().store().write_batch(batch).await?;
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
+                linera_views::metrics::SAVE_VIEW_LATENCY
+                    .with_label_values(&[stringify!(TestView)])
+                    .observe(latency_ms);
+            }
         }
         self.post_save();
         Ok(())
