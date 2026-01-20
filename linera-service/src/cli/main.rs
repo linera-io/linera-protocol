@@ -388,7 +388,7 @@ impl Runnable for Job {
             }
 
             ShowNetworkDescription => {
-                let network_description = storage.read_network_description().await?;
+                let network_description = wallet.genesis_config().network_description();
                 let json = serde_json::to_string_pretty(&network_description)?;
                 println!("{}", json);
             }
@@ -1605,17 +1605,12 @@ impl Runnable for Job {
                 let (Some(faucet_url), None) = (faucet, genesis_config_path) else {
                     return Ok(());
                 };
-                let Some(network_description) = storage.read_network_description().await? else {
-                    anyhow::bail!("Missing network description");
-                };
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let committee = faucet.current_committee().await?;
-                let chain_client = context
-                    .make_chain_client(network_description.admin_chain_id)
-                    .await?;
+                let chain_client = context.make_chain_client(context.admin_chain()).await?;
                 chain_client
                     .synchronize_chain_state_from_committee(committee)
                     .await?;
