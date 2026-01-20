@@ -933,8 +933,7 @@ impl ClientWrapper {
     pub async fn open_multi_owner_chain(
         &self,
         from: ChainId,
-        owners: Vec<AccountOwner>,
-        weights: Vec<u64>,
+        owners: BTreeMap<AccountOwner, u64>,
         multi_leader_rounds: u32,
         balance: Amount,
         base_timeout_ms: u64,
@@ -946,11 +945,6 @@ impl ClientWrapper {
             .arg("--owners")
             .arg(serde_json::to_string(&owners)?)
             .args(["--base-timeout-ms", &base_timeout_ms.to_string()]);
-        if !weights.is_empty() {
-            command
-                .arg("--owner-weights")
-                .arg(serde_json::to_string(&weights)?);
-        };
         command
             .args(["--multi-leader-rounds", &multi_leader_rounds.to_string()])
             .args(["--initial-balance", &balance.to_string()]);
@@ -975,7 +969,12 @@ impl ClientWrapper {
         command
             .arg("--super-owners")
             .arg(serde_json::to_string(&super_owners)?);
-        command.arg("--owners").arg(serde_json::to_string(&owners)?);
+        command.arg("--owners").arg(serde_json::to_string(
+            &owners
+                .into_iter()
+                .zip(std::iter::repeat(100u64))
+                .collect::<BTreeMap<_, _>>(),
+        )?);
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }

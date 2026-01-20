@@ -1,17 +1,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, fmt, iter};
+use std::{
+    collections::{BTreeMap, HashSet},
+    fmt,
+};
 
 use linera_base::{
-    data_types::{ApplicationPermissions, TimeDelta},
+    data_types::{ApplicationPermissions, BlanketMessagePolicy, MessagePolicy, TimeDelta},
     identifiers::{AccountOwner, ApplicationId, ChainId, GenericApplicationId},
     ownership::ChainOwnership,
     time::Duration,
 };
 use linera_core::{
     client::{
-        chain_client, BlanketMessagePolicy, MessagePolicy, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+        chain_client, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
@@ -305,27 +308,15 @@ pub struct ChainOwnershipConfig {
     #[arg(long, value_parser = util::parse_json::<Vec<AccountOwner>>)]
     pub super_owners: Option<std::vec::Vec<AccountOwner>>,
 
-    /// A JSON list of the new owners. Absence of the argument leaves the current list of
-    /// owners unchanged.
-    #[arg(long, value_parser = util::parse_json::<Vec<AccountOwner>>)]
-    pub owners: Option<std::vec::Vec<AccountOwner>>,
+    /// A JSON map of the new owners to their weights. Absence of the argument leaves the current
+    /// set of owners unchanged.
+    #[arg(long, value_parser = util::parse_json::<BTreeMap<AccountOwner, u64>>)]
+    pub owners: Option<BTreeMap<AccountOwner, u64>>,
 
     /// The leader of the first single-leader round. If set to null, this is random like other
     /// rounds. Absence of the argument leaves the current setting unchanged.
     #[arg(long, value_parser = util::parse_json::<Option<AccountOwner>>)]
     pub first_leader: Option<std::option::Option<AccountOwner>>,
-
-    /// A JSON list of weights for the new owners.
-    ///
-    /// If they are specified there must be exactly one weight for each owner.
-    ///
-    /// Absence of the argument gives each owner a weight of 100 if --owners is specified,
-    /// or leaves the owners unchanged if it is not specified.
-    ///
-    /// Note: if --owner is not specified, but this argument is, the weights will be
-    /// assigned to the existing owners in lexicographical order.
-    #[arg(long, value_parser = util::parse_json::<Vec<u64>>)]
-    pub owner_weights: Option<std::vec::Vec<u64>>,
 
     /// The number of rounds in which every owner can propose blocks, i.e. the first round
     /// number in which only a single designated leader is allowed to propose blocks. "null" is
@@ -376,7 +367,6 @@ impl ChainOwnershipConfig {
             super_owners,
             owners,
             first_leader,
-            owner_weights,
             multi_leader_rounds,
             fast_round_duration,
             open_multi_leader_rounds,
@@ -385,18 +375,8 @@ impl ChainOwnershipConfig {
             fallback_duration,
         } = self;
 
-        if let Some(owner_weights) = owner_weights {
-            let owners = owners
-                .unwrap_or_else(|| chain_ownership.owners.keys().cloned().collect::<Vec<_>>());
-            if owner_weights.len() != owners.len() {
-                return Err(Error::MisalignedWeights {
-                    public_keys: owners.len(),
-                    weights: owner_weights.len(),
-                });
-            }
-            chain_ownership.owners = owners.into_iter().zip(owner_weights).collect();
-        } else if let Some(owners) = owners {
-            chain_ownership.owners = owners.into_iter().zip(iter::repeat(100)).collect();
+        if let Some(owners) = owners {
+            chain_ownership.owners = owners;
         }
 
         if let Some(super_owners) = super_owners {

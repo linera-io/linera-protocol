@@ -22,7 +22,7 @@ use linera_base::{
     crypto::{signer, AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, Epoch, Round, Timestamp,
+        ChainDescription, Epoch, MessagePolicy, Round, Timestamp,
     },
     ensure,
     identifiers::{
@@ -51,7 +51,7 @@ use linera_execution::{
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
-use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
+use linera_storage::{Clock as _, Storage as _};
 use linera_views::ViewError;
 use rand::seq::SliceRandom;
 use serde::Serialize;
@@ -64,8 +64,7 @@ use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
 use super::{
     received_log::ReceivedLogs, validator_trackers::ValidatorTrackers, AbortOnDrop, Client,
-    ExecuteBlockOutcome, ListeningMode, MessagePolicy, PendingProposal, ReceiveCertificateMode,
-    TimingType,
+    ExecuteBlockOutcome, ListeningMode, PendingProposal, ReceiveCertificateMode, TimingType,
 };
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
@@ -531,7 +530,7 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
-            .filter_map(|bundle| self.options.message_policy.apply(bundle))
+            .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
             .take(self.options.max_pending_message_bundles)
             .collect())
     }
@@ -2831,24 +2830,15 @@ impl<Env: Environment> ChainClient<Env> {
             .map(BlockHeight)
             .collect();
 
-        let missing_certificate_hashes = self
-            .client
-            .local_node
-            .get_block_hashes(self.chain_id, heights)
-            .await?;
-
         let certificates = self
             .client
             .storage_client()
-            .read_certificates(missing_certificate_hashes.clone())
-            .await?;
-        let certificates =
-            match ResultReadCertificates::new(certificates, missing_certificate_hashes) {
-                ResultReadCertificates::Certificates(certificates) => certificates,
-                ResultReadCertificates::InvalidHashes(hashes) => {
-                    return Err(Error::ReadCertificatesError(hashes))
-                }
-            };
+            .read_certificates_by_heights(self.chain_id, &heights)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
         for certificate in certificates {
             match remote_node
                 .handle_confirmed_certificate(
