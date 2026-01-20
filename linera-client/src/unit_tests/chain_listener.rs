@@ -420,3 +420,96 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// Tests that the ListenerCommand::Listen actually adds chains to the wallet.
+#[test_log::test(tokio::test)]
+async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::Result<()> {
+    use std::collections::BTreeMap;
+
+    use crate::chain_listener::ListenerCommand;
+
+    let signer = InMemorySigner::new(Some(42));
+    let config = ChainListenerConfig::default();
+    let storage_builder = MemoryStorageBuilder::default();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
+
+    let client0 = builder.add_root_chain(0, Amount::ONE).await?;
+    let chain_id0 = client0.chain_id();
+
+    let genesis_config = GenesisConfig::new_testing(&builder);
+    let admin_id = genesis_config.admin_id();
+    let storage = builder.make_storage().await?;
+
+    let context = ClientContext {
+        client: Arc::new(Client::new(
+            environment::Impl {
+                storage: storage.clone(),
+                network: builder.make_node_provider(),
+                signer,
+                wallet: environment::TestWallet::default(),
+            },
+            admin_id,
+            false,
+            std::iter::empty::<(ChainId, ListeningMode)>(),
+            "Client node with no chains".to_string(),
+            Duration::from_secs(30),
+            Duration::from_secs(1),
+            chain_client::Options::test_default(),
+            5_000,
+            10_000,
+            linera_core::client::RequestsSchedulerConfig::default(),
+        )),
+    };
+
+    assert!(
+        context.wallet().get(chain_id0).is_none(),
+        "Wallet should not contain chain_id0 initially"
+    );
+
+    let context = Arc::new(Mutex::new(context));
+    let cancellation_token = CancellationToken::new();
+    let child_token = cancellation_token.child_token();
+    let (command_sender, command_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let chain_listener = ChainListener::new(
+        config,
+        context.clone(),
+        storage.clone(),
+        child_token,
+        command_receiver,
+        false,
+    )
+    .run()
+    .await
+    .unwrap();
+
+    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+
+    let mut chains_to_listen = BTreeMap::new();
+    chains_to_listen.insert(chain_id0, ListeningMode::FullChain);
+    command_sender
+        .send(ListenerCommand::Listen(chains_to_listen))
+        .expect("Failed to send Listen command");
+
+    for i in 0.. {
+        tokio::task::yield_now().await;
+
+        if context.lock().await.wallet().get(chain_id0).is_some() {
+            break;
+        }
+        if i >= 50 {
+            panic!("Wallet was not updated with chain_id0 after Listen command");
+        }
+    }
+
+    let wallet_chain = context.lock().await.wallet().get(chain_id0).unwrap();
+    assert_eq!(
+        wallet_chain.next_block_height,
+        BlockHeight::ZERO,
+        "Chain should be at height 0"
+    );
+
+    cancellation_token.cancel();
+    handle.await;
+
+    Ok(())
+}
