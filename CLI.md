@@ -307,20 +307,20 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 ###### **Options:**
 
 * `--from <CHAIN_ID>` — Chain ID or name (must be one of our chains)
-* `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the argument leaves the current set of super owners unchanged
-* `--owners <OWNERS>` — A JSON map of the new owners to their weights. Absence of the argument leaves the current set of owners unchanged
-* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If set to null, this is random like other rounds. Absence of the argument leaves the current setting unchanged
-* `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the argument leaves the current setting unchanged
+* `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the option leaves the current set of super owners unchanged
+* `--owners <OWNERS>` — A JSON map of the new owners to their weights. Absence of the option leaves the current set of owners unchanged
+* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If set to null, this is random like other rounds. Absence of the option leaves the current setting unchanged
+* `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the option leaves the current setting unchanged
 * `--open-multi-leader-rounds` — Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners. This should only be `true` on chains with restrictive application permissions and an application-based mechanism to select block proposers
-* `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the argument leaves the current setting unchanged
-* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds. Absence of the argument leaves the current setting unchanged
-* `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round. Absence of the argument leaves the current setting unchanged
-* `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds. Absence of the argument leaves the current setting unchanged
-* `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the argument leaves current permissions unchanged
-* `--mandatory-applications <MANDATORY_APPLICATIONS>` — A JSON list of applications, such that at least one operation or incoming message from each of these applications must occur in every block. Absence of the argument leaves current mandatory applications unchanged
-* `--manage-chain <MANAGE_CHAIN>` — A JSON list of applications allowed to manage the chain: close it, change application permissions, and change ownership. Absence of the argument leaves current managing applications unchanged
-* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — A JSON list of applications that are allowed to call services as oracles on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the argument leaves the current value of the setting unchanged
-* `--make-http-requests <MAKE_HTTP_REQUESTS>` — A JSON list of applications that are allowed to make HTTP requests on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the argument leaves the current value of the setting unchanged
+* `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the option leaves the current setting unchanged
+* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds. Absence of the option leaves the current setting unchanged
+* `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round. Absence of the option leaves the current setting unchanged
+* `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds. Absence of the option leaves the current setting unchanged
+* `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the option leaves current permissions unchanged
+* `--mandatory-applications <MANDATORY_APPLICATIONS>` — A JSON list of applications, such that at least one operation or incoming message from each of these applications must occur in every block. Absence of the option leaves current mandatory applications unchanged
+* `--manage-chain <MANAGE_CHAIN>` — A JSON list of applications allowed to manage the chain: close it, change application permissions, and change ownership. Absence of the option leaves current managing applications unchanged
+* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — A JSON list of applications that are allowed to call services as oracles on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the option leaves the current value of the setting unchanged
+* `--make-http-requests <MAKE_HTTP_REQUESTS>` — A JSON list of applications that are allowed to make HTTP requests on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the option leaves the current value of the setting unchanged
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
@@ -351,15 +351,15 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 ###### **Options:**
 
 * `--chain-id <CHAIN_ID>` — The ID or name of the chain whose owners will be changed
-* `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the argument leaves the current set of super owners unchanged
-* `--owners <OWNERS>` — A JSON map of the new owners to their weights. Absence of the argument leaves the current set of owners unchanged
-* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If set to null, this is random like other rounds. Absence of the argument leaves the current setting unchanged
-* `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the argument leaves the current setting unchanged
+* `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the option leaves the current set of super owners unchanged
+* `--owners <OWNERS>` — A JSON map of the new owners to their weights. Absence of the option leaves the current set of owners unchanged
+* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If set to null, this is random like other rounds. Absence of the option leaves the current setting unchanged
+* `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the option leaves the current setting unchanged
 * `--open-multi-leader-rounds` — Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners. This should only be `true` on chains with restrictive application permissions and an application-based mechanism to select block proposers
-* `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the argument leaves the current setting unchanged
-* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds. Absence of the argument leaves the current setting unchanged
-* `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round. Absence of the argument leaves the current setting unchanged
-* `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds. Absence of the argument leaves the current setting unchanged
+* `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the option leaves the current setting unchanged
+* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds. Absence of the option leaves the current setting unchanged
+* `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round. Absence of the option leaves the current setting unchanged
+* `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds. Absence of the option leaves the current setting unchanged
 
 
 
@@ -385,11 +385,11 @@ Changes the application permissions configuration
 ###### **Options:**
 
 * `--chain-id <CHAIN_ID>` — The ID or name of the chain to which the new permissions will be applied
-* `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the argument leaves current permissions unchanged
-* `--mandatory-applications <MANDATORY_APPLICATIONS>` — A JSON list of applications, such that at least one operation or incoming message from each of these applications must occur in every block. Absence of the argument leaves current mandatory applications unchanged
-* `--manage-chain <MANAGE_CHAIN>` — A JSON list of applications allowed to manage the chain: close it, change application permissions, and change ownership. Absence of the argument leaves current managing applications unchanged
-* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — A JSON list of applications that are allowed to call services as oracles on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the argument leaves the current value of the setting unchanged
-* `--make-http-requests <MAKE_HTTP_REQUESTS>` — A JSON list of applications that are allowed to make HTTP requests on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the argument leaves the current value of the setting unchanged
+* `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the option leaves current permissions unchanged
+* `--mandatory-applications <MANDATORY_APPLICATIONS>` — A JSON list of applications, such that at least one operation or incoming message from each of these applications must occur in every block. Absence of the option leaves current mandatory applications unchanged
+* `--manage-chain <MANAGE_CHAIN>` — A JSON list of applications allowed to manage the chain: close it, change application permissions, and change ownership. Absence of the option leaves current managing applications unchanged
+* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — A JSON list of applications that are allowed to call services as oracles on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the option leaves the current value of the setting unchanged
+* `--make-http-requests <MAKE_HTTP_REQUESTS>` — A JSON list of applications that are allowed to make HTTP requests on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the option leaves the current value of the setting unchanged
 
 
 
