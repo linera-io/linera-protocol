@@ -1430,10 +1430,8 @@ pub enum WalletCommand {
     /// Rename a chain in the wallet.
     RenameChain {
         /// The chain ID or current name.
-        #[arg(long)]
         chain_id: ChainIdOrName,
         /// The new name for the chain.
-        #[arg(long)]
         name: String,
     },
 

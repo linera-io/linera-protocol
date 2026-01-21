@@ -280,17 +280,11 @@ impl Wallet {
     ///
     /// If `chain_id` is the admin chain, returns "admin".
     /// Otherwise, returns "user-N" where N is one more than the highest existing user number.
-    pub async fn next_default_name(&self, chain_id: ChainId) -> String {
+    pub async fn next_default_name(&self, chain_id: ChainId) -> anyhow::Result<String> {
         if chain_id == self.genesis_admin_chain() {
-            return "admin".to_string();
+            return Ok("admin".to_string());
         }
-        match wallet::next_default_chain_name(self).await {
-            Ok(name) => name,
-            Err(error) => {
-                tracing::warn!(%error, "Failed to compute next default chain name; using fallback");
-                "user-0".to_string()
-            }
-        }
+        Ok(wallet::next_default_chain_name(self).await?)
     }
 
     /// Sets the name of a chain.
@@ -308,7 +302,7 @@ impl Wallet {
         // Determine the new name.
         let new_name = match name {
             Some(name) => name,
-            None => self.next_default_name(chain_id).await,
+            None => self.next_default_name(chain_id).await?,
         };
         // Validate the name.
         anyhow::ensure!(

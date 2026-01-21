@@ -892,8 +892,8 @@ impl ClientWrapper {
         self.command()
             .await?
             .args(["wallet", "rename-chain"])
-            .args(["--chain-id", &chain_id.to_string()])
-            .args(["--name", name])
+            .arg(chain_id.to_string())
+            .arg(name)
             .spawn_and_wait_for_stdout()
             .await?;
         Ok(())

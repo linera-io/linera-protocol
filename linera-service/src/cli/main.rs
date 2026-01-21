@@ -546,7 +546,7 @@ impl Runnable for Job {
                     .await?;
 
                 // ResourceControlPolicy doesn't need version checks
-                let admin_id = context.admin_chain();
+                let admin_id = context.admin_id();
                 let chain_client = context.make_chain_client(admin_id).await?;
                 // Synchronize the chain state to make sure we're applying the changes to the
                 // latest committee.
@@ -1589,7 +1589,7 @@ impl Runnable for Job {
                 let chain_id = description.id();
                 let chain_name = match name {
                     Some(provided_name) => provided_name,
-                    None => wallet.next_default_name(chain_id).await,
+                    None => wallet.next_default_name(chain_id).await?,
                 };
                 let mut chain = wallet::Chain::from_description(&chain_name, &description);
                 chain.owner = Some(owner);

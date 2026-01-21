@@ -360,8 +360,8 @@ impl<Env: Environment> ClientContext<Env> {
     }
 
     /// Returns the ID of the admin chain.
-    pub fn admin_chain(&self) -> ChainId {
-        self.client.admin_chain()
+    pub fn admin_id(&self) -> ChainId {
+        self.client.admin_id()
     }
 
     /// Returns the default name for a chain.
@@ -369,13 +369,12 @@ impl<Env: Environment> ClientContext<Env> {
     /// Returns "admin" for the admin chain, otherwise generates "user-N" where N is
     /// one more than the highest existing user number.
     async fn default_chain_name(&self, chain_id: ChainId) -> Result<String, Error> {
-        if chain_id == self.admin_chain() {
+        if chain_id == self.admin_id() {
             return Ok("admin".to_string());
         }
-        wallet::next_default_chain_name(self.wallet())
+        Ok(wallet::next_default_chain_name(self.wallet())
             .await
-            .map_err(error::Inner::wallet)
-            .map_err(Error::from)
+            .map_err(error::Inner::wallet)?)
     }
 
     /// Retrieve the default account. Current this is the common account of the default
@@ -391,7 +390,7 @@ impl<Env: Environment> ClientContext<Env> {
     }
 
     pub async fn first_non_admin_chain(&self) -> Result<ChainId, Error> {
-        let admin_id = self.admin_chain();
+        let admin_id = self.admin_id();
         std::pin::pin!(self
             .wallet()
             .chain_ids()
@@ -471,11 +470,9 @@ impl<Env: Environment> ClientContext<Env> {
             Some(provided_name) => provided_name,
             None => self.default_chain_name(chain_id).await?,
         };
+        let chain = wallet::Chain::new(chain_name, owner, epoch, timestamp);
         self.wallet()
-            .try_insert(
-                chain_id,
-                wallet::Chain::new(chain_name, owner, epoch, timestamp),
-            )
+            .try_insert(chain_id, chain)
             .await
             .map_err(error::Inner::wallet)?;
         Ok(())

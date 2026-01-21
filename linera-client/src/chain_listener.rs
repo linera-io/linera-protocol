@@ -14,7 +14,7 @@ use futures::{
 };
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{ChainDescription, Epoch, MessagePolicy, Timestamp},
+    data_types::{BlockHeight, ChainDescription, Epoch, MessagePolicy, Timestamp},
     identifiers::{AccountOwner, BlobType, ChainId},
     task::NonBlockingFuture,
     util::future::FutureSyncExt as _,
@@ -79,8 +79,8 @@ pub trait ClientContext {
 
     fn client(&self) -> &Arc<linera_core::client::Client<Self::Environment>>;
 
-    fn admin_chain(&self) -> ChainId {
-        self.client().admin_chain()
+    fn admin_id(&self) -> ChainId {
+        self.client().admin_id()
     }
 
     /// Gets the timing sender for benchmarking, if available.
@@ -101,22 +101,21 @@ pub trait ClientContext {
         chain_id: ChainId,
     ) -> impl Future<Output = Result<ChainClient<Self::Environment>, Error>> {
         async move {
-            let chain = self
+            let (block_hash, next_block_height, pending_proposal, owner) = match self
                 .wallet()
                 .get(chain_id)
                 .make_sync()
                 .await
-                .map_err(error::Inner::wallet)?;
-            let (block_hash, next_block_height, pending_proposal, owner) = chain
-                .map(|c| {
-                    (
-                        c.block_hash,
-                        c.next_block_height,
-                        c.pending_proposal,
-                        c.owner,
-                    )
-                })
-                .unwrap_or_default();
+                .map_err(error::Inner::wallet)?
+            {
+                None => (None, BlockHeight::ZERO, None, None),
+                Some(chain) => (
+                    chain.block_hash,
+                    chain.next_block_height,
+                    chain.pending_proposal,
+                    chain.owner,
+                ),
+            };
             let follow_only = owner.is_none();
             Ok(self.client().create_chain_client(
                 chain_id,
@@ -263,7 +262,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     pub async fn run(mut self) -> Result<impl Future<Output = Result<(), Error>>, Error> {
         let chain_ids = {
             let guard = self.context.lock().await;
-            let admin_chain_id = guard.admin_chain();
+            let admin_chain_id = guard.admin_id();
             guard
                 .make_chain_client(admin_chain_id)
                 .await?

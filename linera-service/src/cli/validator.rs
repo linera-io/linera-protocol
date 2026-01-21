@@ -252,7 +252,7 @@ impl Add {
                 .await?;
         }
 
-        let admin_id = context.admin_chain();
+        let admin_id = context.admin_id();
         let chain_client = context.make_chain_client(admin_id).await?;
 
         // Synchronize the chain state
@@ -372,7 +372,7 @@ impl Update {
         let mut removes = Vec::new();
 
         // Get current committee to determine if operation is add or modify
-        let admin_id = context.client().admin_chain();
+        let admin_id = context.client().admin_id();
         let chain_client = context.make_chain_client(admin_id).await?;
         let current_committee = chain_client.local_committee().await?;
         let current_validators = current_committee.validators();
@@ -496,7 +496,7 @@ impl Update {
             }
         }
 
-        let admin_id = context.admin_chain();
+        let admin_id = context.admin_id();
         let chain_client = context.make_chain_client(admin_id).await?;
 
         // Synchronize the chain state
@@ -694,7 +694,7 @@ impl Remove {
         tracing::info!("Starting operation to remove validator");
         let time_start = std::time::Instant::now();
 
-        let admin_id = context.admin_chain();
+        let admin_id = context.admin_id();
         let chain_client = context.make_chain_client(admin_id).await?;
 
         // Synchronize the chain state
