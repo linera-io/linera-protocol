@@ -9,19 +9,8 @@ use fungible::{Account, FungibleTokenAbi, InitialState, InitialStateBuilder, Par
 use linera_sdk::{
     abis::fungible::FungibleOperation,
     linera_base_types::{AccountOwner, Amount},
-    test::{MessageAction, ResourceTracker, TestValidator},
+    test::{MessageAction, TestValidator},
 };
-
-/// Prints the resource usage from a block execution.
-fn print_resources(label: &str, resources: &ResourceTracker) {
-    println!("=== {label} ===");
-    println!("  Wasm fuel: {}", resources.wasm_fuel);
-    println!("  Read operations: {}", resources.read_operations);
-    println!("  Write operations: {}", resources.write_operations);
-    println!("  Bytes read: {}", resources.bytes_read);
-    println!("  Bytes written: {}", resources.bytes_written);
-    println!("  Bytes stored: {}", resources.bytes_stored);
-}
 
 /// Test transferring tokens across microchains.
 ///
@@ -30,8 +19,8 @@ fn print_resources(label: &str, resources: &ResourceTracker) {
 /// checks that the balances on each microchain are correct.
 #[tokio::test]
 async fn test_cross_chain_transfer() {
-    let initial_amount = Amount::from_tokens(2000);
-    let transfer_amount = Amount::from_tokens(2);
+    let initial_amount = Amount::from_tokens(20);
+    let transfer_amount = Amount::from_tokens(15);
 
     let (validator, module_id) =
         TestValidator::with_current_module::<fungible::FungibleTokenAbi, Parameters, InitialState>(
@@ -66,19 +55,19 @@ async fn test_cross_chain_transfer() {
             }
         })
         .await;
-    print_resources("Transfer block", &resources);
+    println!("Transfer block: {resources}");
 
-//    assert_eq!(
-//        fungible::query_account(application_id, &sender_chain, sender_account).await,
-//        Some(initial_amount.saturating_sub(transfer_amount)),
-//    );
+    assert_eq!(
+        fungible::query_account(application_id, &sender_chain, sender_account).await,
+        Some(initial_amount.saturating_sub(transfer_amount)),
+    );
 
     receiver_chain.handle_received_messages().await;
 
-//    assert_eq!(
-//        fungible::query_account(application_id, &receiver_chain, receiver_account).await,
-//        Some(transfer_amount),
-//    );
+    assert_eq!(
+        fungible::query_account(application_id, &receiver_chain, receiver_account).await,
+        Some(transfer_amount),
+    );
 }
 
 /// Test bouncing some tokens back to the sender.
@@ -121,7 +110,7 @@ async fn test_bouncing_tokens() {
             );
         })
         .await;
-    print_resources("Sender transfer block", &resources);
+    println!("Sender transfer block: {resources}");
 
     assert_eq!(
         fungible::query_account(application_id, &sender_chain, sender_account).await,
@@ -135,7 +124,7 @@ async fn test_bouncing_tokens() {
             block.with_messages_from_by_action(&certificate, MessageAction::Reject);
         })
         .await;
-    print_resources("Receiver reject block", &resources);
+    println!("Receiver reject block: {resources}");
 
     assert_eq!(
         fungible::query_account(application_id, &receiver_chain, receiver_account).await,
