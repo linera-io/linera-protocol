@@ -12,6 +12,9 @@ use sqlx::postgres::PgPool;
 use crate::db;
 use crate::models::*;
 
+/// Type alias for route handler results.
+type RouteResult<T> = Result<Json<T>, (StatusCode, Json<ErrorResponse>)>;
+
 #[derive(Deserialize)]
 pub struct PaginationParams {
     pub limit: Option<i64>,
@@ -25,7 +28,7 @@ pub async fn health() -> Json<HealthResponse> {
     })
 }
 
-pub async fn get_stats(State(pool): State<PgPool>) -> Result<Json<Stats>, (StatusCode, Json<ErrorResponse>)> {
+pub async fn get_stats(State(pool): State<PgPool>) -> RouteResult<Stats> {
     let total_blocks = db::get_total_block_count(&pool)
         .await
         .map_err(|e| internal_error(&e.to_string()))?;
@@ -47,172 +50,118 @@ pub async fn get_stats(State(pool): State<PgPool>) -> Result<Json<Stats>, (Statu
 pub async fn get_blocks(
     State(pool): State<PgPool>,
     Query(params): Query<PaginationParams>,
-) -> Result<Json<Vec<BlockSummary>>, (StatusCode, Json<ErrorResponse>)> {
+) -> RouteResult<Vec<BlockSummary>> {
     let limit = params.limit.unwrap_or(50);
     let offset = params.offset.unwrap_or(0);
-
-    let blocks = db::get_blocks(&pool, limit, offset)
-        .await
-        .map_err(|e| internal_error(&e.to_string()))?;
-
-    Ok(Json(blocks))
+    db::get_blocks(&pool, limit, offset).await.to_json()
 }
 
 pub async fn get_block_by_hash(
     State(pool): State<PgPool>,
     Path(hash): Path<String>,
-) -> Result<Json<Block>, (StatusCode, Json<ErrorResponse>)> {
-    let block = db::get_block_by_hash(&pool, &hash)
+) -> RouteResult<Block> {
+    db::get_block_by_hash(&pool, &hash)
         .await
-        .map_err(|e| internal_error(&e.to_string()))?;
-
-    match block {
-        Some(b) => Ok(Json(b)),
-        None => Err(not_found("Block not found")),
-    }
+        .to_json_or_not_found("Block not found")
 }
 
 pub async fn get_block_bundles(
     State(pool): State<PgPool>,
     Path(hash): Path<String>,
-) -> Result<Json<Vec<IncomingBundle>>, (StatusCode, Json<ErrorResponse>)> {
-    let bundles = db::get_incoming_bundles(&pool, &hash)
-        .await
-        .map_err(|e| internal_error(&e.to_string()))?;
-
-    Ok(Json(bundles))
+) -> RouteResult<Vec<IncomingBundle>> {
+    db::get_incoming_bundles(&pool, &hash).await.to_json()
 }
 
 pub async fn get_block_bundles_with_messages(
     State(pool): State<PgPool>,
     Path(hash): Path<String>,
-) -> Result<Json<Vec<BundleWithMessages>>, (StatusCode, Json<ErrorResponse>)> {
-    let bundles = db::get_block_with_bundles_and_messages(&pool, &hash)
+) -> RouteResult<Vec<BundleWithMessages>> {
+    db::get_block_with_bundles_and_messages(&pool, &hash)
         .await
-        .map_err(|e| internal_error(&e.to_string()))?;
-
-    Ok(Json(bundles))
+        .to_json()
 }
 
 pub async fn get_bundle_messages(
     State(pool): State<PgPool>,
     Path(id): Path<i64>,
-) -> Result<Json<Vec<PostedMessage>>, (StatusCode, Json<ErrorResponse>)> {
-    let messages = db::get_posted_messages(&pool, id)
-        .await
-        .map_err(|e| internal_error(&e.to_string()))?;
-
-    Ok(Json(messages))
+) -> RouteResult<Vec<PostedMessage>> {
+    db::get_posted_messages(&pool, id).await.to_json()
 }
 
 pub async fn get_block_operations(
     State(pool): State<PgPool>,
     Path(hash): Path<String>,
-) -> Result<Json<Vec<Operation>>, (StatusCode, Json<ErrorResponse>)> {
-    let operations = db::get_operations(&pool, &hash)
-        .await
-        .map_err(|e| internal_error(&e.to_string()))?;
-
-    Ok(Json(operations))
+) -> RouteResult<Vec<Operation>> {
+    db::get_operations(&pool, &hash).await.to_json()
 }
 
 pub async fn get_block_messages(
     State(pool): State<PgPool>,
     Path(hash): Path<String>,
-) -> Result<Json<Vec<OutgoingMessage>>, (StatusCode, Json<ErrorResponse>)> {
-    let messages = db::get_messages(&pool, &hash)
-        .await
-        .map_err(|e| internal_error(&e.to_string()))?;
-
-    Ok(Json(messages))
+) -> RouteResult<Vec<OutgoingMessage>> {
+    db::get_messages(&pool, &hash).await.to_json()
 }
 
 pub async fn get_block_events(
     State(pool): State<PgPool>,
     Path(hash): Path<String>,
-) -> Result<Json<Vec<Event>>, (StatusCode, Json<ErrorResponse>)> {
-    let events = db::get_events(&pool, &hash)
-        .await
-        .map_err(|e| internal_error(&e.to_string()))?;
-
-    Ok(Json(events))
+) -> RouteResult<Vec<Event>> {
+    db::get_events(&pool, &hash).await.to_json()
 }
 
 pub async fn get_block_oracle_responses(
     State(pool): State<PgPool>,
     Path(hash): Path<String>,
-) -> Result<Json<Vec<OracleResponse>>, (StatusCode, Json<ErrorResponse>)> {
-    let responses = db::get_oracle_responses(&pool, &hash)
-        .await
-        .map_err(|e| internal_error(&e.to_string()))?;
-
-    Ok(Json(responses))
+) -> RouteResult<Vec<OracleResponse>> {
+    db::get_oracle_responses(&pool, &hash).await.to_json()
 }
 
 pub async fn get_chains(
     State(pool): State<PgPool>,
     Query(params): Query<PaginationParams>,
-) -> Result<Json<Vec<ChainStats>>, (StatusCode, Json<ErrorResponse>)> {
+) -> RouteResult<Vec<ChainStats>> {
     let offset = params.offset.unwrap_or(0);
-
-    let chains = db::get_chains(&pool, params.limit, offset)
-        .await
-        .map_err(|e| internal_error(&e.to_string()))?;
-
-    Ok(Json(chains))
+    db::get_chains(&pool, params.limit, offset).await.to_json()
 }
 
-pub async fn get_chains_count(
-    State(pool): State<PgPool>,
-) -> Result<Json<CountResponse>, (StatusCode, Json<ErrorResponse>)> {
+pub async fn get_chains_count(State(pool): State<PgPool>) -> RouteResult<CountResponse> {
     let count = db::get_chains_count(&pool)
         .await
         .map_err(|e| internal_error(&e.to_string()))?;
-
     Ok(Json(CountResponse { count }))
 }
 
 pub async fn get_chain_by_id(
     State(pool): State<PgPool>,
     Path(chain_id): Path<String>,
-) -> Result<Json<ChainStats>, (StatusCode, Json<ErrorResponse>)> {
+) -> RouteResult<ChainStats> {
     if !is_valid_chain_id(&chain_id) {
         return Err(bad_request("Chain ID must be a 64-character hex string"));
     }
-
-    let chain = db::get_chain_by_id(&pool, &chain_id)
+    db::get_chain_by_id(&pool, &chain_id)
         .await
-        .map_err(|e| internal_error(&e.to_string()))?;
-
-    match chain {
-        Some(c) => Ok(Json(c)),
-        None => Err(not_found("Chain not found")),
-    }
+        .to_json_or_not_found("Chain not found")
 }
 
 pub async fn get_chain_blocks(
     State(pool): State<PgPool>,
     Path(chain_id): Path<String>,
     Query(params): Query<PaginationParams>,
-) -> Result<Json<Vec<BlockSummary>>, (StatusCode, Json<ErrorResponse>)> {
+) -> RouteResult<Vec<BlockSummary>> {
     let limit = params.limit.unwrap_or(50);
     let offset = params.offset.unwrap_or(0);
-
-    let blocks = db::get_blocks_by_chain(&pool, &chain_id, limit, offset)
+    db::get_blocks_by_chain(&pool, &chain_id, limit, offset)
         .await
-        .map_err(|e| internal_error(&e.to_string()))?;
-
-    Ok(Json(blocks))
+        .to_json()
 }
 
 pub async fn get_chain_block_count(
     State(pool): State<PgPool>,
     Path(chain_id): Path<String>,
-) -> Result<Json<CountResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> RouteResult<CountResponse> {
     let count = db::get_chain_block_count(&pool, &chain_id)
         .await
         .map_err(|e| internal_error(&e.to_string()))?;
-
     Ok(Json(CountResponse { count }))
 }
 
@@ -228,6 +177,29 @@ fn internal_error(msg: &str) -> (StatusCode, Json<ErrorResponse>) {
             error: "Internal server error".to_string(),
         }),
     )
+}
+
+/// Extension trait for converting database results to route responses.
+trait DbResultExt<T> {
+    fn to_json(self) -> RouteResult<T>;
+}
+
+impl<T> DbResultExt<T> for Result<T, sqlx::Error> {
+    fn to_json(self) -> RouteResult<T> {
+        self.map(Json).map_err(|e| internal_error(&e.to_string()))
+    }
+}
+
+/// Extension trait for converting Option database results to route responses.
+trait DbOptionResultExt<T> {
+    fn to_json_or_not_found(self, msg: &str) -> RouteResult<T>;
+}
+
+impl<T> DbOptionResultExt<T> for Result<Option<T>, sqlx::Error> {
+    fn to_json_or_not_found(self, msg: &str) -> RouteResult<T> {
+        let opt = self.map_err(|e| internal_error(&e.to_string()))?;
+        opt.map(Json).ok_or_else(|| not_found(msg))
+    }
 }
 
 fn not_found(msg: &str) -> (StatusCode, Json<ErrorResponse>) {
