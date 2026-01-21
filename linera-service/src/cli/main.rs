@@ -1587,11 +1587,11 @@ impl Runnable for Job {
                 }
 
                 let chain_id = description.id();
-                let name = match name {
-                    Some(n) => n,
+                let chain_name = match name {
+                    Some(provided_name) => provided_name,
                     None => wallet.next_default_name(chain_id).await,
                 };
-                let mut chain = wallet::Chain::from_description(&name, &description);
+                let mut chain = wallet::Chain::from_description(&chain_name, &description);
                 chain.owner = Some(owner);
                 wallet.insert(chain_id, chain)?;
 

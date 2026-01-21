@@ -467,12 +467,15 @@ impl<Env: Environment> ClientContext<Env> {
         timestamp: Timestamp,
         epoch: Epoch,
     ) -> Result<(), Error> {
-        let name = match name {
-            Some(n) => n,
+        let chain_name = match name {
+            Some(provided_name) => provided_name,
             None => self.default_chain_name(chain_id).await?,
         };
         self.wallet()
-            .try_insert(chain_id, wallet::Chain::new(name, owner, epoch, timestamp))
+            .try_insert(
+                chain_id,
+                wallet::Chain::new(chain_name, owner, epoch, timestamp),
+            )
             .await
             .map_err(error::Inner::wallet)?;
         Ok(())
@@ -547,14 +550,14 @@ impl<Env: Environment> ClientContext<Env> {
             .map_err(error::Inner::wallet)?;
         // If the chain didn't exist, insert a new entry.
         if modified.is_none() {
-            let name = match name {
-                Some(n) => n,
+            let chain_name = match name {
+                Some(provided_name) => provided_name,
                 None => self.default_chain_name(chain_id).await?,
             };
             self.wallet()
                 .insert(
                     chain_id,
-                    wallet::Chain::new(name, Some(owner), epoch, timestamp),
+                    wallet::Chain::new(chain_name, Some(owner), epoch, timestamp),
                 )
                 .await
                 .map_err(error::Inner::wallet)

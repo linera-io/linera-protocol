@@ -59,15 +59,16 @@ impl chain_listener::ClientContext for ClientContext {
         epoch: Epoch,
     ) -> Result<(), Error> {
         // Generate a default name if not provided.
-        let name = match name {
-            Some(n) => n,
+        let chain_name = match name {
+            Some(provided_name) => provided_name,
             None if chain_id == self.client.admin_chain() => "admin".to_string(),
             None => wallet::next_default_chain_name(self.wallet()).await?,
         };
         // Ignore if chain already exists in wallet; test mock doesn't care.
-        let _insert_result = self
-            .wallet()
-            .try_insert(chain_id, wallet::Chain::new(name, owner, epoch, timestamp));
+        let _insert_result = self.wallet().try_insert(
+            chain_id,
+            wallet::Chain::new(chain_name, owner, epoch, timestamp),
+        );
         Ok(())
     }
 
@@ -78,7 +79,7 @@ impl chain_listener::ClientContext for ClientContext {
         let info = client.chain_info().await?;
         let chain_id = info.chain_id;
         let existing_name = match self.wallet().get(chain_id) {
-            Some(c) => c.name.clone(),
+            Some(chain) => chain.name.clone(),
             None if chain_id == self.client.admin_chain() => "admin".to_string(),
             None => wallet::next_default_chain_name(self.wallet()).await?,
         };
