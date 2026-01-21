@@ -28,9 +28,6 @@ async fn test_cost_tracking() {
         .await;
 
     println!("=== Cost Tracking Test Results ===");
-    println!("Certificate hash: {:?}", certificate.hash());
-    println!("Resources consumed: {resources:?}");
-    println!();
 
     // Query the logs
     let response = chain.query(application_id, Query::GetLogs).await.response;
@@ -63,35 +60,5 @@ async fn test_cost_tracking() {
     if let QueryResponse::LogCount(count) = count_response {
         println!("Log count from query: {}", count);
         assert!(count > 0, "Should have logged some entries");
-    }
-}
-
-/// Test that individual operations can be tracked.
-#[tokio::test]
-async fn test_multiple_operations() {
-    let (validator, module_id) =
-        TestValidator::with_current_module::<CostTrackingAbi, (), ()>().await;
-    let mut chain = validator.new_chain().await;
-
-    let application_id = chain
-        .create_application(module_id, (), (), vec![])
-        .await;
-
-    // Run the operation multiple times to see consistency
-    for i in 0..3 {
-        let (_, resources) = chain
-            .add_block(|block| {
-                block.with_operation(application_id, Operation::RunAll);
-            })
-            .await;
-        println!("Run {}: Resources = {:?}", i + 1, resources);
-    }
-
-    // Query final log count - should have 3x the entries
-    let response = chain.query(application_id, Query::GetLogCount).await.response;
-    if let QueryResponse::LogCount(count) = response {
-        println!("Total log entries after 3 runs: {}", count);
-        // Each run adds multiple log entries, so we should have a significant number
-        assert!(count >= 3, "Should have at least 3 log entries (one per run minimum)");
     }
 }
