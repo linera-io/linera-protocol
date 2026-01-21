@@ -260,10 +260,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .into_iter()
                 .map(|result| {
                     let (chain_id, chain) = result?;
-                    let mode = if chain.owner.is_some() {
-                        ListeningMode::FullChain
+                    let mode = if let Some(owner) = chain.owner {
+                        (ListeningMode::FullChain, Some(owner))
                     } else {
-                        ListeningMode::FollowChain
+                        (ListeningMode::FollowChain, None)
                     };
                     Ok((chain_id, mode))
                 })
@@ -277,7 +277,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             // typically don't own it.
             chain_ids
                 .entry(admin_chain_id)
-                .or_insert(ListeningMode::FollowChain);
+                .or_insert((ListeningMode::FollowChain, None));
             chain_ids
         };
 
@@ -392,7 +392,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     context_guard
                         .client()
                         .extend_chain_mode(new_chain_id, ListeningMode::FullChain);
-                    new_ids.insert(new_chain_id, ListeningMode::FullChain);
+                    new_ids.insert(new_chain_id, (ListeningMode::FullChain, Some(chain_owner)));
                 }
             }
         }
@@ -425,16 +425,19 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     /// event streams those chains are subscribed to.
     async fn listen_recursively(
         &mut self,
-        mut chain_ids: BTreeMap<ChainId, ListeningMode>,
+        mut chain_ids: BTreeMap<ChainId, (ListeningMode, Option<AccountOwner>)>,
     ) -> Result<(), Error> {
-        while let Some((chain_id, listening_mode)) = chain_ids.pop_first() {
-            for (new_chain_id, new_listening_mode) in self.listen(chain_id, listening_mode).await? {
+        while let Some((chain_id, (listening_mode, maybe_owner))) = chain_ids.pop_first() {
+            for (new_chain_id, (new_listening_mode, maybe_new_owner)) in
+                self.listen(chain_id, listening_mode, maybe_owner).await?
+            {
                 match chain_ids.entry(new_chain_id) {
                     Entry::Vacant(vacant) => {
-                        vacant.insert(new_listening_mode);
+                        vacant.insert((new_listening_mode, maybe_new_owner));
                     }
                     Entry::Occupied(mut occupied) => {
-                        occupied.get_mut().extend(Some(new_listening_mode));
+                        occupied.get_mut().0.extend(Some(new_listening_mode));
+                        occupied.get_mut().1 = maybe_new_owner;
                     }
                 }
             }
@@ -465,7 +468,8 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         &mut self,
         chain_id: ChainId,
         listening_mode: ListeningMode,
-    ) -> Result<BTreeMap<ChainId, ListeningMode>, Error> {
+        maybe_owner: Option<AccountOwner>,
+    ) -> Result<BTreeMap<ChainId, (ListeningMode, Option<AccountOwner>)>, Error> {
         let context_guard = self.context.lock().await;
         let existing_mode = context_guard.client().chain_mode(chain_id);
         // If we already have a listener with a sufficient mode, nothing to do.
@@ -482,12 +486,15 @@ impl<C: ClientContext + 'static> ChainListener<C> {
 
         // Start background tasks to sync received certificates, if enabled.
         let maybe_sync_cancellation_token = self.start_background_sync(chain_id).await;
-        let client = self
+        let mut client = self
             .context
             .lock()
             .await
             .make_chain_client(chain_id)
             .await?;
+        if let Some(owner) = maybe_owner {
+            client.set_preferred_owner(owner);
+        }
         let (listener, abort_handle, notification_stream) = client.listen().await?;
 
         let join_handle = linera_base::task::spawn(listener.in_current_span());
@@ -540,7 +547,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     async fn update_event_subscriptions(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<BTreeMap<ChainId, ListeningMode>, Error> {
+    ) -> Result<BTreeMap<ChainId, (ListeningMode, Option<AccountOwner>)>, Error> {
         let listening_client = self.listening.get_mut(&chain_id).expect("missing client");
         if !listening_client.client.is_tracked() {
             return Ok(BTreeMap::new());
@@ -550,7 +557,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             .event_stream_publishers()
             .await?
             .into_iter()
-            .map(|chain_id| (chain_id, ListeningMode::FullChain))
+            .map(|chain_id| (chain_id, (ListeningMode::FullChain, None)))
             .collect();
         for publisher_id in publishing_chains.keys() {
             self.event_subscribers
@@ -590,44 +597,21 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     match command {
                         ListenerCommand::Listen(new_chains) => {
                             debug!(?new_chains, "received command to listen to new chains");
-                            let mut chains = BTreeMap::new();
-                            let context_guard = self.context.lock().await;
-                            for (chain_id, owner) in new_chains {
-                                if let Some(owner) = owner {
-                                    if context_guard.client().has_key_for(&owner).await? {
-                                        context_guard
-                                            .client()
-                                            .extend_chain_mode(chain_id, ListeningMode::FullChain);
-                                        let chain_description = context_guard
-                                            .client()
-                                            .get_chain_description(chain_id)
-                                            .await?;
-                                        // Get existing chain info from wallet or use default
-                                        let mut chain = context_guard
-                                            .wallet()
-                                            .get(chain_id)
-                                            .await
-                                            .map_err(error::Inner::wallet)?
-                                            .unwrap_or_default();
-                                        // Update owner and chain metadata
-                                        chain.owner = Some(owner);
-                                        chain.timestamp = chain_description.timestamp();
-                                        chain.epoch = Some(chain_description.config().epoch);
-                                        // Insert (overwrites if already exists)
-                                        // TODO(#5247): Do not reset preexisting epoch and timestamp.
-                                        context_guard
-                                            .wallet()
-                                            .insert(chain_id, chain)
-                                            .await
-                                            .map_err(error::Inner::wallet)?;
-                                        chains.insert(chain_id, ListeningMode::FullChain);
-                                        continue;
+                            let chains =
+                                new_chains.into_iter().map(|(chain_id, owner)| {
+                                    if let Some(owner) = owner {
+                                        (chain_id, (ListeningMode::FullChain, Some(owner)))
+                                    } else {
+                                        (chain_id, (ListeningMode::FollowChain, None))
                                     }
+                                })
+                                .collect::<BTreeMap<_, _>>();
+                            self.listen_recursively(chains.clone()).await?;
+                            for chain_id in chains.keys() {
+                                if let Err(error) = self.update_wallet(*chain_id).await {
+                                    error!(%error, %chain_id, "error updating the wallet with a chain");
                                 }
-                                chains.insert(chain_id, ListeningMode::FollowChain);
                             }
-                            drop(context_guard);
-                            self.listen_recursively(chains).await?;
                         }
                         ListenerCommand::StopListening(chains) => {
                             debug!(?chains, "received command to stop listening to chains");
@@ -638,6 +622,9 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                                     continue;
                                 };
                                 listening_client.stop().await;
+                                if let Err(error) = self.context.lock().await.wallet().remove(chain_id).await {
+                                    error!(%error, %chain_id, "error removing a chain from the wallet");
+                                }
                             }
                         }
                         ListenerCommand::SetMessagePolicy(policies) => {
