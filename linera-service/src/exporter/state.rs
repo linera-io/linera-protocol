@@ -222,4 +222,20 @@ impl DestinationStates {
     pub fn insert(&mut self, id: DestinationId, state: Arc<AtomicU64>) {
         self.states.pin().insert(id, state);
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (DestinationId, u64)> + '_ {
+        let pinned = self.states.pin();
+        pinned
+            .iter()
+            .map(|(k, v)| (k.clone(), v.load(Ordering::Acquire)))
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
+    pub fn set(&self, id: &DestinationId, value: u64) -> Option<u64> {
+        self.states
+            .pin()
+            .get(id)
+            .map(|v| v.swap(value, Ordering::Release))
+    }
 }
