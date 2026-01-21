@@ -138,6 +138,10 @@ where
         self.destination_states.set(destination_states);
     }
 
+    pub fn get_destination_states(&self) -> &DestinationStates {
+        self.destination_states.get()
+    }
+
     pub fn set_latest_committee_blob(&mut self, blob_id: BlobId) {
         self.latest_committee_blob.set(Some(blob_id));
     }
