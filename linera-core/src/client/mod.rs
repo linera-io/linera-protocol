@@ -1619,7 +1619,7 @@ impl<Env: Environment> Client<Env> {
                     .await?;
                 continue; // We found the missing blob: retry.
             }
-            if let Ok((block, _)) = &result {
+            if let Ok((block, _, _)) = &result {
                 let hash = CryptoHash::new(block);
                 let notification = Notification {
                     chain_id: block.header.chain_id,
@@ -1630,7 +1630,8 @@ impl<Env: Environment> Client<Env> {
                 };
                 self.notifier.notify(&[notification]);
             }
-            return Ok(result?);
+            let (block, response, _resource_tracker) = result?;
+            return Ok((block, response));
         }
     }
 }

@@ -7,7 +7,9 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::{channel::mpsc, future::BoxFuture, FutureExt as _};
+use futures::{
+    channel::mpsc, future::BoxFuture, stream::FuturesUnordered, FutureExt as _, StreamExt as _,
+};
 use linera_base::{
     data_types::Blob,
     identifiers::ChainId,
@@ -52,7 +54,8 @@ mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
-        linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
+        exponential_bucket_interval, linear_bucket_interval, register_histogram_vec,
+        register_int_counter_vec,
     };
     use prometheus::{HistogramVec, IntCounterVec};
 
@@ -102,6 +105,164 @@ mod metrics {
             &[],
         )
     });
+
+    pub static NOTIFICATIONS_SKIPPED_RECEIVER_LAG: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "notifications_skipped_receiver_lag",
+            "Number of notifications skipped because receiver lagged behind sender",
+            &[],
+        )
+    });
+
+    pub static NOTIFICATIONS_DROPPED_NO_RECEIVER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "notifications_dropped_no_receiver",
+            "Number of notifications dropped because no receiver was available",
+            &[],
+        )
+    });
+
+    pub static NOTIFICATION_BATCH_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "notification_batch_size",
+            "Number of notifications per batch sent to proxy",
+            &[],
+            exponential_bucket_interval(1.0, 250.0),
+        )
+    });
+
+    pub static NOTIFICATION_BATCHES_SENT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "notification_batches_sent",
+            "Total notification batches sent",
+            &["status"],
+        )
+    });
+}
+
+/// Handles batched forwarding of notifications to proxy and exporters.
+struct BatchForwarder {
+    nickname: String,
+    client: NotifierServiceClient<Channel>,
+    exporter_clients: Vec<NotifierServiceClient<Channel>>,
+    pending_notifications: Vec<Notification>,
+    futures: FuturesUnordered<BoxFuture<'static, ()>>,
+    batch_limit: usize,
+    max_tasks: usize,
+}
+
+impl BatchForwarder {
+    /// Spawns batch send tasks up to max_tasks limit.
+    fn spawn_batches(&mut self) {
+        while !self.pending_notifications.is_empty() && self.futures.len() < self.max_tasks {
+            let chunk_size = std::cmp::min(self.batch_limit, self.pending_notifications.len());
+            let batch: Vec<Notification> = self.pending_notifications.drain(..chunk_size).collect();
+
+            #[cfg(with_metrics)]
+            metrics::NOTIFICATION_BATCH_SIZE
+                .with_label_values(&[])
+                .observe(batch.len() as f64);
+
+            let client = self.client.clone();
+            let exporter_clients = self.exporter_clients.clone();
+            let nickname = self.nickname.clone();
+
+            self.futures.push(
+                async move {
+                    Self::send_batch(nickname, client, exporter_clients, batch).await;
+                }
+                .boxed(),
+            );
+        }
+    }
+
+    /// Returns true if there are no pending notifications and no in-flight tasks.
+    fn is_fully_drained(&self) -> bool {
+        self.pending_notifications.is_empty() && self.futures.is_empty()
+    }
+
+    /// Sends a batch of notifications to the proxy and exporters.
+    async fn send_batch(
+        nickname: String,
+        mut client: NotifierServiceClient<Channel>,
+        mut exporter_clients: Vec<NotifierServiceClient<Channel>>,
+        batch: Vec<Notification>,
+    ) {
+        // Convert to proto notifications, logging any deserialization errors
+        let mut proto_notifications = Vec::with_capacity(batch.len());
+        for notification in &batch {
+            match notification.clone().try_into() {
+                Ok(proto) => proto_notifications.push(proto),
+                Err(error) => {
+                    warn!(
+                        %error,
+                        nickname,
+                        ?notification.chain_id,
+                        ?notification.reason,
+                        "could not deserialize notification"
+                    );
+                }
+            }
+        }
+
+        // Collect chain_ids for error logging
+        let chain_ids: Vec<_> = batch.iter().map(|n| n.chain_id).collect();
+
+        // Send batch to proxy
+        let request = Request::new(api::NotificationBatch {
+            notifications: proto_notifications.clone(),
+        });
+        let result = client.notify_batch(request).await;
+
+        #[cfg(with_metrics)]
+        {
+            let status = if result.is_ok() { "success" } else { "error" };
+            metrics::NOTIFICATION_BATCHES_SENT
+                .with_label_values(&[status])
+                .inc();
+        }
+
+        if let Err(error) = result {
+            error!(
+                %error,
+                nickname,
+                batch_size = proto_notifications.len(),
+                ?chain_ids,
+                "proxy: could not send notification batch",
+            );
+        }
+
+        // Send NewBlock notifications to exporters
+        let new_block_notifications: Vec<_> = batch
+            .iter()
+            .filter(|n| matches!(n.reason, Reason::NewBlock { .. }))
+            .collect();
+
+        let exporter_notifications: Vec<api::Notification> = new_block_notifications
+            .iter()
+            .filter_map(|n| (*n).clone().try_into().ok())
+            .collect();
+
+        if !exporter_notifications.is_empty() {
+            let exporter_chain_ids: Vec<_> =
+                new_block_notifications.iter().map(|n| n.chain_id).collect();
+
+            for exporter_client in &mut exporter_clients {
+                let request = Request::new(api::NotificationBatch {
+                    notifications: exporter_notifications.clone(),
+                });
+                if let Err(error) = exporter_client.notify_batch(request).await {
+                    error!(
+                        %error,
+                        nickname,
+                        batch_size = exporter_notifications.len(),
+                        ?exporter_chain_ids,
+                        "block exporter: could not send notification batch",
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -237,6 +398,7 @@ where
                     proxy.internal_address(&internal_network.protocol),
                     exporter_addresses,
                     receiver,
+                    notification_config.clone(),
                 )
             });
         }
@@ -284,23 +446,24 @@ where
         GrpcServerHandle { handle }
     }
 
-    /// Continuously waits for receiver to receive a notification which is then sent to
-    /// the proxy.
-    #[instrument(skip(receiver))]
+    /// Continuously waits for receiver to receive notifications and sends them to
+    /// the proxy in batches for improved throughput.
+    #[instrument(skip(receiver, config))]
     async fn forward_notifications(
         nickname: String,
         proxy_address: String,
         exporter_addresses: Vec<String>,
         mut receiver: tokio::sync::broadcast::Receiver<Notification>,
+        config: NotificationConfig,
     ) {
         let channel = tonic::transport::Channel::from_shared(proxy_address.clone())
             .expect("Proxy URI should be valid")
             .connect_lazy();
-        let mut client = NotifierServiceClient::new(channel)
+        let client = NotifierServiceClient::new(channel)
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
 
-        let mut exporter_clients: Vec<NotifierServiceClient<Channel>> = exporter_addresses
+        let exporter_clients: Vec<NotifierServiceClient<Channel>> = exporter_addresses
             .iter()
             .map(|address| {
                 let channel = tonic::transport::Channel::from_shared(address.clone())
@@ -312,57 +475,61 @@ where
             })
             .collect::<Vec<_>>();
 
+        let mut forwarder = BatchForwarder {
+            nickname: nickname.clone(),
+            client,
+            exporter_clients,
+            pending_notifications: Vec::new(),
+            futures: FuturesUnordered::new(),
+            batch_limit: config.notification_batch_size,
+            max_tasks: config.notification_max_in_flight,
+        };
+
         loop {
-            let notification = match receiver.recv().await {
-                Ok(notification) => notification,
-                Err(RecvError::Lagged(skipped_count)) => {
-                    warn!(
-                        nickname,
-                        skipped_count, "notification receiver lagged, messages were skipped"
-                    );
-                    continue;
-                }
-                Err(RecvError::Closed) => {
-                    warn!(
-                        nickname,
-                        "notification channel closed, exiting forwarding loop"
-                    );
-                    break;
-                }
-            };
+            tokio::select! {
+                biased;
 
-            let reason = &notification.reason;
-            let chain_id = notification.chain_id;
-            let notification: api::Notification = match notification.clone().try_into() {
-                Ok(notification) => notification,
-                Err(error) => {
-                    warn!(%error, nickname, "could not deserialize notification");
-                    continue;
-                }
-            };
-            let request = tonic::Request::new(notification.clone());
-            if let Err(error) = client.notify(request).await {
-                error!(
-                    %error,
-                    nickname,
-                    ?chain_id,
-                    ?reason,
-                    "proxy: could not send notification",
-                )
-            }
+                result = receiver.recv() => {
+                    match result {
+                        Ok(notification) => {
+                            forwarder.pending_notifications.push(notification);
 
-            if let Reason::NewBlock { height: _, hash: _ } = reason {
-                for exporter_client in &mut exporter_clients {
-                    let request = tonic::Request::new(notification.clone());
-                    if let Err(error) = exporter_client.notify(request).await {
-                        error!(
-                            %error,
-                            nickname,
-                            ?chain_id,
-                            ?reason,
-                            "block exporter: could not send notification",
-                        )
+                            if forwarder.futures.is_empty()
+                               || (forwarder.pending_notifications.len() >= forwarder.batch_limit
+                                   && forwarder.futures.len() < forwarder.max_tasks) {
+                                forwarder.spawn_batches();
+                            }
+                        }
+                        Err(RecvError::Lagged(skipped_count)) => {
+                            warn!(
+                                nickname,
+                                skipped_count, "notification receiver lagged, messages were skipped"
+                            );
+                            #[cfg(with_metrics)]
+                            metrics::NOTIFICATIONS_SKIPPED_RECEIVER_LAG
+                                .with_label_values(&[])
+                                .inc_by(skipped_count);
+                        }
+                        Err(RecvError::Closed) => {
+                            warn!(
+                                nickname,
+                                "notification channel closed, draining pending notifications"
+                            );
+                            // Drain all pending notifications before exiting
+                            loop {
+                                forwarder.spawn_batches();
+                                if forwarder.is_fully_drained() {
+                                    break;
+                                }
+                                forwarder.futures.next().await;
+                            }
+                            break;
+                        }
                     }
+                }
+
+                Some(()) = forwarder.futures.next() => {
+                    forwarder.spawn_batches();
                 }
             }
         }
@@ -395,7 +562,10 @@ where
             trace!("Scheduling notification query");
             if let Err(error) = notification_sender.send(notification) {
                 error!(%error, "dropping notification");
-                break;
+                #[cfg(with_metrics)]
+                metrics::NOTIFICATIONS_DROPPED_NO_RECEIVER
+                    .with_label_values(&[])
+                    .inc();
             }
         }
     }
