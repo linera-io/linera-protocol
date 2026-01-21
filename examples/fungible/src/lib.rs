@@ -114,9 +114,10 @@ pub async fn create_with_accounts(
             })
             .await;
 
+        let (claim_certificate, _) = claim_certificate;
         assert_eq!(claim_certificate.outgoing_message_count(), 1);
 
-        let transfer_certificate = token_chain
+        let (transfer_certificate, _) = token_chain
             .add_block(|block| {
                 block.with_messages_from(&claim_certificate);
             })
@@ -124,7 +125,7 @@ pub async fn create_with_accounts(
 
         assert_eq!(transfer_certificate.outgoing_message_count(), 1);
 
-        chain
+        let _ = chain
             .add_block(|block| {
                 block.with_messages_from(&transfer_certificate);
             })

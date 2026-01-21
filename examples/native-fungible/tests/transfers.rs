@@ -31,7 +31,7 @@ async fn chain_balance_transfers() {
     let funding_chain = validator.get_chain(&validator.admin_chain_id());
     let recipient = Account::chain(recipient_chain.id());
 
-    let transfer_certificate = funding_chain
+    let (transfer_certificate, _) = funding_chain
         .add_block(|block| {
             block.with_native_token_transfer(AccountOwner::CHAIN, recipient, transfer_amount);
         })
@@ -69,7 +69,7 @@ async fn transfer_to_owner() {
     let owner = AccountOwner::from(CryptoHash::test_hash("owner"));
     let recipient = Account::new(recipient_chain.id(), owner);
 
-    let transfer_certificate = funding_chain
+    let (transfer_certificate, _) = funding_chain
         .add_block(|block| {
             block.with_native_token_transfer(AccountOwner::CHAIN, recipient, transfer_amount);
         })
@@ -111,7 +111,7 @@ async fn transfer_to_multiple_owners() {
         .copied()
         .map(|account_owner| Account::new(recipient_chain.id(), account_owner));
 
-    let transfer_certificate = funding_chain
+    let (transfer_certificate, _) = funding_chain
         .add_block(|block| {
             for (recipient, transfer_amount) in recipients.zip(transfer_amounts.clone()) {
                 block.with_native_token_transfer(AccountOwner::CHAIN, recipient, transfer_amount);
@@ -152,7 +152,7 @@ async fn emptied_account_disappears_from_queries() {
     let owner = AccountOwner::from(recipient_chain.public_key());
     let recipient = Account::new(recipient_chain.id(), owner);
 
-    let transfer_certificate = funding_chain
+    let (transfer_certificate, _) = funding_chain
         .add_block(|block| {
             block.with_native_token_transfer(AccountOwner::CHAIN, recipient, transfer_amount);
         })
