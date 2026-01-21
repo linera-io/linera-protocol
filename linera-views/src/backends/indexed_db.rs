@@ -310,7 +310,7 @@ impl KeyValueDatabase for IndexedDbDatabase {
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<()> {
-        Self::connect(config, namespace).await?.database;
+        let Self { .. } = Self::connect(config, namespace).await?;
         Ok(())
     }
 
