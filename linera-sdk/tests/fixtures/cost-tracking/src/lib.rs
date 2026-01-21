@@ -31,6 +31,13 @@ pub struct LogEntry {
     pub fuel: u64,
 }
 
+/// Messages that can be sent by the contract.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Message {
+    /// A dummy message for benchmarking.
+    Ping,
+}
+
 impl ContractAbi for CostTrackingAbi {
     type Operation = Operation;
     type Response = ();

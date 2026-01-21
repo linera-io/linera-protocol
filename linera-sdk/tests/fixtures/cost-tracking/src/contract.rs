@@ -5,9 +5,11 @@
 
 mod state;
 
-use cost_tracking::{CostTrackingAbi, LogEntry, Operation};
+use std::hint::black_box;
+
+use cost_tracking::{CostTrackingAbi, LogEntry, Message, Operation};
 use linera_sdk::{
-    linera_base_types::WithContractAbi,
+    linera_base_types::{AccountOwner, Amount, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -38,7 +40,8 @@ impl CostTrackingContract {
     /// Test storage read operations.
     async fn test_storage_read(&mut self) {
         self.log_entry("before_storage_read");
-        let _value = self.state.counter.get();
+        let value = self.state.counter.get();
+        black_box(value);
         self.log_entry("after_storage_read");
     }
 
@@ -49,51 +52,116 @@ impl CostTrackingContract {
         self.log_entry("after_storage_write");
     }
 
-    /// Test serialization.
-    fn test_serialization(&mut self) {
-        self.log_entry("before_serialization");
+    /// Test JSON serialization.
+    fn test_json_serialization(&mut self) {
+        self.log_entry("before_json_serialize");
 
-        // Serialize a complex structure
         let data = LogEntry {
             label: "test_data".to_string(),
             fuel: 12345,
         };
-        let _serialized = serde_json::to_vec(&data).expect("serialization failed");
+        let serialized = serde_json::to_vec(&data).expect("serialization failed");
+        black_box(&serialized);
 
-        self.log_entry("after_serialization");
+        self.log_entry("after_json_serialize");
     }
 
-    /// Test deserialization.
-    fn test_deserialization(&mut self) {
-        self.log_entry("before_deserialization");
+    /// Test JSON deserialization.
+    fn test_json_deserialization(&mut self) {
+        self.log_entry("before_json_deserialize");
 
-        // Deserialize a JSON string
         let json_str = r#"{"label":"test_label","fuel":999}"#;
-        let _deserialized: LogEntry = serde_json::from_str(json_str).expect("deserialization failed");
+        let deserialized: LogEntry = serde_json::from_str(json_str).expect("deserialization failed");
+        black_box(&deserialized);
 
-        self.log_entry("after_deserialization");
+        self.log_entry("after_json_deserialize");
+    }
+
+    /// Test BCS serialization.
+    fn test_bcs_serialization(&mut self) {
+        self.log_entry("before_bcs_serialize");
+
+        let data = LogEntry {
+            label: "test_data".to_string(),
+            fuel: 12345,
+        };
+        let serialized = bcs::to_bytes(&data).expect("bcs serialization failed");
+        black_box(&serialized);
+
+        self.log_entry("after_bcs_serialize");
+    }
+
+    /// Test BCS deserialization.
+    fn test_bcs_deserialization(&mut self) {
+        self.log_entry("before_bcs_deserialize");
+
+        // First serialize to get valid BCS bytes
+        let data = LogEntry {
+            label: "test_label".to_string(),
+            fuel: 999,
+        };
+        let bytes = bcs::to_bytes(&data).expect("bcs serialization failed");
+        let deserialized: LogEntry = bcs::from_bytes(&bytes).expect("bcs deserialization failed");
+        black_box(&deserialized);
+
+        self.log_entry("after_bcs_deserialize");
+    }
+
+    /// Test bincode serialization.
+    fn test_bincode_serialization(&mut self) {
+        self.log_entry("before_bincode_serialize");
+
+        let data = LogEntry {
+            label: "test_data".to_string(),
+            fuel: 12345,
+        };
+        let serialized = bincode::serialize(&data).expect("bincode serialization failed");
+        black_box(&serialized);
+
+        self.log_entry("after_bincode_serialize");
+    }
+
+    /// Test bincode deserialization.
+    fn test_bincode_deserialization(&mut self) {
+        self.log_entry("before_bincode_deserialize");
+
+        // First serialize to get valid bincode bytes
+        let data = LogEntry {
+            label: "test_label".to_string(),
+            fuel: 999,
+        };
+        let bytes = bincode::serialize(&data).expect("bincode serialization failed");
+        let deserialized: LogEntry = bincode::deserialize(&bytes).expect("bincode deserialization failed");
+        black_box(&deserialized);
+
+        self.log_entry("after_bincode_deserialize");
     }
 
     /// Test basic runtime operations.
     fn test_runtime_operations(&mut self) {
         self.log_entry("before_chain_id");
-        let _chain_id = self.runtime.chain_id();
+        let chain_id = self.runtime.chain_id();
+        black_box(&chain_id);
         self.log_entry("after_chain_id");
 
         self.log_entry("before_block_height");
-        let _block_height = self.runtime.block_height();
+        let block_height = self.runtime.block_height();
+        black_box(&block_height);
         self.log_entry("after_block_height");
 
         self.log_entry("before_system_time");
-        let _system_time = self.runtime.system_time();
+        let system_time = self.runtime.system_time();
+        black_box(&system_time);
         self.log_entry("after_system_time");
 
         self.log_entry("before_application_id");
-        let _app_id = self.runtime.application_id();
+        let app_id = self.runtime.application_id();
+        black_box(&app_id);
         self.log_entry("after_application_id");
 
         self.log_entry("before_application_parameters");
-        let _params = self.runtime.application_parameters();
+        let params = self.runtime.application_parameters();
+        black_box(&params);
         self.log_entry("after_application_parameters");
     }
 
@@ -105,11 +173,13 @@ impl CostTrackingContract {
         for i in 0..100 {
             s.push_str(&format!("item_{} ", i));
         }
+        black_box(&s);
 
         self.log_entry("after_string_concat");
 
         self.log_entry("before_string_parse");
-        let _parsed: Vec<&str> = s.split_whitespace().collect();
+        let parsed: Vec<&str> = s.split_whitespace().collect();
+        black_box(&parsed);
         self.log_entry("after_string_parse");
     }
 
@@ -121,16 +191,87 @@ impl CostTrackingContract {
         for i in 0..1000 {
             vec.push(i);
         }
+        black_box(&vec);
 
         self.log_entry("after_vector_alloc");
 
         self.log_entry("before_vector_sort");
         vec.sort_by(|a, b| b.cmp(a)); // reverse sort
+        black_box(&vec);
         self.log_entry("after_vector_sort");
 
         self.log_entry("before_vector_sum");
-        let _sum: u64 = vec.iter().sum();
+        let sum: u64 = vec.iter().sum();
+        black_box(&sum);
         self.log_entry("after_vector_sum");
+    }
+
+    /// Test MapView operations.
+    async fn test_map_operations(&mut self) {
+        // Test insert
+        self.log_entry("before_map_insert");
+        self.state.map.insert(&"key1".to_string(), 100).unwrap();
+        self.log_entry("after_map_insert");
+
+        // Test get
+        self.log_entry("before_map_get");
+        let value = self.state.map.get(&"key1".to_string()).await.unwrap();
+        black_box(&value);
+        self.log_entry("after_map_get");
+
+        // Test contains_key
+        self.log_entry("before_map_contains_key");
+        let contains = self.state.map.contains_key(&"key1".to_string()).await.unwrap();
+        black_box(&contains);
+        self.log_entry("after_map_contains_key");
+
+        // Insert multiple entries
+        self.log_entry("before_map_insert_10");
+        for i in 0..10 {
+            self.state.map.insert(&format!("key_{}", i), i as u64).unwrap();
+        }
+        self.log_entry("after_map_insert_10");
+
+        // Test remove
+        self.log_entry("before_map_remove");
+        self.state.map.remove(&"key1".to_string()).unwrap();
+        self.log_entry("after_map_remove");
+    }
+
+    /// Test transfer operations.
+    fn test_transfer(&mut self) {
+        self.log_entry("before_transfer");
+
+        // Transfer from chain balance to chain balance (same chain)
+        let chain_id = self.runtime.chain_id();
+        let destination = linera_sdk::linera_base_types::Account {
+            chain_id,
+            owner: AccountOwner::CHAIN,
+        };
+        // Transfer a small amount (1 unit = 10^-18 tokens)
+        self.runtime.transfer(AccountOwner::CHAIN, destination, Amount::from_attos(1));
+
+        self.log_entry("after_transfer");
+    }
+
+    /// Test message emission.
+    fn test_send_message(&mut self) {
+        self.log_entry("before_send_message");
+
+        let chain_id = self.runtime.chain_id();
+        self.runtime.send_message(chain_id, Message::Ping);
+
+        self.log_entry("after_send_message");
+
+        // Test prepare_message with tracking
+        self.log_entry("before_send_message_tracked");
+
+        self.runtime
+            .prepare_message(Message::Ping)
+            .with_tracking()
+            .send_to(chain_id);
+
+        self.log_entry("after_send_message_tracked");
     }
 
     /// Run all cost tracking operations.
@@ -141,9 +282,17 @@ impl CostTrackingContract {
         self.test_storage_read().await;
         self.test_storage_write().await;
 
-        // Serialization/deserialization
-        self.test_serialization();
-        self.test_deserialization();
+        // JSON serialization/deserialization
+        self.test_json_serialization();
+        self.test_json_deserialization();
+
+        // BCS serialization/deserialization
+        self.test_bcs_serialization();
+        self.test_bcs_deserialization();
+
+        // Bincode serialization/deserialization
+        self.test_bincode_serialization();
+        self.test_bincode_deserialization();
 
         // Runtime operations
         self.test_runtime_operations();
@@ -152,12 +301,21 @@ impl CostTrackingContract {
         self.test_string_operations();
         self.test_vector_operations();
 
+        // MapView operations
+        self.test_map_operations().await;
+
+        // Transfer operations
+        self.test_transfer();
+
+        // Message operations
+        self.test_send_message();
+
         self.log_entry("end");
     }
 }
 
 impl Contract for CostTrackingContract {
-    type Message = ();
+    type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ();
     type EventValue = ();
@@ -184,7 +342,13 @@ impl Contract for CostTrackingContract {
         }
     }
 
-    async fn execute_message(&mut self, _message: ()) {}
+    async fn execute_message(&mut self, message: Message) {
+        match message {
+            Message::Ping => {
+                // No-op, just for benchmarking message reception
+            }
+        }
+    }
 
     async fn store(mut self) {
         self.state.save().await.expect("Failed to save state");
