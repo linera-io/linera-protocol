@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cost_tracking::LogEntry;
-use linera_sdk::views::{linera_views, LogView, MapView, RegisterView, RootView, ViewStorageContext};
+use linera_sdk::views::{
+    linera_views, LogView, MapView, RegisterView, RootView, ViewStorageContext,
+};
 
 /// The application state.
 #[derive(RootView)]

@@ -16,12 +16,10 @@ async fn test_cost_tracking() {
     let mut chain = validator.new_chain().await;
 
     // Create the application
-    let application_id = chain
-        .create_application(module_id, (), (), vec![])
-        .await;
+    let application_id = chain.create_application(module_id, (), (), vec![]).await;
 
     // Execute the RunAll operation to perform all cost tracking operations
-    let (certificate, resources) = chain
+    chain
         .add_block(|block| {
             block.with_operation(application_id, Operation::RunAll);
         })
@@ -56,7 +54,10 @@ async fn test_cost_tracking() {
     }
 
     // Also verify we can get the log count
-    let count_response = chain.query(application_id, Query::GetLogCount).await.response;
+    let count_response = chain
+        .query(application_id, Query::GetLogCount)
+        .await
+        .response;
     if let QueryResponse::LogCount(count) = count_response {
         println!("Log count from query: {}", count);
         assert!(count > 0, "Should have logged some entries");

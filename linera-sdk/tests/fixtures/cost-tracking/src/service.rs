@@ -42,9 +42,7 @@ impl Service for CostTrackingService {
                 }
                 QueryResponse::Logs(logs)
             }
-            Query::GetLogCount => {
-                QueryResponse::LogCount(self.state.logs.count() as u64)
-            }
+            Query::GetLogCount => QueryResponse::LogCount(self.state.logs.count() as u64),
         }
     }
 }
