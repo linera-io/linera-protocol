@@ -306,7 +306,19 @@ where
                 callback,
             } => {
                 let mut view = self.state.users.try_load_entry_mut(&id).await?;
+                let size_before = view.total_size();
                 view.write_batch(batch).await?;
+                let size_after = view.total_size();
+                let total_before = u64::from(size_before.key) + u64::from(size_before.value);
+                let total_after = u64::from(size_after.key) + u64::from(size_after.value);
+                let delta = i64::try_from(total_after)
+                    .and_then(|after| i64::try_from(total_before).map(|before| after - before))
+                    .map_err(|_| ExecutionError::from(ArithmeticError::Overflow))?;
+                if delta != 0 {
+                    let delta = i32::try_from(delta)
+                        .map_err(|_| ExecutionError::from(ArithmeticError::Overflow))?;
+                    self.resource_controller.track_stored_bytes(delta)?;
+                }
                 callback.respond(());
             }
 
@@ -853,6 +865,7 @@ where
     ) -> Result<(), ExecutionError> {
         let chain_id = self.state.context().extra().chain_id();
         let mut cloned_grant = grant.as_ref().map(|x| **x);
+        let initial_bytes_stored = self.resource_controller.tracker.bytes_stored;
         let initial_balance = self
             .resource_controller
             .with_state_and_grant(&mut self.state.system, cloned_grant.as_mut())
@@ -907,9 +920,24 @@ where
             self.handle_request(request).await?;
         }
 
-        let (result, controller) = contract_runtime_task.await??;
+        let (result, mut controller) = contract_runtime_task.await??;
 
         self.txn_tracker.add_operation_result(result);
+
+        let bytes_stored_delta = self
+            .resource_controller
+            .tracker
+            .bytes_stored
+            .checked_sub(initial_bytes_stored)
+            .ok_or(ExecutionError::from(ArithmeticError::Overflow))?;
+        let controller_balance = controller.balance()?;
+        let fees_spent = if controller_balance > initial_balance {
+            Amount::ZERO
+        } else {
+            initial_balance.try_sub(controller_balance)?
+        };
+        let refund_limit = Amount::from_attos(fees_spent.to_attos() / 2);
+        controller.apply_storage_size_delta(bytes_stored_delta, refund_limit)?;
 
         self.resource_controller
             .with_state_and_grant(&mut self.state.system, grant)
