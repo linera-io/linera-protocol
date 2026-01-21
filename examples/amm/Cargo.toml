@@ -8,7 +8,6 @@ edition = "2021"
 async-graphql.workspace = true
 fungible.workspace = true
 linera-sdk.workspace = true
-matching-engine.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true
 serde.workspace = true
