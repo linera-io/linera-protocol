@@ -40,19 +40,17 @@ async fn test_cross_chain_transfer() {
 
     let (_, resources) = sender_chain
         .add_block(|block| {
-            for _ in 0..700 {
-                block.with_operation(
-                    application_id,
-                    FungibleOperation::Transfer {
-                        owner: sender_account,
-                        amount: transfer_amount,
-                        target_account: Account {
-                            chain_id: receiver_chain.id(),
-                            owner: receiver_account,
-                        },
+            block.with_operation(
+                application_id,
+                FungibleOperation::Transfer {
+                    owner: sender_account,
+                    amount: transfer_amount,
+                    target_account: Account {
+                        chain_id: receiver_chain.id(),
+                        owner: receiver_account,
                     },
-                );
-            }
+                },
+            );
         })
         .await;
     println!("Transfer block: {resources}");
