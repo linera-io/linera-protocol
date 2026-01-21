@@ -68,10 +68,10 @@ impl CostTrackingContract {
 
     /// Test JSON deserialization.
     fn test_json_deserialization(&mut self) {
-
         let json_str = r#"{"label":"test_label","fuel":999}"#;
         self.log_entry("before_json_deserialize");
-        let deserialized: LogEntry = serde_json::from_str(json_str).expect("deserialization failed");
+        let deserialized: LogEntry =
+            serde_json::from_str(json_str).expect("deserialization failed");
         black_box(&deserialized);
 
         self.log_entry("after_json_deserialize");
@@ -79,7 +79,6 @@ impl CostTrackingContract {
 
     /// Test BCS serialization.
     fn test_bcs_serialization(&mut self) {
-
         let data = LogEntry {
             label: "test_data".to_string(),
             fuel: 12345,
@@ -93,7 +92,6 @@ impl CostTrackingContract {
 
     /// Test BCS deserialization.
     fn test_bcs_deserialization(&mut self) {
-
         // First serialize to get valid BCS bytes
         let data = LogEntry {
             label: "test_label".to_string(),
@@ -109,7 +107,6 @@ impl CostTrackingContract {
 
     /// Test bincode serialization.
     fn test_bincode_serialization(&mut self) {
-
         let data = LogEntry {
             label: "test_data".to_string(),
             fuel: 12345,
@@ -123,7 +120,6 @@ impl CostTrackingContract {
 
     /// Test bincode deserialization.
     fn test_bincode_deserialization(&mut self) {
-
         // First serialize to get valid bincode bytes
         let data = LogEntry {
             label: "test_label".to_string(),
@@ -131,7 +127,8 @@ impl CostTrackingContract {
         };
         let bytes = bincode::serialize(&data).expect("bincode serialization failed");
         self.log_entry("before_bincode_deserialize");
-        let deserialized: LogEntry = bincode::deserialize(&bytes).expect("bincode deserialization failed");
+        let deserialized: LogEntry =
+            bincode::deserialize(&bytes).expect("bincode deserialization failed");
         black_box(&deserialized);
 
         self.log_entry("after_bincode_deserialize");
@@ -221,14 +218,22 @@ impl CostTrackingContract {
 
         // Test contains_key
         self.log_entry("before_map_contains_key");
-        let contains = self.state.map.contains_key(&"key1".to_string()).await.unwrap();
+        let contains = self
+            .state
+            .map
+            .contains_key(&"key1".to_string())
+            .await
+            .unwrap();
         black_box(&contains);
         self.log_entry("after_map_contains_key");
 
         // Insert multiple entries
         self.log_entry("before_map_insert_10");
         for i in 0..10 {
-            self.state.map.insert(&format!("key_{}", i), i as u64).unwrap();
+            self.state
+                .map
+                .insert(&format!("key_{}", i), i as u64)
+                .unwrap();
         }
         self.log_entry("after_map_insert_10");
 
@@ -240,7 +245,6 @@ impl CostTrackingContract {
 
     /// Test transfer operations.
     fn test_transfer(&mut self) {
-
         // Transfer from chain balance to chain balance (same chain)
         let chain_id = self.runtime.chain_id();
         let destination = linera_sdk::linera_base_types::Account {
@@ -249,7 +253,8 @@ impl CostTrackingContract {
         };
         // Transfer a small amount (1 unit = 10^-18 tokens)
         self.log_entry("before_transfer");
-        self.runtime.transfer(AccountOwner::CHAIN, destination, Amount::from_attos(1));
+        self.runtime
+            .transfer(AccountOwner::CHAIN, destination, Amount::from_attos(1));
 
         self.log_entry("after_transfer");
     }
