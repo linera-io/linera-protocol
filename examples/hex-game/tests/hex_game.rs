@@ -21,7 +21,7 @@ async fn hex_game() {
     let (validator, app_id, creation_chain) =
         TestValidator::with_current_application::<HexAbi, _, _>((), Timeouts::default()).await;
 
-    let certificate = creation_chain
+    let (certificate, _) = creation_chain
         .add_block(|block| {
             let operation = Operation::Start {
                 board_size: 2,
@@ -102,7 +102,7 @@ async fn hex_game_clock() {
             .saturating_sub(TimeDelta::from_millis(1)),
     );
 
-    let certificate = creation_chain
+    let (certificate, _) = creation_chain
         .add_block(|block| {
             let operation = Operation::Start {
                 board_size: 2,

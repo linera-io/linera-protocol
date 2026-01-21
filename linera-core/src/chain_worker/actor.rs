@@ -26,7 +26,7 @@ use linera_chain::{
 };
 use linera_execution::{
     system::EventSubscriptions, ExecutionStateView, Query, QueryContext, QueryOutcome,
-    ServiceRuntimeEndpoint, ServiceSyncRuntime,
+    ResourceTracker, ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::context::{Context, InactiveContext};
@@ -57,14 +57,32 @@ pub(crate) type ChainWorkerRequestReceiver<Ctx> =
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util::{exponential_bucket_interval, register_histogram};
-    use prometheus::Histogram;
+    use linera_base::prometheus_util::{
+        exponential_bucket_interval, register_histogram, register_int_gauge,
+    };
+    use prometheus::{Histogram, IntGauge};
 
     pub static CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME: LazyLock<Histogram> = LazyLock::new(|| {
         register_histogram(
             "chain_worker_request_queue_wait_time",
             "Time (ms) a chain worker request waits in queue before being processed",
             exponential_bucket_interval(0.1_f64, 10_000.0),
+        )
+    });
+
+    /// Number of active chain worker actor tasks (outer loop of handle_requests).
+    pub static CHAIN_WORKER_ACTORS_ACTIVE: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
+            "chain_worker_actors_active",
+            "Number of active chain worker actor tasks",
+        )
+    });
+
+    /// Number of chain workers with chain state loaded in memory (inner loop of handle_requests).
+    pub static CHAIN_WORKER_STATES_LOADED: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
+            "chain_worker_states_loaded",
+            "Number of chain workers with chain state loaded in memory",
         )
     });
 }
@@ -110,7 +128,7 @@ where
         round: Option<u32>,
         published_blobs: Vec<Blob>,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<(Block, ChainInfoResponse), WorkerError>>,
+        callback: oneshot::Sender<Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError>>,
     },
 
     /// Process a leader timeout issued for this multi-owner chain.
@@ -327,6 +345,8 @@ where
         request_receiver: ChainWorkerRequestReceiver<StorageClient::Context>,
         is_tracked: bool,
     ) {
+        #[cfg(with_metrics)]
+        metrics::CHAIN_WORKER_ACTORS_ACTIVE.inc();
         let actor = ChainWorkerActor {
             config,
             storage,
@@ -343,6 +363,8 @@ where
         {
             tracing::error!("Chain actor error: {err}");
         }
+        #[cfg(with_metrics)]
+        metrics::CHAIN_WORKER_ACTORS_ACTIVE.dec();
     }
 
     /// Returns the TTL timeout timestamp.
@@ -400,7 +422,7 @@ where
                     clock.sleep_until(delay_until).await;
                     // Re-insert the request into the queue. If the channel is closed,
                     // the actor is shutting down, so we can ignore the error.
-                    let _ = sender.send((request, span, queued_at));
+                    sender.send((request, span, queued_at)).ok();
                 })
                 .forget();
                 return None;
@@ -458,6 +480,8 @@ where
             )
             .instrument(span.clone())
             .await?;
+            #[cfg(with_metrics)]
+            metrics::CHAIN_WORKER_STATES_LOADED.inc();
 
             Box::pin(worker.handle_request(request))
                 .instrument(span)
@@ -488,6 +512,8 @@ where
             trace!("Unloading chain state of {} ...", self.chain_id);
             worker.clear_shared_chain_view().await;
             drop(worker);
+            #[cfg(with_metrics)]
+            metrics::CHAIN_WORKER_STATES_LOADED.dec();
             if let Some(task) = service_runtime_task {
                 task.await?;
             }

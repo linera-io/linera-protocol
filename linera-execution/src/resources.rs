@@ -3,7 +3,7 @@
 
 //! This module tracks the resources used during the execution of a transaction.
 
-use std::{sync::Arc, time::Duration};
+use std::{fmt, sync::Arc, time::Duration};
 
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -166,6 +166,135 @@ impl ResourceTracker {
             VmRuntime::Wasm => self.wasm_fuel,
             VmRuntime::Evm => self.evm_fuel,
         }
+    }
+}
+
+impl fmt::Display for ResourceTracker {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut lines = Vec::new();
+
+        let mut block_parts = Vec::new();
+        if self.block_size != 0 {
+            block_parts.push(format!("size={}", self.block_size));
+        }
+        if self.operations != 0 {
+            block_parts.push(format!("operations={}", self.operations));
+        }
+        if self.operation_bytes != 0 {
+            block_parts.push(format!("operation_bytes={}", self.operation_bytes));
+        }
+        if !block_parts.is_empty() {
+            lines.push(format!("block: {}", block_parts.join(", ")));
+        }
+
+        let mut fuel_parts = Vec::new();
+        if self.wasm_fuel != 0 {
+            fuel_parts.push(format!("wasm={}", self.wasm_fuel));
+        }
+        if self.evm_fuel != 0 {
+            fuel_parts.push(format!("evm={}", self.evm_fuel));
+        }
+        if !fuel_parts.is_empty() {
+            lines.push(format!("fuel: {}", fuel_parts.join(", ")));
+        }
+
+        let mut storage_parts = Vec::new();
+        if self.read_operations != 0 {
+            storage_parts.push(format!("reads={}", self.read_operations));
+        }
+        if self.write_operations != 0 {
+            storage_parts.push(format!("writes={}", self.write_operations));
+        }
+        if self.bytes_runtime != 0 {
+            storage_parts.push(format!("runtime_bytes={}", self.bytes_runtime));
+        }
+        if self.bytes_read != 0 {
+            storage_parts.push(format!("bytes_read={}", self.bytes_read));
+        }
+        if self.bytes_written != 0 {
+            storage_parts.push(format!("bytes_written={}", self.bytes_written));
+        }
+        if self.bytes_stored != 0 {
+            storage_parts.push(format!("bytes_stored={}", self.bytes_stored));
+        }
+        if !storage_parts.is_empty() {
+            lines.push(format!("storage: {}", storage_parts.join(", ")));
+        }
+
+        let mut blob_parts = Vec::new();
+        if self.blobs_read != 0 {
+            blob_parts.push(format!("read={}", self.blobs_read));
+        }
+        if self.blobs_published != 0 {
+            blob_parts.push(format!("published={}", self.blobs_published));
+        }
+        if self.blob_bytes_read != 0 {
+            blob_parts.push(format!("bytes_read={}", self.blob_bytes_read));
+        }
+        if self.blob_bytes_published != 0 {
+            blob_parts.push(format!("bytes_published={}", self.blob_bytes_published));
+        }
+        if !blob_parts.is_empty() {
+            lines.push(format!("blobs: {}", blob_parts.join(", ")));
+        }
+
+        let mut event_parts = Vec::new();
+        if self.events_read != 0 {
+            event_parts.push(format!("read={}", self.events_read));
+        }
+        if self.events_published != 0 {
+            event_parts.push(format!("published={}", self.events_published));
+        }
+        if self.event_bytes_read != 0 {
+            event_parts.push(format!("bytes_read={}", self.event_bytes_read));
+        }
+        if self.event_bytes_published != 0 {
+            event_parts.push(format!("bytes_published={}", self.event_bytes_published));
+        }
+        if !event_parts.is_empty() {
+            lines.push(format!("events: {}", event_parts.join(", ")));
+        }
+
+        let mut message_parts = Vec::new();
+        if self.messages != 0 {
+            message_parts.push(format!("count={}", self.messages));
+        }
+        if self.message_bytes != 0 {
+            message_parts.push(format!("bytes={}", self.message_bytes));
+        }
+        if self.grants != Amount::ZERO {
+            message_parts.push(format!("grants={}", self.grants));
+        }
+        if !message_parts.is_empty() {
+            lines.push(format!("messages: {}", message_parts.join(", ")));
+        }
+
+        let mut http_service_parts = Vec::new();
+        if self.http_requests != 0 {
+            http_service_parts.push(format!("http_requests={}", self.http_requests));
+        }
+        if self.service_oracle_queries != 0 {
+            http_service_parts.push(format!("service_queries={}", self.service_oracle_queries));
+        }
+        if self.service_oracle_execution != Duration::ZERO {
+            http_service_parts.push(format!(
+                "service_execution={:?}",
+                self.service_oracle_execution
+            ));
+        }
+        if !http_service_parts.is_empty() {
+            lines.push(format!("http/service: {}", http_service_parts.join(", ")));
+        }
+
+        let mut lines_iter = lines.into_iter();
+        if let Some(first) = lines_iter.next() {
+            write!(f, "{}", first)?;
+            for line in lines_iter {
+                write!(f, "\n  {}", line)?;
+            }
+        }
+
+        Ok(())
     }
 }
 

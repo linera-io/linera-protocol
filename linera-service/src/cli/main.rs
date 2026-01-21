@@ -1712,11 +1712,13 @@ impl Runnable for Job {
 async fn kill_all_processes(pids: &[u32]) {
     for &pid in pids {
         info!("Killing benchmark process (pid {})", pid);
-        let _ = Command::new("kill")
+        // Ignore kill errors; the process may have already exited.
+        Command::new("kill")
             .arg("-9")
             .arg(pid.to_string())
             .status()
-            .await;
+            .await
+            .ok();
     }
 }
 
@@ -2357,6 +2359,24 @@ Make sure to use a Linera client compatible with this network.
                     "Wallet initialized in {} ms",
                     start_time.elapsed().as_millis()
                 );
+                Ok(0)
+            }
+
+            WalletCommand::ExportGenesis { output, faucet } => {
+                let genesis_config: GenesisConfig = if let Some(url) = faucet {
+                    let faucet = cli_wrappers::Faucet::new(url.clone());
+                    faucet
+                        .genesis_config()
+                        .await
+                        .context("Failed to obtain the genesis configuration from the faucet")?
+                } else {
+                    let wallet = options.wallet()?;
+                    wallet.genesis_config().clone()
+                };
+                let json = serde_json::to_string_pretty(&genesis_config)?;
+                std::fs::write(output, json)
+                    .context("Failed to write genesis configuration to file")?;
+                info!("Genesis configuration exported to {}", output.display());
                 Ok(0)
             }
 

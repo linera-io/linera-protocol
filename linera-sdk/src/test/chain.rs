@@ -27,7 +27,7 @@ use linera_chain::{types::ConfirmedBlockCertificate, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
     system::{SystemOperation, SystemQuery, SystemResponse},
-    ExecutionError, Operation, Query, QueryOutcome, QueryResponse,
+    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, ResourceTracker,
 };
 use linera_storage::Storage as _;
 use serde::Serialize;
@@ -209,10 +209,12 @@ impl ActiveChain {
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
     /// to provide the block's contents.
+    ///
+    /// Returns the block certificate and a [`ResourceTracker`] containing execution costs.
     pub async fn add_block(
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
-    ) -> ConfirmedBlockCertificate {
+    ) -> (ConfirmedBlockCertificate, ResourceTracker) {
         self.try_add_block(block_builder)
             .await
             .expect("Failed to execute block.")
@@ -222,11 +224,13 @@ impl ActiveChain {
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
     /// to provide the block's contents.
+    ///
+    /// Returns the block certificate and a [`ResourceTracker`] containing execution costs.
     pub async fn add_block_with_blobs(
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
         blobs: Vec<Blob>,
-    ) -> ConfirmedBlockCertificate {
+    ) -> (ConfirmedBlockCertificate, ResourceTracker) {
         self.try_add_block_with_blobs(block_builder, blobs)
             .await
             .expect("Failed to execute block.")
@@ -236,10 +240,12 @@ impl ActiveChain {
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
     /// to provide the block's contents.
+    ///
+    /// Returns the block certificate and a [`ResourceTracker`] containing execution costs.
     pub async fn try_add_block(
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
-    ) -> Result<ConfirmedBlockCertificate, WorkerError> {
+    ) -> Result<(ConfirmedBlockCertificate, ResourceTracker), WorkerError> {
         self.try_add_block_with_blobs(block_builder, vec![]).await
     }
 
@@ -250,11 +256,13 @@ impl ActiveChain {
     ///
     /// The blobs are either all written to storage, if executing the block fails due to a missing
     /// blob, or none are written to storage if executing the block succeeds without the blobs.
+    ///
+    /// Returns the block certificate and a [`ResourceTracker`] containing execution costs.
     async fn try_add_block_with_blobs(
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
         blobs: Vec<Blob>,
-    ) -> Result<ConfirmedBlockCertificate, WorkerError> {
+    ) -> Result<(ConfirmedBlockCertificate, ResourceTracker), WorkerError> {
         let mut tip = self.tip.lock().await;
         let mut block = BlockBuilder::new(
             self.description.id(),
@@ -267,7 +275,7 @@ impl ActiveChain {
         block_builder(&mut block);
 
         // TODO(#2066): Remove boxing once call-stack is shallower
-        let certificate = Box::pin(block.try_sign(&blobs)).await?;
+        let (certificate, resource_tracker) = Box::pin(block.try_sign(&blobs)).await?;
 
         let result = self
             .validator
@@ -287,7 +295,7 @@ impl ActiveChain {
 
         *tip = Some(certificate.clone());
 
-        Ok(certificate)
+        Ok((certificate, resource_tracker))
     }
 
     /// Receives all queued messages in all inboxes of this microchain.
@@ -310,12 +318,12 @@ impl ActiveChain {
         if messages.is_empty() {
             return None;
         }
-        Some(
-            self.add_block(|block| {
+        let (certificate, _) = self
+            .add_block(|block| {
                 block.with_incoming_bundles(messages);
             })
-            .await,
-        )
+            .await;
+        Some(certificate)
     }
 
     /// Processes all new events from streams this chain subscribes to.
@@ -400,7 +408,7 @@ impl ActiveChain {
 
         let module_id = ModuleId::new(contract_blob_hash, service_blob_hash, vm_runtime);
 
-        let certificate = self
+        let (certificate, _) = self
             .add_block_with_blobs(
                 |block| {
                     block.with_system_operation(SystemOperation::PublishModule { module_id });
@@ -551,7 +559,7 @@ impl ActiveChain {
         let parameters = serde_json::to_vec(&parameters).unwrap();
         let instantiation_argument = serde_json::to_vec(&instantiation_argument).unwrap();
 
-        let creation_certificate = self
+        let (creation_certificate, _) = self
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::CreateApplication {
                     module_id: module_id.forget_abi(),
@@ -726,7 +734,7 @@ impl ActiveChain {
     {
         let QueryOutcome { operations, .. } = self.try_graphql_query(application_id, query).await?;
 
-        let certificate = self
+        let (certificate, _) = self
             .try_add_block(|block| {
                 for operation in operations {
                     match operation {
