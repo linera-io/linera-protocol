@@ -157,8 +157,7 @@ impl CostTrackingContract {
         self.log_entry("after_application_id");
 
         self.log_entry("before_application_parameters");
-        let params = self.runtime.application_parameters();
-        black_box(&params);
+        black_box(&self.runtime.application_parameters());
         self.log_entry("after_application_parameters");
     }
 
@@ -336,7 +335,7 @@ impl Contract for CostTrackingContract {
         self.state.data.set(String::new());
     }
 
-    async fn execute_operation(&mut self, operation: Operation) -> () {
+    async fn execute_operation(&mut self, operation: Operation) {
         match operation {
             Operation::RunAll => {
                 self.run_all().await;
