@@ -66,11 +66,11 @@ mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
-        exponential_bucket_interval, register_histogram_vec, register_int_counter,
-        register_int_counter_vec, register_int_gauge,
+        exponential_bucket_interval, register_histogram, register_histogram_vec,
+        register_int_counter, register_int_counter_vec, register_int_gauge,
     };
     use linera_chain::types::ConfirmedBlockCertificate;
-    use prometheus::{HistogramVec, IntCounter, IntCounterVec, IntGauge};
+    use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge};
 
     pub static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
@@ -101,6 +101,30 @@ mod metrics {
 
     pub static OPERATION_COUNT: LazyLock<IntCounter> =
         LazyLock::new(|| register_int_counter("operation_count", "Operation count"));
+
+    pub static OPERATIONS_PER_BLOCK: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "operations_per_block",
+            "Number of operations per block",
+            exponential_bucket_interval(1.0, 10000.0),
+        )
+    });
+
+    pub static INCOMING_BUNDLES_PER_BLOCK: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "incoming_bundles_per_block",
+            "Number of incoming bundles per block",
+            exponential_bucket_interval(1.0, 10000.0),
+        )
+    });
+
+    pub static TRANSACTIONS_PER_BLOCK: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "transactions_per_block",
+            "Number of transactions per block",
+            exponential_bucket_interval(1.0, 10000.0),
+        )
+    });
 
     pub static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
@@ -172,6 +196,9 @@ mod metrics {
             NUM_ROUNDS_IN_CERTIFICATE
                 .with_label_values(&[self.certificate_log_str, self.round_type])
                 .observe(self.round_number as f64);
+            TRANSACTIONS_PER_BLOCK.observe(self.confirmed_transactions as f64);
+            INCOMING_BUNDLES_PER_BLOCK.observe(self.confirmed_incoming_bundles as f64);
+            OPERATIONS_PER_BLOCK.observe(self.confirmed_operations as f64);
             if self.confirmed_transactions > 0 {
                 TRANSACTION_COUNT
                     .with_label_values(&[])
