@@ -15,6 +15,40 @@ use crate::{client::PendingProposal, data_types::ChainInfo};
 mod memory;
 pub use memory::Memory;
 
+/// The maximum length of a chain name. Chain names must be shorter than a chain ID
+/// (which is 64 hex characters) to avoid ambiguity.
+pub const MAX_CHAIN_NAME_LENGTH: usize = 63;
+
+/// Validates a chain name, returning an error if it's invalid.
+///
+/// Chain names must:
+/// - Not be empty
+/// - Be at most [`MAX_CHAIN_NAME_LENGTH`] characters
+/// - Not contain colons (used as separator in account strings)
+pub fn validate_chain_name(name: &str) -> Result<(), ChainNameError> {
+    if name.is_empty() {
+        return Err(ChainNameError::Empty);
+    }
+    if name.len() > MAX_CHAIN_NAME_LENGTH {
+        return Err(ChainNameError::TooLong(name.len()));
+    }
+    if name.contains(':') {
+        return Err(ChainNameError::ContainsColon);
+    }
+    Ok(())
+}
+
+/// Error returned when a chain name is invalid.
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum ChainNameError {
+    #[error("chain name cannot be empty")]
+    Empty,
+    #[error("chain name is too long ({0} characters, maximum is {MAX_CHAIN_NAME_LENGTH})")]
+    TooLong(usize),
+    #[error("chain name cannot contain colons (used as separator in account strings)")]
+    ContainsColon,
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Chain {
     /// The name of this chain in the wallet.

@@ -466,8 +466,12 @@ impl<Env: Environment> ClientContext<Env> {
         timestamp: Timestamp,
         epoch: Epoch,
     ) -> Result<(), Error> {
+        // User-provided names are validated; auto-generated names are trusted.
         let chain_name = match name {
-            Some(provided_name) => provided_name,
+            Some(provided_name) => {
+                wallet::validate_chain_name(&provided_name)?;
+                provided_name
+            }
             None => self.default_chain_name(chain_id).await?,
         };
         let chain = wallet::Chain::new(chain_name, owner, epoch, timestamp);

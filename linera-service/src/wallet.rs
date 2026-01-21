@@ -14,12 +14,9 @@ use linera_base::{
 use linera_client::config::GenesisConfig;
 use linera_core::wallet;
 use linera_persistent as persistent;
+pub use wallet::MAX_CHAIN_NAME_LENGTH;
 
 use crate::cli::command::ChainIdOrName;
-
-/// The maximum length of a chain name. Chain names must be shorter than a chain ID
-/// (which is 64 hex characters) to avoid ambiguity.
-pub const MAX_CHAIN_NAME_LENGTH: usize = 63;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Data {
@@ -299,19 +296,15 @@ impl Wallet {
         chain_id: ChainId,
         name: Option<String>,
     ) -> anyhow::Result<()> {
-        // Determine the new name.
+        // Determine the new name. User-provided names are validated; auto-generated names
+        // are trusted.
         let new_name = match name {
-            Some(name) => name,
+            Some(name) => {
+                wallet::validate_chain_name(&name)?;
+                name
+            }
             None => self.next_default_name(chain_id).await?,
         };
-        // Validate the name.
-        anyhow::ensure!(
-            new_name.len() <= MAX_CHAIN_NAME_LENGTH,
-            "chain name is too long ({} characters, maximum is {})",
-            new_name.len(),
-            MAX_CHAIN_NAME_LENGTH
-        );
-        anyhow::ensure!(!new_name.is_empty(), "chain name cannot be empty");
         // Check if the name is already used by another chain.
         if let Some(existing_chain_id) = self.resolve_chain_name(&new_name) {
             anyhow::ensure!(

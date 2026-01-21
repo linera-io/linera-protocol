@@ -18,6 +18,7 @@ use linera_client::{
     },
     util,
 };
+use linera_core::wallet;
 use linera_rpc::config::CrossChainConfig;
 
 use crate::{cli::validator, task_processor::parse_operator};
@@ -98,13 +99,8 @@ impl FromStr for ChainIdOrName {
         if let Ok(chain_id) = s.parse::<ChainId>() {
             return Ok(ChainIdOrName::ChainId(chain_id));
         }
-        // Otherwise treat as a name, but validate the length.
-        anyhow::ensure!(
-            s.len() <= crate::wallet::MAX_CHAIN_NAME_LENGTH,
-            "chain name is too long ({} characters, maximum is {})",
-            s.len(),
-            crate::wallet::MAX_CHAIN_NAME_LENGTH
-        );
+        // Otherwise treat as a name, but validate it.
+        wallet::validate_chain_name(s)?;
         Ok(ChainIdOrName::Name(s.to_string()))
     }
 }
@@ -150,13 +146,12 @@ impl FromStr for AccountOrName {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Chain names cannot contain colons, so splitting on the first colon is unambiguous.
         let mut parts = s.splitn(2, ':');
         let chain_part = parts
             .next()
             .expect("split always returns at least one part");
-
-        let chain: ChainIdOrName = chain_part.parse()?;
-
+        let chain = chain_part.parse::<ChainIdOrName>()?;
         let owner = match parts.next() {
             Some(owner_string) => owner_string.parse::<AccountOwner>()?,
             None => AccountOwner::CHAIN,
