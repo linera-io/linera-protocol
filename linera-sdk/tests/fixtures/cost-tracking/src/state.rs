@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cost_tracking::LogEntry;
-use linera_sdk::views::{linera_views, LogView, RegisterView, RootView, ViewStorageContext};
+use linera_sdk::views::{linera_views, LogView, MapView, RegisterView, RootView, ViewStorageContext};
 
 /// The application state.
 #[derive(RootView)]
@@ -14,4 +14,6 @@ pub struct CostTrackingState {
     pub counter: RegisterView<u64>,
     /// A string used for testing serialization.
     pub data: RegisterView<String>,
+    /// A map used for testing MapView operations.
+    pub map: MapView<String, u64>,
 }
