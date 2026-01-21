@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO(#4637): convert to IndexedDbStore once we refactor Context
 pub type Storage = linera_storage::DbStorage<
     linera_views::indexed_db::IndexedDbDatabase,
     linera_storage::WallClock,
