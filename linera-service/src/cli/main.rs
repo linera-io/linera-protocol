@@ -174,6 +174,8 @@ impl Runnable for Job {
                 recipient,
                 amount,
             } => {
+                let sender = sender.resolve(&wallet)?;
+                let recipient = recipient.resolve(&wallet)?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -400,6 +402,7 @@ impl Runnable for Job {
             }
 
             LocalBalance { account } => {
+                let account = account.map(|a| a.resolve(&wallet)).transpose()?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -414,6 +417,7 @@ impl Runnable for Job {
             }
 
             QueryBalance { account } => {
+                let account = account.map(|a| a.resolve(&wallet)).transpose()?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -431,6 +435,7 @@ impl Runnable for Job {
             }
 
             SyncBalance { account } => {
+                let account = account.map(|a| a.resolve(&wallet)).transpose()?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;

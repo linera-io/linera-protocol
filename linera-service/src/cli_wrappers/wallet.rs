@@ -979,11 +979,11 @@ impl ClientWrapper {
         Ok(())
     }
 
-    /// Runs `linera wallet follow-chain CHAIN_ID`.
+    /// Runs `linera wallet follow-chain --chain-id CHAIN_ID`.
     pub async fn follow_chain(&self, chain_id: ChainId, sync: bool) -> Result<()> {
         let mut command = self.command().await?;
         command
-            .args(["wallet", "follow-chain"])
+            .args(["wallet", "follow-chain", "--chain-id"])
             .arg(chain_id.to_string());
         if sync {
             command.arg("--sync");

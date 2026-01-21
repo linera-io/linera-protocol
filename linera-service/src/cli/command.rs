@@ -115,6 +115,91 @@ impl From<ChainId> for ChainIdOrName {
     }
 }
 
+/// An account identifier that can use either a chain ID or a chain name.
+///
+/// When parsed from a string, the chain part (before the first `:`) is first tried as a
+/// chain ID. If that fails, it's treated as a chain name that will be resolved when the
+/// wallet is available.
+///
+/// Formats:
+/// - `chain-id` or `chain-name` - account for the chain itself
+/// - `chain-id:owner-type:address` or `chain-name:owner-type:address` - specific owner
+#[derive(Clone, Debug)]
+pub enum AccountOrName {
+    /// A fully resolved account.
+    Account(Account),
+    /// An account with a chain name that needs to be resolved.
+    Named { name: String, owner: AccountOwner },
+}
+
+impl AccountOrName {
+    /// Resolves this account to a fully qualified Account using the provided wallet.
+    pub fn resolve(&self, wallet: &crate::wallet::Wallet) -> anyhow::Result<Account> {
+        match self {
+            AccountOrName::Account(account) => Ok(*account),
+            AccountOrName::Named { name, owner } => {
+                let chain_id = wallet
+                    .resolve_chain_name(name)
+                    .ok_or_else(|| anyhow::anyhow!("unknown chain name: `{name}`"))?;
+                Ok(Account::new(chain_id, *owner))
+            }
+        }
+    }
+}
+
+impl fmt::Display for AccountOrName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AccountOrName::Account(account) => write!(f, "{account}"),
+            AccountOrName::Named { name, owner } => write!(f, "{name}:{owner}"),
+        }
+    }
+}
+
+impl FromStr for AccountOrName {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.splitn(2, ':');
+        let chain_part = parts
+            .next()
+            .expect("split always returns at least one part");
+
+        // Try to parse the chain part as a ChainId first.
+        if chain_part.parse::<ChainId>().is_ok() {
+            // Successfully parsed as ChainId, now parse the full account.
+            let account = s.parse::<Account>()?;
+            return Ok(AccountOrName::Account(account));
+        }
+
+        // Otherwise treat the chain part as a name.
+        anyhow::ensure!(
+            chain_part.len() <= crate::wallet::MAX_CHAIN_NAME_LENGTH,
+            "chain name is too long ({} characters, maximum is {})",
+            chain_part.len(),
+            crate::wallet::MAX_CHAIN_NAME_LENGTH
+        );
+
+        // Parse the owner part if present.
+        let owner = if let Some(owner_string) = parts.next() {
+            owner_string.parse::<AccountOwner>()?
+        } else {
+            AccountOwner::CHAIN
+        };
+
+        Ok(AccountOrName::Named {
+            name: chain_part.to_string(),
+            owner,
+        })
+    }
+}
+
+impl From<Account> for AccountOrName {
+    fn from(account: Account) -> Self {
+        AccountOrName::Account(account)
+    }
+}
+
 #[derive(Clone, clap::Args, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct BenchmarkOptions {
@@ -266,13 +351,13 @@ use crate::util::{
 pub enum ClientCommand {
     /// Transfer funds
     Transfer {
-        /// Sending chain ID (must be one of our chains)
+        /// Sending chain or account (can use a chain name)
         #[arg(long = "from")]
-        sender: Account,
+        sender: AccountOrName,
 
-        /// Recipient account
+        /// Recipient chain or account (can use a chain name)
         #[arg(long = "to")]
-        recipient: Account,
+        recipient: AccountOrName,
 
         /// Amount to transfer
         amount: Amount,
@@ -385,10 +470,10 @@ pub enum ClientCommand {
     /// `linera sync` then either `linera query-balance` or `linera process-inbox &&
     /// linera local-balance` for a consolidated balance.
     LocalBalance {
-        /// The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
-        /// chain balance. By default, we read the chain balance of the default chain in
-        /// the wallet.
-        account: Option<Account>,
+        /// The account to read, written as `CHAIN-ID:OWNER`, `CHAIN-NAME:OWNER`, or simply
+        /// `CHAIN-ID`/`CHAIN-NAME` for the chain balance. By default, we read the chain
+        /// balance of the default chain in the wallet.
+        account: Option<AccountOrName>,
     },
 
     /// Simulate the execution of one block made of pending messages from the local inbox,
@@ -397,10 +482,10 @@ pub enum ClientCommand {
     /// NOTE: The balance does not reflect messages that have not been synchronized from
     /// validators yet. Call `linera sync` first to do so.
     QueryBalance {
-        /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
-        /// chain balance. By default, we read the chain balance of the default chain in
-        /// the wallet.
-        account: Option<Account>,
+        /// The account to query, written as `CHAIN-ID:OWNER`, `CHAIN-NAME:OWNER`, or simply
+        /// `CHAIN-ID`/`CHAIN-NAME` for the chain balance. By default, we read the chain
+        /// balance of the default chain in the wallet.
+        account: Option<AccountOrName>,
     },
 
     /// (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the
@@ -408,10 +493,10 @@ pub enum ClientCommand {
     ///
     /// This command is deprecated. Use `linera sync && linera query-balance` instead.
     SyncBalance {
-        /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
-        /// chain balance. By default, we read the chain balance of the default chain in
-        /// the wallet.
-        account: Option<Account>,
+        /// The account to query, written as `CHAIN-ID:OWNER`, `CHAIN-NAME:OWNER`, or simply
+        /// `CHAIN-ID`/`CHAIN-NAME` for the chain balance. By default, we read the chain
+        /// balance of the default chain in the wallet.
+        account: Option<AccountOrName>,
     },
 
     /// Synchronize the local state of the chain with a quorum validators.
@@ -1332,6 +1417,7 @@ pub enum WalletCommand {
     /// Add a new followed chain (i.e. a chain without keypair) to the wallet.
     FollowChain {
         /// The chain ID.
+        #[arg(long)]
         chain_id: ChainId,
         /// Synchronize the new chain and download all its blocks from the validators.
         #[arg(long)]
@@ -1344,6 +1430,7 @@ pub enum WalletCommand {
     /// Rename a chain in the wallet.
     RenameChain {
         /// The chain ID or current name.
+        #[arg(long)]
         chain_id: ChainIdOrName,
         /// The new name for the chain.
         #[arg(long)]

@@ -275,8 +275,8 @@ Transfer funds
 
 ###### **Options:**
 
-* `--from <SENDER>` — Sending chain ID (must be one of our chains)
-* `--to <RECIPIENT>` — Recipient account
+* `--from <SENDER>` — Sending chain or account (can use a chain name)
+* `--to <RECIPIENT>` — Recipient chain or account (can use a chain name)
 
 
 
@@ -425,7 +425,7 @@ NOTE: The local balance does not reflect messages that are waiting to be picked 
 
 ###### **Arguments:**
 
-* `<ACCOUNT>` — The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
+* `<ACCOUNT>` — The account to read, written as `CHAIN-ID:OWNER`, `CHAIN-NAME:OWNER`, or simply `CHAIN-ID`/`CHAIN-NAME` for the chain balance. By default, we read the chain balance of the default chain in the wallet
 
 
 
@@ -439,7 +439,7 @@ NOTE: The balance does not reflect messages that have not been synchronized from
 
 ###### **Arguments:**
 
-* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
+* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER`, `CHAIN-NAME:OWNER`, or simply `CHAIN-ID`/`CHAIN-NAME` for the chain balance. By default, we read the chain balance of the default chain in the wallet
 
 
 
@@ -453,7 +453,7 @@ This command is deprecated. Use `linera sync && linera query-balance` instead.
 
 ###### **Arguments:**
 
-* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
+* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER`, `CHAIN-NAME:OWNER`, or simply `CHAIN-ID`/`CHAIN-NAME` for the chain balance. By default, we read the chain balance of the default chain in the wallet
 
 
 
@@ -1016,14 +1016,11 @@ By default, exports the genesis config from the current wallet. Alternatively, u
 
 Add a new followed chain (i.e. a chain without keypair) to the wallet
 
-**Usage:** `linera wallet follow-chain [OPTIONS] <CHAIN_ID>`
-
-###### **Arguments:**
-
-* `<CHAIN_ID>` — The chain ID
+**Usage:** `linera wallet follow-chain [OPTIONS] --chain-id <CHAIN_ID>`
 
 ###### **Options:**
 
+* `--chain-id <CHAIN_ID>` — The chain ID
 * `--sync` — Synchronize the new chain and download all its blocks from the validators
 * `--name <NAME>` — A name to give to the chain
 
