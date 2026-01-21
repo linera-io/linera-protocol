@@ -892,12 +892,13 @@ Create an unassigned key pair
 
 Link the owner to the chain. Expects that the caller has a private key corresponding to the `public_key`, otherwise block proposals will fail when signing with it
 
-**Usage:** `linera assign --owner <OWNER> --chain-id <CHAIN_ID>`
+**Usage:** `linera assign [OPTIONS] --owner <OWNER> --chain-id <CHAIN_ID>`
 
 ###### **Options:**
 
 * `--owner <OWNER>` — The owner to assign
 * `--chain-id <CHAIN_ID>` — The ID or name of the chain
+* `--name <NAME>` — A name for this chain in the wallet
 
 
 

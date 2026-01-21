@@ -303,7 +303,7 @@ impl Runnable for Job {
             }
 
             ShowOwnership { chain_id } => {
-                let chain_id = chain_id.as_ref().map(|c| c.resolve(&wallet)).transpose()?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -316,7 +316,7 @@ impl Runnable for Job {
                 chain_id,
                 ownership_config,
             } => {
-                let chain_id = chain_id.as_ref().map(|c| c.resolve(&wallet)).transpose()?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -324,7 +324,7 @@ impl Runnable for Job {
             }
 
             SetPreferredOwner { chain_id, owner } => {
-                let chain_id = chain_id.as_ref().map(|c| c.resolve(&wallet)).transpose()?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1460,7 +1460,11 @@ impl Runnable for Job {
                 println!("{}", application_id);
             }
 
-            Assign { owner, chain_id } => {
+            Assign {
+                owner,
+                chain_id,
+                name,
+            } => {
                 let chain_id = chain_id.resolve(&wallet)?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -1471,7 +1475,7 @@ impl Runnable for Job {
                     {owner}",
                 );
                 context
-                    .assign_new_chain_to_key(chain_id, None, owner)
+                    .assign_new_chain_to_key(chain_id, name, owner)
                     .await?;
                 info!(
                     "Chain linked to owner in {} ms",
@@ -2105,7 +2109,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 let public_key = signer.mutate(|s| s.generate_new()).await?;
                 let description = genesis_config.add_root_chain(public_key, *initial_funding);
                 let chain = wallet::Chain {
-                    name: format!("user-{i}"),
+                    name: format!("root-{i}"),
                     owner: Some(public_key.into()),
                     epoch: Some(description.config().epoch),
                     timestamp,

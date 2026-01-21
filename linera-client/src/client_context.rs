@@ -602,8 +602,7 @@ impl<Env: Environment> ClientContext<Env> {
         }
     }
 
-    pub async fn ownership(&mut self, chain_id: Option<ChainId>) -> Result<ChainOwnership, Error> {
-        let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
+    pub async fn ownership(&mut self, chain_id: ChainId) -> Result<ChainOwnership, Error> {
         let client = self.make_chain_client(chain_id).await?;
         let info = client.chain_info().await?;
         Ok(info.manager.ownership)
@@ -611,10 +610,9 @@ impl<Env: Environment> ClientContext<Env> {
 
     pub async fn change_ownership(
         &mut self,
-        chain_id: Option<ChainId>,
+        chain_id: ChainId,
         ownership_config: ChainOwnershipConfig,
     ) -> Result<(), Error> {
-        let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
         let chain_client = self.make_chain_client(chain_id).await?;
         info!(
             ?ownership_config, %chain_id, preferred_owner=?chain_client.preferred_owner(),
@@ -650,10 +648,9 @@ impl<Env: Environment> ClientContext<Env> {
 
     pub async fn set_preferred_owner(
         &mut self,
-        chain_id: Option<ChainId>,
+        chain_id: ChainId,
         preferred_owner: AccountOwner,
     ) -> Result<(), Error> {
-        let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
         let mut chain_client = self.make_chain_client(chain_id).await?;
         let old_owner = chain_client.preferred_owner();
         info!(%chain_id, ?old_owner, %preferred_owner, "Changing preferred owner for chain");

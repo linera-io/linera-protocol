@@ -125,34 +125,24 @@ impl From<ChainId> for ChainIdOrName {
 /// - `chain-id` or `chain-name` - account for the chain itself
 /// - `chain-id:owner-type:address` or `chain-name:owner-type:address` - specific owner
 #[derive(Clone, Debug)]
-pub enum AccountOrName {
-    /// A fully resolved account.
-    Account(Account),
-    /// An account with a chain name that needs to be resolved.
-    Named { name: String, owner: AccountOwner },
+pub struct AccountOrName {
+    /// The chain, specified as either an ID or a name.
+    pub chain: ChainIdOrName,
+    /// The account owner within the chain.
+    pub owner: AccountOwner,
 }
 
 impl AccountOrName {
     /// Resolves this account to a fully qualified Account using the provided wallet.
     pub fn resolve(&self, wallet: &crate::wallet::Wallet) -> anyhow::Result<Account> {
-        match self {
-            AccountOrName::Account(account) => Ok(*account),
-            AccountOrName::Named { name, owner } => {
-                let chain_id = wallet
-                    .resolve_chain_name(name)
-                    .ok_or_else(|| anyhow::anyhow!("unknown chain name: `{name}`"))?;
-                Ok(Account::new(chain_id, *owner))
-            }
-        }
+        let chain_id = self.chain.resolve(wallet)?;
+        Ok(Account::new(chain_id, self.owner))
     }
 }
 
 impl fmt::Display for AccountOrName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AccountOrName::Account(account) => write!(f, "{account}"),
-            AccountOrName::Named { name, owner } => write!(f, "{name}:{owner}"),
-        }
+        write!(f, "{}:{}", self.chain, self.owner)
     }
 }
 
@@ -165,38 +155,23 @@ impl FromStr for AccountOrName {
             .next()
             .expect("split always returns at least one part");
 
-        // Try to parse the chain part as a ChainId first.
-        if chain_part.parse::<ChainId>().is_ok() {
-            // Successfully parsed as ChainId, now parse the full account.
-            let account = s.parse::<Account>()?;
-            return Ok(AccountOrName::Account(account));
-        }
+        let chain: ChainIdOrName = chain_part.parse()?;
 
-        // Otherwise treat the chain part as a name.
-        anyhow::ensure!(
-            chain_part.len() <= crate::wallet::MAX_CHAIN_NAME_LENGTH,
-            "chain name is too long ({} characters, maximum is {})",
-            chain_part.len(),
-            crate::wallet::MAX_CHAIN_NAME_LENGTH
-        );
-
-        // Parse the owner part if present.
-        let owner = if let Some(owner_string) = parts.next() {
-            owner_string.parse::<AccountOwner>()?
-        } else {
-            AccountOwner::CHAIN
+        let owner = match parts.next() {
+            Some(owner_string) => owner_string.parse::<AccountOwner>()?,
+            None => AccountOwner::CHAIN,
         };
 
-        Ok(AccountOrName::Named {
-            name: chain_part.to_string(),
-            owner,
-        })
+        Ok(AccountOrName { chain, owner })
     }
 }
 
 impl From<Account> for AccountOrName {
     fn from(account: Account) -> Self {
-        AccountOrName::Account(account)
+        AccountOrName {
+            chain: ChainIdOrName::ChainId(account.chain_id),
+            owner: account.owner,
+        }
     }
 }
 
@@ -1068,6 +1043,10 @@ pub enum ClientCommand {
         /// The ID or name of the chain.
         #[arg(long)]
         chain_id: ChainIdOrName,
+
+        /// A name for this chain in the wallet.
+        #[arg(long)]
+        name: Option<String>,
     },
 
     /// Retry a block we unsuccessfully tried to propose earlier.
