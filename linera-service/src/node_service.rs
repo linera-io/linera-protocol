@@ -11,7 +11,7 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
 use futures::{lock::Mutex, Future, FutureExt as _, TryStreamExt as _};
 use linera_base::{
-    crypto::{CryptoError, CryptoHash},
+    crypto::CryptoHash,
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, Bytecode, Epoch, TimeDelta,
     },
@@ -32,7 +32,7 @@ use linera_client::chain_listener::{
 use linera_core::{
     client::chain_client::{self, ChainClient},
     data_types::ClientOutcome,
-    wallet::Wallet as _,
+    wallet::{resolve_chain_name, Wallet as _},
     worker::Notification,
 };
 use linera_execution::{
@@ -82,8 +82,10 @@ enum NodeServiceError {
     BcsHex(#[from] BcsHexParseError),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
-    #[error("malformed chain ID: {0}")]
-    InvalidChainId(CryptoError),
+    #[error("chain not found: {0}")]
+    ChainNotFound(String),
+    #[error("wallet error: {0}")]
+    Wallet(String),
     #[error(transparent)]
     Client(#[from] linera_client::Error),
     #[error("scheduling operations from queries is disabled in read-only mode")]
@@ -93,9 +95,8 @@ enum NodeServiceError {
 impl IntoResponse for NodeServiceError {
     fn into_response(self) -> response::Response {
         let status = match self {
-            NodeServiceError::InvalidChainId(_) | NodeServiceError::BcsHex(_) => {
-                StatusCode::BAD_REQUEST
-            }
+            NodeServiceError::BcsHex(_) => StatusCode::BAD_REQUEST,
+            NodeServiceError::ChainNotFound(_) => StatusCode::NOT_FOUND,
             NodeServiceError::ReadOnlyModeOperationsNotAllowed => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
@@ -1164,11 +1165,21 @@ where
     /// Pattern matches on the `OperationType` of the query and routes the query
     /// accordingly.
     async fn application_handler(
-        Path((chain_id, application_id)): Path<(String, String)>,
+        Path((chain_id_or_name, application_id)): Path<(String, String)>,
         service: Extension<Self>,
         request: String,
     ) -> Result<Vec<u8>, NodeServiceError> {
-        let chain_id: ChainId = chain_id.parse().map_err(NodeServiceError::InvalidChainId)?;
+        // First try parsing as a chain ID, then fall back to resolving by name.
+        let chain_id: ChainId = match chain_id_or_name.parse() {
+            Ok(id) => id,
+            Err(_) => {
+                let context = service.0.context.lock().await;
+                resolve_chain_name(context.wallet(), &chain_id_or_name)
+                    .await
+                    .map_err(|error| NodeServiceError::Wallet(error.to_string()))?
+                    .ok_or_else(|| NodeServiceError::ChainNotFound(chain_id_or_name.clone()))?
+            }
+        };
         let application_id: ApplicationId = application_id.parse()?;
 
         debug!(

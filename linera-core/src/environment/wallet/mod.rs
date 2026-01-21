@@ -165,3 +165,23 @@ pub async fn next_default_chain_name<W: Wallet>(wallet: &W) -> Result<String, W:
     }
     Ok(format!("user-{}", next_user_num))
 }
+
+/// Resolves a chain name to a chain ID.
+///
+/// Looks up chains by their stored name.
+///
+/// Note: This is a free function rather than a default trait method because the
+/// `trait_variant::make(Send)` macro doesn't support default async implementations.
+pub async fn resolve_chain_name<W: Wallet>(
+    wallet: &W,
+    name: &str,
+) -> Result<Option<ChainId>, W::Error> {
+    let mut items = pin!(wallet.items());
+    while let Some(result) = items.next().await {
+        let (chain_id, chain) = result?;
+        if chain.name == name {
+            return Ok(Some(chain_id));
+        }
+    }
+    Ok(None)
+}
