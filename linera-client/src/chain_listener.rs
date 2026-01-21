@@ -557,7 +557,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             .event_stream_publishers()
             .await?
             .into_iter()
-            .map(|chain_id| (chain_id, (ListeningMode::FollowChain, None)))
+            .map(|chain_id| (chain_id, (ListeningMode::FullChain, None)))
             .collect();
         for publisher_id in publishing_chains.keys() {
             self.event_subscribers
