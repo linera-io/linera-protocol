@@ -50,13 +50,12 @@ impl Faucet {
         );
         let description = self.0.claim(&owner).await?;
         let chain_id = description.id();
-        wallet.chains.insert(
-            chain_id,
-            wallet::Chain {
-                owner: Some(owner),
-                ..description.into()
-            },
-        );
+        let name = wallet::next_default_chain_name(&*wallet.chains)
+            .await
+            .expect("infallible");
+        let mut chain = wallet::Chain::from_description(name, &description);
+        chain.owner = Some(owner);
+        wallet.chains.insert(chain_id, chain);
         if wallet.default.is_none() {
             wallet.default = Some(chain_id);
         }

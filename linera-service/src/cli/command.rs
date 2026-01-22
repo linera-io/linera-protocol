@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, num::NonZeroU16, path::PathBuf};
+use std::{borrow::Cow, fmt, num::NonZeroU16, path::PathBuf, str::FromStr};
 
 use chrono::{DateTime, Utc};
 use linera_base::{
@@ -18,6 +18,7 @@ use linera_client::{
     },
     util,
 };
+use linera_core::wallet;
 use linera_rpc::config::CrossChainConfig;
 
 use crate::{cli::validator, task_processor::parse_operator};
@@ -53,6 +54,119 @@ impl std::str::FromStr for ValidatorToAdd {
             address: parts[2].to_string(),
             votes: parts[3].parse()?,
         })
+    }
+}
+
+/// A chain identifier that can be specified either by its ID or by a name.
+///
+/// When parsed from a string, this type first tries to parse as a chain ID (64 hex
+/// characters). If that fails, it's treated as a chain name that will be resolved
+/// when the wallet is available.
+#[derive(Clone, Debug)]
+pub enum ChainIdOrName {
+    /// A chain ID.
+    ChainId(ChainId),
+    /// A chain name that needs to be resolved.
+    Name(String),
+}
+
+impl ChainIdOrName {
+    /// Resolves this identifier to a chain ID using the provided wallet.
+    pub fn resolve(&self, wallet: &crate::wallet::Wallet) -> anyhow::Result<ChainId> {
+        match self {
+            ChainIdOrName::ChainId(id) => Ok(*id),
+            ChainIdOrName::Name(name) => wallet
+                .resolve_chain_name(name)
+                .ok_or_else(|| anyhow::anyhow!("unknown chain name: `{name}`")),
+        }
+    }
+}
+
+impl fmt::Display for ChainIdOrName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ChainIdOrName::ChainId(id) => write!(f, "{id}"),
+            ChainIdOrName::Name(name) => write!(f, "{name}"),
+        }
+    }
+}
+
+impl FromStr for ChainIdOrName {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Try to parse as a chain ID first. Chain IDs are 64 hex characters.
+        if let Ok(chain_id) = s.parse::<ChainId>() {
+            return Ok(ChainIdOrName::ChainId(chain_id));
+        }
+        // Otherwise treat as a name, but validate it.
+        wallet::validate_chain_name(s)?;
+        Ok(ChainIdOrName::Name(s.to_string()))
+    }
+}
+
+impl From<ChainId> for ChainIdOrName {
+    fn from(id: ChainId) -> Self {
+        ChainIdOrName::ChainId(id)
+    }
+}
+
+/// An account identifier that can use either a chain ID or a chain name.
+///
+/// When parsed from a string, the chain part (before the first `:`) is first tried as a
+/// chain ID. If that fails, it's treated as a chain name that will be resolved when the
+/// wallet is available.
+///
+/// Formats:
+/// - `chain-id` or `chain-name` - account for the chain itself
+/// - `chain-id:owner-type:address` or `chain-name:owner-type:address` - specific owner
+#[derive(Clone, Debug)]
+pub struct AccountOrName {
+    /// The chain, specified as either an ID or a name.
+    pub chain: ChainIdOrName,
+    /// The account owner within the chain.
+    pub owner: AccountOwner,
+}
+
+impl AccountOrName {
+    /// Resolves this account to a fully qualified Account using the provided wallet.
+    pub fn resolve(&self, wallet: &crate::wallet::Wallet) -> anyhow::Result<Account> {
+        let chain_id = self.chain.resolve(wallet)?;
+        Ok(Account::new(chain_id, self.owner))
+    }
+}
+
+impl fmt::Display for AccountOrName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.chain, self.owner)
+    }
+}
+
+impl FromStr for AccountOrName {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Chain names cannot contain colons, so splitting on the first colon is unambiguous.
+        let mut parts = s.splitn(2, ':');
+        let chain_part = parts
+            .next()
+            .expect("split always returns at least one part");
+        let chain = chain_part.parse::<ChainIdOrName>()?;
+        let owner = match parts.next() {
+            Some(owner_string) => owner_string.parse::<AccountOwner>()?,
+            None => AccountOwner::CHAIN,
+        };
+
+        Ok(AccountOrName { chain, owner })
+    }
+}
+
+impl From<Account> for AccountOrName {
+    fn from(account: Account) -> Self {
+        AccountOrName {
+            chain: ChainIdOrName::ChainId(account.chain_id),
+            owner: account.owner,
+        }
     }
 }
 
@@ -207,13 +321,13 @@ use crate::util::{
 pub enum ClientCommand {
     /// Transfer funds
     Transfer {
-        /// Sending chain ID (must be one of our chains)
+        /// Sending chain or account (can use a chain name)
         #[arg(long = "from")]
-        sender: Account,
+        sender: AccountOrName,
 
-        /// Recipient account
+        /// Recipient chain or account (can use a chain name)
         #[arg(long = "to")]
-        recipient: Account,
+        recipient: AccountOrName,
 
         /// Amount to transfer
         amount: Amount,
@@ -221,9 +335,9 @@ pub enum ClientCommand {
 
     /// Open (i.e. activate) a new chain deriving the UID from an existing one.
     OpenChain {
-        /// Chain ID (must be one of our chains).
+        /// Chain ID or name (must be one of our chains).
         #[arg(long = "from")]
-        chain_id: Option<ChainId>,
+        chain_id: Option<ChainIdOrName>,
 
         /// The new owner (otherwise create a key pair and remember it)
         #[arg(long = "owner")]
@@ -237,13 +351,17 @@ pub enum ClientCommand {
         /// Whether to create a super owner for the new chain.
         #[arg(long)]
         super_owner: bool,
+
+        /// A name to give to the new chain.
+        #[arg(long)]
+        name: Option<String>,
     },
 
     /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.
     OpenMultiOwnerChain {
-        /// Chain ID (must be one of our chains).
+        /// Chain ID or name (must be one of our chains).
         #[arg(long = "from")]
-        chain_id: Option<ChainId>,
+        chain_id: Option<ChainIdOrName>,
 
         #[clap(flatten)]
         ownership_config: ChainOwnershipConfig,
@@ -255,13 +373,17 @@ pub enum ClientCommand {
         /// balance.
         #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
+
+        /// A name to give to the new chain.
+        #[arg(long)]
+        name: Option<String>,
     },
 
     /// Display who owns the chain, and how the owners work together proposing blocks.
     ShowOwnership {
-        /// The ID of the chain whose owners will be changed.
+        /// The ID or name of the chain whose owners will be shown.
         #[clap(long)]
-        chain_id: Option<ChainId>,
+        chain_id: Option<ChainIdOrName>,
     },
 
     /// Change who owns the chain, and how the owners work together proposing blocks.
@@ -269,9 +391,9 @@ pub enum ClientCommand {
     /// Specify the complete set of new owners, by public key. Existing owners that are
     /// not included will be removed.
     ChangeOwnership {
-        /// The ID of the chain whose owners will be changed.
+        /// The ID or name of the chain whose owners will be changed.
         #[clap(long)]
-        chain_id: Option<ChainId>,
+        chain_id: Option<ChainIdOrName>,
 
         #[clap(flatten)]
         ownership_config: ChainOwnershipConfig,
@@ -279,9 +401,9 @@ pub enum ClientCommand {
 
     /// Change the preferred owner of a chain.
     SetPreferredOwner {
-        /// The ID of the chain whose preferred owner will be changed.
+        /// The ID or name of the chain whose preferred owner will be changed.
         #[clap(long)]
-        chain_id: Option<ChainId>,
+        chain_id: Option<ChainIdOrName>,
 
         /// The new preferred owner.
         #[arg(long)]
@@ -290,9 +412,9 @@ pub enum ClientCommand {
 
     /// Changes the application permissions configuration.
     ChangeApplicationPermissions {
-        /// The ID of the chain to which the new permissions will be applied.
+        /// The ID or name of the chain to which the new permissions will be applied.
         #[arg(long)]
-        chain_id: Option<ChainId>,
+        chain_id: Option<ChainIdOrName>,
 
         #[clap(flatten)]
         application_permissions_config: ApplicationPermissionsConfig,
@@ -303,8 +425,8 @@ pub enum ClientCommand {
     /// A closed chain cannot execute operations or accept messages anymore.
     /// It can still reject incoming messages, so they bounce back to the sender.
     CloseChain {
-        /// Chain ID (must be one of our chains)
-        chain_id: ChainId,
+        /// Chain ID or name (must be one of our chains)
+        chain_id: ChainIdOrName,
     },
 
     /// Print out the network description.
@@ -318,10 +440,10 @@ pub enum ClientCommand {
     /// `linera sync` then either `linera query-balance` or `linera process-inbox &&
     /// linera local-balance` for a consolidated balance.
     LocalBalance {
-        /// The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
-        /// chain balance. By default, we read the chain balance of the default chain in
-        /// the wallet.
-        account: Option<Account>,
+        /// The account to read, written as `CHAIN-ID:OWNER`, `CHAIN-NAME:OWNER`, or simply
+        /// `CHAIN-ID`/`CHAIN-NAME` for the chain balance. By default, we read the chain
+        /// balance of the default chain in the wallet.
+        account: Option<AccountOrName>,
     },
 
     /// Simulate the execution of one block made of pending messages from the local inbox,
@@ -330,10 +452,10 @@ pub enum ClientCommand {
     /// NOTE: The balance does not reflect messages that have not been synchronized from
     /// validators yet. Call `linera sync` first to do so.
     QueryBalance {
-        /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
-        /// chain balance. By default, we read the chain balance of the default chain in
-        /// the wallet.
-        account: Option<Account>,
+        /// The account to query, written as `CHAIN-ID:OWNER`, `CHAIN-NAME:OWNER`, or simply
+        /// `CHAIN-ID`/`CHAIN-NAME` for the chain balance. By default, we read the chain
+        /// balance of the default chain in the wallet.
+        account: Option<AccountOrName>,
     },
 
     /// (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the
@@ -341,31 +463,32 @@ pub enum ClientCommand {
     ///
     /// This command is deprecated. Use `linera sync && linera query-balance` instead.
     SyncBalance {
-        /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
-        /// chain balance. By default, we read the chain balance of the default chain in
-        /// the wallet.
-        account: Option<Account>,
+        /// The account to query, written as `CHAIN-ID:OWNER`, `CHAIN-NAME:OWNER`, or simply
+        /// `CHAIN-ID`/`CHAIN-NAME` for the chain balance. By default, we read the chain
+        /// balance of the default chain in the wallet.
+        account: Option<AccountOrName>,
     },
 
     /// Synchronize the local state of the chain with a quorum validators.
     Sync {
-        /// The chain to synchronize with validators. If omitted, synchronizes the
-        /// default chain of the wallet.
-        chain_id: Option<ChainId>,
+        /// The chain to synchronize with validators (ID or name). If omitted, synchronizes
+        /// the default chain of the wallet.
+        chain_id: Option<ChainIdOrName>,
     },
 
     /// Process all pending incoming messages from the inbox of the given chain by creating as many
     /// blocks as needed to execute all (non-failing) messages. Failing messages will be
     /// marked as rejected and may bounce to their sender depending on their configuration.
     ProcessInbox {
-        /// The chain to process. If omitted, uses the default chain of the wallet.
-        chain_id: Option<ChainId>,
+        /// The chain to process (ID or name). If omitted, uses the default chain of the
+        /// wallet.
+        chain_id: Option<ChainIdOrName>,
     },
 
     /// Query validators for shard information about a specific chain.
     QueryShardInfo {
-        /// The chain to query shard information for.
-        chain_id: ChainId,
+        /// The chain to query shard information for (ID or name).
+        chain_id: ChainIdOrName,
     },
 
     /// Deprecates all committees up to and including the specified one.
@@ -702,8 +825,8 @@ pub enum ClientCommand {
 
     /// Watch the network for notifications.
     Watch {
-        /// The chain ID to watch.
-        chain_id: Option<ChainId>,
+        /// The chain ID or name to watch.
+        chain_id: Option<ChainIdOrName>,
 
         /// Show all notifications from all validators.
         #[arg(long)]
@@ -749,8 +872,8 @@ pub enum ClientCommand {
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.
     /// This gives away the chain's tokens, and is mainly intended for testing.
     Faucet {
-        /// The chain that gives away its tokens.
-        chain_id: Option<ChainId>,
+        /// The chain that gives away its tokens (ID or name).
+        chain_id: Option<ChainIdOrName>,
 
         /// The port on which to run the server
         #[arg(long, default_value = "8080")]
@@ -795,15 +918,16 @@ pub enum ClientCommand {
         #[arg(long, default_value = "wasm")]
         vm_runtime: VmRuntime,
 
-        /// An optional chain ID to publish the module. The default chain of the wallet
-        /// is used otherwise.
-        publisher: Option<ChainId>,
+        /// An optional chain ID or name to publish the module. The default chain of the
+        /// wallet is used otherwise.
+        publisher: Option<ChainIdOrName>,
     },
 
     /// Print events from a specific chain and stream from a specified index.
     ListEventsFromIndex {
-        /// The chain to query. If omitted, query the default chain of the wallet.
-        chain_id: Option<ChainId>,
+        /// The chain to query (ID or name). If omitted, query the default chain of the
+        /// wallet.
+        chain_id: Option<ChainIdOrName>,
 
         /// The stream being considered.
         #[arg(long)]
@@ -818,9 +942,9 @@ pub enum ClientCommand {
     PublishDataBlob {
         /// Path to data blob file to be published.
         blob_path: PathBuf,
-        /// An optional chain ID to publish the blob. The default chain of the wallet
-        /// is used otherwise.
-        publisher: Option<ChainId>,
+        /// An optional chain ID or name to publish the blob. The default chain of the
+        /// wallet is used otherwise.
+        publisher: Option<ChainIdOrName>,
     },
 
     // TODO(#2490): Consider removing or renaming this.
@@ -828,9 +952,9 @@ pub enum ClientCommand {
     ReadDataBlob {
         /// The hash of the content.
         hash: CryptoHash,
-        /// An optional chain ID to verify the blob. The default chain of the wallet
-        /// is used otherwise.
-        reader: Option<ChainId>,
+        /// An optional chain ID or name to verify the blob. The default chain of the
+        /// wallet is used otherwise.
+        reader: Option<ChainIdOrName>,
     },
 
     /// Create an application.
@@ -838,9 +962,9 @@ pub enum ClientCommand {
         /// The module ID of the application to create.
         module_id: ModuleId,
 
-        /// An optional chain ID to host the application. The default chain of the wallet
-        /// is used otherwise.
-        creator: Option<ChainId>,
+        /// An optional chain ID or name to host the application. The default chain of the
+        /// wallet is used otherwise.
+        creator: Option<ChainIdOrName>,
 
         /// The shared parameters as JSON string.
         #[arg(long)]
@@ -875,9 +999,9 @@ pub enum ClientCommand {
         #[arg(long, default_value = "wasm")]
         vm_runtime: VmRuntime,
 
-        /// An optional chain ID to publish the module. The default chain of the wallet
-        /// is used otherwise.
-        publisher: Option<ChainId>,
+        /// An optional chain ID or name to publish the module. The default chain of the
+        /// wallet is used otherwise.
+        publisher: Option<ChainIdOrName>,
 
         /// The shared parameters as JSON string.
         #[arg(long)]
@@ -911,9 +1035,13 @@ pub enum ClientCommand {
         #[arg(long)]
         owner: AccountOwner,
 
-        /// The ID of the chain.
+        /// The ID or name of the chain.
         #[arg(long)]
-        chain_id: ChainId,
+        chain_id: ChainIdOrName,
+
+        /// A name for this chain in the wallet.
+        #[arg(long)]
+        name: Option<String>,
     },
 
     /// Retry a block we unsuccessfully tried to propose earlier.
@@ -921,8 +1049,9 @@ pub enum ClientCommand {
     /// As long as a block is pending most other commands will fail, since it is unsafe to propose
     /// multiple blocks at the same height.
     RetryPendingBlock {
-        /// The chain with the pending block. If not specified, the wallet's default chain is used.
-        chain_id: Option<ChainId>,
+        /// The chain with the pending block (ID or name). If not specified, the wallet's
+        /// default chain is used.
+        chain_id: Option<ChainIdOrName>,
     },
 
     /// Show the contents of the wallet.
@@ -1195,8 +1324,8 @@ pub enum NetCommand {
 pub enum WalletCommand {
     /// Show the contents of the wallet.
     Show {
-        /// The chain to show the metadata.
-        chain_id: Option<ChainId>,
+        /// The chain to show the metadata (can be a chain ID or name).
+        chain_id: Option<ChainIdOrName>,
         /// Only print a non-formatted list of the wallet's chain IDs.
         #[arg(long)]
         short: bool,
@@ -1206,7 +1335,10 @@ pub enum WalletCommand {
     },
 
     /// Change the wallet default chain.
-    SetDefault { chain_id: ChainId },
+    SetDefault {
+        /// The chain ID or name.
+        chain_id: ChainIdOrName,
+    },
 
     /// Initialize a wallet from the genesis configuration.
     Init {
@@ -1236,6 +1368,10 @@ pub enum WalletCommand {
         /// Whether this chain should become the default chain.
         #[arg(long)]
         set_default: bool,
+
+        /// A name to give to the new chain.
+        #[arg(long)]
+        name: Option<String>,
     },
 
     /// Export the genesis configuration to a JSON file.
@@ -1255,18 +1391,36 @@ pub enum WalletCommand {
     /// Add a new followed chain (i.e. a chain without keypair) to the wallet.
     FollowChain {
         /// The chain ID.
+        #[arg(long)]
         chain_id: ChainId,
         /// Synchronize the new chain and download all its blocks from the validators.
         #[arg(long)]
         sync: bool,
+        /// A name to give to the chain.
+        #[arg(long)]
+        name: Option<String>,
+    },
+
+    /// Rename a chain in the wallet.
+    RenameChain {
+        /// The chain ID or current name.
+        chain_id: ChainIdOrName,
+        /// The new name for the chain.
+        name: String,
     },
 
     /// Forgets the specified chain's keys. The chain will still be followed by the
     /// wallet.
-    ForgetKeys { chain_id: ChainId },
+    ForgetKeys {
+        /// The chain ID or name.
+        chain_id: ChainIdOrName,
+    },
 
     /// Forgets the specified chain, including the associated key pair.
-    ForgetChain { chain_id: ChainId },
+    ForgetChain {
+        /// The chain ID or name.
+        chain_id: ChainIdOrName,
+    },
 }
 
 #[derive(Clone, clap::Subcommand)]
@@ -1275,16 +1429,16 @@ pub enum ChainCommand {
     ShowBlock {
         /// The height of the block.
         height: BlockHeight,
-        /// The chain to show the block (if not specified, the default chain from the
-        /// wallet is used).
-        chain_id: Option<ChainId>,
+        /// The chain to show the block (can be a chain ID or name; if not specified, the
+        /// default chain from the wallet is used).
+        chain_id: Option<ChainIdOrName>,
     },
 
     /// Show the chain description of a chain.
     ShowChainDescription {
-        /// The chain ID to show (if not specified, the default chain from the wallet is
-        /// used).
-        chain_id: Option<ChainId>,
+        /// The chain ID or name to show (if not specified, the default chain from the
+        /// wallet is used).
+        chain_id: Option<ChainIdOrName>,
     },
 }
 
@@ -1319,9 +1473,9 @@ pub enum ProjectCommand {
         /// underscores.
         name: Option<String>,
 
-        /// An optional chain ID to publish the module. The default chain of the wallet
-        /// is used otherwise.
-        publisher: Option<ChainId>,
+        /// An optional chain ID or name to publish the module. The default chain of the
+        /// wallet is used otherwise.
+        publisher: Option<ChainIdOrName>,
 
         /// The virtual machine runtime to use.
         #[arg(long, default_value = "wasm")]

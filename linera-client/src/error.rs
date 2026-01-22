@@ -4,7 +4,7 @@
 use linera_base::{
     crypto::ValidatorPublicKey, data_types::NetworkDescription, identifiers::ChainId,
 };
-use linera_core::node::NodeError;
+use linera_core::{node::NodeError, wallet::ChainNameError};
 use linera_version::VersionInfo;
 use thiserror_context::Context;
 
@@ -37,6 +37,8 @@ pub(crate) enum Inner {
     Arithmetic(#[from] linera_base::data_types::ArithmeticError),
     #[error("incorrect chain ownership")]
     ChainOwnership,
+    #[error("invalid chain name: {0}")]
+    ChainName(#[from] ChainNameError),
     #[cfg(not(web))]
     #[error("Benchmark error: {0}")]
     Benchmark(#[from] BenchmarkError),

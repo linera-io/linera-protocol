@@ -45,6 +45,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera wallet request-chain`↴](#linera-wallet-request-chain)
 * [`linera wallet export-genesis`↴](#linera-wallet-export-genesis)
 * [`linera wallet follow-chain`↴](#linera-wallet-follow-chain)
+* [`linera wallet rename-chain`↴](#linera-wallet-rename-chain)
 * [`linera wallet forget-keys`↴](#linera-wallet-forget-keys)
 * [`linera wallet forget-chain`↴](#linera-wallet-forget-chain)
 * [`linera chain`↴](#linera-chain)
@@ -274,8 +275,8 @@ Transfer funds
 
 ###### **Options:**
 
-* `--from <SENDER>` — Sending chain ID (must be one of our chains)
-* `--to <RECIPIENT>` — Recipient account
+* `--from <SENDER>` — Sending chain or account (can use a chain name)
+* `--to <RECIPIENT>` — Recipient chain or account (can use a chain name)
 
 
 
@@ -287,12 +288,13 @@ Open (i.e. activate) a new chain deriving the UID from an existing one
 
 ###### **Options:**
 
-* `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
+* `--from <CHAIN_ID>` — Chain ID or name (must be one of our chains)
 * `--owner <OWNER>` — The new owner (otherwise create a key pair and remember it)
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
 * `--super-owner` — Whether to create a super owner for the new chain
+* `--name <NAME>` — A name to give to the new chain
 
 
 
@@ -304,7 +306,7 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 
 ###### **Options:**
 
-* `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
+* `--from <CHAIN_ID>` — Chain ID or name (must be one of our chains)
 * `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the option leaves the current set of super owners unchanged
 * `--owners <OWNERS>` — A JSON map of the new owners to their weights. Absence of the option leaves the current set of owners unchanged
 * `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If set to null, this is random like other rounds. Absence of the option leaves the current setting unchanged
@@ -322,6 +324,7 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
+* `--name <NAME>` — A name to give to the new chain
 
 
 
@@ -333,7 +336,7 @@ Display who owns the chain, and how the owners work together proposing blocks
 
 ###### **Options:**
 
-* `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
+* `--chain-id <CHAIN_ID>` — The ID or name of the chain whose owners will be shown
 
 
 
@@ -347,7 +350,7 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 
 ###### **Options:**
 
-* `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
+* `--chain-id <CHAIN_ID>` — The ID or name of the chain whose owners will be changed
 * `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the option leaves the current set of super owners unchanged
 * `--owners <OWNERS>` — A JSON map of the new owners to their weights. Absence of the option leaves the current set of owners unchanged
 * `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If set to null, this is random like other rounds. Absence of the option leaves the current setting unchanged
@@ -368,7 +371,7 @@ Change the preferred owner of a chain
 
 ###### **Options:**
 
-* `--chain-id <CHAIN_ID>` — The ID of the chain whose preferred owner will be changed
+* `--chain-id <CHAIN_ID>` — The ID or name of the chain whose preferred owner will be changed
 * `--owner <OWNER>` — The new preferred owner
 
 
@@ -381,7 +384,7 @@ Changes the application permissions configuration
 
 ###### **Options:**
 
-* `--chain-id <CHAIN_ID>` — The ID of the chain to which the new permissions will be applied
+* `--chain-id <CHAIN_ID>` — The ID or name of the chain to which the new permissions will be applied
 * `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the option leaves current permissions unchanged
 * `--mandatory-applications <MANDATORY_APPLICATIONS>` — A JSON list of applications, such that at least one operation or incoming message from each of these applications must occur in every block. Absence of the option leaves current mandatory applications unchanged
 * `--manage-chain <MANAGE_CHAIN>` — A JSON list of applications allowed to manage the chain: close it, change application permissions, and change ownership. Absence of the option leaves current managing applications unchanged
@@ -400,7 +403,7 @@ A closed chain cannot execute operations or accept messages anymore. It can stil
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — Chain ID (must be one of our chains)
+* `<CHAIN_ID>` — Chain ID or name (must be one of our chains)
 
 
 
@@ -422,7 +425,7 @@ NOTE: The local balance does not reflect messages that are waiting to be picked 
 
 ###### **Arguments:**
 
-* `<ACCOUNT>` — The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
+* `<ACCOUNT>` — The account to read, written as `CHAIN-ID:OWNER`, `CHAIN-NAME:OWNER`, or simply `CHAIN-ID`/`CHAIN-NAME` for the chain balance. By default, we read the chain balance of the default chain in the wallet
 
 
 
@@ -436,7 +439,7 @@ NOTE: The balance does not reflect messages that have not been synchronized from
 
 ###### **Arguments:**
 
-* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
+* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER`, `CHAIN-NAME:OWNER`, or simply `CHAIN-ID`/`CHAIN-NAME` for the chain balance. By default, we read the chain balance of the default chain in the wallet
 
 
 
@@ -450,7 +453,7 @@ This command is deprecated. Use `linera sync && linera query-balance` instead.
 
 ###### **Arguments:**
 
-* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
+* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER`, `CHAIN-NAME:OWNER`, or simply `CHAIN-ID`/`CHAIN-NAME` for the chain balance. By default, we read the chain balance of the default chain in the wallet
 
 
 
@@ -462,7 +465,7 @@ Synchronize the local state of the chain with a quorum validators
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — The chain to synchronize with validators. If omitted, synchronizes the default chain of the wallet
+* `<CHAIN_ID>` — The chain to synchronize with validators (ID or name). If omitted, synchronizes the default chain of the wallet
 
 
 
@@ -474,7 +477,7 @@ Process all pending incoming messages from the inbox of the given chain by creat
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — The chain to process. If omitted, uses the default chain of the wallet
+* `<CHAIN_ID>` — The chain to process (ID or name). If omitted, uses the default chain of the wallet
 
 
 
@@ -486,7 +489,7 @@ Query validators for shard information about a specific chain
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — The chain to query shard information for
+* `<CHAIN_ID>` — The chain to query shard information for (ID or name)
 
 
 
@@ -704,7 +707,7 @@ Watch the network for notifications
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — The chain ID to watch
+* `<CHAIN_ID>` — The chain ID or name to watch
 
 ###### **Options:**
 
@@ -743,7 +746,7 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — The chain that gives away its tokens
+* `<CHAIN_ID>` — The chain that gives away its tokens (ID or name)
 
 ###### **Options:**
 
@@ -776,7 +779,7 @@ Publish module
 
 * `<CONTRACT>` — Path to the Wasm file for the application "contract" bytecode
 * `<SERVICE>` — Path to the Wasm file for the application "service" bytecode
-* `<PUBLISHER>` — An optional chain ID to publish the module. The default chain of the wallet is used otherwise
+* `<PUBLISHER>` — An optional chain ID or name to publish the module. The default chain of the wallet is used otherwise
 
 ###### **Options:**
 
@@ -794,7 +797,7 @@ Print events from a specific chain and stream from a specified index
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — The chain to query. If omitted, query the default chain of the wallet
+* `<CHAIN_ID>` — The chain to query (ID or name). If omitted, query the default chain of the wallet
 
 ###### **Options:**
 
@@ -814,7 +817,7 @@ Publish a data blob of binary data
 ###### **Arguments:**
 
 * `<BLOB_PATH>` — Path to data blob file to be published
-* `<PUBLISHER>` — An optional chain ID to publish the blob. The default chain of the wallet is used otherwise
+* `<PUBLISHER>` — An optional chain ID or name to publish the blob. The default chain of the wallet is used otherwise
 
 
 
@@ -827,7 +830,7 @@ Verify that a data blob is readable
 ###### **Arguments:**
 
 * `<HASH>` — The hash of the content
-* `<READER>` — An optional chain ID to verify the blob. The default chain of the wallet is used otherwise
+* `<READER>` — An optional chain ID or name to verify the blob. The default chain of the wallet is used otherwise
 
 
 
@@ -840,7 +843,7 @@ Create an application
 ###### **Arguments:**
 
 * `<MODULE_ID>` — The module ID of the application to create
-* `<CREATOR>` — An optional chain ID to host the application. The default chain of the wallet is used otherwise
+* `<CREATOR>` — An optional chain ID or name to host the application. The default chain of the wallet is used otherwise
 
 ###### **Options:**
 
@@ -862,7 +865,7 @@ Create an application, and publish the required module
 
 * `<CONTRACT>` — Path to the Wasm file for the application "contract" bytecode
 * `<SERVICE>` — Path to the Wasm file for the application "service" bytecode
-* `<PUBLISHER>` — An optional chain ID to publish the module. The default chain of the wallet is used otherwise
+* `<PUBLISHER>` — An optional chain ID or name to publish the module. The default chain of the wallet is used otherwise
 
 ###### **Options:**
 
@@ -889,12 +892,13 @@ Create an unassigned key pair
 
 Link the owner to the chain. Expects that the caller has a private key corresponding to the `public_key`, otherwise block proposals will fail when signing with it
 
-**Usage:** `linera assign --owner <OWNER> --chain-id <CHAIN_ID>`
+**Usage:** `linera assign [OPTIONS] --owner <OWNER> --chain-id <CHAIN_ID>`
 
 ###### **Options:**
 
 * `--owner <OWNER>` — The owner to assign
-* `--chain-id <CHAIN_ID>` — The ID of the chain
+* `--chain-id <CHAIN_ID>` — The ID or name of the chain
+* `--name <NAME>` — A name for this chain in the wallet
 
 
 
@@ -908,7 +912,7 @@ As long as a block is pending most other commands will fail, since it is unsafe 
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — The chain with the pending block. If not specified, the wallet's default chain is used
+* `<CHAIN_ID>` — The chain with the pending block (ID or name). If not specified, the wallet's default chain is used
 
 
 
@@ -926,6 +930,7 @@ Show the contents of the wallet
 * `request-chain` — Request a new chain from a faucet and add it to the wallet
 * `export-genesis` — Export the genesis configuration to a JSON file
 * `follow-chain` — Add a new followed chain (i.e. a chain without keypair) to the wallet
+* `rename-chain` — Rename a chain in the wallet
 * `forget-keys` — Forgets the specified chain's keys. The chain will still be followed by the wallet
 * `forget-chain` — Forgets the specified chain, including the associated key pair
 
@@ -939,7 +944,7 @@ Show the contents of the wallet
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — The chain to show the metadata
+* `<CHAIN_ID>` — The chain to show the metadata (can be a chain ID or name)
 
 ###### **Options:**
 
@@ -956,7 +961,7 @@ Change the wallet default chain
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain ID or name
 
 
 
@@ -986,6 +991,7 @@ Request a new chain from a faucet and add it to the wallet
 
 * `--faucet <FAUCET>` — The address of a faucet
 * `--set-default` — Whether this chain should become the default chain
+* `--name <NAME>` — A name to give to the new chain
 
 
 
@@ -1011,15 +1017,26 @@ By default, exports the genesis config from the current wallet. Alternatively, u
 
 Add a new followed chain (i.e. a chain without keypair) to the wallet
 
-**Usage:** `linera wallet follow-chain [OPTIONS] <CHAIN_ID>`
-
-###### **Arguments:**
-
-* `<CHAIN_ID>` — The chain ID
+**Usage:** `linera wallet follow-chain [OPTIONS] --chain-id <CHAIN_ID>`
 
 ###### **Options:**
 
+* `--chain-id <CHAIN_ID>` — The chain ID
 * `--sync` — Synchronize the new chain and download all its blocks from the validators
+* `--name <NAME>` — A name to give to the chain
+
+
+
+## `linera wallet rename-chain`
+
+Rename a chain in the wallet
+
+**Usage:** `linera wallet rename-chain <CHAIN_ID> <NAME>`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>` — The chain ID or current name
+* `<NAME>` — The new name for the chain
 
 
 
@@ -1031,7 +1048,7 @@ Forgets the specified chain's keys. The chain will still be followed by the wall
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain ID or name
 
 
 
@@ -1043,7 +1060,7 @@ Forgets the specified chain, including the associated key pair
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain ID or name
 
 
 
@@ -1069,7 +1086,7 @@ Show the contents of a block
 ###### **Arguments:**
 
 * `<HEIGHT>` — The height of the block
-* `<CHAIN_ID>` — The chain to show the block (if not specified, the default chain from the wallet is used)
+* `<CHAIN_ID>` — The chain to show the block (can be a chain ID or name; if not specified, the default chain from the wallet is used)
 
 
 
@@ -1081,7 +1098,7 @@ Show the chain description of a chain
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — The chain ID to show (if not specified, the default chain from the wallet is used)
+* `<CHAIN_ID>` — The chain ID or name to show (if not specified, the default chain from the wallet is used)
 
 
 
@@ -1141,7 +1158,7 @@ Build and publish a Linera project
 * `<NAME>` — Specify the name of the Linera project. This is used to locate the generated bytecode files. The generated bytecode files should be of the form `<name>_{contract,service}.wasm`.
 
    Defaults to the package name in Cargo.toml, with dashes replaced by underscores.
-* `<PUBLISHER>` — An optional chain ID to publish the module. The default chain of the wallet is used otherwise
+* `<PUBLISHER>` — An optional chain ID or name to publish the module. The default chain of the wallet is used otherwise
 
 ###### **Options:**
 

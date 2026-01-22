@@ -41,7 +41,7 @@ use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt as _};
 use linera_base::{
     crypto::Signer,
-    data_types::{ApplicationPermissions, Timestamp},
+    data_types::{ApplicationPermissions, BlockHeight, Timestamp},
     identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
@@ -174,6 +174,8 @@ impl Runnable for Job {
                 recipient,
                 amount,
             } => {
+                let sender = sender.resolve(&wallet)?;
+                let recipient = recipient.resolve(&wallet)?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -204,13 +206,14 @@ impl Runnable for Job {
                 owner,
                 balance,
                 super_owner,
+                name,
             } => {
                 let new_owner = owner.unwrap_or_else(|| signer.generate_new().into());
                 signer.persist().await?;
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id).await?;
                 info!("Opening a new chain from existing chain {}", chain_id);
                 let time_start = Instant::now();
@@ -235,7 +238,7 @@ impl Runnable for Job {
                 let epoch = certificate.block().header.epoch;
                 let id = description.id();
                 context
-                    .update_wallet_for_new_chain(id, Some(new_owner), timestamp, epoch)
+                    .update_wallet_for_new_chain(id, name, Some(new_owner), timestamp, epoch)
                     .await?;
                 let time_total = time_start.elapsed();
                 info!(
@@ -253,11 +256,12 @@ impl Runnable for Job {
                 balance,
                 ownership_config,
                 application_permissions_config,
+                name,
             } => {
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id).await?;
                 info!(
                     "Opening a new multi-owner chain from existing chain {}",
@@ -286,7 +290,7 @@ impl Runnable for Job {
                 let timestamp = certificate.block().header.timestamp;
                 let epoch = certificate.block().header.epoch;
                 context
-                    .update_wallet_for_new_chain(id, owner, timestamp, epoch)
+                    .update_wallet_for_new_chain(id, name, owner, timestamp, epoch)
                     .await?;
                 let time_total = time_start.elapsed();
                 info!(
@@ -299,6 +303,7 @@ impl Runnable for Job {
             }
 
             ShowOwnership { chain_id } => {
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -311,6 +316,7 @@ impl Runnable for Job {
                 chain_id,
                 ownership_config,
             } => {
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -318,6 +324,7 @@ impl Runnable for Job {
             }
 
             SetPreferredOwner { chain_id, owner } => {
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -328,10 +335,10 @@ impl Runnable for Job {
                 chain_id,
                 application_permissions_config,
             } => {
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id).await?;
                 info!("Changing application permissions for chain {}", chain_id);
                 let time_start = Instant::now();
@@ -359,6 +366,7 @@ impl Runnable for Job {
             }
 
             CloseChain { chain_id } => {
+                let chain_id = chain_id.resolve(&wallet)?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -394,6 +402,7 @@ impl Runnable for Job {
             }
 
             LocalBalance { account } => {
+                let account = account.map(|a| a.resolve(&wallet)).transpose()?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -408,6 +417,7 @@ impl Runnable for Job {
             }
 
             QueryBalance { account } => {
+                let account = account.map(|a| a.resolve(&wallet)).transpose()?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -425,6 +435,7 @@ impl Runnable for Job {
             }
 
             SyncBalance { account } => {
+                let account = account.map(|a| a.resolve(&wallet)).transpose()?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -446,10 +457,10 @@ impl Runnable for Job {
             }
 
             Sync { chain_id } => {
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id).await?;
                 info!("Synchronizing chain information");
                 let time_start = Instant::now();
@@ -463,10 +474,10 @@ impl Runnable for Job {
             }
 
             ProcessInbox { chain_id } => {
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let follow_only = context
                     .wallet()
                     .get(chain_id)
@@ -490,6 +501,7 @@ impl Runnable for Job {
             }
 
             QueryShardInfo { chain_id } => {
+                let chain_id = chain_id.resolve(&wallet)?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -534,7 +546,7 @@ impl Runnable for Job {
                     .await?;
 
                 // ResourceControlPolicy doesn't need version checks
-                let admin_id = context.admin_chain();
+                let admin_id = context.admin_id();
                 let chain_client = context.make_chain_client(admin_id).await?;
                 // Synchronize the chain state to make sure we're applying the changes to the
                 // latest committee.
@@ -1122,12 +1134,12 @@ impl Runnable for Job {
             },
 
             Watch { chain_id, raw } => {
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
 
                 let mut join_set = JoinSet::new();
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id).await?;
                 info!("Watching for notifications for chain {:?}", chain_id);
                 let (listener, _listen_handle, mut notifications) = chain_client.listen().await?;
@@ -1234,6 +1246,8 @@ impl Runnable for Job {
                 max_batch_size,
             } => {
                 let genesis_config = wallet.genesis_config().clone();
+                // Resolve chain name to ID before creating context.
+                let chain_id = chain_id.as_ref().map(|c| c.resolve(&wallet)).transpose()?;
 
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
@@ -1275,12 +1289,12 @@ impl Runnable for Job {
                 vm_runtime,
                 publisher,
             } => {
+                let publisher = wallet.resolve_or_default(publisher.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
 
                 let start_time = Instant::now();
-                let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing module on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher).await?;
                 let module_id = context
@@ -1298,11 +1312,11 @@ impl Runnable for Job {
                 stream_id,
                 start_index,
             } => {
-                let context = options
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
+                let _context = options
                     .create_client_context(storage.clone(), wallet, signer.into_value())
                     .await?;
                 let start_time = Instant::now();
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let index_events = storage
                     .read_events_from_index(&chain_id, &stream_id, start_index)
                     .await?;
@@ -1314,12 +1328,12 @@ impl Runnable for Job {
                 blob_path,
                 publisher,
             } => {
+                let publisher = wallet.resolve_or_default(publisher.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
 
                 let start_time = Instant::now();
-                let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing data blob on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher).await?;
                 let hash = context.publish_data_blob(&chain_client, blob_path).await?;
@@ -1332,12 +1346,12 @@ impl Runnable for Job {
 
             // TODO(#2490): Consider removing or renaming this.
             ReadDataBlob { hash, reader } => {
+                let reader = wallet.resolve_or_default(reader.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
 
                 let start_time = Instant::now();
-                let reader = reader.unwrap_or_else(|| context.default_chain());
                 info!("Verifying data blob on chain {}", reader);
                 let chain_client = context.make_chain_client(reader).await?;
                 context.read_data_blob(&chain_client, hash).await?;
@@ -1353,12 +1367,12 @@ impl Runnable for Job {
                 json_argument_path,
                 required_application_ids,
             } => {
+                let creator = wallet.resolve_or_default(creator.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
 
                 let start_time = Instant::now();
-                let creator = creator.unwrap_or_else(|| context.default_chain());
                 info!("Creating application on chain {}", creator);
                 let chain_client = context.make_chain_client(creator).await?;
                 let parameters = read_json(json_parameters, json_parameters_path)?;
@@ -1405,12 +1419,12 @@ impl Runnable for Job {
                 json_argument_path,
                 required_application_ids,
             } => {
+                let publisher = wallet.resolve_or_default(publisher.as_ref())?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
 
                 let start_time = Instant::now();
-                let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing and creating application on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher).await?;
                 let parameters = read_json(json_parameters, json_parameters_path)?;
@@ -1446,7 +1460,12 @@ impl Runnable for Job {
                 println!("{}", application_id);
             }
 
-            Assign { owner, chain_id } => {
+            Assign {
+                owner,
+                chain_id,
+                name,
+            } => {
+                let chain_id = chain_id.resolve(&wallet)?;
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1455,7 +1474,9 @@ impl Runnable for Job {
                     "Linking chain {chain_id} to its corresponding key in the wallet, owned by \
                     {owner}",
                 );
-                context.assign_new_chain_to_key(chain_id, owner).await?;
+                context
+                    .assign_new_chain_to_key(chain_id, name, owner)
+                    .await?;
                 info!(
                     "Chain linked to owner in {} ms",
                     start_time.elapsed().as_millis()
@@ -1474,11 +1495,11 @@ impl Runnable for Job {
                     json_argument_path,
                     required_application_ids,
                 } => {
+                    let publisher = wallet.resolve_or_default(publisher.as_ref())?;
                     let mut context = options
                         .create_client_context(storage, wallet, signer.into_value())
                         .await?;
                     let start_time = Instant::now();
-                    let publisher = publisher.unwrap_or_else(|| context.default_chain());
                     info!("Creating application on chain {}", publisher);
                     let chain_client = context.make_chain_client(publisher).await?;
 
@@ -1523,11 +1544,11 @@ impl Runnable for Job {
             },
 
             RetryPendingBlock { chain_id } => {
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
                 let start_time = Instant::now();
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Committing pending block for chain {}", chain_id);
                 let chain_client = context.make_chain_client(chain_id).await?;
                 match chain_client.process_pending_block().await? {
@@ -1553,6 +1574,7 @@ impl Runnable for Job {
             Wallet(WalletCommand::RequestChain {
                 faucet: faucet_url,
                 set_default,
+                name,
             }) => {
                 let start_time = Instant::now();
                 let owner: AccountOwner = signer.mutate(|s| s.generate_new()).await?.into();
@@ -1571,13 +1593,14 @@ impl Runnable for Job {
                     );
                 }
 
-                wallet.insert(
-                    description.id(),
-                    wallet::Chain {
-                        owner: Some(owner),
-                        ..(&description).into()
-                    },
-                )?;
+                let chain_id = description.id();
+                let chain_name = match name {
+                    Some(provided_name) => provided_name,
+                    None => wallet.next_default_name(chain_id).await?,
+                };
+                let mut chain = wallet::Chain::from_description(&chain_name, &description);
+                chain.owner = Some(owner);
+                wallet.insert(chain_id, chain)?;
 
                 if set_default {
                     wallet.set_default_chain(description.id())?;
@@ -1625,7 +1648,11 @@ impl Runnable for Job {
                 context.update_wallet_from_client(&chain_client).await?;
             }
 
-            Wallet(WalletCommand::FollowChain { chain_id, sync }) => {
+            Wallet(WalletCommand::FollowChain {
+                chain_id,
+                sync,
+                name,
+            }) => {
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1640,6 +1667,9 @@ impl Runnable for Job {
                     chain_client.fetch_chain_info().await?;
                 }
                 context.update_wallet_from_client(&chain_client).await?;
+                if name.is_some() {
+                    context.wallet().set_chain_name(chain_id, name).await?;
+                }
                 // Update the in-memory state to follow-only mode.
                 context.client.set_chain_follow_only(chain_id, true);
                 info!(
@@ -1649,10 +1679,10 @@ impl Runnable for Job {
             }
 
             Chain(ChainCommand::ShowBlock { chain_id, height }) => {
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_state_view = context
                     .storage()
                     .load_chain(chain_id)
@@ -1671,10 +1701,10 @@ impl Runnable for Job {
             }
 
             Chain(ChainCommand::ShowChainDescription { chain_id }) => {
+                let chain_id = wallet.resolve_or_default(chain_id.as_ref())?;
                 let context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id).await?;
                 let description = match chain_client.get_chain_description().await {
                     Ok(description) => description,
@@ -2068,21 +2098,27 @@ async fn run(options: &Options) -> Result<i32, Error> {
             let mut chains = vec![(
                 admin_chain_description.id(),
                 wallet::Chain {
+                    name: "admin".to_string(),
                     owner: Some(admin_public_key.into()),
                     epoch: Some(admin_chain_description.config().epoch),
                     timestamp,
-                    ..wallet::Chain::default()
+                    block_hash: None,
+                    next_block_height: BlockHeight::ZERO,
+                    pending_proposal: None,
                 },
             )];
-            for _ in 0..*num_other_initial_chains {
+            for i in 0..*num_other_initial_chains {
                 // Create keys.
                 let public_key = signer.mutate(|s| s.generate_new()).await?;
                 let description = genesis_config.add_root_chain(public_key, *initial_funding);
                 let chain = wallet::Chain {
+                    name: format!("root-{i}"),
                     owner: Some(public_key.into()),
                     epoch: Some(description.config().epoch),
                     timestamp,
-                    ..wallet::Chain::default()
+                    block_hash: None,
+                    next_block_height: BlockHeight::ZERO,
+                    pending_proposal: None,
                 };
                 chains.push((description.id(), chain));
             }
@@ -2265,7 +2301,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 let wallet = options.wallet()?;
                 let chain_ids = if let Some(chain_id) = chain_id {
                     ensure!(!owned, "Cannot specify both --owned and a chain ID");
-                    vec![*chain_id]
+                    vec![chain_id.resolve(&wallet)?]
                 } else if *owned {
                     wallet.owned_chain_ids()
                 } else {
@@ -2283,7 +2319,9 @@ async fn run(options: &Options) -> Result<i32, Error> {
 
             WalletCommand::SetDefault { chain_id } => {
                 let start_time = Instant::now();
-                options.wallet()?.set_default_chain(*chain_id)?;
+                let mut wallet = options.wallet()?;
+                let chain_id = chain_id.resolve(&wallet)?;
+                wallet.set_default_chain(chain_id)?;
                 info!(
                     "Default chain set in {} ms",
                     start_time.elapsed().as_millis()
@@ -2293,7 +2331,9 @@ async fn run(options: &Options) -> Result<i32, Error> {
 
             WalletCommand::ForgetKeys { chain_id } => {
                 let start_time = Instant::now();
-                let owner = options.wallet()?.forget_keys(*chain_id)?;
+                let wallet = options.wallet()?;
+                let chain_id = chain_id.resolve(&wallet)?;
+                let owner = wallet.forget_keys(chain_id)?;
                 if !options
                     .signer()?
                     .contains_key(&owner)
@@ -2311,8 +2351,22 @@ async fn run(options: &Options) -> Result<i32, Error> {
 
             WalletCommand::ForgetChain { chain_id } => {
                 let start_time = Instant::now();
-                options.wallet()?.forget_chain(*chain_id)?;
+                let wallet = options.wallet()?;
+                let chain_id = chain_id.resolve(&wallet)?;
+                wallet.forget_chain(chain_id)?;
                 info!("Chain forgotten in {} ms", start_time.elapsed().as_millis());
+                Ok(0)
+            }
+
+            WalletCommand::RenameChain { chain_id, name } => {
+                let start_time = Instant::now();
+                let wallet = options.wallet()?;
+                let chain_id = chain_id.resolve(&wallet)?;
+                wallet.set_chain_name(chain_id, Some(name.clone())).await?;
+                info!(
+                    "Chain {chain_id} renamed to `{name}` in {} ms",
+                    start_time.elapsed().as_millis()
+                );
                 Ok(0)
             }
 

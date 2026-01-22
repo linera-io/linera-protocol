@@ -14,6 +14,9 @@ use linera_base::{
 use linera_client::config::GenesisConfig;
 use linera_core::wallet;
 use linera_persistent as persistent;
+pub use wallet::MAX_CHAIN_NAME_LENGTH;
+
+use crate::cli::command::ChainIdOrName;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Data {
@@ -51,6 +54,7 @@ impl ChainDetails {
 
     fn print_paragraph(&self) {
         println!("-----------------------");
+        println!("{:<20}  {}", "Name:", self.user_chain.name);
         println!("{:<20}  {}", "Chain ID:", self.chain_id);
 
         let mut tags = Vec::new();
@@ -237,6 +241,84 @@ impl Wallet {
 
     pub fn genesis_admin_chain(&self) -> ChainId {
         self.0.genesis_config.admin_id()
+    }
+
+    /// Returns the name of a chain, if it exists in the wallet.
+    pub fn chain_name(&self, chain_id: ChainId) -> Option<String> {
+        self.0.chains.get(chain_id).map(|chain| chain.name)
+    }
+
+    /// Resolves a chain name to a chain ID.
+    ///
+    /// Looks up chains by their stored name.
+    pub fn resolve_chain_name(&self, name: &str) -> Option<ChainId> {
+        for (chain_id, chain) in self.items() {
+            if chain.name == name {
+                return Some(chain_id);
+            }
+        }
+        None
+    }
+
+    /// Resolves an optional chain ID or name to a chain ID, using the default if not specified.
+    ///
+    /// If `chain` is `Some`, resolves the chain ID or name.
+    /// If `chain` is `None`, returns the wallet's default chain.
+    /// Returns an error if resolution fails or no default chain exists.
+    pub fn resolve_or_default(&self, chain: Option<&ChainIdOrName>) -> anyhow::Result<ChainId> {
+        chain
+            .map(|c| c.resolve(self))
+            .transpose()?
+            .or_else(|| self.default_chain())
+            .ok_or_else(|| anyhow::anyhow!("No default chain"))
+    }
+
+    /// Returns the next available default name for a new chain.
+    ///
+    /// If `chain_id` is the admin chain, returns "admin".
+    /// Otherwise, returns "user-N" where N is one more than the highest existing user number.
+    pub async fn next_default_name(&self, chain_id: ChainId) -> anyhow::Result<String> {
+        if chain_id == self.genesis_admin_chain() {
+            return Ok("admin".to_string());
+        }
+        Ok(wallet::next_default_chain_name(self).await?)
+    }
+
+    /// Sets the name of a chain.
+    ///
+    /// If `name` is `Some`, sets the chain's name. If `name` is `None`, generates
+    /// a default name using `next_default_name`.
+    ///
+    /// Returns an error if the name is too long, if the chain doesn't exist in the wallet,
+    /// or if the name is already used by another chain.
+    pub async fn set_chain_name(
+        &self,
+        chain_id: ChainId,
+        name: Option<String>,
+    ) -> anyhow::Result<()> {
+        // Determine the new name. User-provided names are validated; auto-generated names
+        // are trusted.
+        let new_name = match name {
+            Some(name) => {
+                wallet::validate_chain_name(&name)?;
+                name
+            }
+            None => self.next_default_name(chain_id).await?,
+        };
+        // Check if the name is already used by another chain.
+        if let Some(existing_chain_id) = self.resolve_chain_name(&new_name) {
+            anyhow::ensure!(
+                existing_chain_id == chain_id,
+                "chain name `{new_name}` is already used by another chain"
+            );
+        }
+        // Update the chain's name.
+        let modified = self.0.chains.mutate(chain_id, |chain| {
+            chain.name.clone_from(&new_name);
+        });
+        anyhow::ensure!(modified.is_some(), "chain `{chain_id}` not found in wallet");
+        self.0.save()?;
+        Ok(())
     }
 
     // TODO(#5082): now that wallets only store chains, not keys, there's not much point in

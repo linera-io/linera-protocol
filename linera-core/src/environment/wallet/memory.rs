@@ -140,6 +140,7 @@ mod tests {
 
     fn make_chain(height: u64) -> Chain {
         Chain {
+            name: format!("test-{height}"),
             owner: None,
             block_hash: None,
             next_block_height: height.into(),

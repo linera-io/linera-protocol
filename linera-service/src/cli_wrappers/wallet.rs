@@ -823,6 +823,7 @@ impl ClientWrapper {
         owner: Option<AccountOwner>,
         initial_balance: Amount,
         super_owner: bool,
+        name: Option<&str>,
     ) -> Result<(ChainId, AccountOwner)> {
         let mut command = self.command().await?;
         command
@@ -836,6 +837,10 @@ impl ClientWrapper {
 
         if super_owner {
             command.arg("--super-owner");
+        }
+
+        if let Some(name) = name {
+            command.args(["--name", name]);
         }
 
         let stdout = command.spawn_and_wait_for_stdout().await?;
@@ -855,7 +860,7 @@ impl ClientWrapper {
         owner: Option<AccountOwner>,
         initial_balance: Amount,
     ) -> Result<(ChainId, AccountOwner)> {
-        self.open_chain_internal(from, owner, initial_balance, true)
+        self.open_chain_internal(from, owner, initial_balance, true, None)
             .await
     }
 
@@ -866,8 +871,45 @@ impl ClientWrapper {
         owner: Option<AccountOwner>,
         initial_balance: Amount,
     ) -> Result<(ChainId, AccountOwner)> {
-        self.open_chain_internal(from, owner, initial_balance, false)
+        self.open_chain_internal(from, owner, initial_balance, false, None)
             .await
+    }
+
+    /// Runs `linera open-chain` with an optional name.
+    pub async fn open_chain_with_name(
+        &self,
+        from: ChainId,
+        owner: Option<AccountOwner>,
+        initial_balance: Amount,
+        name: Option<&str>,
+    ) -> Result<(ChainId, AccountOwner)> {
+        self.open_chain_internal(from, owner, initial_balance, false, name)
+            .await
+    }
+
+    /// Runs `linera wallet rename-chain`.
+    pub async fn rename_chain(&self, chain_id: ChainId, name: &str) -> Result<()> {
+        self.command()
+            .await?
+            .args(["wallet", "rename-chain"])
+            .arg(chain_id.to_string())
+            .arg(name)
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
+    }
+
+    /// Runs `linera transfer` using chain names instead of IDs.
+    pub async fn transfer_by_name(&self, amount: Amount, from: &str, to: &str) -> Result<()> {
+        self.command()
+            .await?
+            .arg("transfer")
+            .arg(amount.to_string())
+            .args(["--from", from])
+            .args(["--to", to])
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
     }
 
     /// Runs `linera open-chain` then `linera assign`.
@@ -937,11 +979,11 @@ impl ClientWrapper {
         Ok(())
     }
 
-    /// Runs `linera wallet follow-chain CHAIN_ID`.
+    /// Runs `linera wallet follow-chain --chain-id CHAIN_ID`.
     pub async fn follow_chain(&self, chain_id: ChainId, sync: bool) -> Result<()> {
         let mut command = self.command().await?;
         command
-            .args(["wallet", "follow-chain"])
+            .args(["wallet", "follow-chain", "--chain-id"])
             .arg(chain_id.to_string());
         if sync {
             command.arg("--sync");

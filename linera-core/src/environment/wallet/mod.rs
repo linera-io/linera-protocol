@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
+use std::{ops::Deref, pin::pin};
 
 use futures::{Stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
@@ -15,8 +15,44 @@ use crate::{client::PendingProposal, data_types::ChainInfo};
 mod memory;
 pub use memory::Memory;
 
-#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
+/// The maximum length of a chain name. Chain names must be shorter than a chain ID
+/// (which is 64 hex characters) to avoid ambiguity.
+pub const MAX_CHAIN_NAME_LENGTH: usize = 63;
+
+/// Validates a chain name, returning an error if it's invalid.
+///
+/// Chain names must:
+/// - Not be empty
+/// - Be at most [`MAX_CHAIN_NAME_LENGTH`] characters
+/// - Not contain colons (used as separator in account strings)
+pub fn validate_chain_name(name: &str) -> Result<(), ChainNameError> {
+    if name.is_empty() {
+        return Err(ChainNameError::Empty);
+    }
+    if name.len() > MAX_CHAIN_NAME_LENGTH {
+        return Err(ChainNameError::TooLong(name.len()));
+    }
+    if name.contains(':') {
+        return Err(ChainNameError::ContainsColon);
+    }
+    Ok(())
+}
+
+/// Error returned when a chain name is invalid.
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum ChainNameError {
+    #[error("chain name cannot be empty")]
+    Empty,
+    #[error("chain name is too long ({0} characters, maximum is {MAX_CHAIN_NAME_LENGTH})")]
+    TooLong(usize),
+    #[error("chain name cannot contain colons (used as separator in account strings)")]
+    ContainsColon,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Chain {
+    /// The name of this chain in the wallet.
+    pub name: String,
     pub owner: Option<AccountOwner>,
     pub block_hash: Option<CryptoHash>,
     pub next_block_height: BlockHeight,
@@ -25,47 +61,45 @@ pub struct Chain {
     pub epoch: Option<Epoch>,
 }
 
-impl From<&ChainInfo> for Chain {
-    fn from(info: &ChainInfo) -> Self {
-        Self {
-            owner: None,
-            block_hash: info.block_hash,
-            next_block_height: info.next_block_height,
-            timestamp: info.timestamp,
-            pending_proposal: None,
-            epoch: Some(info.epoch),
-        }
-    }
-}
-
-impl From<ChainInfo> for Chain {
-    fn from(info: ChainInfo) -> Self {
-        Self::from(&info)
-    }
-}
-
-impl From<&ChainDescription> for Chain {
-    fn from(description: &ChainDescription) -> Self {
-        Self::new(None, description.config().epoch, description.timestamp())
-    }
-}
-
-impl From<ChainDescription> for Chain {
-    fn from(description: ChainDescription) -> Self {
-        (&description).into()
-    }
-}
-
 impl Chain {
     /// Creates a chain that we haven't interacted with before.
-    pub fn new(owner: Option<AccountOwner>, current_epoch: Epoch, now: Timestamp) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        owner: Option<AccountOwner>,
+        current_epoch: Epoch,
+        now: Timestamp,
+    ) -> Self {
         Self {
+            name: name.into(),
             owner,
             block_hash: None,
             timestamp: now,
             next_block_height: BlockHeight::ZERO,
             pending_proposal: None,
             epoch: Some(current_epoch),
+        }
+    }
+
+    /// Creates a chain from a chain description.
+    pub fn from_description(name: impl Into<String>, description: &ChainDescription) -> Self {
+        Self::new(
+            name,
+            None,
+            description.config().epoch,
+            description.timestamp(),
+        )
+    }
+
+    /// Creates a chain from chain info.
+    pub fn from_info(name: impl Into<String>, info: &ChainInfo) -> Self {
+        Self {
+            name: name.into(),
+            owner: None,
+            block_hash: info.block_hash,
+            next_block_height: info.next_block_height,
+            timestamp: info.timestamp,
+            pending_proposal: None,
+            epoch: Some(info.epoch),
         }
     }
 
@@ -143,4 +177,45 @@ impl<W: Deref<Target: Wallet> + linera_base::util::traits::AutoTraits> Wallet fo
     ) -> Result<Option<()>, Self::Error> {
         self.deref().modify(id, f).await
     }
+}
+
+/// Generates the next available default chain name ("user-N").
+///
+/// Scans existing chains for names matching "user-N" pattern and returns
+/// "user-(max+1)" where max is the highest N found, or "user-0" if none exist.
+///
+/// Note: This is a free function rather than a default trait method because the
+/// `trait_variant::make(Send)` macro doesn't support default async implementations.
+pub async fn next_default_chain_name<W: Wallet>(wallet: &W) -> Result<String, W::Error> {
+    let mut next_user_num = 0;
+    let mut items = pin!(wallet.items());
+    while let Some(result) = items.next().await {
+        let (_, chain) = result?;
+        if let Some(num_str) = chain.name.strip_prefix("user-") {
+            if let Ok(num) = num_str.parse::<u128>() {
+                next_user_num = next_user_num.max(num.saturating_add(1))
+            }
+        }
+    }
+    Ok(format!("user-{}", next_user_num))
+}
+
+/// Resolves a chain name to a chain ID.
+///
+/// Looks up chains by their stored name.
+///
+/// Note: This is a free function rather than a default trait method because the
+/// `trait_variant::make(Send)` macro doesn't support default async implementations.
+pub async fn resolve_chain_name<W: Wallet>(
+    wallet: &W,
+    name: &str,
+) -> Result<Option<ChainId>, W::Error> {
+    let mut items = pin!(wallet.items());
+    while let Some(result) = items.next().await {
+        let (chain_id, chain) = result?;
+        if chain.name == name {
+            return Ok(Some(chain_id));
+        }
+    }
+    Ok(None)
 }

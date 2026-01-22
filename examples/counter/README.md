@@ -43,7 +43,7 @@ Enable logs for user applications:
 export LINERA_APPLICATION_LOGS=true
 ```
 
-Create the user wallet and add chains to it:
+Create the user wallet and add a chain to it:
 
 ```bash
 export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
@@ -51,10 +51,7 @@ export LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json"
 export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
 
 linera wallet init --faucet $LINERA_FAUCET_URL
-
-INFO=($(linera wallet request-chain --faucet $LINERA_FAUCET_URL))
-CHAIN="${INFO[0]}"
-OWNER="${INFO[1]}"
+linera wallet request-chain --faucet $LINERA_FAUCET_URL --name my-chain
 ```
 
 Now, compile the `counter` application WebAssembly binaries, publish and create an application instance.
@@ -98,16 +95,15 @@ First, a node service for the current wallet has to be started:
 ```bash
 PORT=8080
 linera service --port $PORT &
-echo "http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID"
 ```
 
-Clicking the printed URL will take you to a
-[GraphiQL](https://www.gatsbyjs.com/docs/how-to/querying-data/running-queries-with-graphiql/)
+Navigate to <http://localhost:8080/chains/my-chain/applications/$LINERA_APPLICATION_ID>
+to access a [GraphiQL](https://www.gatsbyjs.com/docs/how-to/querying-data/running-queries-with-graphiql/)
 environment connected to your app.
 
 To get the current value of `counter`, you can run the query:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID
+```gql,uri=http://localhost:8080/chains/my-chain/applications/$LINERA_APPLICATION_ID
 query {
   value
 }
@@ -117,7 +113,7 @@ To increase the value of the counter, you can run the `increment`
 mutation. Note that the result of a mutation is the hash of the
 resulting block, if any.
 
-```gql,uri=http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID
+```gql,uri=http://localhost:8080/chains/my-chain/applications/$LINERA_APPLICATION_ID
 mutation Increment {
   increment(value: 3)
 }

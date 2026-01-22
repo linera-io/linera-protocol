@@ -61,6 +61,7 @@ impl chain_listener::ClientContext for ClientContext {
     async fn update_wallet_for_new_chain(
         &mut self,
         _: ChainId,
+        _: Option<String>,
         _: Option<AccountOwner>,
         _: Timestamp,
         _: Epoch,

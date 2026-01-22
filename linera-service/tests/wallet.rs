@@ -113,6 +113,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
         .insert(
             admin_description.id(),
             wallet::Chain {
+                name: "admin".to_string(),
                 owner: Some(new_pubkey.into()),
                 timestamp: clock.current_time(),
                 pending_proposal: Some(PendingProposal {
@@ -127,7 +128,9 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
                     },
                     blobs: vec![Blob::new_data(b"blob".to_vec())],
                 }),
-                ..admin_description.into()
+                block_hash: None,
+                next_block_height: BlockHeight::ZERO,
+                epoch: Some(admin_description.config().epoch),
             },
         )
         .expect("wallet should be empty");

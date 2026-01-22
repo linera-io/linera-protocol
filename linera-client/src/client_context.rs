@@ -243,11 +243,12 @@ impl<Env: Environment> chain_listener::ClientContext for ClientContext<Env> {
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
+        name: Option<String>,
         owner: Option<AccountOwner>,
         timestamp: Timestamp,
         epoch: Epoch,
     ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain(chain_id, owner, timestamp, epoch)
+        self.update_wallet_for_new_chain(chain_id, name, owner, timestamp, epoch)
             .make_sync()
             .await
     }
@@ -358,8 +359,21 @@ impl<Env: Environment> ClientContext<Env> {
     }
 
     /// Returns the ID of the admin chain.
-    pub fn admin_chain(&self) -> ChainId {
-        self.client.admin_chain()
+    pub fn admin_id(&self) -> ChainId {
+        self.client.admin_id()
+    }
+
+    /// Returns the default name for a chain.
+    ///
+    /// Returns "admin" for the admin chain, otherwise generates "user-N" where N is
+    /// one more than the highest existing user number.
+    async fn default_chain_name(&self, chain_id: ChainId) -> Result<String, Error> {
+        if chain_id == self.admin_id() {
+            return Ok("admin".to_string());
+        }
+        Ok(wallet::next_default_chain_name(self.wallet())
+            .await
+            .map_err(error::Inner::wallet)?)
     }
 
     /// Retrieve the default account. Current this is the common account of the default
@@ -375,7 +389,7 @@ impl<Env: Environment> ClientContext<Env> {
     }
 
     pub async fn first_non_admin_chain(&self) -> Result<ChainId, Error> {
-        let admin_id = self.admin_chain();
+        let admin_id = self.admin_id();
         std::pin::pin!(self
             .wallet()
             .chain_ids()
@@ -411,10 +425,24 @@ impl<Env: Environment> ClientContext<Env> {
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
         let chain_id = info.chain_id;
+        // Get existing chain to preserve its name; if it doesn't exist, generate a default name.
+        let existing = self
+            .wallet()
+            .get(chain_id)
+            .await
+            .map_err(error::Inner::wallet)?;
+        let name = match existing {
+            Some(chain) => chain.name,
+            None => self.default_chain_name(chain_id).await?,
+        };
         let new_chain = wallet::Chain {
+            name,
             pending_proposal: client.pending_proposal().clone(),
             owner: client.preferred_owner(),
-            ..info.as_ref().into()
+            block_hash: info.block_hash,
+            next_block_height: info.next_block_height,
+            timestamp: info.timestamp,
+            epoch: Some(info.epoch),
         };
 
         self.wallet()
@@ -426,18 +454,28 @@ impl<Env: Environment> ClientContext<Env> {
     }
 
     /// Remembers the new chain and its owner (if any) in the wallet.
+    ///
+    /// If `name` is `None`, generates a default name: "admin" for the admin chain,
+    /// or "user-N" where N is one more than the highest existing user number.
     pub async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
+        name: Option<String>,
         owner: Option<AccountOwner>,
         timestamp: Timestamp,
         epoch: Epoch,
     ) -> Result<(), Error> {
+        // User-provided names are validated; auto-generated names are trusted.
+        let chain_name = match name {
+            Some(provided_name) => {
+                wallet::validate_chain_name(&provided_name)?;
+                provided_name
+            }
+            None => self.default_chain_name(chain_id).await?,
+        };
+        let chain = wallet::Chain::new(chain_name, owner, epoch, timestamp);
         self.wallet()
-            .try_insert(
-                chain_id,
-                linera_core::wallet::Chain::new(owner, epoch, timestamp),
-            )
+            .try_insert(chain_id, chain)
             .await
             .map_err(error::Inner::wallet)?;
         Ok(())
@@ -479,9 +517,13 @@ impl<Env: Environment> ClientContext<Env> {
         }
     }
 
+    /// Assigns a chain to a key in the wallet.
+    ///
+    /// If `name` is `None`, generates a default name like "user-N".
     pub async fn assign_new_chain_to_key(
         &mut self,
         chain_id: ChainId,
+        name: Option<String>,
         owner: AccountOwner,
     ) -> Result<(), Error> {
         self.client
@@ -508,15 +550,14 @@ impl<Env: Environment> ClientContext<Env> {
             .map_err(error::Inner::wallet)?;
         // If the chain didn't exist, insert a new entry.
         if modified.is_none() {
+            let chain_name = match name {
+                Some(provided_name) => provided_name,
+                None => self.default_chain_name(chain_id).await?,
+            };
             self.wallet()
                 .insert(
                     chain_id,
-                    wallet::Chain {
-                        owner: Some(owner),
-                        timestamp,
-                        epoch: Some(epoch),
-                        ..Default::default()
-                    },
+                    wallet::Chain::new(chain_name, Some(owner), epoch, timestamp),
                 )
                 .await
                 .map_err(error::Inner::wallet)
@@ -571,8 +612,7 @@ impl<Env: Environment> ClientContext<Env> {
         }
     }
 
-    pub async fn ownership(&mut self, chain_id: Option<ChainId>) -> Result<ChainOwnership, Error> {
-        let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
+    pub async fn ownership(&mut self, chain_id: ChainId) -> Result<ChainOwnership, Error> {
         let client = self.make_chain_client(chain_id).await?;
         let info = client.chain_info().await?;
         Ok(info.manager.ownership)
@@ -580,10 +620,9 @@ impl<Env: Environment> ClientContext<Env> {
 
     pub async fn change_ownership(
         &mut self,
-        chain_id: Option<ChainId>,
+        chain_id: ChainId,
         ownership_config: ChainOwnershipConfig,
     ) -> Result<(), Error> {
-        let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
         let chain_client = self.make_chain_client(chain_id).await?;
         info!(
             ?ownership_config, %chain_id, preferred_owner=?chain_client.preferred_owner(),
@@ -619,10 +658,9 @@ impl<Env: Environment> ClientContext<Env> {
 
     pub async fn set_preferred_owner(
         &mut self,
-        chain_id: Option<ChainId>,
+        chain_id: ChainId,
         preferred_owner: AccountOwner,
     ) -> Result<(), Error> {
-        let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
         let mut chain_client = self.make_chain_client(chain_id).await?;
         let old_owner = chain_client.preferred_owner();
         info!(%chain_id, ?old_owner, %preferred_owner, "Changing preferred owner for chain");
@@ -965,15 +1003,29 @@ impl<Env: Environment> ClientContext<Env> {
             info!("Updating wallet from chain clients...");
             for chain_client in chain_clients {
                 let info = chain_client.chain_info().await?;
+                let chain_id = info.chain_id;
+                let existing = self
+                    .wallet()
+                    .get(chain_id)
+                    .await
+                    .map_err(error::Inner::wallet)?;
+                let name = match existing {
+                    Some(chain) => chain.name,
+                    None => self.default_chain_name(chain_id).await?,
+                };
                 let client_owner = chain_client.preferred_owner();
                 let pending_proposal = chain_client.pending_proposal().clone();
                 self.wallet()
                     .insert(
-                        info.chain_id,
+                        chain_id,
                         wallet::Chain {
+                            name,
                             pending_proposal,
                             owner: client_owner,
-                            ..info.as_ref().into()
+                            block_hash: info.block_hash,
+                            next_block_height: info.next_block_height,
+                            timestamp: info.timestamp,
+                            epoch: Some(info.epoch),
                         },
                     )
                     .await

@@ -295,7 +295,7 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Returns the chain ID of the admin chain.
-    pub fn admin_chain(&self) -> ChainId {
+    pub fn admin_id(&self) -> ChainId {
         self.admin_id
     }
 
