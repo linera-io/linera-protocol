@@ -38,11 +38,28 @@ spec:
         value: "true"
         effect: NoSchedule
       {{- end }}
+      {{- if .Values.nodeLocalDns.enabled }}
+      dnsPolicy: None
+      dnsConfig:
+        nameservers:
+          - {{ .Values.nodeLocalDns.localDnsIp }}
+        searches:
+          - {{ .Release.Namespace }}.svc.cluster.local
+          - svc.cluster.local
+          - cluster.local
+        options:
+          - name: ndots
+            value: "5"
+      {{- end }}
       terminationGracePeriodSeconds: 10
       initContainers:
         - name: linera-server-initializer
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
+          {{- with .Values.shardResources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command:
             - sh
             - -c
@@ -75,8 +92,10 @@ spec:
               value: {{ .Values.logLevel }}
             - name: RUST_BACKTRACE
               value: "1"
+            {{- if .Values.otlpExporterEndpoint }}
             - name: LINERA_OTLP_EXPORTER_ENDPOINT
               value: {{ .Values.otlpExporterEndpoint }}
+            {{- end }}
           volumeMounts:
             - name: config
               mountPath: "/config"
@@ -101,6 +120,10 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
+          {{- with .Values.shardResources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command:
             - sh
             - -c
@@ -110,12 +133,20 @@ spec:
                 --storage {{ .Values.storage | quote }} \
                 --server /config/server.json \
                 --shard $ORDINAL \
-                --storage-replication-factor {{ .Values.storageReplicationFactor | quote }}
+                --storage-replication-factor {{ .Values.storageReplicationFactor | quote }} \
+                {{- if .Values.crossChainQueueSize }}
+                --cross-chain-queue-size {{ .Values.crossChainQueueSize }}
+                {{- end }}
+                {{- if .Values.notificationQueueSize }}
+                --notification-queue-size {{ .Values.notificationQueueSize }}
+                {{- end }}
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
+            {{- if .Values.otlpExporterEndpoint }}
             - name: LINERA_OTLP_EXPORTER_ENDPOINT
               value: {{ .Values.otlpExporterEndpoint }}
+            {{- end }}
             {{- if .Values.serverTokioThreads }}
             - name: LINERA_SERVER_TOKIO_THREADS
               value: "{{ .Values.serverTokioThreads }}"

@@ -30,7 +30,7 @@ use linera_chain::{
     },
     ChainError, ChainStateView,
 };
-use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome};
+use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome, ResourceTracker};
 use linera_storage::Storage;
 use linera_views::{context::InactiveContext, ViewError};
 use serde::{Deserialize, Serialize};
@@ -39,7 +39,9 @@ use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, warn};
 
 /// Re-export of [`EventSubscriptionsResult`] for use by other crate modules.
-pub(crate) use crate::chain_worker::EventSubscriptionsResult;
+pub(crate) use crate::chain_worker::{
+    ChainWorkerRequestReceiver, ChainWorkerRequestSender, EventSubscriptionsResult,
+};
 use crate::{
     chain_worker::{
         BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier,
@@ -61,10 +63,11 @@ mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
-        exponential_bucket_interval, register_histogram_vec, register_int_counter,
-        register_int_counter_vec,
+        exponential_bucket_interval, register_histogram, register_histogram_vec,
+        register_int_counter, register_int_counter_vec, register_int_gauge,
     };
-    use prometheus::{HistogramVec, IntCounter, IntCounterVec};
+    use linera_chain::types::ConfirmedBlockCertificate;
+    use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge};
 
     pub static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
@@ -90,8 +93,35 @@ mod metrics {
     pub static INCOMING_BUNDLE_COUNT: LazyLock<IntCounter> =
         LazyLock::new(|| register_int_counter("incoming_bundle_count", "Incoming bundle count"));
 
+    pub static INCOMING_MESSAGE_COUNT: LazyLock<IntCounter> =
+        LazyLock::new(|| register_int_counter("incoming_message_count", "Incoming message count"));
+
     pub static OPERATION_COUNT: LazyLock<IntCounter> =
         LazyLock::new(|| register_int_counter("operation_count", "Operation count"));
+
+    pub static OPERATIONS_PER_BLOCK: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "operations_per_block",
+            "Number of operations per block",
+            exponential_bucket_interval(1.0, 10000.0),
+        )
+    });
+
+    pub static INCOMING_BUNDLES_PER_BLOCK: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "incoming_bundles_per_block",
+            "Number of incoming bundles per block",
+            exponential_bucket_interval(1.0, 10000.0),
+        )
+    });
+
+    pub static TRANSACTIONS_PER_BLOCK: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "transactions_per_block",
+            "Number of transactions per block",
+            exponential_bucket_interval(1.0, 10000.0),
+        )
+    });
 
     pub static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
@@ -111,6 +141,83 @@ mod metrics {
             "Number of chain info queries processed",
         )
     });
+
+    /// Number of cached chain worker channel endpoints in the map.
+    pub static CHAIN_WORKER_ENDPOINTS_CACHED: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
+            "chain_worker_endpoints_cached",
+            "Number of cached chain worker channel endpoints",
+        )
+    });
+
+    /// Holds metrics data extracted from a confirmed block certificate.
+    pub struct MetricsData {
+        certificate_log_str: &'static str,
+        round_type: &'static str,
+        round_number: u32,
+        confirmed_transactions: u64,
+        confirmed_incoming_bundles: u64,
+        confirmed_incoming_messages: u64,
+        confirmed_operations: u64,
+        validators_with_signatures: Vec<String>,
+    }
+
+    impl MetricsData {
+        /// Creates a new `MetricsData` by extracting data from the certificate.
+        pub fn new(certificate: &ConfirmedBlockCertificate) -> Self {
+            Self {
+                certificate_log_str: certificate.inner().to_log_str(),
+                round_type: certificate.round.type_name(),
+                round_number: certificate.round.number(),
+                confirmed_transactions: certificate.block().body.transactions.len() as u64,
+                confirmed_incoming_bundles: certificate.block().body.incoming_bundles().count()
+                    as u64,
+                confirmed_incoming_messages: certificate
+                    .block()
+                    .body
+                    .incoming_bundles()
+                    .map(|b| b.messages().count())
+                    .sum::<usize>() as u64,
+                confirmed_operations: certificate.block().body.operations().count() as u64,
+                validators_with_signatures: certificate
+                    .signatures()
+                    .iter()
+                    .map(|(validator_name, _)| validator_name.to_string())
+                    .collect(),
+            }
+        }
+
+        /// Records the metrics for a processed block.
+        pub fn record(self) {
+            NUM_BLOCKS.with_label_values(&[]).inc();
+            NUM_ROUNDS_IN_CERTIFICATE
+                .with_label_values(&[self.certificate_log_str, self.round_type])
+                .observe(self.round_number as f64);
+            TRANSACTIONS_PER_BLOCK.observe(self.confirmed_transactions as f64);
+            INCOMING_BUNDLES_PER_BLOCK.observe(self.confirmed_incoming_bundles as f64);
+            OPERATIONS_PER_BLOCK.observe(self.confirmed_operations as f64);
+            if self.confirmed_transactions > 0 {
+                TRANSACTION_COUNT
+                    .with_label_values(&[])
+                    .inc_by(self.confirmed_transactions);
+                if self.confirmed_incoming_bundles > 0 {
+                    INCOMING_BUNDLE_COUNT.inc_by(self.confirmed_incoming_bundles);
+                }
+                if self.confirmed_incoming_messages > 0 {
+                    INCOMING_MESSAGE_COUNT.inc_by(self.confirmed_incoming_messages);
+                }
+                if self.confirmed_operations > 0 {
+                    OPERATION_COUNT.inc_by(self.confirmed_operations);
+                }
+            }
+
+            for validator_name in self.validators_with_signatures {
+                CERTIFICATES_SIGNED
+                    .with_label_values(&[&validator_name])
+                    .inc();
+            }
+        }
+    }
 }
 
 /// Instruct the networking layer to send cross-chain requests and/or push notifications.
@@ -647,7 +754,7 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse), WorkerError> {
+    ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         self.query_chain_worker(block.chain_id, move |callback| {
             ChainWorkerRequest::StageBlockExecution {
                 block,
@@ -841,10 +948,10 @@ where
         let request = request_builder(callback);
 
         // Call the endpoint, possibly a new one.
-        let new_receiver = self.call_and_maybe_create_chain_worker_endpoint(chain_id, request)?;
+        let new_channel = self.call_and_maybe_create_chain_worker_endpoint(chain_id, request)?;
 
-        // We just created an endpoint: spawn the actor.
-        if let Some(receiver) = new_receiver {
+        // We just created a channel: spawn the actor.
+        if let Some((sender, receiver)) = new_channel {
             let delivery_notifier = self
                 .delivery_notifiers
                 .lock()
@@ -869,6 +976,7 @@ where
                 self.chain_modes.clone(),
                 delivery_notifier,
                 chain_id,
+                sender,
                 receiver,
                 is_tracked,
             );
@@ -893,6 +1001,9 @@ where
     }
 
     /// Find an endpoint and call it. Create the endpoint if necessary.
+    ///
+    /// Returns `Some((sender, receiver))` if a new channel was created and the actor needs to be
+    /// spawned, or `None` if an existing endpoint was used.
     #[instrument(level = "trace", skip(self), fields(
         nickname = %self.nickname,
         chain_id = %chain_id
@@ -903,22 +1014,19 @@ where
         chain_id: ChainId,
         request: ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<
-        Option<
-            mpsc::UnboundedReceiver<(
-                ChainWorkerRequest<StorageClient::Context>,
-                tracing::Span,
-                Instant,
-            )>,
-        >,
+        Option<(
+            ChainWorkerRequestSender<StorageClient::Context>,
+            ChainWorkerRequestReceiver<StorageClient::Context>,
+        )>,
         WorkerError,
     > {
         let mut chain_workers = self.chain_workers.lock().unwrap();
 
-        let (sender, new_receiver) = if let Some(endpoint) = chain_workers.remove(&chain_id) {
+        let (sender, new_channel) = if let Some(endpoint) = chain_workers.remove(&chain_id) {
             (endpoint, None)
         } else {
             let (sender, receiver) = mpsc::unbounded_channel();
-            (sender, Some(receiver))
+            (sender.clone(), Some((sender, receiver)))
         };
 
         if let Err(e) = sender.send((request, tracing::Span::current(), Instant::now())) {
@@ -931,8 +1039,10 @@ where
 
         // Put back the sender in the cache for next time.
         chain_workers.insert(chain_id, sender);
+        #[cfg(with_metrics)]
+        metrics::CHAIN_WORKER_ENDPOINTS_CACHED.set(chain_workers.len() as i64);
 
-        Ok(new_receiver)
+        Ok(new_channel)
     }
 
     #[instrument(skip_all, fields(
@@ -1002,58 +1112,15 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
         #[cfg(with_metrics)]
-        let metrics_data = (
-            certificate.inner().to_log_str(),
-            certificate.round.type_name(),
-            certificate.round.number(),
-            certificate.block().body.transactions.len() as u64,
-            certificate.block().body.incoming_bundles().count() as u64,
-            certificate.block().body.operations().count() as u64,
-            certificate
-                .signatures()
-                .iter()
-                .map(|(validator_name, _)| validator_name.to_string())
-                .collect::<Vec<_>>(),
-        );
+        let metrics_data = metrics::MetricsData::new(&certificate);
 
         let (info, actions, _outcome) =
             Box::pin(self.process_confirmed_block(certificate, notify_when_messages_are_delivered))
                 .await?;
 
         #[cfg(with_metrics)]
-        {
-            if matches!(_outcome, BlockOutcome::Processed) {
-                let (
-                    certificate_log_str,
-                    round_type,
-                    round_number,
-                    confirmed_transactions,
-                    confirmed_incoming_bundles,
-                    confirmed_operations,
-                    validators_with_signatures,
-                ) = metrics_data;
-                metrics::NUM_BLOCKS.with_label_values(&[]).inc();
-                metrics::NUM_ROUNDS_IN_CERTIFICATE
-                    .with_label_values(&[certificate_log_str, round_type])
-                    .observe(round_number as f64);
-                if confirmed_transactions > 0 {
-                    metrics::TRANSACTION_COUNT
-                        .with_label_values(&[])
-                        .inc_by(confirmed_transactions);
-                    if confirmed_incoming_bundles > 0 {
-                        metrics::INCOMING_BUNDLE_COUNT.inc_by(confirmed_incoming_bundles);
-                    }
-                    if confirmed_operations > 0 {
-                        metrics::OPERATION_COUNT.inc_by(confirmed_operations);
-                    }
-                }
-
-                for validator_name in validators_with_signatures {
-                    metrics::CERTIFICATES_SIGNED
-                        .with_label_values(&[&validator_name])
-                        .inc();
-                }
-            }
+        if matches!(_outcome, BlockOutcome::Processed) {
+            metrics_data.record();
         }
         Ok((info, actions))
     }

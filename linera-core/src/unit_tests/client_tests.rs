@@ -45,7 +45,7 @@ use crate::test_utils::ServiceStorageBuilder;
 use crate::{
     client::{
         chain_client::{self, ChainClient},
-        BlanketMessagePolicy, ClientOutcome, ListeningMode, MessageAction, MessagePolicy,
+        ClientOutcome, ListeningMode, MessageAction,
     },
     local_node::LocalNodeError,
     node::{
@@ -517,7 +517,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let regular_owner = signer.generate_new().into();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let mut sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let super_owner = sender.identity().await?;
 
     // Configure chain with one super owner and one regular owner, no multi-leader rounds.
@@ -530,6 +530,9 @@ where
         timeout_config: TimeoutConfig::default(),
     });
     sender.execute_operation(owner_change_op).await.unwrap();
+
+    // Enable fast blocks so the super owner can propose in the Fast round.
+    sender.options_mut().allow_fast_blocks = true;
 
     // The super owner can still burn tokens since that doesn't use the validation round oracle.
     sender
@@ -2588,7 +2591,9 @@ where
     let signer = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let mut client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    // Enable fast blocks for this test that specifically tests fast block behavior.
+    client0.options_mut().allow_fast_blocks = true;
     let chain_id = client0.chain_id();
     let owner0 = client0.identity().await.unwrap();
     let owner1 = builder.signer.generate_new().into();
@@ -2613,6 +2618,7 @@ where
             BlockHeight::from(1),
         )
         .await?;
+    client1.options_mut().allow_fast_blocks = true;
     client1.set_preferred_owner(owner1);
 
     // Client 0 transfers 5 tokens from the chain account to themselves.
@@ -2824,13 +2830,14 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer)
         .await?
         .with_policy(policy.clone());
-    let client1 = builder.add_root_chain(1, Amount::ONE).await?;
-    let client2 = builder.add_root_chain(2, Amount::ONE).await?;
-    let client3 = builder.add_root_chain(3, Amount::ONE).await?;
+    let mut client1 = builder.add_root_chain(1, Amount::ONE).await?;
+    let mut client2 = builder.add_root_chain(2, Amount::ONE).await?;
+    let mut client3 = builder.add_root_chain(3, Amount::ONE).await?;
     let chain_id3 = client3.chain_id();
 
-    // Configure the clients as super owners, so they make fast blocks by default.
-    for client in [&client1, &client2, &client3] {
+    // Configure the clients as super owners with fast blocks enabled.
+    for client in [&mut client1, &mut client2, &mut client3] {
+        client.options_mut().allow_fast_blocks = true;
         let owner = client.identity().await?;
         let ownership = ChainOwnership::single_super(owner);
         client.change_ownership(ownership).await.unwrap();
@@ -3387,6 +3394,63 @@ where
     assert!(
         balance >= Amount::from_tokens(3),
         "New chain should have received the transferred funds, got {balance}"
+    );
+
+    Ok(())
+}
+
+/// Tests the `allow_fast_blocks` option: when enabled, a super owner produces `Fast` blocks;
+/// when disabled, they produce `MultiLeader(0)` blocks instead.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_disallow_fast_blocks<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+
+    // Create a chain and get its owner.
+    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let super_owner = client.identity().await?;
+
+    // Change ownership to make the owner a super owner.
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
+        super_owners: vec![super_owner],
+        owners: vec![],
+        first_leader: None,
+        multi_leader_rounds: 10,
+        open_multi_leader_rounds: false,
+        timeout_config: TimeoutConfig::default(),
+    });
+    client.execute_operation(owner_change_op).await.unwrap();
+
+    // With fast blocks enabled, the super owner creates a block in the Fast round.
+    client.options_mut().allow_fast_blocks = true;
+    let certificate = client
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(
+        certificate.round,
+        Round::Fast,
+        "Block should be in Fast round when fast blocks are enabled"
+    );
+
+    // With fast blocks disabled, the super owner creates a block in MultiLeader(0) instead.
+    client.options_mut().allow_fast_blocks = false;
+    let certificate = client
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(
+        certificate.round,
+        Round::MultiLeader(0),
+        "Block should be in MultiLeader(0) when fast blocks are disabled"
     );
 
     Ok(())

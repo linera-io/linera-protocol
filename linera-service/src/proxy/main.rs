@@ -369,7 +369,7 @@ where
                 ))))
             }
             DownloadCertificates(hashes) => {
-                let certificates = self.storage.read_certificates(hashes.clone()).await?;
+                let certificates = self.storage.read_certificates(&hashes).await?;
                 let certificates = match ResultReadCertificates::new(certificates, hashes) {
                     ResultReadCertificates::Certificates(certificates) => certificates,
                     ResultReadCertificates::InvalidHashes(hashes) => {
@@ -401,7 +401,7 @@ where
                     }
                     _ => bail!("Failed to retrieve sent certificate hashes"),
                 };
-                let certificates = self.storage.read_certificates(hashes.clone()).await?;
+                let certificates = self.storage.read_certificates(&hashes).await?;
                 let certificates = match ResultReadCertificates::new(certificates, hashes) {
                     ResultReadCertificates::Certificates(certificates) => certificates,
                     ResultReadCertificates::InvalidHashes(hashes) => {

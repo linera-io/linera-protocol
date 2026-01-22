@@ -223,7 +223,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
     );
 
     // The valid block is accepted...
-    let outcome = chain
+    let (outcome, _) = chain
         .execute_block(&valid_block, time, None, &[], None)
         .await
         .unwrap();
@@ -324,7 +324,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .with_operation(app_operation.clone())
         .with_operation(another_app_operation.clone());
 
-    let outcome = chain
+    let (outcome, _) = chain
         .execute_block(&valid_block, time, None, &[], None)
         .await?;
 
@@ -357,7 +357,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let valid_block = make_child_block(&value)
         .with_operation(app_operation.clone())
         .with_operation(another_app_operation.clone());
-    let outcome = chain
+    let (outcome, _) = chain
         .execute_block(&valid_block, time, None, &[], None)
         .await?;
     let value = ConfirmedBlock::new(outcome.with(valid_block));
@@ -564,7 +564,10 @@ async fn test_service_as_oracle_response_size_limit(
 
     application.expect_call(ExpectedCall::default_finalize());
 
-    chain.execute_block(&block, time, None, &[], None).await
+    chain
+        .execute_block(&block, time, None, &[], None)
+        .await
+        .map(|(outcome, _)| outcome)
 }
 
 /// Tests contract HTTP response size limit.
@@ -620,7 +623,10 @@ async fn test_contract_http_response_size_limit(
 
     application.expect_call(ExpectedCall::default_finalize());
 
-    chain.execute_block(&block, time, None, &[], None).await
+    chain
+        .execute_block(&block, time, None, &[], None)
+        .await
+        .map(|(outcome, _)| outcome)
 }
 
 /// Tests service HTTP response size limit.
@@ -676,7 +682,10 @@ async fn test_service_http_response_size_limit(
 
     application.expect_call(ExpectedCall::default_finalize());
 
-    chain.execute_block(&block, time, None, &[], None).await
+    chain
+        .execute_block(&block, time, None, &[], None)
+        .await
+        .map(|(outcome, _)| outcome)
 }
 
 /// Sets up a test with a dummy [`MockApplication`].

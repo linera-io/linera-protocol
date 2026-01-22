@@ -13,12 +13,15 @@ use linera_base::{
         AccountSignature, BcsHashable, BcsSignable, CryptoError, CryptoHash, Signer,
         ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
-    data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
+    data_types::{
+        Amount, Blob, BlockHeight, Epoch, Event, MessagePolicy, OracleResponse, Round, Timestamp,
+    },
     doc_scalar, ensure, hex, hex_debug,
     identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
 };
 use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 use crate::{
     block::{Block, ValidatedBlock},
@@ -266,6 +269,39 @@ impl IncomingBundle {
     /// Returns an iterator over all posted messages in this bundle, together with their ID.
     pub fn messages(&self) -> impl Iterator<Item = &PostedMessage> {
         self.bundle.messages.iter()
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub fn apply_policy(mut self, policy: &MessagePolicy) -> Option<IncomingBundle> {
+        if let Some(chain_ids) = &policy.restrict_chain_ids_to {
+            if !chain_ids.contains(&self.origin) {
+                return None;
+            }
+        }
+        if let Some(app_ids) = &policy.reject_message_bundles_without_application_ids {
+            if !self
+                .messages()
+                .any(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
+            {
+                return None;
+            }
+        }
+        if let Some(app_ids) = &policy.reject_message_bundles_with_other_application_ids {
+            if !self
+                .messages()
+                .all(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
+            {
+                return None;
+            }
+        }
+        if policy.is_reject() {
+            if self.bundle.is_skippable() {
+                return None;
+            } else if !self.bundle.is_protected() {
+                self.action = MessageAction::Reject;
+            }
+        }
+        Some(self)
     }
 }
 

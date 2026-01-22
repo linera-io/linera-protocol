@@ -16,6 +16,7 @@ use linera_base::{
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, BlobId, ChainId, StreamId},
+    task,
     time::Instant,
 };
 use linera_chain::{
@@ -25,12 +26,12 @@ use linera_chain::{
 };
 use linera_execution::{
     system::EventSubscriptions, ExecutionStateView, Query, QueryContext, QueryOutcome,
-    ServiceRuntimeEndpoint, ServiceSyncRuntime,
+    ResourceTracker, ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::{Clock as _, Storage};
-use linera_views::context::InactiveContext;
+use linera_views::context::{Context, InactiveContext};
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
-use tracing::{instrument, trace, Instrument as _};
+use tracing::{debug, instrument, trace, Instrument as _};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
 use crate::{
@@ -44,12 +45,22 @@ use crate::{
 /// Type alias for event subscriptions result.
 pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscriptions)>;
 
+/// Type alias for the request channel sender.
+pub(crate) type ChainWorkerRequestSender<Ctx> =
+    mpsc::UnboundedSender<(ChainWorkerRequest<Ctx>, tracing::Span, Instant)>;
+
+/// Type alias for the request channel receiver.
+pub(crate) type ChainWorkerRequestReceiver<Ctx> =
+    mpsc::UnboundedReceiver<(ChainWorkerRequest<Ctx>, tracing::Span, Instant)>;
+
 #[cfg(with_metrics)]
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util::{exponential_bucket_interval, register_histogram};
-    use prometheus::Histogram;
+    use linera_base::prometheus_util::{
+        exponential_bucket_interval, register_histogram, register_int_gauge,
+    };
+    use prometheus::{Histogram, IntGauge};
 
     pub static CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME: LazyLock<Histogram> = LazyLock::new(|| {
         register_histogram(
@@ -58,13 +69,29 @@ mod metrics {
             exponential_bucket_interval(0.1_f64, 10_000.0),
         )
     });
+
+    /// Number of active chain worker actor tasks (outer loop of handle_requests).
+    pub static CHAIN_WORKER_ACTORS_ACTIVE: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
+            "chain_worker_actors_active",
+            "Number of active chain worker actor tasks",
+        )
+    });
+
+    /// Number of chain workers with chain state loaded in memory (inner loop of handle_requests).
+    pub static CHAIN_WORKER_STATES_LOADED: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
+            "chain_worker_states_loaded",
+            "Number of chain workers with chain state loaded in memory",
+        )
+    });
 }
 
 /// A request for the [`ChainWorkerActor`].
 #[derive(Debug)]
-pub(crate) enum ChainWorkerRequest<Context>
+pub(crate) enum ChainWorkerRequest<Ctx>
 where
-    Context: linera_views::context::Context + Clone + 'static,
+    Ctx: Context + Clone + 'static,
 {
     /// Reads the certificate for a requested [`BlockHeight`].
     #[cfg(with_testing)]
@@ -77,8 +104,7 @@ where
     /// Request a read-only view of the [`ChainStateView`].
     GetChainStateView {
         #[debug(skip)]
-        callback:
-            oneshot::Sender<Result<OwnedRwLockReadGuard<ChainStateView<Context>>, WorkerError>>,
+        callback: oneshot::Sender<Result<OwnedRwLockReadGuard<ChainStateView<Ctx>>, WorkerError>>,
     },
 
     /// Query an application's state.
@@ -102,7 +128,7 @@ where
         round: Option<u32>,
         published_blobs: Vec<Blob>,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<(Block, ChainInfoResponse), WorkerError>>,
+        callback: oneshot::Sender<Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError>>,
     },
 
     /// Process a leader timeout issued for this multi-owner chain.
@@ -315,13 +341,12 @@ where
         chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
-        incoming_requests: mpsc::UnboundedReceiver<(
-            ChainWorkerRequest<StorageClient::Context>,
-            tracing::Span,
-            Instant,
-        )>,
+        request_sender: ChainWorkerRequestSender<StorageClient::Context>,
+        request_receiver: ChainWorkerRequestReceiver<StorageClient::Context>,
         is_tracked: bool,
     ) {
+        #[cfg(with_metrics)]
+        metrics::CHAIN_WORKER_ACTORS_ACTIVE.inc();
         let actor = ChainWorkerActor {
             config,
             storage,
@@ -332,13 +357,18 @@ where
             chain_id,
             is_tracked,
         };
-        if let Err(err) = actor.handle_requests(incoming_requests).await {
+        if let Err(err) = actor
+            .handle_requests(request_sender, request_receiver)
+            .await
+        {
             tracing::error!("Chain actor error: {err}");
         }
+        #[cfg(with_metrics)]
+        metrics::CHAIN_WORKER_ACTORS_ACTIVE.dec();
     }
 
-    /// Sleeps for the configured TTL.
-    pub(super) async fn sleep_until_timeout(&self) {
+    /// Returns the TTL timeout timestamp.
+    fn ttl_timeout(&self) -> Timestamp {
         let now = self.storage.clock().current_time();
         let timeout = if self.is_tracked {
             self.config.sender_chain_ttl
@@ -346,8 +376,67 @@ where
             self.config.ttl
         };
         let ttl = TimeDelta::from_micros(u64::try_from(timeout.as_micros()).unwrap_or(u64::MAX));
-        let timeout = now.saturating_add(ttl);
-        self.storage.clock().sleep_until(timeout).await
+        now.saturating_add(ttl)
+    }
+
+    /// Checks if a block proposal should be delayed because its timestamp is in the future.
+    ///
+    /// Returns `Some(timestamp)` if the proposal should be delayed until that timestamp,
+    /// or `None` if it should be processed immediately (either because the timestamp is
+    /// not in the future, or because it's beyond the grace period and should error).
+    fn delay_until(&self, proposal: &BlockProposal) -> Option<Timestamp> {
+        let block_timestamp = proposal.content.block.timestamp;
+        let now = self.storage.clock().current_time();
+        let delta = block_timestamp.delta_since(now);
+
+        // Only delay if the timestamp is in the future but within the grace period.
+        // If it's beyond the grace period, process immediately to return an error.
+        // This prevents malicious clients from filling our delay queue with far-future proposals.
+        let grace_period = TimeDelta::from_micros(
+            u64::try_from(self.config.block_time_grace_period.as_micros()).unwrap_or(u64::MAX),
+        );
+        (delta > TimeDelta::ZERO && delta <= grace_period).then_some(block_timestamp)
+    }
+
+    /// If the request is a block proposal that should be delayed, spawns a task to
+    /// re-queue it and returns `None`. Otherwise, records queue wait metrics and
+    /// returns the request for immediate processing.
+    fn preprocess_request(
+        &self,
+        request: ChainWorkerRequest<StorageClient::Context>,
+        span: tracing::Span,
+        queued_at: Instant,
+        request_sender: &ChainWorkerRequestSender<StorageClient::Context>,
+    ) -> Option<(
+        ChainWorkerRequest<StorageClient::Context>,
+        tracing::Span,
+        Instant,
+    )> {
+        // Check if this request should be delayed.
+        if let ChainWorkerRequest::HandleBlockProposal { ref proposal, .. } = request {
+            if let Some(delay_until) = self.delay_until(proposal) {
+                debug!(%delay_until, "delaying block proposal");
+                let sender = request_sender.clone();
+                let clock = self.storage.clock().clone();
+                task::spawn(async move {
+                    clock.sleep_until(delay_until).await;
+                    // Re-insert the request into the queue. If the channel is closed,
+                    // the actor is shutting down, so we can ignore the error.
+                    sender.send((request, span, queued_at)).ok();
+                })
+                .forget();
+                return None;
+            }
+        }
+
+        // Record how long the request waited in queue (in milliseconds).
+        #[cfg(with_metrics)]
+        {
+            let queue_wait_time_ms = queued_at.elapsed().as_secs_f64() * 1000.0;
+            metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
+        }
+
+        Some((request, span, queued_at))
     }
 
     /// Runs the worker until there are no more incoming requests.
@@ -357,21 +446,17 @@ where
     )]
     async fn handle_requests(
         self,
-        mut incoming_requests: mpsc::UnboundedReceiver<(
-            ChainWorkerRequest<StorageClient::Context>,
-            tracing::Span,
-            Instant,
-        )>,
+        request_sender: ChainWorkerRequestSender<StorageClient::Context>,
+        mut incoming_requests: ChainWorkerRequestReceiver<StorageClient::Context>,
     ) -> Result<(), WorkerError> {
         trace!("Starting `ChainWorkerActor`");
 
-        while let Some((request, span, _queued_at)) = incoming_requests.recv().await {
-            // Record how long the request waited in queue (in milliseconds)
-            #[cfg(with_metrics)]
-            {
-                let queue_wait_time_ms = _queued_at.elapsed().as_secs_f64() * 1000.0;
-                metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
-            }
+        while let Some((request, span, queued_at)) = incoming_requests.recv().await {
+            let Some((request, span, _)) =
+                self.preprocess_request(request, span, queued_at, &request_sender)
+            else {
+                continue;
+            };
 
             let (service_runtime_task, service_runtime_endpoint) =
                 if self.config.long_lived_services {
@@ -395,25 +480,29 @@ where
             )
             .instrument(span.clone())
             .await?;
+            #[cfg(with_metrics)]
+            metrics::CHAIN_WORKER_STATES_LOADED.inc();
 
             Box::pin(worker.handle_request(request))
                 .instrument(span)
                 .await;
 
             loop {
+                let ttl_timeout = self.ttl_timeout();
+
                 futures::select! {
-                    () = self.sleep_until_timeout().fuse() => break,
+                    () = self.storage.clock().sleep_until(ttl_timeout).fuse() => {
+                        break;
+                    }
                     maybe_request = incoming_requests.recv().fuse() => {
-                        let Some((request, span, _queued_at)) = maybe_request else {
+                        let Some((request, span, queued_at)) = maybe_request else {
                             break; // Request sender was dropped.
                         };
-
-                        // Record how long the request waited in queue (in milliseconds)
-                        #[cfg(with_metrics)]
-                        {
-                            let queue_wait_time_ms = _queued_at.elapsed().as_secs_f64() * 1000.0;
-                            metrics::CHAIN_WORKER_REQUEST_QUEUE_WAIT_TIME.observe(queue_wait_time_ms);
-                        }
+                        let Some((request, span, _)) =
+                            self.preprocess_request(request, span, queued_at, &request_sender)
+                        else {
+                            continue;
+                        };
 
                         Box::pin(worker.handle_request(request)).instrument(span).await;
                     }
@@ -423,6 +512,8 @@ where
             trace!("Unloading chain state of {} ...", self.chain_id);
             worker.clear_shared_chain_view().await;
             drop(worker);
+            #[cfg(with_metrics)]
+            metrics::CHAIN_WORKER_STATES_LOADED.dec();
             if let Some(task) = service_runtime_task {
                 task.await?;
             }

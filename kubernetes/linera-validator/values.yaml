@@ -15,6 +15,8 @@ logLevel: "info"
 
 # OpenTelemetry configuration
 # Set to empty string to disable OTLP tracing
+# When otelCollector.enabled is true, this should point to the collector
+# Example: "http://otel-collector.default.svc.cluster.local:4317"
 otlpExporterEndpoint: ""
 
 # Network ports
@@ -26,9 +28,39 @@ metricsPort: 21100
 numShards: 4
 numProxies: 1
 
+# Shard container resource limits
+# These should be calculated based on node size and shard count
+# to ensure cgroup-aware memory/CPU detection works correctly in RocksDB
+shardResources: {}
+# Example:
+#   requests:
+#     cpu: "2"
+#     memory: "8Gi"
+#   limits:
+#     cpu: "4"
+#     memory: "16Gi"
+
+# Proxy container resource limits
+proxyResources: {}
+# Example:
+#   requests:
+#     cpu: "1"
+#     memory: "4Gi"
+#   limits:
+#     cpu: "2"
+#     memory: "8Gi"
+
 # Performance tuning
 # Set to empty string to use default Tokio thread count
 serverTokioThreads: ""
+
+# Cross-chain message queue size (default in binary is 1000)
+# Set to empty string to use default
+crossChainQueueSize: ""
+
+# Notification queue size for proxy notifications (default in binary is 1000)
+# Set to empty string to use default
+notificationQueueSize: ""
 
 # ============================================================================
 # Storage Configuration
@@ -271,3 +303,121 @@ kube-prometheus-stack:
 # Pyroscope - continuous profiling
 pyroscope:
   enabled: false
+
+# ============================================================================
+# OpenTelemetry Collector - Two-Tier Architecture
+# ============================================================================
+# Tier 1 (Router): DaemonSet on shard nodes, routes by traceID
+# Tier 2 (Sampler): StatefulSet on monitoring nodes, does tail sampling
+
+otelCollector:
+  # Enable/disable the OTel Collector two-tier architecture
+  enabled: false
+
+  # Tier 1: Router (Deployment on monitoring nodes)
+  # Lightweight - routes traces by traceID to Tier 2
+  router:
+    image: "otel/opentelemetry-collector-contrib"
+    imageTag: "0.113.0"
+    imagePullPolicy: "IfNotPresent"
+    # Number of router replicas - lineractl may override this
+    replicas: 2
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+    nodeSelector:
+      workload: monitoring
+    tolerations:
+      - key: monitoring
+        value: "true"
+        effect: NoSchedule
+
+  # Tier 2: Sampler (StatefulSet on monitoring nodes)
+  # Heavy - holds traces in memory for tail sampling decisions
+  sampler:
+    image: "otel/opentelemetry-collector-contrib"
+    imageTag: "0.113.0"
+    imagePullPolicy: "IfNotPresent"
+    # Replicas: scaled by lineractl based on total shard vCPUs
+    # Formula: max(2, ceil(total_shard_vcpus / 50))
+    replicas: 2
+    resources:
+      requests:
+        cpu: "2000m"
+        memory: "4Gi"
+      limits:
+        cpu: "4000m"
+        memory: "6Gi"
+    # Tail sampling settings
+    decisionWait: "5s"
+    numTraces: 100000
+    expectedTracesPerSec: 5000
+    latencyThresholdMs: 500
+    baselineSamplingPercent: 5.0
+    nodeSelector:
+      workload: monitoring
+    tolerations:
+      - key: monitoring
+        value: "true"
+        effect: NoSchedule
+
+  # Tempo endpoint (where Tier 2 exports to)
+  tempoEndpoint: "tempo.tempo.svc.cluster.local:4317"
+  tempoInsecure: true
+
+# ============================================================================
+# NodeLocal DNSCache - Reduces CoreDNS load by caching DNS at node level
+# ============================================================================
+# Deploys a DaemonSet that runs a DNS cache on every node, reducing
+# latency and load on the cluster's CoreDNS pods.
+
+nodeLocalDns:
+  # Enable/disable NodeLocal DNSCache
+  enabled: false
+
+  # Local DNS IP - link-local address for the node cache
+  # Must not conflict with any existing cluster IPs
+  localDnsIp: "169.254.20.10"
+
+  # kube-dns service IP - REQUIRED for iptables interception
+  # Get this with: kubectl get svc kube-dns -n kube-system -o jsonpath='{.spec.clusterIP}'
+  # For GKE, typically 10.x.0.10 where x depends on your service CIDR
+  kubeDnsIp: ""
+
+  # kube-dns-upstream service IP - Used for forwarding DNS queries
+  # This service bypasses NOTRACK iptables rules, allowing NAT to work properly
+  # If empty, Helm will look up the service IP automatically (requires service to exist)
+  # On first deploy, falls back to kubeDnsIp (requires second helm upgrade to fix)
+  kubeDnsUpstreamIp: ""
+
+  # Image configuration
+  image: "registry.k8s.io/dns/k8s-dns-node-cache"
+  imageTag: "1.23.1"
+  imagePullPolicy: "IfNotPresent"
+
+  # Resource limits - lineractl calculates proportional values based on VM vCPUs
+  # Shard nodes have high DNS load from ScyllaDB connection queries
+  resources:
+    requests:
+      cpu: "400m"
+      memory: "64Mi"
+    limits:
+      cpu: "1200m"
+      memory: "256Mi"
+
+  # DNS configuration
+  # Cluster DNS domain (usually cluster.local)
+  clusterDomain: "cluster.local"
+
+  # Upstream DNS servers for external queries (empty = use node's resolv.conf)
+  upstreamServers: ""
+
+  # Cache TTL settings (in seconds)
+  # How long to cache successful DNS responses
+  successTtl: 30
+  # How long to cache negative DNS responses (NXDOMAIN)
+  denialTtl: 5

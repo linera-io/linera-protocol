@@ -14,7 +14,7 @@ use futures::{
 };
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{ChainDescription, Epoch, Timestamp},
+    data_types::{ChainDescription, Epoch, MessagePolicy, Timestamp},
     identifiers::{AccountOwner, BlobType, ChainId},
     task::NonBlockingFuture,
     util::future::FutureSyncExt as _,
@@ -202,6 +202,8 @@ pub enum ListenerCommand {
     Listen(BTreeMap<ChainId, ListeningMode>),
     /// Command: stop listening to the given chains.
     StopListening(BTreeSet<ChainId>),
+    /// Command: set the message policies of some chain clients.
+    SetMessagePolicy(BTreeMap<ChainId, MessagePolicy>),
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
@@ -594,7 +596,12 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     match command {
                         ListenerCommand::Listen(new_chains) => {
                             debug!(?new_chains, "received command to listen to new chains");
-                            self.listen_recursively(new_chains).await?;
+                            self.listen_recursively(new_chains.clone()).await?;
+                            for chain_id in new_chains.keys() {
+                                if let Err(error) = self.update_wallet(*chain_id).await {
+                                    error!(%error, %chain_id, "error updating the wallet with a chain");
+                                }
+                            }
                         }
                         ListenerCommand::StopListening(chains) => {
                             debug!(?chains, "received command to stop listening to chains");
@@ -605,6 +612,23 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                                     continue;
                                 };
                                 listening_client.stop().await;
+                                if let Err(error) = self.context.lock().await.wallet().remove(chain_id).await {
+                                    error!(%error, %chain_id, "error removing a chain from the wallet");
+                                }
+                            }
+                        }
+                        ListenerCommand::SetMessagePolicy(policies) => {
+                            debug!(?policies, "received command to set message policies");
+                            for (chain_id, policy) in policies {
+                                let Some(listening_client) = self.listening.get_mut(&chain_id) else {
+                                    error!(
+                                        %chain_id,
+                                        "attempted to set the message policy of a non-existent \
+                                        listener"
+                                    );
+                                    continue;
+                                };
+                                listening_client.client.options_mut().message_policy = policy;
                             }
                         }
                     }

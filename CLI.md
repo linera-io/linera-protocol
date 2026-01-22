@@ -43,6 +43,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera wallet set-default`↴](#linera-wallet-set-default)
 * [`linera wallet init`↴](#linera-wallet-init)
 * [`linera wallet request-chain`↴](#linera-wallet-request-chain)
+* [`linera wallet export-genesis`↴](#linera-wallet-export-genesis)
 * [`linera wallet follow-chain`↴](#linera-wallet-follow-chain)
 * [`linera wallet forget-keys`↴](#linera-wallet-forget-keys)
 * [`linera wallet forget-chain`↴](#linera-wallet-forget-chain)
@@ -146,6 +147,7 @@ Client implementation and command-line tool for the Linera blockchain
 
   Default value: `10`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
+* `--allow-fast-blocks` — Whether to allow creating blocks in the fast round. Fast blocks have lower latency but must be used carefully so that there are never any conflicting fast block proposals
 * `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries
 * `--blanket-message-policy <BLANKET_MESSAGE_POLICY>` — The policy for handling incoming messages
 
@@ -303,27 +305,20 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 ###### **Options:**
 
 * `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
-* `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the argument leaves the current set of super owners unchanged
-* `--owners <OWNERS>` — A JSON list of the new owners. Absence of the argument leaves the current list of owners unchanged
-* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If set to null, this is random like other rounds. Absence of the argument leaves the current setting unchanged
-* `--owner-weights <OWNER_WEIGHTS>` — A JSON list of weights for the new owners.
-
-   If they are specified there must be exactly one weight for each owner.
-
-   Absence of the argument gives each owner a weight of 100 if --owners is specified, or leaves the owners unchanged if it is not specified.
-
-   Note: if --owner is not specified, but this argument is, the weights will be assigned to the existing owners in lexicographical order.
-* `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the argument leaves the current setting unchanged
+* `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the option leaves the current set of super owners unchanged
+* `--owners <OWNERS>` — A JSON map of the new owners to their weights. Absence of the option leaves the current set of owners unchanged
+* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If set to null, this is random like other rounds. Absence of the option leaves the current setting unchanged
+* `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the option leaves the current setting unchanged
 * `--open-multi-leader-rounds` — Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners. This should only be `true` on chains with restrictive application permissions and an application-based mechanism to select block proposers
-* `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the argument leaves the current setting unchanged
-* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds. Absence of the argument leaves the current setting unchanged
-* `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round. Absence of the argument leaves the current setting unchanged
-* `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds. Absence of the argument leaves the current setting unchanged
-* `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the argument leaves current permissions unchanged
-* `--mandatory-applications <MANDATORY_APPLICATIONS>` — A JSON list of applications, such that at least one operation or incoming message from each of these applications must occur in every block. Absence of the argument leaves current mandatory applications unchanged
-* `--manage-chain <MANAGE_CHAIN>` — A JSON list of applications allowed to manage the chain: close it, change application permissions, and change ownership. Absence of the argument leaves current managing applications unchanged
-* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — A JSON list of applications that are allowed to call services as oracles on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the argument leaves the current value of the setting unchanged
-* `--make-http-requests <MAKE_HTTP_REQUESTS>` — A JSON list of applications that are allowed to make HTTP requests on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the argument leaves the current value of the setting unchanged
+* `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the option leaves the current setting unchanged
+* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds. Absence of the option leaves the current setting unchanged
+* `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round. Absence of the option leaves the current setting unchanged
+* `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds. Absence of the option leaves the current setting unchanged
+* `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the option leaves current permissions unchanged
+* `--mandatory-applications <MANDATORY_APPLICATIONS>` — A JSON list of applications, such that at least one operation or incoming message from each of these applications must occur in every block. Absence of the option leaves current mandatory applications unchanged
+* `--manage-chain <MANAGE_CHAIN>` — A JSON list of applications allowed to manage the chain: close it, change application permissions, and change ownership. Absence of the option leaves current managing applications unchanged
+* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — A JSON list of applications that are allowed to call services as oracles on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the option leaves the current value of the setting unchanged
+* `--make-http-requests <MAKE_HTTP_REQUESTS>` — A JSON list of applications that are allowed to make HTTP requests on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the option leaves the current value of the setting unchanged
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
@@ -353,22 +348,15 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 ###### **Options:**
 
 * `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
-* `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the argument leaves the current set of super owners unchanged
-* `--owners <OWNERS>` — A JSON list of the new owners. Absence of the argument leaves the current list of owners unchanged
-* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If set to null, this is random like other rounds. Absence of the argument leaves the current setting unchanged
-* `--owner-weights <OWNER_WEIGHTS>` — A JSON list of weights for the new owners.
-
-   If they are specified there must be exactly one weight for each owner.
-
-   Absence of the argument gives each owner a weight of 100 if --owners is specified, or leaves the owners unchanged if it is not specified.
-
-   Note: if --owner is not specified, but this argument is, the weights will be assigned to the existing owners in lexicographical order.
-* `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the argument leaves the current setting unchanged
+* `--super-owners <SUPER_OWNERS>` — A JSON list of the new super owners. Absence of the option leaves the current set of super owners unchanged
+* `--owners <OWNERS>` — A JSON map of the new owners to their weights. Absence of the option leaves the current set of owners unchanged
+* `--first-leader <FIRST_LEADER>` — The leader of the first single-leader round. If set to null, this is random like other rounds. Absence of the option leaves the current setting unchanged
+* `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the option leaves the current setting unchanged
 * `--open-multi-leader-rounds` — Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners. This should only be `true` on chains with restrictive application permissions and an application-based mechanism to select block proposers
-* `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the argument leaves the current setting unchanged
-* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds. Absence of the argument leaves the current setting unchanged
-* `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round. Absence of the argument leaves the current setting unchanged
-* `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds. Absence of the argument leaves the current setting unchanged
+* `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the option leaves the current setting unchanged
+* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds. Absence of the option leaves the current setting unchanged
+* `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round. Absence of the option leaves the current setting unchanged
+* `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds. Absence of the option leaves the current setting unchanged
 
 
 
@@ -394,11 +382,11 @@ Changes the application permissions configuration
 ###### **Options:**
 
 * `--chain-id <CHAIN_ID>` — The ID of the chain to which the new permissions will be applied
-* `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the argument leaves current permissions unchanged
-* `--mandatory-applications <MANDATORY_APPLICATIONS>` — A JSON list of applications, such that at least one operation or incoming message from each of these applications must occur in every block. Absence of the argument leaves current mandatory applications unchanged
-* `--manage-chain <MANAGE_CHAIN>` — A JSON list of applications allowed to manage the chain: close it, change application permissions, and change ownership. Absence of the argument leaves current managing applications unchanged
-* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — A JSON list of applications that are allowed to call services as oracles on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the argument leaves the current value of the setting unchanged
-* `--make-http-requests <MAKE_HTTP_REQUESTS>` — A JSON list of applications that are allowed to make HTTP requests on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the argument leaves the current value of the setting unchanged
+* `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the option leaves current permissions unchanged
+* `--mandatory-applications <MANDATORY_APPLICATIONS>` — A JSON list of applications, such that at least one operation or incoming message from each of these applications must occur in every block. Absence of the option leaves current mandatory applications unchanged
+* `--manage-chain <MANAGE_CHAIN>` — A JSON list of applications allowed to manage the chain: close it, change application permissions, and change ownership. Absence of the option leaves current managing applications unchanged
+* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — A JSON list of applications that are allowed to call services as oracles on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the option leaves the current value of the setting unchanged
+* `--make-http-requests <MAKE_HTTP_REQUESTS>` — A JSON list of applications that are allowed to make HTTP requests on the current chain using the system API. If set to null, all applications will be able to do so. Absence of the option leaves the current value of the setting unchanged
 
 
 
@@ -936,6 +924,7 @@ Show the contents of the wallet
 * `set-default` — Change the wallet default chain
 * `init` — Initialize a wallet from the genesis configuration
 * `request-chain` — Request a new chain from a faucet and add it to the wallet
+* `export-genesis` — Export the genesis configuration to a JSON file
 * `follow-chain` — Add a new followed chain (i.e. a chain without keypair) to the wallet
 * `forget-keys` — Forgets the specified chain's keys. The chain will still be followed by the wallet
 * `forget-chain` — Forgets the specified chain, including the associated key pair
@@ -997,6 +986,24 @@ Request a new chain from a faucet and add it to the wallet
 
 * `--faucet <FAUCET>` — The address of a faucet
 * `--set-default` — Whether this chain should become the default chain
+
+
+
+## `linera wallet export-genesis`
+
+Export the genesis configuration to a JSON file.
+
+By default, exports the genesis config from the current wallet. Alternatively, use `--faucet` to retrieve the genesis config directly from a faucet URL.
+
+**Usage:** `linera wallet export-genesis [OPTIONS] <OUTPUT>`
+
+###### **Arguments:**
+
+* `<OUTPUT>` — Path to save the genesis configuration JSON file
+
+###### **Options:**
+
+* `--faucet <FAUCET>` — The address of a faucet to retrieve the genesis config from. If not specified, the genesis config is read from the current wallet
 
 
 

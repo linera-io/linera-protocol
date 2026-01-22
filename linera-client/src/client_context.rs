@@ -433,8 +433,7 @@ impl<Env: Environment> ClientContext<Env> {
         timestamp: Timestamp,
         epoch: Epoch,
     ) -> Result<(), Error> {
-        let _ = self
-            .wallet()
+        self.wallet()
             .try_insert(
                 chain_id,
                 linera_core::wallet::Chain::new(owner, epoch, timestamp),

@@ -1,0 +1,64 @@
+{{- if .Values.otelCollector.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-sampler-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: otel-collector-sampler
+data:
+  otel-collector-config.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 3000
+        spike_limit_mib: 500
+
+      batch:
+        timeout: 1s
+        send_batch_size: 1024
+
+      tail_sampling:
+        decision_wait: {{ .Values.otelCollector.sampler.decisionWait }}
+        num_traces: {{ .Values.otelCollector.sampler.numTraces }}
+        expected_new_traces_per_sec: {{ .Values.otelCollector.sampler.expectedTracesPerSec }}
+        policies:
+          - name: errors
+            type: status_code
+            status_code:
+              status_codes: [ERROR]
+          - name: slow-requests
+            type: latency
+            latency:
+              threshold_ms: {{ .Values.otelCollector.sampler.latencyThresholdMs }}
+          - name: baseline
+            type: probabilistic
+            probabilistic:
+              sampling_percentage: {{ .Values.otelCollector.sampler.baselineSamplingPercent }}
+
+    exporters:
+      otlp:
+        endpoint: {{ .Values.otelCollector.tempoEndpoint | quote }}
+        tls:
+          insecure: {{ .Values.otelCollector.tempoInsecure }}
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch, tail_sampling]
+          exporters: [otlp]
+{{- end }}

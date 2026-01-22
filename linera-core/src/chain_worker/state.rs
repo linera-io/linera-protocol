@@ -33,9 +33,9 @@ use linera_chain::{
 use linera_execution::{
     system::{EpochEventData, EPOCH_STREAM_NAME},
     Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
-    ServiceRuntimeEndpoint,
+    ResourceTracker, ServiceRuntimeEndpoint,
 };
-use linera_storage::{Clock as _, ResultReadConfirmedBlocks, Storage};
+use linera_storage::{Clock as _, ResultReadCertificates, Storage};
 use linera_views::{
     context::{Context, InactiveContext},
     views::{ClonableView, ReplaceContext as _, RootView as _, View as _},
@@ -546,19 +546,16 @@ where
         }
 
         if !uncached_hashes.is_empty() {
-            let blocks = self
-                .storage
-                .read_confirmed_blocks(uncached_hashes.clone())
-                .await?;
-            let blocks = match ResultReadConfirmedBlocks::new(blocks, uncached_hashes) {
-                ResultReadConfirmedBlocks::Blocks(blocks) => blocks,
-                ResultReadConfirmedBlocks::InvalidHashes(hashes) => {
+            let certificates = self.storage.read_certificates(&uncached_hashes).await?;
+            let certificates = match ResultReadCertificates::new(certificates, uncached_hashes) {
+                ResultReadCertificates::Certificates(certificates) => certificates,
+                ResultReadCertificates::InvalidHashes(hashes) => {
                     return Err(WorkerError::ReadCertificatesError(hashes))
                 }
             };
 
-            for block in blocks {
-                let hashed_block = block.into_inner();
+            for cert in certificates {
+                let hashed_block = cert.into_value().into_inner();
                 let height = hashed_block.inner().header.height;
                 self.block_values.insert(Cow::Owned(hashed_block.clone()));
                 height_to_blocks.insert(height, hashed_block);
@@ -954,7 +951,7 @@ where
                     .await;
                 outcome.clone()
             } else {
-                chain
+                let (verified, _resource_tracker) = chain
                     .execute_block(
                         &proposed_block,
                         local_time,
@@ -962,7 +959,8 @@ where
                         &published_blobs,
                         oracle_responses,
                     )
-                    .await?
+                    .await?;
+                verified
             };
         // We should always agree on the messages and state hash.
         ensure!(
@@ -1472,7 +1470,7 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: &[Blob],
-    ) -> Result<(Block, ChainInfoResponse), WorkerError> {
+    ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
         let (_, committee) = self.chain.current_committee()?;
@@ -1481,7 +1479,7 @@ where
         self.chain
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
-        let executed_block =
+        let (executed_block, resource_tracker) =
             Box::pin(self.execute_block(&block, local_time, round, published_blobs)).await?;
 
         // No need to sign: only used internally.
@@ -1496,7 +1494,7 @@ where
                 .await?;
         }
 
-        Ok((executed_block, response))
+        Ok((executed_block, response, resource_tracker))
     }
 
     /// Validates and executes a block proposed to extend this chain.
@@ -1595,18 +1593,18 @@ where
             outcome,
         } = content;
 
-        if self.config.key_pair().is_some() {
-            if block.timestamp.duration_since(local_time) > self.config.block_time_grace_period {
-                return Err(WorkerError::InvalidTimestamp {
-                    local_time,
-                    block_timestamp: block.timestamp,
-                    block_time_grace_period: self.config.block_time_grace_period,
-                });
-            }
-
-            self.storage.clock().sleep_until(block.timestamp).await;
+        if self.config.key_pair().is_some()
+            && block.timestamp.duration_since(local_time) > self.config.block_time_grace_period
+        {
+            return Err(WorkerError::InvalidTimestamp {
+                local_time,
+                block_timestamp: block.timestamp,
+                block_time_grace_period: self.config.block_time_grace_period,
+            });
         }
-        let local_time = self.storage.clock().current_time();
+        // Note: The actor delays processing proposals with future timestamps (within the grace
+        // period) so that other requests can be handled in the meantime. By the time we reach
+        // here, the block timestamp should be in the past or very close to the current time.
 
         self.chain
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
@@ -1614,8 +1612,14 @@ where
         let block = if let Some(outcome) = outcome {
             outcome.clone().with(proposal.content.block.clone())
         } else {
-            Box::pin(self.execute_block(block, local_time, round.multi_leader(), &published_blobs))
-                .await?
+            let (executed_block, _resource_tracker) = Box::pin(self.execute_block(
+                block,
+                local_time,
+                round.multi_leader(),
+                &published_blobs,
+            ))
+            .await?;
+            executed_block
         };
 
         ensure!(
@@ -1736,8 +1740,8 @@ where
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
-    ) -> Result<Block, WorkerError> {
-        let outcome =
+    ) -> Result<(Block, ResourceTracker), WorkerError> {
+        let (outcome, resource_tracker) =
             Box::pin(
                 self.chain
                     .execute_block(block, local_time, round, published_blobs, None),
@@ -1754,7 +1758,7 @@ where
             )
             .await,
         );
-        Ok(block)
+        Ok((block, resource_tracker))
     }
 
     /// Initializes and saves the current chain if it is not active yet.

@@ -22,7 +22,7 @@ use linera_base::{
     crypto::{signer, AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, Epoch, Round, Timestamp,
+        ChainDescription, Epoch, MessagePolicy, Round, Timestamp,
     },
     ensure,
     identifiers::{
@@ -51,7 +51,7 @@ use linera_execution::{
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
-use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
+use linera_storage::{Clock as _, Storage as _};
 use linera_views::ViewError;
 use rand::seq::SliceRandom;
 use serde::Serialize;
@@ -64,7 +64,7 @@ use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
 use super::{
     received_log::ReceivedLogs, validator_trackers::ValidatorTrackers, AbortOnDrop, Client,
-    ListeningMode, MessagePolicy, PendingProposal, ReceiveCertificateMode, TimingType,
+    ListeningMode, PendingProposal, ReceiveCertificateMode, TimingType,
 };
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
@@ -102,6 +102,9 @@ pub struct Options {
     pub sender_certificate_download_batch_size: usize,
     /// Maximum number of tasks that can be joined concurrently using buffer_unordered.
     pub max_joined_tasks: usize,
+    /// Whether to allow creating blocks in the fast round. Fast blocks have lower latency but
+    /// must be used carefully so that there are never any conflicting fast block proposals.
+    pub allow_fast_blocks: bool,
 }
 
 #[cfg(with_testing)]
@@ -122,6 +125,7 @@ impl Options {
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             max_joined_tasks: 100,
+            allow_fast_blocks: false,
         }
     }
 }
@@ -532,7 +536,7 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
-            .filter_map(|bundle| self.options.message_policy.apply(bundle))
+            .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
             .take(self.options.max_pending_message_bundles)
             .collect())
     }
@@ -1877,14 +1881,17 @@ impl<Env: Environment> ChainClient<Env> {
         let seed = manager.seed;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
-        // Similarly, we cannot propose a block that uses oracles in the fast round.
+        // Similarly, we cannot propose a block that uses oracles in the fast round, and also
+        // skip the fast round if fast blocks are not allowed.
+        let skip_fast = manager.current_round.is_fast()
+            && (has_oracle_responses || !self.options.allow_fast_blocks);
         let conflict = manager
             .requested_signed_proposal
             .as_ref()
             .into_iter()
             .chain(&manager.requested_proposed)
             .any(|proposal| proposal.content.round == manager.current_round)
-            || (manager.current_round.is_fast() && has_oracle_responses);
+            || skip_fast;
         let round = if !conflict {
             manager.current_round
         } else if let Some(round) = manager
@@ -2824,24 +2831,15 @@ impl<Env: Environment> ChainClient<Env> {
             .map(BlockHeight)
             .collect();
 
-        let missing_certificate_hashes = self
-            .client
-            .local_node
-            .get_block_hashes(self.chain_id, heights)
-            .await?;
-
         let certificates = self
             .client
             .storage_client()
-            .read_certificates(missing_certificate_hashes.clone())
-            .await?;
-        let certificates =
-            match ResultReadCertificates::new(certificates, missing_certificate_hashes) {
-                ResultReadCertificates::Certificates(certificates) => certificates,
-                ResultReadCertificates::InvalidHashes(hashes) => {
-                    return Err(Error::ReadCertificatesError(hashes))
-                }
-            };
+            .read_certificates_by_heights(self.chain_id, &heights)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
         for certificate in certificates {
             match remote_node
                 .handle_confirmed_certificate(

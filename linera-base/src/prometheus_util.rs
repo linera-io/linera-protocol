@@ -24,9 +24,36 @@ pub fn register_int_counter_vec(
     register_int_counter_vec!(counter_opts, label_names).expect("IntCounter can be created")
 }
 
+/// Wrapper around Prometheus `register_int_counter_vec!` macro with `linera` namespace and a subsystem.
+/// Results in metrics named `linera_<subsystem>_<name>`.
+pub fn register_int_counter_vec_with_subsystem(
+    subsystem: &str,
+    name: &str,
+    description: &str,
+    label_names: &[&str],
+) -> IntCounterVec {
+    let counter_opts = Opts::new(name, description)
+        .namespace(LINERA_NAMESPACE)
+        .subsystem(subsystem);
+    register_int_counter_vec!(counter_opts, label_names).expect("IntCounter can be created")
+}
+
 /// Wrapper around Prometheus `register_int_counter!` macro which also sets the `linera` namespace
 pub fn register_int_counter(name: &str, description: &str) -> IntCounter {
     let counter_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
+    register_int_counter!(counter_opts).expect("IntCounter can be created")
+}
+
+/// Wrapper around Prometheus `register_int_counter!` macro with `linera` namespace and a subsystem.
+/// Results in metrics named `linera_<subsystem>_<name>`.
+pub fn register_int_counter_with_subsystem(
+    subsystem: &str,
+    name: &str,
+    description: &str,
+) -> IntCounter {
+    let counter_opts = Opts::new(name, description)
+        .namespace(LINERA_NAMESPACE)
+        .subsystem(subsystem);
     register_int_counter!(counter_opts).expect("IntCounter can be created")
 }
 
@@ -46,6 +73,28 @@ pub fn register_histogram_vec(
     register_histogram_vec!(histogram_opts, label_names).expect("Histogram can be created")
 }
 
+/// Wrapper around Prometheus `register_histogram_vec!` macro with `linera` namespace and a subsystem.
+/// Results in metrics named `linera_<subsystem>_<name>`.
+pub fn register_histogram_vec_with_subsystem(
+    subsystem: &str,
+    name: &str,
+    description: &str,
+    label_names: &[&str],
+    buckets: Option<Vec<f64>>,
+) -> HistogramVec {
+    let histogram_opts = if let Some(buckets) = buckets {
+        histogram_opts!(name, description, buckets)
+            .namespace(LINERA_NAMESPACE)
+            .subsystem(subsystem)
+    } else {
+        histogram_opts!(name, description)
+            .namespace(LINERA_NAMESPACE)
+            .subsystem(subsystem)
+    };
+
+    register_histogram_vec!(histogram_opts, label_names).expect("Histogram can be created")
+}
+
 /// Wrapper around Prometheus `register_histogram!` macro which also sets the `linera` namespace
 pub fn register_histogram(name: &str, description: &str, buckets: Option<Vec<f64>>) -> Histogram {
     let histogram_opts = if let Some(buckets) = buckets {
@@ -57,15 +106,63 @@ pub fn register_histogram(name: &str, description: &str, buckets: Option<Vec<f64
     register_histogram!(histogram_opts).expect("Histogram can be created")
 }
 
+/// Wrapper around Prometheus `register_histogram!` macro with `linera` namespace and a subsystem.
+/// Results in metrics named `linera_<subsystem>_<name>`.
+pub fn register_histogram_with_subsystem(
+    subsystem: &str,
+    name: &str,
+    description: &str,
+    buckets: Option<Vec<f64>>,
+) -> Histogram {
+    let histogram_opts = if let Some(buckets) = buckets {
+        histogram_opts!(name, description, buckets)
+            .namespace(LINERA_NAMESPACE)
+            .subsystem(subsystem)
+    } else {
+        histogram_opts!(name, description)
+            .namespace(LINERA_NAMESPACE)
+            .subsystem(subsystem)
+    };
+
+    register_histogram!(histogram_opts).expect("Histogram can be created")
+}
+
 /// Wrapper around Prometheus `register_int_gauge!` macro which also sets the `linera` namespace
 pub fn register_int_gauge(name: &str, description: &str) -> IntGauge {
     let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
     register_int_gauge!(gauge_opts).expect("IntGauge can be created")
 }
 
+/// Wrapper around Prometheus `register_int_gauge!` macro with `linera` namespace and a subsystem.
+/// Results in metrics named `linera_<subsystem>_<name>`.
+pub fn register_int_gauge_with_subsystem(
+    subsystem: &str,
+    name: &str,
+    description: &str,
+) -> IntGauge {
+    let gauge_opts = Opts::new(name, description)
+        .namespace(LINERA_NAMESPACE)
+        .subsystem(subsystem);
+    register_int_gauge!(gauge_opts).expect("IntGauge can be created")
+}
+
 /// Wrapper around Prometheus `register_int_gauge_vec!` macro which also sets the `linera` namespace
 pub fn register_int_gauge_vec(name: &str, description: &str, label_names: &[&str]) -> IntGaugeVec {
     let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
+    register_int_gauge_vec!(gauge_opts, label_names).expect("IntGauge can be created")
+}
+
+/// Wrapper around Prometheus `register_int_gauge_vec!` macro with `linera` namespace and a subsystem.
+/// Results in metrics named `linera_<subsystem>_<name>`.
+pub fn register_int_gauge_vec_with_subsystem(
+    subsystem: &str,
+    name: &str,
+    description: &str,
+    label_names: &[&str],
+) -> IntGaugeVec {
+    let gauge_opts = Opts::new(name, description)
+        .namespace(LINERA_NAMESPACE)
+        .subsystem(subsystem);
     register_int_gauge_vec!(gauge_opts, label_names).expect("IntGauge can be created")
 }
 

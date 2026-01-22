@@ -41,8 +41,9 @@ mod implementation {
             let (send_done, recv_done) = oneshot::channel();
             let (send_output, recv_output) = oneshot::channel();
             let future = async move {
-                let _ = send_output.send(future.await);
-                let _ = send_done.send(());
+                // Receiver may have been dropped if the task was aborted.
+                send_output.send(future.await).ok();
+                send_done.send(()).ok();
             };
             self.0.push(recv_done);
             wasm_bindgen_futures::spawn_local(
@@ -105,7 +106,8 @@ mod implementation {
             let (output_sender, output_receiver) = oneshot::channel();
 
             let abort_handle = self.spawn(async move {
-                let _ = output_sender.send(future.await);
+                // Receiver may have been dropped if the task was aborted.
+                output_sender.send(future.await).ok();
             });
 
             TaskHandle {
