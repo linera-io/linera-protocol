@@ -3,7 +3,7 @@
 
 //! This provides the trait definitions for the stores.
 
-use std::{fmt::Debug, future::Future, pin::pin, task::Context, task::Poll};
+use std::{fmt::Debug, future::Future};
 
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -14,7 +14,6 @@ use crate::{
     common::from_bytes_option,
     ViewError,
 };
-use futures::task::noop_waker;
 
 /// The error type for the key-value stores.
 pub trait KeyValueStoreError:
@@ -37,22 +36,6 @@ impl<E: KeyValueStoreError> From<E> for ViewError {
 pub trait WithError {
     /// The error type.
     type Error: KeyValueStoreError;
-}
-
-fn block_on<AnyFuture>(future: AnyFuture) -> AnyFuture::Output
-where
-    AnyFuture: Future,
-{
-    let waker = noop_waker();
-    let mut task_context = Context::from_waker(&waker);
-    let mut future = pin!(future);
-
-    loop {
-        match future.as_mut().poll(&mut task_context) {
-            Poll::Pending => continue,
-            Poll::Ready(output) => return output,
-        }
-    }
 }
 
 /// Asynchronous read key-value operations.
@@ -228,81 +211,6 @@ impl<T> DirectSyncKeyValueStore for T where
 pub trait SyncKeyValueStore: ReadableSyncKeyValueStore + WritableSyncKeyValueStore {}
 
 impl<T> SyncKeyValueStore for T where T: ReadableSyncKeyValueStore + WritableSyncKeyValueStore {}
-
-impl<T> ReadableSyncKeyValueStore for T
-where
-    T: ReadableKeyValueStore,
-{
-    const MAX_KEY_SIZE: usize = T::MAX_KEY_SIZE;
-
-    fn max_stream_queries(&self) -> usize {
-        self.max_stream_queries()
-    }
-
-    fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
-        self.root_key()
-    }
-
-    fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        block_on(self.read_value_bytes(key))
-    }
-
-    fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        block_on(self.contains_key(key))
-    }
-
-    fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error> {
-        block_on(self.contains_keys(keys))
-    }
-
-    fn read_multi_values_bytes(
-        &self,
-        keys: &[Vec<u8>],
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        block_on(self.read_multi_values_bytes(keys))
-    }
-
-    fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        block_on(self.find_keys_by_prefix(key_prefix))
-    }
-
-    fn find_key_values_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
-        block_on(self.find_key_values_by_prefix(key_prefix))
-    }
-}
-
-impl<T> WritableSyncKeyValueStore for T
-where
-    T: WritableKeyValueStore,
-{
-    const MAX_VALUE_SIZE: usize = T::MAX_VALUE_SIZE;
-
-    fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        block_on(self.write_batch(batch))
-    }
-
-    fn clear_journal(&self) -> Result<(), Self::Error> {
-        block_on(self.clear_journal())
-    }
-}
-
-impl<T> DirectWritableSyncKeyValueStore for T
-where
-    T: DirectWritableKeyValueStore,
-{
-    const MAX_BATCH_SIZE: usize = T::MAX_BATCH_SIZE;
-    const MAX_BATCH_TOTAL_SIZE: usize = T::MAX_BATCH_TOTAL_SIZE;
-    const MAX_VALUE_SIZE: usize = T::MAX_VALUE_SIZE;
-
-    type Batch = T::Batch;
-
-    fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error> {
-        block_on(self.write_batch(batch))
-    }
-}
 
 /// Asynchronous direct write key-value operations with simplified batch.
 ///

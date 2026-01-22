@@ -9,9 +9,9 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     batch::Batch,
     common::{CustomSerialize, Update},
-    context::{BaseKey, Context},
+    context::{BaseKey, SyncContext},
     store::ReadableSyncKeyValueStore as _,
-    sync_view::{SyncReplaceContext, SyncView},
+    sync_view::SyncView,
     ViewError,
 };
 
@@ -28,22 +28,7 @@ pub struct SyncByteSetView<C> {
     updates: BTreeMap<Vec<u8>, Update<()>>,
 }
 
-impl<C: Context, C2: Context> SyncReplaceContext<C2> for SyncByteSetView<C> {
-    type Target = SyncByteSetView<C2>;
-
-    fn with_context(
-        &mut self,
-        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
-    ) -> Self::Target {
-        SyncByteSetView {
-            context: ctx(&self.context),
-            delete_storage_first: self.delete_storage_first,
-            updates: self.updates.clone(),
-        }
-    }
-}
-
-impl<C: Context> SyncView for SyncByteSetView<C> {
+impl<C: SyncContext> SyncView for SyncByteSetView<C> {
     const NUM_INIT_KEYS: usize = 0;
 
     type Context = C;
@@ -112,7 +97,7 @@ impl<C: Context> SyncView for SyncByteSetView<C> {
 }
 
 
-impl<C: Context> SyncByteSetView<C> {
+impl<C: SyncContext> SyncByteSetView<C> {
     /// Inserts a value. If already present then it has no effect.
     /// ```rust
     /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncByteSetView};
@@ -150,7 +135,7 @@ impl<C: Context> SyncByteSetView<C> {
     }
 }
 
-impl<C: Context> SyncByteSetView<C> {
+impl<C: SyncContext> SyncByteSetView<C> {
     /// Returns true if the given index exists in the set.
     /// ```rust
     /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncByteSetView};
@@ -177,7 +162,7 @@ impl<C: Context> SyncByteSetView<C> {
     }
 }
 
-impl<C: Context> SyncByteSetView<C> {
+impl<C: SyncContext> SyncByteSetView<C> {
     /// Returns the list of keys in the set. The order is lexicographic.
     /// ```rust
     /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncByteSetView};
@@ -324,21 +309,7 @@ pub struct SyncSetView<C, I> {
     _phantom: PhantomData<I>,
 }
 
-impl<C: Context, I: Send + Sync + Serialize, C2: Context> SyncReplaceContext<C2> for SyncSetView<C, I> {
-    type Target = SyncSetView<C2, I>;
-
-    fn with_context(
-        &mut self,
-        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
-    ) -> Self::Target {
-        SyncSetView {
-            set: self.set.with_context(ctx),
-            _phantom: self._phantom,
-        }
-    }
-}
-
-impl<C: Context, I: Send + Sync + Serialize> SyncView for SyncSetView<C, I> {
+impl<C: SyncContext, I: Send + Sync + Serialize> SyncView for SyncSetView<C, I> {
     const NUM_INIT_KEYS: usize = SyncByteSetView::<C>::NUM_INIT_KEYS;
 
     type Context = C;

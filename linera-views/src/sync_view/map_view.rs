@@ -31,9 +31,9 @@ use crate::{
         from_bytes_option, get_key_range_for_prefix, CustomSerialize, DeletionSet,
         SuffixClosedSetIterator, Update,
     },
-    context::{BaseKey, Context},
+    context::{BaseKey, SyncContext},
     store::ReadableSyncKeyValueStore as _,
-    sync_view::{SyncReplaceContext, SyncView},
+    sync_view::SyncView,
     ViewError,
 };
 
@@ -48,24 +48,6 @@ pub struct SyncByteMapView<C, V> {
     deletion_set: DeletionSet,
     /// Pending changes not yet persisted to storage.
     updates: BTreeMap<Vec<u8>, Update<V>>,
-}
-
-impl<C: Context, C2: Context, V> SyncReplaceContext<C2> for SyncByteMapView<C, V>
-where
-    V: Send + Sync + Serialize + Clone,
-{
-    type Target = SyncByteMapView<C2, V>;
-
-    fn with_context(
-        &mut self,
-        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
-    ) -> Self::Target {
-        SyncByteMapView {
-            context: ctx(&self.context),
-            deletion_set: self.deletion_set.clone(),
-            updates: self.updates.clone(),
-        }
-    }
 }
 
 /// Whether we have a value or its serialization.
@@ -104,7 +86,7 @@ where
 
 impl<C, V> SyncView for SyncByteMapView<C, V>
 where
-    C: Context,
+    C: SyncContext,
     V: Send + Sync + Serialize,
 {
     const NUM_INIT_KEYS: usize = 0;

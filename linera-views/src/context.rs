@@ -6,7 +6,10 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     batch::DeletePrefixExpander,
     memory::{MemoryStore, SyncMemoryStore},
-    store::{KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueStoreError, ReadableKeyValueStore, ReadableSyncKeyValueStore, WithError,
+        WritableKeyValueStore, WritableSyncKeyValueStore,
+    },
     views::MIN_VIEW_TAG,
 };
 
@@ -134,6 +137,52 @@ where
     }
 }
 
+/// The context in which a sync view is operated.
+pub trait SyncContext: Clone
+where
+    crate::ViewError: From<Self::Error>,
+{
+    /// The type of the key-value store used by this context.
+    type Store: ReadableSyncKeyValueStore
+        + WritableSyncKeyValueStore
+        + WithError<Error = Self::Error>;
+
+    /// User-provided data to be carried along.
+    type Extra: Clone + linera_base::util::traits::AutoTraits;
+
+    /// The type of errors that may be returned by operations on the `Store`, a
+    /// convenience alias for `<Self::Store as WithError>::Error`.
+    type Error: KeyValueStoreError;
+
+    /// Getter for the store.
+    fn store(&self) -> &Self::Store;
+
+    /// Getter for the user-provided data.
+    fn extra(&self) -> &Self::Extra;
+
+    /// Getter for the address of the base key.
+    fn base_key(&self) -> &BaseKey;
+
+    /// Mutable getter for the address of the base key.
+    fn base_key_mut(&mut self) -> &mut BaseKey;
+
+    /// Obtains a similar [`SyncContext`] implementation with a different base key.
+    fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self {
+        let mut context = self.clone();
+        context.base_key_mut().bytes = base_key;
+        context
+    }
+
+    /// Obtains a similar [`SyncContext`] implementation with the last `n` bytes of the base
+    /// key trimmed.
+    fn clone_with_trimmed_key(&self, n: usize) -> Self {
+        let mut context = self.clone();
+        let key = context.base_key().trimmed_key(n).unwrap();
+        context.base_key_mut().bytes = key;
+        context
+    }
+}
+
 /// A context which can't be used to read or write data, only used for caching views.
 #[derive(Debug, Default, Clone)]
 pub struct InactiveContext(pub BaseKey);
@@ -203,6 +252,34 @@ impl<E, S> Context for ViewContext<E, S>
 where
     E: Clone + linera_base::util::traits::AutoTraits,
     S: ReadableKeyValueStore + WritableKeyValueStore + Clone,
+    S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+{
+    type Extra = E;
+    type Store = S;
+
+    type Error = S::Error;
+
+    fn store(&self) -> &Self::Store {
+        &self.store
+    }
+
+    fn extra(&self) -> &E {
+        &self.extra
+    }
+
+    fn base_key(&self) -> &BaseKey {
+        &self.base_key
+    }
+
+    fn base_key_mut(&mut self) -> &mut BaseKey {
+        &mut self.base_key
+    }
+}
+
+impl<E, S> SyncContext for ViewContext<E, S>
+where
+    E: Clone + linera_base::util::traits::AutoTraits,
+    S: ReadableSyncKeyValueStore + WritableSyncKeyValueStore + Clone,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
 {
     type Extra = E;

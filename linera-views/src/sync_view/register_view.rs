@@ -7,8 +7,8 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     batch::Batch,
     common::from_bytes_option_or_default,
-    context::Context,
-    sync_view::{SyncReplaceContext, SyncView},
+    context::SyncContext,
+    sync_view::SyncView,
     ViewError,
 };
 
@@ -27,30 +27,9 @@ pub struct SyncRegisterView<C, T> {
     update: Option<Box<T>>,
 }
 
-impl<C, T, C2> SyncReplaceContext<C2> for SyncRegisterView<C, T>
-where
-    C: Context,
-    C2: Context,
-    T: Default + Send + Sync + Serialize + DeserializeOwned + Clone,
-{
-    type Target = SyncRegisterView<C2, T>;
-
-    fn with_context(
-        &mut self,
-        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
-    ) -> Self::Target {
-        SyncRegisterView {
-            delete_storage_first: self.delete_storage_first,
-            context: ctx(&self.context),
-            stored_value: self.stored_value.clone(),
-            update: self.update.clone(),
-        }
-    }
-}
-
 impl<C, T> SyncView for SyncRegisterView<C, T>
 where
-    C: Context,
+    C: SyncContext,
     T: Default + Send + Sync + Serialize + DeserializeOwned,
 {
     const NUM_INIT_KEYS: usize = 1;

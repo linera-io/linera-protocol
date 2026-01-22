@@ -17,7 +17,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     batch::Batch,
     common::{CustomSerialize, SliceExt as _, Update},
-    context::{BaseKey, Context},
+    context::{BaseKey, SyncContext},
     store::ReadableSyncKeyValueStore as _,
     sync_view::{SyncView, MIN_VIEW_TAG},
     ViewError,
@@ -604,7 +604,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     }
 
     /// Gets the extra data.
-    pub fn extra(&self) -> &<W::Context as Context>::Extra {
+    pub fn extra(&self) -> &<W::Context as SyncContext>::Extra {
         self.context.extra()
     }
 }

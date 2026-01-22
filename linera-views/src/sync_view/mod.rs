@@ -34,7 +34,7 @@ pub trait SyncView: Sized {
     const NUM_INIT_KEYS: usize;
 
     /// The type of context stored in this view.
-    type Context: crate::context::Context;
+    type Context: crate::context::SyncContext;
 
     /// Obtains a mutable reference to the internal context.
     fn context(&self) -> Self::Context;
@@ -50,7 +50,7 @@ pub trait SyncView: Sized {
         if Self::NUM_INIT_KEYS == 0 {
             Self::post_load(context, &[])
         } else {
-            use crate::{context::Context, store::ReadableSyncKeyValueStore as _};
+            use crate::{context::SyncContext as _, store::ReadableSyncKeyValueStore as _};
             let keys = Self::pre_load(&context)?;
             let values = context.store().read_multi_values_bytes(&keys)?;
             Self::post_load(context, &values)
@@ -88,20 +88,11 @@ pub trait SyncView: Sized {
     }
 }
 
-/// A view which can have its context replaced.
-pub trait SyncReplaceContext<C: crate::context::Context>: SyncView {
-    /// The type returned after replacing the context.
-    type Target: SyncView<Context = C>;
-
-    /// Returns a view with a replaced context.
-    fn with_context(&mut self, ctx: impl FnOnce(&Self::Context) -> C + Clone) -> Self::Target;
-}
-
 /// A [`SyncView`] whose staged modifications can be saved in storage.
 pub trait SyncRootView: SyncView {
     /// Saves the root view to the database context.
     fn save(&mut self) -> Result<(), ViewError> {
-        use crate::{context::Context as _, store::WritableSyncKeyValueStore as _};
+        use crate::{context::SyncContext as _, store::WritableSyncKeyValueStore as _};
         let mut batch = Batch::new();
         self.pre_save(&mut batch)?;
         if !batch.is_empty() {
@@ -113,63 +104,6 @@ pub trait SyncRootView: SyncView {
 }
 
 impl<T> SyncRootView for T where T: SyncView {}
-
-impl<T> crate::views::View for T
-where
-    T: SyncView,
-{
-    const NUM_INIT_KEYS: usize = T::NUM_INIT_KEYS;
-
-    type Context = T::Context;
-
-    fn context(&self) -> Self::Context {
-        SyncView::context(self)
-    }
-
-    fn pre_load(context: &Self::Context) -> Result<Vec<Vec<u8>>, ViewError> {
-        SyncView::pre_load(context)
-    }
-
-    fn post_load(context: Self::Context, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        SyncView::post_load(context, values)
-    }
-
-    async fn load(context: Self::Context) -> Result<Self, ViewError> {
-        SyncView::load(context)
-    }
-
-    fn rollback(&mut self) {
-        SyncView::rollback(self)
-    }
-
-    async fn has_pending_changes(&self) -> bool {
-        SyncView::has_pending_changes(self)
-    }
-
-    fn clear(&mut self) {
-        SyncView::clear(self)
-    }
-
-    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
-        SyncView::pre_save(self, batch)
-    }
-
-    fn post_save(&mut self) {
-        SyncView::post_save(self)
-    }
-}
-
-impl<T, C2> crate::views::ReplaceContext<C2> for T
-where
-    T: SyncReplaceContext<C2>,
-    C2: crate::context::Context,
-{
-    type Target = T::Target;
-
-    async fn with_context(&mut self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Target {
-        SyncReplaceContext::with_context(self, ctx)
-    }
-}
 
 impl<T> crate::views::RootView for T
 where

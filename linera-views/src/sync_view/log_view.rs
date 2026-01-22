@@ -12,7 +12,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     batch::Batch,
     common::from_bytes_option_or_default,
-    context::Context,
+    context::SyncContext,
     store::ReadableSyncKeyValueStore as _,
     sync_view::{SyncView, MIN_VIEW_TAG},
     ViewError,
@@ -44,7 +44,7 @@ pub struct SyncLogView<C, T> {
 
 impl<C, T> SyncView for SyncLogView<C, T>
 where
-    C: Context,
+    C: SyncContext,
     T: Send + Sync + Serialize,
 {
     const NUM_INIT_KEYS: usize = 1;
