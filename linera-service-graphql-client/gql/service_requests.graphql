@@ -132,7 +132,7 @@ query Chain(
       system {
         description
         epoch
-        adminId
+        adminChainId
         ownership
         balance
         timestamp

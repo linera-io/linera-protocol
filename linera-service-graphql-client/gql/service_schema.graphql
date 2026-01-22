@@ -1416,7 +1416,7 @@ type SubscriptionRoot {
 type SystemExecutionStateView {
 	description: ChainDescription
 	epoch: Epoch!
-	adminId: ChainId
+	adminChainId: ChainId
 	committees: JSONObject!
 	ownership: ChainOwnership!
 	balance: Amount!

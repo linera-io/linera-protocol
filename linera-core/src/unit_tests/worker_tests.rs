@@ -184,7 +184,7 @@ where
         })
     }
 
-    fn admin_id(&self) -> ChainId {
+    fn admin_chain_id(&self) -> ChainId {
         self.admin_description.id()
     }
 
@@ -431,7 +431,7 @@ where
             ownership: ChainOwnership::single(chain_owner_pubkey.into()),
             balance,
             balances,
-            admin_id: Some(self.admin_id()),
+            admin_chain_id: Some(self.admin_chain_id()),
             ..SystemExecutionState::new(chain_description)
         };
         let mut block = match previous_confirmed_blocks.first() {
@@ -535,7 +535,7 @@ where
     }
 
     pub fn system_execution_state(&self, chain_id: &ChainId) -> SystemExecutionState {
-        let description = if *chain_id == self.admin_id() {
+        let description = if *chain_id == self.admin_chain_id() {
             self.admin_description.clone()
         } else {
             self.other_chains
@@ -544,7 +544,7 @@ where
                 .clone()
         };
         SystemExecutionState {
-            admin_id: Some(self.admin_id()),
+            admin_chain_id: Some(self.admin_chain_id()),
             timestamp: description.timestamp(),
             committees: [(Epoch::ZERO, self.committee.clone())]
                 .into_iter()
@@ -2678,13 +2678,13 @@ where
     let mut committees = BTreeMap::new();
     let committee = env.committee().clone();
     committees.insert(Epoch::ZERO, committee.clone());
-    let admin_id = env.admin_id();
+    let admin_chain_id = env.admin_chain_id();
     // Have the admin chain create a user chain.
     let user_description = env
-        .add_child_chain(admin_id, env.admin_public_key().into(), Amount::ZERO)
+        .add_child_chain(admin_chain_id, env.admin_public_key().into(), Amount::ZERO)
         .await;
     let user_id = user_description.id();
-    let proposal0 = make_first_block(admin_id)
+    let proposal0 = make_first_block(admin_chain_id)
         .with_operation(SystemOperation::OpenChain(OpenChainConfig {
             ownership: ChainOwnership::single(env.admin_public_key().into()),
             balance: Amount::ZERO,
@@ -2708,7 +2708,7 @@ where
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
     {
-        let admin_chain = env.worker().chain_state_view(admin_id).await?;
+        let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active());
         assert_no_removed_bundles(&admin_chain).await;
         assert_eq!(
@@ -2717,8 +2717,8 @@ where
         );
         assert!(admin_chain.outboxes.indices().await?.is_empty());
         assert_eq!(
-            *admin_chain.execution_state.system.admin_id.get(),
-            Some(admin_id)
+            *admin_chain.execution_state.system.admin_chain_id.get(),
+            Some(admin_chain_id)
         );
     }
 
@@ -2738,7 +2738,7 @@ where
     let certificate1 = env.execute_proposal(proposal1.clone(), vec![]).await?;
 
     let event_id = EventId {
-        chain_id: admin_id,
+        chain_id: admin_chain_id,
         stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
         index: 1,
     };
@@ -2780,14 +2780,14 @@ where
             user_chain.tip_state.get().next_block_height
         );
         assert_eq!(
-            *user_chain.execution_state.system.admin_id.get(),
-            Some(admin_id)
+            *user_chain.execution_state.system.admin_chain_id.get(),
+            Some(admin_chain_id)
         );
         assert_no_removed_bundles(&user_chain).await;
         matches!(
             &user_chain
                 .inboxes
-                .try_load_entry(&admin_id)
+                .try_load_entry(&admin_chain_id)
                 .await?
                 .expect("Missing inbox for admin chain in user chain")
                 .added_bundles
@@ -2802,7 +2802,7 @@ where
     }
     let proposal3 = make_first_block(user_id)
         .with_incoming_bundle(IncomingBundle {
-            origin: admin_id,
+            origin: admin_chain_id,
             bundle: MessageBundle {
                 certificate_hash: certificate1.hash(),
                 height: BlockHeight::from(1),
@@ -2827,7 +2827,7 @@ where
             vec![
                 OracleResponse::Event(
                     EventId {
-                        chain_id: admin_id,
+                        chain_id: admin_chain_id,
                         stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                         index: 1,
                     },
@@ -2856,8 +2856,8 @@ where
             user_chain.tip_state.get().next_block_height
         );
         assert_eq!(
-            *user_chain.execution_state.system.admin_id.get(),
-            Some(admin_id)
+            *user_chain.execution_state.system.admin_chain_id.get(),
+            Some(admin_chain_id)
         );
         assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
         assert_no_removed_bundles(&user_chain).await;
@@ -2880,18 +2880,18 @@ where
     let mut committees = BTreeMap::new();
     let committee = env.committee().clone();
     committees.insert(Epoch::ZERO, committee.clone());
-    let admin_id = env.admin_id();
+    let admin_chain_id = env.admin_chain_id();
     let user_id = chain_1_desc.id();
 
     // Have the user chain start a transfer to the admin chain.
     let proposal0 = make_first_block(user_id)
-        .with_simple_transfer(admin_id, Amount::ONE)
+        .with_simple_transfer(admin_chain_id, Amount::ONE)
         .with_authenticated_owner(Some(owner1));
     let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
 
     assert!(certificate0.value().matches_proposed_block(&proposal0));
     assert!(certificate0.block().outcome_matches(
-        vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
+        vec![vec![direct_credit_message(admin_chain_id, Amount::ONE)]],
         BTreeMap::new(),
         BTreeMap::new(),
         vec![vec![]],
@@ -2905,7 +2905,7 @@ where
     let blob_hash = committee_blob.id().hash;
     env.write_blobs(std::slice::from_ref(&committee_blob))
         .await?;
-    let proposal1 = make_first_block(admin_id).with_operation(SystemOperation::Admin(
+    let proposal1 = make_first_block(admin_chain_id).with_operation(SystemOperation::Admin(
         AdminOperation::CreateCommittee {
             epoch: Epoch::from(1),
             blob_hash,
@@ -2955,7 +2955,7 @@ where
     assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
     // .. and the message has gone through.
-    let admin_chain = env.worker().chain_state_view(admin_id).await?;
+    let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
     assert!(admin_chain.is_active());
     assert_eq!(admin_chain.inboxes.indices().await?.len(), 1);
     matches!(
@@ -2991,18 +2991,18 @@ where
     let mut committees = BTreeMap::new();
     let committee = env.committee().clone();
     committees.insert(Epoch::ZERO, committee.clone());
-    let admin_id = env.admin_id();
+    let admin_chain_id = env.admin_chain_id();
     let user_id = chain_1_desc.id();
 
     // Have the user chain start a transfer to the admin chain.
     let proposal0 = make_first_block(user_id)
-        .with_simple_transfer(admin_id, Amount::ONE)
+        .with_simple_transfer(admin_chain_id, Amount::ONE)
         .with_authenticated_owner(Some(owner1));
     let certificate0 = env.execute_proposal(proposal0.clone(), vec![]).await?;
 
     assert!(certificate0.value().matches_proposed_block(&proposal0));
     assert!(certificate0.block().outcome_matches(
-        vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
+        vec![vec![direct_credit_message(admin_chain_id, Amount::ONE)]],
         BTreeMap::new(),
         BTreeMap::new(),
         vec![Vec::new()],
@@ -3017,7 +3017,7 @@ where
     env.write_blobs(std::slice::from_ref(&committee_blob))
         .await?;
 
-    let proposal1 = make_first_block(admin_id)
+    let proposal1 = make_first_block(admin_chain_id)
         .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
             epoch: Epoch::from(1),
             blob_hash,
@@ -3078,7 +3078,7 @@ where
         assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
         // .. but the message hasn't gone through.
-        let admin_chain = env.worker().chain_state_view(admin_id).await?;
+        let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active());
         assert!(admin_chain.inboxes.indices().await?.is_empty());
     }
@@ -3118,7 +3118,7 @@ where
 
     {
         // The admin chain has an anticipated message.
-        let admin_chain = env.worker().chain_state_view(admin_id).await?;
+        let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active());
         assert!(admin_chain
             .inboxes
@@ -3139,7 +3139,7 @@ where
 
     {
         // The admin chain has no more anticipated messages.
-        let admin_chain = env.worker().chain_state_view(admin_id).await?;
+        let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active());
         assert_no_removed_bundles(&admin_chain).await;
     }
@@ -3992,7 +3992,7 @@ where
     let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
     let clock = storage_builder.clock();
     let committee = env.committee().clone();
-    let admin_id = env.admin_description.id();
+    let admin_chain_id = env.admin_description.id();
 
     // Create a non-admin chain with fallback_duration configured.
     let balance = Amount::from_tokens(5);
@@ -4033,7 +4033,7 @@ where
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     let blob_hash = committee_blob.id().hash;
     env.write_blobs(&[committee_blob]).await?;
-    let proposal = make_first_block(admin_id).with_operation(SystemOperation::Admin(
+    let proposal = make_first_block(admin_chain_id).with_operation(SystemOperation::Admin(
         AdminOperation::CreateCommittee {
             epoch: Epoch::from(1),
             blob_hash,

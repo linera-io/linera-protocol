@@ -57,7 +57,7 @@ pub async fn new_test_client_context(
                 signer,
                 wallet,
             },
-            genesis_config.admin_id(),
+            genesis_config.admin_chain_id(),
             false,
             chain_modes,
             name,
@@ -91,7 +91,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
     builder.add_root_chain(0, Amount::ONE).await?;
-    let chain_id = builder.admin_id();
+    let chain_id = builder.admin_chain_id();
 
     let genesis_config = GenesisConfig::new_testing(&builder);
 

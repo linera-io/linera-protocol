@@ -1293,14 +1293,14 @@ where
     async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
         let chain = &mut self.chain;
         let epoch = *chain.execution_state.system.epoch.get();
-        let Some(admin_id) = chain.execution_state.system.admin_id.get() else {
+        let Some(admin_chain_id) = chain.execution_state.system.admin_chain_id.get() else {
             return Ok(());
         };
 
         // Check if epoch e+1 exists on the admin chain and when it was created.
         let next_epoch_index = epoch.0.saturating_add(1);
         let event_id = EventId {
-            chain_id: *admin_id,
+            chain_id: *admin_chain_id,
             stream_id: StreamId::system(EPOCH_STREAM_NAME),
             index: next_epoch_index,
         };

@@ -1008,7 +1008,7 @@ where
         result
     }
 
-    pub fn admin_id(&self) -> ChainId {
+    pub fn admin_chain_id(&self) -> ChainId {
         self.admin_description
             .as_ref()
             .expect("admin chain not initialized")
@@ -1066,7 +1066,7 @@ where
                 signer: self.signer.clone(),
                 wallet: TestWallet::default(),
             },
-            self.admin_id(),
+            self.admin_chain_id(),
             false,
             [(chain_id, mode)],
             format!("Client node for {:.8}", chain_id),

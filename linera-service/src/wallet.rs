@@ -37,7 +37,7 @@ impl ChainDetails {
         };
         ChainDetails {
             is_default: Some(chain_id) == *wallet.default.read().unwrap(),
-            is_admin: chain_id == wallet.genesis_config.admin_id(),
+            is_admin: chain_id == wallet.genesis_config.admin_chain_id(),
             chain_id,
             origin: wallet
                 .genesis_config
@@ -235,8 +235,8 @@ impl Wallet {
         &self.0.genesis_config
     }
 
-    pub fn genesis_admin_chain(&self) -> ChainId {
-        self.0.genesis_config.admin_id()
+    pub fn genesis_admin_chain_id(&self) -> ChainId {
+        self.0.genesis_config.admin_chain_id()
     }
 
     // TODO(#5082): now that wallets only store chains, not keys, there's not much point in
