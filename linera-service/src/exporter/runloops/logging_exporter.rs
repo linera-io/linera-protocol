@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{future::IntoFuture, io::Write, path::Path, sync::atomic::Ordering};
+use std::{fs::OpenOptions, future::IntoFuture, io::Write, path::Path, sync::atomic::Ordering};
 
 use linera_chain::types::CertificateValue;
 use linera_service::config::DestinationId;
@@ -23,7 +23,13 @@ impl LoggingExporter {
     /// Creates a new `LoggingExporter` that logs to the specified file.
     pub fn new(id: DestinationId) -> Self {
         let log_file = Path::new(id.address());
-        let file = std::fs::File::create(log_file).expect("Failed to create log file");
+        // Don't truncate the file to preserve previous logs
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(log_file)
+            .expect("Failed to create log file");
         LoggingExporter { id, file }
     }
 
