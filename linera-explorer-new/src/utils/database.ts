@@ -1,7 +1,7 @@
 import { Block, BlockInfo, IncomingBundle, PostedMessage, ChainInfo, Operation, Message, Event, OracleResponse, IncomingBundleWithMessages } from '../types/blockchain';
 
 // Use environment variable if set (for production), otherwise use relative path (for dev with Vite proxy)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export class BlockchainAPI {
   // Get all blocks with pagination
@@ -24,14 +24,8 @@ export class BlockchainAPI {
     }
     const block = await response.json();
     
-    // Convert base64 data back to Uint8Array
     if (block.data) {
-      const binaryString = atob(block.data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      block.data = bytes;
+      block.data = this.base64ToUint8Array(block.data);
     }
     
     return block;
@@ -195,8 +189,9 @@ export class BlockchainAPI {
   }
 
   // Helper method to convert base64 to Uint8Array
+  // PostgreSQL's ENCODE adds newlines every 76 chars, strip them for atob()
   private base64ToUint8Array(base64: string): Uint8Array {
-    const binaryString = atob(base64);
+    const binaryString = atob(base64.replace(/\n/g, ''));
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
