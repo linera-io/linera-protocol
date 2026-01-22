@@ -26,7 +26,7 @@ async fn new_view_and_context() -> (
     let state = SystemExecutionState {
         description: Some(description),
         epoch: Epoch(1),
-        admin_id: Some(dummy_chain_description(0).id()),
+        admin_chain_id: Some(dummy_chain_description(0).id()),
         committees: BTreeMap::new(),
         ..SystemExecutionState::default()
     };

@@ -26,7 +26,7 @@ use crate::{
 pub struct SystemExecutionState {
     pub description: Option<ChainDescription>,
     pub epoch: Epoch,
-    pub admin_id: Option<ChainId>,
+    pub admin_chain_id: Option<ChainId>,
     pub committees: BTreeMap<Epoch, Committee>,
     pub ownership: ChainOwnership,
     pub balance: Amount,
@@ -48,11 +48,11 @@ impl SystemExecutionState {
         let ownership = description.config().ownership.clone();
         let balance = description.config().balance;
         let epoch = description.config().epoch;
-        let admin_id = Some(dummy_chain_description(0).id());
+        let admin_chain_id = Some(dummy_chain_description(0).id());
         SystemExecutionState {
             epoch,
             description: Some(description),
-            admin_id,
+            admin_chain_id,
             ownership,
             balance,
             committees: dummy_committees(),
@@ -92,7 +92,7 @@ impl SystemExecutionState {
         let SystemExecutionState {
             description,
             epoch,
-            admin_id,
+            admin_chain_id,
             committees,
             ownership,
             balance,
@@ -127,7 +127,7 @@ impl SystemExecutionState {
             .expect("Loading from memory should work");
         view.system.description.set(description);
         view.system.epoch.set(epoch);
-        view.system.admin_id.set(admin_id);
+        view.system.admin_chain_id.set(admin_chain_id);
         view.system.committees.set(committees);
         view.system.ownership.set(ownership);
         view.system.balance.set(balance);

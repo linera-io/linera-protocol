@@ -75,9 +75,9 @@ impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
         self.epoch.get()
     }
 
-    #[graphql(derived(name = "admin_id"))]
-    async fn _admin_id(&self) -> &Option<ChainId> {
-        self.admin_id.get()
+    #[graphql(derived(name = "admin_chain_id"))]
+    async fn _admin_chain_id(&self) -> &Option<ChainId> {
+        self.admin_chain_id.get()
     }
 
     #[graphql(derived(name = "committees"))]
