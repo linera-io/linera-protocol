@@ -40,7 +40,7 @@ web = [
     "linera-storage/web",
     "linera-views/web",
 ]
-indexed-db = ["web", "indexed_db_futures", "serde-wasm-bindgen", "gloo-utils"]
+indexed-db = ["web", "serde-wasm-bindgen", "gloo-utils"]
 web-default = ["web", "wasmer", "indexed-db"]
 
 [dependencies]
@@ -78,7 +78,6 @@ wasm-bindgen.workspace = true
 [target.wasm32-unknown-unknown.dependencies]
 flarch = { workspace = true, optional = true }
 gloo-utils = { workspace = true, optional = true }
-indexed_db_futures = { workspace = true, optional = true }
 serde-wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true }
