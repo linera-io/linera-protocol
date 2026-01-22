@@ -71,19 +71,6 @@ where
     }
 }
 
-impl<T> ValueOrBytes<'_, T>
-where
-    T: Serialize,
-{
-    /// Convert to bytes.
-    pub fn into_bytes(self) -> Result<Vec<u8>, ViewError> {
-        match self {
-            ValueOrBytes::Value(value) => Ok(bcs::to_bytes(value)?),
-            ValueOrBytes::Bytes(bytes) => Ok(bytes),
-        }
-    }
-}
-
 impl<C, V> SyncView for SyncByteMapView<C, V>
 where
     C: SyncContext,
