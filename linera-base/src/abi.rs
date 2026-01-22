@@ -21,10 +21,6 @@ impl<T> Abi for T where T: ContractAbi + ServiceAbi {}
 /// A trait that includes all the types exported by a Linera application contract.
 pub trait ContractAbi {
     /// The type of operation executed by the application.
-    ///
-    /// Operations are transactions directly added to a block by the creator (and signer)
-    /// of the block. Users typically use operations to start interacting with an
-    /// application on their own chain.
     type Operation: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
     /// The response type of an application call.
@@ -41,7 +37,6 @@ pub trait ContractAbi {
         bcs::to_bytes(operation)
             .map_err(|e| format!("BCS serialization error {e:?} for operation {operation:?}"))
     }
-
     /// How the `Response` is deserialized
     fn deserialize_response(response: Vec<u8>) -> Result<Self::Response, String> {
         bcs::from_bytes(&response)
@@ -58,7 +53,7 @@ pub trait ContractAbi {
 
 // ANCHOR: service_abi
 /// A trait that includes all the types exported by a Linera application service.
-pub trait ServiceAbi {
+pub trait ServiceAbi: ContractAbi {
     /// The type of a query receivable by the application's service.
     type Query: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
@@ -73,12 +68,35 @@ pub trait WithContractAbi {
     type Abi: ContractAbi;
 }
 
+impl<A> WithContractAbi for A
+where
+    A: WithServiceAbi,
+{
+    type Abi = <A as WithServiceAbi>::Abi;
+}
+
 impl<A> ContractAbi for A
 where
     A: WithContractAbi,
 {
     type Operation = <<A as WithContractAbi>::Abi as ContractAbi>::Operation;
     type Response = <<A as WithContractAbi>::Abi as ContractAbi>::Response;
+
+    fn deserialize_operation(operation: Vec<u8>) -> Result<Self::Operation, String> {
+        <<A as WithContractAbi>::Abi as ContractAbi>::deserialize_operation(operation)
+    }
+
+    fn serialize_operation(operation: &Self::Operation) -> Result<Vec<u8>, String> {
+        <<A as WithContractAbi>::Abi as ContractAbi>::serialize_operation(operation)
+    }
+
+    fn deserialize_response(response: Vec<u8>) -> Result<Self::Response, String> {
+        <<A as WithContractAbi>::Abi as ContractAbi>::deserialize_response(response)
+    }
+
+    fn serialize_response(response: Self::Response) -> Result<Vec<u8>, String> {
+        <<A as WithContractAbi>::Abi as ContractAbi>::serialize_response(response)
+    }
 }
 
 /// Marker trait to help importing service types.
