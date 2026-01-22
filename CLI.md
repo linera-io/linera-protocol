@@ -412,7 +412,7 @@ NOTE: The local balance does not reflect messages that are waiting to be picked 
 
 ###### **Arguments:**
 
-* `<ACCOUNT>` — The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
+* `<ACCOUNT>` — The account to read, written as `OWNER@CHAIN-ID` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
 
 
 
@@ -426,7 +426,7 @@ NOTE: The balance does not reflect messages that have not been synchronized from
 
 ###### **Arguments:**
 
-* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
+* `<ACCOUNT>` — The account to query, written as `OWNER@CHAIN-ID` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
 
 
 
@@ -440,7 +440,7 @@ This command is deprecated. Use `linera sync && linera query-balance` instead.
 
 ###### **Arguments:**
 
-* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
+* `<ACCOUNT>` — The account to query, written as `OWNER@CHAIN-ID` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
 
 
 
