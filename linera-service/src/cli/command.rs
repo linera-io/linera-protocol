@@ -318,7 +318,7 @@ pub enum ClientCommand {
     /// `linera sync` then either `linera query-balance` or `linera process-inbox &&
     /// linera local-balance` for a consolidated balance.
     LocalBalance {
-        /// The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
+        /// The account to read, written as `OWNER@CHAIN-ID` or simply `CHAIN-ID` for the
         /// chain balance. By default, we read the chain balance of the default chain in
         /// the wallet.
         account: Option<Account>,
@@ -330,7 +330,7 @@ pub enum ClientCommand {
     /// NOTE: The balance does not reflect messages that have not been synchronized from
     /// validators yet. Call `linera sync` first to do so.
     QueryBalance {
-        /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
+        /// The account to query, written as `OWNER@CHAIN-ID` or simply `CHAIN-ID` for the
         /// chain balance. By default, we read the chain balance of the default chain in
         /// the wallet.
         account: Option<Account>,
@@ -341,7 +341,7 @@ pub enum ClientCommand {
     ///
     /// This command is deprecated. Use `linera sync && linera query-balance` instead.
     SyncBalance {
-        /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
+        /// The account to query, written as `OWNER@CHAIN-ID` or simply `CHAIN-ID` for the
         /// chain balance. By default, we read the chain balance of the default chain in
         /// the wallet.
         account: Option<Account>,
