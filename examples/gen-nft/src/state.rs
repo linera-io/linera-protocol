@@ -7,11 +7,11 @@ use async_graphql::SimpleObject;
 use gen_nft::{Nft, TokenId};
 use linera_sdk::{
     linera_base_types::AccountOwner,
-    views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, SyncView, ViewStorageContext},
 };
 
 /// The application state.
-#[derive(RootView, SimpleObject)]
+#[derive(SyncView, SimpleObject)]
 #[view(context = ViewStorageContext)]
 pub struct GenNftState {
     // Map from token ID to the NFT data

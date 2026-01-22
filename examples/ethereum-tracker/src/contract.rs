@@ -34,7 +34,6 @@ impl Contract for EthereumTrackerContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = EthereumTrackerState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         EthereumTrackerContract { state, runtime }
     }
@@ -53,7 +52,6 @@ impl Contract for EthereumTrackerContract {
         self.state.start_block.set(start_block);
         self.state
             .save()
-            .await
             .expect("Failed to write updated storage");
 
         self.read_initial().await;
@@ -71,7 +69,7 @@ impl Contract for EthereumTrackerContract {
     }
 
     async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 
@@ -148,7 +146,6 @@ impl EthereumTrackerContract {
                     .state
                     .accounts
                     .get_mut_or_default(source)
-                    .await
                     .expect("Failed to read account balance for source address");
                 source_balance.value -= value;
             }
@@ -157,7 +154,6 @@ impl EthereumTrackerContract {
                     .state
                     .accounts
                     .get_mut_or_default(destination)
-                    .await
                     .expect("Failed to read account balance for destination address");
                 destination_balance.value += value;
             }

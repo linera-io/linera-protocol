@@ -34,7 +34,6 @@ impl Contract for CrowdFundingContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = CrowdFundingState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         CrowdFundingContract { state, runtime }
     }
@@ -81,7 +80,7 @@ impl Contract for CrowdFundingContract {
     }
 
     async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 
@@ -131,7 +130,6 @@ impl CrowdFundingContract {
                 .state
                 .pledges
                 .get_mut_or_default(&source)
-                .await
                 .expect("view access should not fail")
                 .saturating_add_assign(amount),
             Status::Complete => self.send_to(amount, self.instantiation_argument().owner),
@@ -181,7 +179,6 @@ impl CrowdFundingContract {
                 pledges.push((pledger, amount));
                 Ok(())
             })
-            .await
             .expect("view iteration should not fail");
         for (pledger, amount) in pledges {
             self.send_to(amount, pledger);

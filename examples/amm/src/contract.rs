@@ -36,7 +36,6 @@ impl Contract for AmmContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = AmmState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         AmmContract { state, runtime }
     }
@@ -313,7 +312,7 @@ impl Contract for AmmContract {
     }
 
     async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 
@@ -323,7 +322,6 @@ impl AmmContract {
         self.state
             .shares
             .get(account)
-            .await
             .expect("Failure in the retrieval")
             .unwrap_or_default()
     }
@@ -489,7 +487,6 @@ impl AmmContract {
                     .state
                     .shares
                     .indices()
-                    .await
                     .expect("Failed to load list of share owners");
 
                 for account in accounts {

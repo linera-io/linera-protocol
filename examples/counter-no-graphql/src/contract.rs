@@ -33,7 +33,6 @@ impl Contract for CounterContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = CounterState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         CounterContract { state, runtime }
     }
@@ -58,14 +57,14 @@ impl Contract for CounterContract {
     }
 
     async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 
 #[cfg(test)]
 mod tests {
     use futures::FutureExt as _;
-    use linera_sdk::{util::BlockingWait, views::View, Contract, ContractRuntime};
+    use linera_sdk::{views::View, Contract, ContractRuntime};
 
     use super::{CounterContract, CounterOperation, CounterState};
 
@@ -123,7 +122,6 @@ mod tests {
         let runtime = ContractRuntime::new().with_application_parameters(());
         let mut contract = CounterContract {
             state: CounterState::load(runtime.root_view_storage_context())
-                .blocking_wait()
                 .expect("Failed to read from mock key value store"),
             runtime,
         };

@@ -40,7 +40,6 @@ impl Service for EthereumTrackerService {
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = EthereumTrackerState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         EthereumTrackerService {
             state: Arc::new(state),

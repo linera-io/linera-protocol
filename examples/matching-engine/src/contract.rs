@@ -40,7 +40,6 @@ impl Contract for MatchingEngineContract {
             parameters,
         );
         let state = MatchingEngineState::load(context)
-            .await
             .expect("Failed to load state");
         MatchingEngineContract { state, runtime }
     }
@@ -73,7 +72,6 @@ impl Contract for MatchingEngineContract {
                     .state
                     .orders
                     .indices()
-                    .await
                     .expect("Failed to read existing order IDs");
                 for order_id in order_ids {
                     match self.state.modify_order(order_id, ModifyQuantity::All).await {
@@ -111,7 +109,7 @@ impl Contract for MatchingEngineContract {
     }
 
     async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 

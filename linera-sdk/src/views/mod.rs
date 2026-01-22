@@ -11,7 +11,8 @@ mod system_api;
 pub use linera_views::{
     self,
     common::CustomSerialize,
-    views::{RootView, View},
+    sync_view::{SyncRootView, SyncView},
+    sync_view::{SyncRootView as RootView, SyncView as View},
     ViewError,
 };
 

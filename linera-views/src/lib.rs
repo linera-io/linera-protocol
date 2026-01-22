@@ -83,6 +83,9 @@ pub use error::ViewError;
 /// Elementary data-structures implementing the [`views::View`] trait.
 pub mod views;
 
+/// Synchronous views and containers.
+pub mod sync_view;
+
 /// Backend implementing the [`crate::store::KeyValueStore`] trait.
 pub mod backends;
 

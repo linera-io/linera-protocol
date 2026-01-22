@@ -37,7 +37,6 @@ impl Service for NonFungibleTokenService {
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = NonFungibleTokenState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         NonFungibleTokenService {
             state: Arc::new(state),
@@ -74,7 +73,6 @@ impl QueryRoot {
             .non_fungible_token
             .nfts
             .get(&TokenId { id: token_id_vec })
-            .await
             .unwrap();
 
         if let Some(nft) = nft {
@@ -97,7 +95,6 @@ impl QueryRoot {
                 nfts.insert(nft_output.token_id.clone(), nft_output);
                 Ok(())
             })
-            .await
             .unwrap();
 
         nfts
@@ -107,7 +104,6 @@ impl QueryRoot {
         self.non_fungible_token
             .owned_token_ids
             .get(&owner)
-            .await
             .unwrap()
             .into_iter()
             .flatten()
@@ -129,7 +125,6 @@ impl QueryRoot {
                 owners.insert(owner, new_token_ids);
                 Ok(())
             })
-            .await
             .unwrap();
 
         owners
@@ -141,7 +136,6 @@ impl QueryRoot {
             .non_fungible_token
             .owned_token_ids
             .get(&owner)
-            .await
             .unwrap();
 
         for token_id in owned_token_ids.into_iter().flatten() {
@@ -149,7 +143,6 @@ impl QueryRoot {
                 .non_fungible_token
                 .nfts
                 .get(&token_id)
-                .await
                 .unwrap()
                 .unwrap();
             let payload = self.runtime.read_data_blob(nft.blob_hash);

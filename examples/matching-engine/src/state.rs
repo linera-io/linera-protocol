@@ -11,20 +11,20 @@ use linera_sdk::{
     views::{linera_views, linera_views::context::Context as _},
     KeyValueStore,
 };
-use linera_views::views::{RootView, View};
+use linera_views::sync_view::SyncView;
 use matching_engine::{OrderId, OrderNature, Parameters, Price, PriceAsk, PriceBid};
 use serde::{Deserialize, Serialize};
 
 pub type Context = linera_views::context::ViewContext<Parameters, KeyValueStore>;
 
 pub type CustomCollectionView<K, V> =
-    linera_views::collection_view::CustomCollectionView<Context, K, V>;
+    linera_views::sync_view::collection_view::CustomCollectionView<Context, K, V>;
 
-pub type MapView<K, V> = linera_views::map_view::MapView<Context, K, V>;
+pub type MapView<K, V> = linera_views::sync_view::map_view::MapView<Context, K, V>;
 
-pub type QueueView<T> = linera_views::queue_view::QueueView<Context, T>;
+pub type QueueView<T> = linera_views::sync_view::queue_view::QueueView<Context, T>;
 
-pub type RegisterView<T> = linera_views::register_view::RegisterView<Context, T>;
+pub type RegisterView<T> = linera_views::sync_view::register_view::RegisterView<Context, T>;
 
 /// The order entry in the order book
 #[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]
@@ -62,14 +62,14 @@ pub struct AccountInfo {
 /// When an order is cancelled it is zero. But if that
 /// cancelled order is not the oldest, then it remains
 /// though with a size zero.
-#[derive(View, SimpleObject)]
+#[derive(SyncView, SimpleObject)]
 #[view(context = Context)]
 pub struct LevelView {
     pub queue: QueueView<OrderEntry>,
 }
 
 /// The matching engine containing the information.
-#[derive(RootView, SimpleObject)]
+#[derive(SyncView, SimpleObject)]
 #[view(context = Context)]
 pub struct MatchingEngineState {
     /// The next order_id to be used.
@@ -99,7 +99,6 @@ impl MatchingEngineState {
     pub async fn ask_level(&mut self, price: &PriceAsk) -> &mut LevelView {
         self.asks
             .load_entry_mut(price)
-            .await
             .expect("Failed to load `LevelView` for an ask price")
     }
 
@@ -107,7 +106,6 @@ impl MatchingEngineState {
     pub async fn bid_level(&mut self, price: &PriceBid) -> &mut LevelView {
         self.bids
             .load_entry_mut(price)
-            .await
             .expect("Failed to load `LevelView` for a bid price")
     }
 
@@ -116,7 +114,6 @@ impl MatchingEngineState {
         let value = self
             .orders
             .get(order_id)
-            .await
             .expect("Failed to load order");
         match value {
             None => panic!("Order is not present therefore cannot be cancelled"),
@@ -140,7 +137,6 @@ impl MatchingEngineState {
         let key_book = self
             .orders
             .get(&order_id)
-            .await
             .expect("Failed to load order")?;
         let transfer = match key_book.nature {
             OrderNature::Bid => {
@@ -199,7 +195,6 @@ impl MatchingEngineState {
         let account_info = self
             .account_info
             .get_mut_or_default(&account.owner)
-            .await
             .expect("Failed to load account information");
         account_info.orders.insert(order_id);
         let key_book = KeyBook {
@@ -220,7 +215,6 @@ impl MatchingEngineState {
         let account_info = self
             .account_info
             .get_mut(&owner)
-            .await
             .expect("account_info")
             .unwrap();
         account_info.orders.remove(&order_id);
@@ -265,7 +259,6 @@ impl MatchingEngineState {
                         }
                         Ok(matches)
                     })
-                    .await
                     .expect("Failed to iterate over ask prices");
                 for price_ask in matching_price_asks {
                     let view = self.ask_level(&price_ask).await;
@@ -311,7 +304,6 @@ impl MatchingEngineState {
                         }
                         Ok(matches)
                     })
-                    .await
                     .expect("Failed to iterate over bid prices");
                 for price_bid in matching_price_bids {
                     let view = self.bid_level(&price_bid).await;
@@ -394,7 +386,6 @@ impl LevelView {
         let orders = self
             .queue
             .iter_mut()
-            .await
             .expect("Failed to load iterator over orders");
         for order in orders {
             let fill = min(order.quantity, *quantity);
@@ -529,7 +520,6 @@ impl LevelView {
         let iter = self
             .queue
             .iter_mut()
-            .await
             .expect("Failed to load iterator over level queue");
         let n_remove = iter
             .take_while(|order| order.quantity == Amount::ZERO)
@@ -551,7 +541,6 @@ impl LevelView {
         let mut iter = self
             .queue
             .iter_mut()
-            .await
             .expect("Failed to load iterator over level queue");
         let state_order = iter.find(|order| order.order_id == order_id)?;
         let new_quantity = match reduce_quantity {

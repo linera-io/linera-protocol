@@ -33,7 +33,6 @@ impl Service for HexService {
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = HexState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         HexService {
             runtime: Arc::new(runtime),
@@ -81,7 +80,6 @@ mod tests {
     fn query() {
         let runtime = ServiceRuntime::<HexService>::new();
         let state = HexState::load(runtime.root_view_storage_context())
-            .blocking_wait()
             .expect("Failed to read from mock key value store");
 
         let service = HexService {

@@ -4,11 +4,11 @@
 use fungible::{InitialState, OwnerSpender};
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount},
-    views::{linera_views, MapView, RootView, ViewStorageContext},
+    views::{linera_views, MapView, SyncView, ViewStorageContext},
 };
 
 /// The application state.
-#[derive(RootView)]
+#[derive(SyncView)]
 #[view(context = ViewStorageContext)]
 pub struct FungibleTokenState {
     pub accounts: MapView<AccountOwner, Amount>,
@@ -32,7 +32,6 @@ impl FungibleTokenState {
     pub(crate) async fn balance(&self, account: &AccountOwner) -> Option<Amount> {
         self.accounts
             .get(account)
-            .await
             .expect("Failure in the retrieval")
     }
 
@@ -55,7 +54,6 @@ impl FungibleTokenState {
         let total_allowance = self
             .allowances
             .get_mut_or_default(&owner_spender)
-            .await
             .expect("Failed allowance access");
         total_allowance.saturating_add_assign(allowance);
     }
@@ -72,7 +70,6 @@ impl FungibleTokenState {
         let mut balance = self
             .accounts
             .get(&owner)
-            .await
             .expect("Failed balance access")
             .unwrap_or_default();
         balance.try_sub_assign(amount).unwrap_or_else(|_| {
@@ -91,7 +88,6 @@ impl FungibleTokenState {
         let mut allowance = self
             .allowances
             .get(&owner_spender)
-            .await
             .expect("Failed allowance access")
             .unwrap_or_default();
         allowance.try_sub_assign(amount).unwrap_or_else(|_| {

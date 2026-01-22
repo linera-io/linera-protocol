@@ -4,7 +4,7 @@
 use async_graphql::{InputObject, SimpleObject, Union};
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, ChainId},
-    views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, SyncView, ViewStorageContext},
 };
 use rfq::{RequestId, TokenPair, Tokens};
 use serde::{Deserialize, Serialize};
@@ -81,7 +81,7 @@ pub struct TempChainState {
     tokens_in_hold: Option<Tokens>,
 }
 
-#[derive(RootView, SimpleObject)]
+#[derive(SyncView, SimpleObject)]
 #[view(context = ViewStorageContext)]
 pub struct RfqState {
     next_seq_number: RegisterView<u64>,
@@ -192,7 +192,6 @@ impl RfqState {
         let req_data = self
             .requests
             .get(request_id)
-            .await
             .expect("ViewError")
             .expect("Request not found");
         match req_data.state {
@@ -213,7 +212,7 @@ impl RfqState {
     }
 
     pub async fn request_data(&mut self, request_id: &RequestId) -> Option<&mut RequestData> {
-        self.requests.get_mut(request_id).await.expect("ViewError")
+        self.requests.get_mut(request_id).expect("ViewError")
     }
 
     pub fn init_temp_chain_state(

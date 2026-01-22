@@ -37,7 +37,6 @@ impl Contract for HexContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = HexState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         HexContract { state, runtime }
     }
@@ -86,7 +85,6 @@ impl Contract for HexContract {
                         .state
                         .game_chains
                         .get_mut_or_default(owner)
-                        .await
                         .unwrap();
                     chain_set.retain(|game_chain| game_chain.chain_id != origin_chain_id);
                     if chain_set.is_empty() {
@@ -98,7 +96,7 @@ impl Contract for HexContract {
     }
 
     async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 
@@ -160,7 +158,6 @@ impl HexContract {
             self.state
                 .game_chains
                 .get_mut_or_default(owner)
-                .await
                 .unwrap()
                 .insert(GameChain { chain_id });
         }

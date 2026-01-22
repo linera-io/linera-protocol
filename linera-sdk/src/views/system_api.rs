@@ -9,7 +9,10 @@ use std::sync::Arc;
 use linera_base::ensure;
 use linera_views::{
     batch::Batch,
-    store::{ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        ReadableKeyValueStore, ReadableSyncKeyValueStore, WithError, WritableKeyValueStore,
+        WritableSyncKeyValueStore,
+    },
 };
 use thiserror::Error;
 
@@ -21,7 +24,7 @@ use crate::{
         contract_runtime_api::{self, WriteOperation},
     },
     service::wit::base_runtime_api as service_wit,
-    util::yield_once,
+    util::{BlockingWait as _, yield_once},
 };
 
 /// We need to have a maximum key size that handles all possible underlying
@@ -198,6 +201,101 @@ impl WritableKeyValueStore for KeyValueStore {
     }
 
     async fn clear_journal(&self) -> Result<(), KeyValueStoreError> {
+        Ok(())
+    }
+}
+
+impl ReadableSyncKeyValueStore for KeyValueStore {
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
+
+    fn max_stream_queries(&self) -> usize {
+        1
+    }
+
+    fn root_key(&self) -> Result<Vec<u8>, KeyValueStoreError> {
+        Ok(Vec::new())
+    }
+
+    fn contains_key(&self, key: &[u8]) -> Result<bool, KeyValueStoreError> {
+        ensure!(
+            key.len() <= Self::MAX_KEY_SIZE,
+            KeyValueStoreError::KeyTooLong
+        );
+        let promise = self.wit_api.contains_key_new(key);
+        yield_once().blocking_wait();
+        Ok(self.wit_api.contains_key_wait(promise))
+    }
+
+    fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, KeyValueStoreError> {
+        for key in keys {
+            ensure!(
+                key.len() <= Self::MAX_KEY_SIZE,
+                KeyValueStoreError::KeyTooLong
+            );
+        }
+        let promise = self.wit_api.contains_keys_new(keys);
+        yield_once().blocking_wait();
+        Ok(self.wit_api.contains_keys_wait(promise))
+    }
+
+    fn read_multi_values_bytes(
+        &self,
+        keys: &[Vec<u8>],
+    ) -> Result<Vec<Option<Vec<u8>>>, KeyValueStoreError> {
+        for key in keys {
+            ensure!(
+                key.len() <= Self::MAX_KEY_SIZE,
+                KeyValueStoreError::KeyTooLong
+            );
+        }
+        let promise = self.wit_api.read_multi_values_bytes_new(keys);
+        yield_once().blocking_wait();
+        Ok(self.wit_api.read_multi_values_bytes_wait(promise))
+    }
+
+    fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, KeyValueStoreError> {
+        ensure!(
+            key.len() <= Self::MAX_KEY_SIZE,
+            KeyValueStoreError::KeyTooLong
+        );
+        let promise = self.wit_api.read_value_bytes_new(key);
+        yield_once().blocking_wait();
+        Ok(self.wit_api.read_value_bytes_wait(promise))
+    }
+
+    fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, KeyValueStoreError> {
+        ensure!(
+            key_prefix.len() <= Self::MAX_KEY_SIZE,
+            KeyValueStoreError::KeyTooLong
+        );
+        let promise = self.wit_api.find_keys_new(key_prefix);
+        yield_once().blocking_wait();
+        Ok(self.wit_api.find_keys_wait(promise))
+    }
+
+    fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, KeyValueStoreError> {
+        ensure!(
+            key_prefix.len() <= Self::MAX_KEY_SIZE,
+            KeyValueStoreError::KeyTooLong
+        );
+        let promise = self.wit_api.find_key_values_new(key_prefix);
+        yield_once().blocking_wait();
+        Ok(self.wit_api.find_key_values_wait(promise))
+    }
+}
+
+impl WritableSyncKeyValueStore for KeyValueStore {
+    const MAX_VALUE_SIZE: usize = usize::MAX;
+
+    fn write_batch(&self, batch: Batch) -> Result<(), KeyValueStoreError> {
+        self.wit_api.write_batch(batch);
+        Ok(())
+    }
+
+    fn clear_journal(&self) -> Result<(), KeyValueStoreError> {
         Ok(())
     }
 }

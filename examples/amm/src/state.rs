@@ -3,10 +3,10 @@
 
 use linera_sdk::{
     linera_base_types::{Account, Amount},
-    views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, SyncView, ViewStorageContext},
 };
 
-#[derive(RootView, async_graphql::SimpleObject)]
+#[derive(SyncView, async_graphql::SimpleObject)]
 #[view(context = ViewStorageContext)]
 pub struct AmmState {
     pub shares: MapView<Account, Amount>,

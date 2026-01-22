@@ -67,7 +67,6 @@ impl Contract for ControllerContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = ControllerState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         ControllerContract { state, runtime }
     }
@@ -160,7 +159,7 @@ impl Contract for ControllerContract {
     }
 
     async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 
@@ -248,26 +247,24 @@ impl ControllerContract {
                 self.runtime
                     .prepare_message(Message::Reset)
                     .send_to(worker_id);
-                let services_ids = self.state.services.indices().await.expect("storage");
+                let services_ids = self.state.services.indices().expect("storage");
                 for id in services_ids {
                     let mut workers = self
                         .state
                         .services
                         .get(&id)
-                        .await
                         .expect("storage")
                         .expect("value should be present");
                     if workers.remove(&worker_id) {
                         self.update_service(id, workers).await;
                     }
                 }
-                let chain_ids = self.state.chains.indices().await.expect("storage");
+                let chain_ids = self.state.chains.indices().expect("storage");
                 for id in chain_ids {
                     let mut workers = self
                         .state
                         .chains
                         .get(&id)
-                        .await
                         .expect("storage")
                         .expect("value should be present");
                     if workers.remove(&worker_id) {
@@ -290,7 +287,6 @@ impl ControllerContract {
                     .state
                     .services
                     .indices()
-                    .await
                     .expect("storage")
                     .into_iter()
                     .collect::<HashSet<_>>();
@@ -314,7 +310,6 @@ impl ControllerContract {
                     .state
                     .chains
                     .indices()
-                    .await
                     .expect("storage")
                     .into_iter()
                     .collect::<HashSet<_>>();
@@ -338,7 +333,6 @@ impl ControllerContract {
             .state
             .services
             .get(&service_id)
-            .await
             .expect("storage")
             .unwrap_or_default();
 
@@ -373,7 +367,6 @@ impl ControllerContract {
             .state
             .chains
             .get(&chain_id)
-            .await
             .expect("storage")
             .unwrap_or_default();
 
@@ -411,7 +404,7 @@ impl ControllerState {}
 #[cfg(test)]
 mod tests {
     use futures::FutureExt as _;
-    use linera_sdk::{util::BlockingWait, views::View, Contract, ContractRuntime};
+    use linera_sdk::{views::View, Contract, ContractRuntime};
 
     use super::{ControllerContract, ControllerState};
 
@@ -425,7 +418,6 @@ mod tests {
         let runtime = ContractRuntime::new().with_application_parameters(());
         let mut contract = ControllerContract {
             state: ControllerState::load(runtime.root_view_storage_context())
-                .blocking_wait()
                 .expect("Failed to read from mock key value store"),
             runtime,
         };

@@ -28,9 +28,8 @@ impl Service for CounterService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = CounterState::load(runtime.root_view_storage_context())
-            .await
-            .expect("Failed to load state");
+        let state =
+            CounterState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         CounterService {
             state: Arc::new(state),
             runtime: Arc::new(runtime),
@@ -69,7 +68,7 @@ mod tests {
 
     use async_graphql::{Request, Response, Value};
     use futures::FutureExt as _;
-    use linera_sdk::{util::BlockingWait, views::View, Service, ServiceRuntime};
+    use linera_sdk::{views::View, Service, ServiceRuntime};
     use serde_json::json;
 
     use super::{CounterService, CounterState};
@@ -79,7 +78,6 @@ mod tests {
         let value = 61_098_721_u64;
         let runtime = Arc::new(ServiceRuntime::<CounterService>::new());
         let mut state = CounterState::load(runtime.root_view_storage_context())
-            .blocking_wait()
             .expect("Failed to read from mock key value store");
         state.value.set(value);
 

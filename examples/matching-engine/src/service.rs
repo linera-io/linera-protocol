@@ -40,7 +40,6 @@ impl Service for MatchingEngineService {
             parameters,
         );
         let state = MatchingEngineState::load(context)
-            .await
             .expect("Failed to load state");
         MatchingEngineService {
             state: Arc::new(state),

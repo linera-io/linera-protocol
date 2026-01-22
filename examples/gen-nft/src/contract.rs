@@ -35,7 +35,6 @@ impl Contract for GenNftContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = GenNftState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         GenNftContract { state, runtime }
     }
@@ -125,7 +124,7 @@ impl Contract for GenNftContract {
     }
 
     async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 
@@ -154,7 +153,6 @@ impl GenNftContract {
         self.state
             .nfts
             .get(token_id)
-            .await
             .expect("Failure in retrieving NFT")
             .expect("NFT not found")
     }
@@ -210,7 +208,6 @@ impl GenNftContract {
             .state
             .owned_token_ids
             .get_mut(&owner)
-            .await
             .expect("Error in get_mut statement")
         {
             owned_token_ids.insert(token_id);
@@ -233,7 +230,6 @@ impl GenNftContract {
             .state
             .owned_token_ids
             .get_mut(&nft.owner)
-            .await
             .expect("Error in get_mut statement")
             .expect("NFT set should be there!");
 
