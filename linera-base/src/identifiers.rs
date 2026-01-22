@@ -156,11 +156,7 @@ impl Account {
 
 impl fmt::Display for Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.owner.is_chain() {
-            write!(f, "{}", self.chain_id)
-        } else {
-            write!(f, "{}@{}", self.owner, self.chain_id)
-        }
+        write!(f, "{}@{}", self.owner, self.chain_id)
     }
 }
 
@@ -1106,7 +1102,7 @@ impl std::str::FromStr for AccountOwner {
             } else if s.len() == 40 {
                 let address = hex::decode(s)?;
                 if address.len() != 20 {
-                    anyhow::bail!("Invalid address length: {}", s);
+                    anyhow::bail!("Invalid address length: {s}");
                 }
                 let address = <[u8; 20]>::try_from(address.as_slice()).unwrap();
                 return Ok(AccountOwner::Address20(address));
@@ -1119,7 +1115,7 @@ impl std::str::FromStr for AccountOwner {
                 }
             }
         }
-        anyhow::bail!("Invalid address value: {}", s);
+        anyhow::bail!("Invalid address value: {s}");
     }
 }
 
@@ -1236,6 +1232,7 @@ mod tests {
     #[test]
     fn addresses() {
         assert_eq!(&AccountOwner::Reserved(0).to_string(), "0x00");
+        assert_eq!(AccountOwner::from_str("0x00").unwrap(), AccountOwner::CHAIN);
 
         let address = AccountOwner::from_str("0x10").unwrap();
         assert_eq!(address, AccountOwner::Reserved(16));
@@ -1278,8 +1275,12 @@ mod tests {
 
         // Chain-only account.
         let account = Account::from_str(CHAIN).unwrap();
+        assert_eq!(
+            account,
+            Account::from_str(&format!("0x00@{CHAIN}")).unwrap()
+        );
         assert_eq!(account, Account::chain(chain_id));
-        assert_eq!(account.to_string(), CHAIN);
+        assert_eq!(account.to_string(), format!("0x00@{CHAIN}"));
 
         // Account with owner.
         let account = Account::from_str(&format!("{OWNER}@{CHAIN}")).unwrap();
