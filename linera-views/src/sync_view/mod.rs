@@ -1,11 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::crypto::CryptoHash;
 use crate::{batch::Batch, ViewError};
 
 pub use linera_views_derive::SyncView;
-pub use crate::views::Hasher;
 
 /// The `SyncRegisterView` implements a register for a single value.
 pub mod register_view;
@@ -13,8 +11,6 @@ pub mod register_view;
 /// The `SyncLogView` implements a log list that can be pushed.
 pub mod log_view;
 
-/// The `SyncBucketQueueView` implements a queue that can push on the back and delete on the front and group data in buckets.
-pub mod bucket_queue_view;
 
 /// The `SyncQueueView` implements a queue that can push on the back and delete on the front.
 pub mod queue_view;
@@ -27,15 +23,6 @@ pub mod set_view;
 
 /// The `SyncCollectionView` implements a map structure whose keys are ordered and the values are views.
 pub mod collection_view;
-
-/// The implementation of a key-value store view.
-pub mod key_value_store_view;
-
-/// Wrapping a view to memoize hashing.
-pub mod hashable_wrapper;
-
-/// Wrapping a view to compute hash based on the history of modifications to the view.
-pub mod historical_hash_wrapper;
 
 /// The minimum value for the view tags. Values in `0..MIN_VIEW_TAG` are used for other purposes.
 pub const MIN_VIEW_TAG: u8 = crate::views::MIN_VIEW_TAG;
@@ -110,18 +97,6 @@ pub trait SyncReplaceContext<C: crate::context::Context>: SyncView {
     fn with_context(&mut self, ctx: impl FnOnce(&Self::Context) -> C + Clone) -> Self::Target;
 }
 
-/// A view that supports hashing its values.
-pub trait SyncHashableView: SyncView {
-    /// How to compute hashes.
-    type Hasher: Hasher;
-
-    /// Computes the hash of the values.
-    fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
-
-    /// Same as `hash` but guaranteed to be wait-free.
-    fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
-}
-
 /// A [`SyncView`] whose staged modifications can be saved in storage.
 pub trait SyncRootView: SyncView {
     /// Saves the root view to the database context.
@@ -138,25 +113,6 @@ pub trait SyncRootView: SyncView {
 }
 
 impl<T> SyncRootView for T where T: SyncView {}
-
-/// A [`SyncView`] that also supports crypto hash.
-pub trait SyncCryptoHashView: SyncHashableView {
-    /// Computing the hash and attributing the type to it. May require locking.
-    fn crypto_hash(&self) -> Result<CryptoHash, ViewError>;
-
-    /// Same as `crypto_hash` but guaranteed to be wait-free.
-    fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError>;
-}
-
-/// A [`SyncRootView`] that also supports crypto hash.
-pub trait SyncCryptoHashRootView: SyncRootView + SyncCryptoHashView {}
-
-/// A view that can be shared (unsafely) by cloning it.
-pub trait SyncClonableView: SyncView {
-    /// Creates a clone of this view, sharing the underlying storage context but prone to
-    /// data races which can corrupt the view state.
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError>;
-}
 
 impl<T> crate::views::View for T
 where
@@ -215,30 +171,6 @@ where
     }
 }
 
-impl<T> crate::views::ClonableView for T
-where
-    T: SyncClonableView,
-{
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        SyncClonableView::clone_unchecked(self)
-    }
-}
-
-impl<T> crate::views::HashableView for T
-where
-    T: SyncHashableView,
-{
-    type Hasher = T::Hasher;
-
-    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        SyncHashableView::hash(self)
-    }
-
-    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        SyncHashableView::hash_mut(self)
-    }
-}
-
 impl<T> crate::views::RootView for T
 where
     T: SyncRootView,
@@ -247,18 +179,3 @@ where
         SyncRootView::save(self)
     }
 }
-
-impl<T> crate::views::CryptoHashView for T
-where
-    T: SyncCryptoHashView,
-{
-    async fn crypto_hash(&self) -> Result<CryptoHash, ViewError> {
-        SyncCryptoHashView::crypto_hash(self)
-    }
-
-    async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
-        SyncCryptoHashView::crypto_hash_mut(self)
-    }
-}
-
-impl<T> crate::views::CryptoHashRootView for T where T: SyncCryptoHashRootView {}
