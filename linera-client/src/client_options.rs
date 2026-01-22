@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, fmt, iter};
+use std::{
+    collections::{BTreeMap, HashSet},
+    fmt,
+};
 
 use linera_base::{
     data_types::{ApplicationPermissions, BlanketMessagePolicy, MessagePolicy, TimeDelta},
@@ -295,7 +298,7 @@ impl Options {
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct ChainOwnershipConfig {
-    /// A JSON list of the new super owners. Absence of the argument leaves the current
+    /// A JSON list of the new super owners. Absence of the option leaves the current
     /// set of super owners unchanged.
     // NOTE (applies to all fields): we need the std::option:: and std::vec:: qualifiers in order
     // to throw off the #[derive(Args)] macro's automatic inference of the type it should expect
@@ -305,26 +308,14 @@ pub struct ChainOwnershipConfig {
     #[arg(long, value_parser = util::parse_json::<Vec<AccountOwner>>)]
     pub super_owners: Option<std::vec::Vec<AccountOwner>>,
 
-    /// A JSON list of the new owners. Absence of the argument leaves the current list of
-    /// owners unchanged.
-    #[arg(long, value_parser = util::parse_json::<Vec<AccountOwner>>)]
-    pub owners: Option<std::vec::Vec<AccountOwner>>,
-
-    /// A JSON list of weights for the new owners.
-    ///
-    /// If they are specified there must be exactly one weight for each owner.
-    ///
-    /// Absence of the argument gives each owner a weight of 100 if --owners is specified,
-    /// or leaves the owners unchanged if it is not specified.
-    ///
-    /// Note: if --owner is not specified, but this argument is, the weights will be
-    /// assigned to the existing owners in lexicographical order.
-    #[arg(long, value_parser = util::parse_json::<Vec<u64>>)]
-    pub owner_weights: Option<std::vec::Vec<u64>>,
+    /// A JSON map of the new owners to their weights. Absence of the option leaves the current
+    /// set of owners unchanged.
+    #[arg(long, value_parser = util::parse_json::<BTreeMap<AccountOwner, u64>>)]
+    pub owners: Option<BTreeMap<AccountOwner, u64>>,
 
     /// The number of rounds in which every owner can propose blocks, i.e. the first round
     /// number in which only a single designated leader is allowed to propose blocks. "null" is
-    /// equivalent to 2^32 - 1. Absence of the argument leaves the current setting unchanged.
+    /// equivalent to 2^32 - 1. Absence of the option leaves the current setting unchanged.
     #[arg(long, value_parser = util::parse_json::<Option<u32>>)]
     pub multi_leader_rounds: Option<std::option::Option<u32>>,
 
@@ -335,12 +326,12 @@ pub struct ChainOwnershipConfig {
     pub open_multi_leader_rounds: bool,
 
     /// The duration of the fast round, in milliseconds. "null" means the fast round will
-    /// not time out. Absence of the argument leaves the current setting unchanged.
+    /// not time out. Absence of the option leaves the current setting unchanged.
     #[arg(long = "fast-round-ms", value_parser = util::parse_json_optional_millis_delta)]
     pub fast_round_duration: Option<std::option::Option<TimeDelta>>,
 
     /// The duration of the first single-leader and all multi-leader rounds. Absence of
-    /// the argument leaves the current setting unchanged.
+    /// the option leaves the current setting unchanged.
     #[arg(
         long = "base-timeout-ms",
         value_parser = util::parse_millis_delta
@@ -348,7 +339,7 @@ pub struct ChainOwnershipConfig {
     pub base_timeout: Option<TimeDelta>,
 
     /// The number of milliseconds by which the timeout increases after each
-    /// single-leader round. Absence of the argument leaves the current setting unchanged.
+    /// single-leader round. Absence of the option leaves the current setting unchanged.
     #[arg(
         long = "timeout-increment-ms",
         value_parser = util::parse_millis_delta
@@ -356,7 +347,7 @@ pub struct ChainOwnershipConfig {
     pub timeout_increment: Option<TimeDelta>,
 
     /// The age of an incoming tracked or protected message after which the validators start
-    /// transitioning the chain to fallback mode, in milliseconds. Absence of the argument
+    /// transitioning the chain to fallback mode, in milliseconds. Absence of the option
     /// leaves the current setting unchanged.
     #[arg(
         long = "fallback-duration-ms",
@@ -370,7 +361,6 @@ impl ChainOwnershipConfig {
         let ChainOwnershipConfig {
             super_owners,
             owners,
-            owner_weights,
             multi_leader_rounds,
             fast_round_duration,
             open_multi_leader_rounds,
@@ -379,18 +369,8 @@ impl ChainOwnershipConfig {
             fallback_duration,
         } = self;
 
-        if let Some(owner_weights) = owner_weights {
-            let owners = owners
-                .unwrap_or_else(|| chain_ownership.owners.keys().cloned().collect::<Vec<_>>());
-            if owner_weights.len() != owners.len() {
-                return Err(Error::MisalignedWeights {
-                    public_keys: owners.len(),
-                    weights: owner_weights.len(),
-                });
-            }
-            chain_ownership.owners = owners.into_iter().zip(owner_weights).collect();
-        } else if let Some(owners) = owners {
-            chain_ownership.owners = owners.into_iter().zip(iter::repeat(100)).collect();
+        if let Some(owners) = owners {
+            chain_ownership.owners = owners;
         }
 
         if let Some(super_owners) = super_owners {
@@ -434,7 +414,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
 pub struct ApplicationPermissionsConfig {
     /// A JSON list of applications allowed to execute operations on this chain. If set to null, all
     /// operations will be allowed. Otherwise, only operations from the specified applications are
-    /// allowed, and no system operations. Absence of the argument leaves current permissions
+    /// allowed, and no system operations. Absence of the option leaves current permissions
     /// unchanged.
     // NOTE (applies to all fields): we need the std::option:: and std::vec:: qualifiers in order
     // to throw off the #[derive(Args)] macro's automatic inference of the type it should expect
@@ -444,26 +424,26 @@ pub struct ApplicationPermissionsConfig {
     #[arg(long, value_parser = util::parse_json::<Option<Vec<ApplicationId>>>)]
     pub execute_operations: Option<std::option::Option<Vec<ApplicationId>>>,
     /// A JSON list of applications, such that at least one operation or incoming message from each
-    /// of these applications must occur in every block. Absence of the argument leaves
+    /// of these applications must occur in every block. Absence of the option leaves
     /// current mandatory applications unchanged.
     #[arg(long, value_parser = util::parse_json::<Vec<ApplicationId>>)]
     pub mandatory_applications: Option<std::vec::Vec<ApplicationId>>,
-    /// A JSON list of applications allowed to close the chain. Absence of the argument leaves
+    /// A JSON list of applications allowed to close the chain. Absence of the option leaves
     /// the current list unchanged.
     #[arg(long, value_parser = util::parse_json::<Vec<ApplicationId>>)]
     pub close_chain: Option<std::vec::Vec<ApplicationId>>,
     /// A JSON list of applications allowed to change the application permissions on the current
-    /// chain using the system API. Absence of the argument leaves the current list unchanged.
+    /// chain using the system API. Absence of the option leaves the current list unchanged.
     #[arg(long, value_parser = util::parse_json::<Vec<ApplicationId>>)]
     pub change_application_permissions: Option<std::vec::Vec<ApplicationId>>,
     /// A JSON list of applications that are allowed to call services as oracles on the current
     /// chain using the system API. If set to null, all applications will be able to do
-    /// so. Absence of the argument leaves the current value of the setting unchanged.
+    /// so. Absence of the option leaves the current value of the setting unchanged.
     #[arg(long, value_parser = util::parse_json::<Option<Vec<ApplicationId>>>)]
     pub call_service_as_oracle: Option<std::option::Option<Vec<ApplicationId>>>,
     /// A JSON list of applications that are allowed to make HTTP requests on the current chain
     /// using the system API. If set to null, all applications will be able to do so.
-    /// Absence of the argument leaves the current value of the setting unchanged.
+    /// Absence of the option leaves the current value of the setting unchanged.
     #[arg(long, value_parser = util::parse_json::<Option<Vec<ApplicationId>>>)]
     pub make_http_requests: Option<std::option::Option<Vec<ApplicationId>>>,
 }
