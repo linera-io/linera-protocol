@@ -708,6 +708,14 @@ where
                 Self::send_err(requests, error_msg.clone());
                 return Ok(());
             }
+            Ok(ClientOutcome::Conflict(certificate)) => {
+                let error_msg = format!(
+                    "A different block was committed at this height: {}",
+                    certificate.hash(),
+                );
+                Self::send_err(requests, error_msg.clone());
+                return Ok(());
+            }
         };
 
         // Parse chain descriptions from the block's blobs

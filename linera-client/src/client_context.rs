@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_chain::{manager::LockingBlock, types::ConfirmedBlockCertificate};
 use linera_core::{
-    client::{ChainClient, Client, ListeningMode},
+    client::{chain_client, ChainClient, Client, ListeningMode},
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
     node::ValidatorNode,
@@ -36,7 +36,6 @@ use {
         data_types::{Amount, BlockHeight},
         identifiers::{ApplicationId, BlobType},
     },
-    linera_core::client::chain_client,
     linera_execution::{
         system::{OpenChainConfig, SystemOperation},
         Operation,
@@ -544,8 +543,12 @@ impl<Env: Environment> ClientContext<Env> {
         // Try applying f optimistically without validator notifications. Return if committed.
         let result = f(client).await;
         self.update_wallet_from_client(client).await?;
-        if let ClientOutcome::Committed(t) = result? {
-            return Ok(t);
+        match result? {
+            ClientOutcome::Committed(t) => return Ok(t),
+            ClientOutcome::Conflict(certificate) => {
+                return Err(chain_client::Error::Conflict(certificate.hash()).into());
+            }
+            ClientOutcome::WaitForTimeout(_) => {}
         }
 
         // Start listening for notifications, so we learn about new rounds and blocks.
@@ -558,6 +561,9 @@ impl<Env: Environment> ClientContext<Env> {
             self.update_wallet_from_client(client).await?;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
+                ClientOutcome::Conflict(certificate) => {
+                    return Err(chain_client::Error::Conflict(certificate.hash()).into());
+                }
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             // Otherwise wait and try again in the next round.
