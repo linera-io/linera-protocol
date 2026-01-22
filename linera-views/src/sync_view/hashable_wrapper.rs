@@ -16,7 +16,7 @@ use crate::{
     common::from_bytes_option,
     context::Context,
     sync_view::{
-        SyncClonableView, SyncHashableView, SyncReplaceContext, SyncView, MIN_VIEW_TAG,
+        Hasher, SyncClonableView, SyncHashableView, SyncReplaceContext, SyncView, MIN_VIEW_TAG,
     },
     ViewError,
 };
@@ -24,7 +24,7 @@ use crate::{
 /// Wrapping a view to memoize its hash.
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, O, W: Allocative")]
-pub struct WrappedHashableContainerView<C, W, O> {
+pub struct SyncWrappedHashableContainerView<C, W, O> {
     /// Phantom data for the context type.
     #[allocative(skip)]
     _phantom: PhantomData<C>,
@@ -38,7 +38,7 @@ pub struct WrappedHashableContainerView<C, W, O> {
     inner: W,
 }
 
-/// Key tags to create the sub-keys of a `WrappedHashableContainerView` on top of the base key.
+/// Key tags to create the sub-keys of a `SyncWrappedHashableContainerView` on top of the base key.
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the indices of the view.
@@ -47,20 +47,22 @@ enum KeyTag {
     Hash,
 }
 
-impl<C, W, O, C2> SyncReplaceContext<C2> for WrappedHashableContainerView<C, W, O>
+impl<C, W, O, C2> SyncReplaceContext<C2> for SyncWrappedHashableContainerView<C, W, O>
 where
-    W: SyncHashableView<Hasher: crate::sync_view::Hasher<Output = O>, Context = C>
-        + SyncReplaceContext<C2>,
-    <W as SyncReplaceContext<C2>>::Target: SyncHashableView<Hasher: crate::sync_view::Hasher<Output = O>>,
+    W: SyncHashableView<Hasher: Hasher<Output = O>, Context = C> + SyncReplaceContext<C2>,
+    <W as SyncReplaceContext<C2>>::Target: SyncHashableView<Hasher: Hasher<Output = O>>,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     C: Context,
     C2: Context,
 {
-    type Target = WrappedHashableContainerView<C2, <W as SyncReplaceContext<C2>>::Target, O>;
+    type Target = SyncWrappedHashableContainerView<C2, <W as SyncReplaceContext<C2>>::Target, O>;
 
-    fn with_context(&mut self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Target {
+    fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
         let hash = *self.hash.lock().unwrap();
-        WrappedHashableContainerView {
+        SyncWrappedHashableContainerView {
             _phantom: PhantomData,
             stored_hash: self.stored_hash,
             hash: Mutex::new(hash),
@@ -69,9 +71,9 @@ where
     }
 }
 
-impl<W: SyncHashableView, O> SyncView for WrappedHashableContainerView<W::Context, W, O>
+impl<W: SyncHashableView, O> SyncView for SyncWrappedHashableContainerView<W::Context, W, O>
 where
-    W: SyncHashableView<Hasher: crate::sync_view::Hasher<Output = O>>,
+    W: SyncHashableView<Hasher: Hasher<Output = O>>,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
 {
     const NUM_INIT_KEYS: usize = 1 + W::NUM_INIT_KEYS;
@@ -151,14 +153,14 @@ where
     }
 }
 
-impl<W, O> SyncClonableView for WrappedHashableContainerView<W::Context, W, O>
+impl<W, O> SyncClonableView for SyncWrappedHashableContainerView<W::Context, W, O>
 where
     W: SyncHashableView + SyncClonableView,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
-    W::Hasher: crate::sync_view::Hasher<Output = O>,
+    W::Hasher: Hasher<Output = O>,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(WrappedHashableContainerView {
+        Ok(SyncWrappedHashableContainerView {
             _phantom: PhantomData,
             stored_hash: self.stored_hash,
             hash: Mutex::new(*self.hash.get_mut().unwrap()),
@@ -167,15 +169,15 @@ where
     }
 }
 
-impl<W, O> SyncHashableView for WrappedHashableContainerView<W::Context, W, O>
+impl<W, O> SyncHashableView for SyncWrappedHashableContainerView<W::Context, W, O>
 where
     W: SyncHashableView,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
-    W::Hasher: crate::sync_view::Hasher<Output = O>,
+    W::Hasher: Hasher<Output = O>,
 {
     type Hasher = W::Hasher;
 
-    fn hash_mut(&mut self) -> Result<<Self::Hasher as crate::sync_view::Hasher>::Output, ViewError> {
+    fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let hash = *self.hash.get_mut().unwrap();
         match hash {
             Some(hash) => Ok(hash),
@@ -188,7 +190,7 @@ where
         }
     }
 
-    fn hash(&self) -> Result<<Self::Hasher as crate::sync_view::Hasher>::Output, ViewError> {
+    fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let hash = *self.hash.lock().unwrap();
         match hash {
             Some(hash) => Ok(hash),
@@ -202,7 +204,7 @@ where
     }
 }
 
-impl<C, W, O> Deref for WrappedHashableContainerView<C, W, O> {
+impl<C, W, O> Deref for SyncWrappedHashableContainerView<C, W, O> {
     type Target = W;
 
     fn deref(&self) -> &W {
@@ -210,10 +212,44 @@ impl<C, W, O> Deref for WrappedHashableContainerView<C, W, O> {
     }
 }
 
-impl<C, W, O> DerefMut for WrappedHashableContainerView<C, W, O> {
+impl<C, W, O> DerefMut for SyncWrappedHashableContainerView<C, W, O> {
     fn deref_mut(&mut self) -> &mut W {
         *self.hash.get_mut().unwrap() = None;
         &mut self.inner
     }
 }
 
+#[cfg(with_graphql)]
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::SyncWrappedHashableContainerView;
+    use crate::context::Context;
+
+    impl<C, W, O> async_graphql::OutputType for SyncWrappedHashableContainerView<C, W, O>
+    where
+        C: Context,
+        W: async_graphql::OutputType + Send + Sync,
+        O: Send + Sync,
+    {
+        fn type_name() -> Cow<'static, str> {
+            W::type_name()
+        }
+
+        fn qualified_type_name() -> String {
+            W::qualified_type_name()
+        }
+
+        fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+            W::create_type_info(registry)
+        }
+
+        fn resolve(
+            &self,
+            ctx: &async_graphql::ContextSelectionSet<'_>,
+            field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+        ) -> async_graphql::ServerResult<async_graphql::Value> {
+            (**self).resolve(ctx, field)
+        }
+    }
+}

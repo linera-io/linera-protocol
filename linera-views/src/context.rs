@@ -5,7 +5,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::DeletePrefixExpander,
-    memory::MemoryStore,
+    memory::{MemoryStore, SyncMemoryStore},
     store::{KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore},
     views::MIN_VIEW_TAG,
 };
@@ -236,6 +236,21 @@ impl<E> MemoryContext<E> {
     pub fn new_for_testing(extra: E) -> Self {
         Self {
             store: MemoryStore::new_for_testing(),
+            base_key: BaseKey::default(),
+            extra,
+        }
+    }
+}
+
+/// An implementation of [`crate::context::Context`] that stores all values in sync memory.
+pub type SyncMemoryContext<E> = ViewContext<E, SyncMemoryStore>;
+
+impl<E> SyncMemoryContext<E> {
+    /// Creates a [`Context`] instance in sync memory for testing.
+    #[cfg(with_testing)]
+    pub fn new_for_testing(extra: E) -> Self {
+        Self {
+            store: SyncMemoryStore::new_for_testing(),
             base_key: BaseKey::default(),
             extra,
         }

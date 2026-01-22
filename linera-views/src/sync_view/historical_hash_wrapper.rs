@@ -14,11 +14,10 @@ use linera_base::visit_allocative_simple;
 
 use crate::{
     batch::Batch,
-    common::from_bytes_option,
+    common::{from_bytes_option, HasherOutput},
     context::Context,
     store::ReadableSyncKeyValueStore as _,
-    sync_view::{SyncClonableView, SyncReplaceContext, SyncView, MIN_VIEW_TAG},
-    views::{Hasher, HasherOutput},
+    sync_view::{Hasher, SyncClonableView, SyncReplaceContext, SyncView, MIN_VIEW_TAG},
     ViewError,
 };
 
@@ -34,7 +33,7 @@ mod metrics {
         LazyLock::new(|| {
             register_histogram_vec(
                 "historically_hashable_view_hash_runtime",
-                "HistoricallyHashableView hash runtime",
+                "SyncHistoricallyHashableView hash runtime",
                 &[],
                 exponential_bucket_latencies(5.0),
             )
@@ -44,7 +43,7 @@ mod metrics {
 /// Wrapper to compute the hash of the view based on its history of modifications.
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, W: Allocative")]
-pub struct HistoricallyHashableView<C, W> {
+pub struct SyncHistoricallyHashableView<C, W> {
     /// The hash in storage.
     #[allocative(visit = visit_allocative_simple)]
     stored_hash: Option<HasherOutput>,
@@ -58,7 +57,7 @@ pub struct HistoricallyHashableView<C, W> {
     _phantom: PhantomData<C>,
 }
 
-/// Key tags to create the sub-keys of a `HistoricallyHashableView` on top of the base key.
+/// Key tags to create the sub-keys of a `SyncHistoricallyHashableView` on top of the base key.
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the indices of the view.
@@ -67,7 +66,7 @@ enum KeyTag {
     Hash,
 }
 
-impl<C, W> HistoricallyHashableView<C, W> {
+impl<C, W> SyncHistoricallyHashableView<C, W> {
     fn make_hash(
         stored_hash: Option<HasherOutput>,
         batch: &Batch,
@@ -85,16 +84,19 @@ impl<C, W> HistoricallyHashableView<C, W> {
     }
 }
 
-impl<C, W, C2> SyncReplaceContext<C2> for HistoricallyHashableView<C, W>
+impl<C, W, C2> SyncReplaceContext<C2> for SyncHistoricallyHashableView<C, W>
 where
     W: SyncView<Context = C> + SyncReplaceContext<C2>,
     C: Context,
     C2: Context,
 {
-    type Target = HistoricallyHashableView<C2, <W as SyncReplaceContext<C2>>::Target>;
+    type Target = SyncHistoricallyHashableView<C2, <W as SyncReplaceContext<C2>>::Target>;
 
-    fn with_context(&mut self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Target {
-        HistoricallyHashableView {
+    fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
+        SyncHistoricallyHashableView {
             _phantom: PhantomData,
             stored_hash: self.stored_hash,
             hash: Mutex::new(*self.hash.get_mut().unwrap()),
@@ -103,7 +105,7 @@ where
     }
 }
 
-impl<W> SyncView for HistoricallyHashableView<W::Context, W>
+impl<W> SyncView for SyncHistoricallyHashableView<W::Context, W>
 where
     W: SyncView,
 {
@@ -197,12 +199,12 @@ where
     }
 }
 
-impl<W> SyncClonableView for HistoricallyHashableView<W::Context, W>
+impl<W> SyncClonableView for SyncHistoricallyHashableView<W::Context, W>
 where
     W: SyncClonableView,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(HistoricallyHashableView {
+        Ok(SyncHistoricallyHashableView {
             _phantom: PhantomData,
             stored_hash: self.stored_hash,
             hash: Mutex::new(*self.hash.get_mut().unwrap()),
@@ -211,21 +213,22 @@ where
     }
 }
 
-impl<W: SyncView> HistoricallyHashableView<W::Context, W> {
+impl<W: SyncView> SyncHistoricallyHashableView<W::Context, W> {
     /// Obtains a hash of the history of the changes in the view.
     pub fn historical_hash(&mut self) -> Result<HasherOutput, ViewError> {
         if let Some(hash) = self.hash.get_mut().unwrap() {
             return Ok(*hash);
         }
         let mut batch = Batch::new();
-        self.pre_save(&mut batch)?;
-        let new_hash = Self::make_hash(self.stored_hash, &batch)?;
-        *self.hash.get_mut().unwrap() = Some(new_hash);
-        Ok(new_hash)
+        self.inner.pre_save(&mut batch)?;
+        let hash = Self::make_hash(self.stored_hash, &batch)?;
+        // Remember the hash that we just computed.
+        *self.hash.get_mut().unwrap() = Some(hash);
+        Ok(hash)
     }
 }
 
-impl<C, W> Deref for HistoricallyHashableView<C, W> {
+impl<C, W> Deref for SyncHistoricallyHashableView<C, W> {
     type Target = W;
 
     fn deref(&self) -> &W {
@@ -233,9 +236,44 @@ impl<C, W> Deref for HistoricallyHashableView<C, W> {
     }
 }
 
-impl<C, W> DerefMut for HistoricallyHashableView<C, W> {
+impl<C, W> DerefMut for SyncHistoricallyHashableView<C, W> {
     fn deref_mut(&mut self) -> &mut W {
+        // Clear the memoized hash.
+        *self.hash.get_mut().unwrap() = None;
         &mut self.inner
     }
 }
 
+#[cfg(with_graphql)]
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::SyncHistoricallyHashableView;
+    use crate::context::Context;
+
+    impl<C, W> async_graphql::OutputType for SyncHistoricallyHashableView<C, W>
+    where
+        C: Context,
+        W: async_graphql::OutputType + Send + Sync,
+    {
+        fn type_name() -> Cow<'static, str> {
+            W::type_name()
+        }
+
+        fn qualified_type_name() -> String {
+            W::qualified_type_name()
+        }
+
+        fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+            W::create_type_info(registry)
+        }
+
+        fn resolve(
+            &self,
+            ctx: &async_graphql::ContextSelectionSet<'_>,
+            field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+        ) -> async_graphql::ServerResult<async_graphql::Value> {
+            self.inner.resolve(ctx, field)
+        }
+    }
+}

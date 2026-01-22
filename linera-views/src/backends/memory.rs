@@ -17,8 +17,8 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::get_key_range_for_prefix,
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, ReadableSyncKeyValueStore,
+        WithError, WritableKeyValueStore, WritableSyncKeyValueStore,
     },
 };
 
@@ -289,7 +289,7 @@ impl SyncMemoryStore {
     }
 }
 
-impl ReadableKeyValueStore for SyncMemoryStore {
+impl ReadableSyncKeyValueStore for SyncMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 
     fn max_stream_queries(&self) -> usize {
@@ -300,7 +300,7 @@ impl ReadableKeyValueStore for SyncMemoryStore {
         Ok(self.root_key.clone())
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryStoreError> {
+    fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryStoreError> {
         let map = self
             .map
             .read()
@@ -308,7 +308,7 @@ impl ReadableKeyValueStore for SyncMemoryStore {
         Ok(map.get(key).cloned())
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryStoreError> {
+    fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryStoreError> {
         let map = self
             .map
             .read()
@@ -316,7 +316,7 @@ impl ReadableKeyValueStore for SyncMemoryStore {
         Ok(map.contains_key(key))
     }
 
-    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, MemoryStoreError> {
+    fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, MemoryStoreError> {
         let map = self
             .map
             .read()
@@ -327,7 +327,7 @@ impl ReadableKeyValueStore for SyncMemoryStore {
             .collect::<Vec<_>>())
     }
 
-    async fn read_multi_values_bytes(
+    fn read_multi_values_bytes(
         &self,
         keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, MemoryStoreError> {
@@ -342,7 +342,7 @@ impl ReadableKeyValueStore for SyncMemoryStore {
         Ok(result)
     }
 
-    async fn find_keys_by_prefix(
+    fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
@@ -358,7 +358,7 @@ impl ReadableKeyValueStore for SyncMemoryStore {
         Ok(values)
     }
 
-    async fn find_key_values_by_prefix(
+    fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
@@ -376,10 +376,10 @@ impl ReadableKeyValueStore for SyncMemoryStore {
     }
 }
 
-impl WritableKeyValueStore for SyncMemoryStore {
+impl WritableSyncKeyValueStore for SyncMemoryStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), MemoryStoreError> {
+    fn write_batch(&self, batch: Batch) -> Result<(), MemoryStoreError> {
         let mut map = self
             .map
             .write()
@@ -406,8 +406,65 @@ impl WritableKeyValueStore for SyncMemoryStore {
         Ok(())
     }
 
-    async fn clear_journal(&self) -> Result<(), MemoryStoreError> {
+    fn clear_journal(&self) -> Result<(), MemoryStoreError> {
         Ok(())
+    }
+}
+
+impl ReadableKeyValueStore for SyncMemoryStore {
+    const MAX_KEY_SIZE: usize = <Self as ReadableSyncKeyValueStore>::MAX_KEY_SIZE;
+
+    fn max_stream_queries(&self) -> usize {
+        <Self as ReadableSyncKeyValueStore>::max_stream_queries(self)
+    }
+
+    fn root_key(&self) -> Result<Vec<u8>, MemoryStoreError> {
+        <Self as ReadableSyncKeyValueStore>::root_key(self)
+    }
+
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryStoreError> {
+        <Self as ReadableSyncKeyValueStore>::read_value_bytes(self, key)
+    }
+
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryStoreError> {
+        <Self as ReadableSyncKeyValueStore>::contains_key(self, key)
+    }
+
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, MemoryStoreError> {
+        <Self as ReadableSyncKeyValueStore>::contains_keys(self, keys)
+    }
+
+    async fn read_multi_values_bytes(
+        &self,
+        keys: &[Vec<u8>],
+    ) -> Result<Vec<Option<Vec<u8>>>, MemoryStoreError> {
+        <Self as ReadableSyncKeyValueStore>::read_multi_values_bytes(self, keys)
+    }
+
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
+        <Self as ReadableSyncKeyValueStore>::find_keys_by_prefix(self, key_prefix)
+    }
+
+    async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
+        <Self as ReadableSyncKeyValueStore>::find_key_values_by_prefix(self, key_prefix)
+    }
+}
+
+impl WritableKeyValueStore for SyncMemoryStore {
+    const MAX_VALUE_SIZE: usize = <Self as WritableSyncKeyValueStore>::MAX_VALUE_SIZE;
+
+    async fn write_batch(&self, batch: Batch) -> Result<(), MemoryStoreError> {
+        <Self as WritableSyncKeyValueStore>::write_batch(self, batch)
+    }
+
+    async fn clear_journal(&self) -> Result<(), MemoryStoreError> {
+        <Self as WritableSyncKeyValueStore>::clear_journal(self)
     }
 }
 

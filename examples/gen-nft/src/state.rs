@@ -7,7 +7,7 @@ use async_graphql::SimpleObject;
 use gen_nft::{Nft, TokenId};
 use linera_sdk::{
     linera_base_types::AccountOwner,
-    views::{linera_views, MapView, RegisterView, SyncView, ViewStorageContext},
+    views::{linera_views, SyncMapView, SyncRegisterView, SyncView, ViewStorageContext},
 };
 
 /// The application state.
@@ -15,9 +15,9 @@ use linera_sdk::{
 #[view(context = ViewStorageContext)]
 pub struct GenNftState {
     // Map from token ID to the NFT data
-    pub nfts: MapView<TokenId, Nft>,
+    pub nfts: SyncMapView<TokenId, Nft>,
     // Map from owners to the set of NFT token IDs they own
-    pub owned_token_ids: MapView<AccountOwner, BTreeSet<TokenId>>,
+    pub owned_token_ids: SyncMapView<AccountOwner, BTreeSet<TokenId>>,
     // Counter of NFTs minted in this chain, used for hash uniqueness
-    pub num_minted_nfts: RegisterView<u64>,
+    pub num_minted_nfts: SyncRegisterView<u64>,
 }

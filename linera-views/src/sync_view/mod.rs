@@ -1,34 +1,31 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{future::Future, pin::pin, task::{Context, Poll}};
-
-use futures::task::noop_waker;
 use linera_base::crypto::CryptoHash;
 use crate::{batch::Batch, ViewError};
 
 pub use linera_views_derive::SyncView;
 pub use crate::views::Hasher;
 
-/// The `RegisterView` implements a register for a single value.
+/// The `SyncRegisterView` implements a register for a single value.
 pub mod register_view;
 
-/// The `LogView` implements a log list that can be pushed.
+/// The `SyncLogView` implements a log list that can be pushed.
 pub mod log_view;
 
-/// The `BucketQueueView` implements a queue that can push on the back and delete on the front and group data in buckets.
+/// The `SyncBucketQueueView` implements a queue that can push on the back and delete on the front and group data in buckets.
 pub mod bucket_queue_view;
 
-/// The `QueueView` implements a queue that can push on the back and delete on the front.
+/// The `SyncQueueView` implements a queue that can push on the back and delete on the front.
 pub mod queue_view;
 
-/// The `MapView` implements a map with ordered keys.
+/// The `SyncMapView` implements a map with ordered keys.
 pub mod map_view;
 
-/// The `SetView` implements a set with ordered entries.
+/// The `SyncSetView` implements a set with ordered entries.
 pub mod set_view;
 
-/// The `CollectionView` implements a map structure whose keys are ordered and the values are views.
+/// The `SyncCollectionView` implements a map structure whose keys are ordered and the values are views.
 pub mod collection_view;
 
 /// The implementation of a key-value store view.
@@ -42,22 +39,6 @@ pub mod historical_hash_wrapper;
 
 /// The minimum value for the view tags. Values in `0..MIN_VIEW_TAG` are used for other purposes.
 pub const MIN_VIEW_TAG: u8 = crate::views::MIN_VIEW_TAG;
-
-pub(crate) fn block_on<AnyFuture>(future: AnyFuture) -> AnyFuture::Output
-where
-    AnyFuture: Future,
-{
-    let waker = noop_waker();
-    let mut task_context = Context::from_waker(&waker);
-    let mut future = pin!(future);
-
-    loop {
-        match future.as_mut().poll(&mut task_context) {
-            Poll::Pending => continue,
-            Poll::Ready(output) => return output,
-        }
-    }
-}
 
 /// A synchronous view gives exclusive access to read and write the data stored at an underlying
 /// address in storage.

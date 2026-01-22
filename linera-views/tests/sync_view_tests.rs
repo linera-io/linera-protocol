@@ -4,7 +4,7 @@
 use linera_views::{
     context::ViewContext,
     memory::SyncMemoryStore,
-    sync_view::{map_view::MapView, register_view::RegisterView, SyncRootView, SyncView},
+    sync_view::{map_view::SyncMapView, register_view::SyncRegisterView, SyncRootView, SyncView},
     ViewError,
 };
 
@@ -13,8 +13,8 @@ type TestContext = ViewContext<(), SyncMemoryStore>;
 #[derive(SyncView)]
 #[view(context = TestContext)]
 struct TestView {
-    counter: RegisterView<TestContext, u64>,
-    map: MapView<TestContext, String, u64>,
+    counter: SyncRegisterView<TestContext, u64>,
+    map: SyncMapView<TestContext, String, u64>,
 }
 
 #[test]
@@ -39,4 +39,3 @@ fn sync_view_roundtrip() -> Result<(), ViewError> {
 
     Ok(())
 }
-

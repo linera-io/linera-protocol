@@ -4,15 +4,15 @@
 use fungible::{InitialState, OwnerSpender};
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount},
-    views::{linera_views, MapView, SyncView, ViewStorageContext},
+    views::{linera_views, SyncMapView, SyncView, ViewStorageContext},
 };
 
 /// The application state.
 #[derive(SyncView)]
 #[view(context = ViewStorageContext)]
 pub struct FungibleTokenState {
-    pub accounts: MapView<AccountOwner, Amount>,
-    pub allowances: MapView<OwnerSpender, Amount>,
+    pub accounts: SyncMapView<AccountOwner, Amount>,
+    pub allowances: SyncMapView<OwnerSpender, Amount>,
 }
 
 #[allow(dead_code)]

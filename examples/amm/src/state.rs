@@ -3,12 +3,12 @@
 
 use linera_sdk::{
     linera_base_types::{Account, Amount},
-    views::{linera_views, MapView, RegisterView, SyncView, ViewStorageContext},
+    views::{linera_views, SyncMapView, SyncRegisterView, SyncView, ViewStorageContext},
 };
 
 #[derive(SyncView, async_graphql::SimpleObject)]
 #[view(context = ViewStorageContext)]
 pub struct AmmState {
-    pub shares: MapView<Account, Amount>,
-    pub total_shares_supply: RegisterView<Amount>,
+    pub shares: SyncMapView<Account, Amount>,
+    pub total_shares_supply: SyncRegisterView<Amount>,
 }

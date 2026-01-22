@@ -5,7 +5,7 @@ use async_graphql::scalar;
 use crowd_funding::InstantiationArgument;
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount},
-    views::{linera_views, MapView, RegisterView, SyncView, ViewStorageContext},
+    views::{linera_views, SyncMapView, SyncRegisterView, SyncView, ViewStorageContext},
 };
 use serde::{Deserialize, Serialize};
 
@@ -28,11 +28,11 @@ scalar!(Status);
 #[view(context = ViewStorageContext)]
 pub struct CrowdFundingState {
     /// The status of the campaign.
-    pub status: RegisterView<Status>,
+    pub status: SyncRegisterView<Status>,
     /// The map of pledges that will be collected if the campaign succeeds.
-    pub pledges: MapView<AccountOwner, Amount>,
+    pub pledges: SyncMapView<AccountOwner, Amount>,
     /// The instantiation data that determines the details of the campaign.
-    pub instantiation_argument: RegisterView<Option<InstantiationArgument>>,
+    pub instantiation_argument: SyncRegisterView<Option<InstantiationArgument>>,
 }
 
 #[allow(dead_code)]

@@ -1,206 +1,522 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::{Deref, DerefMut};
+use std::{
+    collections::{vec_deque::IterMut, VecDeque},
+    ops::Range,
+};
 
+use allocative::Allocative;
+#[cfg(with_metrics)]
+use linera_base::prometheus_util::MeasureLatency as _;
+use linera_base::visit_allocative_simple;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
+    batch::Batch,
+    common::{from_bytes_option_or_default, HasherOutput},
     context::Context,
-    sync_view::{block_on, SyncClonableView, SyncHashableView, SyncReplaceContext, SyncView},
-    views::{ClonableView as _, HashableView as _, ReplaceContext as _, View as _},
+    store::ReadableSyncKeyValueStore as _,
+    sync_view::{
+        hashable_wrapper::SyncWrappedHashableContainerView,
+        historical_hash_wrapper::SyncHistoricallyHashableView,
+        Hasher, SyncClonableView, SyncHashableView, SyncView, MIN_VIEW_TAG,
+    },
     ViewError,
 };
 
-/// A synchronous queue view.
-#[derive(Debug)]
-pub struct QueueView<C, T> {
-    inner: crate::views::queue_view::QueueView<C, T>,
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    /// The runtime of hash computation
+    pub static QUEUE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "queue_view_hash_runtime",
+            "SyncQueueView hash runtime",
+            &[],
+            exponential_bucket_latencies(5.0),
+        )
+    });
 }
 
-impl<C, T> QueueView<C, T> {
-    /// Deletes the front value, if any.
-    pub fn delete_front(&mut self) {
-        self.inner.delete_front();
-    }
-
-    /// Pushes a value to the end of the queue.
-    pub fn push_back(&mut self, value: T) {
-        self.inner.push_back(value);
-    }
-
-    /// Reads the size of the queue.
-    pub fn count(&self) -> usize {
-        self.inner.count()
-    }
-
-    /// Obtains the extra data.
-    pub fn extra(&self) -> &C::Extra
-    where
-        C: Context,
-    {
-        self.inner.extra()
-    }
-
-    /// Reads the front value, if any.
-    pub fn front(&self) -> Result<Option<T>, ViewError>
-    where
-        C: Context,
-        T: Send + Sync + Clone + Serialize + DeserializeOwned,
-    {
-        block_on(self.inner.front())
-    }
-
-    /// Reads the back value, if any.
-    pub fn back(&self) -> Result<Option<T>, ViewError>
-    where
-        C: Context,
-        T: Send + Sync + Clone + Serialize + DeserializeOwned,
-    {
-        block_on(self.inner.back())
-    }
-
-    /// Reads the `count` next values in the queue (including staged ones).
-    pub fn read_front(&self, count: usize) -> Result<Vec<T>, ViewError>
-    where
-        C: Context,
-        T: Send + Sync + Clone + Serialize + DeserializeOwned,
-    {
-        block_on(self.inner.read_front(count))
-    }
-
-    /// Reads the `count` last values in the queue (including staged ones).
-    pub fn read_back(&self, count: usize) -> Result<Vec<T>, ViewError>
-    where
-        C: Context,
-        T: Send + Sync + Clone + Serialize + DeserializeOwned,
-    {
-        block_on(self.inner.read_back(count))
-    }
-
-    /// Reads all values in the queue.
-    pub fn elements(&self) -> Result<Vec<T>, ViewError>
-    where
-        C: Context,
-        T: Send + Sync + Clone + Serialize + DeserializeOwned,
-    {
-        block_on(self.inner.elements())
-    }
-
-    /// Returns a mutable iterator over the queue values.
-    pub fn iter_mut<'a>(&'a mut self) -> Result<crate::views::queue_view::IterMut<'a, T>, ViewError>
-    where
-        C: Context,
-        T: Send + Sync + Clone + Serialize + DeserializeOwned,
-    {
-        block_on(self.inner.iter_mut())
-    }
+/// Key tags to create the sub-keys of a `SyncQueueView` on top of the base key.
+#[repr(u8)]
+enum KeyTag {
+    /// Prefix for the storing of the variable `stored_indices`.
+    Store = MIN_VIEW_TAG,
+    /// Prefix for the indices of the log.
+    Index,
 }
 
-impl<C, T> SyncView for QueueView<C, T>
+/// A view that supports a FIFO queue for values of type `T`.
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, T: Allocative")]
+pub struct SyncQueueView<C, T> {
+    /// The view context.
+    #[allocative(skip)]
+    context: C,
+    /// The range of indices for entries persisted in storage.
+    #[allocative(visit = visit_allocative_simple)]
+    stored_indices: Range<usize>,
+    /// The number of entries to delete from the front.
+    front_delete_count: usize,
+    /// Whether to clear storage before applying updates.
+    delete_storage_first: bool,
+    /// New values added to the back, not yet persisted to storage.
+    new_back_values: VecDeque<T>,
+}
+
+impl<C, T> SyncView for SyncQueueView<C, T>
 where
     C: Context,
-    T: Send + Sync + Clone + Serialize + DeserializeOwned,
+    T: Serialize + Send + Sync,
 {
-    const NUM_INIT_KEYS: usize = <crate::views::queue_view::QueueView<C, T> as crate::views::View>::NUM_INIT_KEYS;
+    const NUM_INIT_KEYS: usize = 1;
 
     type Context = C;
 
-    fn context(&self) -> Self::Context {
-        self.inner.context()
+    fn context(&self) -> C {
+        self.context.clone()
     }
 
-    fn pre_load(context: &Self::Context) -> Result<Vec<Vec<u8>>, ViewError> {
-        crate::views::queue_view::QueueView::<C, T>::pre_load(context)
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        Ok(vec![context.base_key().base_tag(KeyTag::Store as u8)])
     }
 
-    fn post_load(context: Self::Context, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        let inner = crate::views::queue_view::QueueView::<C, T>::post_load(context, values)?;
-        Ok(Self { inner })
-    }
-
-    fn load(context: Self::Context) -> Result<Self, ViewError> {
-        let inner = block_on(crate::views::queue_view::QueueView::<C, T>::load(context))?;
-        Ok(Self { inner })
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let stored_indices =
+            from_bytes_option_or_default(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
+        Ok(Self {
+            context,
+            stored_indices,
+            front_delete_count: 0,
+            delete_storage_first: false,
+            new_back_values: VecDeque::new(),
+        })
     }
 
     fn rollback(&mut self) {
-        self.inner.rollback();
+        self.delete_storage_first = false;
+        self.front_delete_count = 0;
+        self.new_back_values.clear();
     }
 
     fn has_pending_changes(&self) -> bool {
-        block_on(self.inner.has_pending_changes())
+        if self.delete_storage_first {
+            return true;
+        }
+        if self.front_delete_count > 0 {
+            return true;
+        }
+        !self.new_back_values.is_empty()
     }
 
-    fn clear(&mut self) {
-        self.inner.clear();
-    }
-
-    fn pre_save(&self, batch: &mut crate::batch::Batch) -> Result<bool, ViewError> {
-        self.inner.pre_save(batch)
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let mut delete_view = false;
+        if self.delete_storage_first {
+            batch.delete_key_prefix(self.context.base_key().bytes.clone());
+            delete_view = true;
+        }
+        let mut new_stored_indices = self.stored_indices.clone();
+        if self.stored_count() == 0 {
+            let key_prefix = self.context.base_key().base_tag(KeyTag::Index as u8);
+            batch.delete_key_prefix(key_prefix);
+            new_stored_indices = Range::default();
+        } else if self.front_delete_count > 0 {
+            let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
+            new_stored_indices.start += self.front_delete_count;
+            for index in deletion_range {
+                let key = self
+                    .context
+                    .base_key()
+                    .derive_tag_key(KeyTag::Index as u8, &index)?;
+                batch.delete_key(key);
+            }
+        }
+        if !self.new_back_values.is_empty() {
+            delete_view = false;
+            for value in &self.new_back_values {
+                let key = self
+                    .context
+                    .base_key()
+                    .derive_tag_key(KeyTag::Index as u8, &new_stored_indices.end)?;
+                batch.put_key_value(key, value)?;
+                new_stored_indices.end += 1;
+            }
+        }
+        if !self.delete_storage_first || !new_stored_indices.is_empty() {
+            let key = self.context.base_key().base_tag(KeyTag::Store as u8);
+            batch.put_key_value(key, &new_stored_indices)?;
+        }
+        Ok(delete_view)
     }
 
     fn post_save(&mut self) {
-        self.inner.post_save();
+        if self.stored_count() == 0 {
+            self.stored_indices = Range::default();
+        } else if self.front_delete_count > 0 {
+            self.stored_indices.start += self.front_delete_count;
+        }
+        if !self.new_back_values.is_empty() {
+            self.stored_indices.end += self.new_back_values.len();
+            self.new_back_values.clear();
+        }
+        self.front_delete_count = 0;
+        self.delete_storage_first = false;
+    }
+
+    fn clear(&mut self) {
+        self.delete_storage_first = true;
+        self.new_back_values.clear();
     }
 }
 
-impl<C, T, C2> SyncReplaceContext<C2> for QueueView<C, T>
+impl<C, T> SyncClonableView for SyncQueueView<C, T>
 where
     C: Context,
-    C2: Context,
-    T: Send + Sync + Clone + Serialize + DeserializeOwned,
-{
-    type Target = QueueView<C2, T>;
-
-    fn with_context(&mut self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Target {
-        let inner = block_on(self.inner.with_context(ctx));
-        QueueView { inner }
-    }
-}
-
-impl<C, T> SyncClonableView for QueueView<C, T>
-where
-    C: Context,
-    T: Clone + Send + Sync + Serialize + DeserializeOwned,
+    T: Clone + Send + Sync + Serialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        let inner = self.inner.clone_unchecked()?;
-        Ok(Self { inner })
+        Ok(SyncQueueView {
+            context: self.context.clone(),
+            stored_indices: self.stored_indices.clone(),
+            front_delete_count: self.front_delete_count,
+            delete_storage_first: self.delete_storage_first,
+            new_back_values: self.new_back_values.clone(),
+        })
     }
 }
 
-impl<C, T> SyncHashableView for QueueView<C, T>
+impl<C, T> SyncQueueView<C, T> {
+    fn stored_count(&self) -> usize {
+        if self.delete_storage_first {
+            0
+        } else {
+            self.stored_indices.len() - self.front_delete_count
+        }
+    }
+}
+
+impl<'a, C, T> SyncQueueView<C, T>
 where
     C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
-    type Hasher = <crate::views::queue_view::QueueView<C, T> as crate::views::HashableView>::Hasher;
-
-    fn hash(&self) -> Result<<Self::Hasher as crate::sync_view::Hasher>::Output, ViewError> {
-        block_on(self.inner.hash())
+    fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
+        let key = self
+            .context
+            .base_key()
+            .derive_tag_key(KeyTag::Index as u8, &index)?;
+        Ok(self.context.store().read_value(&key)?)
     }
 
-    fn hash_mut(&mut self) -> Result<<Self::Hasher as crate::sync_view::Hasher>::Output, ViewError> {
-        block_on(self.inner.hash_mut())
+    /// Reads the front value, if any.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// assert_eq!(queue.front().unwrap(), Some(34));
+    /// ```
+    pub fn front(&self) -> Result<Option<T>, ViewError> {
+        let stored_remainder = self.stored_count();
+        let value = if stored_remainder > 0 {
+            self.get(self.stored_indices.end - stored_remainder)?
+        } else {
+            self.new_back_values.front().cloned()
+        };
+        Ok(value)
+    }
+
+    /// Reads the back value, if any.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// assert_eq!(queue.back().unwrap(), Some(42));
+    /// ```
+    pub fn back(&self) -> Result<Option<T>, ViewError> {
+        Ok(match self.new_back_values.back() {
+            Some(value) => Some(value.clone()),
+            None if self.stored_count() > 0 => self.get(self.stored_indices.end - 1)?,
+            _ => None,
+        })
+    }
+
+    /// Deletes the front value, if any.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34 as u128);
+    /// queue.delete_front();
+    /// assert_eq!(queue.elements().unwrap(), Vec::<u128>::new());
+    /// ```
+    pub fn delete_front(&mut self) {
+        if self.stored_count() > 0 {
+            self.front_delete_count += 1;
+        } else {
+            self.new_back_values.pop_front();
+        }
+    }
+
+    /// Pushes a value to the end of the queue.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(37);
+    /// assert_eq!(queue.elements().unwrap(), vec![34, 37]);
+    /// ```
+    pub fn push_back(&mut self, value: T) {
+        self.new_back_values.push_back(value);
+    }
+
+    /// Reads the size of the queue.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// assert_eq!(queue.count(), 1);
+    /// ```
+    pub fn count(&self) -> usize {
+        self.stored_count() + self.new_back_values.len()
+    }
+
+    /// Obtains the extra data.
+    pub fn extra(&self) -> &C::Extra {
+        self.context.extra()
+    }
+
+    fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
+        let count = range.len();
+        let mut keys = Vec::with_capacity(count);
+        for index in range {
+            let key = self
+                .context
+                .base_key()
+                .derive_tag_key(KeyTag::Index as u8, &index)?;
+            keys.push(key)
+        }
+        let mut values = Vec::with_capacity(count);
+        for entry in self.context.store().read_multi_values(&keys)? {
+            match entry {
+                None => {
+                    return Err(ViewError::MissingEntries("SyncQueueView".into()));
+                }
+                Some(value) => values.push(value),
+            }
+        }
+        Ok(values)
+    }
+
+    /// Reads the `count` next values in the queue (including staged ones).
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// assert_eq!(queue.read_front(1).unwrap(), vec![34]);
+    /// ```
+    pub fn read_front(&self, mut count: usize) -> Result<Vec<T>, ViewError> {
+        if count > self.count() {
+            count = self.count();
+        }
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        let mut values = Vec::with_capacity(count);
+        if !self.delete_storage_first {
+            let stored_remainder = self.stored_count();
+            let start = self.stored_indices.end - stored_remainder;
+            if count <= stored_remainder {
+                values.extend(self.read_context(start..(start + count))?);
+            } else {
+                values.extend(self.read_context(start..self.stored_indices.end)?);
+                values.extend(
+                    self.new_back_values
+                        .range(0..(count - stored_remainder))
+                        .cloned(),
+                );
+            }
+        } else {
+            values.extend(self.new_back_values.range(0..count).cloned());
+        }
+        Ok(values)
+    }
+
+    /// Reads the `count` last values in the queue (including staged ones).
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// assert_eq!(queue.read_back(1).unwrap(), vec![42]);
+    /// ```
+    pub fn read_back(&self, mut count: usize) -> Result<Vec<T>, ViewError> {
+        if count > self.count() {
+            count = self.count();
+        }
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        let mut values = Vec::with_capacity(count);
+        let new_back_len = self.new_back_values.len();
+        if count <= new_back_len || self.delete_storage_first {
+            values.extend(
+                self.new_back_values
+                    .range((new_back_len - count)..new_back_len)
+                    .cloned(),
+            );
+        } else {
+            let start = self.stored_indices.end + new_back_len - count;
+            values.extend(self.read_context(start..self.stored_indices.end)?);
+            values.extend(self.new_back_values.iter().cloned());
+        }
+        Ok(values)
+    }
+
+    /// Reads all the elements
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(37);
+    /// assert_eq!(queue.elements().unwrap(), vec![34, 37]);
+    /// ```
+    pub fn elements(&self) -> Result<Vec<T>, ViewError> {
+        let count = self.count();
+        self.read_front(count)
+    }
+
+    fn load_all(&mut self) -> Result<(), ViewError> {
+        if !self.delete_storage_first {
+            let stored_remainder = self.stored_count();
+            let start = self.stored_indices.end - stored_remainder;
+            let elements = self.read_context(start..self.stored_indices.end)?;
+            let shift = self.stored_indices.end - start;
+            for elt in elements {
+                self.new_back_values.push_back(elt);
+            }
+            self.new_back_values.rotate_right(shift);
+            // All indices are being deleted at the next flush. This is because they are deleted either:
+            // * Because a self.front_delete_count forces them to be removed
+            // * Or because loading them means that their value can be changed which invalidates
+            //   the entries on storage
+            self.delete_storage_first = true;
+        }
+        Ok(())
+    }
+
+    /// Gets a mutable iterator on the entries of the queue
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// let mut iter = queue.iter_mut().unwrap();
+    /// let value = iter.next().unwrap();
+    /// *value = 42;
+    /// assert_eq!(queue.elements().unwrap(), vec![42]);
+    /// ```
+    pub fn iter_mut(&'a mut self) -> Result<IterMut<'a, T>, ViewError> {
+        self.load_all()?;
+        Ok(self.new_back_values.iter_mut())
     }
 }
 
-impl<C, T> Deref for QueueView<C, T> {
-    type Target = crate::views::queue_view::QueueView<C, T>;
+impl<C, T> SyncHashableView for SyncQueueView<C, T>
+where
+    C: Context,
+    T: Send + Sync + Clone + Serialize + DeserializeOwned,
+{
+    type Hasher = sha3::Sha3_256;
 
-    fn deref(&self) -> &Self::Target {
-        &self.inner
+    fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.hash()
+    }
+
+    fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        #[cfg(with_metrics)]
+        let _hash_latency = metrics::QUEUE_VIEW_HASH_RUNTIME.measure_latency();
+        let elements = self.elements()?;
+        let mut hasher = sha3::Sha3_256::default();
+        hasher.update_with_bcs_bytes(&elements)?;
+        Ok(hasher.finalize())
     }
 }
 
-impl<C, T> DerefMut for QueueView<C, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
+/// Type wrapping `SyncQueueView` while memoizing the hash.
+pub type SyncHashedQueueView<C, T> = SyncWrappedHashableContainerView<C, SyncQueueView<C, T>, HasherOutput>;
+
+/// Wrapper around `SyncQueueView` to compute hashes based on the history of changes.
+pub type SyncHistoricallyHashedQueueView<C, T> = SyncHistoricallyHashableView<C, SyncQueueView<C, T>>;
+
+#[cfg(with_graphql)]
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::SyncQueueView;
+    use crate::{
+        context::Context,
+        graphql::{hash_name, mangle},
+    };
+
+    impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName for SyncQueueView<C, T> {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "SyncQueueView_{}_{:08x}",
+                mangle(T::type_name()),
+                hash_name::<T>()
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<C: Context, T: async_graphql::OutputType> SyncQueueView<C, T>
+    where
+        T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
+    {
+        #[graphql(derived(name = "count"))]
+        fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count() as u32)
+        }
+
+        fn entries(&self, count: Option<usize>) -> async_graphql::Result<Vec<T>> {
+            Ok(self
+                .read_front(count.unwrap_or_else(|| self.count()))
+                ?)
+        }
     }
 }
-
-/// A view for queues with a memoized hash.
-pub type HashedQueueView<C, T> =
-    crate::sync_view::hashable_wrapper::WrappedHashableContainerView<C, QueueView<C, T>, crate::common::HasherOutput>;
-
