@@ -6,21 +6,12 @@
 #   built
 # - `binaries` is the path to the directory containing the Linera
 #   binaries. Leave unset to build the binaries from scratch.
-# - `target` is a Rust target quadruple. Currently known to be
-#   supported are `x86_64-unknown-linux-gnu` and
-#   `aarch64-unknown-linux-gnu`.
 # - `build_flag` is either "--release" or an empty string.
 # - `build_folder` is either "release" or "debug".
 # - `build_features` is a comma-separated list of features to build the binaries with.
 
-# Stage 1 - Generate recipe file for dependencies
-
-# Modern Docker provides TARGETPLATFORM and friends, but these do not
-# provide enough information to reconstruct the whole Rust target and
-# switching on them to map to a subset of targets seems unwise
 ARG git_commit
 ARG build_date
-ARG target=x86_64-unknown-linux-gnu
 ARG binaries=
 ARG copy=${binaries:+_copy}
 ARG build_flag=--release
@@ -30,7 +21,6 @@ ARG rustflags="-C force-frame-pointers=yes"
 
 FROM rust:1.74-slim-bookworm AS builder
 ARG git_commit
-ARG target
 ARG build_flag
 ARG build_folder
 ARG build_features
@@ -74,14 +64,15 @@ COPY rust-toolchain* Cargo.* ./
 ENV GIT_COMMIT=${git_commit}
 ENV RUSTFLAGS=${rustflags}
 
-RUN cargo build ${build_flag:+"$build_flag"} --target "$target" --bin linera-proxy --features $build_features
-RUN cargo build ${build_flag:+"$build_flag"} --target "$target" --bin linera-server --features $build_features
-RUN cargo build ${build_flag:+"$build_flag"} --target "$target" --bin linera --features $build_features
+# Build without explicit --target to use host architecture
+RUN cargo build ${build_flag:+"$build_flag"} --bin linera-proxy --features $build_features
+RUN cargo build ${build_flag:+"$build_flag"} --bin linera-server --features $build_features
+RUN cargo build ${build_flag:+"$build_flag"} --bin linera --features $build_features
 
 RUN mv \
-    target/"$target"/"$build_folder"/linera \
-    target/"$target"/"$build_folder"/linera-proxy \
-    target/"$target"/"$build_folder"/linera-server \
+    target/"$build_folder"/linera \
+    target/"$build_folder"/linera-proxy \
+    target/"$build_folder"/linera-server \
     ./
 
 # Optionally copy binaries instead of using the build images above
@@ -108,8 +99,6 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     openssl
 RUN update-ca-certificates
-
-ARG target
 
 COPY --from=binaries \
     linera \
