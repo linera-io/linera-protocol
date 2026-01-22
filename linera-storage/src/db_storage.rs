@@ -586,10 +586,13 @@ impl TestClock {
 #[cfg_attr(web, async_trait(?Send))]
 impl<Database, C> Storage for DbStorage<Database, C>
 where
-    Database: KeyValueDatabase + Clone + Send + Sync + 'static,
-    Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
+    Database: KeyValueDatabase<
+            Store: KeyValueStore + Clone + linera_base::util::traits::AutoTraits + 'static,
+            Error: Send + Sync,
+        > + Clone
+        + linera_base::util::traits::AutoTraits
+        + 'static,
     C: Clock + Clone + Send + Sync + 'static,
-    Database::Error: Send + Sync,
 {
     type Context = ViewContext<ChainRuntimeContext<Self>, Database::Store>;
     type Clock = C;
@@ -1167,8 +1170,8 @@ where
 
 impl<Database, C> DbStorage<Database, C>
 where
-    Database: KeyValueDatabase + Clone + Send + Sync + 'static,
-    Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
+    Database: KeyValueDatabase + Clone,
+    Database::Store: KeyValueStore + Clone,
     C: Clock,
     Database::Error: Send + Sync,
 {
@@ -1252,9 +1255,9 @@ impl<Database, C> DbStorage<Database, C> {
 
 impl<Database> DbStorage<Database, WallClock>
 where
-    Database: KeyValueDatabase + Clone + Send + Sync + 'static,
+    Database: KeyValueDatabase + Clone + 'static,
     Database::Error: Send + Sync,
-    Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
+    Database::Store: KeyValueStore + Clone + 'static,
 {
     pub async fn maybe_create_and_connect(
         config: &Database::Config,

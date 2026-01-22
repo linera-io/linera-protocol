@@ -8,13 +8,6 @@ This crate handles persisting data types to disk with a variety of backends.
 #![allow(async_fn_in_trait)]
 
 cfg_if::cfg_if! {
-    if #[cfg(with_indexed_db)] {
-        pub mod indexed_db;
-        pub use indexed_db::IndexedDb;
-    }
-}
-
-cfg_if::cfg_if! {
     if #[cfg(feature = "fs")] {
         pub mod file;
         pub use file::File;

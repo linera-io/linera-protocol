@@ -139,7 +139,7 @@ pub trait DirectWritableKeyValueStore: WithError {
 
 /// The definition of a key-value database.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
-pub trait KeyValueDatabase: WithError + Sized {
+pub trait KeyValueDatabase: WithError + linera_base::util::traits::AutoTraits + Sized {
     /// The configuration needed to interact with a new backend.
     type Config: Send + Sync;
 

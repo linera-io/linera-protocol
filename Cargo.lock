@@ -13,18 +13,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "accessory"
-version = "1.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87537f9ae7cfa78d5b8ebd1a1db25959f5e737126be4d8eb44a5452fc4b63cde"
-dependencies = [
- "macroific",
- "proc-macro2",
- "quote",
- "syn 2.0.105",
-]
-
-[[package]]
 name = "addchain"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2991,18 +2979,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
-name = "delegate-display"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98a85201f233142ac819bbf6226e36d0b5e129a47bd325084674261c82d4cd66"
-dependencies = [
- "macroific",
- "proc-macro2",
- "quote",
- "syn 2.0.105",
-]
-
-[[package]]
 name = "deluxe"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3536,18 +3512,6 @@ name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
-
-[[package]]
-name = "fancy_constructor"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07b19d0e43eae2bfbafe4931b5e79c73fb1a849ca15cd41a761a7b8587f9a1a2"
-dependencies = [
- "macroific",
- "proc-macro2",
- "quote",
- "syn 2.0.105",
-]
 
 [[package]]
 name = "fast_chemail"
@@ -4731,18 +4695,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "indexed_db_futures"
-version = "0.4.1"
-source = "git+https://github.com/Twey/rust-indexed-db?branch=no-uuid-wasm-bindgen#5fbacbd82669ccb8549eb283963e50732d2b7215"
+name = "indexed-db"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78f4ecbb6cd50773303683617a93fc2782267d2c94546e9545ec4190eb69aa1a"
 dependencies = [
- "accessory",
- "cfg-if",
- "delegate-display",
- "fancy_constructor",
- "js-sys",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
+ "futures-channel",
+ "futures-util",
+ "pin-project-lite",
+ "scoped-tls",
+ "thiserror 2.0.17",
  "web-sys",
 ]
 
@@ -5348,7 +5310,6 @@ dependencies = [
  "futures",
  "gloo-utils",
  "hdrhistogram",
- "indexed_db_futures",
  "linera-base",
  "linera-chain",
  "linera-client",
@@ -5739,17 +5700,12 @@ dependencies = [
  "derive_more 1.0.0",
  "fs-err",
  "fs4",
- "gloo-utils",
- "indexed_db_futures",
  "serde",
- "serde-wasm-bindgen 0.6.5",
  "serde_json",
  "thiserror 1.0.69",
  "thiserror-context",
  "tracing",
  "trait-variant",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]
@@ -6085,7 +6041,7 @@ dependencies = [
  "generic-array",
  "gloo-utils",
  "hex",
- "indexed_db_futures",
+ "indexed-db",
  "itertools 0.14.0",
  "linera-base",
  "linera-views",
@@ -6425,53 +6381,6 @@ version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b27834086c65ec3f9387b096d66e99f221cf081c2b738042aa252bcd41204e3"
 dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.105",
-]
-
-[[package]]
-name = "macroific"
-version = "1.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f05c00ac596022625d01047c421a0d97d7f09a18e429187b341c201cb631b9dd"
-dependencies = [
- "macroific_attr_parse",
- "macroific_core",
- "macroific_macro",
-]
-
-[[package]]
-name = "macroific_attr_parse"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd94d5da95b30ae6e10621ad02340909346ad91661f3f8c0f2b62345e46a2f67"
-dependencies = [
- "cfg-if",
- "proc-macro2",
- "quote",
- "syn 2.0.105",
-]
-
-[[package]]
-name = "macroific_core"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13198c120864097a565ccb3ff947672d969932b7975ebd4085732c9f09435e55"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.105",
-]
-
-[[package]]
-name = "macroific_macro"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0c9853143cbed7f1e41dc39fee95f9b361bec65c8dc2a01bf609be01b61f5ae"
-dependencies = [
- "macroific_attr_parse",
- "macroific_core",
  "proc-macro2",
  "quote",
  "syn 2.0.105",
@@ -8840,6 +8749,12 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "scoped-tls"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1cf6437eb19a8f4a6cc0f7dca544973b0b78843adbfeb3683d1a94a0024a294"
 
 [[package]]
 name = "scopeguard"

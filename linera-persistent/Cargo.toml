@@ -16,19 +16,10 @@ workspace = true
 
 [features]
 fs = ["fs-err", "fs4"]
-indexed-db = ["web", "indexed_db_futures", "serde-wasm-bindgen", "gloo-utils"]
-web = ["dep:web-sys", "dep:wasm-bindgen-futures"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 fs-err = { workspace = true, optional = true }
 fs4 = { workspace = true, optional = true }
-
-[target.wasm32-unknown-unknown.dependencies]
-gloo-utils = { workspace = true, optional = true }
-indexed_db_futures = { workspace = true, optional = true }
-serde-wasm-bindgen = { workspace = true, optional = true }
-wasm-bindgen-futures = { workspace = true, optional = true }
-web-sys = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true

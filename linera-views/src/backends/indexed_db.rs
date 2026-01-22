@@ -3,12 +3,12 @@
 
 //! Implements [`crate::store::KeyValueStore`] for the IndexedDB Web database.
 
-use std::rc::Rc;
+use std::{convert::Infallible, future::Future, ops::Bound, rc::Rc};
 
 use futures::future;
-use indexed_db_futures::{js_sys, prelude::*, web_sys};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use web_sys::{js_sys, wasm_bindgen::JsValue};
 
 use crate::{
     batch::{Batch, WriteOperation},
@@ -33,39 +33,37 @@ static STORED_ROOT_KEYS_PREFIX: [u8; 1] = [1];
 /// The number of streams for the test
 pub const TEST_INDEX_DB_MAX_STREAM_QUERIES: usize = 10;
 
-const DATABASE_NAME: &str = "linera";
+const OBJECT_STORE_NAME: &str = "linera";
 
 /// A browser implementation of a key-value store using the [IndexedDB
 /// API](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API#:~:text=IndexedDB%20is%20a%20low%2Dlevel,larger%20amounts%20of%20structured%20data.).
+#[derive(Clone)]
 pub struct IndexedDbDatabase {
     /// The database used for storing the data.
-    pub database: Rc<IdbDatabase>,
-    /// The object store name used for storing the data.
-    pub object_store_name: String,
+    pub database: Rc<indexed_db::Database<Infallible>>,
     /// The maximum number of queries used for the stream.
     pub max_stream_queries: usize,
+    /// The database name used for storing the data.
+    pub namespace: String,
 }
 
 /// A logical partition of [`IndexedDbDatabase`]
+#[derive(Clone)]
 pub struct IndexedDbStore {
     /// The database used for storing the data.
-    pub database: Rc<IdbDatabase>,
-    /// The object store name used for storing the data.
-    pub object_store_name: String,
-    /// The maximum number of queries used for the stream.
-    pub max_stream_queries: usize,
+    pub database: IndexedDbDatabase,
     /// The key being used at the start of the writing
     start_key: Vec<u8>,
 }
 
 impl IndexedDbStore {
-    fn with_object_store<R>(
+    async fn with_object_store<Fut: Future<Output: 'static>>(
         &self,
-        f: impl FnOnce(IdbObjectStore) -> R,
-    ) -> Result<R, IndexedDbStoreError> {
-        let transaction = self.database.transaction_on_one(&self.object_store_name)?;
-        let object_store = transaction.object_store(&self.object_store_name)?;
-        Ok(f(object_store))
+        f: impl FnOnce(indexed_db::ObjectStore<Infallible>) -> Fut + 'static,
+    ) -> Result<Fut::Output> {
+        self.database.database.transaction(&[OBJECT_STORE_NAME]).run(|transaction| async move {
+            Ok(f(transaction.object_store(OBJECT_STORE_NAME)?).await)
+        }).await.map_err(Into::into)
     }
 
     fn full_key(&self, key: &[u8]) -> Vec<u8> {
@@ -77,31 +75,26 @@ impl IndexedDbStore {
 
 impl IndexedDbDatabase {
     fn open_internal(&self, start_key: Vec<u8>) -> IndexedDbStore {
-        let database = self.database.clone();
-        let object_store_name = self.object_store_name.clone();
-        let max_stream_queries = self.max_stream_queries;
         IndexedDbStore {
-            database,
-            object_store_name,
-            max_stream_queries,
+            database: self.clone(),
             start_key,
         }
     }
 }
 
-fn prefix_to_range(prefix: &[u8]) -> Result<web_sys::IdbKeyRange, wasm_bindgen::JsValue> {
-    let lower = js_sys::Uint8Array::from(prefix);
-    if let Some(upper) = get_upper_bound_option(prefix) {
-        let upper = js_sys::Uint8Array::from(&upper[..]);
-        web_sys::IdbKeyRange::bound_with_lower_open_and_upper_open(
-            &lower.into(),
-            &upper.into(),
-            false,
-            true,
-        )
+fn database_name(namespace: &str) -> String {
+    format!("linera/{namespace}")
+}
+
+fn prefix_to_range(prefix: &[u8]) -> (Bound<JsValue>, Bound<JsValue>) {
+    let lower = Bound::Included(js_sys::Uint8Array::from(prefix).into());
+    let upper = if let Some(upper) = get_upper_bound_option(prefix) {
+        Bound::Excluded(js_sys::Uint8Array::from(&upper[..]).into())
     } else {
-        web_sys::IdbKeyRange::lower_bound(&lower.into())
-    }
+        Bound::Unbounded
+    };
+
+    (lower, upper)
 }
 
 impl WithError for IndexedDbStore {
@@ -116,31 +109,31 @@ impl ReadableKeyValueStore for IndexedDbStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 
     fn max_stream_queries(&self) -> usize {
-        self.max_stream_queries
+        self.database.max_stream_queries
     }
 
-    fn root_key(&self) -> Result<Vec<u8>, IndexedDbStoreError> {
+    fn root_key(&self) -> Result<Vec<u8>> {
         assert!(self.start_key.starts_with(&ROOT_KEY_DOMAIN));
         let root_key = bcs::from_bytes(&self.start_key[ROOT_KEY_DOMAIN.len()..])?;
         Ok(root_key)
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, IndexedDbStoreError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let key = self.full_key(key);
-        let key = js_sys::Uint8Array::from(key.as_slice());
-        let value = self.with_object_store(|o| o.get(&key))??.await?;
+        let value = self
+            .with_object_store(move |o| o.get(&js_sys::Uint8Array::from(key.as_slice())))
+            .await??;
         Ok(value.map(|v| js_sys::Uint8Array::new(&v).to_vec()))
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, IndexedDbStoreError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool> {
         let key = self.full_key(key);
-        let key = js_sys::Uint8Array::from(key.as_slice());
-        let count = self.with_object_store(|o| o.count_with_key(&key))??.await?;
-        assert!(count < 2);
-        Ok(count == 1)
+        Ok(self
+            .with_object_store(move |o| o.contains(&js_sys::Uint8Array::from(key.as_slice())))
+            .await??)
     }
 
-    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, IndexedDbStoreError> {
+    async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>> {
         future::try_join_all(
             keys.iter()
                 .map(|key| async move { self.contains_key(key).await }),
@@ -148,10 +141,7 @@ impl ReadableKeyValueStore for IndexedDbStore {
         .await
     }
 
-    async fn read_multi_values_bytes(
-        &self,
-        keys: &[Vec<u8>],
-    ) -> Result<Vec<Option<Vec<u8>>>, IndexedDbStoreError> {
+    async fn read_multi_values_bytes(&self, keys: &[Vec<u8>]) -> Result<Vec<Option<Vec<u8>>>> {
         future::try_join_all(
             keys.iter()
                 .map(|key| async move { self.read_value_bytes(key).await }),
@@ -159,15 +149,12 @@ impl ReadableKeyValueStore for IndexedDbStore {
         .await
     }
 
-    async fn find_keys_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, IndexedDbStoreError> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>> {
         let key_prefix = self.full_key(key_prefix);
-        let range = prefix_to_range(&key_prefix)?;
+        let range = prefix_to_range(&key_prefix);
         Ok(self
-            .with_object_store(|o| o.get_all_keys_with_key(&range))??
-            .await?
+            .with_object_store(|o| o.get_all_keys_in(range, None))
+            .await??
             .into_iter()
             .map(|key| {
                 let key = js_sys::Uint8Array::new(&key);
@@ -179,80 +166,86 @@ impl ReadableKeyValueStore for IndexedDbStore {
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, IndexedDbStoreError> {
-        let mut key_values = vec![];
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
         let key_prefix = self.full_key(key_prefix);
-        let range = prefix_to_range(&key_prefix)?;
-        let transaction = self.database.transaction_on_one(&self.object_store_name)?;
-        let object_store = transaction.object_store(&self.object_store_name)?;
-        let Some(cursor) = object_store.open_cursor_with_range_owned(range)?.await? else {
-            return Ok(key_values);
-        };
+        let range = prefix_to_range(&key_prefix);
+        self.with_object_store(|object_store| async move {
+            let mut key_values = vec![];
+            let mut cursor = object_store.cursor().range(range)?.open().await?;
 
-        loop {
-            let Some(key) = cursor.primary_key() else {
-                break;
-            };
-            let key = js_sys::Uint8Array::new(&key);
-            key_values.push((
-                key.subarray(key_prefix.len() as u32, key.length()).to_vec(),
-                js_sys::Uint8Array::new(&cursor.value()).to_vec(),
-            ));
-            if !cursor.continue_cursor()?.await? {
-                break;
+            while let Some(key) = cursor.primary_key() {
+                let key = js_sys::Uint8Array::new(&key);
+                key_values.push((
+                    key.subarray(key_prefix.len() as u32, key.length()).to_vec(),
+                    js_sys::Uint8Array::new(
+                        &cursor
+                            .value()
+                            .expect("we should have a value because we have a key"),
+                    )
+                    .to_vec(),
+                ));
+                cursor.advance(1).await?;
             }
-        }
 
-        Ok(key_values)
+            Ok(key_values)
+        })
+        .await?
     }
 }
 
 impl WritableKeyValueStore for IndexedDbStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), IndexedDbStoreError> {
-        let transaction = self
+    async fn write_batch(&self, batch: Batch) -> Result<()> {
+        let mut start_key = self.start_key.clone();
+        self.database
             .database
-            .transaction_on_one_with_mode(&self.object_store_name, IdbTransactionMode::Readwrite)?;
-        let object_store = transaction.object_store(&self.object_store_name)?;
+            .transaction(&[OBJECT_STORE_NAME])
+            .rw()
+            .run(move |transaction| async move {
+                let object_store = transaction.object_store(OBJECT_STORE_NAME)?;
 
-        for ent in batch.operations {
-            match ent {
-                WriteOperation::Put { key, value } => {
-                    let key = self.full_key(&key);
-                    object_store
-                        .put_key_val_owned(
-                            js_sys::Uint8Array::from(&key[..]),
-                            &js_sys::Uint8Array::from(&value[..]),
-                        )?
-                        .await?;
+                for ent in batch.operations {
+                    match ent {
+                        WriteOperation::Put { key, value } => {
+                            let key = [start_key.as_slice(), key.as_slice()].concat();
+                            object_store
+                                .put_kv(
+                                    &js_sys::Uint8Array::from(&key[..]),
+                                    &js_sys::Uint8Array::from(&value[..]),
+                                )
+                                .await?;
+                        }
+                        WriteOperation::Delete { key } => {
+                            let key = [start_key.as_slice(), key.as_slice()].concat();
+                            object_store
+                                .delete(&js_sys::Uint8Array::from(&key[..]))
+                                .await?;
+                        }
+                        WriteOperation::DeletePrefix { key_prefix } => {
+                            let key_prefix = [start_key.as_slice(), key_prefix.as_slice()].concat();
+                            object_store
+                                .delete_range(prefix_to_range(&key_prefix[..]))
+                                .await?;
+                        }
+                    }
                 }
-                WriteOperation::Delete { key } => {
-                    let key = self.full_key(&key);
-                    object_store
-                        .delete_owned(js_sys::Uint8Array::from(&key[..]))?
-                        .await?;
-                }
-                WriteOperation::DeletePrefix { key_prefix } => {
-                    let key_prefix = self.full_key(&key_prefix);
-                    object_store
-                        .delete_owned(prefix_to_range(&key_prefix[..])?)?
-                        .await?;
-                }
-            }
-        }
-        let mut key = self.start_key.clone();
-        key[0] = STORED_ROOT_KEYS_PREFIX[0];
-        object_store
-            .put_key_val_owned(
-                js_sys::Uint8Array::from(&key[..]),
-                &js_sys::Uint8Array::default(),
-            )?
+                start_key[0] = STORED_ROOT_KEYS_PREFIX[0];
+                object_store
+                    .put_kv(
+                        &js_sys::Uint8Array::from(&start_key[..]),
+                        &js_sys::Uint8Array::default(),
+                    )
+                    .await?;
+
+                Ok(())
+            })
             .await?;
+
         Ok(())
     }
 
-    async fn clear_journal(&self) -> Result<(), IndexedDbStoreError> {
+    async fn clear_journal(&self) -> Result<()> {
         Ok(())
     }
 }
@@ -266,71 +259,63 @@ impl KeyValueDatabase for IndexedDbDatabase {
         "indexed db".to_string()
     }
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, IndexedDbStoreError> {
-        let namespace = namespace.to_string();
-        let object_store_name = namespace.clone();
-        let mut database = IdbDatabase::open(DATABASE_NAME)?.await?;
-
-        if !database.object_store_names().any(|n| n == namespace) {
-            let version = database.version();
-            database.close();
-            let mut db_req = IdbDatabase::open_f64(DATABASE_NAME, version + 1.0)?;
-            db_req.set_on_upgrade_needed(Some(move |event: &IdbVersionChangeEvent| {
-                event.db().create_object_store(&namespace)?;
-                Ok(())
-            }));
-            database = db_req.await?;
-        }
-        let database = Rc::new(database);
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self> {
         Ok(Self {
-            database,
-            object_store_name,
+            database: indexed_db::Factory::<Infallible>::get()?
+                .open(
+                    &database_name(namespace),
+                    1,
+                    |event: indexed_db::VersionChangeEvent<Infallible>| async move {
+                        event
+                            .database()
+                            .build_object_store(OBJECT_STORE_NAME)
+                            .create()?;
+                        Ok(())
+                    },
+                )
+                .await?
+                .into(),
+            namespace: namespace.to_string(),
             max_stream_queries: config.max_stream_queries,
         })
     }
 
-    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, IndexedDbStoreError> {
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store> {
         let mut start_key = ROOT_KEY_DOMAIN.to_vec();
         start_key.extend(bcs::to_bytes(&root_key)?);
         Ok(self.open_internal(start_key))
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, IndexedDbStoreError> {
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store> {
         self.open_shared(root_key)
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, IndexedDbStoreError> {
-        Ok(Self::connect(config, "")
-            .await?
-            .database
-            .object_store_names()
-            .collect())
+    async fn list_all(_config: &Self::Config) -> Result<Vec<String>> {
+        // This would be supported if we assume IndexedDB v3, which has good support but
+        // is still considered a draft at time of writing.
+        tracing::warn!("`list_all` is not currently supported for IndexedDB: listing databases is only possible in IndexedDB v3");
+        Ok(vec![])
     }
 
-    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>, IndexedDbStoreError> {
+    async fn list_root_keys(&self) -> Result<Vec<Vec<u8>>> {
         let start_key = STORED_ROOT_KEYS_PREFIX.to_vec();
         let store = self.open_internal(start_key);
         store.find_keys_by_prefix(&[]).await
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, IndexedDbStoreError> {
-        Ok(Self::connect(config, "")
-            .await?
-            .database
-            .object_store_names()
-            .any(|x| x == namespace))
+    async fn exists(_config: &Self::Config, _namespace: &str) -> Result<bool> {
+        // IndexedDB will create the database if it doesn't exist, so let's pretend it
+        // always exists.
+        Ok(true)
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), IndexedDbStoreError> {
-        Self::connect(config, "")
-            .await?
-            .database
-            .create_object_store(namespace)?;
+    async fn create(config: &Self::Config, namespace: &str) -> Result<()> {
+        let Self { .. } = Self::connect(config, namespace).await?;
         Ok(())
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), IndexedDbStoreError> {
-        Ok(Self::connect(config, "")
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<()> {
+        Ok(Self::connect(config, namespace)
             .await?
             .database
             .delete_object_store(namespace)?)
@@ -364,34 +349,39 @@ mod testing {
 #[cfg(with_testing)]
 pub use testing::*;
 
-/// The error type for [`IndexedDbStore`].
+type Result<T, E = IndexedDbStoreError> = ::std::result::Result<T, E>;
+
+/// Errors thrown by the IndexedDB backend.
 #[derive(Error, Debug)]
 pub enum IndexedDbStoreError {
     /// Serialization error with BCS.
     #[error(transparent)]
-    BcsError(#[from] bcs::Error),
+    Bcs(#[from] bcs::Error),
 
     /// A DOM exception occurred in the IndexedDB operations
-    #[error("DOM exception: {0:?}")]
-    Dom(gloo_utils::errors::JsError),
+    // #[error("DOM exception: {0}")]
+    // Dom(gloo_utils::errors::JsError),
 
-    /// JavaScript threw an exception whilst handling IndexedDB operations
-    #[error("JavaScript exception: {0:?}")]
-    Js(gloo_utils::errors::JsError),
+    // /// JavaScript threw an exception whilst handling IndexedDB operations
+    // #[error("JavaScript exception: {0}")]
+    // Js(gloo_utils::errors::JsError),
+
+    #[error("IndexedDB error: {0:?}")]
+    IndexedDb(#[from] indexed_db::Error<Infallible>),
 }
 
-impl From<web_sys::DomException> for IndexedDbStoreError {
-    fn from(dom_exception: web_sys::DomException) -> Self {
-        let value: &wasm_bindgen::JsValue = dom_exception.as_ref();
-        Self::Dom(value.clone().try_into().unwrap())
-    }
-}
+// impl From<web_sys::DomException> for Error {
+//     fn from(dom_exception: web_sys::DomException) -> Self {
+//         let value: &wasm_bindgen::JsValue = dom_exception.as_ref();
+//         Self::Dom(value.clone().try_into().unwrap())
+//     }
+// }
 
-impl From<wasm_bindgen::JsValue> for IndexedDbStoreError {
-    fn from(js_value: wasm_bindgen::JsValue) -> Self {
-        Self::Js(js_value.try_into().unwrap())
-    }
-}
+// impl From<wasm_bindgen::JsValue> for IndexedDbStoreError {
+//     fn from(js_value: wasm_bindgen::JsValue) -> Self {
+//         Self::Js(js_value.try_into().unwrap())
+//     }
+// }
 
 impl KeyValueStoreError for IndexedDbStoreError {
     const BACKEND: &'static str = "indexed_db";

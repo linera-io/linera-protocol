@@ -134,7 +134,7 @@ heck = "0.4.1"
 hex = "0.4.3"
 http = "1.1.0"
 humantime = "2.1.0"
-indexed_db_futures = "0.4.1"
+indexed-db = "0.4.2"
 insta = "1.36.1"
 is-terminal = "0.4.12"
 itertools = "0.14.0"
@@ -368,11 +368,6 @@ opt-level = 3
 
 [profile.dev.package.wasmtime]
 opt-level = 3
-
-[patch.crates-io.indexed_db_futures]
-version = "0.4.1"
-git = "https://github.com/Twey/rust-indexed-db"
-branch = "no-uuid-wasm-bindgen"
 
 [workspace.metadata.spellcheck]
 config = "spellcheck-cfg.toml"
