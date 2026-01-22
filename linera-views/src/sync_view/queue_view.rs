@@ -150,3 +150,268 @@ where
         self.new_back_values.clear();
     }
 }
+
+impl<C, T> SyncQueueView<C, T> {
+    /// Returns the number of entries still stored (not yet deleted from storage).
+    fn stored_count(&self) -> usize {
+        if self.delete_storage_first {
+            0
+        } else {
+            self.stored_indices.len() - self.front_delete_count
+        }
+    }
+}
+
+impl<C, T> SyncQueueView<C, T>
+where
+    C: SyncContext,
+    T: Send + Sync + Clone + Serialize + DeserializeOwned,
+{
+    fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
+        let key = self
+            .context
+            .base_key()
+            .derive_tag_key(KeyTag::Index as u8, &index)?;
+        Ok(self.context.store().read_value(&key)?)
+    }
+
+    /// Reads the front value, if any.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// assert_eq!(queue.front().unwrap(), Some(34));
+    /// ```
+    pub fn front(&self) -> Result<Option<T>, ViewError> {
+        let stored_remainder = self.stored_count();
+        let value = if stored_remainder > 0 {
+            self.get(self.stored_indices.end - stored_remainder)?
+        } else {
+            self.new_back_values.front().cloned()
+        };
+        Ok(value)
+    }
+
+    /// Reads the back value, if any.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// assert_eq!(queue.back().unwrap(), Some(42));
+    /// ```
+    pub fn back(&self) -> Result<Option<T>, ViewError> {
+        Ok(match self.new_back_values.back() {
+            Some(value) => Some(value.clone()),
+            None if self.stored_count() > 0 => self.get(self.stored_indices.end - 1)?,
+            _ => None,
+        })
+    }
+
+    /// Deletes the front value, if any.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34 as u128);
+    /// queue.delete_front();
+    /// assert_eq!(queue.elements().unwrap(), Vec::<u128>::new());
+    /// ```
+    pub fn delete_front(&mut self) {
+        if self.stored_count() > 0 {
+            self.front_delete_count += 1;
+        } else {
+            self.new_back_values.pop_front();
+        }
+    }
+
+    /// Pushes a value to the end of the queue.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(37);
+    /// assert_eq!(queue.elements().unwrap(), vec![34, 37]);
+    /// ```
+    pub fn push_back(&mut self, value: T) {
+        self.new_back_values.push_back(value);
+    }
+
+    /// Reads the size of the queue.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// assert_eq!(queue.count(), 1);
+    /// ```
+    pub fn count(&self) -> usize {
+        self.stored_count() + self.new_back_values.len()
+    }
+
+    /// Obtains the extra data.
+    pub fn extra(&self) -> &C::Extra {
+        self.context.extra()
+    }
+
+    fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
+        let count = range.len();
+        let mut keys = Vec::with_capacity(count);
+        for index in range {
+            let key = self
+                .context
+                .base_key()
+                .derive_tag_key(KeyTag::Index as u8, &index)?;
+            keys.push(key)
+        }
+        let mut values = Vec::with_capacity(count);
+        for entry in self.context.store().read_multi_values(&keys)? {
+            match entry {
+                None => {
+                    return Err(ViewError::MissingEntries("SyncQueueView".into()));
+                }
+                Some(value) => values.push(value),
+            }
+        }
+        Ok(values)
+    }
+
+    /// Reads the `count` next values in the queue (including staged ones).
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// assert_eq!(queue.read_front(1).unwrap(), vec![34]);
+    /// ```
+    pub fn read_front(&self, mut count: usize) -> Result<Vec<T>, ViewError> {
+        if count > self.count() {
+            count = self.count();
+        }
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        let mut values = Vec::with_capacity(count);
+        if !self.delete_storage_first {
+            let stored_remainder = self.stored_count();
+            let start = self.stored_indices.end - stored_remainder;
+            if count <= stored_remainder {
+                values.extend(self.read_context(start..(start + count))?);
+            } else {
+                values.extend(self.read_context(start..self.stored_indices.end)?);
+                values.extend(
+                    self.new_back_values
+                        .range(0..(count - stored_remainder))
+                        .cloned(),
+                );
+            }
+        } else {
+            values.extend(self.new_back_values.range(0..count).cloned());
+        }
+        Ok(values)
+    }
+
+    /// Reads the `count` last values in the queue (including staged ones).
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// assert_eq!(queue.read_back(1).unwrap(), vec![42]);
+    /// ```
+    pub fn read_back(&self, mut count: usize) -> Result<Vec<T>, ViewError> {
+        if count > self.count() {
+            count = self.count();
+        }
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        let mut values = Vec::with_capacity(count);
+        let new_back_len = self.new_back_values.len();
+        if count <= new_back_len || self.delete_storage_first {
+            values.extend(
+                self.new_back_values
+                    .range((new_back_len - count)..new_back_len)
+                    .cloned(),
+            );
+        } else {
+            let start = self.stored_indices.end + new_back_len - count;
+            values.extend(self.read_context(start..self.stored_indices.end)?);
+            values.extend(self.new_back_values.iter().cloned());
+        }
+        Ok(values)
+    }
+
+    /// Reads all the elements
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(37);
+    /// assert_eq!(queue.elements().unwrap(), vec![34, 37]);
+    /// ```
+    pub fn elements(&self) -> Result<Vec<T>, ViewError> {
+        let count = self.count();
+        self.read_front(count)
+    }
+
+    fn load_all(&mut self) -> Result<(), ViewError> {
+        if !self.delete_storage_first {
+            let stored_remainder = self.stored_count();
+            let start = self.stored_indices.end - stored_remainder;
+            let elements = self.read_context(start..self.stored_indices.end)?;
+            let shift = self.stored_indices.end - start;
+            for elt in elements {
+                self.new_back_values.push_back(elt);
+            }
+            self.new_back_values.rotate_right(shift);
+            // All indices are being deleted at the next flush. This is because they are deleted either:
+            // * Because a self.front_delete_count forces them to be removed
+            // * Or because loading them means that their value can be changed which invalidates
+            //   the entries on storage
+            self.delete_storage_first = true;
+        }
+        Ok(())
+    }
+
+    /// Gets a mutable iterator on the entries of the queue
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::queue_view::SyncQueueView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut queue = SyncQueueView::load(context).unwrap();
+    /// queue.push_back(34);
+    /// let mut iter = queue.iter_mut().unwrap();
+    /// let value = iter.next().unwrap();
+    /// *value = 42;
+    /// assert_eq!(queue.elements().unwrap(), vec![42]);
+    /// ```
+    pub fn iter_mut(&mut self) -> Result<IterMut<'_, T>, ViewError> {
+        self.load_all()?;
+        Ok(self.new_back_values.iter_mut())
+    }
+}

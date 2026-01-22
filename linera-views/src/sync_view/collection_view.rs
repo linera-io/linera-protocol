@@ -4,7 +4,6 @@
 use std::{
     borrow::Borrow,
     collections::{btree_map, BTreeMap},
-    io::Write,
     marker::PhantomData,
     mem,
     ops::Deref,
@@ -120,7 +119,7 @@ impl<W: SyncView> SyncView for SyncByteCollectionView<W::Context, W> {
 
     fn rollback(&mut self) {
         self.delete_storage_first = false;
-        self.updates.get_mut().clear();
+        self.updates.get_mut().expect("lock should not be poisoned").clear();
     }
 
     fn has_pending_changes(&self) -> bool {
@@ -167,18 +166,19 @@ impl<W: SyncView> SyncView for SyncByteCollectionView<W::Context, W> {
     }
 
     fn post_save(&mut self) {
-        for (_, update) in self.updates.get_mut().iter_mut() {
+        let updates = self.updates.get_mut().expect("lock should not be poisoned");
+        for (_, update) in updates.iter_mut() {
             if let Update::Set(view) = update {
                 view.post_save();
             }
         }
         self.delete_storage_first = false;
-        self.updates.get_mut().clear();
+        updates.clear();
     }
 
     fn clear(&mut self) {
         self.delete_storage_first = true;
-        self.updates.get_mut().clear();
+        self.updates.get_mut().expect("lock should not be poisoned").clear();
     }
 }
 
@@ -217,7 +217,8 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// assert_eq!(*value, String::default());
     /// ```
     pub fn load_entry_mut(&mut self, short_key: &[u8]) -> Result<&mut W, ViewError> {
-        match self.updates.get_mut().entry(short_key.to_vec()) {
+        let updates = self.updates.get_mut().expect("lock should not be poisoned");
+        match updates.entry(short_key.to_vec()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 match entry {
@@ -542,6 +543,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
         let view = W::new(context)?;
         self.updates
             .get_mut()
+            .expect("lock should not be poisoned")
             .insert(short_key.to_vec(), Update::Set(view));
         Ok(())
     }
@@ -595,11 +597,12 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// assert_eq!(keys.len(), 0);
     /// ```
     pub fn remove_entry(&mut self, short_key: Vec<u8>) {
+        let updates = self.updates.get_mut().expect("lock should not be poisoned");
         if self.delete_storage_first {
             // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
-            self.updates.get_mut().remove(&short_key);
+            updates.remove(&short_key);
         } else {
-            self.updates.get_mut().insert(short_key, Update::Removed);
+            updates.insert(short_key, Update::Removed);
         }
     }
 
@@ -809,5 +812,736 @@ where
 
     fn clear(&mut self) {
         self.collection.clear()
+    }
+}
+
+impl<I: Serialize, W: SyncView> SyncCollectionView<W::Context, I, W> {
+    /// Loads a subview for the data at the given index in the collection. If an entry
+    /// is absent then a default entry is added to the collection. The resulting view
+    /// can be modified.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
+    ///     SyncCollectionView::load(context).unwrap();
+    /// let subview = view.load_entry_mut(&23).unwrap();
+    /// let value = subview.get();
+    /// assert_eq!(*value, String::default());
+    /// ```
+    pub fn load_entry_mut<Q>(&mut self, index: &Q) -> Result<&mut W, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = BaseKey::derive_short_key(index)?;
+        self.collection.load_entry_mut(&short_key)
+    }
+
+    /// Loads a subview for the data at the given index in the collection. If an entry
+    /// is absent then `None` is returned. The resulting view cannot be modified.
+    /// May fail if one subview is already being visited.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
+    ///     SyncCollectionView::load(context).unwrap();
+    /// {
+    ///     let _subview = view.load_entry_mut(&23).unwrap();
+    /// }
+    /// {
+    ///     let subview = view.try_load_entry(&23).unwrap().unwrap();
+    ///     let value = subview.get();
+    ///     assert_eq!(*value, String::default());
+    /// }
+    /// assert!(view.try_load_entry(&24).unwrap().is_none());
+    /// ```
+    pub fn try_load_entry<Q>(
+        &self,
+        index: &Q,
+    ) -> Result<Option<SyncReadGuardedView<'_, W>>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = BaseKey::derive_short_key(index)?;
+        self.collection.try_load_entry(&short_key)
+    }
+
+    /// Load multiple entries for reading at once.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
+    ///     SyncCollectionView::load(context).unwrap();
+    /// {
+    ///     let _subview = view.load_entry_mut(&23).unwrap();
+    /// }
+    /// let indices = vec![23, 24];
+    /// let subviews = view.try_load_entries(&indices).unwrap();
+    /// let value0 = subviews[0].as_ref().unwrap().get();
+    /// assert_eq!(*value0, String::default());
+    /// ```
+    pub fn try_load_entries<'a, Q>(
+        &self,
+        indices: impl IntoIterator<Item = &'a Q>,
+    ) -> Result<Vec<Option<SyncReadGuardedView<'_, W>>>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + 'a,
+    {
+        let short_keys = indices
+            .into_iter()
+            .map(|index| BaseKey::derive_short_key(index))
+            .collect::<Result<_, _>>()?;
+        self.collection.try_load_entries(short_keys)
+    }
+
+    /// Loads multiple entries for reading at once with their keys.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
+    ///     SyncCollectionView::load(context).unwrap();
+    /// {
+    ///     let _subview = view.load_entry_mut(&23).unwrap();
+    /// }
+    /// let indices = [23, 24];
+    /// let subviews = view.try_load_entries_pairs(indices).unwrap();
+    /// let value0 = subviews[0].1.as_ref().unwrap().get();
+    /// assert_eq!(*value0, String::default());
+    /// ```
+    pub fn try_load_entries_pairs<Q>(
+        &self,
+        indices: impl IntoIterator<Item = Q>,
+    ) -> Result<Vec<(Q, Option<SyncReadGuardedView<'_, W>>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + Clone,
+    {
+        let indices_vec: Vec<Q> = indices.into_iter().collect();
+        let values = self.try_load_entries(indices_vec.iter())?;
+        Ok(indices_vec.into_iter().zip(values).collect())
+    }
+
+    /// Resets an entry to the default value.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
+    ///     SyncCollectionView::load(context).unwrap();
+    /// let subview = view.load_entry_mut(&23).unwrap();
+    /// let value = subview.get_mut();
+    /// *value = String::from("Hello");
+    /// view.reset_entry_to_default(&23).unwrap();
+    /// let subview = view.load_entry_mut(&23).unwrap();
+    /// let value = subview.get_mut();
+    /// assert_eq!(*value, String::default());
+    /// ```
+    pub fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = BaseKey::derive_short_key(index)?;
+        self.collection.reset_entry_to_default(&short_key)
+    }
+
+    /// Removes an entry from the `SyncCollectionView`. If absent nothing happens.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
+    ///     SyncCollectionView::load(context).unwrap();
+    /// let subview = view.load_entry_mut(&23).unwrap();
+    /// let value = subview.get_mut();
+    /// assert_eq!(*value, String::default());
+    /// view.remove_entry(&23).unwrap();
+    /// let keys = view.indices().unwrap();
+    /// assert_eq!(keys.len(), 0);
+    /// ```
+    pub fn remove_entry<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = BaseKey::derive_short_key(index)?;
+        self.collection.remove_entry(short_key);
+        Ok(())
+    }
+
+    /// Tests if the collection contains a specified key and returns a boolean.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
+    ///     SyncCollectionView::load(context).unwrap();
+    /// {
+    ///     let _subview = view.load_entry_mut(&23).unwrap();
+    /// }
+    /// assert!(view.contains_key(&23).unwrap());
+    /// assert!(!view.contains_key(&24).unwrap());
+    /// ```
+    pub fn contains_key<Q>(&self, index: &Q) -> Result<bool, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = BaseKey::derive_short_key(index)?;
+        self.collection.contains_key(&short_key)
+    }
+
+    /// Gets the extra data.
+    pub fn extra(&self) -> &<W::Context as SyncContext>::Extra {
+        self.collection.extra()
+    }
+}
+
+impl<I, W: SyncView> SyncCollectionView<W::Context, I, W>
+where
+    I: Sync + Send + Serialize + DeserializeOwned,
+{
+    /// Load all entries for reading at once.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
+    ///     SyncCollectionView::load(context).unwrap();
+    /// {
+    ///     let _subview = view.load_entry_mut(&23).unwrap();
+    /// }
+    /// let subviews = view.try_load_all_entries().unwrap();
+    /// assert_eq!(subviews.len(), 1);
+    /// ```
+    pub fn try_load_all_entries(&self) -> Result<Vec<(I, SyncReadGuardedView<'_, W>)>, ViewError> {
+        let results = self.collection.try_load_all_entries()?;
+        results
+            .into_iter()
+            .map(|(short_key, view)| {
+                let index = BaseKey::deserialize_value(&short_key)?;
+                Ok((index, view))
+            })
+            .collect()
+    }
+
+    /// Returns the list of indices in the collection in the order determined by
+    /// the serialization.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
+    ///     SyncCollectionView::load(context).unwrap();
+    /// view.load_entry_mut(&23).unwrap();
+    /// view.load_entry_mut(&25).unwrap();
+    /// let indices = view.indices().unwrap();
+    /// assert_eq!(indices.len(), 2);
+    /// ```
+    pub fn indices(&self) -> Result<Vec<I>, ViewError> {
+        let mut indices = Vec::new();
+        self.for_each_index(|index| {
+            indices.push(index);
+            Ok(())
+        })?;
+        Ok(indices)
+    }
+
+    /// Returns the number of entries in the collection.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
+    ///     SyncCollectionView::load(context).unwrap();
+    /// view.load_entry_mut(&23).unwrap();
+    /// view.load_entry_mut(&25).unwrap();
+    /// assert_eq!(view.count().unwrap(), 2);
+    /// ```
+    pub fn count(&self) -> Result<usize, ViewError> {
+        self.collection.count()
+    }
+}
+
+impl<I: DeserializeOwned, W: SyncView> SyncCollectionView<W::Context, I, W> {
+    /// Applies a function f on each index. Indices are visited in an order
+    /// determined by the serialization. If the function returns false then
+    /// the loop ends prematurely.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
+    ///     SyncCollectionView::load(context).unwrap();
+    /// view.load_entry_mut(&23).unwrap();
+    /// view.load_entry_mut(&24).unwrap();
+    /// let mut count = 0;
+    /// view.for_each_index_while(|_key| {
+    ///     count += 1;
+    ///     Ok(count < 1)
+    /// })
+    /// .unwrap();
+    /// assert_eq!(count, 1);
+    /// ```
+    pub fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<bool, ViewError> + Send,
+    {
+        self.collection.for_each_key_while(|key| {
+            let index = BaseKey::deserialize_value(key)?;
+            f(index)
+        })?;
+        Ok(())
+    }
+
+    /// Applies a function f on each index. Indices are visited in an order
+    /// determined by the serialization.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
+    ///     SyncCollectionView::load(context).unwrap();
+    /// view.load_entry_mut(&23).unwrap();
+    /// view.load_entry_mut(&28).unwrap();
+    /// let mut count = 0;
+    /// view.for_each_index(|_key| {
+    ///     count += 1;
+    ///     Ok(())
+    /// })
+    /// .unwrap();
+    /// assert_eq!(count, 2);
+    /// ```
+    pub fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.collection.for_each_key(|key| {
+            let index = BaseKey::deserialize_value(key)?;
+            f(index)
+        })?;
+        Ok(())
+    }
+}
+
+/// A view that supports accessing a collection of views of the same kind, indexed by a
+/// key that uses custom serialization, one subview at a time.
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, I, W: Allocative")]
+pub struct SyncCustomCollectionView<C, I, W> {
+    collection: SyncByteCollectionView<C, W>,
+    #[allocative(skip)]
+    _phantom: PhantomData<I>,
+}
+
+impl<I: Send + Sync, W: SyncView> SyncView for SyncCustomCollectionView<W::Context, I, W> {
+    const NUM_INIT_KEYS: usize = SyncByteCollectionView::<W::Context, W>::NUM_INIT_KEYS;
+
+    type Context = W::Context;
+
+    fn context(&self) -> Self::Context {
+        self.collection.context()
+    }
+
+    fn pre_load(context: &Self::Context) -> Result<Vec<Vec<u8>>, ViewError> {
+        SyncByteCollectionView::<_, W>::pre_load(context)
+    }
+
+    fn post_load(context: Self::Context, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let collection = SyncByteCollectionView::post_load(context, values)?;
+        Ok(SyncCustomCollectionView {
+            collection,
+            _phantom: PhantomData,
+        })
+    }
+
+    fn rollback(&mut self) {
+        self.collection.rollback()
+    }
+
+    fn has_pending_changes(&self) -> bool {
+        self.collection.has_pending_changes()
+    }
+
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.collection.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.collection.post_save()
+    }
+
+    fn clear(&mut self) {
+        self.collection.clear()
+    }
+}
+
+impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W> {
+    /// Loads a subview for the data at the given index in the collection. If an entry
+    /// is absent then a default entry is added to the collection. The resulting view
+    /// can be modified.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
+    ///     SyncCustomCollectionView::load(context).unwrap();
+    /// let subview = view.load_entry_mut(&23).unwrap();
+    /// let value = subview.get();
+    /// assert_eq!(*value, String::default());
+    /// ```
+    pub fn load_entry_mut<Q>(&mut self, index: &Q) -> Result<&mut W, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes()?;
+        self.collection.load_entry_mut(&short_key)
+    }
+
+    /// Loads a subview for the data at the given index in the collection. If an entry
+    /// is absent then `None` is returned. The resulting view cannot be modified.
+    /// May fail if one subview is already being visited.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
+    ///     SyncCustomCollectionView::load(context).unwrap();
+    /// {
+    ///     let _subview = view.load_entry_mut(&23).unwrap();
+    /// }
+    /// {
+    ///     let subview = view.try_load_entry(&23).unwrap().unwrap();
+    ///     let value = subview.get();
+    ///     assert_eq!(*value, String::default());
+    /// }
+    /// assert!(view.try_load_entry(&24).unwrap().is_none());
+    /// ```
+    pub fn try_load_entry<Q>(
+        &self,
+        index: &Q,
+    ) -> Result<Option<SyncReadGuardedView<'_, W>>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes()?;
+        self.collection.try_load_entry(&short_key)
+    }
+
+    /// Load multiple entries for reading at once.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
+    ///     SyncCustomCollectionView::load(context).unwrap();
+    /// {
+    ///     let _subview = view.load_entry_mut(&23).unwrap();
+    /// }
+    /// let subviews = view.try_load_entries(&[23, 42]).unwrap();
+    /// let value0 = subviews[0].as_ref().unwrap().get();
+    /// assert_eq!(*value0, String::default());
+    /// ```
+    pub fn try_load_entries<'a, Q>(
+        &self,
+        indices: impl IntoIterator<Item = &'a Q>,
+    ) -> Result<Vec<Option<SyncReadGuardedView<'_, W>>>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + 'a,
+    {
+        let short_keys = indices
+            .into_iter()
+            .map(|index| index.to_custom_bytes())
+            .collect::<Result<_, _>>()?;
+        self.collection.try_load_entries(short_keys)
+    }
+
+    /// Loads multiple entries for reading at once with their keys.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
+    ///     SyncCustomCollectionView::load(context).unwrap();
+    /// {
+    ///     let _subview = view.load_entry_mut(&23).unwrap();
+    /// }
+    /// let indices = [23, 42];
+    /// let subviews = view.try_load_entries_pairs(indices).unwrap();
+    /// let value0 = subviews[0].1.as_ref().unwrap().get();
+    /// assert_eq!(*value0, String::default());
+    /// ```
+    pub fn try_load_entries_pairs<Q>(
+        &self,
+        indices: impl IntoIterator<Item = Q>,
+    ) -> Result<Vec<(Q, Option<SyncReadGuardedView<'_, W>>)>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + Clone,
+    {
+        let indices_vec: Vec<Q> = indices.into_iter().collect();
+        let values = self.try_load_entries(indices_vec.iter())?;
+        Ok(indices_vec.into_iter().zip(values).collect())
+    }
+
+    /// Marks the entry so that it is removed in the next flush.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
+    ///     SyncCustomCollectionView::load(context).unwrap();
+    /// let subview = view.load_entry_mut(&23).unwrap();
+    /// let value = subview.get_mut();
+    /// *value = String::from("Hello");
+    /// view.reset_entry_to_default(&23).unwrap();
+    /// let subview = view.load_entry_mut(&23).unwrap();
+    /// let value = subview.get_mut();
+    /// assert_eq!(*value, String::default());
+    /// ```
+    pub fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes()?;
+        self.collection.reset_entry_to_default(&short_key)
+    }
+
+    /// Removes an entry from the `SyncCustomCollectionView`. If absent nothing happens.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
+    ///     SyncCustomCollectionView::load(context).unwrap();
+    /// let subview = view.load_entry_mut(&23).unwrap();
+    /// let value = subview.get_mut();
+    /// assert_eq!(*value, String::default());
+    /// view.remove_entry(&23).unwrap();
+    /// let keys = view.indices().unwrap();
+    /// assert_eq!(keys.len(), 0);
+    /// ```
+    pub fn remove_entry<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes()?;
+        self.collection.remove_entry(short_key);
+        Ok(())
+    }
+
+    /// Tests if the collection contains a specified key and returns a boolean.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
+    ///     SyncCustomCollectionView::load(context).unwrap();
+    /// {
+    ///     let _subview = view.load_entry_mut(&23).unwrap();
+    /// }
+    /// assert!(view.contains_key(&23).unwrap());
+    /// assert!(!view.contains_key(&24).unwrap());
+    /// ```
+    pub fn contains_key<Q>(&self, index: &Q) -> Result<bool, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes()?;
+        self.collection.contains_key(&short_key)
+    }
+
+    /// Gets the extra data.
+    pub fn extra(&self) -> &<W::Context as SyncContext>::Extra {
+        self.collection.extra()
+    }
+}
+
+impl<I: CustomSerialize + Send, W: SyncView> SyncCustomCollectionView<W::Context, I, W> {
+    /// Load all entries for reading at once.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
+    ///     SyncCustomCollectionView::load(context).unwrap();
+    /// {
+    ///     let _subview = view.load_entry_mut(&23).unwrap();
+    /// }
+    /// let subviews = view.try_load_all_entries().unwrap();
+    /// assert_eq!(subviews.len(), 1);
+    /// ```
+    pub fn try_load_all_entries(&self) -> Result<Vec<(I, SyncReadGuardedView<'_, W>)>, ViewError> {
+        let results = self.collection.try_load_all_entries()?;
+        results
+            .into_iter()
+            .map(|(short_key, view)| {
+                let index = I::from_custom_bytes(&short_key)?;
+                Ok((index, view))
+            })
+            .collect()
+    }
+
+    /// Returns the list of indices in the collection in the order determined by the custom serialization.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
+    ///     SyncCustomCollectionView::load(context).unwrap();
+    /// view.load_entry_mut(&23).unwrap();
+    /// view.load_entry_mut(&25).unwrap();
+    /// let indices = view.indices().unwrap();
+    /// assert_eq!(indices, vec![23, 25]);
+    /// ```
+    pub fn indices(&self) -> Result<Vec<I>, ViewError> {
+        let mut indices = Vec::new();
+        self.for_each_index(|index| {
+            indices.push(index);
+            Ok(())
+        })?;
+        Ok(indices)
+    }
+
+    /// Returns the number of entries in the collection.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view = SyncCustomCollectionView::<_, u128, SyncRegisterView<_, String>>::load(context)
+    ///     .unwrap();
+    /// view.load_entry_mut(&(23 as u128)).unwrap();
+    /// view.load_entry_mut(&(25 as u128)).unwrap();
+    /// assert_eq!(view.count().unwrap(), 2);
+    /// ```
+    pub fn count(&self) -> Result<usize, ViewError> {
+        self.collection.count()
+    }
+}
+
+impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W> {
+    /// Applies a function f on each index. Indices are visited in an order
+    /// determined by the custom serialization. If the function f returns false,
+    /// then the loop ends prematurely.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
+    ///     SyncCustomCollectionView::load(context).unwrap();
+    /// view.load_entry_mut(&28).unwrap();
+    /// view.load_entry_mut(&24).unwrap();
+    /// view.load_entry_mut(&23).unwrap();
+    /// let mut part_indices = Vec::new();
+    /// view.for_each_index_while(|index| {
+    ///     part_indices.push(index);
+    ///     Ok(part_indices.len() < 2)
+    /// })
+    /// .unwrap();
+    /// assert_eq!(part_indices, vec![23, 24]);
+    /// ```
+    pub fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<bool, ViewError> + Send,
+    {
+        self.collection.for_each_key_while(|key| {
+            let index = I::from_custom_bytes(key)?;
+            f(index)
+        })?;
+        Ok(())
+    }
+
+    /// Applies a function on each index. Indices are visited in an order
+    /// determined by the custom serialization.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
+    ///     SyncCustomCollectionView::load(context).unwrap();
+    /// view.load_entry_mut(&28).unwrap();
+    /// view.load_entry_mut(&24).unwrap();
+    /// view.load_entry_mut(&23).unwrap();
+    /// let mut indices = Vec::new();
+    /// view.for_each_index(|index| {
+    ///     indices.push(index);
+    ///     Ok(())
+    /// })
+    /// .unwrap();
+    /// assert_eq!(indices, vec![23, 24, 28]);
+    /// ```
+    pub fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.collection.for_each_key(|key| {
+            let index = I::from_custom_bytes(key)?;
+            f(index)
+        })?;
+        Ok(())
     }
 }

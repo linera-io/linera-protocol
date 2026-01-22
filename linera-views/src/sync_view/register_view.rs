@@ -95,3 +95,73 @@ where
         self.update = Some(Box::default());
     }
 }
+
+impl<C, T> SyncRegisterView<C, T>
+where
+    C: SyncContext,
+{
+    /// Access the current value in the register.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut register = SyncRegisterView::<_, u32>::load(context).unwrap();
+    /// let value = register.get();
+    /// assert_eq!(*value, 0);
+    /// ```
+    pub fn get(&self) -> &T {
+        match &self.update {
+            None => &self.stored_value,
+            Some(value) => value,
+        }
+    }
+
+    /// Sets the value in the register.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut register = SyncRegisterView::load(context).unwrap();
+    /// register.set(5);
+    /// let value = register.get();
+    /// assert_eq!(*value, 5);
+    /// ```
+    pub fn set(&mut self, value: T) {
+        self.delete_storage_first = false;
+        self.update = Some(Box::new(value));
+    }
+
+    /// Obtains the extra data.
+    pub fn extra(&self) -> &C::Extra {
+        self.context.extra()
+    }
+}
+
+impl<C, T> SyncRegisterView<C, T>
+where
+    C: SyncContext,
+    T: Clone + Serialize,
+{
+    /// Obtains a mutable reference to the value in the register.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::register_view::SyncRegisterView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut register: SyncRegisterView<_, u32> = SyncRegisterView::load(context).unwrap();
+    /// let value = register.get_mut();
+    /// assert_eq!(*value, 0);
+    /// ```
+    pub fn get_mut(&mut self) -> &mut T {
+        self.delete_storage_first = false;
+        match &mut self.update {
+            Some(value) => value,
+            update => {
+                *update = Some(self.stored_value.clone());
+                update.as_mut().unwrap()
+            }
+        }
+    }
+}

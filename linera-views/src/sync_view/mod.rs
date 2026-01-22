@@ -105,11 +105,3 @@ pub trait SyncRootView: SyncView {
 
 impl<T> SyncRootView for T where T: SyncView {}
 
-impl<T> crate::views::RootView for T
-where
-    T: SyncRootView,
-{
-    async fn save(&mut self) -> Result<(), ViewError> {
-        SyncRootView::save(self)
-    }
-}

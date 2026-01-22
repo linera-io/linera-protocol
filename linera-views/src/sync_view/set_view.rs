@@ -350,3 +350,397 @@ impl<C: SyncContext, I: Send + Sync + Serialize> SyncView for SyncSetView<C, I> 
         self.set.clear()
     }
 }
+
+impl<C: SyncContext, I: Serialize> SyncSetView<C, I> {
+    /// Inserts a value. If already present then no effect.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::set_view::SyncSetView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set = SyncSetView::<_, u32>::load(context).unwrap();
+    /// set.insert(&(34 as u32)).unwrap();
+    /// assert_eq!(set.indices().unwrap().len(), 1);
+    /// ```
+    pub fn insert<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = BaseKey::derive_short_key(index)?;
+        self.set.insert(short_key);
+        Ok(())
+    }
+
+    /// Removes a value. If absent then nothing is done.
+    /// ```rust
+    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncSetView};
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set = SyncSetView::<_, u32>::load(context).unwrap();
+    /// set.remove(&(34 as u32)).unwrap();
+    /// assert_eq!(set.indices().unwrap().len(), 0);
+    /// ```
+    pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = BaseKey::derive_short_key(index)?;
+        self.set.remove(short_key);
+        Ok(())
+    }
+
+    /// Obtains the extra data.
+    pub fn extra(&self) -> &C::Extra {
+        self.set.extra()
+    }
+}
+
+impl<C: SyncContext, I: Serialize> SyncSetView<C, I> {
+    /// Returns true if the given index exists in the set.
+    /// ```rust
+    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncSetView};
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set: SyncSetView<_, u32> = SyncSetView::load(context).unwrap();
+    /// set.insert(&(34 as u32)).unwrap();
+    /// assert_eq!(set.contains(&(34 as u32)).unwrap(), true);
+    /// assert_eq!(set.contains(&(45 as u32)).unwrap(), false);
+    /// ```
+    pub fn contains<Q>(&self, index: &Q) -> Result<bool, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = BaseKey::derive_short_key(index)?;
+        self.set.contains(&short_key)
+    }
+}
+
+impl<C: SyncContext, I: Serialize + DeserializeOwned + Send> SyncSetView<C, I> {
+    /// Returns the list of indices in the set. The order is determined by serialization.
+    /// ```rust
+    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncSetView};
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set: SyncSetView<_, u32> = SyncSetView::load(context).unwrap();
+    /// set.insert(&(34 as u32)).unwrap();
+    /// assert_eq!(set.indices().unwrap(), vec![34 as u32]);
+    /// ```
+    pub fn indices(&self) -> Result<Vec<I>, ViewError> {
+        let mut indices = Vec::new();
+        self.for_each_index(|index| {
+            indices.push(index);
+            Ok(())
+        })?;
+        Ok(indices)
+    }
+
+    /// Returns the number of entries in the set.
+    /// ```rust
+    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncSetView};
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set: SyncSetView<_, u32> = SyncSetView::load(context).unwrap();
+    /// set.insert(&(34 as u32)).unwrap();
+    /// assert_eq!(set.count().unwrap(), 1);
+    /// ```
+    pub fn count(&self) -> Result<usize, ViewError> {
+        self.set.count()
+    }
+
+    /// Applies a function f on each index. Indices are visited in an order
+    /// determined by the serialization. If the function returns false, then the
+    /// loop ends prematurely.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::set_view::SyncSetView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set = SyncSetView::<_, u32>::load(context).unwrap();
+    /// set.insert(&(34 as u32)).unwrap();
+    /// set.insert(&(37 as u32)).unwrap();
+    /// set.insert(&(42 as u32)).unwrap();
+    /// let mut count = 0;
+    /// set.for_each_index_while(|_key| {
+    ///     count += 1;
+    ///     Ok(count < 2)
+    /// })
+    /// .unwrap();
+    /// assert_eq!(count, 2);
+    /// ```
+    pub fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<bool, ViewError> + Send,
+    {
+        self.set.for_each_key_while(|key| {
+            let index = BaseKey::deserialize_value(key)?;
+            f(index)
+        })?;
+        Ok(())
+    }
+
+    /// Applies a function f on each index. Indices are visited in an order
+    /// determined by the serialization.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::set_view::SyncSetView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set = SyncSetView::<_, u32>::load(context).unwrap();
+    /// set.insert(&(34 as u32)).unwrap();
+    /// set.insert(&(37 as u32)).unwrap();
+    /// set.insert(&(42 as u32)).unwrap();
+    /// let mut count = 0;
+    /// set.for_each_index(|_key| {
+    ///     count += 1;
+    ///     Ok(())
+    /// })
+    /// .unwrap();
+    /// assert_eq!(count, 3);
+    /// ```
+    pub fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.set.for_each_key(|key| {
+            let index = BaseKey::deserialize_value(key)?;
+            f(index)
+        })?;
+        Ok(())
+    }
+}
+
+/// A view that supports a set of values with custom serialization.
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, I: Allocative")]
+pub struct SyncCustomSetView<C, I> {
+    /// The underlying set storing entries with custom-serialized keys.
+    set: SyncByteSetView<C>,
+    /// Phantom data for the key type.
+    #[allocative(skip)]
+    _phantom: PhantomData<I>,
+}
+
+impl<C, I> SyncView for SyncCustomSetView<C, I>
+where
+    C: SyncContext,
+    I: Send + Sync + CustomSerialize,
+{
+    const NUM_INIT_KEYS: usize = SyncByteSetView::<C>::NUM_INIT_KEYS;
+
+    type Context = C;
+
+    fn context(&self) -> C {
+        self.set.context()
+    }
+
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        SyncByteSetView::pre_load(context)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let set = SyncByteSetView::post_load(context, values)?;
+        Ok(Self {
+            set,
+            _phantom: PhantomData,
+        })
+    }
+
+    fn rollback(&mut self) {
+        self.set.rollback()
+    }
+
+    fn has_pending_changes(&self) -> bool {
+        self.set.has_pending_changes()
+    }
+
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.set.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.set.post_save()
+    }
+
+    fn clear(&mut self) {
+        self.set.clear()
+    }
+}
+
+impl<C: SyncContext, I: CustomSerialize> SyncCustomSetView<C, I> {
+    /// Inserts a value. If present then it has no effect.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
+    /// set.insert(&(34 as u128)).unwrap();
+    /// assert_eq!(set.indices().unwrap().len(), 1);
+    /// ```
+    pub fn insert<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes()?;
+        self.set.insert(short_key);
+        Ok(())
+    }
+
+    /// Removes a value. If absent then nothing is done.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
+    /// set.remove(&(34 as u128)).unwrap();
+    /// assert_eq!(set.indices().unwrap().len(), 0);
+    /// ```
+    pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes()?;
+        self.set.remove(short_key);
+        Ok(())
+    }
+
+    /// Obtains the extra data.
+    pub fn extra(&self) -> &C::Extra {
+        self.set.extra()
+    }
+}
+
+impl<C, I> SyncCustomSetView<C, I>
+where
+    C: SyncContext,
+    I: CustomSerialize,
+{
+    /// Returns true if the given index exists in the set.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
+    /// set.insert(&(34 as u128)).unwrap();
+    /// assert_eq!(set.contains(&(34 as u128)).unwrap(), true);
+    /// assert_eq!(set.contains(&(37 as u128)).unwrap(), false);
+    /// ```
+    pub fn contains<Q>(&self, index: &Q) -> Result<bool, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes()?;
+        self.set.contains(&short_key)
+    }
+}
+
+impl<C, I> SyncCustomSetView<C, I>
+where
+    C: SyncContext,
+    I: Sync + Send + CustomSerialize,
+{
+    /// Returns the list of indices in the set. The order is determined by the custom
+    /// serialization.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
+    /// set.insert(&(34 as u128)).unwrap();
+    /// set.insert(&(37 as u128)).unwrap();
+    /// assert_eq!(set.indices().unwrap(), vec![34 as u128, 37 as u128]);
+    /// ```
+    pub fn indices(&self) -> Result<Vec<I>, ViewError> {
+        let mut indices = Vec::new();
+        self.for_each_index(|index| {
+            indices.push(index);
+            Ok(())
+        })?;
+        Ok(indices)
+    }
+
+    /// Returns the number of entries of the set.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
+    /// set.insert(&(34 as u128)).unwrap();
+    /// set.insert(&(37 as u128)).unwrap();
+    /// assert_eq!(set.count().unwrap(), 2);
+    /// ```
+    pub fn count(&self) -> Result<usize, ViewError> {
+        self.set.count()
+    }
+
+    /// Applies a function f on each index. Indices are visited in an order
+    /// determined by the custom serialization. If the function does return
+    /// false, then the loop prematurely ends.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
+    /// set.insert(&(34 as u128)).unwrap();
+    /// set.insert(&(37 as u128)).unwrap();
+    /// set.insert(&(42 as u128)).unwrap();
+    /// let mut count = 0;
+    /// set.for_each_index_while(|_key| {
+    ///     count += 1;
+    ///     Ok(count < 5)
+    /// })
+    /// .unwrap();
+    /// assert_eq!(count, 3);
+    /// ```
+    pub fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<bool, ViewError> + Send,
+    {
+        self.set.for_each_key_while(|key| {
+            let index = I::from_custom_bytes(key)?;
+            f(index)
+        })?;
+        Ok(())
+    }
+
+    /// Applies a function f on each index. Indices are visited in an order
+    /// determined by the custom serialization.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
+    /// set.insert(&(34 as u128)).unwrap();
+    /// set.insert(&(37 as u128)).unwrap();
+    /// set.insert(&(42 as u128)).unwrap();
+    /// let mut count = 0;
+    /// set.for_each_index(|_key| {
+    ///     count += 1;
+    ///     Ok(())
+    /// })
+    /// .unwrap();
+    /// assert_eq!(count, 3);
+    /// ```
+    pub fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.set.for_each_key(|key| {
+            let index = I::from_custom_bytes(key)?;
+            f(index)
+        })?;
+        Ok(())
+    }
+}

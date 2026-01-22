@@ -119,3 +119,228 @@ where
         self.new_values.clear();
     }
 }
+
+impl<C, T> SyncLogView<C, T>
+where
+    C: SyncContext,
+{
+    /// Pushes a value to the end of the log.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::log_view::SyncLogView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut log = SyncLogView::load(context).unwrap();
+    /// log.push(34);
+    /// ```
+    pub fn push(&mut self, value: T) {
+        self.new_values.push(value);
+    }
+
+    /// Reads the size of the log.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::log_view::SyncLogView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut log = SyncLogView::load(context).unwrap();
+    /// log.push(34);
+    /// log.push(42);
+    /// assert_eq!(log.count(), 2);
+    /// ```
+    pub fn count(&self) -> usize {
+        if self.delete_storage_first {
+            self.new_values.len()
+        } else {
+            self.stored_count + self.new_values.len()
+        }
+    }
+
+    /// Obtains the extra data.
+    pub fn extra(&self) -> &C::Extra {
+        self.context.extra()
+    }
+}
+
+impl<C, T> SyncLogView<C, T>
+where
+    C: SyncContext,
+    T: Clone + DeserializeOwned + Serialize + Send + Sync,
+{
+    /// Reads the logged value with the given index (including staged ones).
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::log_view::SyncLogView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut log = SyncLogView::load(context).unwrap();
+    /// log.push(34);
+    /// assert_eq!(log.get(0).unwrap(), Some(34));
+    /// ```
+    pub fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
+        let value = if self.delete_storage_first {
+            self.new_values.get(index).cloned()
+        } else if index < self.stored_count {
+            let key = self
+                .context
+                .base_key()
+                .derive_tag_key(KeyTag::Index as u8, &index)?;
+            self.context.store().read_value(&key)?
+        } else {
+            self.new_values.get(index - self.stored_count).cloned()
+        };
+        Ok(value)
+    }
+
+    /// Reads several logged keys (including staged ones)
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::log_view::SyncLogView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut log = SyncLogView::load(context).unwrap();
+    /// log.push(34);
+    /// log.push(42);
+    /// assert_eq!(
+    ///     log.multi_get(vec![0, 1]).unwrap(),
+    ///     vec![Some(34), Some(42)]
+    /// );
+    /// ```
+    pub fn multi_get(&self, indices: Vec<usize>) -> Result<Vec<Option<T>>, ViewError> {
+        let mut result = Vec::new();
+        if self.delete_storage_first {
+            for index in indices {
+                result.push(self.new_values.get(index).cloned());
+            }
+        } else {
+            let mut index_to_positions = BTreeMap::<usize, Vec<usize>>::new();
+            for (pos, index) in indices.into_iter().enumerate() {
+                if index < self.stored_count {
+                    index_to_positions.entry(index).or_default().push(pos);
+                    result.push(None);
+                } else {
+                    result.push(self.new_values.get(index - self.stored_count).cloned());
+                }
+            }
+            let mut keys = Vec::new();
+            let mut vec_positions = Vec::new();
+            for (index, positions) in index_to_positions {
+                let key = self
+                    .context
+                    .base_key()
+                    .derive_tag_key(KeyTag::Index as u8, &index)?;
+                keys.push(key);
+                vec_positions.push(positions);
+            }
+            let values = self.context.store().read_multi_values(&keys)?;
+            for (positions, value) in vec_positions.into_iter().zip(values) {
+                if let Some((&last, rest)) = positions.split_last() {
+                    for &position in rest {
+                        *result.get_mut(position).unwrap() = value.clone();
+                    }
+                    *result.get_mut(last).unwrap() = value;
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    /// Reads the index-value pairs at the given positions.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::log_view::SyncLogView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut log = SyncLogView::load(context).unwrap();
+    /// log.push(34);
+    /// log.push(42);
+    /// assert_eq!(
+    ///     log.multi_get_pairs(vec![0, 1, 5]).unwrap(),
+    ///     vec![(0, Some(34)), (1, Some(42)), (5, None)]
+    /// );
+    /// ```
+    pub fn multi_get_pairs(
+        &self,
+        indices: Vec<usize>,
+    ) -> Result<Vec<(usize, Option<T>)>, ViewError> {
+        let values = self.multi_get(indices.clone())?;
+        Ok(indices.into_iter().zip(values).collect())
+    }
+
+    fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
+        let count = range.len();
+        let mut keys = Vec::with_capacity(count);
+        for index in range {
+            let key = self
+                .context
+                .base_key()
+                .derive_tag_key(KeyTag::Index as u8, &index)?;
+            keys.push(key);
+        }
+        let mut values = Vec::with_capacity(count);
+        for entry in self.context.store().read_multi_values(&keys)? {
+            match entry {
+                None => {
+                    return Err(ViewError::MissingEntries("SyncLogView".into()));
+                }
+                Some(value) => values.push(value),
+            }
+        }
+        Ok(values)
+    }
+
+    /// Reads the logged values in the given range (including staged ones).
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::log_view::SyncLogView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut log = SyncLogView::load(context).unwrap();
+    /// log.push(34);
+    /// log.push(42);
+    /// log.push(56);
+    /// assert_eq!(log.read(0..2).unwrap(), vec![34, 42]);
+    /// ```
+    pub fn read<R>(&self, range: R) -> Result<Vec<T>, ViewError>
+    where
+        R: RangeBounds<usize>,
+    {
+        let effective_stored_count = if self.delete_storage_first {
+            0
+        } else {
+            self.stored_count
+        };
+        let end = match range.end_bound() {
+            Bound::Included(end) => *end + 1,
+            Bound::Excluded(end) => *end,
+            Bound::Unbounded => self.count(),
+        }
+        .min(self.count());
+        let start = match range.start_bound() {
+            Bound::Included(start) => *start,
+            Bound::Excluded(start) => *start + 1,
+            Bound::Unbounded => 0,
+        };
+        if start >= end {
+            return Ok(Vec::new());
+        }
+        if start < effective_stored_count {
+            if end <= effective_stored_count {
+                self.read_context(start..end)
+            } else {
+                let mut values = self.read_context(start..effective_stored_count)?;
+                values.extend(
+                    self.new_values[0..(end - effective_stored_count)]
+                        .iter()
+                        .cloned(),
+                );
+                Ok(values)
+            }
+        } else {
+            Ok(
+                self.new_values[(start - effective_stored_count)..(end - effective_stored_count)]
+                    .to_vec(),
+            )
+        }
+    }
+}
