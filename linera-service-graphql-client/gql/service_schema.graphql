@@ -902,12 +902,12 @@ type MutationRoot {
 	readDataBlob(chainId: ChainId!, hash: CryptoHash!): CryptoHash!
 	"""
 	Creates (or activates) a new chain with the given owner.
-	This will automatically subscribe to the future committees created by `admin_id`.
+	This will automatically subscribe to the future committees created by `admin_chain_id`.
 	"""
 	openChain(chainId: ChainId!, owner: AccountOwner!, balance: Amount): ChainId!
 	"""
 	Creates (or activates) a new chain by installing the given authentication keys.
-	This will automatically subscribe to the future committees created by `admin_id`.
+	This will automatically subscribe to the future committees created by `admin_chain_id`.
 	"""
 	openMultiOwnerChain(		chainId: ChainId!,		applicationPermissions: ApplicationPermissions,		owners: [AccountOwner!]!,		weights: [Int!],		multiLeaderRounds: Int,		balance: Amount,
 		"""
@@ -1255,7 +1255,7 @@ type SubscriptionRoot {
 type SystemExecutionStateView {
 	description: ChainDescription
 	epoch: Epoch!
-	adminId: ChainId
+	adminChainId: ChainId
 	committees: JSONObject!
 	ownership: ChainOwnership!
 	balance: Amount!

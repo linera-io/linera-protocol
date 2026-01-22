@@ -219,7 +219,7 @@ pub struct Client<Env: Environment> {
     /// Manages the requests sent to validator nodes.
     requests_scheduler: RequestsScheduler<Env>,
     /// The admin chain ID.
-    admin_id: ChainId,
+    admin_chain_id: ChainId,
     /// Chains that should be tracked by the client, along with their listening mode.
     /// The presence of a chain in this map means it is tracked by the local node.
     chain_modes: Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>,
@@ -237,7 +237,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip_all)]
     pub fn new(
         environment: Env,
-        admin_id: ChainId,
+        admin_chain_id: ChainId,
         long_lived_services: bool,
         chain_modes: impl IntoIterator<Item = (ChainId, ListeningMode)>,
         name: impl Into<String>,
@@ -265,7 +265,7 @@ impl<Env: Environment> Client<Env> {
             local_node,
             requests_scheduler,
             chains: papaya::HashMap::new(),
-            admin_id,
+            admin_chain_id,
             chain_modes,
             notifier: Arc::new(ChannelNotifier::default()),
             options,
@@ -273,8 +273,8 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Returns the chain ID of the admin chain.
-    pub fn admin_chain(&self) -> ChainId {
-        self.admin_id
+    pub fn admin_chain_id(&self) -> ChainId {
+        self.admin_chain_id
     }
 
     /// Returns the storage client used by this client's local node.
@@ -386,7 +386,7 @@ impl<Env: Environment> Client<Env> {
             Ok(info) => Ok(info),
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
                 // Make sure the admin chain is up to date.
-                Box::pin(self.synchronize_chain_state(self.admin_id)).await?;
+                Box::pin(self.synchronize_chain_state(self.admin_chain_id)).await?;
                 // If the chain is missing then the error is a WorkerError
                 // and so a BlobsNotFound
                 self.update_local_node_with_blobs_from(blob_ids, validators)
@@ -569,13 +569,13 @@ impl<Env: Environment> Client<Env> {
     async fn admin_committees(
         &self,
     ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
-        let info = self.chain_info_with_committees(self.admin_id).await?;
+        let info = self.chain_info_with_committees(self.admin_chain_id).await?;
         Ok((info.epoch, info.into_committees()?))
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.
     pub async fn admin_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
-        let info = self.chain_info_with_committees(self.admin_id).await?;
+        let info = self.chain_info_with_committees(self.admin_chain_id).await?;
         Ok((info.epoch, info.into_current_committee()?))
     }
 
@@ -616,7 +616,7 @@ impl<Env: Environment> Client<Env> {
             return Ok(bcs::from_bytes(blob.bytes())?);
         };
         // Recover history from the current validators, according to the admin chain.
-        Box::pin(self.synchronize_chain_state(self.admin_id)).await?;
+        Box::pin(self.synchronize_chain_state(self.admin_chain_id)).await?;
         let nodes = self.validator_nodes().await?;
         let blob = self
             .update_local_node_with_blobs_from(vec![chain_desc_id], &nodes)
@@ -758,7 +758,7 @@ impl<Env: Environment> Client<Env> {
                 let mut updater = ValidatorUpdater {
                     remote_node,
                     client: self.clone(),
-                    admin_id: self.admin_id,
+                    admin_chain_id: self.admin_chain_id,
                 };
                 let certificate = latest_certificate.clone();
                 Box::pin(async move {
@@ -794,7 +794,7 @@ impl<Env: Environment> Client<Env> {
                 let mut updater = ValidatorUpdater {
                     remote_node,
                     client: self.clone(),
-                    admin_id: self.admin_id,
+                    admin_chain_id: self.admin_chain_id,
                 };
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })
@@ -1859,8 +1859,8 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Gets the ID of the admin chain.
     #[instrument(level = "trace", skip(self))]
-    pub fn admin_id(&self) -> ChainId {
-        self.client.admin_id
+    pub fn admin_chain_id(&self) -> ChainId {
+        self.client.admin_chain_id
     }
 
     /// Gets the currently preferred owner for signing the blocks.
@@ -1901,8 +1901,8 @@ impl<Env: Environment> ChainClient<Env> {
             .into_iter()
             .map(|((chain_id, _), _)| chain_id)
             .collect::<BTreeSet<_>>();
-        if self.chain_id != self.client.admin_id {
-            publishers.insert(self.client.admin_id);
+        if self.chain_id != self.client.admin_chain_id {
+            publishers.insert(self.client.admin_chain_id);
         }
         Ok(publishers)
     }
@@ -2153,7 +2153,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         if info.epoch > self.client.admin_committees().await?.0 {
             self.client
-                .synchronize_chain_state(self.client.admin_id)
+                .synchronize_chain_state(self.client.admin_chain_id)
                 .await?;
         }
 
@@ -2246,7 +2246,7 @@ impl<Env: Environment> ChainClient<Env> {
         let chain_ids = subscriptions
             .iter()
             .map(|((chain_id, _), _)| *chain_id)
-            .chain(iter::once(self.client.admin_id))
+            .chain(iter::once(self.client.admin_chain_id))
             .filter(|chain_id| *chain_id != self.chain_id)
             .collect::<BTreeSet<_>>();
         stream::iter(
@@ -3880,7 +3880,7 @@ impl<Env: Environment> ChainClient<Env> {
         index: u32,
     ) -> Result<bool, ChainClientError> {
         let event_id = EventId {
-            chain_id: self.client.admin_id,
+            chain_id: self.client.admin_chain_id,
             stream_id: StreamId::system(stream_name),
             index,
         };
