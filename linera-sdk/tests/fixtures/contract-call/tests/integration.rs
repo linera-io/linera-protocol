@@ -29,7 +29,7 @@ async fn test_contract_call_integration() {
 
     let transfer_amount = Amount::from_tokens(100);
     let funding_chain = validator.get_chain(&validator.admin_chain_id());
-    let transfer_certificate = funding_chain
+    let (transfer_certificate, _) = funding_chain
         .add_block(|block| {
             block.with_native_token_transfer(AccountOwner::CHAIN, account1, transfer_amount);
         })

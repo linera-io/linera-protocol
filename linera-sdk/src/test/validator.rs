@@ -325,7 +325,7 @@ impl TestValidator {
         };
         let new_chain_config = open_chain_config.init_chain_config(epoch, epoch, epoch);
 
-        let certificate = admin_chain
+        let (certificate, _) = admin_chain
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::OpenChain(open_chain_config));
             })

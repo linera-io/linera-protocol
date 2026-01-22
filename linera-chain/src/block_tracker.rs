@@ -400,12 +400,15 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         #[cfg(with_metrics)]
         crate::chain::metrics::track_block_metrics(&self.resource_controller.tracker);
 
+        let resource_tracker = self.resource_controller.tracker;
+
         (
             self.messages,
             self.oracle_responses,
             self.events,
             self.blobs,
             self.operation_results,
+            resource_tracker,
         )
     }
 }
@@ -416,4 +419,5 @@ pub(crate) type FinalizeExecutionResult = (
     Vec<Vec<Event>>,
     Vec<Vec<Blob>>,
     Vec<OperationResult>,
+    ResourceTracker,
 );

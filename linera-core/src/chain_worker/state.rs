@@ -31,7 +31,7 @@ use linera_chain::{
 };
 use linera_execution::{
     Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
-    ServiceRuntimeEndpoint,
+    ResourceTracker, ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
 use linera_views::{
@@ -893,7 +893,7 @@ where
                     .await;
                 outcome.clone()
             } else {
-                chain
+                let (verified, _resource_tracker) = chain
                     .execute_block(
                         &proposed_block,
                         local_time,
@@ -901,7 +901,8 @@ where
                         &published_blobs,
                         oracle_responses,
                     )
-                    .await?
+                    .await?;
+                verified
             };
         // We should always agree on the messages and state hash.
         ensure!(
@@ -1390,7 +1391,7 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: &[Blob],
-    ) -> Result<(Block, ChainInfoResponse), WorkerError> {
+    ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
         let signer = block.authenticated_signer;
@@ -1400,7 +1401,7 @@ where
         self.chain
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
-        let outcome =
+        let (outcome, resource_tracker) =
             Box::pin(self.execute_block(&block, local_time, round, published_blobs)).await?;
 
         // No need to sign: only used internally.
@@ -1415,7 +1416,7 @@ where
                 .await?;
         }
 
-        Ok((outcome.with(block), response))
+        Ok((outcome.with(block), response, resource_tracker))
     }
 
     /// Validates and executes a block proposed to extend this chain.
@@ -1533,8 +1534,14 @@ where
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
-            Box::pin(self.execute_block(block, local_time, round.multi_leader(), &published_blobs))
-                .await?
+            let (executed_block, _resource_tracker) = Box::pin(self.execute_block(
+                block,
+                local_time,
+                round.multi_leader(),
+                &published_blobs,
+            ))
+            .await?;
+            executed_block
         };
 
         ensure!(
@@ -1656,8 +1663,8 @@ where
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
-    ) -> Result<BlockExecutionOutcome, WorkerError> {
-        let outcome =
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker), WorkerError> {
+        let (outcome, resource_tracker) =
             Box::pin(
                 self.chain
                     .execute_block(block, local_time, round, published_blobs, None),
@@ -1674,7 +1681,7 @@ where
             )
             .await,
         );
-        Ok(outcome)
+        Ok((outcome, resource_tracker))
     }
 
     /// Initializes and saves the current chain if it is not active yet.
