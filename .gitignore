@@ -42,5 +42,8 @@ linera-web/**/*-lock.json
 CLAUDE.md
 .serena
 
+# Zed
+/.zed/
+
 # Git worktrees
 .worktrees/
