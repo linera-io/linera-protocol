@@ -42,11 +42,11 @@ mod metrics {
 pub struct ByteSetView<C> {
     /// The view context.
     #[allocative(skip)]
-    context: C,
+    pub(crate) context: C,
     /// Whether to clear storage before applying updates.
-    delete_storage_first: bool,
+    pub(crate) delete_storage_first: bool,
     /// Pending changes not yet persisted to storage.
-    updates: BTreeMap<Vec<u8>, Update<()>>,
+    pub(crate) updates: BTreeMap<Vec<u8>, Update<()>>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ByteSetView<C> {
@@ -64,85 +64,67 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for ByteSetView<C> {
     }
 }
 
-impl<C: Context> View for ByteSetView<C> {
-    const NUM_INIT_KEYS: usize = 0;
-
-    type Context = C;
-
-    fn context(&self) -> C {
-        self.context.clone()
-    }
-
-    fn pre_load(_context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        Ok(Vec::new())
-    }
-
-    fn post_load(context: C, _values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        Ok(Self {
-            context,
-            delete_storage_first: false,
-            updates: BTreeMap::new(),
-        })
-    }
-
-    fn rollback(&mut self) {
+impl<C> ByteSetView<C> {
+    /// Shared implementation of `rollback`.
+    pub(crate) fn base_rollback(&mut self) {
         self.delete_storage_first = false;
         self.updates.clear();
     }
 
-    async fn has_pending_changes(&self) -> bool {
+    /// Shared implementation of `has_pending_changes`.
+    pub(crate) fn base_has_pending_changes(&self) -> bool {
         if self.delete_storage_first {
             return true;
         }
         !self.updates.is_empty()
     }
 
-    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+    /// Shared implementation of `post_save`.
+    pub(crate) fn base_post_save(&mut self) {
+        self.delete_storage_first = false;
+        self.updates.clear();
+    }
+
+    /// Shared implementation of `clear`.
+    pub(crate) fn base_clear(&mut self) {
+        self.delete_storage_first = true;
+        self.updates.clear();
+    }
+
+    /// Shared implementation of `post_load`.
+    pub(crate) fn base_post_load(context: C) -> Self {
+        Self {
+            context,
+            delete_storage_first: false,
+            updates: BTreeMap::new(),
+        }
+    }
+
+    /// Shared implementation of `pre_save`.
+    pub(crate) fn base_pre_save(&self, batch: &mut Batch, base_key: &BaseKey) -> bool {
         let mut delete_view = false;
         if self.delete_storage_first {
             delete_view = true;
-            batch.delete_key_prefix(self.context.base_key().bytes.clone());
+            batch.delete_key_prefix(base_key.bytes.clone());
             for (index, update) in self.updates.iter() {
                 if let Update::Set(_) = update {
-                    let key = self.context.base_key().base_index(index);
+                    let key = base_key.base_index(index);
                     batch.put_key_value_bytes(key, Vec::new());
                     delete_view = false;
                 }
             }
         } else {
             for (index, update) in self.updates.iter() {
-                let key = self.context.base_key().base_index(index);
+                let key = base_key.base_index(index);
                 match update {
                     Update::Removed => batch.delete_key(key),
                     Update::Set(_) => batch.put_key_value_bytes(key, Vec::new()),
                 }
             }
         }
-        Ok(delete_view)
+        delete_view
     }
 
-    fn post_save(&mut self) {
-        self.delete_storage_first = false;
-        self.updates.clear();
-    }
-
-    fn clear(&mut self) {
-        self.delete_storage_first = true;
-        self.updates.clear();
-    }
-}
-
-impl<C: Context> ClonableView for ByteSetView<C> {
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(ByteSetView {
-            context: self.context.clone(),
-            delete_storage_first: self.delete_storage_first,
-            updates: self.updates.clone(),
-        })
-    }
-}
-
-impl<C: Context> ByteSetView<C> {
     /// Inserts a value. If already present then it has no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -171,13 +153,62 @@ impl<C: Context> ByteSetView<C> {
     /// ```
     pub fn remove(&mut self, short_key: Vec<u8>) {
         if self.delete_storage_first {
-            // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
             self.updates.remove(&short_key);
         } else {
             self.updates.insert(short_key, Update::Removed);
         }
     }
+}
 
+impl<C: Context> View for ByteSetView<C> {
+    const NUM_INIT_KEYS: usize = 0;
+
+    type Context = C;
+
+    fn context(&self) -> C {
+        self.context.clone()
+    }
+
+    fn pre_load(_context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        Ok(Vec::new())
+    }
+
+    fn post_load(context: C, _values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        Ok(Self::base_post_load(context))
+    }
+
+    fn rollback(&mut self) {
+        self.base_rollback();
+    }
+
+    async fn has_pending_changes(&self) -> bool {
+        self.base_has_pending_changes()
+    }
+
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        Ok(self.base_pre_save(batch, self.context.base_key()))
+    }
+
+    fn post_save(&mut self) {
+        self.base_post_save();
+    }
+
+    fn clear(&mut self) {
+        self.base_clear();
+    }
+}
+
+impl<C: Context> ClonableView for ByteSetView<C> {
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(ByteSetView {
+            context: self.context.clone(),
+            delete_storage_first: self.delete_storage_first,
+            updates: self.updates.clone(),
+        })
+    }
+}
+
+impl<C: Context> ByteSetView<C> {
     /// Gets the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()

@@ -7,7 +7,8 @@ use async_graphql::SimpleObject;
 use hex_game::{Board, Clock, Timeouts};
 use linera_sdk::{
     linera_base_types::{AccountOwner, ChainId},
-    views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, ViewStorageContext},
+    RootView,
 };
 use serde::{Deserialize, Serialize};
 

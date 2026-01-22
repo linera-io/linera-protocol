@@ -31,18 +31,17 @@ impl Contract for TimeExpiryContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = TimeExpiryState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         TimeExpiryContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {
+    fn instantiate(&mut self, _argument: ()) {
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, operation: TimeExpiryOperation) {
+    fn execute_operation(&mut self, operation: TimeExpiryOperation) {
         let TimeExpiryOperation::ExpireAfter(delta) = operation;
 
         // Get the current block timestamp.
@@ -55,14 +54,11 @@ impl Contract for TimeExpiryContract {
         self.runtime.assert_before(expiry_timestamp);
     }
 
-    async fn execute_message(&mut self, _message: ()) {
+    fn execute_message(&mut self, _message: ()) {
         panic!("TimeExpiry application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {
-        self.state
-            .save_and_drop()
-            .await
-            .expect("Failed to save state");
+    fn store(mut self) {
+        self.state.save().expect("Failed to save state");
     }
 }

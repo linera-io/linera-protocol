@@ -28,11 +28,11 @@ impl Contract for NativeFungibleTokenContract {
     type InstantiationArgument = InitialState;
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         NativeFungibleTokenContract { runtime }
     }
 
-    async fn instantiate(&mut self, state: Self::InstantiationArgument) {
+    fn instantiate(&mut self, state: Self::InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         assert!(
             self.runtime.application_parameters().ticker_symbol == "NAT",
@@ -47,7 +47,7 @@ impl Contract for NativeFungibleTokenContract {
         }
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             FungibleOperation::Balance { owner } => {
                 log::info!("balance check for owner={}", owner);
@@ -135,14 +135,14 @@ impl Contract for NativeFungibleTokenContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Self::Message) {
+    fn execute_message(&mut self, message: Self::Message) {
         // Messages for now don't do anything, just pass messages around
         match message {
             Message::Notify => (),
         }
     }
 
-    async fn store(self) {}
+    fn store(self) {}
 }
 
 impl NativeFungibleTokenContract {

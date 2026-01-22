@@ -32,26 +32,24 @@ impl Contract for MatchingEngineContract {
     type Parameters = Parameters;
     type EventValue = ();
 
-    async fn load(mut runtime: ContractRuntime<Self>) -> Self {
+    fn load(mut runtime: ContractRuntime<Self>) -> Self {
         let parameters = runtime.application_parameters();
-        let context = linera_views::context::ViewContext::new_unchecked(
+        let context = linera_views::context::ViewSyncContext::new_unchecked(
             runtime.key_value_store(),
             Vec::new(),
             parameters,
         );
-        let state = MatchingEngineState::load(context)
-            .await
-            .expect("Failed to load state");
+        let state = MatchingEngineState::load(context).expect("Failed to load state");
         MatchingEngineContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {}
+    fn instantiate(&mut self, _argument: ()) {}
 
     /// Executes an order operation, or closes the chain.
     ///
     /// If the chain is the one of the matching engine then the order is processed
     /// locally. Otherwise, it gets transmitted as a message to the chain of the engine.
-    async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Operation) -> Self::Response {
         match operation {
             Operation::ExecuteOrder { order } => {
                 self.runtime
@@ -63,7 +61,7 @@ impl Contract for MatchingEngineContract {
                     .check_account_permission(owner)
                     .expect("Permission for ExecuteOrder operation");
                 if chain_id == self.runtime.application_creator_chain_id() {
-                    self.execute_order_local(order, chain_id).await;
+                    self.execute_order_local(order, chain_id);
                 } else {
                     self.execute_order_remote(order);
                 }
@@ -73,10 +71,9 @@ impl Contract for MatchingEngineContract {
                     .state
                     .orders
                     .indices()
-                    .await
                     .expect("Failed to read existing order IDs");
                 for order_id in order_ids {
-                    match self.state.modify_order(order_id, ModifyQuantity::All).await {
+                    match self.state.modify_order(order_id, ModifyQuantity::All) {
                         Some(transfer) => self.send_to(&transfer),
                         // Orders with amount zero may have been cleared in an earlier iteration.
                         None => continue,
@@ -90,7 +87,7 @@ impl Contract for MatchingEngineContract {
     }
 
     /// Execution of the order on the creation chain
-    async fn execute_message(&mut self, message: Message) {
+    fn execute_message(&mut self, message: Message) {
         assert_eq!(
             self.runtime.chain_id(),
             self.runtime.application_creator_chain_id(),
@@ -105,16 +102,13 @@ impl Contract for MatchingEngineContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for ExecuteOrder message");
-                self.execute_order_local(order, origin_chain_id).await;
+                self.execute_order_local(order, origin_chain_id);
             }
         }
     }
 
-    async fn store(self) {
-        self.state
-            .save_and_drop()
-            .await
-            .expect("Failed to save state");
+    fn store(mut self) {
+        self.state.save().expect("Failed to save state");
     }
 }
 
@@ -171,7 +165,7 @@ impl MatchingEngineContract {
     ///   - Insertion of the order into the market and immediately uncrossing the market that
     ///     is making sure that at the end we have best bid < best ask.
     ///   - Creation of the corresponding orders and operation of the corresponding transfers
-    async fn execute_order_local(&mut self, order: Order, chain_id: ChainId) {
+    fn execute_order_local(&mut self, order: Order, chain_id: ChainId) {
         match order {
             Order::Insert {
                 owner,
@@ -183,18 +177,16 @@ impl MatchingEngineContract {
                 let account = Account { chain_id, owner };
                 let transfers = self
                     .state
-                    .insert_and_uncross_market(&account, quantity, nature, &price)
-                    .await;
+                    .insert_and_uncross_market(&account, quantity, nature, &price);
                 for transfer in transfers {
                     self.send_to(&transfer);
                 }
             }
             Order::Cancel { owner, order_id } => {
-                self.state.check_order_id(&order_id, &owner).await;
+                self.state.check_order_id(&order_id, &owner);
                 let transfer = self
                     .state
                     .modify_order(order_id, ModifyQuantity::All)
-                    .await
                     .expect("Order is not present therefore cannot be cancelled");
                 self.send_to(&transfer);
             }
@@ -203,11 +195,10 @@ impl MatchingEngineContract {
                 order_id,
                 reduce_quantity,
             } => {
-                self.state.check_order_id(&order_id, &owner).await;
+                self.state.check_order_id(&order_id, &owner);
                 let transfer = self
                     .state
                     .modify_order(order_id, ModifyQuantity::Partial(reduce_quantity))
-                    .await
                     .expect("Order is not present therefore cannot be cancelled");
                 self.send_to(&transfer);
             }

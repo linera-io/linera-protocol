@@ -48,19 +48,22 @@ enum KeyTag {
     Index,
 }
 
+/// The `u8` value for the `Index` key tag, exported for use by sync views.
+pub(crate) const KEY_TAG_INDEX: u8 = KeyTag::Index as u8;
+
 /// A view that supports logging values of type `T`.
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, T: Allocative")]
 pub struct LogView<C, T> {
     /// The view context.
     #[allocative(skip)]
-    context: C,
+    pub(crate) context: C,
     /// Whether to clear storage before applying updates.
-    delete_storage_first: bool,
+    pub(crate) delete_storage_first: bool,
     /// The number of entries persisted in storage.
-    stored_count: usize,
+    pub(crate) stored_count: usize,
     /// New values not yet persisted to storage.
-    new_values: Vec<T>,
+    pub(crate) new_values: Vec<T>,
 }
 
 impl<C, T> View for LogView<C, T>
@@ -77,67 +80,31 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        Ok(vec![context.base_key().base_tag(KeyTag::Count as u8)])
+        Ok(Self::base_pre_load(context.base_key()))
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        let stored_count =
-            from_bytes_option_or_default(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
-        Ok(Self {
-            context,
-            delete_storage_first: false,
-            stored_count,
-            new_values: Vec::new(),
-        })
+        Self::base_post_load(context, values)
     }
 
     fn rollback(&mut self) {
-        self.delete_storage_first = false;
-        self.new_values.clear();
+        self.base_rollback();
     }
 
     async fn has_pending_changes(&self) -> bool {
-        if self.delete_storage_first {
-            return true;
-        }
-        !self.new_values.is_empty()
+        self.base_has_pending_changes()
     }
 
     fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
-        let mut delete_view = false;
-        if self.delete_storage_first {
-            batch.delete_key_prefix(self.context.base_key().bytes.clone());
-            delete_view = true;
-        }
-        if !self.new_values.is_empty() {
-            delete_view = false;
-            let mut count = self.stored_count;
-            for value in &self.new_values {
-                let key = self
-                    .context
-                    .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &count)?;
-                batch.put_key_value(key, value)?;
-                count += 1;
-            }
-            let key = self.context.base_key().base_tag(KeyTag::Count as u8);
-            batch.put_key_value(key, &count)?;
-        }
-        Ok(delete_view)
+        self.base_pre_save(batch, self.context.base_key())
     }
 
     fn post_save(&mut self) {
-        if self.delete_storage_first {
-            self.stored_count = 0;
-        }
-        self.stored_count += self.new_values.len();
-        self.new_values.clear();
-        self.delete_storage_first = false;
+        self.base_post_save();
     }
 
     fn clear(&mut self) {
-        self.delete_storage_first = true;
-        self.new_values.clear();
+        self.base_clear();
     }
 }
 
@@ -156,10 +123,7 @@ where
     }
 }
 
-impl<C, T> LogView<C, T>
-where
-    C: Context,
-{
+impl<C, T> LogView<C, T> {
     /// Pushes a value to the end of the log.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -196,6 +160,88 @@ where
         }
     }
 
+    /// Shared implementation of `rollback`.
+    pub(crate) fn base_rollback(&mut self) {
+        self.delete_storage_first = false;
+        self.new_values.clear();
+    }
+
+    /// Shared implementation of `has_pending_changes`.
+    pub(crate) fn base_has_pending_changes(&self) -> bool {
+        if self.delete_storage_first {
+            return true;
+        }
+        !self.new_values.is_empty()
+    }
+
+    /// Shared implementation of `clear`.
+    pub(crate) fn base_clear(&mut self) {
+        self.delete_storage_first = true;
+        self.new_values.clear();
+    }
+
+    /// Shared implementation of `post_save`.
+    pub(crate) fn base_post_save(&mut self) {
+        if self.delete_storage_first {
+            self.stored_count = 0;
+        }
+        self.stored_count += self.new_values.len();
+        self.new_values.clear();
+        self.delete_storage_first = false;
+    }
+
+    /// Shared implementation of `post_load`.
+    pub(crate) fn base_post_load(
+        context: C,
+        values: &[Option<Vec<u8>>],
+    ) -> Result<Self, ViewError> {
+        let stored_count =
+            from_bytes_option_or_default(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
+        Ok(Self {
+            context,
+            delete_storage_first: false,
+            stored_count,
+            new_values: Vec::new(),
+        })
+    }
+
+    /// Shared implementation of `pre_load`.
+    pub(crate) fn base_pre_load(base_key: &crate::context::BaseKey) -> Vec<Vec<u8>> {
+        vec![base_key.base_tag(KeyTag::Count as u8)]
+    }
+}
+
+impl<C, T: Serialize> LogView<C, T> {
+    /// Shared implementation of `pre_save`.
+    pub(crate) fn base_pre_save(
+        &self,
+        batch: &mut Batch,
+        base_key: &crate::context::BaseKey,
+    ) -> Result<bool, ViewError> {
+        let mut delete_view = false;
+        if self.delete_storage_first {
+            batch.delete_key_prefix(base_key.bytes.clone());
+            delete_view = true;
+        }
+        if !self.new_values.is_empty() {
+            delete_view = false;
+            let mut count = self.stored_count;
+            for value in &self.new_values {
+                let key = base_key.derive_tag_key(KeyTag::Index as u8, &count)?;
+                batch.put_key_value(key, value)?;
+                count += 1;
+            }
+            let key = base_key.base_tag(KeyTag::Count as u8);
+            batch.put_key_value(key, &count)?;
+        }
+        Ok(delete_view)
+    }
+}
+
+impl<C, T> LogView<C, T>
+where
+    C: Context,
+{
     /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
