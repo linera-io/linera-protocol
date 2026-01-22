@@ -34,7 +34,6 @@ impl Service for TaskProcessorService {
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = TaskProcessorState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         TaskProcessorService {
             state: Arc::new(state),
@@ -73,11 +72,7 @@ impl QueryRoot {
     /// Returns the stored results in order.
     async fn results(&self) -> Vec<String> {
         let count = self.state.results.count();
-        self.state
-            .results
-            .read_front(count)
-            .await
-            .unwrap_or_default()
+        self.state.results.read_front(count).unwrap_or_default()
     }
 
     /// Returns the pending tasks and callback requests for the task processor.
@@ -86,7 +81,7 @@ impl QueryRoot {
 
         // Get all pending tasks from the queue.
         let count = self.state.pending_tasks.count();
-        if let Ok(pending_tasks) = self.state.pending_tasks.read_front(count).await {
+        if let Ok(pending_tasks) = self.state.pending_tasks.read_front(count) {
             for pending in pending_tasks {
                 actions.execute_tasks.push(Task {
                     operator: pending.operator,

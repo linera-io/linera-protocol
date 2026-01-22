@@ -35,19 +35,18 @@ impl Contract for RfqContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = RfqState::load(runtime.root_view_storage_context())
-            .await
-            .expect("Failed to load state");
+    fn load(runtime: ContractRuntime<Self>) -> Self {
+        let state =
+            RfqState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         RfqContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {
+    fn instantiate(&mut self, _argument: ()) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         if self.state.is_temp_chain() {
             // No operations should be executed directly on a temporary chain
             return;
@@ -79,7 +78,6 @@ impl Contract for RfqContract {
                 let request_data = self
                     .state
                     .request_data(&request_id)
-                    .await
                     .expect("Request not found!");
                 if request_id.is_our_request() {
                     panic!("Tried to provide a quote for our own request!");
@@ -103,25 +101,21 @@ impl Contract for RfqContract {
                 let request_data = self
                     .state
                     .request_data(&request_id)
-                    .await
                     .expect("Request not found!");
                 if !request_id.is_our_request() {
                     panic!("Tried to accept a quote we have provided");
                 }
                 let quote_provided = request_data.quote_provided();
                 let token_pair = request_data.token_pair();
-                let temp_chain_id = self
-                    .start_exchange(
-                        request_id.clone(),
-                        quote_provided,
-                        token_pair,
-                        fee_budget,
-                        owner,
-                    )
-                    .await;
+                let temp_chain_id = self.start_exchange(
+                    request_id.clone(),
+                    quote_provided,
+                    token_pair,
+                    fee_budget,
+                    owner,
+                );
                 self.state
                     .request_data(&request_id)
-                    .await
                     .expect("Request not found!")
                     .start_exchange(temp_chain_id);
             }
@@ -129,7 +123,6 @@ impl Contract for RfqContract {
                 let request_data = self
                     .state
                     .request_data(&request_id)
-                    .await
                     .expect("Request not found!");
                 let awaiting_tokens = request_data.awaiting_tokens();
                 let owner = awaiting_tokens.quoter_account;
@@ -170,7 +163,7 @@ impl Contract for RfqContract {
                 request_data.start_exchange(temp_chain_id);
             }
             Operation::CancelRequest { request_id } => {
-                if let Some(temp_chain_id) = self.state.cancel_request(&request_id).await {
+                if let Some(temp_chain_id) = self.state.cancel_request(&request_id) {
                     let message = Message::CloseChain;
                     self.runtime
                         .prepare_message(message)
@@ -190,7 +183,7 @@ impl Contract for RfqContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Self::Message) {
+    fn execute_message(&mut self, message: Self::Message) {
         let origin_chain_id = self
             .runtime
             .message_origin_chain_id()
@@ -209,19 +202,17 @@ impl Contract for RfqContract {
             } => {
                 self.state
                     .request_data(&request_id)
-                    .await
                     .expect("Request not found!")
                     .update_state_with_quote(quote, quoter_owner);
             }
             Message::QuoteAccepted { request_id } => {
                 self.state
                     .request_data(&request_id)
-                    .await
                     .expect("Request not found!")
                     .accept_quote(origin_chain_id);
             }
             Message::CancelRequest { .. } => {
-                if let Some(temp_chain_id) = self.state.cancel_request(&request_id).await {
+                if let Some(temp_chain_id) = self.state.cancel_request(&request_id) {
                     // the other side wasn't aware of the chain yet, or they would have
                     // sent `RequestClosed` - we have to close it ourselves
                     let message = Message::CloseChain;
@@ -232,7 +223,7 @@ impl Contract for RfqContract {
                 }
             }
             Message::ChainClosed { request_id } => {
-                self.state.close_request(&request_id).await;
+                self.state.close_request(&request_id);
             }
             // the message below should only be executed on the temporary chains
             Message::StartExchange {
@@ -309,16 +300,13 @@ impl Contract for RfqContract {
         }
     }
 
-    async fn store(self) {
-        self.state
-            .save_and_drop()
-            .await
-            .expect("Failed to save state");
+    fn store(mut self) {
+        self.state.save().expect("Failed to save state");
     }
 }
 
 impl RfqContract {
-    async fn start_exchange(
+    fn start_exchange(
         &mut self,
         request_id: RequestId,
         quote_provided: QuoteProvided,

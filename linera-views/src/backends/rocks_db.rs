@@ -29,8 +29,8 @@ use crate::{
     common::get_upper_bound_option,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, SyncReadableKeyValueStore,
+        SyncWritableKeyValueStore, WithError, WritableKeyValueStore,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -557,6 +557,103 @@ impl WritableKeyValueStore for RocksDbStoreInternal {
 
     async fn clear_journal(&self) -> Result<(), RocksDbStoreInternalError> {
         Ok(())
+    }
+}
+
+/// A synchronous RocksDB store that calls the executor methods directly
+/// without any tokio spawning.
+#[derive(Clone)]
+pub struct SyncRocksDbStoreInternal {
+    executor: RocksDbStoreExecutor,
+    root_key_written: Arc<AtomicBool>,
+}
+
+impl WithError for SyncRocksDbStoreInternal {
+    type Error = RocksDbStoreInternalError;
+}
+
+impl SyncReadableKeyValueStore for SyncRocksDbStoreInternal {
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
+
+    fn root_key(&self) -> Result<Vec<u8>, RocksDbStoreInternalError> {
+        assert!(self.executor.start_key.starts_with(&ROOT_KEY_DOMAIN));
+        let root_key = bcs::from_bytes(&self.executor.start_key[ROOT_KEY_DOMAIN.len()..])?;
+        Ok(root_key)
+    }
+
+    fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbStoreInternalError> {
+        check_key_size(key)?;
+        let mut full_key = self.executor.start_key.to_vec();
+        full_key.extend(key);
+        Ok(self.executor.db.get(&full_key)?)
+    }
+
+    fn contains_key(&self, key: &[u8]) -> Result<bool, RocksDbStoreInternalError> {
+        check_key_size(key)?;
+        let mut full_key = self.executor.start_key.to_vec();
+        full_key.extend(key);
+        if !self.executor.db.key_may_exist(&full_key) {
+            return Ok(false);
+        }
+        Ok(self.executor.db.get(&full_key)?.is_some())
+    }
+
+    fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, RocksDbStoreInternalError> {
+        self.executor.contains_keys_internal(keys.to_vec())
+    }
+
+    fn read_multi_values_bytes(
+        &self,
+        keys: &[Vec<u8>],
+    ) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreInternalError> {
+        self.executor
+            .read_multi_values_bytes_internal(keys.to_vec())
+    }
+
+    fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
+        self.executor
+            .find_keys_by_prefix_internal(key_prefix.to_vec())
+    }
+
+    fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, RocksDbStoreInternalError> {
+        self.executor
+            .find_key_values_by_prefix_internal(key_prefix.to_vec())
+    }
+}
+
+impl SyncWritableKeyValueStore for SyncRocksDbStoreInternal {
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+
+    fn write_batch(&self, batch: Batch) -> Result<(), RocksDbStoreInternalError> {
+        let write_root_key = !self.root_key_written.fetch_or(true, Ordering::SeqCst);
+        self.executor.write_batch_internal(batch, write_root_key)
+    }
+
+    fn clear_journal(&self) -> Result<(), RocksDbStoreInternalError> {
+        Ok(())
+    }
+}
+
+impl RocksDbDatabaseInternal {
+    /// Opens a synchronous store for the given root key.
+    pub fn open_sync(
+        &self,
+        root_key: &[u8],
+    ) -> Result<SyncRocksDbStoreInternal, RocksDbStoreInternalError> {
+        let mut start_key = ROOT_KEY_DOMAIN.to_vec();
+        start_key.extend(bcs::to_bytes(root_key)?);
+        let mut executor = self.executor.clone();
+        executor.start_key = start_key;
+        Ok(SyncRocksDbStoreInternal {
+            executor,
+            root_key_written: Arc::new(AtomicBool::new(false)),
+        })
     }
 }
 

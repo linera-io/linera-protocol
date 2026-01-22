@@ -6,7 +6,8 @@ use std::collections::BTreeSet;
 use async_graphql::SimpleObject;
 use linera_sdk::{
     linera_base_types::AccountOwner,
-    views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, ViewStorageContext},
+    RootView,
 };
 use non_fungible::{Nft, TokenId};
 

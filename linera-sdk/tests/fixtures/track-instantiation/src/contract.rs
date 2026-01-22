@@ -31,15 +31,14 @@ impl Contract for TrackInstantiationContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = TrackInstantiationState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
 
         TrackInstantiationContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {
+    fn instantiate(&mut self, _argument: ()) {
         self.runtime.application_parameters();
 
         // Send message to creator chain about instantiation
@@ -50,19 +49,16 @@ impl Contract for TrackInstantiationContract {
             .send_to(creator_chain);
     }
 
-    async fn execute_operation(&mut self, _operation: ()) {
+    fn execute_operation(&mut self, _operation: ()) {
         panic!("No operation being executed");
     }
 
-    async fn execute_message(&mut self, _message: ()) {
+    fn execute_message(&mut self, _message: ()) {
         let count = self.state.stats.get_mut();
         *count += 1;
     }
 
-    async fn store(self) {
-        self.state
-            .save_and_drop()
-            .await
-            .expect("Failed to save state");
+    fn store(mut self) {
+        self.state.save().expect("Failed to save state");
     }
 }

@@ -31,18 +31,17 @@ impl Contract for TaskProcessorContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = TaskProcessorState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         TaskProcessorContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {
+    fn instantiate(&mut self, _argument: ()) {
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, operation: TaskProcessorOperation) {
+    fn execute_operation(&mut self, operation: TaskProcessorOperation) {
         match operation {
             TaskProcessorOperation::RequestTask { operator, input } => {
                 self.state
@@ -68,7 +67,7 @@ impl Contract for TaskProcessorContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    fn execute_message(&mut self, message: Message) {
         match message {
             Message::RequestTask { operator, input } => {
                 self.state
@@ -78,10 +77,7 @@ impl Contract for TaskProcessorContract {
         }
     }
 
-    async fn store(self) {
-        self.state
-            .save_and_drop()
-            .await
-            .expect("Failed to save state");
+    fn store(mut self) {
+        self.state.save().expect("Failed to save state");
     }
 }

@@ -31,11 +31,11 @@ impl Contract for MetaCounterContract {
     type Parameters = ApplicationId<counter::CounterAbi>;
     type EventValue = String;
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         MetaCounterContract { runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {
+    fn instantiate(&mut self, _argument: ()) {
         // Validate that the application parameters were configured correctly.
         self.counter_id();
         // Send a no-op message to ourselves. This is only for testing contracts that send messages
@@ -48,7 +48,7 @@ impl Contract for MetaCounterContract {
         self.runtime.send_message(this_chain, Message::Increment(0));
     }
 
-    async fn execute_operation(&mut self, operation: Operation) {
+    fn execute_operation(&mut self, operation: Operation) {
         log::trace!("operation: {:?}", operation);
         let Operation {
             recipient_id,
@@ -78,7 +78,7 @@ impl Contract for MetaCounterContract {
         message.send_to(recipient_id);
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    fn execute_message(&mut self, message: Message) {
         let is_bouncing = self
             .runtime
             .message_is_bouncing()
@@ -100,5 +100,5 @@ impl Contract for MetaCounterContract {
         }
     }
 
-    async fn store(self) {}
+    fn store(self) {}
 }

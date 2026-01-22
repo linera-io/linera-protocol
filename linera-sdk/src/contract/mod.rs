@@ -18,7 +18,7 @@ pub use self::runtime::ContractRuntime;
 pub use self::test_runtime::MockContractRuntime;
 #[doc(hidden)]
 pub use self::wit::export_contract;
-use crate::{log::ContractLogger, util::BlockingWait};
+use crate::log::ContractLogger;
 
 /// Inside tests, use the [`MockContractRuntime`] instead of the real [`ContractRuntime`].
 #[cfg(with_testing)]
@@ -43,27 +43,25 @@ macro_rules! contract {
             for $contract
         {
             fn instantiate(argument: Vec<u8>) {
-                use $crate::util::BlockingWait as _;
-                $crate::contract::run_async_entrypoint::<$contract, _, _>(
+                $crate::contract::run_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
                         let argument = $crate::serde_json::from_slice(&argument)
                             .unwrap_or_else(|_| panic!("Failed to deserialize instantiation argument {argument:?}"));
 
-                        contract.instantiate(argument).blocking_wait()
+                        contract.instantiate(argument)
                     },
                 )
             }
 
             fn execute_operation(operation: Vec<u8>) -> Vec<u8> {
-                use $crate::util::BlockingWait as _;
-                $crate::contract::run_async_entrypoint::<$contract, _, _>(
+                $crate::contract::run_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
                         let operation = <$contract as $crate::abi::ContractAbi>::deserialize_operation(operation)
                             .expect("Failed to deserialize `Operation` in execute_operation");
 
-                        let response = contract.execute_operation(operation).blocking_wait();
+                        let response = contract.execute_operation(operation);
 
                         <$contract as $crate::abi::ContractAbi>::serialize_response(response)
                             .expect("Failed to serialize `Response` in execute_operation")
@@ -72,15 +70,14 @@ macro_rules! contract {
             }
 
             fn execute_message(message: Vec<u8>) {
-                use $crate::util::BlockingWait as _;
-                $crate::contract::run_async_entrypoint::<$contract, _, _>(
+                $crate::contract::run_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
                         let message: <$contract as $crate::Contract>::Message =
                             $crate::bcs::from_bytes(&message)
                                 .expect("Failed to deserialize message");
 
-                        contract.execute_message(message).blocking_wait()
+                        contract.execute_message(message)
                     },
                 )
             }
@@ -88,25 +85,22 @@ macro_rules! contract {
             fn process_streams(updates: Vec<
                 $crate::contract::wit::exports::linera::app::contract_entrypoints::StreamUpdate,
             >) {
-                use $crate::util::BlockingWait as _;
-                $crate::contract::run_async_entrypoint::<$contract, _, _>(
+                $crate::contract::run_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
                         let updates = updates.into_iter().map(Into::into).collect();
-                        contract.process_streams(updates).blocking_wait()
+                        contract.process_streams(updates)
                     },
                 )
             }
 
             fn finalize() {
-                use $crate::util::BlockingWait as _;
-
                 let Some(contract) = (unsafe { CONTRACT.take() }) else {
                     $crate::ContractLogger::install();
                     panic!("Calling `store` on a `Contract` instance that wasn't loaded");
                 };
 
-                contract.store().blocking_wait();
+                contract.store();
             }
         }
 
@@ -117,9 +111,8 @@ macro_rules! contract {
     };
 }
 
-/// Runs an asynchronous entrypoint in a blocking manner, by repeatedly polling the entrypoint
-/// future.
-pub fn run_async_entrypoint<Contract, Output, RawOutput>(
+/// Runs an entrypoint, ensuring the contract is loaded first.
+pub fn run_entrypoint<Contract, Output, RawOutput>(
     contract: &mut Option<Contract>,
     entrypoint: impl FnOnce(&mut Contract) -> Output + Send,
 ) -> RawOutput
@@ -129,8 +122,7 @@ where
 {
     ContractLogger::install();
 
-    let contract =
-        contract.get_or_insert_with(|| Contract::load(ContractRuntime::new()).blocking_wait());
+    let contract = contract.get_or_insert_with(|| Contract::load(ContractRuntime::new()));
 
     entrypoint(contract).into()
 }

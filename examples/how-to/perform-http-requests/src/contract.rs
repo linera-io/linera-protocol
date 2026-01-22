@@ -22,16 +22,16 @@ impl linera_sdk::Contract for Contract {
     type Parameters = String;
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         Contract { runtime }
     }
 
-    async fn instantiate(&mut self, (): Self::InstantiationArgument) {
+    fn instantiate(&mut self, (): Self::InstantiationArgument) {
         // Check that the global parameters can be deserialized correctly.
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             Operation::HandleHttpResponse(response_body) => {
                 self.handle_http_response(&response_body)
@@ -41,11 +41,11 @@ impl linera_sdk::Contract for Contract {
         }
     }
 
-    async fn execute_message(&mut self, (): Self::Message) {
+    fn execute_message(&mut self, (): Self::Message) {
         panic!("This application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {}
+    fn store(self) {}
 }
 
 impl Contract {

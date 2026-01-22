@@ -1663,7 +1663,6 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "bcs",
- "futures",
  "linera-sdk",
  "log",
  "serde",
@@ -4030,6 +4029,7 @@ dependencies = [
  "linera-sdk-derive",
  "linera-storage",
  "linera-views",
+ "linera-views-derive",
  "log",
  "papaya",
  "serde",
@@ -4135,6 +4135,7 @@ dependencies = [
  "linera-witty",
  "linked-hash-map",
  "papaya",
+ "parking_lot",
  "prometheus",
  "rand 0.8.5",
  "serde",

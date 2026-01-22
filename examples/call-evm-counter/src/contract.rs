@@ -39,16 +39,16 @@ impl Contract for CallCounterContract {
     type Parameters = ApplicationId<EvmAbi>;
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         CallCounterContract { runtime }
     }
 
-    async fn instantiate(&mut self, _value: ()) {
+    fn instantiate(&mut self, _value: ()) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, operation: CallCounterOperation) -> u64 {
+    fn execute_operation(&mut self, operation: CallCounterOperation) -> u64 {
         sol! {
             function increment(uint64 input);
             function call_from_wasm(address remote_address);
@@ -70,9 +70,9 @@ impl Contract for CallCounterContract {
         }
     }
 
-    async fn execute_message(&mut self, _message: ()) {
+    fn execute_message(&mut self, _message: ()) {
         panic!("Counter application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {}
+    fn store(self) {}
 }

@@ -6,9 +6,7 @@
 //! Unit tests for the contract.
 
 use how_to_perform_http_requests::{Abi, Operation};
-use linera_sdk::{
-    http, linera_base_types::ApplicationId, util::BlockingWait as _, Contract as _, ContractRuntime,
-};
+use linera_sdk::{http, linera_base_types::ApplicationId, Contract as _, ContractRuntime};
 
 use super::Contract;
 
@@ -22,9 +20,7 @@ use super::Contract;
 fn accepts_valid_off_chain_response() {
     let mut contract = create_contract();
 
-    contract
-        .execute_operation(Operation::HandleHttpResponse(b"Hello, world!".to_vec()))
-        .blocking_wait();
+    contract.execute_operation(Operation::HandleHttpResponse(b"Hello, world!".to_vec()));
 }
 
 /// Tests if the contract rejects an invalid HTTP response obtained off-chain.
@@ -38,9 +34,7 @@ fn accepts_valid_off_chain_response() {
 fn rejects_invalid_off_chain_response() {
     let mut contract = create_contract();
 
-    contract
-        .execute_operation(Operation::HandleHttpResponse(b"Fake response".to_vec()))
-        .blocking_wait();
+    contract.execute_operation(Operation::HandleHttpResponse(b"Fake response".to_vec()));
 }
 
 /// Tests if the contract performs an HTTP request and accepts it if it receives a valid
@@ -58,9 +52,7 @@ fn accepts_response_obtained_by_contract() {
             http::Response::ok(b"Hello, world!".to_vec()),
         );
 
-    contract
-        .execute_operation(Operation::PerformHttpRequest)
-        .blocking_wait();
+    contract.execute_operation(Operation::PerformHttpRequest);
 }
 
 /// Tests if the contract performs an HTTP request and rejects it if it receives an
@@ -79,9 +71,7 @@ fn rejects_invalid_response_obtained_by_contract() {
             http::Response::ok(b"Untrusted response".to_vec()),
         );
 
-    contract
-        .execute_operation(Operation::PerformHttpRequest)
-        .blocking_wait();
+    contract.execute_operation(Operation::PerformHttpRequest);
 }
 
 /// Tests if the contract uses the service as an oracle to perform an HTTP request and
@@ -114,9 +104,7 @@ fn accepts_response_from_oracle() {
             )),
         );
 
-    contract
-        .execute_operation(Operation::UseServiceAsOracle)
-        .blocking_wait();
+    contract.execute_operation(Operation::UseServiceAsOracle);
 }
 
 /// Tests if the contract uses the service as an oracle to perform an HTTP request and
@@ -150,9 +138,7 @@ fn rejects_invalid_response_from_oracle() {
             )),
         );
 
-    contract
-        .execute_operation(Operation::UseServiceAsOracle)
-        .blocking_wait();
+    contract.execute_operation(Operation::UseServiceAsOracle);
 }
 
 /// Creates a [`Contract`] instance for testing.
