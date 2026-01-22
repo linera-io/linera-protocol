@@ -74,7 +74,8 @@ enum DestinationsCommand {
     },
     /// Set a destination's block index
     Set {
-        /// The address of the destination
+        /// The address of the destination.
+        /// Can be acquired from the `list` command.
         address: String,
         /// The block index to set
         index: u64,
@@ -94,8 +95,8 @@ struct DestinationsOptions {
     #[command(flatten)]
     common_storage_options: CommonStorageOptions,
 
-    /// Exporter ID (default 0)
-    #[arg(long, default_value = "0")]
+    /// Exporter ID
+    #[arg(long, default_value = "1")]
     exporter_id: u32,
 }
 
