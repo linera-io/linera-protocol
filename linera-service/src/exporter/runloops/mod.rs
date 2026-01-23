@@ -117,13 +117,7 @@ where
     // Load persisted committee destinations from storage if available
     // This may perform a fallback scan if no persisted blob ID exists
     let (persisted_committee_destinations, blob_id_to_persist) =
-        match load_persisted_committee_destinations(
-            &storage,
-            &block_processor_storage,
-            &mut exporter_storage,
-        )
-        .await
-        {
+        match load_persisted_committee_destinations(&storage, &block_processor_storage).await {
             Some((destinations, blob_id)) => (Some(destinations), blob_id),
             None => (None, None),
         };
@@ -193,7 +187,6 @@ where
 async fn load_persisted_committee_destinations<S>(
     storage: &S,
     block_processor_storage: &BlockProcessorStorage<S>,
-    exporter_storage: &mut crate::storage::ExporterStorage<S>,
 ) -> Option<(Vec<DestinationId>, Option<BlobId>)>
 where
     S: Storage + Clone + Send + Sync + 'static,
@@ -205,11 +198,11 @@ where
         if let Some(destinations) = load_committee_from_blob(storage, committee_blob_id).await {
             return Some((destinations, None));
         }
+
+        return None;
     }
 
-    // Fallback: scan backwards through canonical blocks to find the latest committee
-    tracing::info!("No persisted committee blob ID, scanning canonical blocks...");
-    scan_canonical_blocks_for_committee(storage, exporter_storage).await
+    None
 }
 
 /// Loads the committee destinations from a specific blob ID.
@@ -254,70 +247,6 @@ where
         .collect();
 
     Some(destinations)
-}
-
-/// Scans backwards through canonical blocks to find the latest committee.
-/// Returns the destinations and the blob ID that should be persisted for future startups.
-async fn scan_canonical_blocks_for_committee<S>(
-    storage: &S,
-    exporter_storage: &mut crate::storage::ExporterStorage<S>,
-) -> Option<(Vec<DestinationId>, Option<BlobId>)>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
-    use linera_base::identifiers::BlobType;
-    use linera_execution::{system::AdminOperation, Operation, SystemOperation};
-
-    let latest_index = exporter_storage.get_latest_index();
-    if latest_index == 0 {
-        tracing::info!("No blocks in canonical state to scan");
-        return None;
-    }
-
-    tracing::info!(
-        latest_index,
-        "Scanning canonical blocks backwards for committee"
-    );
-
-    // Scan backwards from latest_index - 1 to 0
-    for index in (0..latest_index).rev() {
-        let (block_cert, _blob_ids) = match exporter_storage.get_block_with_blob_ids(index).await {
-            Ok(result) => result,
-            Err(e) => {
-                tracing::warn!(
-                    index,
-                    error = ?e,
-                    "Failed to read block at index during committee scan"
-                );
-                continue;
-            }
-        };
-
-        // Check if this block has a CreateCommittee operation
-        let committee_blob_id = block_cert.value().block().body.operations().find_map(|op| {
-            if let Operation::System(boxed) = op {
-                if let SystemOperation::Admin(AdminOperation::CreateCommittee {
-                    blob_hash, ..
-                }) = boxed.as_ref()
-                {
-                    return Some(BlobId::new(*blob_hash, BlobType::Committee));
-                }
-            }
-            None
-        });
-
-        if let Some(blob_id) = committee_blob_id {
-            tracing::info!(index, ?blob_id, "Found committee blob via backward scan");
-
-            if let Some(destinations) = load_committee_from_blob(storage, blob_id).await {
-                // Return the blob ID so caller can persist it
-                return Some((destinations, Some(blob_id)));
-            }
-        }
-    }
-
-    tracing::info!("No committee found in canonical blocks");
-    None
 }
 
 #[cfg(test)]
@@ -835,158 +764,5 @@ mod test {
 
         destinations.push(destination_address);
         Ok(destination)
-    }
-
-    /// Tests that when no committee blob ID is persisted, the fallback scan
-    /// through canonical blocks finds the latest committee.
-    #[tokio::test]
-    async fn test_fallback_committee_scan_finds_committee() -> anyhow::Result<()> {
-        use std::collections::BTreeMap;
-
-        use linera_base::{
-            crypto::{AccountPublicKey, CryptoHash},
-            data_types::{Blob, BlobContent, Epoch, Round},
-            identifiers::{BlobId, BlobType, ChainId},
-        };
-        use linera_chain::{
-            data_types::BlockExecutionOutcome,
-            test::{make_child_block, make_first_block, BlockTestExt},
-            types::{ConfirmedBlock, ConfirmedBlockCertificate},
-        };
-        use linera_execution::{
-            committee::{Committee, ValidatorState},
-            system::AdminOperation,
-            Operation, ResourceControlPolicy, SystemOperation,
-        };
-
-        use super::load_persisted_committee_destinations;
-        use crate::storage::BlockProcessorStorage;
-
-        // Create a test committee with a specific network address
-        let validator_key = linera_base::crypto::ValidatorPublicKey::test_key(1);
-        let account_key = AccountPublicKey::test_key(1);
-        let expected_address = "Tcp:validator1:9000";
-        let mut validators = BTreeMap::new();
-        validators.insert(
-            validator_key,
-            ValidatorState {
-                network_address: expected_address.to_string(),
-                votes: 100,
-                account_public_key: account_key,
-            },
-        );
-        let committee = Committee::new(validators, ResourceControlPolicy::default());
-        let committee_bytes = bcs::to_bytes(&committee)?;
-        let committee_blob = Blob::new(BlobContent::new_committee(committee_bytes));
-        let committee_blob_hash = CryptoHash::new(committee_blob.content());
-        let _committee_blob_id = BlobId::new(committee_blob_hash, BlobType::Committee);
-
-        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
-
-        // Store the committee blob
-        storage.write_blobs(&[committee_blob]).await?;
-
-        // Create blocks including one with CreateCommittee operation
-        let chain_id = ChainId(CryptoHash::test_hash("admin_chain"));
-        let create_committee_op = Operation::System(Box::new(SystemOperation::Admin(
-            AdminOperation::CreateCommittee {
-                epoch: Epoch::ZERO,
-                blob_hash: committee_blob_hash,
-            },
-        )));
-
-        // First block (no committee)
-        let block1 =
-            ConfirmedBlock::new(BlockExecutionOutcome::default().with(make_first_block(chain_id)));
-        let cert1 = ConfirmedBlockCertificate::new(block1.clone(), Round::Fast, vec![]);
-        storage.write_blobs_and_certificate(&[], &cert1).await?;
-
-        // Second block with CreateCommittee
-        let block2 = ConfirmedBlock::new(
-            BlockExecutionOutcome::default()
-                .with(make_child_block(&block1).with_operation(create_committee_op)),
-        );
-        let cert2 = ConfirmedBlockCertificate::new(block2.clone(), Round::Fast, vec![]);
-        storage.write_blobs_and_certificate(&[], &cert2).await?;
-
-        // === FIRST SESSION: Process blocks and save ===
-        // This simulates an existing database from before the persistence feature was added
-        {
-            let (mut block_processor_storage, _) =
-                BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
-                    .await?;
-
-            let block1_id = crate::common::BlockId::from_confirmed_block(&block1);
-            let block2_id = crate::common::BlockId::from_confirmed_block(&block2);
-
-            block_processor_storage.index_block(&block1_id).await?;
-            block_processor_storage
-                .push_block(crate::common::CanonicalBlock::new(block1_id.hash, &[]));
-
-            block_processor_storage.index_block(&block2_id).await?;
-            block_processor_storage
-                .push_block(crate::common::CanonicalBlock::new(block2_id.hash, &[]));
-
-            // Save but don't persist the committee blob ID
-            block_processor_storage.save().await?;
-
-            // Verify no persisted committee blob ID
-            assert!(
-                block_processor_storage
-                    .get_latest_committee_blob()
-                    .is_none(),
-                "Expected no persisted committee blob ID"
-            );
-        }
-
-        // === SECOND SESSION: Reload and test fallback scan ===
-        // This simulates a restart with the new code
-        let (mut block_processor_storage, mut exporter_storage) =
-            BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
-                .await?;
-
-        // Verify still no persisted committee blob ID after reload
-        assert!(
-            block_processor_storage
-                .get_latest_committee_blob()
-                .is_none(),
-            "Expected no persisted committee blob ID after reload"
-        );
-
-        // Now call load_persisted_committee_destinations
-        // This should trigger the fallback scan
-        let result = load_persisted_committee_destinations(
-            &storage,
-            &block_processor_storage,
-            &mut exporter_storage,
-        )
-        .await;
-
-        // Should find the committee via fallback scan
-        assert!(
-            result.is_some(),
-            "Expected fallback scan to find the committee"
-        );
-
-        let (destinations, found_blob_id) = result.unwrap();
-        assert!(
-            found_blob_id.is_some(),
-            "Expected blob ID to be returned for persistence"
-        );
-        assert_eq!(destinations.len(), 1);
-        assert_eq!(destinations[0].address(), expected_address);
-        {
-            block_processor_storage.set_latest_committee_blob(found_blob_id.unwrap());
-
-            let latest_committee_blob = block_processor_storage
-                .get_latest_committee_blob()
-                .expect("Expected persisted committee blob ID after scan");
-            assert_eq!(
-                found_blob_id.unwrap(),
-                latest_committee_blob,
-                "Returned blob ID should match persisted blob ID"
-            );
-        }
-        Ok(())
     }
 }
