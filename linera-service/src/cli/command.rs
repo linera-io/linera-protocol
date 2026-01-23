@@ -72,11 +72,6 @@ pub struct BenchmarkOptions {
     #[arg(long, default_value_t = DEFAULT_TRANSACTIONS_PER_BLOCK)]
     pub transactions_per_block: usize,
 
-    /// The application ID of a fungible token on the wallet's default chain.
-    /// If none is specified, the benchmark uses the native token.
-    #[arg(long)]
-    pub fungible_application_id: Option<linera_base::identifiers::ApplicationId>,
-
     /// The fixed BPS (Blocks Per Second) rate that block proposals will be sent at.
     #[arg(long, default_value_t = DEFAULT_BPS)]
     pub bps: usize,
@@ -121,6 +116,12 @@ pub struct BenchmarkOptions {
     /// If not provided, only transfers between chains in the same wallet.
     #[arg(long)]
     pub config_path: Option<PathBuf>,
+
+    /// Transaction distribution mode. If false (default), distributes transactions evenly
+    /// across chains within each block. If true, sends all transactions in each block
+    /// to a single chain, rotating through chains for subsequent blocks.
+    #[arg(long)]
+    pub single_destination_per_block: bool,
 }
 
 impl Default for BenchmarkOptions {
@@ -130,7 +131,6 @@ impl Default for BenchmarkOptions {
             tokens_per_chain: DEFAULT_TOKENS_PER_CHAIN,
             transactions_per_block: DEFAULT_TRANSACTIONS_PER_BLOCK,
             wrap_up_max_in_flight: DEFAULT_WRAP_UP_MAX_IN_FLIGHT,
-            fungible_application_id: None,
             bps: DEFAULT_BPS,
             close_chains: false,
             health_check_endpoints: None,
@@ -138,6 +138,7 @@ impl Default for BenchmarkOptions {
             runtime_in_seconds: None,
             delay_between_chains_ms: None,
             config_path: None,
+            single_destination_per_block: false,
         }
     }
 }
@@ -149,12 +150,22 @@ pub enum BenchmarkCommand {
     Single {
         #[command(flatten)]
         options: BenchmarkOptions,
+
+        /// The application ID of a fungible token on the wallet's default chain.
+        /// If none is specified, the benchmark uses the native token.
+        #[arg(long)]
+        fungible_application_id: Option<ApplicationId>,
     },
 
     /// Run multiple benchmark processes in parallel.
     Multi {
         #[command(flatten)]
         options: BenchmarkOptions,
+
+        /// The application ID of a fungible token on the wallet's default chain.
+        /// If none is specified, the benchmark uses the native token.
+        #[arg(long)]
+        fungible_application_id: Option<ApplicationId>,
 
         /// The number of benchmark processes to run in parallel.
         #[arg(long, default_value = "1")]
@@ -179,13 +190,49 @@ pub enum BenchmarkCommand {
         #[arg(long)]
         cross_wallet_transfers: bool,
     },
+
+    /// Benchmark PM (Prediction Market) order submission.
+    Pm {
+        #[command(flatten)]
+        options: BenchmarkOptions,
+
+        /// The Linera faucet URL (for creating trader chains).
+        #[arg(long, env = "LINERA_FAUCET_URL")]
+        faucet: String,
+
+        /// The PM faucet URL (for distributing BASE tokens to traders).
+        #[arg(long, env = "PM_FAUCET_URL")]
+        pm_faucet: String,
+
+        /// The PM engine application ID (from pm-infra data/engines/engine-X.json).
+        #[arg(long)]
+        pm_engine_id: ApplicationId,
+
+        /// The market chain ID (from pm-infra data/engines/engine-X.json).
+        #[arg(long)]
+        market_chain_id: ChainId,
+
+        /// The order generation pattern.
+        #[arg(long, value_enum, default_value = "matching")]
+        order_pattern: linera_client::benchmark::OrderPatternArg,
+
+        /// The price scale for orders (e.g., 1000 means price 500 = 0.5).
+        #[arg(long, default_value = "1000")]
+        price_scale: u64,
+
+        /// Probability of generating matching orders (0.0-1.0). Only used with --order-pattern mixed.
+        /// Defaults to 0.5 if not specified.
+        #[arg(long)]
+        match_probability: Option<f64>,
+    },
 }
 
 impl BenchmarkCommand {
     pub fn transactions_per_block(&self) -> usize {
         match self {
-            Self::Single { options } => options.transactions_per_block,
+            Self::Single { options, .. } => options.transactions_per_block,
             Self::Multi { options, .. } => options.transactions_per_block,
+            Self::Pm { options, .. } => options.transactions_per_block,
         }
     }
 }
@@ -999,6 +1046,7 @@ impl ClientCommand {
             | ClientCommand::RetryPendingBlock { .. } => "client".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Single { .. }) => "single-benchmark".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Multi { .. }) => "multi-benchmark".into(),
+            ClientCommand::Benchmark(BenchmarkCommand::Pm { .. }) => "pm-benchmark".into(),
             ClientCommand::Net { .. } => "net".into(),
             ClientCommand::Project { .. } => "project".into(),
             ClientCommand::Watch { .. } => "watch".into(),

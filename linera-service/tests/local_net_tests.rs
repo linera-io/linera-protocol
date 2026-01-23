@@ -858,6 +858,7 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
                 close_chains: true,
                 ..Default::default()
             },
+            fungible_application_id: None,
         })
         .await?;
     assert_eq!(client.load_wallet()?.num_chains(), 3);
@@ -887,10 +888,10 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
                 transactions_per_block: 10,
                 bps: 2,
                 runtime_in_seconds: Some(5),
-                fungible_application_id: Some(application_id.forget_abi()),
                 close_chains: true,
                 ..Default::default()
             },
+            fungible_application_id: Some(application_id.forget_abi()),
         })
         .await?;
 

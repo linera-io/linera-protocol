@@ -23,7 +23,7 @@ use linera_execution::{system::SystemOperation, Operation};
 use linera_sdk::abis::fungible::{self, FungibleOperation};
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
-use rand::{seq::SliceRandom, thread_rng};
+use rand::{rngs::SmallRng, seq::SliceRandom, thread_rng, Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use tokio::{
     sync::{mpsc, Barrier, Notify},
@@ -33,6 +33,228 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
 
 use crate::chain_listener::{ChainListener, ClientContext};
+
+/// The mode of operation for the benchmark.
+#[derive(Clone, Debug)]
+pub enum BenchmarkMode {
+    /// Benchmark native token transfers between chains.
+    NativeTransfer,
+    /// Benchmark fungible token transfers between chains.
+    FungibleTransfer { application_id: ApplicationId },
+    /// Benchmark PM (Prediction Market) order submission.
+    Pm {
+        pm_engine_id: ApplicationId,
+        market_chain_id: ChainId,
+        pattern: OrderPattern,
+        price_scale: u64,
+    },
+}
+
+impl BenchmarkMode {
+    /// Create a BenchmarkMode from the legacy fungible_application_id parameter.
+    pub fn from_fungible_application_id(fungible_application_id: Option<ApplicationId>) -> Self {
+        match fungible_application_id {
+            Some(application_id) => BenchmarkMode::FungibleTransfer { application_id },
+            None => BenchmarkMode::NativeTransfer,
+        }
+    }
+
+    /// Returns the market chain ID if this is a PM benchmark, None otherwise.
+    pub fn market_chain_id(&self) -> Option<ChainId> {
+        match self {
+            BenchmarkMode::Pm {
+                market_chain_id, ..
+            } => Some(*market_chain_id),
+            _ => None,
+        }
+    }
+}
+
+/// Pattern for generating PM orders (for CLI parsing).
+///
+/// These types mirror pm-engine but are defined here to avoid a dependency on pm-app.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OrderPatternArg {
+    /// All orders will match. Generates YES bid + NO bid pairs at complementary prices.
+    #[default]
+    Matching,
+    /// Mix of matching and non-matching orders. Use --match-probability to configure
+    /// what fraction of orders will match (default: 0.5).
+    Mixed,
+}
+
+/// Pattern for generating PM orders (internal representation with probability).
+#[derive(Clone, Copy, Debug)]
+pub enum OrderPattern {
+    /// All orders will match.
+    Matching,
+    /// Mix of matching and non-matching orders with configurable probability.
+    Mixed { match_probability: f64 },
+}
+
+impl OrderPattern {
+    /// Create from CLI args.
+    ///
+    /// Returns an error if `--match-probability` is set but the pattern is not `Mixed`.
+    pub fn from_args(
+        pattern: OrderPatternArg,
+        match_probability: Option<f64>,
+    ) -> anyhow::Result<Self> {
+        match pattern {
+            OrderPatternArg::Matching => {
+                if match_probability.is_some() {
+                    anyhow::bail!(
+                        "--match-probability can only be used with --order-pattern mixed"
+                    );
+                }
+                Ok(OrderPattern::Matching)
+            }
+            OrderPatternArg::Mixed => Ok(OrderPattern::Mixed {
+                match_probability: match_probability.unwrap_or(0.5),
+            }),
+        }
+    }
+}
+
+/// PM order nature (which side of the market).
+/// IMPORTANT: Variant order must match pm-engine's OrderNature for BCS serialization.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum PmOrderNature {
+    /// A bid for buying YES tokens (index 0)
+    YesBid,
+    /// An ask for selling YES tokens (index 1) - not used in benchmark
+    YesAsk,
+    /// A bid for buying NO tokens (index 2)
+    NoBid,
+    /// An ask for selling NO tokens (index 3) - not used in benchmark
+    NoAsk,
+}
+
+/// PM order validity.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum PmValidity {
+    /// Order remains until explicitly cancelled.
+    UntilCanceled,
+    /// Order must be filled immediately or cancelled.
+    Immediate,
+}
+
+/// A PM order to insert into the order book.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum PmOrder {
+    Insert {
+        quantity: Amount,
+        nature: PmOrderNature,
+        price: u64,
+        validity: PmValidity,
+    },
+}
+
+/// PM engine operation.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum PmEngineOperation {
+    ExecuteOrder { order: PmOrder, owner: AccountOwner },
+}
+
+/// Generates PM orders based on a pattern.
+///
+/// For matching orders to work in a prediction market:
+/// - YES bid at price P + NO bid at price (100-P) = prices sum to 100 = MATCH
+/// - When matched, the engine mints 1 YES + 1 NO token backed by their combined payment
+///
+/// This generator maintains state to produce complementary pairs:
+/// - First call: YES bid at price P
+/// - Second call: NO bid at price (100-P)
+/// - Repeat...
+pub struct PmOrderGenerator {
+    pattern: OrderPattern,
+    price_scale: u64,
+    /// State for matching pairs: stores the YES bid price when we need to generate the NO bid
+    pending_yes_price: Option<u64>,
+}
+
+impl PmOrderGenerator {
+    pub fn new(pattern: OrderPattern, price_scale: u64) -> Self {
+        Self {
+            pattern,
+            price_scale,
+            pending_yes_price: None,
+        }
+    }
+
+    /// Generate the next order based on the pattern.
+    pub fn next_order(&mut self, rng: &mut impl Rng, owner: AccountOwner) -> PmEngineOperation {
+        let order = match self.pattern {
+            OrderPattern::Matching => self.matching_order(rng),
+            OrderPattern::Mixed { match_probability } => {
+                // If we have a pending YES price, we must complete the pair.
+                // Otherwise, flip the coin to decide whether to start a new matching pair.
+                if self.pending_yes_price.is_some() || rng.gen_bool(match_probability) {
+                    self.matching_order(rng)
+                } else {
+                    self.non_matching_order(rng)
+                }
+            }
+        };
+        PmEngineOperation::ExecuteOrder { order, owner }
+    }
+
+    /// Generate an order that won't match (bids at very low prices).
+    /// These orders sit in the order book and never execute.
+    fn non_matching_order(&self, rng: &mut impl Rng) -> PmOrder {
+        // Very low bids that won't find matching counterparties
+        let price = rng.gen_range(1..self.price_scale / 10); // 1-10%
+        let nature = if rng.gen_bool(0.5) {
+            PmOrderNature::YesBid
+        } else {
+            PmOrderNature::NoBid
+        };
+
+        PmOrder::Insert {
+            quantity: Amount::from_millis(rng.gen_range(100..1000)),
+            nature,
+            price,
+            validity: PmValidity::UntilCanceled,
+        }
+    }
+
+    /// Generate a matching order pair (YES bid + NO bid at complementary prices).
+    /// Called twice: first returns YES bid, second returns complementary NO bid.
+    fn matching_order(&mut self, rng: &mut impl Rng) -> PmOrder {
+        if let Some(yes_price) = self.pending_yes_price.take() {
+            // Second order of the pair: NO bid at complementary price
+            // YES price + NO price = price_scale (e.g., 60 + 40 = 100)
+            let no_price = self.price_scale - yes_price;
+            PmOrder::Insert {
+                quantity: Amount::from_millis(rng.gen_range(100..500)),
+                nature: PmOrderNature::NoBid,
+                price: no_price,
+                validity: PmValidity::UntilCanceled,
+            }
+        } else {
+            // First order of the pair: YES bid
+            // Price between 40-60% for realistic mid-range orders
+            let yes_price = self.price_scale * 4 / 10 + rng.gen_range(0..self.price_scale * 2 / 10);
+            self.pending_yes_price = Some(yes_price);
+            PmOrder::Insert {
+                quantity: Amount::from_millis(rng.gen_range(100..500)),
+                nature: PmOrderNature::YesBid,
+                price: yes_price,
+                validity: PmValidity::UntilCanceled,
+            }
+        }
+    }
+}
+
+/// Create a PM operation to send to the pm-engine.
+pub fn create_pm_operation(pm_engine_id: ApplicationId, operation: PmEngineOperation) -> Operation {
+    let bytes = bcs::to_bytes(&operation).expect("should serialize pm-engine operation");
+    Operation::User {
+        application_id: pm_engine_id,
+        bytes,
+    }
+}
 
 const PROXY_LATENCY_P99_THRESHOLD: f64 = 400.0;
 const LATENCY_METRIC_PREFIX: &str = "linera_proxy_request_latency";
@@ -73,6 +295,8 @@ pub enum BenchmarkError {
     ConfigLoadError(#[from] anyhow::Error),
     #[error("Could not find enough chains in wallet alone: needed {0}, but only found {1}")]
     NotEnoughChainsInWallet(usize, usize),
+    #[error("Random number generator error: {0}")]
+    RandError(#[from] rand::Error),
 }
 
 #[derive(Debug)]
@@ -109,17 +333,19 @@ pub struct Benchmark<Env: Environment> {
 impl<Env: Environment> Benchmark<Env> {
     #[expect(clippy::too_many_arguments)]
     pub async fn run_benchmark<C: ClientContext<Environment = Env> + 'static>(
-        num_chains: usize,
-        transactions_per_block: usize,
         bps: usize,
         chain_clients: Vec<ChainClient<Env>>,
-        blocks_infos: Vec<Vec<Operation>>,
+        all_chains: Vec<ChainId>,
+        transactions_per_block: usize,
+        mode: BenchmarkMode,
         health_check_endpoints: Option<String>,
         runtime_in_seconds: Option<u64>,
         delay_between_chains_ms: Option<u64>,
         chain_listener: ChainListener<C>,
         shutdown_notifier: &CancellationToken,
+        single_destination_per_block: bool,
     ) -> Result<(), BenchmarkError> {
+        let num_chains = chain_clients.len();
         let bps_counts = (0..num_chains)
             .map(|_| Arc::new(AtomicUsize::new(0)))
             .collect::<Vec<_>>();
@@ -143,19 +369,18 @@ impl<Env: Environment> Benchmark<Env> {
         let (runtime_control_task, runtime_control_sender) =
             Self::runtime_control_task(shutdown_notifier, runtime_in_seconds, num_chains);
 
+        let num_chains = chain_clients.len();
         let bps_initial_share = bps / num_chains;
         let mut bps_remainder = bps % num_chains;
         let mut join_set = task::JoinSet::<Result<(), BenchmarkError>>::new();
-        for (chain_idx, (block_info, chain_client)) in blocks_infos
-            .into_iter()
-            .zip(chain_clients.into_iter())
-            .enumerate()
-        {
+        for (chain_idx, chain_client) in chain_clients.into_iter().enumerate() {
             let shutdown_notifier_clone = shutdown_notifier.clone();
             let barrier_clone = barrier.clone();
             let bps_count_clone = bps_counts[chain_idx].clone();
             let notifier_clone = notifier.clone();
             let runtime_control_sender_clone = runtime_control_sender.clone();
+            let all_chains_clone = all_chains.clone();
+            let mode_clone = mode.clone();
             let bps_share = if bps_remainder > 0 {
                 bps_remainder -= 1;
                 bps_initial_share + 1
@@ -169,14 +394,17 @@ impl<Env: Environment> Benchmark<Env> {
                         chain_idx,
                         chain_id,
                         bps_share,
-                        block_info,
                         chain_client,
+                        all_chains_clone,
+                        transactions_per_block,
+                        mode_clone,
                         shutdown_notifier_clone,
                         bps_count_clone,
                         barrier_clone,
                         notifier_clone,
                         runtime_control_sender_clone,
                         delay_between_chains_ms,
+                        single_destination_per_block,
                     ))
                     .await?;
 
@@ -553,14 +781,17 @@ impl<Env: Environment> Benchmark<Env> {
         chain_idx: usize,
         chain_id: ChainId,
         bps: usize,
-        operations: Vec<Operation>,
         chain_client: ChainClient<Env>,
+        all_chains: Vec<ChainId>,
+        transactions_per_block: usize,
+        mode: BenchmarkMode,
         shutdown_notifier: CancellationToken,
         bps_count: Arc<AtomicUsize>,
         barrier: Arc<Barrier>,
         notifier: Arc<Notify>,
         runtime_control_sender: Option<mpsc::Sender<()>>,
         delay_between_chains_ms: Option<u64>,
+        single_destination_per_block: bool,
     ) -> Result<(), BenchmarkError> {
         barrier.wait().await;
         if let Some(delay_between_chains_ms) = delay_between_chains_ms {
@@ -575,6 +806,12 @@ impl<Env: Environment> Benchmark<Env> {
             runtime_control_sender.send(()).await?;
         }
 
+        let owner = chain_client
+            .identity()
+            .await
+            .map_err(BenchmarkError::ChainClient)?;
+        let mut operation_generator = BenchmarkOperationGenerator::new(chain_id, all_chains, mode)?;
+
         loop {
             tokio::select! {
                 biased;
@@ -583,7 +820,14 @@ impl<Env: Environment> Benchmark<Env> {
                     info!("Shutdown signal received, stopping benchmark");
                     break;
                 }
-                result = chain_client.execute_operations(operations.clone(), vec![]) => {
+                result = chain_client.execute_operations(
+                    operation_generator.generate_operations(
+                        owner,
+                        transactions_per_block,
+                        single_destination_per_block,
+                    ),
+                    vec![]
+                ) => {
                     result
                         .map_err(BenchmarkError::ChainClient)?
                         .expect("should execute block with operations");
@@ -638,98 +882,142 @@ impl<Env: Environment> Benchmark<Env> {
 
         Ok(all_chains)
     }
+}
 
-    pub fn make_benchmark_block_info(
-        benchmark_chains: Vec<(ChainId, AccountOwner)>,
-        transactions_per_block: usize,
-        fungible_application_id: Option<ApplicationId>,
-        all_chains: Vec<ChainId>,
-    ) -> Result<Vec<Vec<Operation>>, BenchmarkError> {
-        let mut blocks_infos = Vec::new();
-        let amount = Amount::from_attos(1);
+/// Creates a fungible token transfer operation.
+pub fn fungible_transfer(
+    application_id: ApplicationId,
+    chain_id: ChainId,
+    sender: AccountOwner,
+    receiver: AccountOwner,
+    amount: Amount,
+) -> Operation {
+    let target_account = fungible::Account {
+        chain_id,
+        owner: receiver,
+    };
+    let bytes = bcs::to_bytes(&FungibleOperation::Transfer {
+        owner: sender,
+        amount,
+        target_account,
+    })
+    .expect("should serialize fungible token operation");
+    Operation::User {
+        application_id,
+        bytes,
+    }
+}
 
-        for (current_chain_id, owner) in benchmark_chains.iter() {
-            let mut operations = Vec::new();
+/// Manages operation generation for benchmarks, including destination selection and mode-specific logic.
+struct BenchmarkOperationGenerator {
+    source_chain_id: ChainId,
+    destination_index: usize,
+    destination_chains: Vec<ChainId>,
+    rng: SmallRng,
+    mode: BenchmarkMode,
+    pm_generator: Option<PmOrderGenerator>,
+}
 
-            let mut other_chains: Vec<_> = if all_chains.len() == 1 {
-                // If there's only one chain, just have it send to itself.
-                all_chains.clone()
-            } else {
-                // If there's more than one chain, have it send to all other chains, and don't
-                // send to self.
-                all_chains
-                    .iter()
-                    .filter(|chain_id| **chain_id != *current_chain_id)
-                    .copied()
-                    .collect()
-            };
+impl BenchmarkOperationGenerator {
+    fn new(
+        source_chain_id: ChainId,
+        mut destination_chains: Vec<ChainId>,
+        mode: BenchmarkMode,
+    ) -> Result<Self, BenchmarkError> {
+        let mut rng = SmallRng::from_rng(thread_rng())?;
+        destination_chains.shuffle(&mut rng);
 
-            other_chains.shuffle(&mut thread_rng());
+        let pm_generator = match &mode {
+            BenchmarkMode::Pm {
+                pattern,
+                price_scale,
+                ..
+            } => Some(PmOrderGenerator::new(*pattern, *price_scale)),
+            _ => None,
+        };
 
-            // Calculate adjusted transactions_per_block to ensure even distribution
-            let num_destinations = other_chains.len();
-            let adjusted_transactions_per_block = if transactions_per_block % num_destinations != 0
-            {
-                let adjusted = transactions_per_block.div_ceil(num_destinations) * num_destinations;
-                warn!(
-                    "Requested transactions_per_block ({}) is not evenly divisible by number of destination chains ({}). \
-                    Adjusting to {} transactions per block to ensure transfers cancel each other out.",
-                    transactions_per_block, num_destinations, adjusted
-                );
-                adjusted
-            } else {
-                transactions_per_block
-            };
-
-            for recipient_chain_id in other_chains {
-                let operation = match fungible_application_id {
-                    Some(application_id) => Self::fungible_transfer(
-                        application_id,
-                        recipient_chain_id,
-                        *owner,
-                        *owner,
-                        amount,
-                    ),
-                    None => Operation::system(SystemOperation::Transfer {
-                        owner: AccountOwner::CHAIN,
-                        recipient: Account::chain(recipient_chain_id),
-                        amount,
-                    }),
-                };
-                operations.push(operation);
-            }
-
-            let operations = operations
-                .into_iter()
-                .cycle()
-                .take(adjusted_transactions_per_block)
-                .collect();
-            blocks_infos.push(operations);
-        }
-        Ok(blocks_infos)
+        Ok(Self {
+            source_chain_id,
+            destination_index: 0,
+            destination_chains,
+            rng,
+            mode,
+            pm_generator,
+        })
     }
 
-    /// Creates a fungible token transfer operation.
-    pub fn fungible_transfer(
-        application_id: ApplicationId,
-        chain_id: ChainId,
-        sender: AccountOwner,
-        receiver: AccountOwner,
+    /// Get the next destination chain. For PM mode, always returns the market chain.
+    fn get_next_destination(&mut self) -> ChainId {
+        // For PM mode, destination is always the market chain
+        if let Some(market_chain) = self.mode.market_chain_id() {
+            return market_chain;
+        }
+
+        // Check if we've gone through all destinations
+        if self.destination_index >= self.destination_chains.len() {
+            // Reshuffle the destinations for the next cycle
+            self.destination_chains.shuffle(&mut self.rng);
+            self.destination_index = 0;
+        }
+
+        let destination_chain_id = self.destination_chains[self.destination_index];
+        self.destination_index += 1;
+
+        if destination_chain_id == self.source_chain_id {
+            self.get_next_destination()
+        } else {
+            destination_chain_id
+        }
+    }
+
+    /// Generate operations for a single block.
+    fn generate_operations(
+        &mut self,
+        owner: AccountOwner,
+        transactions_per_block: usize,
+        single_destination_per_block: bool,
+    ) -> Vec<Operation> {
+        let amount = Amount::from_attos(1);
+
+        if single_destination_per_block {
+            let recipient_chain_id = self.get_next_destination();
+            (0..transactions_per_block)
+                .map(|_| self.create_operation(recipient_chain_id, owner, amount))
+                .collect()
+        } else {
+            (0..transactions_per_block)
+                .map(|_| {
+                    let recipient_chain_id = self.get_next_destination();
+                    self.create_operation(recipient_chain_id, owner, amount)
+                })
+                .collect()
+        }
+    }
+
+    /// Create a single operation based on the benchmark mode.
+    fn create_operation(
+        &mut self,
+        recipient_chain_id: ChainId,
+        owner: AccountOwner,
         amount: Amount,
     ) -> Operation {
-        let target_account = fungible::Account {
-            chain_id,
-            owner: receiver,
-        };
-        let bytes = bcs::to_bytes(&FungibleOperation::Transfer {
-            owner: sender,
-            amount,
-            target_account,
-        })
-        .expect("should serialize fungible token operation");
-        Operation::User {
-            application_id,
-            bytes,
+        match &self.mode {
+            BenchmarkMode::NativeTransfer => Operation::system(SystemOperation::Transfer {
+                owner: AccountOwner::CHAIN,
+                recipient: Account::chain(recipient_chain_id),
+                amount,
+            }),
+            BenchmarkMode::FungibleTransfer { application_id } => {
+                fungible_transfer(*application_id, recipient_chain_id, owner, owner, amount)
+            }
+            BenchmarkMode::Pm { pm_engine_id, .. } => {
+                let generator = self
+                    .pm_generator
+                    .as_mut()
+                    .expect("PM generator should be initialized for PM mode");
+                let operation = generator.next_order(&mut self.rng, owner);
+                create_pm_operation(*pm_engine_id, operation)
+            }
         }
     }
 }
