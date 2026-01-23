@@ -1493,3 +1493,237 @@ where
         self.map.count()
     }
 }
+
+#[cfg(with_graphql)]
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::{SyncByteMapView, SyncCustomMapView, SyncMapView};
+    use crate::{
+        context::SyncContext,
+        graphql::{hash_name, mangle, Entry, MapInput},
+    };
+
+    impl<C: Send + Sync, V: async_graphql::OutputType> async_graphql::TypeName
+        for SyncByteMapView<C, V>
+    {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "SyncByteMapView_{}_{:08x}",
+                mangle(V::type_name()),
+                hash_name::<V>()
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<C, V> SyncByteMapView<C, V>
+    where
+        C: SyncContext + Send + Sync,
+        V: async_graphql::OutputType
+            + serde::ser::Serialize
+            + serde::de::DeserializeOwned
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    {
+        #[graphql(derived(name = "keys"))]
+        async fn keys_(&self, count: Option<usize>) -> Result<Vec<Vec<u8>>, async_graphql::Error> {
+            let keys = self.keys()?;
+            let it = keys.iter().cloned();
+            Ok(if let Some(count) = count {
+                it.take(count).collect()
+            } else {
+                it.collect()
+            })
+        }
+
+        async fn entry(
+            &self,
+            key: Vec<u8>,
+        ) -> Result<Entry<Vec<u8>, Option<V>>, async_graphql::Error> {
+            Ok(Entry {
+                value: self.get(&key)?,
+                key,
+            })
+        }
+
+        async fn entries(
+            &self,
+            input: Option<MapInput<Vec<u8>>>,
+        ) -> Result<Vec<Entry<Vec<u8>, Option<V>>>, async_graphql::Error> {
+            let keys = input
+                .and_then(|input| input.filters)
+                .and_then(|filters| filters.keys);
+            let keys = if let Some(keys) = keys {
+                keys
+            } else {
+                self.keys()?
+            };
+
+            let mut entries = vec![];
+            for key in keys {
+                entries.push(Entry {
+                    value: self.get(&key)?,
+                    key,
+                })
+            }
+
+            Ok(entries)
+        }
+    }
+
+    impl<C: Send + Sync, I: async_graphql::OutputType, V: async_graphql::OutputType>
+        async_graphql::TypeName for SyncMapView<C, I, V>
+    {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "SyncMapView_{}_{}_{:08x}",
+                mangle(I::type_name()),
+                mangle(V::type_name()),
+                hash_name::<(I, V)>(),
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<C, I, V> SyncMapView<C, I, V>
+    where
+        C: SyncContext + Send + Sync,
+        I: async_graphql::OutputType
+            + async_graphql::InputType
+            + serde::ser::Serialize
+            + serde::de::DeserializeOwned
+            + std::fmt::Debug
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+        V: async_graphql::OutputType
+            + serde::ser::Serialize
+            + serde::de::DeserializeOwned
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    {
+        async fn keys(&self, count: Option<usize>) -> Result<Vec<I>, async_graphql::Error> {
+            let indices = self.indices()?;
+            let it = indices.iter().cloned();
+            Ok(if let Some(count) = count {
+                it.take(count).collect()
+            } else {
+                it.collect()
+            })
+        }
+
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count()? as u32)
+        }
+
+        async fn entry(&self, key: I) -> Result<Entry<I, Option<V>>, async_graphql::Error> {
+            Ok(Entry {
+                value: self.get(&key)?,
+                key,
+            })
+        }
+
+        async fn entries(
+            &self,
+            input: Option<MapInput<I>>,
+        ) -> Result<Vec<Entry<I, Option<V>>>, async_graphql::Error> {
+            let keys = input
+                .and_then(|input| input.filters)
+                .and_then(|filters| filters.keys);
+            let keys = if let Some(keys) = keys {
+                keys
+            } else {
+                self.indices()?
+            };
+
+            let values = self.multi_get(&keys)?;
+            Ok(values
+                .into_iter()
+                .zip(keys)
+                .map(|(value, key)| Entry { value, key })
+                .collect())
+        }
+    }
+
+    impl<C: Send + Sync, I: async_graphql::OutputType, V: async_graphql::OutputType>
+        async_graphql::TypeName for SyncCustomMapView<C, I, V>
+    {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "SyncCustomMapView_{}_{}_{:08x}",
+                mangle(I::type_name()),
+                mangle(V::type_name()),
+                hash_name::<(I, V)>(),
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<C, I, V> SyncCustomMapView<C, I, V>
+    where
+        C: SyncContext + Send + Sync,
+        I: async_graphql::OutputType
+            + async_graphql::InputType
+            + crate::common::CustomSerialize
+            + std::fmt::Debug
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+        V: async_graphql::OutputType
+            + serde::ser::Serialize
+            + serde::de::DeserializeOwned
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    {
+        async fn keys(&self, count: Option<usize>) -> Result<Vec<I>, async_graphql::Error> {
+            let indices = self.indices()?;
+            let it = indices.iter().cloned();
+            Ok(if let Some(count) = count {
+                it.take(count).collect()
+            } else {
+                it.collect()
+            })
+        }
+
+        async fn entry(&self, key: I) -> Result<Entry<I, Option<V>>, async_graphql::Error> {
+            Ok(Entry {
+                value: self.get(&key)?,
+                key,
+            })
+        }
+
+        async fn entries(
+            &self,
+            input: Option<MapInput<I>>,
+        ) -> Result<Vec<Entry<I, Option<V>>>, async_graphql::Error> {
+            let keys = input
+                .and_then(|input| input.filters)
+                .and_then(|filters| filters.keys);
+            let keys = if let Some(keys) = keys {
+                keys
+            } else {
+                self.indices()?
+            };
+
+            let values = self.multi_get(&keys)?;
+            Ok(values
+                .into_iter()
+                .zip(keys)
+                .map(|(value, key)| Entry { value, key })
+                .collect())
+        }
+    }
+}

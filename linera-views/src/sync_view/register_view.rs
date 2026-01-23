@@ -165,3 +165,33 @@ where
         }
     }
 }
+
+#[cfg(with_graphql)]
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::SyncRegisterView;
+    use crate::context::SyncContext;
+
+    impl<C, T> async_graphql::OutputType for SyncRegisterView<C, T>
+    where
+        C: SyncContext + Send + Sync,
+        T: async_graphql::OutputType + Send + Sync,
+    {
+        fn type_name() -> Cow<'static, str> {
+            T::type_name()
+        }
+
+        fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+            T::create_type_info(registry)
+        }
+
+        async fn resolve(
+            &self,
+            ctx: &async_graphql::ContextSelectionSet<'_>,
+            field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+        ) -> async_graphql::ServerResult<async_graphql::Value> {
+            self.get().resolve(ctx, field).await
+        }
+    }
+}

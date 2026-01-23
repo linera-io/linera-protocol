@@ -415,3 +415,42 @@ where
         Ok(self.new_back_values.iter_mut())
     }
 }
+
+#[cfg(with_graphql)]
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::SyncQueueView;
+    use crate::{
+        context::SyncContext,
+        graphql::{hash_name, mangle},
+    };
+
+    impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName
+        for SyncQueueView<C, T>
+    {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "SyncQueueView_{}_{:08x}",
+                mangle(T::type_name()),
+                hash_name::<T>()
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<C: SyncContext + Send + Sync, T: async_graphql::OutputType> SyncQueueView<C, T>
+    where
+        T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
+    {
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count() as u32)
+        }
+
+        async fn entries(&self, count: Option<usize>) -> async_graphql::Result<Vec<T>> {
+            Ok(self.read_front(count.unwrap_or_else(|| self.count()))?)
+        }
+    }
+}

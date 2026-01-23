@@ -81,6 +81,20 @@ impl<W> std::ops::Deref for SyncReadGuardedView<'_, W> {
     }
 }
 
+impl<W: Clone> SyncReadGuardedView<'_, W> {
+    fn into_owned(self) -> W {
+        match self {
+            SyncReadGuardedView::Loaded { updates, short_key } => {
+                let Update::Set(view) = updates.get(&short_key).unwrap() else {
+                    unreachable!();
+                };
+                view.clone()
+            }
+            SyncReadGuardedView::NotLoaded { view, .. } => view,
+        }
+    }
+}
+
 /// We need to find new base keys in order to implement `SyncCollectionView`.
 /// We do this by appending a value to the base key.
 ///
@@ -1543,5 +1557,167 @@ impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W>
             f(index)
         })?;
         Ok(())
+    }
+}
+
+#[cfg(with_graphql)]
+mod graphql {
+    use std::borrow::Cow;
+
+    use super::{SyncCollectionView, SyncCustomCollectionView};
+    use crate::{
+        graphql::{hash_name, mangle, missing_key_error, Entry, MapInput},
+        sync_view::SyncView,
+    };
+
+    impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
+        async_graphql::TypeName for SyncCollectionView<C, K, V>
+    {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "SyncCollectionView_{}_{}_{:08x}",
+                mangle(K::type_name()),
+                mangle(V::type_name()),
+                hash_name::<(K, V)>(),
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<K, V> SyncCollectionView<V::Context, K, V>
+    where
+        K: async_graphql::InputType
+            + async_graphql::OutputType
+            + Send
+            + Sync
+            + serde::ser::Serialize
+            + serde::de::DeserializeOwned
+            + std::fmt::Debug,
+        V: SyncView + async_graphql::OutputType + Clone + Send + Sync + 'static,
+        V::Context: Send + Sync,
+    {
+        async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
+            Ok(self.indices()?)
+        }
+
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count()? as u32)
+        }
+
+        async fn entry(
+            &self,
+            key: K,
+        ) -> Result<Entry<K, V>, async_graphql::Error> {
+            let value = self
+                .try_load_entry(&key)?
+                .ok_or_else(|| missing_key_error(&key))?;
+            Ok(Entry {
+                value: value.into_owned(),
+                key,
+            })
+        }
+
+        async fn entries(
+            &self,
+            input: Option<MapInput<K>>,
+        ) -> Result<Vec<Entry<K, V>>, async_graphql::Error> {
+            let keys = if let Some(keys) = input
+                .and_then(|input| input.filters)
+                .and_then(|filters| filters.keys)
+            {
+                keys
+            } else {
+                self.indices()?
+            };
+
+            let values = self.try_load_entries(&keys)?;
+            Ok(values
+                .into_iter()
+                .zip(keys)
+                .filter_map(|(value, key)| {
+                    value.map(|value| Entry {
+                        value: value.into_owned(),
+                        key,
+                    })
+                })
+                .collect())
+        }
+    }
+
+    impl<C: Send + Sync, K: async_graphql::InputType, V: async_graphql::OutputType>
+        async_graphql::TypeName for SyncCustomCollectionView<C, K, V>
+    {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "SyncCustomCollectionView_{}_{}_{:08x}",
+                mangle(K::type_name()),
+                mangle(V::type_name()),
+                hash_name::<(K, V)>(),
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<K, V> SyncCustomCollectionView<V::Context, K, V>
+    where
+        K: async_graphql::InputType
+            + async_graphql::OutputType
+            + Send
+            + Sync
+            + crate::common::CustomSerialize
+            + std::fmt::Debug,
+        V: SyncView + async_graphql::OutputType + Clone + Send + Sync + 'static,
+        V::Context: Send + Sync,
+    {
+        async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
+            Ok(self.indices()?)
+        }
+
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count()? as u32)
+        }
+
+        async fn entry(
+            &self,
+            key: K,
+        ) -> Result<Entry<K, V>, async_graphql::Error> {
+            let value = self
+                .try_load_entry(&key)?
+                .ok_or_else(|| missing_key_error(&key))?;
+            Ok(Entry {
+                value: value.into_owned(),
+                key,
+            })
+        }
+
+        async fn entries(
+            &self,
+            input: Option<MapInput<K>>,
+        ) -> Result<Vec<Entry<K, V>>, async_graphql::Error> {
+            let keys = if let Some(keys) = input
+                .and_then(|input| input.filters)
+                .and_then(|filters| filters.keys)
+            {
+                keys
+            } else {
+                self.indices()?
+            };
+
+            let values = self.try_load_entries(&keys)?;
+            Ok(values
+                .into_iter()
+                .zip(keys)
+                .filter_map(|(value, key)| {
+                    value.map(|value| Entry {
+                        value: value.into_owned(),
+                        key,
+                    })
+                })
+                .collect())
+        }
     }
 }
