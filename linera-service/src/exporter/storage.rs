@@ -348,6 +348,14 @@ where
         });
     }
 
+    pub(super) fn set_latest_committee_blob(&mut self, blob_id: BlobId) {
+        self.exporter_state_view.set_latest_committee_blob(blob_id);
+    }
+
+    pub(super) fn get_latest_committee_blob(&self) -> Option<BlobId> {
+        self.exporter_state_view.get_latest_committee_blob()
+    }
+
     pub(super) async fn save(&mut self) -> Result<(), ExporterError> {
         let mut batch = Batch::new();
 
