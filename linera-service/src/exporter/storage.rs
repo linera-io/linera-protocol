@@ -16,12 +16,12 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
-use linera_sdk::{ensure, views::View};
+use linera_sdk::ensure;
 use linera_service::config::{DestinationId, LimitsConfig};
 use linera_storage::Storage;
 use linera_views::{
     batch::Batch, context::Context, log_view::LogView, store::WritableKeyValueStore as _,
-    views::ClonableView,
+    views::{View, ClonableView},
 };
 use mini_moka::unsync::Cache as LfuCache;
 use quick_cache::{sync::Cache as FifoCache, Weighter};
