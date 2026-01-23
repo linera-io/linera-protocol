@@ -356,7 +356,7 @@ fn generate_sync_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2
     Ok(quote! {
         impl #impl_generics linera_views::sync_view::SyncView for #struct_name #type_generics
         where
-            #context: linera_views::context::Context,
+            #context: linera_views::context::SyncContext,
             #(#input_constraints,)*
             #(#field_types: linera_views::sync_view::SyncView<Context = #context>,)*
         {
@@ -365,28 +365,28 @@ fn generate_sync_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2
             type Context = #context;
 
             fn context(&self) -> #context {
-                use linera_views::{context::Context as _};
+                use linera_views::{context::SyncContext as _};
                 #trim_key_logic
                 let context = self.#first_name_quote.context();
                 context.clone_with_trimmed_key(__bytes_to_trim)
             }
 
             fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
-                use linera_views::context::Context as _;
+                use linera_views::context::SyncContext as _;
                 let mut keys = Vec::new();
                 #(#pre_load_keys_quotes)*
                 Ok(keys)
             }
 
             fn post_load(context: #context, values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::ViewError> {
-                use linera_views::context::Context as _;
+                use linera_views::context::SyncContext as _;
                 let mut __linera_reserved_pos = 0;
                 #(#post_load_keys_quotes)*
                 Ok(Self {#(#name_quotes),*})
             }
 
             fn load(context: #context) -> Result<Self, linera_views::ViewError> {
-                use linera_views::{context::Context as _, store::ReadableSyncKeyValueStore as _};
+                use linera_views::{context::SyncContext as _, store::ReadableSyncKeyValueStore as _};
                 #load_metrics
                 if Self::NUM_INIT_KEYS == 0 {
                     Self::post_load(context, &[])
