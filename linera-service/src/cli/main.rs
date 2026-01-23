@@ -2250,6 +2250,24 @@ Make sure to use a Linera client compatible with this network.
                 Ok(0)
             }
 
+            WalletCommand::ExportGenesis { output, faucet } => {
+                let genesis_config: GenesisConfig = if let Some(url) = faucet {
+                    let faucet = cli_wrappers::Faucet::new(url.clone());
+                    faucet
+                        .genesis_config()
+                        .await
+                        .context("Failed to obtain the genesis configuration from the faucet")?
+                } else {
+                    let wallet = options.wallet()?;
+                    wallet.genesis_config().clone()
+                };
+                let json = serde_json::to_string_pretty(&genesis_config)?;
+                std::fs::write(output, json)
+                    .context("Failed to write genesis configuration to file")?;
+                info!("Genesis configuration exported to {}", output.display());
+                Ok(0)
+            }
+
             WalletCommand::FollowChain { .. } | WalletCommand::RequestChain { .. } => {
                 options.run_with_storage(Job(options.clone())).await??;
                 Ok(0)
