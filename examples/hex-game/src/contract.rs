@@ -59,7 +59,7 @@ impl Contract for HexContract {
                 timeouts,
             } => {
                 self.execute_start(players, board_size, fee_budget, timeouts)
-                    .await
+                    
             }
         };
         self.handle_winner(outcome)
@@ -138,7 +138,7 @@ impl HexContract {
         HexOutcome::Winner(active.other())
     }
 
-    async fn execute_start(
+    fn execute_start(
         &mut self,
         players: [AccountOwner; 2],
         board_size: u16,

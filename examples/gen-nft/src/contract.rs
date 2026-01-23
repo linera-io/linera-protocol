@@ -51,7 +51,7 @@ impl Contract for GenNftContract {
                 self.runtime
                     .check_account_permission(minter)
                     .expect("Permission for Mint operation");
-                self.mint(minter, prompt).await;
+                self.mint(minter, prompt);
             }
 
             Operation::Transfer {
@@ -62,10 +62,10 @@ impl Contract for GenNftContract {
                 self.runtime
                     .check_account_permission(source_owner)
                     .expect("Permission for Transfer operation");
-                let nft = self.get_nft(&token_id).await;
+                let nft = self.get_nft(&token_id);
                 assert_eq!(source_owner, nft.owner);
 
-                self.transfer(nft, target_account).await;
+                self.transfer(nft, target_account);
             }
 
             Operation::Claim {
@@ -78,10 +78,10 @@ impl Contract for GenNftContract {
                     .expect("Permission for Claim operation");
 
                 if source_account.chain_id == self.runtime.chain_id() {
-                    let nft = self.get_nft(&token_id).await;
+                    let nft = self.get_nft(&token_id);
                     assert_eq!(source_account.owner, nft.owner);
 
-                    self.transfer(nft, target_account).await;
+                    self.transfer(nft, target_account);
                 } else {
                     self.remote_claim(source_account, token_id, target_account)
                 }
@@ -103,7 +103,7 @@ impl Contract for GenNftContract {
                     nft.owner = target_account.owner;
                 }
 
-                self.add_nft(nft).await;
+                self.add_nft(nft);
             }
 
             Message::Claim {
@@ -115,10 +115,10 @@ impl Contract for GenNftContract {
                     .check_account_permission(source_account.owner)
                     .expect("Permission for Claim message");
 
-                let nft = self.get_nft(&token_id).await;
+                let nft = self.get_nft(&token_id);
                 assert_eq!(source_account.owner, nft.owner);
 
-                self.transfer(nft, target_account).await;
+                self.transfer(nft, target_account);
             }
         }
     }
@@ -131,11 +131,11 @@ impl Contract for GenNftContract {
 impl GenNftContract {
     /// Transfers the specified NFT to another account.
     /// Authentication needs to have happened already.
-    async fn transfer(&mut self, mut nft: Nft, target_account: Account) {
-        self.remove_nft(&nft).await;
+    fn transfer(&mut self, mut nft: Nft, target_account: Account) {
+        self.remove_nft(&nft);
         if target_account.chain_id == self.runtime.chain_id() {
             nft.owner = target_account.owner;
-            self.add_nft(nft).await;
+            self.add_nft(nft);
         } else {
             let message = Message::Transfer {
                 nft,
@@ -149,7 +149,7 @@ impl GenNftContract {
         }
     }
 
-    async fn get_nft(&self, token_id: &TokenId) -> Nft {
+    fn get_nft(&self, token_id: &TokenId) -> Nft {
         self.state
             .nfts
             .get(token_id)
@@ -157,7 +157,7 @@ impl GenNftContract {
             .expect("NFT not found")
     }
 
-    async fn mint(&mut self, owner: AccountOwner, prompt: String) {
+    fn mint(&mut self, owner: AccountOwner, prompt: String) {
         let token_id = Nft::create_token_id(
             &self.runtime.chain_id(),
             &self.runtime.application_id().forget_abi(),
@@ -172,8 +172,7 @@ impl GenNftContract {
             owner,
             prompt,
             minter: owner,
-        })
-        .await;
+        });
 
         let num_minted_nfts = self.state.num_minted_nfts.get_mut();
         *num_minted_nfts += 1;
@@ -196,7 +195,7 @@ impl GenNftContract {
             .send_to(source_account.chain_id);
     }
 
-    async fn add_nft(&mut self, nft: Nft) {
+    fn add_nft(&mut self, nft: Nft) {
         let token_id = nft.token_id.clone();
         let owner = nft.owner;
 
@@ -221,7 +220,7 @@ impl GenNftContract {
         }
     }
 
-    async fn remove_nft(&mut self, nft: &Nft) {
+    fn remove_nft(&mut self, nft: &Nft) {
         self.state
             .nfts
             .remove(&nft.token_id)

@@ -55,7 +55,7 @@ impl Contract for NonFungibleTokenContract {
                 self.runtime
                     .check_account_permission(minter)
                     .expect("Permission for Mint operation");
-                self.mint(minter, name, blob_hash).await;
+                self.mint(minter, name, blob_hash);
             }
 
             Operation::Transfer {
@@ -67,10 +67,10 @@ impl Contract for NonFungibleTokenContract {
                     .check_account_permission(source_owner)
                     .expect("Permission for Transfer operation");
 
-                let nft = self.get_nft(&token_id).await;
+                let nft = self.get_nft(&token_id);
                 assert_eq!(source_owner, nft.owner);
 
-                self.transfer(nft, target_account).await;
+                self.transfer(nft, target_account);
             }
 
             Operation::Claim {
@@ -83,10 +83,10 @@ impl Contract for NonFungibleTokenContract {
                     .expect("Permission for Claim operation");
 
                 if source_account.chain_id == self.runtime.chain_id() {
-                    let nft = self.get_nft(&token_id).await;
+                    let nft = self.get_nft(&token_id);
                     assert_eq!(source_account.owner, nft.owner);
 
-                    self.transfer(nft, target_account).await;
+                    self.transfer(nft, target_account);
                 } else {
                     self.remote_claim(source_account, token_id, target_account)
                 }
@@ -108,7 +108,7 @@ impl Contract for NonFungibleTokenContract {
                     nft.owner = target_account.owner;
                 }
 
-                self.add_nft(nft).await;
+                self.add_nft(nft);
             }
 
             Message::Claim {
@@ -119,10 +119,10 @@ impl Contract for NonFungibleTokenContract {
                 self.runtime
                     .check_account_permission(source_account.owner)
                     .expect("Permission for Claim message");
-                let nft = self.get_nft(&token_id).await;
+                let nft = self.get_nft(&token_id);
                 assert_eq!(source_account.owner, nft.owner);
 
-                self.transfer(nft, target_account).await;
+                self.transfer(nft, target_account);
             }
         }
     }
@@ -135,11 +135,11 @@ impl Contract for NonFungibleTokenContract {
 impl NonFungibleTokenContract {
     /// Transfers the specified NFT to another account.
     /// Authentication needs to have happened already.
-    async fn transfer(&mut self, mut nft: Nft, target_account: Account) {
-        self.remove_nft(&nft).await;
+    fn transfer(&mut self, mut nft: Nft, target_account: Account) {
+        self.remove_nft(&nft);
         if target_account.chain_id == self.runtime.chain_id() {
             nft.owner = target_account.owner;
-            self.add_nft(nft).await;
+            self.add_nft(nft);
         } else {
             let message = Message::Transfer {
                 nft,
@@ -153,7 +153,7 @@ impl NonFungibleTokenContract {
         }
     }
 
-    async fn get_nft(&self, token_id: &TokenId) -> Nft {
+    fn get_nft(&self, token_id: &TokenId) -> Nft {
         self.state
             .nfts
             .get(token_id)
@@ -161,7 +161,7 @@ impl NonFungibleTokenContract {
             .expect("NFT not found")
     }
 
-    async fn mint(&mut self, owner: AccountOwner, name: String, blob_hash: DataBlobHash) {
+    fn mint(&mut self, owner: AccountOwner, name: String, blob_hash: DataBlobHash) {
         self.runtime.assert_data_blob_exists(blob_hash);
         let token_id = Nft::create_token_id(
             &self.runtime.chain_id(),
@@ -179,8 +179,7 @@ impl NonFungibleTokenContract {
             name,
             minter: owner,
             blob_hash,
-        })
-        .await;
+        });
 
         let num_minted_nfts = self.state.num_minted_nfts.get_mut();
         *num_minted_nfts += 1;
@@ -203,7 +202,7 @@ impl NonFungibleTokenContract {
             .send_to(source_account.chain_id);
     }
 
-    async fn add_nft(&mut self, nft: Nft) {
+    fn add_nft(&mut self, nft: Nft) {
         let token_id = nft.token_id.clone();
         let owner = nft.owner;
 
@@ -228,7 +227,7 @@ impl NonFungibleTokenContract {
         }
     }
 
-    async fn remove_nft(&mut self, nft: &Nft) {
+    fn remove_nft(&mut self, nft: &Nft) {
         self.state
             .nfts
             .remove(&nft.token_id)

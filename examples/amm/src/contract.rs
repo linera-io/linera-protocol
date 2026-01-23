@@ -47,9 +47,9 @@ impl Contract for AmmContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         if self.runtime.chain_id() == self.runtime.application_creator_chain_id() {
-            self.execute_order_local(operation).await;
+            self.execute_order_local(operation);
         } else {
-            self.execute_order_remote(operation).await;
+            self.execute_order_remote(operation);
         }
     }
 
@@ -208,7 +208,7 @@ impl Contract for AmmContract {
 
                 let mut current_shares = self
                     .current_shares_or_default(&message_origin_account)
-                    .await;
+                    ;
                 current_shares.saturating_add_assign(shares_to_mint);
                 self.state
                     .shares
@@ -273,7 +273,7 @@ impl Contract for AmmContract {
                 let message_origin_account = self.get_message_origin_account(owner);
                 let current_shares = self
                     .current_shares_or_default(&message_origin_account)
-                    .await;
+                    ;
                 assert!(
                     shares_to_return <= current_shares,
                     "Can't remove more liquidity than you added"
@@ -296,7 +296,7 @@ impl Contract for AmmContract {
                 let message_origin_account = self.get_message_origin_account(owner);
                 let current_shares = self
                     .current_shares_or_default(&message_origin_account)
-                    .await;
+                    ;
 
                 let (amount_token0, amount_token1) = self.get_amounts_from_shares(current_shares);
                 self.return_shares(
@@ -318,7 +318,7 @@ impl Contract for AmmContract {
 
 impl AmmContract {
     /// Obtains the current shares for an `account`.
-    async fn current_shares_or_default(&self, account: &Account) -> Amount {
+    fn current_shares_or_default(&self, account: &Account) -> Amount {
         self.state
             .shares
             .get(account)
@@ -458,7 +458,7 @@ impl AmmContract {
         }
     }
 
-    async fn execute_order_local(&mut self, operation: Operation) {
+    fn execute_order_local(&mut self, operation: Operation) {
         match operation {
             Operation::Swap {
                 owner: _,
@@ -490,7 +490,7 @@ impl AmmContract {
                     .expect("Failed to load list of share owners");
 
                 for account in accounts {
-                    let current_shares = self.current_shares_or_default(&account).await;
+                    let current_shares = self.current_shares_or_default(&account);
                     let (amount_token0, amount_token1) =
                         self.get_amounts_from_shares(current_shares);
 
@@ -517,7 +517,7 @@ impl AmmContract {
         }
     }
 
-    async fn execute_order_remote(&mut self, operation: Operation) {
+    fn execute_order_remote(&mut self, operation: Operation) {
         match operation {
             Operation::Swap {
                 owner,

@@ -188,7 +188,7 @@ impl RfqState {
             .expect("Couldn't insert a new request state");
     }
 
-    pub async fn cancel_request(&mut self, request_id: &RequestId) -> Option<ChainId> {
+    pub fn cancel_request(&mut self, request_id: &RequestId) -> Option<ChainId> {
         let req_data = self
             .requests
             .get(request_id)
@@ -207,11 +207,11 @@ impl RfqState {
         }
     }
 
-    pub async fn close_request(&mut self, request_id: &RequestId) {
+    pub fn close_request(&mut self, request_id: &RequestId) {
         self.requests.remove(request_id).expect("Request not found");
     }
 
-    pub async fn request_data(&mut self, request_id: &RequestId) -> Option<&mut RequestData> {
+    pub fn request_data(&mut self, request_id: &RequestId) -> Option<&mut RequestData> {
         self.requests.get_mut(request_id).expect("ViewError")
     }
 

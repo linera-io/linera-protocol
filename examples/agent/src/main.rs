@@ -211,7 +211,7 @@ impl Tool for LineraNodeService {
     type Args = NodeServiceArgs; // GraphQL
     type Output = NodeServiceOutput; // More GraphQL
 
-    async fn definition(&self, _prompt: String) -> ToolDefinition {
+    fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: "Linera".to_string(),
             description: "Interact with a Linera wallet via GraphQL".to_string(),

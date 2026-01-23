@@ -58,11 +58,11 @@ impl Contract for SocialContract {
                     .unsubscribe_from_events(chain_id, app_id, STREAM_NAME.into());
             }
             Operation::Post { text, image_url } => {
-                self.execute_post_operation(text, image_url).await
+                self.execute_post_operation(text, image_url)
             }
-            Operation::Like { key } => self.execute_like_operation(key).await,
+            Operation::Like { key } => self.execute_like_operation(key),
             Operation::Comment { key, comment } => {
-                self.execute_comment_operation(key, comment).await
+                self.execute_comment_operation(key, comment)
             }
         }
     }
@@ -92,10 +92,10 @@ impl Contract for SocialContract {
                     Event::Post { post, index } => {
                         self.execute_post_event(update.chain_id, index, post);
                     }
-                    Event::Like { key } => self.execute_like_event(key).await,
+                    Event::Like { key } => self.execute_like_event(key),
                     Event::Comment { key, comment } => {
                         self.execute_comment_event(key, update.chain_id, comment)
-                            .await;
+                            ;
                     }
                 }
             }
@@ -108,7 +108,7 @@ impl Contract for SocialContract {
 }
 
 impl SocialContract {
-    async fn execute_post_operation(&mut self, text: String, image_url: Option<String>) {
+    fn execute_post_operation(&mut self, text: String, image_url: Option<String>) {
         let timestamp = self.runtime.system_time();
         let post = OwnPost {
             timestamp,
@@ -121,7 +121,7 @@ impl SocialContract {
             .emit(STREAM_NAME.into(), &Event::Post { post, index });
     }
 
-    async fn execute_like_operation(&mut self, key: Key) {
+    fn execute_like_operation(&mut self, key: Key) {
         let chain_id = key.author;
 
         if chain_id != self.runtime.chain_id() {
@@ -131,7 +131,7 @@ impl SocialContract {
         }
     }
 
-    async fn execute_comment_operation(&mut self, key: Key, comment: String) {
+    fn execute_comment_operation(&mut self, key: Key, comment: String) {
         let chain_id = key.author;
         if chain_id != self.runtime.chain_id() {
             self.runtime
@@ -163,7 +163,7 @@ impl SocialContract {
             .expect("Failed to insert received post");
     }
 
-    async fn execute_like_event(&mut self, key: Key) {
+    fn execute_like_event(&mut self, key: Key) {
         let mut post = self
             .state
             .received_posts
@@ -179,7 +179,7 @@ impl SocialContract {
             .expect("Failed to insert received post");
     }
 
-    async fn execute_comment_event(&mut self, key: Key, chain_id: ChainId, comment: String) {
+    fn execute_comment_event(&mut self, key: Key, chain_id: ChainId, comment: String) {
         let mut post = self
             .state
             .received_posts

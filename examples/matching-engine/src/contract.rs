@@ -62,7 +62,7 @@ impl Contract for MatchingEngineContract {
                     .check_account_permission(owner)
                     .expect("Permission for ExecuteOrder operation");
                 if chain_id == self.runtime.application_creator_chain_id() {
-                    self.execute_order_local(order, chain_id).await;
+                    self.execute_order_local(order, chain_id);
                 } else {
                     self.execute_order_remote(order);
                 }
@@ -103,7 +103,7 @@ impl Contract for MatchingEngineContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for ExecuteOrder message");
-                self.execute_order_local(order, origin_chain_id).await;
+                self.execute_order_local(order, origin_chain_id);
             }
         }
     }
@@ -166,7 +166,7 @@ impl MatchingEngineContract {
     ///   - Insertion of the order into the market and immediately uncrossing the market that
     ///     is making sure that at the end we have best bid < best ask.
     ///   - Creation of the corresponding orders and operation of the corresponding transfers
-    async fn execute_order_local(&mut self, order: Order, chain_id: ChainId) {
+    fn execute_order_local(&mut self, order: Order, chain_id: ChainId) {
         match order {
             Order::Insert {
                 owner,
