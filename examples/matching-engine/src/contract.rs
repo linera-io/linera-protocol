@@ -34,7 +34,7 @@ impl Contract for MatchingEngineContract {
 
     async fn load(mut runtime: ContractRuntime<Self>) -> Self {
         let parameters = runtime.application_parameters();
-        let context = linera_views::context::ViewContext::new_unchecked(
+        let context = linera_views::context::ViewSyncContext::new_unchecked(
             runtime.key_value_store(),
             Vec::new(),
             parameters,
