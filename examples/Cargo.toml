@@ -36,6 +36,7 @@ candle-core = "0.4.1"
 candle-transformers = "0.4.1"
 futures = "0.3.24"
 futures-util = "0.3.26"
+insta = { version = "1.36.1", features = ["yaml"] }
 getrandom = { version = "0.2.12", default-features = false, features = [
     "custom",
 ] }
@@ -47,6 +48,7 @@ num-bigint = "0.4.3"
 num-traits = "0.2.16"
 rand = "0.8.5"
 serde = { version = "1.0.152", features = ["derive"] }
+serde-reflection = "0.3.6"
 serde_json = "1.0.93"
 sha3 = "0.10.8"
 test-log = { version = "0.2.15", default-features = false, features = [
