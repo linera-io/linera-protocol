@@ -206,6 +206,7 @@ where
         Ok(ExporterStorage::new(self.shared_storage.clone()?))
     }
 
+    #[allow(unused)]
     pub(crate) fn get_latest_index(&self) -> usize {
         self.shared_storage.shared_canonical_state.latest_index()
     }

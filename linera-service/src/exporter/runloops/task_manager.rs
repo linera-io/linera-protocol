@@ -4,7 +4,6 @@
 use std::{
     collections::{HashMap, HashSet},
     future::{Future, IntoFuture},
-    path::Path,
     sync::Arc,
 };
 
@@ -185,8 +184,7 @@ where
             }
 
             DestinationKind::Logging => {
-                let path = Path::new(id.address());
-                let exporter_task = LoggingExporter::new(path);
+                let exporter_task = LoggingExporter::new(id);
                 tokio::task::spawn(
                     exporter_task.run_with_shutdown(self.shutdown_signal.clone(), storage),
                 )

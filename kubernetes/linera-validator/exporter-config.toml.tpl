@@ -26,7 +26,7 @@ endpoint = "linera-indexer-{{ .Values.networkName }}.linera-indexer.svc.cluster.
 {{- end }}
 
 [limits]
-persistence_period_ms = 299000
+persistence_period_ms = 5_000
 work_queue_size = 256
 blob_cache_weight_mb = 1024
 blob_cache_items_capacity = 8192
