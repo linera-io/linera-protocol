@@ -1,0 +1,58 @@
+---
+source: crowd-funding/tests/format.rs
+expression: get_registry().unwrap()
+---
+AccountOwner:
+  ENUM:
+    0:
+      Reserved:
+        NEWTYPE: U8
+    1:
+      Address32:
+        NEWTYPE:
+          TYPENAME: CryptoHash
+    2:
+      Address20:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 20
+Amount:
+  NEWTYPESTRUCT: U128
+CryptoHash:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+InstantiationArgument:
+  STRUCT:
+    - owner:
+        TYPENAME: AccountOwner
+    - deadline:
+        TYPENAME: Timestamp
+    - target:
+        TYPENAME: Amount
+Message:
+  ENUM:
+    0:
+      PledgeWithAccount:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - amount:
+              TYPENAME: Amount
+Operation:
+  ENUM:
+    0:
+      Pledge:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - amount:
+              TYPENAME: Amount
+    1:
+      Collect: UNIT
+    2:
+      Cancel: UNIT
+Timestamp:
+  NEWTYPESTRUCT: U64

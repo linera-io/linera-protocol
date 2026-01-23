@@ -1,11 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! ABI format test for the fungible token application.
+//! ABI format test for the crowd-funding application.
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use fungible::{Account, FungibleOperation, FungibleResponse, InitialState, Message, Parameters};
+use crowd_funding::{InstantiationArgument, Message, Operation};
 use linera_sdk::linera_base_types::AccountOwner;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 
@@ -18,17 +18,16 @@ fn get_registry() -> Result<Registry> {
     let samples = Samples::new();
 
     // ContractAbi types
-    tracer.trace_type::<FungibleOperation>(&samples)?;
-    tracer.trace_type::<FungibleResponse>(&samples)?;
+    tracer.trace_type::<Operation>(&samples)?;
+    // Response is () - skipped
 
     // Contract types
     tracer.trace_type::<Message>(&samples)?;
-    tracer.trace_type::<Parameters>(&samples)?;
-    tracer.trace_type::<InitialState>(&samples)?;
+    // Parameters is () - skipped
+    tracer.trace_type::<InstantiationArgument>(&samples)?;
     // EventValue is () - skipped
 
-    // Supporting types (referenced by the above)
-    tracer.trace_type::<Account>(&samples)?;
+    // Supporting types
     tracer.trace_type::<AccountOwner>(&samples)?;
 
     tracer.registry()

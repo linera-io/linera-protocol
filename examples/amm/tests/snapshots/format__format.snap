@@ -1,0 +1,92 @@
+---
+source: amm/tests/format.rs
+expression: get_registry().unwrap()
+---
+AccountOwner:
+  ENUM:
+    0:
+      Reserved:
+        NEWTYPE: U8
+    1:
+      Address32:
+        NEWTYPE:
+          TYPENAME: CryptoHash
+    2:
+      Address20:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 20
+Amount:
+  NEWTYPESTRUCT: U128
+CryptoHash:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+Message:
+  ENUM:
+    0:
+      Swap:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - input_token_idx: U32
+          - input_amount:
+              TYPENAME: Amount
+    1:
+      AddLiquidity:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - max_token0_amount:
+              TYPENAME: Amount
+          - max_token1_amount:
+              TYPENAME: Amount
+    2:
+      RemoveLiquidity:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - token_to_remove_idx: U32
+          - token_to_remove_amount:
+              TYPENAME: Amount
+    3:
+      RemoveAllAddedLiquidity:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+Operation:
+  ENUM:
+    0:
+      Swap:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - input_token_idx: U32
+          - input_amount:
+              TYPENAME: Amount
+    1:
+      AddLiquidity:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - max_token0_amount:
+              TYPENAME: Amount
+          - max_token1_amount:
+              TYPENAME: Amount
+    2:
+      RemoveLiquidity:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - token_to_remove_idx: U32
+          - token_to_remove_amount:
+              TYPENAME: Amount
+    3:
+      RemoveAllAddedLiquidity:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+    4:
+      CloseChain: UNIT

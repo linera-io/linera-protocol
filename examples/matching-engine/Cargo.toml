@@ -13,7 +13,9 @@ serde.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 fungible = { workspace = true, features = ["test"] }
+insta.workspace = true
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+serde-reflection.workspace = true
 tokio.workspace = true
 
 [[bin]]

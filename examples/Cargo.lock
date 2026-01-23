@@ -722,11 +722,13 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
+ "insta",
  "linera-sdk",
  "matching-engine",
  "num-bigint",
  "num-traits",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -1659,7 +1661,9 @@ dependencies = [
  "assert_matches",
  "async-graphql",
  "futures",
+ "insta",
  "linera-sdk",
+ "serde-reflection",
  "serde_json",
  "tokio",
 ]
@@ -1831,8 +1835,10 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "serde_json",
  "tokio",
 ]
@@ -4311,8 +4317,10 @@ dependencies = [
  "async-graphql",
  "bcs",
  "fungible",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -4492,9 +4500,11 @@ dependencies = [
  "base64 0.22.1",
  "bcs",
  "fungible",
+ "insta",
  "linera-sdk",
  "non-fungible",
  "serde",
+ "serde-reflection",
  "sha3",
  "tokio",
 ]
@@ -6057,8 +6067,10 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "bcs",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 

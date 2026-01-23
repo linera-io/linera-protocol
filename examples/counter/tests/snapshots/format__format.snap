@@ -1,0 +1,5 @@
+---
+source: counter/tests/format.rs
+expression: get_registry().unwrap()
+---
+{}

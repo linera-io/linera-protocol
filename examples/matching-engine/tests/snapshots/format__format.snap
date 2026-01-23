@@ -1,0 +1,89 @@
+---
+source: matching-engine/tests/format.rs
+expression: get_registry().unwrap()
+---
+AccountOwner:
+  ENUM:
+    0:
+      Reserved:
+        NEWTYPE: U8
+    1:
+      Address32:
+        NEWTYPE:
+          TYPENAME: CryptoHash
+    2:
+      Address20:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 20
+Amount:
+  NEWTYPESTRUCT: U128
+ApplicationId:
+  STRUCT:
+    - application_description_hash:
+        TYPENAME: CryptoHash
+CryptoHash:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+Message:
+  ENUM:
+    0:
+      ExecuteOrder:
+        STRUCT:
+          - order:
+              TYPENAME: Order
+Operation:
+  ENUM:
+    0:
+      ExecuteOrder:
+        STRUCT:
+          - order:
+              TYPENAME: Order
+    1:
+      CloseChain: UNIT
+Order:
+  ENUM:
+    0:
+      Insert:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - amount:
+              TYPENAME: Amount
+          - nature:
+              TYPENAME: OrderNature
+          - price:
+              TYPENAME: Price
+    1:
+      Cancel:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - order_id: U64
+    2:
+      Modify:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - order_id: U64
+          - cancel_amount:
+              TYPENAME: Amount
+OrderNature:
+  ENUM:
+    0:
+      Bid: UNIT
+    1:
+      Ask: UNIT
+Parameters:
+  STRUCT:
+    - tokens:
+        TUPLEARRAY:
+          CONTENT:
+            TYPENAME: ApplicationId
+          SIZE: 2
+Price:
+  STRUCT:
+    - price: U64
