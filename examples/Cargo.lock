@@ -3926,6 +3926,7 @@ dependencies = [
  "linera-witty",
  "linked-hash-map",
  "papaya",
+ "parking_lot",
  "prometheus",
  "rand 0.8.5",
  "serde",

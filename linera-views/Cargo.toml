@@ -51,6 +51,7 @@ linera-views-derive.workspace = true
 linera-witty.workspace = true
 linked-hash-map.workspace = true
 papaya.workspace = true
+parking_lot = { workspace = true, features = ["send_guard"] }
 prometheus.workspace = true
 rand = { workspace = true, features = ["small_rng"] }
 rocksdb = { workspace = true, optional = true }

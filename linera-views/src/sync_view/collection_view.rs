@@ -10,7 +10,7 @@ use std::{
 };
 
 use allocative::{Allocative, Key, Visitor};
-use std::sync::{RwLock, RwLockReadGuard};
+use parking_lot::{RwLock, RwLockReadGuard};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -39,7 +39,7 @@ impl<C, W: Allocative> Allocative for SyncByteCollectionView<C, W> {
         let name = Key::new("SyncByteCollectionView");
         let size = mem::size_of::<Self>();
         let mut visitor = visitor.enter(name, size);
-        if let Ok(updates) = self.updates.try_read() {
+        if let Some(updates) = self.updates.try_read() {
             updates.deref().visit(&mut visitor);
         }
         visitor.exit();
@@ -77,20 +77,6 @@ impl<W> std::ops::Deref for SyncReadGuardedView<'_, W> {
                 view
             }
             SyncReadGuardedView::NotLoaded { _updates, view } => view,
-        }
-    }
-}
-
-impl<W: Clone> SyncReadGuardedView<'_, W> {
-    fn into_owned(self) -> W {
-        match self {
-            SyncReadGuardedView::Loaded { updates, short_key } => {
-                let Update::Set(view) = updates.get(&short_key).unwrap() else {
-                    unreachable!();
-                };
-                view.clone()
-            }
-            SyncReadGuardedView::NotLoaded { view, .. } => view,
         }
     }
 }
@@ -133,14 +119,14 @@ impl<W: SyncView> SyncView for SyncByteCollectionView<W::Context, W> {
 
     fn rollback(&mut self) {
         self.delete_storage_first = false;
-        self.updates.get_mut().expect("lock should not be poisoned").clear();
+        self.updates.get_mut().clear();
     }
 
     fn has_pending_changes(&self) -> bool {
         if self.delete_storage_first {
             return true;
         }
-        let updates = self.updates.read().expect("SyncCollectionView lock should not be poisoned");
+        let updates = self.updates.read();
         !updates.is_empty()
     }
 
@@ -149,7 +135,7 @@ impl<W: SyncView> SyncView for SyncByteCollectionView<W::Context, W> {
         let updates = self
             .updates
             .try_read()
-            .map_err(|_| ViewError::TryLockError(vec![]))?;
+            .ok_or_else(|| ViewError::TryLockError(vec![]))?;
         if self.delete_storage_first {
             delete_view = true;
             batch.delete_key_prefix(self.context.base_key().bytes.clone());
@@ -180,7 +166,7 @@ impl<W: SyncView> SyncView for SyncByteCollectionView<W::Context, W> {
     }
 
     fn post_save(&mut self) {
-        let updates = self.updates.get_mut().expect("lock should not be poisoned");
+        let updates = self.updates.get_mut();
         for (_, update) in updates.iter_mut() {
             if let Update::Set(view) = update {
                 view.post_save();
@@ -192,7 +178,7 @@ impl<W: SyncView> SyncView for SyncByteCollectionView<W::Context, W> {
 
     fn clear(&mut self) {
         self.delete_storage_first = true;
-        self.updates.get_mut().expect("lock should not be poisoned").clear();
+        self.updates.get_mut().clear();
     }
 }
 
@@ -231,7 +217,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// assert_eq!(*value, String::default());
     /// ```
     pub fn load_entry_mut(&mut self, short_key: &[u8]) -> Result<&mut W, ViewError> {
-        let updates = self.updates.get_mut().expect("lock should not be poisoned");
+        let updates = self.updates.get_mut();
         match updates.entry(short_key.to_vec()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
@@ -297,7 +283,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
         &self,
         short_key: &[u8],
     ) -> Result<Option<SyncReadGuardedView<'_, W>>, ViewError> {
-        let updates = self.updates.read().expect("SyncCollectionView lock should not be poisoned");
+        let updates = self.updates.read();
         match updates.get(short_key) {
             Some(update) => match update {
                 Update::Removed => Ok(None),
@@ -356,7 +342,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
         let mut results = Vec::with_capacity(short_keys.len());
         let mut keys_to_check = Vec::new();
         let mut keys_to_check_metadata = Vec::new();
-        let updates = self.updates.read().expect("SyncCollectionView lock should not be poisoned");
+        let updates = self.updates.read();
 
         for (position, short_key) in short_keys.into_iter().enumerate() {
             match updates.get(&short_key) {
@@ -365,7 +351,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
                         results.push(None);
                     }
                     Update::Set(_) => {
-                        let updates = self.updates.read().expect("SyncCollectionView lock should not be poisoned");
+                        let updates = self.updates.read();
                         results.push(Some(SyncReadGuardedView::Loaded {
                             updates,
                             short_key: short_key.clone(),
@@ -413,7 +399,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
             .zip(entries_to_load)
         {
             let view = W::post_load(context, loaded_values)?;
-            let updates = self.updates.read().expect("SyncCollectionView lock should not be poisoned");
+            let updates = self.updates.read();
             results[position] = Some(SyncReadGuardedView::NotLoaded {
                 _updates: updates,
                 view,
@@ -470,7 +456,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     pub fn try_load_all_entries(
         &self,
     ) -> Result<Vec<(Vec<u8>, SyncReadGuardedView<'_, W>)>, ViewError> {
-        let updates = self.updates.read().expect("SyncCollectionView lock should not be poisoned"); // Acquire the read lock to prevent writes.
+        let updates = self.updates.read(); // Acquire the read lock to prevent writes.
         let short_keys = self.keys()?;
         let mut results = Vec::with_capacity(short_keys.len());
 
@@ -482,7 +468,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
                     let Update::Set(_) = update else {
                         unreachable!();
                     };
-                    let updates = self.updates.read().expect("SyncCollectionView lock should not be poisoned");
+                    let updates = self.updates.read();
                     let view = SyncReadGuardedView::Loaded {
                         updates,
                         short_key: short_key.clone(),
@@ -517,7 +503,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
             .zip(keys_to_load_metadata)
         {
             let view = W::post_load(context, loaded_values)?;
-            let updates = self.updates.read().expect("SyncCollectionView lock should not be poisoned");
+            let updates = self.updates.read();
             let guarded_view = SyncReadGuardedView::NotLoaded {
                 _updates: updates,
                 view,
@@ -557,7 +543,6 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
         let view = W::new(context)?;
         self.updates
             .get_mut()
-            .expect("lock should not be poisoned")
             .insert(short_key.to_vec(), Update::Set(view));
         Ok(())
     }
@@ -578,7 +563,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// assert!(!view.contains_key(&[0, 2]).unwrap());
     /// ```
     pub fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
-        let updates = self.updates.read().expect("SyncCollectionView lock should not be poisoned");
+        let updates = self.updates.read();
         Ok(match updates.get(short_key) {
             Some(entry) => match entry {
                 Update::Set(_view) => true,
@@ -611,7 +596,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// assert_eq!(keys.len(), 0);
     /// ```
     pub fn remove_entry(&mut self, short_key: Vec<u8>) {
-        let updates = self.updates.get_mut().expect("lock should not be poisoned");
+        let updates = self.updates.get_mut();
         if self.delete_storage_first {
             // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
             updates.remove(&short_key);
@@ -653,7 +638,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
-        let updates = self.updates.read().expect("SyncCollectionView lock should not be poisoned");
+        let updates = self.updates.read();
         let mut updates = updates.iter();
         let mut update = updates.next();
         if !self.delete_storage_first {
@@ -1564,11 +1549,29 @@ impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W>
 mod graphql {
     use std::borrow::Cow;
 
-    use super::{SyncCollectionView, SyncCustomCollectionView};
+    use super::{SyncCollectionView, SyncCustomCollectionView, SyncReadGuardedView};
     use crate::{
         graphql::{hash_name, mangle, missing_key_error, Entry, MapInput},
         sync_view::SyncView,
     };
+
+    impl<T: async_graphql::OutputType> async_graphql::OutputType for SyncReadGuardedView<'_, T> {
+        fn type_name() -> Cow<'static, str> {
+            T::type_name()
+        }
+
+        fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+            T::create_type_info(registry)
+        }
+
+        async fn resolve(
+            &self,
+            ctx: &async_graphql::ContextSelectionSet<'_>,
+            field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+        ) -> async_graphql::ServerResult<async_graphql::Value> {
+            (**self).resolve(ctx, field).await
+        }
+    }
 
     impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
         async_graphql::TypeName for SyncCollectionView<C, K, V>
@@ -1594,7 +1597,7 @@ mod graphql {
             + serde::ser::Serialize
             + serde::de::DeserializeOwned
             + std::fmt::Debug,
-        V: SyncView + async_graphql::OutputType + Clone + Send + Sync + 'static,
+        V: SyncView + async_graphql::OutputType + Send + Sync,
         V::Context: Send + Sync,
     {
         async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
@@ -1609,20 +1612,17 @@ mod graphql {
         async fn entry(
             &self,
             key: K,
-        ) -> Result<Entry<K, V>, async_graphql::Error> {
+        ) -> Result<Entry<K, SyncReadGuardedView<'_, V>>, async_graphql::Error> {
             let value = self
                 .try_load_entry(&key)?
                 .ok_or_else(|| missing_key_error(&key))?;
-            Ok(Entry {
-                value: value.into_owned(),
-                key,
-            })
+            Ok(Entry { value, key })
         }
 
         async fn entries(
             &self,
             input: Option<MapInput<K>>,
-        ) -> Result<Vec<Entry<K, V>>, async_graphql::Error> {
+        ) -> Result<Vec<Entry<K, SyncReadGuardedView<'_, V>>>, async_graphql::Error> {
             let keys = if let Some(keys) = input
                 .and_then(|input| input.filters)
                 .and_then(|filters| filters.keys)
@@ -1636,12 +1636,7 @@ mod graphql {
             Ok(values
                 .into_iter()
                 .zip(keys)
-                .filter_map(|(value, key)| {
-                    value.map(|value| Entry {
-                        value: value.into_owned(),
-                        key,
-                    })
-                })
+                .filter_map(|(value, key)| value.map(|value| Entry { value, key }))
                 .collect())
         }
     }
@@ -1669,7 +1664,7 @@ mod graphql {
             + Sync
             + crate::common::CustomSerialize
             + std::fmt::Debug,
-        V: SyncView + async_graphql::OutputType + Clone + Send + Sync + 'static,
+        V: SyncView + async_graphql::OutputType + Send + Sync,
         V::Context: Send + Sync,
     {
         async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
@@ -1684,20 +1679,17 @@ mod graphql {
         async fn entry(
             &self,
             key: K,
-        ) -> Result<Entry<K, V>, async_graphql::Error> {
+        ) -> Result<Entry<K, SyncReadGuardedView<'_, V>>, async_graphql::Error> {
             let value = self
                 .try_load_entry(&key)?
                 .ok_or_else(|| missing_key_error(&key))?;
-            Ok(Entry {
-                value: value.into_owned(),
-                key,
-            })
+            Ok(Entry { value, key })
         }
 
         async fn entries(
             &self,
             input: Option<MapInput<K>>,
-        ) -> Result<Vec<Entry<K, V>>, async_graphql::Error> {
+        ) -> Result<Vec<Entry<K, SyncReadGuardedView<'_, V>>>, async_graphql::Error> {
             let keys = if let Some(keys) = input
                 .and_then(|input| input.filters)
                 .and_then(|filters| filters.keys)
@@ -1711,12 +1703,7 @@ mod graphql {
             Ok(values
                 .into_iter()
                 .zip(keys)
-                .filter_map(|(value, key)| {
-                    value.map(|value| Entry {
-                        value: value.into_owned(),
-                        key,
-                    })
-                })
+                .filter_map(|(value, key)| value.map(|value| Entry { value, key }))
                 .collect())
         }
     }
