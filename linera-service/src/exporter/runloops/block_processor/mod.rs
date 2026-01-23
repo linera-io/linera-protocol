@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     future::{Future, IntoFuture},
     str::FromStr,
     time::{Duration, Instant},
@@ -83,7 +83,7 @@ where
         let mut interval = interval(Duration::from_millis(persistence_period.into()));
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
-        self.exporters_tracker.start_startup_exporters();
+        self.exporters_tracker.spawn_exporters();
 
         loop {
             tokio::select! {
@@ -123,7 +123,8 @@ where
                                     }
                                 };
 
-                                let committee_destinations = committee.validator_addresses().map(|(_, address)| DestinationId::validator(address.to_owned())).collect::<Vec<_>>();
+                                let committee_destinations = committee.validator_addresses().map(|(_, address)| DestinationId::validator(address.to_owned()))
+                                    .collect::<HashSet<_>>();
                                 self.exporters_tracker.shutdown_old_committee(committee_destinations.clone());
                                 self.storage.new_committee(committee_destinations.clone());
                                 self.storage.set_latest_committee_blob(new_committee_blob);
@@ -208,6 +209,8 @@ where
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashSet;
+
     use linera_base::{
         crypto::CryptoHash,
         data_types::{Round, Timestamp},
@@ -257,6 +260,7 @@ mod test {
             signal.clone(),
             exporter_storage.clone()?,
             vec![],
+            HashSet::new(),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -387,6 +391,7 @@ mod test {
             signal.clone(),
             exporter_storage.clone()?,
             vec![],
+            HashSet::new(),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -507,6 +512,7 @@ mod test {
             signal.clone(),
             exporter_storage.clone()?,
             vec![],
+            HashSet::new(),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -594,6 +600,7 @@ mod test {
             signal.clone(),
             exporter_storage.clone()?,
             vec![],
+            HashSet::new(),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -703,6 +710,7 @@ mod test {
             signal.clone(),
             exporter_storage.clone()?,
             vec![],
+            HashSet::new(),
         );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
@@ -792,6 +800,7 @@ mod test {
             signal.clone(),
             exporter_storage.clone()?,
             vec![],
+            HashSet::new(),
         );
 
         let mut block_processor = BlockProcessor::new(

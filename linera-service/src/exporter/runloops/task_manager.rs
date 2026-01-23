@@ -40,6 +40,7 @@ where
         shutdown_signal: F,
         storage: ExporterStorage<S>,
         startup_destinations: Vec<Destination>,
+        current_committee_destinations: HashSet<DestinationId>,
     ) -> Self {
         let exporters_builder =
             ExporterBuilder::new(node_options, work_queue_size, shutdown_signal);
@@ -50,29 +51,34 @@ where
                 .into_iter()
                 .map(|destination| destination.id())
                 .collect(),
-            current_committee_destinations: HashSet::new(),
+            current_committee_destinations,
             join_handles: HashMap::new(),
         }
     }
 
-    pub(super) fn start_startup_exporters(&mut self)
+    pub(super) fn spawn_exporters(&mut self)
     where
         S: Storage + Clone + Send + Sync + 'static,
         F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
         <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
     {
         for id in self.startup_destinations.clone() {
-            self.spawn(id.clone())
+            self.spawn(id.clone());
         }
+
+        self.start_committee_exporters(self.current_committee_destinations.clone());
     }
 
-    pub(super) fn start_committee_exporters(&mut self, destination_ids: Vec<DestinationId>)
+    pub(super) fn start_committee_exporters(&mut self, destination_ids: HashSet<DestinationId>)
     where
         S: Storage + Clone + Send + Sync + 'static,
         F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
         <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
     {
         for destination in destination_ids {
+            // We treat startup destinations as "MUST" always run
+            // so we skip adding them to `current_committee_destinations` as those
+            // can be turned off.
             if !self.startup_destinations.contains(&destination)
                 && !self.current_committee_destinations.contains(&destination)
             {
@@ -87,11 +93,11 @@ where
     }
 
     /// Shuts down block exporters for destinations that are not in the new committee.
-    pub(super) fn shutdown_old_committee(&mut self, new_committee: Vec<DestinationId>) {
+    pub(super) fn shutdown_old_committee(&mut self, new_committee: HashSet<DestinationId>) {
         // Shutdown the old committee members that are not in the new committee.
         for id in self
             .current_committee_destinations
-            .difference(&new_committee.iter().cloned().collect())
+            .difference(&new_committee)
         {
             tracing::info!(id=?id, "shutting down old committee member");
             if let Some(abort_handle) = self.join_handles.remove(id) {
