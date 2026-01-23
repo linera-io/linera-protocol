@@ -138,6 +138,10 @@ where
         self.destination_states.set(destination_states);
     }
 
+    pub fn get_destination_states(&self) -> &DestinationStates {
+        self.destination_states.get()
+    }
+
     pub fn set_latest_committee_blob(&mut self, blob_id: BlobId) {
         self.latest_committee_blob.set(Some(blob_id));
     }
@@ -221,5 +225,21 @@ impl DestinationStates {
 
     pub fn insert(&mut self, id: DestinationId, state: Arc<AtomicU64>) {
         self.states.pin().insert(id, state);
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (DestinationId, u64)> + '_ {
+        let pinned = self.states.pin();
+        pinned
+            .iter()
+            .map(|(k, v)| (k.clone(), v.load(Ordering::Acquire)))
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
+    pub fn set(&self, id: &DestinationId, value: u64) -> Option<u64> {
+        self.states
+            .pin()
+            .get(id)
+            .map(|v| v.swap(value, Ordering::Release))
     }
 }

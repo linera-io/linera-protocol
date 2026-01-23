@@ -157,6 +157,7 @@ spec:
           imagePullPolicy: {{ .Values.blockExporter.imagePullPolicy }}
           command:
             - "./linera-exporter"
+            - "run"
             - "--storage"
             - "{{ .Values.storage }}"
             - "--config-path"
