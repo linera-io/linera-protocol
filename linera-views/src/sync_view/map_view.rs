@@ -1010,9 +1010,92 @@ where
 impl<C, I, V> SyncMapView<C, I, V>
 where
     C: SyncContext,
-    I: Serialize + DeserializeOwned + Send,
-    V: Clone + Serialize + DeserializeOwned + 'static,
+    I: Serialize,
+    V: Default + DeserializeOwned + 'static,
 {
+    /// Obtains a mutable reference to a value at a given position.
+    /// Default value if the index is missing.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::map_view::SyncMapView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut map: SyncMapView<_, u32, u128> = SyncMapView::load(context).unwrap();
+    /// let value = map.get_mut_or_default(&(34 as u32)).unwrap();
+    /// assert_eq!(*value, 0 as u128);
+    /// ```
+    pub fn get_mut_or_default<Q>(&mut self, index: &Q) -> Result<&mut V, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = BaseKey::derive_short_key(index)?;
+        self.map.get_mut_or_default(&short_key)
+    }
+}
+
+impl<C, I, V> SyncMapView<C, I, V>
+where
+    C: SyncContext,
+    I: Serialize + DeserializeOwned + Send,
+    V: Clone + Serialize + DeserializeOwned + Send + 'static,
+{
+    /// Applies a function on each index/value pair. Indices and values are
+    /// visited in an order determined by serialization.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::map_view::SyncMapView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut map: SyncMapView<_, Vec<u8>, _> = SyncMapView::load(context).unwrap();
+    /// map.insert(&vec![0, 1], String::from("Hello")).unwrap();
+    /// let mut count = 0;
+    /// map.for_each_index_value(|_index, _value| {
+    ///     count += 1;
+    ///     Ok(())
+    /// })
+    /// .unwrap();
+    /// assert_eq!(count, 1);
+    /// ```
+    pub fn for_each_index_value<'a, F>(&'a self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I, Cow<'a, V>) -> Result<(), ViewError> + Send,
+    {
+        let prefix = Vec::new();
+        self.map.for_each_key_value(
+            |key, value| {
+                let index = BaseKey::deserialize_value(key)?;
+                f(index, value)
+            },
+            prefix,
+        )?;
+        Ok(())
+    }
+
+    /// Obtains all the `(index,value)` pairs.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::map_view::SyncMapView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut map: SyncMapView<_, String, _> = SyncMapView::load(context).unwrap();
+    /// map.insert("Italian", String::from("Ciao")).unwrap();
+    /// let index_values = map.index_values().unwrap();
+    /// assert_eq!(
+    ///     index_values,
+    ///     vec![("Italian".to_string(), "Ciao".to_string())]
+    /// );
+    /// ```
+    pub fn index_values(&self) -> Result<Vec<(I, V)>, ViewError> {
+        let mut key_values = Vec::new();
+        self.for_each_index_value(|index, value| {
+            let value = value.into_owned();
+            key_values.push((index, value));
+            Ok(())
+        })?;
+        Ok(key_values)
+    }
+
     /// Returns the list of keys of the map in the order determined by the serialization.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
@@ -1293,6 +1376,36 @@ where
     {
         let short_key = index.to_custom_bytes()?;
         self.map.get_mut(&short_key)
+    }
+}
+
+impl<C, I, V> SyncCustomMapView<C, I, V>
+where
+    C: SyncContext,
+    I: CustomSerialize,
+    V: Default + DeserializeOwned + 'static,
+{
+    /// Obtains a mutable reference to a value at a given position.
+    /// Default value if the index is missing.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_view::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut map = SyncCustomMapView::<_, u128, String>::load(context).unwrap();
+    /// map.insert(&(24 as u128), String::from("Hello")).unwrap();
+    /// assert_eq!(
+    ///     *map.get_mut_or_default(&(34 as u128)).unwrap(),
+    ///     String::new()
+    /// );
+    /// ```
+    pub fn get_mut_or_default<Q>(&mut self, index: &Q) -> Result<&mut V, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes()?;
+        self.map.get_mut_or_default(&short_key)
     }
 }
 
