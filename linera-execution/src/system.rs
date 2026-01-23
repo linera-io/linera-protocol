@@ -68,7 +68,7 @@ pub struct SystemExecutionStateView<C> {
     /// The number identifying the current configuration.
     pub epoch: HashedRegisterView<C, Epoch>,
     /// The admin of the chain.
-    pub admin_id: HashedRegisterView<C, Option<ChainId>>,
+    pub admin_chain_id: HashedRegisterView<C, Option<ChainId>>,
     /// The committees that we trust, indexed by epoch number.
     // Not using a `MapView` because the set active of committees is supposed to be
     // small. Plus, currently, we would create the `BTreeMap` anyway in various places
@@ -102,7 +102,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
         SystemExecutionStateView {
             description: self.description.with_context(ctx.clone()).await,
             epoch: self.epoch.with_context(ctx.clone()).await,
-            admin_id: self.admin_id.with_context(ctx.clone()).await,
+            admin_chain_id: self.admin_chain_id.with_context(ctx.clone()).await,
             committees: self.committees.with_context(ctx.clone()).await,
             ownership: self.ownership.with_context(ctx.clone()).await,
             balance: self.balance.with_context(ctx.clone()).await,
@@ -177,7 +177,7 @@ pub enum SystemOperation {
         amount: Amount,
     },
     /// Creates (or activates) a new chain.
-    /// This will automatically subscribe to the future committees created by `admin_id`.
+    /// This will automatically subscribe to the future committees created by `admin_chain_id`.
     OpenChain(OpenChainConfig),
     /// Closes the chain.
     CloseChain,
@@ -321,7 +321,7 @@ where
         self.description.get().is_some()
             && self.ownership.get().is_active()
             && self.current_committee().is_some()
-            && self.admin_id.get().is_some()
+            && self.admin_chain_id.get().is_some()
     }
 
     /// Returns the current committee, if any.
@@ -412,7 +412,7 @@ where
             }
             Admin(admin_operation) => {
                 ensure!(
-                    *self.admin_id.get() == Some(context.chain_id),
+                    *self.admin_chain_id.get() == Some(context.chain_id),
                     ExecutionError::AdminOperationOnNonAdminChain
                 );
                 match admin_operation {
@@ -485,12 +485,12 @@ where
             }
             ProcessNewEpoch(epoch) => {
                 self.check_next_epoch(epoch)?;
-                let admin_id = self
-                    .admin_id
+                let admin_chain_id = self
+                    .admin_chain_id
                     .get()
                     .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
                 let event_id = EventId {
-                    chain_id: admin_id,
+                    chain_id: admin_chain_id,
                     stream_id: StreamId::system(EPOCH_STREAM_NAME),
                     index: epoch.0,
                 };
@@ -512,12 +512,12 @@ where
                     self.committees.get_mut().remove(&epoch).is_some(),
                     ExecutionError::InvalidCommitteeRemoval
                 );
-                let admin_id = self
-                    .admin_id
+                let admin_chain_id = self
+                    .admin_chain_id
                     .get()
                     .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
                 let event_id = EventId {
-                    chain_id: admin_id,
+                    chain_id: admin_chain_id,
                     stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
                     index: epoch.0,
                 };
@@ -792,7 +792,7 @@ where
             .admin_chain_id;
 
         self.committees.set(committees);
-        self.admin_id.set(Some(admin_chain_id));
+        self.admin_chain_id.set(Some(admin_chain_id));
         self.ownership.set(ownership);
         self.balance.set(balance);
         self.application_permissions.set(application_permissions);

@@ -252,11 +252,11 @@ impl Add {
                 .await?;
         }
 
-        let admin_id = context.admin_chain();
-        let chain_client = context.make_chain_client(admin_id).await?;
+        let admin_chain_id = context.admin_chain_id();
+        let chain_client = context.make_chain_client(admin_chain_id).await?;
 
         // Synchronize the chain state
-        chain_client.synchronize_chain_state(admin_id).await?;
+        chain_client.synchronize_chain_state(admin_chain_id).await?;
 
         let maybe_certificate = context
             .apply_client_command(&chain_client, |chain_client| {
@@ -372,8 +372,8 @@ impl Update {
         let mut removes = Vec::new();
 
         // Get current committee to determine if operation is add or modify
-        let admin_id = context.client().admin_chain();
-        let chain_client = context.make_chain_client(admin_id).await?;
+        let admin_chain_id = context.client().admin_chain_id();
+        let chain_client = context.make_chain_client(admin_chain_id).await?;
         let current_committee = chain_client.local_committee().await?;
         let current_validators = current_committee.validators();
 
@@ -496,11 +496,11 @@ impl Update {
             }
         }
 
-        let admin_id = context.admin_chain();
-        let chain_client = context.make_chain_client(admin_id).await?;
+        let admin_chain_id = context.admin_chain_id();
+        let chain_client = context.make_chain_client(admin_chain_id).await?;
 
         // Synchronize the chain state
-        chain_client.synchronize_chain_state(admin_id).await?;
+        chain_client.synchronize_chain_state(admin_chain_id).await?;
 
         let batch_clone = batch.clone();
         let maybe_certificate = context
@@ -694,11 +694,11 @@ impl Remove {
         tracing::info!("Starting operation to remove validator");
         let time_start = std::time::Instant::now();
 
-        let admin_id = context.admin_chain();
-        let chain_client = context.make_chain_client(admin_id).await?;
+        let admin_chain_id = context.admin_chain_id();
+        let chain_client = context.make_chain_client(admin_chain_id).await?;
 
         // Synchronize the chain state
-        chain_client.synchronize_chain_state(admin_id).await?;
+        chain_client.synchronize_chain_state(admin_chain_id).await?;
 
         let maybe_certificate = context
             .apply_client_command(&chain_client, |chain_client| {

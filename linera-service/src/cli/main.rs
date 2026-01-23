@@ -452,11 +452,11 @@ impl Runnable for Job {
                     .await?;
 
                 // ResourceControlPolicy doesn't need version checks
-                let admin_id = context.admin_chain();
-                let chain_client = context.make_chain_client(admin_id).await?;
+                let admin_chain_id = context.admin_chain_id();
+                let chain_client = context.make_chain_client(admin_chain_id).await?;
                 // Synchronize the chain state to make sure we're applying the changes to the
                 // latest committee.
-                chain_client.synchronize_chain_state(admin_id).await?;
+                chain_client.synchronize_chain_state(admin_chain_id).await?;
                 let maybe_certificate = context
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
@@ -606,7 +606,7 @@ impl Runnable for Job {
                     .await?;
 
                 let chain_client = context
-                    .make_chain_client(context.wallet().genesis_admin_chain())
+                    .make_chain_client(context.wallet().genesis_admin_chain_id())
                     .await?;
 
                 // Remove the old committees.

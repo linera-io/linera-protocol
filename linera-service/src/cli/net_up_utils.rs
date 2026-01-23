@@ -341,7 +341,7 @@ async fn print_messages_and_create_faucet(
         // This picks a lexicographically faucet_chain_idx-th non-admin chain.
         let faucet_chain = chains
             .into_iter()
-            .filter(|chain_id| *chain_id != wallet.genesis_admin_chain())
+            .filter(|chain_id| *chain_id != wallet.genesis_admin_chain_id())
             .nth(faucet_chain_idx as usize)
             .unwrap(); // we checked that there are enough chains above, so this should be safe
         let service = client

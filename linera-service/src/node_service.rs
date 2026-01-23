@@ -320,7 +320,7 @@ where
     }
 
     /// Creates (or activates) a new chain with the given owner.
-    /// This will automatically subscribe to the future committees created by `admin_id`.
+    /// This will automatically subscribe to the future committees created by `admin_chain_id`.
     async fn open_chain(
         &self,
         chain_id: ChainId,
@@ -346,7 +346,7 @@ where
     }
 
     /// Creates (or activates) a new chain by installing the given authentication keys.
-    /// This will automatically subscribe to the future committees created by `admin_id`.
+    /// This will automatically subscribe to the future committees created by `admin_chain_id`.
     #[expect(clippy::too_many_arguments)]
     async fn open_multi_owner_chain(
         &self,
