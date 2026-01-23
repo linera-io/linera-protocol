@@ -45,7 +45,8 @@ pub type SyncLogView<T> = linera_views::sync_view::log_view::SyncLogView<ViewSto
 
 /// An alias to [`linera_views::sync_view::map_view::SyncMapView`] that uses the WebAssembly-specific
 /// [`ViewStorageContext`].
-pub type SyncMapView<K, V> = linera_views::sync_view::map_view::SyncMapView<ViewStorageContext, K, V>;
+pub type SyncMapView<K, V> =
+    linera_views::sync_view::map_view::SyncMapView<ViewStorageContext, K, V>;
 
 /// An alias to [`linera_views::sync_view::queue_view::SyncQueueView`] that uses the WebAssembly-specific
 /// [`ViewStorageContext`].

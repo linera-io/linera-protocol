@@ -20,8 +20,11 @@ use linera_sdk::ensure;
 use linera_service::config::{DestinationId, LimitsConfig};
 use linera_storage::Storage;
 use linera_views::{
-    batch::Batch, context::Context, log_view::LogView, store::WritableKeyValueStore as _,
-    views::{View, ClonableView},
+    batch::Batch,
+    context::Context,
+    log_view::LogView,
+    store::WritableKeyValueStore as _,
+    views::{ClonableView, View},
 };
 use mini_moka::unsync::Cache as LfuCache;
 use quick_cache::{sync::Cache as FifoCache, Weighter};

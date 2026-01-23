@@ -426,9 +426,7 @@ mod graphql {
         graphql::{hash_name, mangle},
     };
 
-    impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName
-        for SyncQueueView<C, T>
-    {
+    impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName for SyncQueueView<C, T> {
         fn type_name() -> Cow<'static, str> {
             format!(
                 "SyncQueueView_{}_{:08x}",

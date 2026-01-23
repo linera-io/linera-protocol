@@ -342,10 +342,7 @@ impl ReadableSyncKeyValueStore for SyncMemoryStore {
         Ok(result)
     }
 
-    fn find_keys_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
+    fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
         let map = self
             .map
             .read()

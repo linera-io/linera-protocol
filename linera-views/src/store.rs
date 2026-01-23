@@ -200,7 +200,10 @@ pub trait DirectWritableSyncKeyValueStore: WithError {
 }
 
 /// A key-value store that can perform both read and direct write operations.
-pub trait DirectSyncKeyValueStore: ReadableSyncKeyValueStore + DirectWritableSyncKeyValueStore {}
+pub trait DirectSyncKeyValueStore:
+    ReadableSyncKeyValueStore + DirectWritableSyncKeyValueStore
+{
+}
 
 impl<T> DirectSyncKeyValueStore for T where
     T: ReadableSyncKeyValueStore + DirectWritableSyncKeyValueStore

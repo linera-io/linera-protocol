@@ -294,7 +294,10 @@ where
                 vector_query.push(key);
             }
         }
-        let values = self.context.store().read_multi_values_bytes(&vector_query)?;
+        let values = self
+            .context
+            .store()
+            .read_multi_values_bytes(&vector_query)?;
         for (i, value) in missed_indices.into_iter().zip(values) {
             results[i] = from_bytes_option(&value)?;
         }
@@ -858,10 +861,7 @@ where
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map: SyncMapView<_, u32, _> = SyncMapView::load(context).unwrap();
     /// map.insert(&(24 as u32), String::from("Hello")).unwrap();
-    /// assert_eq!(
-    ///     map.get(&(24 as u32)).unwrap(),
-    ///     Some(String::from("Hello"))
-    /// );
+    /// assert_eq!(map.get(&(24 as u32)).unwrap(), Some(String::from("Hello")));
     /// ```
     pub fn insert<Q>(&mut self, index: &Q, value: V) -> Result<(), ViewError>
     where
@@ -933,10 +933,7 @@ where
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map: SyncMapView<_, u32, _> = SyncMapView::load(context).unwrap();
     /// map.insert(&(37 as u32), String::from("Hello")).unwrap();
-    /// assert_eq!(
-    ///     map.get(&(37 as u32)).unwrap(),
-    ///     Some(String::from("Hello"))
-    /// );
+    /// assert_eq!(map.get(&(37 as u32)).unwrap(), Some(String::from("Hello")));
     /// assert_eq!(map.get(&(34 as u32)).unwrap(), None);
     /// ```
     pub fn get<Q>(&self, index: &Q) -> Result<Option<V>, ViewError>
@@ -992,10 +989,7 @@ where
     /// assert_eq!(map.get_mut(&(34 as u32)).unwrap(), None);
     /// let value = map.get_mut(&(37 as u32)).unwrap().unwrap();
     /// *value = String::from("Hola");
-    /// assert_eq!(
-    ///     map.get(&(37 as u32)).unwrap(),
-    ///     Some(String::from("Hola"))
-    /// );
+    /// assert_eq!(map.get(&(37 as u32)).unwrap(), Some(String::from("Hola")));
     /// ```
     pub fn get_mut<Q>(&mut self, index: &Q) -> Result<Option<&mut V>, ViewError>
     where
@@ -1202,10 +1196,7 @@ impl<C: SyncContext, I: CustomSerialize, V> SyncCustomMapView<C, I, V> {
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map: SyncCustomMapView<_, u128, _> = SyncCustomMapView::load(context).unwrap();
     /// map.insert(&(24 as u128), String::from("Hello")).unwrap();
-    /// assert_eq!(
-    ///     map.get(&(24 as u128)).unwrap(),
-    ///     Some(String::from("Hello"))
-    /// );
+    /// assert_eq!(map.get(&(24 as u128)).unwrap(), Some(String::from("Hello")));
     /// ```
     pub fn insert<Q>(&mut self, index: &Q, value: V) -> Result<(), ViewError>
     where
@@ -1278,10 +1269,7 @@ where
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::<_, u128, _>::load(context).unwrap();
     /// map.insert(&(34 as u128), String::from("Hello")).unwrap();
-    /// assert_eq!(
-    ///     map.get(&(34 as u128)).unwrap(),
-    ///     Some(String::from("Hello"))
-    /// );
+    /// assert_eq!(map.get(&(34 as u128)).unwrap(), Some(String::from("Hello")));
     /// ```
     pub fn get<Q>(&self, index: &Q) -> Result<Option<V>, ViewError>
     where
@@ -1364,10 +1352,7 @@ where
     /// map.insert(&(34 as u128), String::from("Hello")).unwrap();
     /// let value = map.get_mut(&(34 as u128)).unwrap().unwrap();
     /// *value = String::from("Hola");
-    /// assert_eq!(
-    ///     map.get(&(34 as u128)).unwrap(),
-    ///     Some(String::from("Hola"))
-    /// );
+    /// assert_eq!(map.get(&(34 as u128)).unwrap(), Some(String::from("Hola")));
     /// ```
     pub fn get_mut<Q>(&mut self, index: &Q) -> Result<Option<&mut V>, ViewError>
     where
@@ -1511,8 +1496,7 @@ where
     /// # use linera_views::sync_view::map_view::SyncCustomMapView;
     /// # use linera_views::sync_view::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
-    /// let mut map = SyncCustomMapView::<_, u128, String>::load(context)
-    ///     .unwrap();
+    /// let mut map = SyncCustomMapView::<_, u128, String>::load(context).unwrap();
     /// map.insert(&(34 as u128), String::from("Hello")).unwrap();
     /// map.insert(&(37 as u128), String::from("Hola")).unwrap();
     /// let mut values = Vec::new();

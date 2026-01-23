@@ -96,7 +96,6 @@ impl<C: SyncContext> SyncView for SyncByteSetView<C> {
     }
 }
 
-
 impl<C: SyncContext> SyncByteSetView<C> {
     /// Inserts a value. If already present then it has no effect.
     /// ```rust
@@ -178,8 +177,7 @@ impl<C: SyncContext> SyncByteSetView<C> {
         self.for_each_key(|key| {
             keys.push(key.to_vec());
             Ok(())
-        })
-        ?;
+        })?;
         Ok(keys)
     }
 
@@ -198,8 +196,7 @@ impl<C: SyncContext> SyncByteSetView<C> {
         self.for_each_key(|_key| {
             count += 1;
             Ok(())
-        })
-        ?;
+        })?;
         Ok(count)
     }
 
@@ -219,7 +216,6 @@ impl<C: SyncContext> SyncByteSetView<C> {
     ///     count += 1;
     ///     Ok(count < 2)
     /// })
-    /// 
     /// .unwrap();
     /// assert_eq!(count, 2);
     /// ```
@@ -281,7 +277,6 @@ impl<C: SyncContext> SyncByteSetView<C> {
     ///     count += 1;
     ///     Ok(())
     /// })
-    /// 
     /// .unwrap();
     /// assert_eq!(count, 3);
     /// ```
@@ -293,10 +288,8 @@ impl<C: SyncContext> SyncByteSetView<C> {
             f(key)?;
             Ok(true)
         })
-        
     }
 }
-
 
 /// A [`SyncView`] implementing the set functionality with the index `I` being any serializable type.
 #[derive(Debug, Allocative)]

@@ -5,10 +5,7 @@ use allocative::Allocative;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
-    batch::Batch,
-    common::from_bytes_option_or_default,
-    context::SyncContext,
-    sync_view::SyncView,
+    batch::Batch, common::from_bytes_option_or_default, context::SyncContext, sync_view::SyncView,
     ViewError,
 };
 

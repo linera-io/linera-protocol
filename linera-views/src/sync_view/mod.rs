@@ -1,16 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{batch::Batch, ViewError};
-
 pub use linera_views_derive::SyncView;
+
+use crate::{batch::Batch, ViewError};
 
 /// The `SyncRegisterView` implements a register for a single value.
 pub mod register_view;
 
 /// The `SyncLogView` implements a log list that can be pushed.
 pub mod log_view;
-
 
 /// The `SyncQueueView` implements a queue that can push on the back and delete on the front.
 pub mod queue_view;
@@ -104,4 +103,3 @@ pub trait SyncRootView: SyncView {
 }
 
 impl<T> SyncRootView for T where T: SyncView {}
-

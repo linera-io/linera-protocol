@@ -182,7 +182,6 @@ impl<W: SyncView> SyncView for SyncByteCollectionView<W::Context, W> {
     }
 }
 
-
 impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
         self.context
@@ -297,9 +296,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
                     .context
                     .base_key()
                     .base_tag_index(KeyTag::Index as u8, short_key);
-                if !self.delete_storage_first
-                    && self.context.store().contains_key(&key_index)?
-                {
+                if !self.delete_storage_first && self.context.store().contains_key(&key_index)? {
                     let key = self
                         .context
                         .base_key()
@@ -391,8 +388,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
         let values = self
             .context
             .store()
-            .read_multi_values_bytes(&keys_to_load)
-            ?;
+            .read_multi_values_bytes(&keys_to_load)?;
 
         for (loaded_values, (position, context)) in values
             .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
@@ -495,8 +491,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
         let values = self
             .context
             .store()
-            .read_multi_values_bytes(&keys_to_load)
-            ?;
+            .read_multi_values_bytes(&keys_to_load)?;
 
         for (loaded_values, (position, context, short_key)) in values
             .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
@@ -630,7 +625,6 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     ///     count += 1;
     ///     Ok(count < 1)
     /// })
-    /// 
     /// .unwrap();
     /// assert_eq!(count, 1);
     /// ```
@@ -695,7 +689,6 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     ///     count += 1;
     ///     Ok(())
     /// })
-    /// 
     /// .unwrap();
     /// assert_eq!(count, 2);
     /// ```
@@ -707,7 +700,6 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
             f(key)?;
             Ok(true)
         })
-        
     }
 
     /// Returns the list of keys in the collection. The order is lexicographic.
@@ -729,8 +721,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
         self.for_each_key(|key| {
             keys.push(key.to_vec());
             Ok(())
-        })
-        ?;
+        })?;
         Ok(keys)
     }
 
@@ -752,12 +743,10 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
         self.for_each_key(|_key| {
             count += 1;
             Ok(())
-        })
-        ?;
+        })?;
         Ok(count)
     }
 }
-
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.
@@ -1467,8 +1456,8 @@ impl<I: CustomSerialize + Send, W: SyncView> SyncCustomCollectionView<W::Context
     /// # use linera_views::sync_view::register_view::SyncRegisterView;
     /// # use linera_views::sync_view::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
-    /// let mut view = SyncCustomCollectionView::<_, u128, SyncRegisterView<_, String>>::load(context)
-    ///     .unwrap();
+    /// let mut view =
+    ///     SyncCustomCollectionView::<_, u128, SyncRegisterView<_, String>>::load(context).unwrap();
     /// view.load_entry_mut(&(23 as u128)).unwrap();
     /// view.load_entry_mut(&(25 as u128)).unwrap();
     /// assert_eq!(view.count().unwrap(), 2);

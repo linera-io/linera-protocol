@@ -21,7 +21,7 @@ use crate::{
         contract_runtime_api::{self, WriteOperation},
     },
     service::wit::base_runtime_api as service_wit,
-    util::{BlockingWait as _, yield_once},
+    util::{yield_once, BlockingWait as _},
 };
 
 /// We need to have a maximum key size that handles all possible underlying
@@ -383,8 +383,7 @@ mod tests {
         assert!(!is_key_existing);
 
         // Check if keys exist
-        let is_keys_existing =
-            mock_store.contains_keys(&[b"foo".to_vec(), b"bar".to_vec()])?;
+        let is_keys_existing = mock_store.contains_keys(&[b"foo".to_vec(), b"bar".to_vec()])?;
         assert!(!is_keys_existing[0]);
         assert!(!is_keys_existing[1]);
 

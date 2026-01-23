@@ -201,10 +201,7 @@ where
     /// let mut log = SyncLogView::load(context).unwrap();
     /// log.push(34);
     /// log.push(42);
-    /// assert_eq!(
-    ///     log.multi_get(vec![0, 1]).unwrap(),
-    ///     vec![Some(34), Some(42)]
-    /// );
+    /// assert_eq!(log.multi_get(vec![0, 1]).unwrap(), vec![Some(34), Some(42)]);
     /// ```
     pub fn multi_get(&self, indices: Vec<usize>) -> Result<Vec<Option<T>>, ViewError> {
         let mut result = Vec::new();
