@@ -304,6 +304,72 @@ where
     }
 }
 
+/// Implementation of the [`SyncContext`] trait on top of a DB client implementing
+/// [`crate::store::ReadableSyncKeyValueStore`] and [`crate::store::WritableSyncKeyValueStore`].
+#[derive(Debug, Default, Clone)]
+pub struct ViewSyncContext<E, S> {
+    /// The DB client that is shared between views.
+    store: S,
+    /// The base key for the context.
+    base_key: BaseKey,
+    /// User-defined data attached to the view.
+    extra: E,
+}
+
+impl<E, S> ViewSyncContext<E, S>
+where
+    S: ReadableSyncKeyValueStore + WritableSyncKeyValueStore,
+{
+    /// Creates a context suitable for a root view, using the given store. If the
+    /// journal's store is non-empty, it will be cleared first, before the context is
+    /// returned.
+    pub fn create_root_context(store: S, extra: E) -> Result<Self, S::Error> {
+        store.clear_journal()?;
+        Ok(Self::new_unchecked(store, Vec::new(), extra))
+    }
+}
+
+impl<E, S> ViewSyncContext<E, S> {
+    /// Creates a context for the given base key, store, and an extra argument. NOTE: this
+    /// constructor doesn't check the journal of the store. In doubt, use
+    /// [`ViewSyncContext::create_root_context`] instead.
+    pub fn new_unchecked(store: S, base_key: Vec<u8>, extra: E) -> Self {
+        Self {
+            store,
+            base_key: BaseKey { bytes: base_key },
+            extra,
+        }
+    }
+}
+
+impl<E, S> SyncContext for ViewSyncContext<E, S>
+where
+    E: Clone + linera_base::util::traits::AutoTraits,
+    S: ReadableSyncKeyValueStore + WritableSyncKeyValueStore + Clone,
+    S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+{
+    type Extra = E;
+    type Store = S;
+
+    type Error = S::Error;
+
+    fn store(&self) -> &Self::Store {
+        &self.store
+    }
+
+    fn extra(&self) -> &E {
+        &self.extra
+    }
+
+    fn base_key(&self) -> &BaseKey {
+        &self.base_key
+    }
+
+    fn base_key_mut(&mut self) -> &mut BaseKey {
+        &mut self.base_key
+    }
+}
+
 /// An implementation of [`crate::context::Context`] that stores all values in memory.
 pub type MemoryContext<E> = ViewContext<E, MemoryStore>;
 
@@ -320,10 +386,10 @@ impl<E> MemoryContext<E> {
 }
 
 /// An implementation of [`crate::context::Context`] that stores all values in sync memory.
-pub type SyncMemoryContext<E> = ViewContext<E, SyncMemoryStore>;
+pub type SyncMemoryContext<E> = ViewSyncContext<E, SyncMemoryStore>;
 
 impl<E> SyncMemoryContext<E> {
-    /// Creates a [`Context`] instance in sync memory for testing.
+    /// Creates a [`SyncContext`] instance in sync memory for testing.
     #[cfg(with_testing)]
     pub fn new_for_testing(extra: E) -> Self {
         Self {
