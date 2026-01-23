@@ -488,9 +488,13 @@ impl<Env: Environment> ClientContext<Env> {
             .extend_chain_mode(chain_id, ListeningMode::FullChain);
         let client = self.make_chain_client(chain_id).await?;
         let chain_description = client.get_chain_description().await?;
-        let config = chain_description.config();
+        // let config = chain_description.config();
 
-        if !config.ownership.is_owner(&owner) {
+        let info = client.chain_info().await?;
+
+        if !info.manager.ownership.is_owner(&owner)
+            && !info.manager.ownership.open_multi_leader_rounds
+        {
             tracing::error!(
                 "The chain with the ID returned by the faucet is not owned by you. \
                 Please make sure you are connecting to a genuine faucet."
