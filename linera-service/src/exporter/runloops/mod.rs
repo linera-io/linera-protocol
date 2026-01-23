@@ -1,14 +1,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::future::{Future, IntoFuture};
+use std::{
+    collections::HashSet,
+    future::{Future, IntoFuture},
+};
 
 use block_processor::BlockProcessor;
 use indexer::indexer_exporter::Exporter as IndexerExporter;
 use linera_base::identifiers::BlobId;
 use linera_execution::committee::Committee;
 use linera_rpc::NodeOptions;
-use linera_service::config::{DestinationConfig, DestinationId, DestinationKind, LimitsConfig};
+use linera_service::config::{DestinationConfig, DestinationId, LimitsConfig};
 use linera_storage::Storage;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use validator_exporter::Exporter as ValidatorExporter;
@@ -101,7 +104,7 @@ where
     F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
     <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
 {
-    let destination_ids = destination_config
+    let startup_destinations = destination_config
         .destinations
         .iter()
         .map(|destination| destination.id())
@@ -109,63 +112,54 @@ where
     let (mut block_processor_storage, mut exporter_storage) = BlockProcessorStorage::load(
         storage.clone(),
         block_exporter_id,
-        destination_ids.clone(),
+        startup_destinations.clone(),
         limits,
     )
     .await?;
 
-    // Load persisted committee destinations from storage if available
-    // This may perform a fallback scan if no persisted blob ID exists
-    let (persisted_committee_destinations, blob_id_to_persist) =
-        match load_persisted_committee_destinations(
-            &storage,
-            &block_processor_storage,
-            &mut exporter_storage,
-        )
-        .await
-        {
-            Some((destinations, blob_id)) => (Some(destinations), blob_id),
-            None => (None, None),
-        };
+    let startup_committee_destinations = if destination_config.committee_destination {
+        // Load persisted committee destinations from storage if available
+        // This may perform a fallback scan if no persisted blob ID exists
+        let (persisted_committee_destinations, blob_id_to_persist) =
+            match load_persisted_committee_destinations(
+                &storage,
+                &block_processor_storage,
+                &mut exporter_storage,
+            )
+            .await
+            {
+                Some((destinations, blob_id)) => (Some(destinations), blob_id),
+                None => (None, None),
+            };
 
-    // If we found a committee via fallback scan, persist it for future startups
-    if let Some(blob_id) = blob_id_to_persist {
+        // If we found a committee via fallback scan, persist it for future startups
+        if let Some(blob_id) = blob_id_to_persist {
+            tracing::info!(
+                ?blob_id,
+                "Persisting committee blob ID found via fallback scan"
+            );
+            block_processor_storage.set_latest_committee_blob(blob_id);
+        }
+        let latest_committee_destinations = persisted_committee_destinations.unwrap_or_default();
         tracing::info!(
-            ?blob_id,
-            "Persisting committee blob ID found via fallback scan"
+            ?latest_committee_destinations,
+            "Init committee exporters from persisted state"
         );
-        block_processor_storage.set_latest_committee_blob(blob_id);
-    }
+        latest_committee_destinations
+            .into_iter()
+            .collect::<HashSet<_>>()
+    } else {
+        HashSet::new()
+    };
 
-    let mut tracker = ExportersTracker::new(
+    let tracker = ExportersTracker::new(
         options,
         limits.work_queue_size.into(),
         shutdown_signal.clone(),
         exporter_storage.clone()?,
         destination_config.destinations.clone(),
+        startup_committee_destinations,
     );
-
-    // Start committee exporters from persisted state and configured destinations
-    if destination_config.committee_destination {
-        // Combine persisted committee destinations with configured destinations
-        let mut all_committee_destinations = persisted_committee_destinations.unwrap_or_default();
-        for dest_id in &destination_ids {
-            if dest_id.kind() == DestinationKind::Validator
-                && !all_committee_destinations.contains(dest_id)
-            {
-                all_committee_destinations.push(dest_id.clone());
-            }
-        }
-
-        if !all_committee_destinations.is_empty() {
-            tracing::info!(
-                ?all_committee_destinations,
-                "Starting committee exporters from persisted state and config"
-            );
-            block_processor_storage.new_committee(all_committee_destinations.clone());
-            tracker.start_committee_exporters(all_committee_destinations);
-        }
-    }
 
     let mut block_processor = BlockProcessor::new(
         tracker,
