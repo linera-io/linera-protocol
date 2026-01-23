@@ -1379,8 +1379,10 @@ dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
  "assert_matches",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -1609,9 +1611,11 @@ dependencies = [
  "async-graphql",
  "bcs",
  "futures",
+ "insta",
  "linera-sdk",
  "log",
  "serde",
+ "serde-reflection",
  "serde_json",
  "tokio",
 ]
@@ -1674,8 +1678,10 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "futures",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -2401,8 +2407,10 @@ dependencies = [
  "alloy-primitives",
  "assert_matches",
  "async-graphql",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -2875,11 +2883,13 @@ dependencies = [
  "candle-transformers",
  "fungible",
  "getrandom 0.2.15",
+ "insta",
  "linera-sdk",
  "log",
  "non-fungible",
  "rand 0.8.5",
  "serde",
+ "serde-reflection",
  "sha3",
  "tokenizers",
  "tokio",
@@ -2951,9 +2961,11 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "bcs",
+ "insta",
  "linera-sdk",
  "log",
  "serde",
+ "serde-reflection",
  "serde_json",
  "test-log",
  "thiserror 1.0.65",
@@ -3119,9 +3131,11 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "bcs",
+ "insta",
  "linera-sdk",
  "log",
  "serde",
+ "serde-reflection",
  "serde_json",
  "test-log",
  "tokio",
@@ -4223,9 +4237,11 @@ dependencies = [
  "candle-core",
  "candle-transformers",
  "getrandom 0.2.15",
+ "insta",
  "linera-sdk",
  "log",
  "rand 0.8.5",
+ "serde-reflection",
  "sha3",
  "tokenizers",
  "tokio",
@@ -4474,10 +4490,12 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
+ "insta",
  "linera-sdk",
  "log",
  "native-fungible",
  "serde",
+ "serde-reflection",
  "test-log",
  "tokio",
 ]
@@ -5443,8 +5461,10 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -6363,8 +6383,10 @@ name = "task-processor"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -6497,8 +6519,10 @@ checksum = "ef927ca75afb808a4d64dd374f00a2adf8d0fcff8e7b184af886c3c87ec4a3f3"
 name = "time-expiry"
 version = "0.1.0"
 dependencies = [
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]

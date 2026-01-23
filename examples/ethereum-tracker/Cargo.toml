@@ -11,7 +11,9 @@ linera-sdk = { workspace = true, features = ["ethereum"] }
 serde.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+insta.workspace = true
 linera-sdk = { workspace = true, features = ["test", "wasmer", "ethereum"] }
+serde-reflection.workspace = true
 tokio = { workspace = true, features = ["rt", "sync"] }
 
 [dev-dependencies]

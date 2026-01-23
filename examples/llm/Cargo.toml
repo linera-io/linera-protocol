@@ -15,7 +15,9 @@ sha3.workspace = true
 tokenizers.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+insta.workspace = true
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+serde-reflection.workspace = true
 tokio = { workspace = true, features = ["rt", "sync"] }
 
 [[bin]]

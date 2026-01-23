@@ -1,0 +1,5 @@
+---
+source: llm/tests/format.rs
+expression: get_registry().unwrap()
+---
+{}

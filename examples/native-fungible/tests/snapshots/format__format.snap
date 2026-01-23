@@ -1,0 +1,36 @@
+---
+source: native-fungible/tests/format.rs
+expression: get_registry().unwrap()
+---
+AccountEntry:
+  STRUCT:
+    - key:
+        TYPENAME: AccountOwner
+    - value:
+        TYPENAME: Amount
+AccountOwner:
+  ENUM:
+    0:
+      Reserved:
+        NEWTYPE: U8
+    1:
+      Address32:
+        NEWTYPE:
+          TYPENAME: CryptoHash
+    2:
+      Address20:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 20
+Amount:
+  NEWTYPESTRUCT: U128
+CryptoHash:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+Message:
+  ENUM:
+    0:
+      Notify: UNIT

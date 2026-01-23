@@ -1,0 +1,15 @@
+---
+source: ethereum-tracker/tests/format.rs
+expression: get_registry().unwrap()
+---
+InstantiationArgument:
+  STRUCT:
+    - ethereum_endpoint: STR
+    - contract_address: STR
+    - start_block: U64
+Operation:
+  ENUM:
+    0:
+      Update:
+        STRUCT:
+          - to_block: U64

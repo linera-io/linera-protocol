@@ -20,6 +20,8 @@ native-fungible = { workspace = true, features = ["test"] }
 test-log.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+insta.workspace = true
+serde-reflection.workspace = true
 tokio = { workspace = true }
 
 [[bin]]

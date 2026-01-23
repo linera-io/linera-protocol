@@ -1,0 +1,12 @@
+---
+source: time-expiry/tests/format.rs
+expression: get_registry().unwrap()
+---
+TimeDelta:
+  NEWTYPESTRUCT: U64
+TimeExpiryOperation:
+  ENUM:
+    0:
+      ExpireAfter:
+        NEWTYPE:
+          TYPENAME: TimeDelta

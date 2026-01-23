@@ -1,0 +1,22 @@
+---
+source: call-evm-counter/tests/format.rs
+expression: get_registry().unwrap()
+---
+CallCounterOperation:
+  ENUM:
+    0:
+      TestCallAddress: UNIT
+    1:
+      Increment:
+        NEWTYPE: U64
+CallCounterRequest:
+  ENUM:
+    0:
+      Query: UNIT
+    1:
+      TestCallAddress: UNIT
+    2:
+      ContractTestCallAddress: UNIT
+    3:
+      Increment:
+        NEWTYPE: U64

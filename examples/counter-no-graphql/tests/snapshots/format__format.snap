@@ -1,0 +1,16 @@
+---
+source: counter-no-graphql/tests/format.rs
+expression: get_registry().unwrap()
+---
+CounterOperation:
+  ENUM:
+    0:
+      Increment:
+        NEWTYPE: U64
+CounterRequest:
+  ENUM:
+    0:
+      Query: UNIT
+    1:
+      Increment:
+        NEWTYPE: U64

@@ -12,6 +12,10 @@ serde.workspace = true
 [dev-dependencies]
 linera-sdk = { workspace = true, features = ["test"] }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+insta.workspace = true
+serde-reflection.workspace = true
+
 [[bin]]
 name = "task_processor_contract"
 path = "src/contract.rs"
