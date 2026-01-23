@@ -8,23 +8,23 @@ use std::{cmp::min, collections::BTreeSet};
 use async_graphql::SimpleObject;
 use linera_sdk::{
     linera_base_types::{Account, AccountOwner, Amount},
-    views::{linera_views, linera_views::context::Context as _},
+    views::{linera_views, linera_views::context::SyncContext as _},
     KeyValueStore,
 };
 use linera_views::sync_view::SyncView;
 use matching_engine::{OrderId, OrderNature, Parameters, Price, PriceAsk, PriceBid};
 use serde::{Deserialize, Serialize};
 
-pub type Context = linera_views::context::ViewContext<Parameters, KeyValueStore>;
+pub type SyncContext = linera_views::context::ViewSyncContext<Parameters, KeyValueStore>;
 
 pub type SyncCustomCollectionView<K, V> =
-    linera_views::sync_view::collection_view::SyncCustomCollectionView<Context, K, V>;
+    linera_views::sync_view::collection_view::SyncCustomCollectionView<SyncContext, K, V>;
 
-pub type SyncMapView<K, V> = linera_views::sync_view::map_view::SyncMapView<Context, K, V>;
+pub type SyncMapView<K, V> = linera_views::sync_view::map_view::SyncMapView<SyncContext, K, V>;
 
-pub type SyncQueueView<T> = linera_views::sync_view::queue_view::SyncQueueView<Context, T>;
+pub type SyncQueueView<T> = linera_views::sync_view::queue_view::SyncQueueView<SyncContext, T>;
 
-pub type SyncRegisterView<T> = linera_views::sync_view::register_view::SyncRegisterView<Context, T>;
+pub type SyncRegisterView<T> = linera_views::sync_view::register_view::SyncRegisterView<SyncContext, T>;
 
 /// The order entry in the order book
 #[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]
@@ -63,14 +63,14 @@ pub struct AccountInfo {
 /// cancelled order is not the oldest, then it remains
 /// though with a size zero.
 #[derive(SyncView, SimpleObject)]
-#[view(context = Context)]
+#[view(context = SyncContext)]
 pub struct LevelView {
     pub queue: SyncQueueView<OrderEntry>,
 }
 
 /// The matching engine containing the information.
 #[derive(SyncView, SimpleObject)]
-#[view(context = Context)]
+#[view(context = SyncContext)]
 pub struct MatchingEngineState {
     /// The next order_id to be used.
     pub next_order_id: SyncRegisterView<OrderId>,
