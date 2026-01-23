@@ -112,6 +112,10 @@ where
     fn spawn(&mut self, id: DestinationId) {
         let exporter_builder = &self.exporters_builder;
         let storage = self.storage.clone().expect("Failed to clone storage");
+        if self.join_handles.contains_key(&id) {
+            tracing::trace!(id=?id, "exporter already running, skipping spawn");
+            return;
+        }
         let join_handle = exporter_builder.spawn(id.clone(), storage);
         self.join_handles.insert(id, join_handle);
     }
