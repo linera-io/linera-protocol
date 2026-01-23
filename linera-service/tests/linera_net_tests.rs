@@ -31,10 +31,7 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_core::worker::{Notification, Reason};
-#[allow(unused_imports)]
-use linera_sdk::abis::controller::{
-    ControllerAbi, ControllerCommand, LocalWorkerState, ManagedService, Operation, WorkerCommand,
-};
+use linera_sdk::abis::controller::{ControllerAbi, LocalWorkerState, ManagedService};
 use linera_sdk::{
     abis::fungible::FungibleTokenAbi,
     linera_base_types::{AccountSecretKey, BlobContent, BlockHeight, DataBlobHash},
@@ -5002,94 +4999,22 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
 
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_controller_worker_registration(config: impl LineraNetConfig) -> Result<()> {
+async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     use anyhow::bail;
     use linera_base::time::Duration;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let (mut net, admin_client) = config.instantiate().await?;
-
-    let admin_chain = admin_client.load_wallet()?.default_chain().unwrap();
-
-    let worker_client = net.make_client().await;
-    worker_client.wallet_init(None).await?;
-    let worker_chain = admin_client
-        .open_and_assign(&worker_client, Amount::from_tokens(10))
-        .await?;
-
-    let (contract, service) = admin_client.build_example("controller").await?;
-    let controller_id = admin_client
-        .publish_and_create::<ControllerAbi, (), ()>(
-            contract,
-            service,
-            VmRuntime::Wasm,
-            &(),
-            &(),
-            &[],
-            None,
-        )
-        .await?;
-
-    let port = get_node_port().await;
-    let mut node_service = worker_client
-        .run_node_service_with_controller(
-            port,
-            ProcessInbox::Automatic,
-            &controller_id.forget_abi(),
-            &[],
-        )
-        .await?;
-
-    worker_client.sync(worker_chain).await?;
-    node_service.process_inbox(&worker_chain).await?;
-
-    for _ in 0..30 {
-        linera_base::time::timer::sleep(Duration::from_secs(1)).await;
-
-        let app = node_service.make_application(&worker_chain, &controller_id)?;
-        let response = app.query("localWorkerState").await?;
-
-        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
-
-        if state.local_worker.is_some() {
-            let worker = state.local_worker.unwrap();
-            assert!(worker.capabilities.is_empty());
-            assert_ne!(
-                worker_chain, admin_chain,
-                "Worker should be on a different chain than admin"
-            );
-            node_service.ensure_is_running()?;
-            node_service.terminate().await?;
-            net.ensure_is_running().await?;
-            net.terminate().await?;
-            return Ok(());
-        }
-    }
-
-    let _ = node_service.terminate().await;
-    let _ = net.terminate().await;
-    bail!("Worker did not register within timeout");
-}
-
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[test_log::test(tokio::test)]
-async fn test_controller_service_assignment(config: impl LineraNetConfig) -> Result<()> {
-    use anyhow::bail;
-    use linera_base::time::Duration;
-
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    tracing::info!("Starting test {}", test_name!());
     let (mut net, admin_client) = config.instantiate().await?;
 
     let admin_chain = admin_client.load_wallet()?.default_chain().unwrap();
     let admin_owner = admin_client.get_owner().unwrap();
 
-    let worker_client = net.make_client().await;
-    worker_client.wallet_init(None).await?;
-    let worker_chain = admin_client
-        .open_and_assign(&worker_client, Amount::from_tokens(10))
+    let worker1_client = net.make_client().await;
+    worker1_client.wallet_init(None).await?;
+    let worker1_chain = admin_client
+        .open_and_assign(&worker1_client, Amount::from_tokens(1000))
         .await?;
 
     let (contract, service) = admin_client.build_example("controller").await?;
@@ -5105,166 +5030,23 @@ async fn test_controller_service_assignment(config: impl LineraNetConfig) -> Res
         )
         .await?;
 
-    let port = get_node_port().await;
-    let mut node_service = worker_client
-        .run_node_service_with_controller(
-            port,
-            ProcessInbox::Automatic,
-            &controller_id.forget_abi(),
-            &[],
-        )
-        .await?;
-
-    worker_client.sync(worker_chain).await?;
-    node_service.process_inbox(&worker_chain).await?;
-
-    let app = node_service.make_application(&worker_chain, &controller_id)?;
-
-    for _ in 0..30 {
-        linera_base::time::timer::sleep(Duration::from_secs(1)).await;
-        let response = app.query("localWorkerState").await?;
-        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
-        if state.local_worker.is_some() {
-            break;
-        }
-    }
-
-    let managed_service = ManagedService {
-        application_id: controller_id.forget_abi(),
-        name: "test-service".to_string(),
-        chain_id: worker_chain,
-        requirements: vec![],
-    };
-    let service_bytes = bcs::to_bytes(&managed_service)?;
-    let service_id = node_service
-        .publish_data_blob(&worker_chain, service_bytes)
-        .await?;
-
-    let admin_port = get_node_port().await;
-    let mut admin_node_service = admin_client
-        .run_node_service(admin_port, ProcessInbox::Automatic)
-        .await?;
-    let admin_app = admin_node_service.make_application(&admin_chain, &controller_id)?;
-
-    let set_admin_command = ControllerCommand::SetAdmins {
-        admins: Some(vec![admin_owner]),
-    };
-    let mutation = format!(
-        "executeControllerCommand(admin: \"{}\", command: {})",
-        admin_owner,
-        serde_json::to_string(&set_admin_command)?
-    );
-    admin_app.mutate(&mutation).await?;
-
-    let update_command = ControllerCommand::UpdateService {
-        service_id: DataBlobHash(service_id),
-        workers: vec![worker_chain],
-    };
-    let mutation = format!(
-        "executeControllerCommand(admin: \"{}\", command: {})",
-        admin_owner,
-        serde_json::to_string(&update_command)?
-    );
-    admin_app.mutate(&mutation).await?;
-
-    node_service.process_inbox(&worker_chain).await?;
-
-    let mut service_assigned = false;
-    for _ in 0..30 {
-        linera_base::time::timer::sleep(Duration::from_secs(1)).await;
-        let response = app.query("localWorkerState").await?;
-        let state: LocalWorkerState =
-            serde_json::from_value(response["localWorkerState"].clone())?;
-
-        if !state.local_services.is_empty() {
-            assert_eq!(state.local_services.len(), 1);
-            assert_eq!(state.local_services[0].name, "test-service");
-            service_assigned = true;
-            break;
-        }
-    }
-
-    if !service_assigned {
-        let _ = node_service.terminate().await;
-        let _ = admin_node_service.terminate().await;
-        let _ = net.terminate().await;
-        bail!("Service was not assigned within timeout");
-    }
-
-    let remove_command = ControllerCommand::UpdateService {
-        service_id: DataBlobHash(service_id),
-        workers: vec![],
-    };
-    let mutation = format!(
-        "executeControllerCommand(admin: \"{}\", command: {})",
-        admin_owner,
-        serde_json::to_string(&remove_command)?
-    );
-    admin_app.mutate(&mutation).await?;
-
-    node_service.process_inbox(&worker_chain).await?;
-
-    for _ in 0..30 {
-        linera_base::time::timer::sleep(Duration::from_secs(1)).await;
-        let response = app.query("localWorkerState").await?;
-        let state: LocalWorkerState =
-            serde_json::from_value(response["localWorkerState"].clone())?;
-
-        if state.local_services.is_empty() {
-            node_service.ensure_is_running()?;
-            node_service.terminate().await?;
-            admin_node_service.ensure_is_running()?;
-            admin_node_service.terminate().await?;
-            net.ensure_is_running().await?;
-            net.terminate().await?;
-            return Ok(());
-        }
-    }
-
-    let _ = node_service.terminate().await;
-    let _ = admin_node_service.terminate().await;
-    let _ = net.terminate().await;
-    bail!("Service was not removed within timeout");
-}
-
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[test_log::test(tokio::test)]
-async fn test_controller_multi_worker(config: impl LineraNetConfig) -> Result<()> {
-    use anyhow::bail;
-    use linera_base::time::Duration;
-
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    tracing::info!("Starting test {}", test_name!());
-    let (mut net, admin_client) = config.instantiate().await?;
-
-    let admin_chain = admin_client.load_wallet()?.default_chain().unwrap();
-
-    let worker1_client = net.make_client().await;
-    worker1_client.wallet_init(None).await?;
-    let worker1_chain = admin_client
-        .open_and_assign(&worker1_client, Amount::from_tokens(10))
-        .await?;
-
-    let worker2_client = net.make_client().await;
-    worker2_client.wallet_init(None).await?;
-    let worker2_chain = admin_client
-        .open_and_assign(&worker2_client, Amount::from_tokens(10))
-        .await?;
-
-    let (contract, service) = admin_client.build_example("controller").await?;
-    let controller_id = admin_client
-        .publish_and_create::<ControllerAbi, (), ()>(
-            contract,
-            service,
+    use counter::CounterAbi;
+    let (counter_contract, counter_service) = admin_client.build_example("counter").await?;
+    let counter_id = admin_client
+        .publish_and_create::<CounterAbi, (), u64>(
+            counter_contract,
+            counter_service,
             VmRuntime::Wasm,
             &(),
-            &(),
+            &0u64,
             &[],
             None,
         )
         .await?;
 
     let port1 = get_node_port().await;
+    worker1_client.sync(worker1_chain).await?;
+
     let mut node_service1 = worker1_client
         .run_node_service_with_controller(
             port1,
@@ -5274,7 +5056,43 @@ async fn test_controller_multi_worker(config: impl LineraNetConfig) -> Result<()
         )
         .await?;
 
+    node_service1.process_inbox(&worker1_chain).await?;
+
+    let app1 = node_service1.make_application(&worker1_chain, &controller_id)?;
+
+    let mut worker1_registered = false;
+    for _ in 0..30 {
+        linera_base::time::timer::sleep(Duration::from_secs(1)).await;
+        let response = app1.query("localWorkerState").await?;
+        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
+
+        if state.local_worker.is_some() {
+            let worker = state.local_worker.unwrap();
+            assert!(worker.capabilities.is_empty());
+            assert_ne!(
+                worker1_chain, admin_chain,
+                "Worker should be on a different chain than admin"
+            );
+            worker1_registered = true;
+            break;
+        }
+    }
+
+    if !worker1_registered {
+        let _ = node_service1.terminate().await;
+        let _ = net.terminate().await;
+        bail!("Worker 1 did not register within timeout");
+    }
+
+    let worker2_client = net.make_client().await;
+    worker2_client.wallet_init(None).await?;
+    let worker2_chain = admin_client
+        .open_and_assign(&worker2_client, Amount::from_tokens(1000))
+        .await?;
+
     let port2 = get_node_port().await;
+    worker2_client.sync(worker2_chain).await?;
+
     let mut node_service2 = worker2_client
         .run_node_service_with_controller(
             port2,
@@ -5284,31 +5102,27 @@ async fn test_controller_multi_worker(config: impl LineraNetConfig) -> Result<()
         )
         .await?;
 
-    worker1_client.sync(worker1_chain).await?;
-    node_service1.process_inbox(&worker1_chain).await?;
-
-    let app1 = node_service1.make_application(&worker1_chain, &controller_id)?;
-
-    for _ in 0..30 {
-        linera_base::time::timer::sleep(Duration::from_secs(1)).await;
-        let response = app1.query("localWorkerState").await?;
-        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
-        if state.local_worker.is_some() {
-            break;
-        }
-    }
-
-    worker2_client.sync(worker2_chain).await?;
     node_service2.process_inbox(&worker2_chain).await?;
 
     let app2 = node_service2.make_application(&worker2_chain, &controller_id)?;
+
+    let mut worker2_registered = false;
     for _ in 0..30 {
         linera_base::time::timer::sleep(Duration::from_secs(1)).await;
         let response = app2.query("localWorkerState").await?;
         let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
+
         if state.local_worker.is_some() {
+            worker2_registered = true;
             break;
         }
+    }
+
+    if !worker2_registered {
+        let _ = node_service1.terminate().await;
+        let _ = node_service2.terminate().await;
+        let _ = net.terminate().await;
+        bail!("Worker 2 did not register within timeout");
     }
 
     let admin_port = get_node_port().await;
@@ -5321,13 +5135,9 @@ async fn test_controller_multi_worker(config: impl LineraNetConfig) -> Result<()
     let worker_keys: Vec<String> = serde_json::from_value(response["workers"]["keys"].clone())?;
 
     if worker_keys.len() < 2 {
-        node_service1.ensure_is_running()?;
         let _ = node_service1.terminate().await;
-        node_service2.ensure_is_running()?;
         let _ = node_service2.terminate().await;
-        admin_node_service.ensure_is_running()?;
         let _ = admin_node_service.terminate().await;
-        net.ensure_is_running().await?;
         let _ = net.terminate().await;
         bail!("Expected at least 2 workers, got {}", worker_keys.len());
     }
@@ -5336,13 +5146,82 @@ async fn test_controller_multi_worker(config: impl LineraNetConfig) -> Result<()
     assert_ne!(worker2_chain, admin_chain);
     assert_ne!(worker1_chain, worker2_chain);
 
-    node_service1.ensure_is_running()?;
-    node_service1.terminate().await?;
-    node_service2.ensure_is_running()?;
-    node_service2.terminate().await?;
-    admin_node_service.ensure_is_running()?;
-    admin_node_service.terminate().await?;
-    net.ensure_is_running().await?;
-    net.terminate().await?;
-    Ok(())
+    let managed_service = ManagedService {
+        application_id: counter_id.forget_abi(),
+        name: "test-service".to_string(),
+        chain_id: worker1_chain,
+        requirements: vec![],
+    };
+    let service_bytes = bcs::to_bytes(&managed_service)?;
+    let service_id = node_service1
+        .publish_data_blob(&worker1_chain, service_bytes)
+        .await?;
+
+    let mutation = format!(
+        "executeControllerCommand(admin: \"{}\", command: {{SetAdmins: {{ admins: [\"{}\"] }} }})",
+        admin_owner, admin_owner
+    );
+    admin_app.mutate(&mutation).await?;
+
+    let mutation = format!(
+        "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [\"{}\"] }} }})",
+        admin_owner, service_id, worker1_chain
+    );
+    admin_app.mutate(&mutation).await?;
+
+    node_service1.process_inbox(&worker1_chain).await?;
+
+    let mut service_assigned = false;
+    for _ in 0..30 {
+        linera_base::time::timer::sleep(Duration::from_secs(1)).await;
+        let response = app1.query("localWorkerState").await?;
+        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
+
+        if !state.local_services.is_empty() {
+            assert_eq!(state.local_services.len(), 1);
+            assert_eq!(state.local_services[0].name, "test-service");
+            service_assigned = true;
+            break;
+        }
+    }
+
+    if !service_assigned {
+        let _ = node_service1.terminate().await;
+        let _ = node_service2.terminate().await;
+        let _ = admin_node_service.terminate().await;
+        let _ = net.terminate().await;
+        bail!("Service was not assigned within timeout");
+    }
+
+    let mutation = format!(
+        "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [] }} }})",
+        admin_owner, service_id
+    );
+    admin_app.mutate(&mutation).await?;
+
+    node_service1.process_inbox(&worker1_chain).await?;
+
+    for _ in 0..30 {
+        linera_base::time::timer::sleep(Duration::from_secs(1)).await;
+        let response = app1.query("localWorkerState").await?;
+        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
+
+        if state.local_services.is_empty() {
+            node_service1.ensure_is_running()?;
+            node_service1.terminate().await?;
+            node_service2.ensure_is_running()?;
+            node_service2.terminate().await?;
+            admin_node_service.ensure_is_running()?;
+            admin_node_service.terminate().await?;
+            net.ensure_is_running().await?;
+            net.terminate().await?;
+            return Ok(());
+        }
+    }
+
+    let _ = node_service1.terminate().await;
+    let _ = node_service2.terminate().await;
+    let _ = admin_node_service.terminate().await;
+    let _ = net.terminate().await;
+    bail!("Service was not removed within timeout");
 }
