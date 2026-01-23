@@ -172,6 +172,9 @@ where
             self.context.lock().await.update_wallet(&client).await?;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
+                ClientOutcome::Conflict(certificate) => {
+                    return Err(ChainClientError::Conflict(certificate.hash()).into());
+                }
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             drop(client);
@@ -248,6 +251,10 @@ where
             ClientOutcome::WaitForTimeout(timeout) => Err(Error::from(format!(
                 "Please try again at {}",
                 timeout.timestamp
+            ))),
+            ClientOutcome::Conflict(certificate) => Err(Error::from(format!(
+                "A different block was committed: {}",
+                certificate.hash()
             ))),
         }
     }
@@ -1070,6 +1077,9 @@ where
                 .await?
             {
                 ClientOutcome::Committed(certificate) => break certificate.hash(),
+                ClientOutcome::Conflict(certificate) => {
+                    return Err(ChainClientError::Conflict(certificate.hash()).into());
+                }
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             let mut stream = client.subscribe().map_err(|_| {

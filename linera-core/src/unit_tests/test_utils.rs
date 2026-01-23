@@ -1393,11 +1393,35 @@ impl StorageBuilder for ScyllaDbStorageBuilder {
 }
 
 pub trait ClientOutcomeResultExt<T, E> {
+    /// Unwraps the result and panics if it's not `Committed`.
+    /// Use this when you expect the operation to succeed without conflicts.
     fn unwrap_ok_committed(self) -> T;
+
+    /// Unwraps the result, accepting both `Committed` and `Conflict` outcomes.
+    /// Returns the committed value or the conflicting certificate (boxed).
+    fn unwrap_ok_or_conflict(self) -> Result<T, Box<ConfirmedBlockCertificate>>;
 }
 
 impl<T, E: std::fmt::Debug> ClientOutcomeResultExt<T, E> for Result<ClientOutcome<T>, E> {
     fn unwrap_ok_committed(self) -> T {
-        self.unwrap().unwrap()
+        match self.unwrap() {
+            ClientOutcome::Committed(t) => t,
+            ClientOutcome::WaitForTimeout(timeout) => {
+                panic!("unexpected timeout: {timeout}")
+            }
+            ClientOutcome::Conflict(certificate) => {
+                panic!("unexpected conflict: {}", certificate.hash())
+            }
+        }
+    }
+
+    fn unwrap_ok_or_conflict(self) -> Result<T, Box<ConfirmedBlockCertificate>> {
+        match self.unwrap() {
+            ClientOutcome::Committed(t) => Ok(t),
+            ClientOutcome::Conflict(certificate) => Err(certificate),
+            ClientOutcome::WaitForTimeout(timeout) => {
+                panic!("unexpected timeout: {timeout}")
+            }
+        }
     }
 }

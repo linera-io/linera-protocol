@@ -1768,6 +1768,12 @@ pub enum ChainClientError {
         chain_id: ChainId,
         height: BlockHeight,
     },
+
+    #[error(
+        "A different block was already committed at this height. \
+         The committed certificate hash is {0}"
+    )]
+    Conflict(CryptoHash),
 }
 
 impl From<Infallible> for ChainClientError {
@@ -2655,7 +2661,7 @@ impl<Env: Environment> ChainClient<Env> {
             // TODO(#2066): Remove boxing once the call-stack is shallower
             tracing::debug!("calling execute_block");
             match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await {
-                Ok(ExecuteBlockOutcome::Executed(certificate)) => {
+                Ok(ClientOutcome::Committed(certificate)) => {
                     tracing::debug!(
                         execute_block_ms = execute_block_start.elapsed().as_millis(),
                         "execute_block succeeded"
@@ -2663,14 +2669,15 @@ impl<Env: Environment> ChainClient<Env> {
                     self.send_timing(execute_block_start, TimingType::ExecuteBlock);
                     break Ok(ClientOutcome::Committed(certificate));
                 }
-                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
+                Ok(ClientOutcome::WaitForTimeout(timeout)) => {
                     break Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
-                Ok(ExecuteBlockOutcome::Conflict(certificate)) => {
+                Ok(ClientOutcome::Conflict(certificate)) => {
                     info!(
                         height = %certificate.block().header.height,
-                        "Another block was committed; retrying."
+                        "Another block was committed."
                     );
+                    break Ok(ClientOutcome::Conflict(certificate));
                 }
                 Err(ChainClientError::CommunicationError(CommunicationError::Trusted(
                     NodeError::UnexpectedBlockHeight {
@@ -2714,7 +2721,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
-    ) -> Result<ExecuteBlockOutcome, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
 
@@ -2728,10 +2735,13 @@ impl<Env: Environment> ChainClient<Env> {
         // TODO(#5092): We shouldn't need to call this explicitly.
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
-                return Ok(ExecuteBlockOutcome::Conflict(certificate))
+                return Ok(ClientOutcome::Conflict(Box::new(certificate)))
             }
             ClientOutcome::WaitForTimeout(timeout) => {
-                return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
+                return Ok(ClientOutcome::WaitForTimeout(timeout))
+            }
+            ClientOutcome::Conflict(certificate) => {
+                return Ok(ClientOutcome::Conflict(certificate))
             }
             ClientOutcome::Committed(None) => {}
         }
@@ -2753,18 +2763,17 @@ impl<Env: Environment> ChainClient<Env> {
 
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) if certificate.block() == &block => {
-                Ok(ExecuteBlockOutcome::Executed(certificate))
+                Ok(ClientOutcome::Committed(certificate))
             }
             ClientOutcome::Committed(Some(certificate)) => {
-                Ok(ExecuteBlockOutcome::Conflict(certificate))
+                Ok(ClientOutcome::Conflict(Box::new(certificate)))
             }
             // Should be unreachable: We did set a pending block.
             ClientOutcome::Committed(None) => Err(ChainClientError::BlockProposalError(
                 "Unexpected block proposal error",
             )),
-            ClientOutcome::WaitForTimeout(timeout) => {
-                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
-            }
+            ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
+            ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
         }
     }
 
@@ -3465,36 +3474,31 @@ impl<Env: Environment> ChainClient<Env> {
         new_owner: AccountOwner,
         new_weight: u64,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        loop {
-            let ownership = self.prepare_chain().await?.manager.ownership;
-            ensure!(
-                ownership.is_active(),
-                ChainError::InactiveChain(self.chain_id)
-            );
-            let mut owners = ownership.owners.into_iter().collect::<Vec<_>>();
-            owners.extend(ownership.super_owners.into_iter().zip(iter::repeat(100)));
-            owners.push((new_owner, new_weight));
-            let operations = vec![Operation::system(SystemOperation::ChangeOwnership {
-                super_owners: Vec::new(),
-                owners,
-                multi_leader_rounds: ownership.multi_leader_rounds,
-                open_multi_leader_rounds: ownership.open_multi_leader_rounds,
-                timeout_config: ownership.timeout_config,
-            })];
-            match self.execute_block(operations, vec![]).await? {
-                ExecuteBlockOutcome::Executed(certificate) => {
-                    return Ok(ClientOutcome::Committed(certificate));
-                }
-                ExecuteBlockOutcome::Conflict(certificate) => {
-                    info!(
-                        height = %certificate.block().header.height,
-                        "Another block was committed; retrying."
-                    );
-                }
-                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-                    return Ok(ClientOutcome::WaitForTimeout(timeout));
-                }
-            };
+        let ownership = self.prepare_chain().await?.manager.ownership;
+        ensure!(
+            ownership.is_active(),
+            ChainError::InactiveChain(self.chain_id)
+        );
+        let mut owners = ownership.owners.into_iter().collect::<Vec<_>>();
+        owners.extend(ownership.super_owners.into_iter().zip(iter::repeat(100)));
+        owners.push((new_owner, new_weight));
+        let operations = vec![Operation::system(SystemOperation::ChangeOwnership {
+            super_owners: Vec::new(),
+            owners,
+            multi_leader_rounds: ownership.multi_leader_rounds,
+            open_multi_leader_rounds: ownership.open_multi_leader_rounds,
+            timeout_config: ownership.timeout_config,
+        })];
+        match self.execute_block(operations, vec![]).await? {
+            ClientOutcome::Committed(certificate) => Ok(ClientOutcome::Committed(certificate)),
+            ClientOutcome::Conflict(certificate) => {
+                info!(
+                    height = %certificate.block().header.height,
+                    "Another block was committed."
+                );
+                Ok(ClientOutcome::Conflict(certificate))
+            }
+            ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
         }
     }
 
@@ -3570,43 +3574,43 @@ impl<Env: Environment> ChainClient<Env> {
         balance: Amount,
     ) -> Result<ClientOutcome<(ChainDescription, ConfirmedBlockCertificate)>, ChainClientError>
     {
-        loop {
-            let config = OpenChainConfig {
-                ownership: ownership.clone(),
-                balance,
-                application_permissions: application_permissions.clone(),
-            };
-            let operation = Operation::system(SystemOperation::OpenChain(config));
-            let certificate = match self.execute_block(vec![operation], vec![]).await? {
-                ExecuteBlockOutcome::Executed(certificate) => certificate,
-                ExecuteBlockOutcome::Conflict(_) => continue,
-                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-                    return Ok(ClientOutcome::WaitForTimeout(timeout));
-                }
-            };
-            // The only operation, i.e. the last transaction, created the new chain.
-            let chain_blob = certificate
-                .block()
-                .body
-                .blobs
-                .last()
-                .and_then(|blobs| blobs.last())
-                .ok_or_else(|| ChainClientError::InternalError("Failed to create a new chain"))?;
-            let description = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?;
-            // If we have a key for any owner, add it to the list of tracked chains.
-            for owner in ownership.all_owners() {
-                if self.client.has_key_for(owner).await? {
-                    self.client
-                        .extend_chain_mode(description.id(), ListeningMode::FullChain);
-                    break;
-                }
+        let config = OpenChainConfig {
+            ownership: ownership.clone(),
+            balance,
+            application_permissions: application_permissions.clone(),
+        };
+        let operation = Operation::system(SystemOperation::OpenChain(config));
+        let certificate = match self.execute_block(vec![operation], vec![]).await? {
+            ClientOutcome::Committed(certificate) => certificate,
+            ClientOutcome::Conflict(certificate) => {
+                return Ok(ClientOutcome::Conflict(certificate));
             }
-            self.client
-                .local_node
-                .retry_pending_cross_chain_requests(self.chain_id)
-                .await?;
-            return Ok(ClientOutcome::Committed((description, certificate)));
+            ClientOutcome::WaitForTimeout(timeout) => {
+                return Ok(ClientOutcome::WaitForTimeout(timeout));
+            }
+        };
+        // The only operation, i.e. the last transaction, created the new chain.
+        let chain_blob = certificate
+            .block()
+            .body
+            .blobs
+            .last()
+            .and_then(|blobs| blobs.last())
+            .ok_or_else(|| ChainClientError::InternalError("Failed to create a new chain"))?;
+        let description = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?;
+        // If we have a key for any owner, add it to the list of tracked chains.
+        for owner in ownership.all_owners() {
+            if self.client.has_key_for(owner).await? {
+                self.client
+                    .extend_chain_mode(description.id(), ListeningMode::FullChain);
+                break;
+            }
         }
+        self.client
+            .local_node
+            .retry_pending_cross_chain_requests(self.chain_id)
+            .await?;
+        Ok(ClientOutcome::Committed((description, certificate)))
     }
 
     /// Closes the chain (and loses everything in it!!).
@@ -3779,6 +3783,7 @@ impl<Env: Environment> ChainClient<Env> {
         {
             ClientOutcome::Committed(_) => {}
             outcome @ ClientOutcome::WaitForTimeout(_) => return Ok(outcome),
+            outcome @ ClientOutcome::Conflict(_) => return Ok(outcome),
         }
         let epoch = Box::pin(self.chain_info()).await?.epoch.try_add_one()?;
         Box::pin(
@@ -3821,9 +3826,9 @@ impl<Env: Environment> ChainClient<Env> {
             // will be epoch changes, receiving messages and processing event stream
             // updates, if any are pending.
             match self.execute_block(vec![], vec![]).await {
-                Ok(ExecuteBlockOutcome::Executed(certificate))
-                | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
-                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
+                Ok(ClientOutcome::Committed(certificate)) => certificates.push(certificate),
+                Ok(ClientOutcome::Conflict(certificate)) => certificates.push(*certificate),
+                Ok(ClientOutcome::WaitForTimeout(timeout)) => {
                     return Ok((certificates, Some(timeout)));
                 }
                 // Nothing in the inbox and no stream updates to be processed.
@@ -4408,19 +4413,6 @@ impl<Env: Environment> ChainClient<Env> {
             .await
             .unwrap();
     }
-}
-
-/// The outcome of trying to commit a list of incoming messages and operations to the chain.
-#[derive(Debug)]
-enum ExecuteBlockOutcome {
-    /// A block with the messages and operations was committed.
-    Executed(ConfirmedBlockCertificate),
-    /// A different block was already proposed and got committed. Check whether the messages and
-    /// operations are still suitable, and try again at the next block height.
-    Conflict(ConfirmedBlockCertificate),
-    /// We are not the round leader and cannot do anything. Try again at the specified time or
-    /// or whenever the round or block height changes.
-    WaitForTimeout(RoundTimeout),
 }
 
 /// Wrapper for `AbortHandle` that aborts when its dropped.
