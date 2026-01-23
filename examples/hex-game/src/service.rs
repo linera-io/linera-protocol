@@ -32,8 +32,8 @@ impl Service for HexService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = HexState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            HexState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         HexService {
             runtime: Arc::new(runtime),
             state: Arc::new(state),

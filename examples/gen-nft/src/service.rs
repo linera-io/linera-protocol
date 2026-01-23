@@ -42,8 +42,8 @@ impl Service for GenNftService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = GenNftState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            GenNftState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         GenNftService {
             state: Arc::new(state),
             runtime: Arc::new(runtime),
@@ -136,11 +136,7 @@ impl QueryRoot {
 
     async fn owned_nfts(&self, owner: AccountOwner) -> BTreeMap<String, NftOutput> {
         let mut result = BTreeMap::new();
-        let owned_token_ids = self
-            .non_fungible_token
-            .owned_token_ids
-            .get(&owner)
-            .unwrap();
+        let owned_token_ids = self.non_fungible_token.owned_token_ids.get(&owner).unwrap();
 
         for token_id in owned_token_ids.into_iter().flatten() {
             let nft = self

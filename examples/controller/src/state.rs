@@ -6,7 +6,9 @@ use std::collections::HashSet;
 use linera_sdk::{
     abis::controller::{ManagedServiceId, Worker},
     linera_base_types::{AccountOwner, ChainId, MessagePolicy},
-    views::{linera_views, SyncMapView, SyncRegisterView, SyncView, SyncSetView, ViewStorageContext},
+    views::{
+        linera_views, SyncMapView, SyncRegisterView, SyncSetView, SyncView, ViewStorageContext,
+    },
 };
 
 /// The state of the service controller application.

@@ -85,8 +85,7 @@ impl Contract for ControllerContract {
                 self.prepare_worker_command_locally(owner, &command);
                 let creator_chain_id = self.runtime.application_creator_chain_id();
                 if self.runtime.chain_id() == creator_chain_id {
-                    self.execute_worker_command_locally(owner, command, creator_chain_id)
-                        ;
+                    self.execute_worker_command_locally(owner, command, creator_chain_id);
                 } else {
                     self.runtime
                         .prepare_message(Message::ExecuteWorkerCommand { owner, command })
@@ -120,8 +119,7 @@ impl Contract for ControllerContract {
                 let origin_chain_id = self.runtime.message_origin_chain_id().expect(
                     "Incoming message origin chain ID has to be available when executing a message",
                 );
-                self.execute_worker_command_locally(owner, command, origin_chain_id)
-                    ;
+                self.execute_worker_command_locally(owner, command, origin_chain_id);
             }
             Message::ExecuteControllerCommand { admin, command } => {
                 assert_eq!(
@@ -162,11 +160,7 @@ impl Contract for ControllerContract {
 }
 
 impl ControllerContract {
-    fn prepare_worker_command_locally(
-        &mut self,
-        owner: AccountOwner,
-        command: &WorkerCommand,
-    ) {
+    fn prepare_worker_command_locally(&mut self, owner: AccountOwner, command: &WorkerCommand) {
         match command {
             WorkerCommand::RegisterWorker { capabilities } => {
                 assert!(
@@ -274,8 +268,7 @@ impl ControllerContract {
                 service_id,
                 workers,
             } => {
-                self.update_service(service_id, workers.into_iter().collect())
-                    ;
+                self.update_service(service_id, workers.into_iter().collect());
             }
             ControllerCommand::RemoveService { service_id } => {
                 self.update_service(service_id, HashSet::new());
@@ -297,8 +290,7 @@ impl ControllerContract {
                 }
             }
             ControllerCommand::UpdateChain { chain_id, workers } => {
-                self.update_chain(chain_id, workers.into_iter().collect())
-                    ;
+                self.update_chain(chain_id, workers.into_iter().collect());
             }
             ControllerCommand::RemoveChain { chain_id } => {
                 self.update_chain(chain_id, HashSet::new());
@@ -322,11 +314,7 @@ impl ControllerContract {
         }
     }
 
-    fn update_service(
-        &mut self,
-        service_id: ManagedServiceId,
-        new_workers: HashSet<ChainId>,
-    ) {
+    fn update_service(&mut self, service_id: ManagedServiceId, new_workers: HashSet<ChainId>) {
         let existing_workers = self
             .state
             .services

@@ -50,9 +50,7 @@ impl Contract for EthereumTrackerContract {
         self.state.ethereum_endpoint.set(ethereum_endpoint);
         self.state.contract_address.set(contract_address);
         self.state.start_block.set(start_block);
-        self.state
-            .save()
-            .expect("Failed to write updated storage");
+        self.state.save().expect("Failed to write updated storage");
 
         self.read_initial();
     }

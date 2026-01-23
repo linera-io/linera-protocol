@@ -39,8 +39,7 @@ impl Contract for MatchingEngineContract {
             Vec::new(),
             parameters,
         );
-        let state = MatchingEngineState::load(context)
-            .expect("Failed to load state");
+        let state = MatchingEngineState::load(context).expect("Failed to load state");
         MatchingEngineContract { state, runtime }
     }
 
@@ -176,9 +175,9 @@ impl MatchingEngineContract {
             } => {
                 self.receive_from_account(&owner, &quantity, &nature, &price);
                 let account = Account { chain_id, owner };
-                let transfers =
-                    self.state
-                        .insert_and_uncross_market(&account, quantity, nature, &price);
+                let transfers = self
+                    .state
+                    .insert_and_uncross_market(&account, quantity, nature, &price);
                 for transfer in transfers {
                     self.send_to(transfer);
                 }

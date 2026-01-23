@@ -32,8 +32,8 @@ impl Contract for CounterContract {
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = CounterState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            CounterState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         CounterContract { state, runtime }
     }
 

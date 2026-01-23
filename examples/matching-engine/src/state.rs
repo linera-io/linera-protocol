@@ -24,7 +24,8 @@ pub type SyncMapView<K, V> = linera_views::sync_view::map_view::SyncMapView<Sync
 
 pub type SyncQueueView<T> = linera_views::sync_view::queue_view::SyncQueueView<SyncContext, T>;
 
-pub type SyncRegisterView<T> = linera_views::sync_view::register_view::SyncRegisterView<SyncContext, T>;
+pub type SyncRegisterView<T> =
+    linera_views::sync_view::register_view::SyncRegisterView<SyncContext, T>;
 
 /// The order entry in the order book
 #[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]
@@ -111,10 +112,7 @@ impl MatchingEngineState {
 
     /// Checks that the order exists and has been issued by the claimed owner.
     pub fn check_order_id(&self, order_id: &OrderId, owner: &AccountOwner) {
-        let value = self
-            .orders
-            .get(order_id)
-            .expect("Failed to load order");
+        let value = self.orders.get(order_id).expect("Failed to load order");
         match value {
             None => panic!("Order is not present therefore cannot be cancelled"),
             Some(value) => {
@@ -134,10 +132,7 @@ impl MatchingEngineState {
         order_id: OrderId,
         cancel_quantity: ModifyQuantity,
     ) -> Option<Transfer> {
-        let key_book = self
-            .orders
-            .get(&order_id)
-            .expect("Failed to load order")?;
+        let key_book = self.orders.get(&order_id).expect("Failed to load order")?;
         let transfer = match key_book.nature {
             OrderNature::Bid => {
                 let view = self.bid_level(&key_book.price.to_bid());

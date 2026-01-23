@@ -36,8 +36,8 @@ impl Contract for RfqContract {
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = RfqState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            RfqState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         RfqContract { state, runtime }
     }
 

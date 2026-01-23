@@ -32,8 +32,8 @@ impl Service for RfqService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = RfqState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            RfqState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         RfqService {
             state: Arc::new(state),
             runtime: Arc::new(runtime),

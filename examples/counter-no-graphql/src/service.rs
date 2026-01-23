@@ -27,8 +27,8 @@ impl Service for CounterService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = CounterState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            CounterState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         CounterService {
             state,
             runtime: Arc::new(runtime),

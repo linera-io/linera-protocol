@@ -1,7 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_sdk::views::{linera_views, SyncQueueView, SyncRegisterView, SyncView, ViewStorageContext};
+use linera_sdk::views::{
+    linera_views, SyncQueueView, SyncRegisterView, SyncView, ViewStorageContext,
+};
 use serde::{Deserialize, Serialize};
 
 /// A pending task stored in the application state.

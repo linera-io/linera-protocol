@@ -39,8 +39,7 @@ impl Service for MatchingEngineService {
             Vec::new(),
             parameters,
         );
-        let state = MatchingEngineState::load(context)
-            .expect("Failed to load state");
+        let state = MatchingEngineState::load(context).expect("Failed to load state");
         MatchingEngineService {
             state: Arc::new(state),
             runtime: Arc::new(runtime),

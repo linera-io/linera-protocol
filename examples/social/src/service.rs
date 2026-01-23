@@ -30,8 +30,8 @@ impl Service for SocialService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = SocialState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            SocialState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         SocialService {
             state: Arc::new(state),
             runtime: Arc::new(runtime),

@@ -36,8 +36,8 @@ impl Contract for HexContract {
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = HexState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            HexState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         HexContract { state, runtime }
     }
 
@@ -57,10 +57,7 @@ impl Contract for HexContract {
                 board_size,
                 fee_budget,
                 timeouts,
-            } => {
-                self.execute_start(players, board_size, fee_budget, timeouts)
-                    
-            }
+            } => self.execute_start(players, board_size, fee_budget, timeouts),
         };
         self.handle_winner(outcome)
     }
@@ -81,11 +78,7 @@ impl Contract for HexContract {
             Message::End { winner, loser } => {
                 let origin_chain_id = self.runtime.message_origin_chain_id().unwrap();
                 for owner in [&winner, &loser] {
-                    let chain_set = self
-                        .state
-                        .game_chains
-                        .get_mut_or_default(owner)
-                        .unwrap();
+                    let chain_set = self.state.game_chains.get_mut_or_default(owner).unwrap();
                     chain_set.retain(|game_chain| game_chain.chain_id != origin_chain_id);
                     if chain_set.is_empty() {
                         self.state.game_chains.remove(owner).unwrap();

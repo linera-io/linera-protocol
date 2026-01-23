@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use ethereum_tracker::U256Cont;
-use linera_sdk::views::{linera_views, SyncMapView, SyncRegisterView, SyncView, ViewStorageContext};
+use linera_sdk::views::{
+    linera_views, SyncMapView, SyncRegisterView, SyncView, ViewStorageContext,
+};
 
 /// The application state.
 #[derive(SyncView, async_graphql::SimpleObject)]

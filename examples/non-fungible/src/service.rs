@@ -132,11 +132,7 @@ impl QueryRoot {
 
     async fn owned_nfts(&self, owner: AccountOwner) -> BTreeMap<String, NftOutput> {
         let mut result = BTreeMap::new();
-        let owned_token_ids = self
-            .non_fungible_token
-            .owned_token_ids
-            .get(&owner)
-            .unwrap();
+        let owned_token_ids = self.non_fungible_token.owned_token_ids.get(&owner).unwrap();
 
         for token_id in owned_token_ids.into_iter().flatten() {
             let nft = self

@@ -34,8 +34,8 @@ impl Contract for GenNftContract {
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = GenNftState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            GenNftState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         GenNftContract { state, runtime }
     }
 

@@ -35,8 +35,8 @@ impl Contract for AmmContract {
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = AmmState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            AmmState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         AmmContract { state, runtime }
     }
 
@@ -206,9 +206,7 @@ impl Contract for AmmContract {
                 let shares_to_mint =
                     self.get_shares(token0_amount, token1_amount, &balance0_bigint);
 
-                let mut current_shares = self
-                    .current_shares_or_default(&message_origin_account)
-                    ;
+                let mut current_shares = self.current_shares_or_default(&message_origin_account);
                 current_shares.saturating_add_assign(shares_to_mint);
                 self.state
                     .shares
@@ -271,9 +269,7 @@ impl Contract for AmmContract {
                 };
 
                 let message_origin_account = self.get_message_origin_account(owner);
-                let current_shares = self
-                    .current_shares_or_default(&message_origin_account)
-                    ;
+                let current_shares = self.current_shares_or_default(&message_origin_account);
                 assert!(
                     shares_to_return <= current_shares,
                     "Can't remove more liquidity than you added"
@@ -294,9 +290,7 @@ impl Contract for AmmContract {
                     .expect("Permission for RemoveAllAddedLiquidity message");
 
                 let message_origin_account = self.get_message_origin_account(owner);
-                let current_shares = self
-                    .current_shares_or_default(&message_origin_account)
-                    ;
+                let current_shares = self.current_shares_or_default(&message_origin_account);
 
                 let (amount_token0, amount_token1) = self.get_amounts_from_shares(current_shares);
                 self.return_shares(
