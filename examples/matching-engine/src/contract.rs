@@ -74,7 +74,7 @@ impl Contract for MatchingEngineContract {
                     .indices()
                     .expect("Failed to read existing order IDs");
                 for order_id in order_ids {
-                    match self.state.modify_order(order_id, ModifyQuantity::All).await {
+                    match self.state.modify_order(order_id, ModifyQuantity::All) {
                         Some(transfer) => self.send_to(transfer),
                         // Orders with amount zero may have been cleared in an earlier iteration.
                         None => continue,
@@ -176,20 +176,18 @@ impl MatchingEngineContract {
             } => {
                 self.receive_from_account(&owner, &quantity, &nature, &price);
                 let account = Account { chain_id, owner };
-                let transfers = self
-                    .state
-                    .insert_and_uncross_market(&account, quantity, nature, &price)
-                    .await;
+                let transfers =
+                    self.state
+                        .insert_and_uncross_market(&account, quantity, nature, &price);
                 for transfer in transfers {
                     self.send_to(transfer);
                 }
             }
             Order::Cancel { owner, order_id } => {
-                self.state.check_order_id(&order_id, &owner).await;
+                self.state.check_order_id(&order_id, &owner);
                 let transfer = self
                     .state
                     .modify_order(order_id, ModifyQuantity::All)
-                    .await
                     .expect("Order is not present therefore cannot be cancelled");
                 self.send_to(transfer);
             }
@@ -198,11 +196,10 @@ impl MatchingEngineContract {
                 order_id,
                 reduce_quantity,
             } => {
-                self.state.check_order_id(&order_id, &owner).await;
+                self.state.check_order_id(&order_id, &owner);
                 let transfer = self
                     .state
                     .modify_order(order_id, ModifyQuantity::Partial(reduce_quantity))
-                    .await
                     .expect("Order is not present therefore cannot be cancelled");
                 self.send_to(transfer);
             }
