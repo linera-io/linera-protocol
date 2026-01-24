@@ -71,7 +71,7 @@ impl HexState {
 #[cfg(test)]
 mod tests {
     use async_graphql::{futures_util::FutureExt, Request};
-    use linera_sdk::{util::BlockingWait, views::View, Service, ServiceRuntime};
+    use linera_sdk::{views::View, Service, ServiceRuntime};
     use serde_json::json;
 
     use super::*;
