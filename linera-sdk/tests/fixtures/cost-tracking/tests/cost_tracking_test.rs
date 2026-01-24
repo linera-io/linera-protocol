@@ -5,10 +5,32 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use cost_tracking::{CostTrackingAbi, Operation, Query, QueryResponse};
+use cost_tracking::{CostTrackingAbi, LogEntry, Operation, Query, QueryResponse};
 use linera_sdk::test::TestValidator;
 
-/// Test that runs all cost tracking operations and prints the fuel log.
+/// Computes fuel consumption differences between consecutive log entries.
+/// Returns a vector of (label, fuel_consumed) pairs.
+fn compute_fuel_diffs(logs: &[LogEntry]) -> Vec<(String, u64)> {
+    logs.windows(2)
+        .map(|window| {
+            let prev = &window[0];
+            let curr = &window[1];
+            let fuel_consumed = prev.fuel.saturating_sub(curr.fuel);
+            (curr.label.clone(), fuel_consumed)
+        })
+        .collect()
+}
+
+/// Formats fuel differences as a snapshot-friendly string.
+fn format_fuel_diffs(diffs: &[(String, u64)]) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    for (label, fuel_consumed) in diffs {
+        lines.push(format!("{}: {}", label, fuel_consumed));
+    }
+    lines.join("\n")
+}
+
+/// Test that runs all cost tracking operations and compares fuel consumption against snapshots.
 #[tokio::test]
 async fn test_cost_tracking() {
     let (validator, module_id) =
@@ -25,33 +47,23 @@ async fn test_cost_tracking() {
         })
         .await;
 
-    println!("=== Cost Tracking Test Results ===");
-
     // Query the logs
     let response = chain.query(application_id, Query::GetLogs).await.response;
 
-    if let QueryResponse::Logs(logs) = response {
-        println!("=== Fuel Consumption Log ===");
-        println!("{:<40} {:>15}", "Operation", "Remaining Fuel");
-        println!("{}", "-".repeat(56));
+    let QueryResponse::Logs(logs) = response else {
+        panic!("Expected Logs response");
+    };
 
-        let mut prev_fuel: Option<u64> = None;
-        for entry in &logs {
-            let diff = prev_fuel.map(|p| p.saturating_sub(entry.fuel));
-            let diff_str = diff.map(|d| format!("(-{})", d)).unwrap_or_default();
-            println!("{:<40} {:>15} {}", entry.label, entry.fuel, diff_str);
-            prev_fuel = Some(entry.fuel);
-        }
+    // Compute fuel differences between consecutive measurements
+    let diffs = compute_fuel_diffs(&logs);
+    let formatted = format_fuel_diffs(&diffs);
 
-        println!();
-        println!("Total log entries: {}", logs.len());
+    // Snapshot the fuel consumption differences
+    // When fuel usage changes, this test will fail and show exactly what changed
+    insta::assert_snapshot!("fuel_consumption_diffs", formatted);
 
-        // Calculate total fuel consumed
-        if let (Some(first), Some(last)) = (logs.first(), logs.last()) {
-            let total_consumed = first.fuel.saturating_sub(last.fuel);
-            println!("Total fuel consumed: {}", total_consumed);
-        }
-    }
+    // Verify we have log entries
+    assert!(!logs.is_empty(), "Should have logged some entries");
 
     // Also verify we can get the log count
     let count_response = chain
@@ -59,7 +71,6 @@ async fn test_cost_tracking() {
         .await
         .response;
     if let QueryResponse::LogCount(count) = count_response {
-        println!("Log count from query: {}", count);
         assert!(count > 0, "Should have logged some entries");
     }
 }
