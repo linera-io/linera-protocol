@@ -4,12 +4,12 @@
 use counter_no_graphql::CounterNoGraphQlAbi;
 use linera_sdk::{
     linera_base_types::ApplicationId,
-    views::{linera_views, RegisterView, RootView, ViewStorageContext},
+    views::{linera_views, SyncRegisterView, SyncView, ViewStorageContext},
 };
 
 /// The application state.
-#[derive(RootView)]
+#[derive(SyncView)]
 #[view(context = ViewStorageContext)]
 pub struct CreateAndCallState {
-    pub value: RegisterView<Option<ApplicationId<CounterNoGraphQlAbi>>>,
+    pub value: SyncRegisterView<Option<ApplicationId<CounterNoGraphQlAbi>>>,
 }

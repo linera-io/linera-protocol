@@ -33,7 +33,6 @@ impl Contract for TrackInstantiationContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = TrackInstantiationState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
 
         TrackInstantiationContract { state, runtime }

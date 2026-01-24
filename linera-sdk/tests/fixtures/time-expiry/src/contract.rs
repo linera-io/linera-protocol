@@ -33,7 +33,6 @@ impl Contract for TimeExpiryContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = TimeExpiryState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         TimeExpiryContract { state, runtime }
     }

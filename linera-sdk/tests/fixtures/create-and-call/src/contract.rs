@@ -34,7 +34,6 @@ impl Contract for CreateAndCallContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = CreateAndCallState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         CreateAndCallContract { state, runtime }
     }
