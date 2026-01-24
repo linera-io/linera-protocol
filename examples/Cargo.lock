@@ -1614,7 +1614,6 @@ dependencies = [
  "insta",
  "linera-sdk",
  "log",
- "serde",
  "serde-reflection",
  "serde_json",
  "tokio",

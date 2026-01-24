@@ -673,6 +673,7 @@ dependencies = [
  "async-graphql",
  "futures",
  "linera-sdk",
+ "serde-reflection",
  "serde_json",
 ]
 
@@ -683,6 +684,7 @@ dependencies = [
  "futures",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -2378,6 +2380,7 @@ dependencies = [
  "log",
  "papaya",
  "serde",
+ "serde-reflection",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
@@ -3782,6 +3785,17 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b5b14ebbcc4e4f2b3642fa99c388649da58d1dc3308c7d109f39f565d1710f0"
 dependencies = [
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "serde-reflection"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f05a5f801ac62a51a49d378fdb3884480041b99aced450b28990673e8ff99895"
+dependencies = [
+ "once_cell",
  "serde",
  "thiserror 1.0.69",
 ]
