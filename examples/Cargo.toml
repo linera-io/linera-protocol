@@ -36,11 +36,11 @@ candle-core = "0.4.1"
 candle-transformers = "0.4.1"
 futures = "0.3.24"
 futures-util = "0.3.26"
-insta = { version = "1.36.1", features = ["yaml"] }
 getrandom = { version = "0.2.12", default-features = false, features = [
     "custom",
 ] }
 hex = "0.4.3"
+insta = { version = "1.36.1", features = ["yaml"] }
 linera-sdk = { path = "../linera-sdk" }
 linera-views = { path = "../linera-views", default-features = false }
 log = "0.4.20"
