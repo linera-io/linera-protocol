@@ -3922,6 +3922,7 @@ dependencies = [
  "log",
  "papaya",
  "serde",
+ "serde-reflection",
  "serde_json",
  "thiserror 1.0.65",
  "tokio",

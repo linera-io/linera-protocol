@@ -1,86 +1,113 @@
 ---
 source: social/tests/format.rs
-expression: get_registry().unwrap()
+expression: "SocialApplication::formats().unwrap()"
 ---
-ChainId:
-  NEWTYPESTRUCT:
-    TYPENAME: CryptoHash
-Comment:
-  STRUCT:
-    - text: STR
-    - chain_id:
-        TYPENAME: ChainId
-CryptoHash:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
-Key:
-  STRUCT:
-    - timestamp:
-        TYPENAME: Timestamp
-    - author:
-        TYPENAME: ChainId
-    - index: U32
-Message:
-  ENUM:
-    0:
-      Like:
-        STRUCT:
-          - key:
-              TYPENAME: Key
-    1:
-      Comment:
-        STRUCT:
-          - key:
-              TYPENAME: Key
-          - comment: STR
-Operation:
-  ENUM:
-    0:
-      Subscribe:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-    1:
-      Unsubscribe:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-    2:
-      Post:
-        STRUCT:
-          - text: STR
-          - image_url:
-              OPTION: STR
-    3:
-      Like:
-        STRUCT:
-          - key:
-              TYPENAME: Key
-    4:
-      Comment:
-        STRUCT:
-          - key:
-              TYPENAME: Key
-          - comment: STR
-OwnPost:
-  STRUCT:
-    - timestamp:
-        TYPENAME: Timestamp
-    - text: STR
-    - image_url:
-        OPTION: STR
-Post:
-  STRUCT:
-    - key:
-        TYPENAME: Key
-    - text: STR
-    - image_url:
-        OPTION: STR
-    - likes: U32
-    - comments:
-        SEQ:
-          TYPENAME: Comment
-Timestamp:
-  NEWTYPESTRUCT: U64
+REGISTRY:
+  ChainId:
+    NEWTYPESTRUCT:
+      TYPENAME: CryptoHash
+  Comment:
+    STRUCT:
+      - text: STR
+      - chain_id:
+          TYPENAME: ChainId
+  CryptoHash:
+    NEWTYPESTRUCT:
+      TUPLEARRAY:
+        CONTENT: U8
+        SIZE: 32
+  Event:
+    ENUM:
+      0:
+        Post:
+          STRUCT:
+            - post:
+                TYPENAME: OwnPost
+            - index: U32
+      1:
+        Like:
+          STRUCT:
+            - key:
+                TYPENAME: Key
+      2:
+        Comment:
+          STRUCT:
+            - key:
+                TYPENAME: Key
+            - comment: STR
+  Key:
+    STRUCT:
+      - timestamp:
+          TYPENAME: Timestamp
+      - author:
+          TYPENAME: ChainId
+      - index: U32
+  Message:
+    ENUM:
+      0:
+        Like:
+          STRUCT:
+            - key:
+                TYPENAME: Key
+      1:
+        Comment:
+          STRUCT:
+            - key:
+                TYPENAME: Key
+            - comment: STR
+  Operation:
+    ENUM:
+      0:
+        Subscribe:
+          STRUCT:
+            - chain_id:
+                TYPENAME: ChainId
+      1:
+        Unsubscribe:
+          STRUCT:
+            - chain_id:
+                TYPENAME: ChainId
+      2:
+        Post:
+          STRUCT:
+            - text: STR
+            - image_url:
+                OPTION: STR
+      3:
+        Like:
+          STRUCT:
+            - key:
+                TYPENAME: Key
+      4:
+        Comment:
+          STRUCT:
+            - key:
+                TYPENAME: Key
+            - comment: STR
+  OwnPost:
+    STRUCT:
+      - timestamp:
+          TYPENAME: Timestamp
+      - text: STR
+      - image_url:
+          OPTION: STR
+  Post:
+    STRUCT:
+      - key:
+          TYPENAME: Key
+      - text: STR
+      - image_url:
+          OPTION: STR
+      - likes: U32
+      - comments:
+          SEQ:
+            TYPENAME: Comment
+  Timestamp:
+    NEWTYPESTRUCT: U64
+OPERATION:
+  TYPENAME: Operation
+RESPONSE: UNIT
+MESSAGE:
+  TYPENAME: Message
+EVENT_VALUE:
+  TYPENAME: Event

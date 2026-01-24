@@ -5,25 +5,10 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
-use task_processor::TaskProcessorOperation;
-
-fn get_registry() -> Result<Registry> {
-    let mut tracer = Tracer::new(
-        TracerConfig::default()
-            .record_samples_for_newtype_structs(true)
-            .record_samples_for_tuple_structs(true),
-    );
-    let samples = Samples::new();
-
-    // ContractAbi types
-    tracer.trace_type::<TaskProcessorOperation>(&samples)?;
-    // Response is () - skipped
-
-    tracer.registry()
-}
+use linera_sdk::abis::formats::BcsApplication;
+use task_processor::formats::TaskProcessorApplication;
 
 #[test]
 fn test_format() {
-    insta::assert_yaml_snapshot!("format", get_registry().unwrap());
+    insta::assert_yaml_snapshot!("format", TaskProcessorApplication::formats().unwrap());
 }

@@ -6,13 +6,12 @@
 mod state;
 
 use async_graphql::ComplexObject;
-use gol_challenge::{GolChallengeAbi, Operation};
+use gol_challenge::{GolChallengeAbi, Message, Operation};
 use linera_sdk::{
     linera_base_types::WithContractAbi,
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-use serde::{Deserialize, Serialize};
 use state::{GolChallengeState, Solution};
 
 pub struct GolChallengeContract {
@@ -78,9 +77,6 @@ impl Contract for GolChallengeContract {
         self.state.save().await.expect("Failed to save state");
     }
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Message;
 
 /// This implementation is only nonempty in the service.
 #[ComplexObject]

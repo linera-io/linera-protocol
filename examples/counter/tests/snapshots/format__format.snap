@@ -1,5 +1,9 @@
 ---
 source: counter/tests/format.rs
-expression: get_registry().unwrap()
+expression: "CounterApplication::formats().unwrap()"
 ---
-{}
+REGISTRY: {}
+OPERATION: U64
+RESPONSE: U64
+MESSAGE: UNIT
+EVENT_VALUE: UNIT

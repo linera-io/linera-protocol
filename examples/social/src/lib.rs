@@ -96,6 +96,63 @@ pub struct Key {
     pub index: u32,
 }
 
+/// An event emitted by the social app.
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum Event {
+    /// A new post was created
+    Post { post: OwnPost, index: u32 },
+    /// A user liked a post
+    Like { key: Key },
+    /// A user commented on a post
+    Comment { key: Key, comment: String },
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod formats {
+    use linera_sdk::abis::formats::{BcsApplication, Formats};
+    use serde_reflection::{Samples, Tracer, TracerConfig};
+
+    use super::{Comment, Event, Key, Message, Operation, OwnPost, Post, SocialAbi};
+
+    /// The Social application.
+    pub struct SocialApplication;
+
+    impl BcsApplication for SocialApplication {
+        type Abi = SocialAbi;
+
+        fn formats() -> serde_reflection::Result<Formats> {
+            let mut tracer = Tracer::new(
+                TracerConfig::default()
+                    .record_samples_for_newtype_structs(true)
+                    .record_samples_for_tuple_structs(true),
+            );
+            let samples = Samples::new();
+
+            // Trace the ABI types
+            let (operation, _) = tracer.trace_type::<Operation>(&samples)?;
+            let (response, _) = tracer.trace_type::<()>(&samples)?;
+            let (message, _) = tracer.trace_type::<Message>(&samples)?;
+            let (event_value, _) = tracer.trace_type::<Event>(&samples)?;
+
+            // Trace additional supporting types to populate the registry
+            tracer.trace_type::<Key>(&samples)?;
+            tracer.trace_type::<OwnPost>(&samples)?;
+            tracer.trace_type::<Post>(&samples)?;
+            tracer.trace_type::<Comment>(&samples)?;
+
+            let registry = tracer.registry()?;
+
+            Ok(Formats {
+                registry,
+                operation,
+                response,
+                message,
+                event_value,
+            })
+        }
+    }
+}
+
 // Serialize keys so that the lexicographic order of the serialized keys corresponds to reverse
 // chronological order, then sorted by author, then by descending index.
 impl CustomSerialize for Key {

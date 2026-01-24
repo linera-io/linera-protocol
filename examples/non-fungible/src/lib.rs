@@ -151,3 +151,54 @@ impl Nft {
         })
     }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod formats {
+    use fungible::Account;
+    use linera_sdk::{
+        abis::formats::{BcsApplication, Formats},
+        linera_base_types::AccountOwner,
+    };
+    use serde_reflection::{Samples, Tracer, TracerConfig};
+
+    use super::{Message, Nft, NftOutput, NonFungibleTokenAbi, Operation, TokenId};
+
+    /// The NonFungible application.
+    pub struct NonFungibleApplication;
+
+    impl BcsApplication for NonFungibleApplication {
+        type Abi = NonFungibleTokenAbi;
+
+        fn formats() -> serde_reflection::Result<Formats> {
+            let mut tracer = Tracer::new(
+                TracerConfig::default()
+                    .record_samples_for_newtype_structs(true)
+                    .record_samples_for_tuple_structs(true),
+            );
+            let samples = Samples::new();
+
+            // Trace the ABI types
+            let (operation, _) = tracer.trace_type::<Operation>(&samples)?;
+            let (response, _) = tracer.trace_type::<()>(&samples)?;
+            let (message, _) = tracer.trace_type::<Message>(&samples)?;
+            let (event_value, _) = tracer.trace_type::<()>(&samples)?;
+
+            // Trace additional supporting types to populate the registry
+            tracer.trace_type::<TokenId>(&samples)?;
+            tracer.trace_type::<Nft>(&samples)?;
+            tracer.trace_type::<NftOutput>(&samples)?;
+            tracer.trace_type::<Account>(&samples)?;
+            tracer.trace_type::<AccountOwner>(&samples)?;
+
+            let registry = tracer.registry()?;
+
+            Ok(Formats {
+                registry,
+                operation,
+                response,
+                message,
+                event_value,
+            })
+        }
+    }
+}

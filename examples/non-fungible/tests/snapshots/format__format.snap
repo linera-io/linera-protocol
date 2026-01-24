@@ -1,107 +1,114 @@
 ---
 source: non-fungible/tests/format.rs
-expression: get_registry().unwrap()
+expression: "NonFungibleApplication::formats().unwrap()"
 ---
-Account:
-  STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - owner:
-        TYPENAME: AccountOwner
-AccountOwner:
-  ENUM:
-    0:
-      Reserved:
-        NEWTYPE: U8
-    1:
-      Address32:
-        NEWTYPE:
-          TYPENAME: CryptoHash
-    2:
-      Address20:
-        NEWTYPE:
-          TUPLEARRAY:
-            CONTENT: U8
-            SIZE: 20
-ChainId:
-  NEWTYPESTRUCT:
-    TYPENAME: CryptoHash
-CryptoHash:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
-DataBlobHash:
-  NEWTYPESTRUCT:
-    TYPENAME: CryptoHash
-Message:
-  ENUM:
-    0:
-      Transfer:
-        STRUCT:
-          - nft:
-              TYPENAME: Nft
-          - target_account:
-              TYPENAME: Account
-    1:
-      Claim:
-        STRUCT:
-          - source_account:
-              TYPENAME: Account
-          - token_id:
-              TYPENAME: TokenId
-          - target_account:
-              TYPENAME: Account
-Nft:
-  STRUCT:
-    - tokenId:
-        TYPENAME: TokenId
-    - owner:
-        TYPENAME: AccountOwner
-    - name: STR
-    - minter:
-        TYPENAME: AccountOwner
-    - blobHash:
-        TYPENAME: DataBlobHash
-NftOutput:
-  STRUCT:
-    - tokenId: STR
-    - owner:
-        TYPENAME: AccountOwner
-    - name: STR
-    - minter:
-        TYPENAME: AccountOwner
-    - payload:
-        SEQ: U8
-Operation:
-  ENUM:
-    0:
-      Mint:
-        STRUCT:
-          - minter:
-              TYPENAME: AccountOwner
-          - name: STR
-          - blob_hash:
-              TYPENAME: DataBlobHash
-    1:
-      Transfer:
-        STRUCT:
-          - source_owner:
-              TYPENAME: AccountOwner
-          - token_id:
-              TYPENAME: TokenId
-          - target_account:
-              TYPENAME: Account
-    2:
-      Claim:
-        STRUCT:
-          - source_account:
-              TYPENAME: Account
-          - token_id:
-              TYPENAME: TokenId
-          - target_account:
-              TYPENAME: Account
-TokenId:
-  STRUCT:
-    - id:
-        SEQ: U8
+REGISTRY:
+  Account:
+    STRUCT:
+      - chain_id:
+          TYPENAME: ChainId
+      - owner:
+          TYPENAME: AccountOwner
+  AccountOwner:
+    ENUM:
+      0:
+        Reserved:
+          NEWTYPE: U8
+      1:
+        Address32:
+          NEWTYPE:
+            TYPENAME: CryptoHash
+      2:
+        Address20:
+          NEWTYPE:
+            TUPLEARRAY:
+              CONTENT: U8
+              SIZE: 20
+  ChainId:
+    NEWTYPESTRUCT:
+      TYPENAME: CryptoHash
+  CryptoHash:
+    NEWTYPESTRUCT:
+      TUPLEARRAY:
+        CONTENT: U8
+        SIZE: 32
+  DataBlobHash:
+    NEWTYPESTRUCT:
+      TYPENAME: CryptoHash
+  Message:
+    ENUM:
+      0:
+        Transfer:
+          STRUCT:
+            - nft:
+                TYPENAME: Nft
+            - target_account:
+                TYPENAME: Account
+      1:
+        Claim:
+          STRUCT:
+            - source_account:
+                TYPENAME: Account
+            - token_id:
+                TYPENAME: TokenId
+            - target_account:
+                TYPENAME: Account
+  Nft:
+    STRUCT:
+      - tokenId:
+          TYPENAME: TokenId
+      - owner:
+          TYPENAME: AccountOwner
+      - name: STR
+      - minter:
+          TYPENAME: AccountOwner
+      - blobHash:
+          TYPENAME: DataBlobHash
+  NftOutput:
+    STRUCT:
+      - tokenId: STR
+      - owner:
+          TYPENAME: AccountOwner
+      - name: STR
+      - minter:
+          TYPENAME: AccountOwner
+      - payload:
+          SEQ: U8
+  Operation:
+    ENUM:
+      0:
+        Mint:
+          STRUCT:
+            - minter:
+                TYPENAME: AccountOwner
+            - name: STR
+            - blob_hash:
+                TYPENAME: DataBlobHash
+      1:
+        Transfer:
+          STRUCT:
+            - source_owner:
+                TYPENAME: AccountOwner
+            - token_id:
+                TYPENAME: TokenId
+            - target_account:
+                TYPENAME: Account
+      2:
+        Claim:
+          STRUCT:
+            - source_account:
+                TYPENAME: Account
+            - token_id:
+                TYPENAME: TokenId
+            - target_account:
+                TYPENAME: Account
+  TokenId:
+    STRUCT:
+      - id:
+          SEQ: U8
+OPERATION:
+  TYPENAME: Operation
+RESPONSE: UNIT
+MESSAGE:
+  TYPENAME: Message
+EVENT_VALUE: UNIT

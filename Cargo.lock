@@ -754,6 +754,7 @@ dependencies = [
  "num-bigint 0.4.6",
  "num-traits",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -2098,6 +2099,7 @@ dependencies = [
  "alloy-sol-types",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -2485,6 +2487,7 @@ dependencies = [
  "async-graphql",
  "futures",
  "linera-sdk",
+ "serde-reflection",
  "serde_json",
 ]
 
@@ -2495,6 +2498,7 @@ dependencies = [
  "futures",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -2824,6 +2828,7 @@ dependencies = [
  "fungible",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "serde_json",
 ]
 
@@ -3479,6 +3484,7 @@ dependencies = [
  "async-graphql",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -3764,6 +3770,7 @@ dependencies = [
  "futures",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -4259,6 +4266,7 @@ dependencies = [
  "linera-sdk",
  "log",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -5787,6 +5795,7 @@ dependencies = [
  "log",
  "papaya",
  "serde",
+ "serde-reflection",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
@@ -6421,6 +6430,7 @@ dependencies = [
  "fungible",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -6599,6 +6609,7 @@ dependencies = [
  "linera-sdk",
  "log",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -6621,6 +6632,7 @@ dependencies = [
  "fungible",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "sha3",
 ]
 
@@ -9441,6 +9453,7 @@ dependencies = [
  "bcs",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -10181,6 +10194,7 @@ version = "0.1.0"
 dependencies = [
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]

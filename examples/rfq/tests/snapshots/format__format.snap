@@ -1,149 +1,156 @@
 ---
 source: rfq/tests/format.rs
-expression: get_registry().unwrap()
+expression: "RfqApplication::formats().unwrap()"
 ---
-Account:
-  STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - owner:
-        TYPENAME: AccountOwner
-AccountOwner:
-  ENUM:
-    0:
-      Reserved:
-        NEWTYPE: U8
-    1:
-      Address32:
-        NEWTYPE:
+REGISTRY:
+  Account:
+    STRUCT:
+      - chain_id:
+          TYPENAME: ChainId
+      - owner:
+          TYPENAME: AccountOwner
+  AccountOwner:
+    ENUM:
+      0:
+        Reserved:
+          NEWTYPE: U8
+      1:
+        Address32:
+          NEWTYPE:
+            TYPENAME: CryptoHash
+      2:
+        Address20:
+          NEWTYPE:
+            TUPLEARRAY:
+              CONTENT: U8
+              SIZE: 20
+  Amount:
+    NEWTYPESTRUCT: U128
+  ApplicationId:
+    STRUCT:
+      - application_description_hash:
           TYPENAME: CryptoHash
-    2:
-      Address20:
-        NEWTYPE:
-          TUPLEARRAY:
-            CONTENT: U8
-            SIZE: 20
-Amount:
-  NEWTYPESTRUCT: U128
-ApplicationId:
-  STRUCT:
-    - application_description_hash:
-        TYPENAME: CryptoHash
-ChainId:
-  NEWTYPESTRUCT:
-    TYPENAME: CryptoHash
-CryptoHash:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
-Message:
-  ENUM:
-    0:
-      RequestQuote:
-        STRUCT:
-          - seq_number: U64
-          - token_pair:
-              TYPENAME: TokenPair
-          - amount:
-              TYPENAME: Amount
-    1:
-      ProvideQuote:
-        STRUCT:
-          - seq_number: U64
-          - quote:
-              TYPENAME: Amount
-          - quoter_owner:
-              TYPENAME: AccountOwner
-    2:
-      QuoteAccepted:
-        STRUCT:
-          - request_id:
-              TYPENAME: RequestId
-    3:
-      CancelRequest:
-        STRUCT:
-          - seq_number: U64
-          - recipient_requested: BOOL
-    4:
-      StartExchange:
-        STRUCT:
-          - initiator:
-              TYPENAME: ChainId
-          - request_id:
-              TYPENAME: RequestId
-          - token_pair:
-              TYPENAME: TokenPair
-          - tokens:
-              TYPENAME: Tokens
-    5:
-      TokensSent:
-        STRUCT:
-          - tokens:
-              TYPENAME: Tokens
-    6:
-      CloseChain: UNIT
-    7:
-      ChainClosed:
-        STRUCT:
-          - request_id:
-              TYPENAME: RequestId
-Operation:
-  ENUM:
-    0:
-      RequestQuote:
-        STRUCT:
-          - target:
-              TYPENAME: ChainId
-          - token_pair:
-              TYPENAME: TokenPair
-          - amount:
-              TYPENAME: Amount
-    1:
-      ProvideQuote:
-        STRUCT:
-          - request_id:
-              TYPENAME: RequestId
-          - quote:
-              TYPENAME: Amount
-          - quoter_owner:
-              TYPENAME: AccountOwner
-    2:
-      AcceptQuote:
-        STRUCT:
-          - request_id:
-              TYPENAME: RequestId
-          - owner:
-              TYPENAME: AccountOwner
-          - fee_budget:
-              TYPENAME: Amount
-    3:
-      FinalizeDeal:
-        STRUCT:
-          - request_id:
-              TYPENAME: RequestId
-    4:
-      CancelRequest:
-        STRUCT:
-          - request_id:
-              TYPENAME: RequestId
-RequestId:
-  STRUCT:
-    - other_chain_id:
-        TYPENAME: ChainId
-    - seq_num: U64
-    - we_requested: BOOL
-TokenPair:
-  STRUCT:
-    - token_offered:
-        TYPENAME: ApplicationId
-    - token_asked:
-        TYPENAME: ApplicationId
-Tokens:
-  STRUCT:
-    - token_id:
-        TYPENAME: ApplicationId
-    - owner:
-        TYPENAME: Account
-    - amount:
-        TYPENAME: Amount
+  ChainId:
+    NEWTYPESTRUCT:
+      TYPENAME: CryptoHash
+  CryptoHash:
+    NEWTYPESTRUCT:
+      TUPLEARRAY:
+        CONTENT: U8
+        SIZE: 32
+  Message:
+    ENUM:
+      0:
+        RequestQuote:
+          STRUCT:
+            - seq_number: U64
+            - token_pair:
+                TYPENAME: TokenPair
+            - amount:
+                TYPENAME: Amount
+      1:
+        ProvideQuote:
+          STRUCT:
+            - seq_number: U64
+            - quote:
+                TYPENAME: Amount
+            - quoter_owner:
+                TYPENAME: AccountOwner
+      2:
+        QuoteAccepted:
+          STRUCT:
+            - request_id:
+                TYPENAME: RequestId
+      3:
+        CancelRequest:
+          STRUCT:
+            - seq_number: U64
+            - recipient_requested: BOOL
+      4:
+        StartExchange:
+          STRUCT:
+            - initiator:
+                TYPENAME: ChainId
+            - request_id:
+                TYPENAME: RequestId
+            - token_pair:
+                TYPENAME: TokenPair
+            - tokens:
+                TYPENAME: Tokens
+      5:
+        TokensSent:
+          STRUCT:
+            - tokens:
+                TYPENAME: Tokens
+      6:
+        CloseChain: UNIT
+      7:
+        ChainClosed:
+          STRUCT:
+            - request_id:
+                TYPENAME: RequestId
+  Operation:
+    ENUM:
+      0:
+        RequestQuote:
+          STRUCT:
+            - target:
+                TYPENAME: ChainId
+            - token_pair:
+                TYPENAME: TokenPair
+            - amount:
+                TYPENAME: Amount
+      1:
+        ProvideQuote:
+          STRUCT:
+            - request_id:
+                TYPENAME: RequestId
+            - quote:
+                TYPENAME: Amount
+            - quoter_owner:
+                TYPENAME: AccountOwner
+      2:
+        AcceptQuote:
+          STRUCT:
+            - request_id:
+                TYPENAME: RequestId
+            - owner:
+                TYPENAME: AccountOwner
+            - fee_budget:
+                TYPENAME: Amount
+      3:
+        FinalizeDeal:
+          STRUCT:
+            - request_id:
+                TYPENAME: RequestId
+      4:
+        CancelRequest:
+          STRUCT:
+            - request_id:
+                TYPENAME: RequestId
+  RequestId:
+    STRUCT:
+      - other_chain_id:
+          TYPENAME: ChainId
+      - seq_num: U64
+      - we_requested: BOOL
+  TokenPair:
+    STRUCT:
+      - token_offered:
+          TYPENAME: ApplicationId
+      - token_asked:
+          TYPENAME: ApplicationId
+  Tokens:
+    STRUCT:
+      - token_id:
+          TYPENAME: ApplicationId
+      - owner:
+          TYPENAME: Account
+      - amount:
+          TYPENAME: Amount
+OPERATION:
+  TYPENAME: Operation
+RESPONSE: UNIT
+MESSAGE:
+  TYPENAME: Message
+EVENT_VALUE: UNIT

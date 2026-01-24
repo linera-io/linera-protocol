@@ -1,32 +1,40 @@
 ---
 source: game-of-life-challenge/tests/format.rs
-expression: get_registry().unwrap()
+expression: "GameOfLifeApplication::formats().unwrap()"
 ---
-Board:
-  STRUCT:
-    - size: U16
-    - live_cells:
-        SEQ:
-          TYPENAME: Position
-CryptoHash:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
-DataBlobHash:
-  NEWTYPESTRUCT:
-    TYPENAME: CryptoHash
-Operation:
-  ENUM:
-    0:
-      SubmitSolution:
-        STRUCT:
-          - puzzle_id:
-              TYPENAME: DataBlobHash
-          - board:
-              TYPENAME: Board
-          - steps: U16
-Position:
-  STRUCT:
-    - x: U16
-    - y: U16
+REGISTRY:
+  Board:
+    STRUCT:
+      - size: U16
+      - live_cells:
+          SEQ:
+            TYPENAME: Position
+  CryptoHash:
+    NEWTYPESTRUCT:
+      TUPLEARRAY:
+        CONTENT: U8
+        SIZE: 32
+  DataBlobHash:
+    NEWTYPESTRUCT:
+      TYPENAME: CryptoHash
+  Message: UNITSTRUCT
+  Operation:
+    ENUM:
+      0:
+        SubmitSolution:
+          STRUCT:
+            - puzzle_id:
+                TYPENAME: DataBlobHash
+            - board:
+                TYPENAME: Board
+            - steps: U16
+  Position:
+    STRUCT:
+      - x: U16
+      - y: U16
+OPERATION:
+  TYPENAME: Operation
+RESPONSE: UNIT
+MESSAGE:
+  TYPENAME: Message
+EVENT_VALUE: UNIT

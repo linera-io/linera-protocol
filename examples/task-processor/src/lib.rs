@@ -31,3 +31,43 @@ impl ServiceAbi for TaskProcessorAbi {
     type Query = Request;
     type QueryResponse = Response;
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod formats {
+    use linera_sdk::abis::formats::{BcsApplication, Formats};
+    use serde_reflection::{Samples, Tracer, TracerConfig};
+
+    use super::{TaskProcessorAbi, TaskProcessorOperation};
+
+    /// The TaskProcessor application.
+    pub struct TaskProcessorApplication;
+
+    impl BcsApplication for TaskProcessorApplication {
+        type Abi = TaskProcessorAbi;
+
+        fn formats() -> serde_reflection::Result<Formats> {
+            let mut tracer = Tracer::new(
+                TracerConfig::default()
+                    .record_samples_for_newtype_structs(true)
+                    .record_samples_for_tuple_structs(true),
+            );
+            let samples = Samples::new();
+
+            // Trace the ABI types
+            let (operation, _) = tracer.trace_type::<TaskProcessorOperation>(&samples)?;
+            let (response, _) = tracer.trace_type::<()>(&samples)?;
+            let (message, _) = tracer.trace_type::<()>(&samples)?;
+            let (event_value, _) = tracer.trace_type::<()>(&samples)?;
+
+            let registry = tracer.registry()?;
+
+            Ok(Formats {
+                registry,
+                operation,
+                response,
+                message,
+                event_value,
+            })
+        }
+    }
+}

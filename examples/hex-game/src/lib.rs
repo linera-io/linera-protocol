@@ -276,6 +276,76 @@ impl Board {
     }
 }
 
+/// Messages sent between chains for the Hex game.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Message {
+    /// Initializes a game. Sent from the main chain to a temporary chain.
+    Start {
+        /// The players.
+        players: [AccountOwner; 2],
+        /// The side length of the board. A typical size is 11.
+        board_size: u16,
+        /// Settings that determine how much time the players have to think about their turns.
+        timeouts: Timeouts,
+    },
+    /// Reports the outcome of a game. Sent from a closed chain to the main chain.
+    End {
+        winner: AccountOwner,
+        loser: AccountOwner,
+    },
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod formats {
+    use linera_sdk::{
+        abis::formats::{BcsApplication, Formats},
+        linera_base_types::AccountOwner,
+    };
+    use serde_reflection::{Samples, Tracer, TracerConfig};
+
+    use super::{Board, Cell, Clock, HexAbi, HexOutcome, Message, Operation, Player, Timeouts};
+
+    /// The Hex application.
+    pub struct HexApplication;
+
+    impl BcsApplication for HexApplication {
+        type Abi = HexAbi;
+
+        fn formats() -> serde_reflection::Result<Formats> {
+            let mut tracer = Tracer::new(
+                TracerConfig::default()
+                    .record_samples_for_newtype_structs(true)
+                    .record_samples_for_tuple_structs(true),
+            );
+            let samples = Samples::new();
+
+            // Trace the ABI types
+            let (operation, _) = tracer.trace_type::<Operation>(&samples)?;
+            let (response, _) = tracer.trace_type::<HexOutcome>(&samples)?;
+            let (message, _) = tracer.trace_type::<Message>(&samples)?;
+            let (event_value, _) = tracer.trace_type::<()>(&samples)?;
+
+            // Trace additional supporting types to populate the registry
+            tracer.trace_type::<Timeouts>(&samples)?;
+            tracer.trace_type::<Clock>(&samples)?;
+            tracer.trace_type::<Board>(&samples)?;
+            tracer.trace_type::<Cell>(&samples)?;
+            tracer.trace_type::<Player>(&samples)?;
+            tracer.trace_type::<AccountOwner>(&samples)?;
+
+            let registry = tracer.registry()?;
+
+            Ok(Formats {
+                registry,
+                operation,
+                response,
+                message,
+                event_value,
+            })
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

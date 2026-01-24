@@ -14,6 +14,9 @@ linera-sdk.workspace = true
 log.workspace = true
 serde.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+serde-reflection.workspace = true
+
 [dev-dependencies]
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 native-fungible = { workspace = true, features = ["test"] }
