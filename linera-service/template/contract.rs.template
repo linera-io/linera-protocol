@@ -30,9 +30,8 @@ impl Contract for {project_name}Contract {{
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {{
-        let state = {project_name}State::load(runtime.root_view_storage_context())
-            .await
-            .expect("Failed to load state");
+        let state =
+            {project_name}State::load(runtime.root_view_storage_context()).expect("Failed to load state");
         {project_name}Contract {{ state, runtime }}
     }}
 
@@ -53,14 +52,14 @@ impl Contract for {project_name}Contract {{
     async fn execute_message(&mut self, _message: Self::Message) {{}}
 
     async fn store(mut self) {{
-        self.state.save().await.expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }}
 }}
 
 #[cfg(test)]
 mod tests {{
     use futures::FutureExt as _;
-    use linera_sdk::{{util::BlockingWait, views::View, Contract, ContractRuntime}};
+    use linera_sdk::{{views::View, Contract, ContractRuntime}};
 
     use {module_name}::Operation;
 
@@ -85,7 +84,6 @@ mod tests {{
         let runtime = ContractRuntime::new().with_application_parameters(());
         let mut contract = {project_name}Contract {{
             state: {project_name}State::load(runtime.root_view_storage_context())
-                .blocking_wait()
                 .expect("Failed to read from mock key value store"),
             runtime,
         }};
