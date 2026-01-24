@@ -167,7 +167,7 @@ impl Setup {
 async fn add_liquidity_swap_and_remove_all() {
     let setup = Setup::new().await;
 
-    let add_liquidity_certificate = setup
+    let (add_liquidity_certificate, _) = setup
         .liquidity_chain
         .add_block(|block| {
             block.with_operation(
@@ -219,7 +219,7 @@ async fn add_liquidity_swap_and_remove_all() {
         Some(Amount::from_tokens(40))
     );
 
-    let swap_certificate = setup
+    let (swap_certificate, _) = setup
         .swapper_chain
         .add_block(|block| {
             block.with_operation(
@@ -260,7 +260,7 @@ async fn add_liquidity_swap_and_remove_all() {
         Some(Amount::from_tokens(32))
     );
 
-    let remove_certificate = setup
+    let (remove_certificate, _) = setup
         .liquidity_chain
         .add_block(|block| {
             block.with_operation(
@@ -314,7 +314,7 @@ async fn add_liquidity_swap_and_remove_all() {
 async fn add_liquidity_with_ratio_refund() {
     let setup = Setup::new().await;
 
-    let first_add_certificate = setup
+    let (first_add_certificate, _) = setup
         .liquidity_chain
         .add_block(|block| {
             block.with_operation(
@@ -338,7 +338,7 @@ async fn add_liquidity_with_ratio_refund() {
     setup.liquidity_chain.handle_received_messages().await;
     setup.amm_chain.handle_received_messages().await;
 
-    let second_add_certificate = setup
+    let (second_add_certificate, _) = setup
         .liquidity_chain
         .add_block(|block| {
             block.with_operation(
@@ -394,7 +394,7 @@ async fn add_liquidity_with_ratio_refund() {
 async fn swap_from_token1() {
     let setup = Setup::new().await;
 
-    let add_liquidity_certificate = setup
+    let (add_liquidity_certificate, _) = setup
         .liquidity_chain
         .add_block(|block| {
             block.with_operation(
@@ -418,7 +418,7 @@ async fn swap_from_token1() {
     setup.liquidity_chain.handle_received_messages().await;
     setup.amm_chain.handle_received_messages().await;
 
-    let swap_certificate = setup
+    let (swap_certificate, _) = setup
         .swapper_chain
         .add_block(|block| {
             block.with_operation(
@@ -464,7 +464,7 @@ async fn swap_from_token1() {
 async fn remove_liquidity_partial() {
     let setup = Setup::new().await;
 
-    let add_liquidity_certificate = setup
+    let (add_liquidity_certificate, _) = setup
         .liquidity_chain
         .add_block(|block| {
             block.with_operation(
@@ -488,7 +488,7 @@ async fn remove_liquidity_partial() {
     setup.liquidity_chain.handle_received_messages().await;
     setup.amm_chain.handle_received_messages().await;
 
-    let remove_certificate = setup
+    let (remove_certificate, _) = setup
         .liquidity_chain
         .add_block(|block| {
             block.with_operation(
