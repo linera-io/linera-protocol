@@ -720,6 +720,7 @@ name = "amm"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "fungible",
  "linera-sdk",
  "num-bigint",
  "num-traits",
