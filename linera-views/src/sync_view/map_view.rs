@@ -321,6 +321,7 @@ where
     ///     ]
     /// );
     /// ```
+    #[allow(clippy::type_complexity)]
     pub fn multi_get_pairs(
         &self,
         short_keys: Vec<Vec<u8>>,

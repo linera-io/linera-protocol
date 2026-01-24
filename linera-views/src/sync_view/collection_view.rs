@@ -426,6 +426,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// assert_eq!(*value0, "Bonjour".to_string());
     /// assert!(pairs[1].1.is_none());
     /// ```
+    #[allow(clippy::type_complexity)]
     pub fn try_load_entries_pairs(
         &self,
         short_keys: Vec<Vec<u8>>,
@@ -449,6 +450,7 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// let subviews = view.try_load_all_entries().unwrap();
     /// assert_eq!(subviews.len(), 1);
     /// ```
+    #[allow(clippy::type_complexity)]
     pub fn try_load_all_entries(
         &self,
     ) -> Result<Vec<(Vec<u8>, SyncReadGuardedView<'_, W>)>, ViewError> {
@@ -912,6 +914,7 @@ impl<I: Serialize, W: SyncView> SyncCollectionView<W::Context, I, W> {
     /// let value0 = subviews[0].1.as_ref().unwrap().get();
     /// assert_eq!(*value0, String::default());
     /// ```
+    #[allow(clippy::type_complexity)]
     pub fn try_load_entries_pairs<Q>(
         &self,
         indices: impl IntoIterator<Item = Q>,
@@ -1304,6 +1307,7 @@ impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W>
     /// let value0 = subviews[0].1.as_ref().unwrap().get();
     /// assert_eq!(*value0, String::default());
     /// ```
+    #[allow(clippy::type_complexity)]
     pub fn try_load_entries_pairs<Q>(
         &self,
         indices: impl IntoIterator<Item = Q>,

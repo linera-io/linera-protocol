@@ -145,6 +145,7 @@ pub trait ReadableSyncKeyValueStore: WithError {
     fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 
     /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
+    #[allow(clippy::type_complexity)]
     fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
