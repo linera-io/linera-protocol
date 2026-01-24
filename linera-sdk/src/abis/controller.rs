@@ -168,7 +168,7 @@ pub mod formats {
         WorkerCommand,
     };
     use crate::{
-        abis::formats::{BcsApplication, Formats},
+        formats::{BcsApplication, Formats},
         linera_base_types::AccountOwner,
     };
 

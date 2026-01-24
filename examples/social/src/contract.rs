@@ -10,7 +10,6 @@ use linera_sdk::{
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-use serde::{Deserialize, Serialize};
 use social::{Comment, Event, Key, Message, Operation, OwnPost, Post, SocialAbi};
 use state::SocialState;
 

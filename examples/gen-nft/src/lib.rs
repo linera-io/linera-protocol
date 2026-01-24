@@ -146,7 +146,7 @@ impl Nft {
 pub mod formats {
     use fungible::Account;
     use linera_sdk::{
-        abis::formats::{BcsApplication, Formats},
+        formats::{BcsApplication, Formats},
         linera_base_types::AccountOwner,
     };
     use serde_reflection::{Samples, Tracer, TracerConfig};

@@ -5,7 +5,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use linera_sdk::abis::formats::BcsApplication;
+use linera_sdk::formats::BcsApplication;
 use time_expiry::formats::TimeExpiryApplication;
 
 #[test]

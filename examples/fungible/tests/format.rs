@@ -6,7 +6,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use fungible::formats::FungibleApplication;
-use linera_sdk::abis::formats::BcsApplication;
+use linera_sdk::formats::BcsApplication;
 
 #[test]
 fn test_format() {

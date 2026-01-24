@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(not(target_arch = "wasm32"))]
-
 //! Support the declaration of the binary formats used by an application.
 
 use serde::{Deserialize, Serialize};

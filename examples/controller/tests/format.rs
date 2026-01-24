@@ -5,7 +5,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use linera_sdk::abis::{controller::formats::ControllerApplication, formats::BcsApplication};
+use linera_sdk::{abis::controller::formats::ControllerApplication, formats::BcsApplication};
 
 #[test]
 fn test_format() {

@@ -34,7 +34,7 @@ pub enum CallCounterOperation {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
-    use linera_sdk::abis::formats::{BcsApplication, Formats};
+    use linera_sdk::formats::{BcsApplication, Formats};
     use serde_reflection::{Samples, Tracer, TracerConfig};
 
     use super::{CallCounterAbi, CallCounterOperation, CallCounterRequest};

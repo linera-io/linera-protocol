@@ -5,5 +5,4 @@
 
 pub mod controller;
 pub mod evm;
-pub mod formats;
 pub mod fungible;

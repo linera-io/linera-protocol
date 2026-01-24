@@ -193,7 +193,7 @@ pub enum Message {
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
     use linera_sdk::{
-        abis::formats::{BcsApplication, Formats},
+        formats::{BcsApplication, Formats},
         linera_base_types::AccountOwner,
     };
     use serde_reflection::{Samples, Tracer, TracerConfig};
