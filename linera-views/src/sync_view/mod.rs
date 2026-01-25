@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub use linera_views_derive::SyncView;
+pub use linera_views_derive::{SyncRootView, SyncView};
 
 use crate::{batch::Batch, ViewError};
 
@@ -101,5 +101,3 @@ pub trait SyncRootView: SyncView {
         Ok(())
     }
 }
-
-impl<T> SyncRootView for T where T: SyncView {}

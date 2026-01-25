@@ -3,10 +3,10 @@
 
 use linera_sdk::{
     linera_base_types::DataBlobHash,
-    views::{linera_views, RegisterView, SyncView, ViewStorageContext},
+    views::{linera_views, RegisterView, SyncRootView, ViewStorageContext},
 };
 
-#[derive(SyncView)]
+#[derive(SyncRootView)]
 #[view(context = ViewStorageContext)]
 pub struct PublishReadDataBlobState {
     pub hash: RegisterView<Option<DataBlobHash>>,

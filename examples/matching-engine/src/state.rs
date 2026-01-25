@@ -8,10 +8,10 @@ use std::{cmp::min, collections::BTreeSet};
 use async_graphql::SimpleObject;
 use linera_sdk::{
     linera_base_types::{Account, AccountOwner, Amount},
-    views::{linera_views, linera_views::context::SyncContext as _},
+    views::{linera_views, linera_views::context::SyncContext as _, SyncView as _},
     KeyValueStore,
 };
-use linera_views::sync_view::SyncView;
+use linera_views::sync_view::SyncRootView;
 use matching_engine::{OrderId, OrderNature, Parameters, Price, PriceAsk, PriceBid};
 use serde::{Deserialize, Serialize};
 
@@ -62,14 +62,14 @@ pub struct AccountInfo {
 /// When an order is cancelled it is zero. But if that
 /// cancelled order is not the oldest, then it remains
 /// though with a size zero.
-#[derive(SyncView, SimpleObject)]
+#[derive(SyncRootView, SimpleObject)]
 #[view(context = SyncContext)]
 pub struct LevelView {
     pub queue: QueueView<OrderEntry>,
 }
 
 /// The matching engine containing the information.
-#[derive(SyncView, SimpleObject)]
+#[derive(SyncRootView, SimpleObject)]
 #[view(context = SyncContext)]
 pub struct MatchingEngineState {
     /// The next order_id to be used.

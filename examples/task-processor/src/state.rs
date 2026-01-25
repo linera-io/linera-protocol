@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_sdk::views::{linera_views, QueueView, RegisterView, SyncView, ViewStorageContext};
+use linera_sdk::views::{linera_views, QueueView, RegisterView, SyncRootView, ViewStorageContext};
 use serde::{Deserialize, Serialize};
 
 /// A pending task stored in the application state.
@@ -14,7 +14,7 @@ pub struct PendingTask {
 }
 
 /// The application state.
-#[derive(SyncView, async_graphql::SimpleObject)]
+#[derive(SyncRootView, async_graphql::SimpleObject)]
 #[view(context = ViewStorageContext)]
 pub struct TaskProcessorState {
     /// Pending tasks to be executed.

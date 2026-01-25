@@ -7,7 +7,7 @@ use async_graphql::SimpleObject;
 use hex_game::{Board, Clock, Timeouts};
 use linera_sdk::{
     linera_base_types::{AccountOwner, ChainId},
-    views::{linera_views, MapView, RegisterView, SyncView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, SyncRootView, ViewStorageContext},
 };
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +19,7 @@ pub struct GameChain {
 }
 
 /// The application state.
-#[derive(SyncView, SimpleObject)]
+#[derive(SyncRootView, SimpleObject)]
 #[graphql(complex)]
 #[view(context = ViewStorageContext)]
 pub struct HexState {

@@ -10,7 +10,7 @@ use linera_views::{
 
 type TestContext = ViewContext<(), SyncMemoryStore>;
 
-#[derive(SyncView)]
+#[derive(SyncRootView)]
 #[view(context = TestContext)]
 struct TestView {
     counter: SyncRegisterView<TestContext, u64>,

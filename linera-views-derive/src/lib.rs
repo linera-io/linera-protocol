@@ -485,6 +485,24 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
+fn generate_sync_root_view_code(input: ItemStruct) -> TokenStream2 {
+    let Constraints {
+        input_constraints,
+        impl_generics,
+        type_generics,
+    } = Constraints::get(&input);
+    let struct_name = &input.ident;
+
+    quote! {
+        impl #impl_generics linera_views::sync_view::SyncRootView for #struct_name #type_generics
+        where
+            #(#input_constraints,)*
+            Self: linera_views::sync_view::SyncView,
+        {
+        }
+    }
+}
+
 fn generate_hash_view_code(input: ItemStruct) -> Result<TokenStream2, Error> {
     // Validate that all fields are named
     for field in &input.fields {
@@ -645,6 +663,19 @@ pub fn derive_sync_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let input = generate_sync_view_code(input, false);
     to_token_stream(input)
+}
+
+fn derive_sync_root_view_token_stream2(input: ItemStruct) -> Result<TokenStream2, Error> {
+    let mut stream = generate_sync_view_code(input.clone(), true)?;
+    stream.extend(generate_sync_root_view_code(input));
+    Ok(stream)
+}
+
+#[proc_macro_derive(SyncRootView, attributes(view))]
+pub fn derive_sync_root_view(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemStruct);
+    let stream = derive_sync_root_view_token_stream2(input);
+    to_token_stream(stream)
 }
 
 fn derive_hash_view_token_stream2(input: ItemStruct) -> Result<TokenStream2, Error> {

@@ -4,7 +4,7 @@
 use async_graphql::{InputObject, SimpleObject, Union};
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, ChainId},
-    views::{linera_views, MapView, RegisterView, SyncView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, SyncRootView, ViewStorageContext},
 };
 use rfq::{RequestId, TokenPair, Tokens};
 use serde::{Deserialize, Serialize};
@@ -81,7 +81,7 @@ pub struct TempChainState {
     tokens_in_hold: Option<Tokens>,
 }
 
-#[derive(SyncView, SimpleObject)]
+#[derive(SyncRootView, SimpleObject)]
 #[view(context = ViewStorageContext)]
 pub struct RfqState {
     next_seq_number: RegisterView<u64>,
