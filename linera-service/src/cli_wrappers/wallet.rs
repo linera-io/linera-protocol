@@ -28,6 +28,7 @@ use linera_base::{
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId,
     },
+    util::wasm::optimize_wasm_file,
     vm::VmRuntime,
 };
 use linera_client::client_options::ResourceControlPolicyConfig;
@@ -1228,6 +1229,9 @@ impl ClientWrapper {
 
         let contract = release_dir.join(format!("{}_contract.wasm", name.replace('-', "_")));
         let service = release_dir.join(format!("{}_service.wasm", name.replace('-', "_")));
+
+        optimize_wasm_file(&contract)?;
+        optimize_wasm_file(&service)?;
 
         let contract_size = fs_err::tokio::metadata(&contract).await?.len();
         let service_size = fs_err::tokio::metadata(&service).await?.len();

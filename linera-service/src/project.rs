@@ -12,6 +12,7 @@ use cargo_toml::Manifest;
 use convert_case::{Case, Casing};
 use current_platform::CURRENT_PLATFORM;
 use fs_err::File;
+use linera_base::util::wasm::optimize_wasm_file;
 use tracing::debug;
 
 pub struct Project {
@@ -284,10 +285,23 @@ impl Project {
         let build_path = self
             .workspace_root()?
             .join("target/wasm32-unknown-unknown/release");
-        Ok((
-            build_path.join(contract_name).with_extension("wasm"),
-            build_path.join(service_name).with_extension("wasm"),
-        ))
+        let contract_path = build_path.join(contract_name).with_extension("wasm");
+        let service_path = build_path.join(service_name).with_extension("wasm");
+
+        optimize_wasm_file(&contract_path).with_context(|| {
+            format!(
+                "Failed to optimize contract Wasm binary at {}",
+                contract_path.display()
+            )
+        })?;
+        optimize_wasm_file(&service_path).with_context(|| {
+            format!(
+                "Failed to optimize service Wasm binary at {}",
+                service_path.display()
+            )
+        })?;
+
+        Ok((contract_path, service_path))
     }
 
     fn project_package_name(&self) -> Result<String> {
