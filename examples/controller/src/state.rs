@@ -6,9 +6,7 @@ use std::collections::HashSet;
 use linera_sdk::{
     abis::controller::{ManagedServiceId, Worker},
     linera_base_types::{AccountOwner, ChainId, MessagePolicy},
-    views::{
-        linera_views, SyncMapView, SyncRegisterView, SyncSetView, SyncView, ViewStorageContext,
-    },
+    views::{linera_views, MapView, RegisterView, SetView, SyncView, ViewStorageContext},
 };
 
 /// The state of the service controller application.
@@ -18,26 +16,26 @@ use linera_sdk::{
 pub struct ControllerState {
     // -- Worker chain only --
     /// The description of this worker as we registered it.
-    pub local_worker: SyncRegisterView<Option<Worker>>,
+    pub local_worker: RegisterView<Option<Worker>>,
     /// The services currently running locally.
-    pub local_services: SyncSetView<ManagedServiceId>,
+    pub local_services: SetView<ManagedServiceId>,
     /// The chains currently followed locally (besides ours and the active service
     /// chains).
-    pub local_chains: SyncSetView<ChainId>,
+    pub local_chains: SetView<ChainId>,
     /// The local message policy.
-    pub local_message_policy: SyncMapView<ChainId, MessagePolicy>,
+    pub local_message_policy: MapView<ChainId, MessagePolicy>,
 
     // -- Controller chain only --
     /// The admin account owners (user or application) allowed to update services.
-    pub admins: SyncRegisterView<Option<HashSet<AccountOwner>>>,
+    pub admins: RegisterView<Option<HashSet<AccountOwner>>>,
     /// All the workers declared in the network.
-    pub workers: SyncMapView<ChainId, Worker>,
+    pub workers: MapView<ChainId, Worker>,
     /// All the services currently defined and where they run. If services run on several
     /// workers, the chain is configured so that workers can collaborate to produce blocks
     /// (e.g. only one worker is actively producing blocks while the other waits as a
     /// backup).
     // NOTE: Currently, services should run on a single worker at a time.
-    pub services: SyncMapView<ManagedServiceId, HashSet<ChainId>>,
+    pub services: MapView<ManagedServiceId, HashSet<ChainId>>,
     /// All the chains currently being followed and by which workers.
-    pub chains: SyncMapView<ChainId, HashSet<ChainId>>,
+    pub chains: MapView<ChainId, HashSet<ChainId>>,
 }

@@ -17,9 +17,9 @@ pub use linera_views::{
 
 pub use self::{
     aliases::{
-        SyncByteCollectionView, SyncByteMapView, SyncByteSetView, SyncCollectionView,
-        SyncCustomCollectionView, SyncCustomMapView, SyncCustomSetView, SyncLogView, SyncMapView,
-        SyncQueueView, SyncReadGuardedView, SyncRegisterView, SyncSetView,
+        ByteCollectionView, ByteMapView, ByteSetView, CollectionView, CustomCollectionView,
+        CustomMapView, CustomSetView, LogView, MapView, QueueView, ReadGuardedView, RegisterView,
+        SetView,
     },
     system_api::{KeyValueStore, ViewStorageContext},
 };

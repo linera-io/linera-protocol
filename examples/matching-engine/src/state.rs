@@ -17,15 +17,14 @@ use serde::{Deserialize, Serialize};
 
 pub type SyncContext = linera_views::context::ViewSyncContext<Parameters, KeyValueStore>;
 
-pub type SyncCustomCollectionView<K, V> =
+pub type CustomCollectionView<K, V> =
     linera_views::sync_view::collection_view::SyncCustomCollectionView<SyncContext, K, V>;
 
-pub type SyncMapView<K, V> = linera_views::sync_view::map_view::SyncMapView<SyncContext, K, V>;
+pub type MapView<K, V> = linera_views::sync_view::map_view::SyncMapView<SyncContext, K, V>;
 
-pub type SyncQueueView<T> = linera_views::sync_view::queue_view::SyncQueueView<SyncContext, T>;
+pub type QueueView<T> = linera_views::sync_view::queue_view::SyncQueueView<SyncContext, T>;
 
-pub type SyncRegisterView<T> =
-    linera_views::sync_view::register_view::SyncRegisterView<SyncContext, T>;
+pub type RegisterView<T> = linera_views::sync_view::register_view::SyncRegisterView<SyncContext, T>;
 
 /// The order entry in the order book
 #[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]
@@ -58,7 +57,7 @@ pub struct AccountInfo {
     pub orders: BTreeSet<OrderId>,
 }
 
-/// The price level is contained in a SyncQueueView
+/// The price level is contained in a QueueView
 /// The queue starts with the oldest order to the newest.
 /// When an order is cancelled it is zero. But if that
 /// cancelled order is not the oldest, then it remains
@@ -66,7 +65,7 @@ pub struct AccountInfo {
 #[derive(SyncView, SimpleObject)]
 #[view(context = SyncContext)]
 pub struct LevelView {
-    pub queue: SyncQueueView<OrderEntry>,
+    pub queue: QueueView<OrderEntry>,
 }
 
 /// The matching engine containing the information.
@@ -74,21 +73,21 @@ pub struct LevelView {
 #[view(context = SyncContext)]
 pub struct MatchingEngineState {
     /// The next order_id to be used.
-    pub next_order_id: SyncRegisterView<OrderId>,
+    pub next_order_id: RegisterView<OrderId>,
     /// The map of the outstanding bids, by the bitwise complement of
     /// the revert of the price. The order is from the best price
     /// level (highest proposed by buyer) to the worst
-    pub bids: SyncCustomCollectionView<PriceBid, LevelView>,
+    pub bids: CustomCollectionView<PriceBid, LevelView>,
     /// The map of the outstanding asks, by the bitwise complement of
     /// the price. The order is from the best one (smallest asked price
     /// by seller) to the worst.
-    pub asks: SyncCustomCollectionView<PriceAsk, LevelView>,
+    pub asks: CustomCollectionView<PriceAsk, LevelView>,
     /// The map with the list of orders giving for each order_id the
     /// fundamental information on the order (price, nature, account)
-    pub orders: SyncMapView<OrderId, KeyBook>,
+    pub orders: MapView<OrderId, KeyBook>,
     /// The map giving for each account owner the set of order_id
     /// owned by that owner.
-    pub account_info: SyncMapView<AccountOwner, AccountInfo>,
+    pub account_info: MapView<AccountOwner, AccountInfo>,
 }
 
 impl MatchingEngineState {
@@ -497,7 +496,7 @@ impl LevelView {
     }
 
     /// Orders which have length 0 should be removed from the system.
-    /// It is possible that we have some zero orders in the SyncQueueView
+    /// It is possible that we have some zero orders in the QueueView
     /// under the condition that they are not the oldest.
     /// An order can be of size zero for two reasons:
     /// * It has been totally cancelled

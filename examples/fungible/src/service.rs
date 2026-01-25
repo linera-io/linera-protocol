@@ -13,7 +13,7 @@ use linera_sdk::{
     abis::fungible::FungibleOperation,
     graphql::GraphQLMutationRoot as _,
     linera_base_types::{AccountOwner, Amount, WithServiceAbi},
-    views::{SyncMapView, View},
+    views::{MapView, View},
     Service, ServiceRuntime,
 };
 
@@ -56,11 +56,11 @@ impl Service for FungibleTokenService {
 
 #[Object]
 impl FungibleTokenService {
-    async fn accounts(&self) -> &SyncMapView<AccountOwner, Amount> {
+    async fn accounts(&self) -> &MapView<AccountOwner, Amount> {
         &self.state.accounts
     }
 
-    async fn allowances(&self) -> &SyncMapView<OwnerSpender, Amount> {
+    async fn allowances(&self) -> &MapView<OwnerSpender, Amount> {
         &self.state.allowances
     }
 

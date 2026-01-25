@@ -1,9 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_sdk::views::{
-    linera_views, SyncQueueView, SyncRegisterView, SyncView, ViewStorageContext,
-};
+use linera_sdk::views::{linera_views, QueueView, RegisterView, SyncView, ViewStorageContext};
 use serde::{Deserialize, Serialize};
 
 /// A pending task stored in the application state.
@@ -20,9 +18,9 @@ pub struct PendingTask {
 #[view(context = ViewStorageContext)]
 pub struct TaskProcessorState {
     /// Pending tasks to be executed.
-    pub pending_tasks: SyncQueueView<PendingTask>,
+    pub pending_tasks: QueueView<PendingTask>,
     /// Results from completed tasks.
-    pub results: SyncQueueView<String>,
+    pub results: QueueView<String>,
     /// Counter for tracking how many tasks have been processed.
-    pub task_count: SyncRegisterView<u64>,
+    pub task_count: RegisterView<u64>,
 }

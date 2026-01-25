@@ -7,7 +7,7 @@ use async_graphql::SimpleObject;
 use hex_game::{Board, Clock, Timeouts};
 use linera_sdk::{
     linera_base_types::{AccountOwner, ChainId},
-    views::{linera_views, SyncMapView, SyncRegisterView, SyncView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, SyncView, ViewStorageContext},
 };
 use serde::{Deserialize, Serialize};
 
@@ -24,13 +24,13 @@ pub struct GameChain {
 #[view(context = ViewStorageContext)]
 pub struct HexState {
     /// The `AccountOwner`s controlling players `One` and `Two`.
-    pub owners: SyncRegisterView<Option<[AccountOwner; 2]>>,
+    pub owners: RegisterView<Option<[AccountOwner; 2]>>,
     /// The current game state.
-    pub board: SyncRegisterView<Board>,
+    pub board: RegisterView<Board>,
     /// The game clock.
-    pub clock: SyncRegisterView<Clock>,
+    pub clock: RegisterView<Clock>,
     /// The timeouts.
-    pub timeouts: SyncRegisterView<Timeouts>,
+    pub timeouts: RegisterView<Timeouts>,
     /// Temporary chains for individual games, by player.
-    pub game_chains: SyncMapView<AccountOwner, BTreeSet<GameChain>>,
+    pub game_chains: MapView<AccountOwner, BTreeSet<GameChain>>,
 }
