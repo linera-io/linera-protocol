@@ -75,7 +75,7 @@ fn service_sends_http_response_to_contract() {
 
     service.handle_query(request).blocking_wait();
 
-    let operations = service.runtime.scheduled_operations::<Operation>();
+    let operations = service.runtime.scheduled_operations();
 
     assert_eq!(
         operations,
@@ -92,7 +92,7 @@ fn service_requests_contract_to_perform_http_request() {
 
     service.handle_query(request).blocking_wait();
 
-    let operations = service.runtime.scheduled_operations::<Operation>();
+    let operations = service.runtime.scheduled_operations();
 
     assert_eq!(operations, vec![Operation::PerformHttpRequest]);
 }
@@ -107,7 +107,7 @@ fn service_requests_contract_to_use_it_as_an_oracle() {
 
     service.handle_query(request).blocking_wait();
 
-    let operations = service.runtime.scheduled_operations::<Operation>();
+    let operations = service.runtime.scheduled_operations();
 
     assert_eq!(operations, vec![Operation::UseServiceAsOracle]);
 }

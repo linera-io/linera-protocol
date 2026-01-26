@@ -6,12 +6,11 @@
 use std::sync::Mutex;
 
 use linera_base::{
-    abi::ServiceAbi,
+    abi::{ContractAbi, ServiceAbi},
     data_types::{Amount, BlockHeight, Timestamp},
     http,
     identifiers::{AccountOwner, ApplicationId, ChainId, DataBlobHash},
 };
-use serde::Serialize;
 
 use super::wit::{base_runtime_api as base_wit, service_runtime_api as service_wit};
 use crate::{KeyValueStore, Service, ViewStorageContext};
@@ -174,9 +173,10 @@ where
 
     /// Schedules an operation to be included in the block being built.
     ///
-    /// The operation is serialized using BCS.
-    pub fn schedule_operation(&self, operation: &impl Serialize) {
-        let bytes = bcs::to_bytes(operation).expect("Failed to serialize application operation");
+    /// The operation is serialized using the application ABI.
+    pub fn schedule_operation(&self, operation: &<Application::Abi as ContractAbi>::Operation) {
+        let bytes = <Application::Abi as ContractAbi>::serialize_operation(operation)
+            .expect("Failed to serialize application operation");
 
         service_wit::schedule_operation(&bytes);
     }
