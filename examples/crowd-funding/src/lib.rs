@@ -91,7 +91,7 @@ pub mod formats {
             let (message, _) = tracer.trace_type::<Message>(&samples)?;
             let (event_value, _) = tracer.trace_type::<()>(&samples)?;
 
-            // Trace additional supporting types to populate the registry
+            // Trace additional supporting types (notably all enums) to populate the registry
             tracer.trace_type::<InstantiationArgument>(&samples)?;
             tracer.trace_type::<AccountOwner>(&samples)?;
 
