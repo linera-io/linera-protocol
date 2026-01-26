@@ -1610,11 +1610,11 @@ impl<Env: Environment> Client<Env> {
                             // Remove the failed bundle and all subsequent bundles from the same sender.
                             let mut i = index;
                             while i < block.transactions.len() {
-                                let dominated_by_sender = matches!(
+                                let same_sender = matches!(
                                     &block.transactions[i],
                                     Transaction::ReceiveMessages(bundle) if bundle.origin == origin
                                 );
-                                if dominated_by_sender {
+                                if same_sender {
                                     block.transactions.remove(i);
                                 } else {
                                     i += 1;
