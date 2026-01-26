@@ -60,16 +60,22 @@ done
 # Backup ScyllaDB data volume info (for reference)
 echo ""
 echo "→ Getting volume information..."
-docker volume inspect linera-scylla-data 2>/dev/null >scylla-volume-info.json ||
+
+SCYLLA_VOLUME_NAME=$(docker volume ls --format '{{.Name}}' | grep 'linera-scylla-data' | head -n1)
+if [[ -n "$SCYLLA_VOLUME_NAME" ]]; then
+	docker volume inspect "$SCYLLA_VOLUME_NAME" >scylla-volume-info.json
+	echo "  ✅ Found volume: $SCYLLA_VOLUME_NAME"
+else
 	echo "  ⚠️  ScyllaDB volume not found"
+fi
 
 # Backup docker-compose environment
 echo ""
 echo "→ Backing up deployment configuration..."
-if [ -f "../${DOCKER_COMPOSE_DIR}/.env" ]; then
+if [[ -f "../${DOCKER_COMPOSE_DIR}/.env" ]]; then
 	cp "../${DOCKER_COMPOSE_DIR}/.env" ./env-backup
 	echo "  ✓ Backed up .env file"
-elif [ -f "../${DOCKER_COMPOSE_DIR}/.deployment-info" ]; then
+elif [[ -f "../${DOCKER_COMPOSE_DIR}/.deployment-info" ]]; then
 	cp "../${DOCKER_COMPOSE_DIR}/.deployment-info" ./deployment-info-backup
 	echo "  ✓ Backed up .deployment-info file"
 fi
@@ -80,40 +86,40 @@ echo "→ Saving container configuration..."
 docker compose -f "../${DOCKER_COMPOSE_DIR}/docker-compose.yml" config >docker-compose-config.yml 2>/dev/null || true
 
 # Create restore instructions
-cat >RESTORE_INSTRUCTIONS.md <<'EOF'
+cat >RESTORE_INSTRUCTIONS.md <<EOF
 # Validator Key Restoration Instructions
 
 ## ⚠️ CRITICAL FILES
 
 Look for these files in your backup:
-- `wallet.json` - Your validator wallet
-- `keystore.json` - Your validator keystore  
-- Any `.json` files containing keys
-- `.config/linera/` directory
+- \`wallet.json\` - Your validator wallet
+- \`keystore.json\` - Your validator keystore
+- Any \`.json\` files containing keys
+- \`.config/linera/\` directory
 
 ## To Restore
 
 1. Stop your validator:
-   ```bash
+   \`\`\`bash
    cd docker && docker compose down
-   ```
+   \`\`\`
 
 2. Copy wallet files back to container volumes:
-   ```bash
+   \`\`\`bash
    # After starting containers
    docker cp wallet.json proxy:/linera/
    docker cp keystore.json proxy:/linera/
-   ```
+   \`\`\`
 
 3. Restart services:
-   ```bash
+   \`\`\`bash
    docker compose up -d
-   ```
+   \`\`\`
 
 ## Emergency Recovery
 
 If volumes are corrupted, you may need to:
-1. Delete the old volumes: `docker volume rm linera-scylla-data`
+1. Delete the old volumes: \`docker volume rm $SCYLLA_VOLUME_NAME\`
 2. Recreate from this backup
 3. Re-sync with the network
 

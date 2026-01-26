@@ -39,6 +39,9 @@ pub struct BlockExporterStateView<C> {
     chain_states: MapView<C, ChainId, LiteBlockId>,
     /// The exporter state per destination.
     destination_states: RegisterView<C, DestinationStates>,
+    /// The latest committee blob ID processed by the exporter.
+    /// Used to restore committee exporters on startup.
+    latest_committee_blob: RegisterView<C, Option<BlobId>>,
 }
 
 impl<C> BlockExporterStateView<C>
@@ -53,22 +56,27 @@ where
             .await
             .map_err(ExporterError::StateError)?;
 
-        let stored_destinations = {
-            let pinned = view.destination_states.get().states.pin();
-            pinned.iter().map(|(id, _)| id).cloned().collect::<Vec<_>>()
-        };
-
         tracing::info!(
             init_destinations=?destinations,
-            ?stored_destinations,
             "initialized exporter state with destinations",
         );
 
-        if view.destination_states.get().states.is_empty() {
-            let states = DestinationStates::new(destinations);
-            view.destination_states.set(states);
+        // Update stored destination states with new if not exist
+        for destination in &destinations {
+            if !view
+                .destination_states
+                .get()
+                .states
+                .pin()
+                .contains_key(destination)
+            {
+                let mut states = view.destination_states.get().clone();
+                states.insert(destination.clone(), Arc::new(AtomicU64::new(0)));
+                view.destination_states.set(states);
+            }
         }
 
+        // Return the stored states (which include any newly added destinations)
         let states = view.destination_states.get().clone();
         let canonical_state = view.canonical_state.clone_unchecked()?;
 
@@ -128,6 +136,14 @@ where
 
     pub fn set_destination_states(&mut self, destination_states: DestinationStates) {
         self.destination_states.set(destination_states);
+    }
+
+    pub fn set_latest_committee_blob(&mut self, blob_id: BlobId) {
+        self.latest_committee_blob.set(Some(blob_id));
+    }
+
+    pub fn get_latest_committee_blob(&self) -> Option<BlobId> {
+        *self.latest_committee_blob.get()
     }
 }
 
@@ -191,16 +207,6 @@ impl<'de> Deserialize<'de> for DestinationStates {
 }
 
 impl DestinationStates {
-    fn new(destinations: Vec<DestinationId>) -> Self {
-        let states = destinations
-            .into_iter()
-            .map(|id| (id, Arc::new(AtomicU64::new(0))))
-            .collect::<papaya::HashMap<_, _>>();
-        Self {
-            states: Arc::from(states),
-        }
-    }
-
     pub fn load_state(&self, id: &DestinationId) -> Arc<AtomicU64> {
         let pinned = self.states.pin();
         pinned

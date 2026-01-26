@@ -351,7 +351,7 @@ async fn print_messages_and_create_faucet(
             Some(
                 chains
                     .into_iter()
-                    .filter(|chain_id| *chain_id != wallet.genesis_admin_chain())
+                    .filter(|chain_id| *chain_id != wallet.genesis_admin_chain_id())
                     .nth(faucet_chain_idx as usize)
                     .expect("there should be at least one non-admin chain"),
             )

@@ -134,12 +134,12 @@ linera query-balance "$CHAIN1"
 linera query-balance "$CHAIN2"
 
 # Now let's fund the user balances.
-linera transfer 5 --from "$CHAIN1" --to "$CHAIN1:$ACCOUNT1"
-linera transfer 2 --from "$CHAIN1:$ACCOUNT1" --to "$CHAIN2:$ACCOUNT2"
+linera transfer 5 --from "$CHAIN1" --to "$ACCOUNT1@$CHAIN1"
+linera transfer 2 --from "$ACCOUNT1@$CHAIN1" --to "$ACCOUNT2@$CHAIN2"
 
 # Query user balances again.
-linera query-balance "$CHAIN1:$ACCOUNT1"
-linera query-balance "$CHAIN2:$ACCOUNT2"
+linera query-balance "$ACCOUNT1@$CHAIN1"
+linera query-balance "$ACCOUNT2@$CHAIN2"
 ```
 
 More complex examples may be found in our [developer manual](https://linera.dev) as well

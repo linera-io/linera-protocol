@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { BlockchainAPI } from '../utils/database';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { BlockchainAPI, API_BASE_URL } from '../utils/database';
 import { BlockInfo, Block, IncomingBundleWithMessages, ChainInfo, Operation, Message, Event, OracleResponse } from '../types/blockchain';
 
 const api = new BlockchainAPI();
@@ -9,10 +9,10 @@ export const useAPI = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Test API connection using relative path
+    // Test API connection using the configured API base URL
     const testConnection = async () => {
       try {
-        const response = await fetch('/api/health');
+        const response = await fetch(`${API_BASE_URL}/health`);
         if (response.ok) {
           setIsConnected(true);
         } else {

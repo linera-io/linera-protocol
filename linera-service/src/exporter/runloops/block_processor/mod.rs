@@ -117,6 +117,7 @@ where
                                 let committee_destinations = committee.validator_addresses().map(|(_, address)| DestinationId::validator(address.to_owned())).collect::<Vec<_>>();
                                 self.exporters_tracker.shutdown_old_committee(committee_destinations.clone());
                                 self.storage.new_committee(committee_destinations.clone());
+                                self.storage.set_latest_committee_blob(new_committee_blob);
                                 self.exporters_tracker.start_committee_exporters(committee_destinations.clone());
                         },
 
@@ -712,6 +713,191 @@ mod test {
                 .map(|blob| blob.id())
                 .eq(block_with_blobs.blobs.iter().copied()));
         }
+
+        Ok(())
+    }
+
+    /// Tests that after processing a block with CreateCommittee operation,
+    /// the committee blob ID is persisted and can be retrieved on startup.
+    #[tokio::test]
+    async fn test_committee_blob_persisted_after_processing() -> anyhow::Result<()> {
+        use std::collections::BTreeMap;
+
+        use linera_base::{
+            crypto::AccountPublicKey,
+            data_types::{Blob, BlobContent, Epoch},
+            identifiers::{BlobId, BlobType},
+        };
+        use linera_execution::{
+            committee::{Committee, ValidatorState},
+            system::AdminOperation,
+            Operation, ResourceControlPolicy, SystemOperation,
+        };
+
+        // Create a test committee
+        let validator_key = linera_base::crypto::ValidatorPublicKey::test_key(1);
+        let account_key = AccountPublicKey::test_key(1);
+        let mut validators = BTreeMap::new();
+        validators.insert(
+            validator_key,
+            ValidatorState {
+                network_address: "Tcp:localhost:8080".to_string(),
+                votes: 100,
+                account_public_key: account_key,
+            },
+        );
+        let committee = Committee::new(validators, ResourceControlPolicy::default());
+        let committee_bytes = bcs::to_bytes(&committee)?;
+        let committee_blob = Blob::new(BlobContent::new_committee(committee_bytes));
+        let committee_blob_hash = CryptoHash::new(committee_blob.content());
+        let committee_blob_id = BlobId::new(committee_blob_hash, BlobType::Committee);
+
+        let (tx, rx) = unbounded_channel();
+        let new_block_queue = NewBlockQueue {
+            queue_rear: tx.clone(),
+            queue_front: rx,
+        };
+
+        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
+
+        // Store the committee blob
+        storage.write_blobs(&[committee_blob]).await?;
+
+        let (block_processor_storage, mut exporter_storage) =
+            BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
+                .await?;
+        let token = CancellationToken::new();
+        let signal = ExporterCancellationSignal::new(token.clone());
+        let exporters_tracker = ExportersTracker::<
+            ExporterCancellationSignal,
+            DbStorage<MemoryDatabase, TestClock>,
+        >::new(
+            NodeOptions::default(),
+            256, // work_queue_size must be > 0 for mpsc channel
+            signal.clone(),
+            exporter_storage.clone()?,
+            vec![],
+        );
+
+        let mut block_processor = BlockProcessor::new(
+            exporters_tracker,
+            block_processor_storage,
+            new_block_queue,
+            true, // committee_destination_update = true
+        );
+
+        // Create a block with CreateCommittee operation
+        let chain_id = ChainId(CryptoHash::test_hash("admin_chain"));
+        let create_committee_op = Operation::System(Box::new(SystemOperation::Admin(
+            AdminOperation::CreateCommittee {
+                epoch: Epoch::ZERO,
+                blob_hash: committee_blob_hash,
+            },
+        )));
+
+        let block = ConfirmedBlock::new(
+            BlockExecutionOutcome::default()
+                .with(make_first_block(chain_id).with_operation(create_committee_op)),
+        );
+
+        let cert = ConfirmedBlockCertificate::new(block.clone(), Round::Fast, vec![]);
+        storage.write_blobs_and_certificate(&[], &cert).await?;
+
+        let block_id = BlockId::from_confirmed_block(&block);
+        tx.send(block_id).ok();
+
+        // Process the block
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(5)) => {},
+            _ = block_processor.run_with_shutdown(signal, 5) => {},
+        }
+
+        // Now reload storage and verify the committee blob ID was persisted
+        let (reloaded_storage, _) =
+            BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
+                .await?;
+
+        let latest_committee_blob = reloaded_storage.get_latest_committee_blob();
+        assert_eq!(
+            latest_committee_blob,
+            Some(committee_blob_id),
+            "Expected committee blob ID to be persisted"
+        );
+
+        Ok(())
+    }
+
+    /// Tests that on startup, if there's a persisted committee blob ID,
+    /// it is loaded and can be used to get the committee.
+    #[tokio::test]
+    async fn test_committee_loaded_on_startup() -> anyhow::Result<()> {
+        use std::collections::BTreeMap;
+
+        use linera_base::{
+            crypto::AccountPublicKey,
+            data_types::{Blob, BlobContent},
+            identifiers::{BlobId, BlobType},
+        };
+        use linera_execution::{
+            committee::{Committee, ValidatorState},
+            ResourceControlPolicy,
+        };
+
+        // Create a test committee with a specific network address
+        let validator_key = linera_base::crypto::ValidatorPublicKey::test_key(1);
+        let account_key = AccountPublicKey::test_key(1);
+        let expected_address = "Tcp:validator1:9000";
+        let mut validators = BTreeMap::new();
+        validators.insert(
+            validator_key,
+            ValidatorState {
+                network_address: expected_address.to_string(),
+                votes: 100,
+                account_public_key: account_key,
+            },
+        );
+        let committee = Committee::new(validators, ResourceControlPolicy::default());
+        let committee_bytes = bcs::to_bytes(&committee)?;
+        let committee_blob = Blob::new(BlobContent::new_committee(committee_bytes.clone()));
+        let committee_blob_hash = CryptoHash::new(committee_blob.content());
+        let committee_blob_id = BlobId::new(committee_blob_hash, BlobType::Committee);
+
+        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
+
+        // Store the committee blob
+        storage.write_blobs(&[committee_blob]).await?;
+
+        // First, create storage and set the committee blob ID manually
+        let (mut block_processor_storage, _) =
+            BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
+                .await?;
+
+        // Set the latest committee blob as if a previous session had processed it
+        block_processor_storage.set_latest_committee_blob(committee_blob_id);
+        block_processor_storage.save().await?;
+
+        // Now reload storage and verify the committee blob ID was loaded
+        let (reloaded_storage, _) =
+            BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
+                .await?;
+
+        let loaded_blob_id = reloaded_storage.get_latest_committee_blob();
+        assert_eq!(
+            loaded_blob_id,
+            Some(committee_blob_id),
+            "Expected committee blob ID to be loaded on startup"
+        );
+
+        // Verify we can read the committee from the blob
+        let blob = storage.read_blob(committee_blob_id).await?.unwrap();
+        let loaded_committee: Committee = bcs::from_bytes(blob.bytes())?;
+
+        let addresses: Vec<_> = loaded_committee
+            .validator_addresses()
+            .map(|(_, addr)| addr.to_owned())
+            .collect();
+
+        assert_eq!(addresses, vec![expected_address.to_string()]);
 
         Ok(())
     }

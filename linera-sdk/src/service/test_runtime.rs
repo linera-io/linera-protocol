@@ -10,12 +10,11 @@ use std::{
 };
 
 use linera_base::{
-    abi::ServiceAbi,
+    abi::{ContractAbi, ServiceAbi},
     data_types::{Amount, BlockHeight, Timestamp},
     hex, http,
     identifiers::{AccountOwner, ApplicationId, ChainId, DataBlobHash},
 };
-use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{KeyValueStore, Service, ViewStorageContext};
 
@@ -323,9 +322,10 @@ where
 
     /// Schedules an operation to be included in the block being built.
     ///
-    /// The operation is serialized using BCS.
-    pub fn schedule_operation(&self, operation: &impl Serialize) {
-        let bytes = bcs::to_bytes(operation).expect("Failed to serialize application operation");
+    /// The operation is serialized using the application ABI.
+    pub fn schedule_operation(&self, operation: &<Application::Abi as ContractAbi>::Operation) {
+        let bytes = <Application::Abi as ContractAbi>::serialize_operation(operation)
+            .expect("Failed to serialize application operation");
 
         self.schedule_raw_operation(bytes);
     }
@@ -345,21 +345,21 @@ where
     /// - the last call to [`Self::raw_scheduled_operations`];
     /// - or since the mock runtime was created.
     ///
-    /// All operations are deserialized using BCS into the `Operation` generic type.
-    pub fn scheduled_operations<Operation>(&self) -> Vec<Operation>
-    where
-        Operation: DeserializeOwned,
-    {
+    /// All operations are deserialized using the application ABI.
+    pub fn scheduled_operations(&self) -> Vec<<Application::Abi as ContractAbi>::Operation> {
         self.raw_scheduled_operations()
             .into_iter()
             .enumerate()
             .map(|(index, bytes)| {
-                bcs::from_bytes(&bytes).unwrap_or_else(|error| {
-                    panic!(
-                        "Failed to deserialize scheduled operation #{index} (0x{}): {error}",
-                        hex::encode(bytes)
-                    )
-                })
+                let hex_bytes = hex::encode(&bytes);
+                <Application::Abi as ContractAbi>::deserialize_operation(bytes).unwrap_or_else(
+                    |error| {
+                        panic!(
+                            "Failed to deserialize scheduled operation #{index} (0x{}): {error}",
+                            hex_bytes
+                        )
+                    },
+                )
             })
             .collect()
     }

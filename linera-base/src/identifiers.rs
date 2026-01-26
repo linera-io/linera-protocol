@@ -156,7 +156,7 @@ impl Account {
 
 impl fmt::Display for Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.chain_id, self.owner)
+        write!(f, "{}@{}", self.owner, self.chain_id)
     }
 }
 
@@ -164,19 +164,14 @@ impl std::str::FromStr for Account {
     type Err = anyhow::Error;
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
-        let mut parts = string.splitn(2, ':');
-
-        let chain_id = parts
-            .next()
-            .context(
-                "Expecting an account formatted as `chain-id` or `chain-id:owner-type:address`",
-            )?
-            .parse()?;
-
-        if let Some(owner_string) = parts.next() {
+        if let Some((owner_string, chain_string)) = string.rsplit_once('@') {
             let owner = owner_string.parse::<AccountOwner>()?;
+            let chain_id = chain_string.parse()?;
             Ok(Account::new(chain_id, owner))
         } else {
+            let chain_id = string
+                .parse()
+                .context("Expecting an account formatted as `chain-id` or `owner@chain-id`")?;
             Ok(Account::chain(chain_id))
         }
     }
@@ -1107,7 +1102,7 @@ impl std::str::FromStr for AccountOwner {
             } else if s.len() == 40 {
                 let address = hex::decode(s)?;
                 if address.len() != 20 {
-                    anyhow::bail!("Invalid address length: {}", s);
+                    anyhow::bail!("Invalid address length: {s}");
                 }
                 let address = <[u8; 20]>::try_from(address.as_slice()).unwrap();
                 return Ok(AccountOwner::Address20(address));
@@ -1120,7 +1115,7 @@ impl std::str::FromStr for AccountOwner {
                 }
             }
         }
-        anyhow::bail!("Invalid address value: {}", s);
+        anyhow::bail!("Invalid address value: {s}");
     }
 }
 
@@ -1237,6 +1232,7 @@ mod tests {
     #[test]
     fn addresses() {
         assert_eq!(&AccountOwner::Reserved(0).to_string(), "0x00");
+        assert_eq!(AccountOwner::from_str("0x00").unwrap(), AccountOwner::CHAIN);
 
         let address = AccountOwner::from_str("0x10").unwrap();
         assert_eq!(address, AccountOwner::Reserved(16));
@@ -1265,6 +1261,31 @@ mod tests {
             "5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
         )
         .is_err());
+    }
+
+    #[test]
+    fn accounts() {
+        use super::{Account, ChainId};
+
+        const CHAIN: &str = "76e3a8c7b2449e6bc238642ac68b4311a809cb57328bea0a1ef9122f08a0053d";
+        const OWNER: &str = "0x5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844";
+
+        let chain_id = ChainId::from_str(CHAIN).unwrap();
+        let owner = AccountOwner::from_str(OWNER).unwrap();
+
+        // Chain-only account.
+        let account = Account::from_str(CHAIN).unwrap();
+        assert_eq!(
+            account,
+            Account::from_str(&format!("0x00@{CHAIN}")).unwrap()
+        );
+        assert_eq!(account, Account::chain(chain_id));
+        assert_eq!(account.to_string(), format!("0x00@{CHAIN}"));
+
+        // Account with owner.
+        let account = Account::from_str(&format!("{OWNER}@{CHAIN}")).unwrap();
+        assert_eq!(account, Account::new(chain_id, owner));
+        assert_eq!(account.to_string(), format!("{OWNER}@{CHAIN}"));
     }
 
     #[test]

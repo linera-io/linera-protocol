@@ -70,14 +70,16 @@ impl TestEnvironment {
         };
         let origin = ChainOrigin::Root(0);
         let admin_chain_description = ChainDescription::new(origin, config, Default::default());
-        let admin_id = admin_chain_description.id();
+        let admin_chain_id = admin_chain_description.id();
         Self {
             admin_chain_description: admin_chain_description.clone(),
-            created_descriptions: [(admin_id, admin_chain_description)].into_iter().collect(),
+            created_descriptions: [(admin_chain_id, admin_chain_description)]
+                .into_iter()
+                .collect(),
         }
     }
 
-    fn admin_id(&self) -> ChainId {
+    fn admin_chain_id(&self) -> ChainId {
         self.admin_chain_description.id()
     }
 
@@ -110,7 +112,7 @@ impl TestEnvironment {
         (
             ApplicationDescription {
                 module_id,
-                creator_chain_id: self.admin_id(),
+                creator_chain_id: self.admin_chain_id(),
                 block_height: BlockHeight(2),
                 application_index: 0,
                 required_application_ids: vec![],
@@ -127,7 +129,7 @@ impl TestEnvironment {
         config: InitialChainConfig,
     ) -> ChainDescription {
         let origin = ChainOrigin::Child {
-            parent: self.admin_id(),
+            parent: self.admin_chain_id(),
             block_height: BlockHeight(height),
             chain_index: 0,
         };
@@ -198,7 +200,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
         .with_authenticated_owner(Some(owner))
         .with_operation(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Account::chain(env.admin_id()),
+            recipient: Account::chain(env.admin_chain_id()),
             amount: Amount::ONE,
         });
 
@@ -207,7 +209,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
         .clone()
         .with_operation(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Account::chain(env.admin_id()),
+            recipient: Account::chain(env.admin_chain_id()),
             amount: Amount::ONE,
         });
 

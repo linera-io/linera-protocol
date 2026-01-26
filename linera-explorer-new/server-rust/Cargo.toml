@@ -1,0 +1,17 @@
+[package]
+name = "linera-explorer-server"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+axum = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+prometheus = "0.13.3"
+serde = { version = "1.0", features = ["derive"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

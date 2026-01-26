@@ -22,7 +22,6 @@ impl ContractAbi for EvmAbi {
     fn serialize_operation(operation: &Self::Operation) -> Result<Vec<u8>, String> {
         Ok(operation.to_vec())
     }
-
     fn deserialize_response(response: Vec<u8>) -> Result<Self::Response, String> {
         Ok(response)
     }

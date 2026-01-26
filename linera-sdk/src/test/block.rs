@@ -132,8 +132,8 @@ impl BlockBuilder {
 
     /// Adds a user `operation` to this block.
     ///
-    /// The operation is serialized using [`bcs`] and added to the block, marked to be executed by
-    /// `application`.
+    /// The operation is serialized using the application ABI and added to the block, marked to be
+    /// executed by `application`.
     pub fn with_operation<Abi>(
         &mut self,
         application_id: ApplicationId<Abi>,
@@ -142,7 +142,7 @@ impl BlockBuilder {
     where
         Abi: ContractAbi,
     {
-        let operation = Abi::serialize_operation(&operation)
+        let operation = <Abi as ContractAbi>::serialize_operation(&operation)
             .expect("Failed to serialize `Operation` in BlockBuilder");
         self.with_raw_operation(application_id.forget_abi(), operation)
     }

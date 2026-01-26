@@ -391,8 +391,8 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Gets the ID of the admin chain.
     #[instrument(level = "trace", skip(self))]
-    pub fn admin_id(&self) -> ChainId {
-        self.client.admin_id
+    pub fn admin_chain_id(&self) -> ChainId {
+        self.client.admin_chain_id
     }
 
     /// Gets the currently preferred owner for signing the blocks.
@@ -438,9 +438,9 @@ impl<Env: Environment> ChainClient<Env> {
                 map
             },
         );
-        if self.chain_id != self.client.admin_id {
+        if self.chain_id != self.client.admin_chain_id {
             publishers.insert(
-                self.client.admin_id,
+                self.client.admin_chain_id,
                 vec![
                     StreamId::system(EPOCH_STREAM_NAME),
                     StreamId::system(REMOVED_EPOCH_STREAM_NAME),
@@ -699,7 +699,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         if info.epoch > self.client.admin_committees().await?.0 {
             self.client
-                .synchronize_chain_state(self.client.admin_id)
+                .synchronize_chain_state(self.client.admin_chain_id)
                 .await?;
         }
 
@@ -782,7 +782,7 @@ impl<Env: Environment> ChainClient<Env> {
         let chain_ids = subscriptions
             .iter()
             .map(|((chain_id, _), _)| *chain_id)
-            .chain(iter::once(self.client.admin_id))
+            .chain(iter::once(self.client.admin_chain_id))
             .filter(|chain_id| *chain_id != self.chain_id)
             .collect::<BTreeSet<_>>();
         stream::iter(
@@ -2359,7 +2359,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// exists in storage.
     async fn has_admin_event(&self, stream_name: &[u8], index: u32) -> Result<bool, Error> {
         let event_id = EventId {
-            chain_id: self.client.admin_id,
+            chain_id: self.client.admin_chain_id,
             stream_id: StreamId::system(stream_name),
             index,
         };

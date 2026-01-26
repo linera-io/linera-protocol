@@ -87,7 +87,7 @@ where
 {
     pub remote_node: RemoteNode<Env::ValidatorNode>,
     pub client: Arc<Client<Env>>,
-    pub admin_id: ChainId,
+    pub admin_chain_id: ChainId,
 }
 
 impl<Env: Environment> Clone for ValidatorUpdater<Env> {
@@ -95,7 +95,7 @@ impl<Env: Environment> Clone for ValidatorUpdater<Env> {
         ValidatorUpdater {
             remote_node: self.remote_node.clone(),
             client: self.client.clone(),
-            admin_id: self.admin_id,
+            admin_chain_id: self.admin_chain_id,
         }
     }
 }
@@ -256,10 +256,10 @@ where
             match result {
                 Err(NodeError::EventsNotFound(event_ids))
                     if !sent_admin_chain
-                        && certificate.inner().chain_id() != self.admin_id
+                        && certificate.inner().chain_id() != self.admin_chain_id
                         && event_ids.iter().all(|event_id| {
                             event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
-                                && event_id.chain_id == self.admin_id
+                                && event_id.chain_id == self.admin_chain_id
                         }) =>
                 {
                     // The validator doesn't have the committee that signed the certificate.
@@ -612,9 +612,13 @@ where
     }
 
     async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
-        let local_admin_info = self.client.local_node.chain_info(self.admin_id).await?;
+        let local_admin_info = self
+            .client
+            .local_node
+            .chain_info(self.admin_chain_id)
+            .await?;
         Box::pin(self.send_chain_information(
-            self.admin_id,
+            self.admin_chain_id,
             local_admin_info.next_block_height,
             CrossChainMessageDelivery::NonBlocking,
             None,

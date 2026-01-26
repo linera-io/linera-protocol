@@ -145,7 +145,7 @@ impl GenesisConfig {
         &self.chains[0]
     }
 
-    pub fn admin_id(&self) -> ChainId {
+    pub fn admin_chain_id(&self) -> ChainId {
         self.admin_chain_description().id()
     }
 
@@ -201,7 +201,7 @@ impl GenesisConfig {
             genesis_config_hash: CryptoHash::new(self),
             genesis_timestamp: self.timestamp,
             genesis_committee_blob_hash: self.committee_blob().id().hash,
-            admin_chain_id: self.admin_id(),
+            admin_chain_id: self.admin_chain_id(),
         }
     }
 }
