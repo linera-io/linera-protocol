@@ -3823,6 +3823,7 @@ dependencies = [
  "linera-sdk-derive",
  "linera-storage",
  "linera-views",
+ "linera-views-derive",
  "log",
  "papaya",
  "serde",

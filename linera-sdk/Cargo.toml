@@ -57,6 +57,7 @@ linera-base.workspace = true
 linera-ethereum = { workspace = true, optional = true }
 linera-sdk-derive.workspace = true
 linera-views.workspace = true
+linera-views-derive.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true

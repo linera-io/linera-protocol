@@ -6,12 +6,13 @@ use std::collections::BTreeSet;
 use async_graphql::SimpleObject;
 use linera_sdk::{
     linera_base_types::AccountOwner,
-    views::{linera_views, MapView, RegisterView, SyncRootView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, ViewStorageContext},
 };
+use linera_sdk::RootView;
 use non_fungible::{Nft, TokenId};
 
 /// The application state.
-#[derive(SyncRootView, SimpleObject)]
+#[derive(RootView, SimpleObject)]
 #[view(context = ViewStorageContext)]
 pub struct NonFungibleTokenState {
     // Map from token ID to the NFT data

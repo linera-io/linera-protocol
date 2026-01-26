@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fungible::{InitialState, OwnerSpender};
+use linera_sdk::RootView;
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount},
-    views::{linera_views, MapView, SyncRootView, ViewStorageContext},
+    views::{linera_views, MapView, ViewStorageContext},
 };
 
 /// The application state.
-#[derive(SyncRootView)]
+#[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct FungibleTokenState {
     pub accounts: MapView<AccountOwner, Amount>,

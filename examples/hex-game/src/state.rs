@@ -5,9 +5,10 @@ use std::collections::BTreeSet;
 
 use async_graphql::SimpleObject;
 use hex_game::{Board, Clock, Timeouts};
+use linera_sdk::RootView;
 use linera_sdk::{
     linera_base_types::{AccountOwner, ChainId},
-    views::{linera_views, MapView, RegisterView, SyncRootView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, ViewStorageContext},
 };
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +20,7 @@ pub struct GameChain {
 }
 
 /// The application state.
-#[derive(SyncRootView, SimpleObject)]
+#[derive(RootView, SimpleObject)]
 #[graphql(complex)]
 #[view(context = ViewStorageContext)]
 pub struct HexState {

@@ -6,11 +6,12 @@ use std::collections::HashSet;
 use linera_sdk::{
     abis::controller::{ManagedServiceId, Worker},
     linera_base_types::{AccountOwner, ChainId, MessagePolicy},
-    views::{linera_views, MapView, RegisterView, SetView, SyncRootView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, SetView, ViewStorageContext},
 };
+use linera_sdk::RootView;
 
 /// The state of the service controller application.
-#[derive(SyncRootView, async_graphql::SimpleObject)]
+#[derive(RootView, async_graphql::SimpleObject)]
 #[graphql(complex)]
 #[view(context = ViewStorageContext)]
 pub struct ControllerState {
