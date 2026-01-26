@@ -426,6 +426,21 @@ impl ExecutionError {
             | ExecutionError::IoError(_) => true,
         }
     }
+
+    /// Returns whether this error is caused by a per-block limit being exceeded.
+    ///
+    /// These are errors that might succeed in a later block if the limit was only exceeded
+    /// due to accumulated transactions. Per-transaction or per-call limits are not included.
+    pub fn is_limit_error(&self) -> bool {
+        matches!(
+            self,
+            ExecutionError::ExcessiveRead
+                | ExecutionError::ExcessiveWrite
+                | ExecutionError::MaximumFuelExceeded(_)
+                | ExecutionError::MaximumServiceOracleExecutionTimeExceeded
+                | ExecutionError::BlockTooLarge
+        )
+    }
 }
 
 /// The public entry points provided by the contract part of an application.

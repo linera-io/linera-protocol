@@ -3455,3 +3455,70 @@ where
 
     Ok(())
 }
+
+/// Tests that message bundles exceeding block limits are removed (not rejected) when
+/// they're not the first transaction, allowing retry in a later block.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_block_limit_removes_bundles_not_rejects<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    // Use a very restrictive block size that allows only one transfer at a time.
+    let policy = ResourceControlPolicy {
+        maximum_block_size: 350,
+        ..ResourceControlPolicy::only_fuel()
+    };
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+        .await?
+        .with_policy(policy);
+
+    let sender1 = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let sender2 = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
+    let receiver = builder.add_root_chain(3, Amount::ZERO).await?;
+    let recipient = Account::chain(receiver.chain_id());
+
+    // Both senders send a transfer to the receiver.
+    sender1
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+    sender2
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+
+    // Receiver synchronizes and processes inbox.
+    // Due to block size limits, only one transfer can be processed per block.
+    // The second message exceeds the block limit, gets removed from the first block,
+    // but stays in the inbox for a subsequent block in the same process_inbox loop.
+    receiver.synchronize_from_validators().await?;
+    let (certs, _) = receiver.process_inbox().await?;
+    // Should have created two blocks: one for each message (due to block size limits).
+    assert_eq!(certs.len(), 2);
+    // Receiver should have received both tokens.
+    assert_eq!(receiver.local_balance().await?, Amount::from_tokens(2));
+
+    // Verify that the senders did NOT receive bounce messages (the messages weren't rejected).
+    sender1.synchronize_from_validators().await?;
+    sender2.synchronize_from_validators().await?;
+    let (certs1, _) = sender1.process_inbox().await?;
+    let (certs2, _) = sender2.process_inbox().await?;
+    // No bounce messages should have been received.
+    assert!(
+        certs1.is_empty(),
+        "sender1 should not have received any bounce messages"
+    );
+    assert!(
+        certs2.is_empty(),
+        "sender2 should not have received any bounce messages"
+    );
+
+    Ok(())
+}
