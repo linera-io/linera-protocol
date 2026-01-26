@@ -695,11 +695,11 @@ impl<Env: Environment> ChainClient<Env> {
         let info = self.chain_info().await?;
 
         // Validate that the owner can propose on this chain.
-        if !info.manager.ownership.is_owner(&owner)
-            && !info.manager.ownership.open_multi_leader_rounds
-        {
-            return Err(Error::NotAnOwner(self.chain_id));
-        }
+        ensure!(
+            info.manager.ownership.is_owner(&owner)
+                || info.manager.ownership.open_multi_leader_rounds,
+            Error::NotAnOwner(self.chain_id)
+        );
 
         Ok(info)
     }
