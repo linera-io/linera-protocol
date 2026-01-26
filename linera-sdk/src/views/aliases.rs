@@ -5,14 +5,6 @@
 
 use super::ViewStorageContext;
 
-/// An alias to [`linera_views::sync_views::SyncView`] for the WebAssembly-specific
-/// [`ViewStorageContext`].
-pub use linera_views::sync_views::SyncView as View;
-
-/// An alias to [`linera_views::sync_views::SyncRootView`] for the WebAssembly-specific
-/// [`ViewStorageContext`].
-pub use linera_views::sync_views::SyncRootView as RootView;
-
 /// An alias to [`linera_views::sync_views::collection_view::SyncByteCollectionView`] that uses the
 /// WebAssembly-specific [`ViewStorageContext`].
 pub type ByteCollectionView<V> =
