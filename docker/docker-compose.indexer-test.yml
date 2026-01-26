@@ -157,7 +157,7 @@ services:
       - "${BLOCK_EXPORTER_PORT:-8882}:${BLOCK_EXPORTER_PORT:-8882}"
       - "${METRICS_PORT:-9091}:${METRICS_PORT:-9091}"
     command: >
-      sh -c "./linera-exporter
+      sh -c "./linera-exporter run
       --storage scylladb:tcp:scylla:9042:table_default_server_0_db
       --config-path /exporter-config.toml
       --metrics-port ${METRICS_PORT:-9091}"
