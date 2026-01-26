@@ -26,6 +26,13 @@ use linera_core::{
 };
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
+#[cfg(all(with_metrics, feature = "opentelemetry"))]
+use linera_rpc::propagation::get_traffic_type_from_request;
+#[cfg(feature = "opentelemetry")]
+use linera_rpc::propagation::{
+    create_request_with_context, get_otel_context_from_tonic_request,
+    get_traffic_type_from_tonic_request, OtelContextLayer,
+};
 use linera_rpc::{
     config::{ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig},
     grpc::{
@@ -68,23 +75,33 @@ mod metrics {
     };
     use prometheus::{HistogramVec, IntCounterVec};
 
+    /// Label for distinguishing organic vs synthetic (benchmark) traffic.
+    pub const TRAFFIC_TYPE_LABEL: &str = "traffic_type";
+
+    /// Label for the gRPC method name.
+    pub const METHOD_NAME_LABEL: &str = "method_name";
+
     pub static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "proxy_request_latency",
             "Proxy request latency",
-            &[],
+            &[TRAFFIC_TYPE_LABEL],
             linear_bucket_interval(1.0, 50.0, 2000.0),
         )
     });
     pub static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("proxy_request_count", "Proxy request count", &[])
+        register_int_counter_vec(
+            "proxy_request_count",
+            "Proxy request count",
+            &[TRAFFIC_TYPE_LABEL],
+        )
     });
 
     pub static PROXY_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "proxy_request_success",
             "Proxy request success",
-            &["method_name"],
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
         )
     });
 
@@ -92,7 +109,7 @@ mod metrics {
         register_int_counter_vec(
             "proxy_request_error",
             "Proxy request error",
-            &["method_name"],
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
         )
     });
 }
@@ -113,10 +130,11 @@ impl<S> Layer<S> for PrometheusMetricsMiddlewareLayer {
     }
 }
 
-impl<S, Req> Service<Req> for PrometheusMetricsMiddlewareService<S>
+impl<S, B> Service<http::Request<B>> for PrometheusMetricsMiddlewareService<S>
 where
     S::Future: Send + 'static,
-    S: Service<Req> + std::marker::Send,
+    S: Service<http::Request<B>> + std::marker::Send,
+    B: Send + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -126,18 +144,29 @@ where
         self.service.poll_ready(cx)
     }
 
-    fn call(&mut self, request: Req) -> Self::Future {
+    fn call(&mut self, request: http::Request<B>) -> Self::Future {
         #[cfg(with_metrics)]
         let start = linera_base::time::Instant::now();
+
+        // Extract traffic type from request extensions (set by OtelContextLayer).
+        // Falls back to "unknown" if opentelemetry feature is disabled.
+        // When opentelemetry is enabled but no baggage is set, defaults to "organic".
+        #[cfg(all(with_metrics, feature = "opentelemetry"))]
+        let traffic_type: &'static str = get_traffic_type_from_request(&request);
+        #[cfg(all(with_metrics, not(feature = "opentelemetry")))]
+        let traffic_type: &'static str = "unknown";
+
         let future = self.service.call(request);
         async move {
             let response = future.await?;
             #[cfg(with_metrics)]
             {
                 metrics::PROXY_REQUEST_LATENCY
-                    .with_label_values(&[])
+                    .with_label_values(&[traffic_type])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
-                metrics::PROXY_REQUEST_COUNT.with_label_values(&[]).inc();
+                metrics::PROXY_REQUEST_COUNT
+                    .with_label_values(&[traffic_type])
+                    .inc();
             }
             Ok(response)
         }
@@ -265,16 +294,24 @@ where
         let reflection_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(linera_rpc::FILE_DESCRIPTOR_SET)
             .build_v1()?;
+        // Build the layer stack for the public server
+        #[cfg(feature = "opentelemetry")]
+        let layers = ServiceBuilder::new()
+            // Extract OpenTelemetry context from incoming requests (trace context + baggage)
+            .layer(OtelContextLayer)
+            .layer(PrometheusMetricsMiddlewareLayer)
+            .into_inner();
+        #[cfg(not(feature = "opentelemetry"))]
+        let layers = ServiceBuilder::new()
+            .layer(PrometheusMetricsMiddlewareLayer)
+            .into_inner();
+
         let public_server = join_set.spawn_task(
             self.public_server()?
                 .max_concurrent_streams(Some(u32::MAX - 1)) // we subtract one to make sure
                 // that the value is not
                 // interpreted as "not set"
-                .layer(
-                    ServiceBuilder::new()
-                        .layer(PrometheusMetricsMiddlewareLayer)
-                        .into_inner(),
-                )
+                .layer(layers)
                 .layer(
                     // enable
                     // [CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS)
@@ -311,6 +348,37 @@ where
         }
     }
 
+    /// Extracts traffic type and OpenTelemetry context from request extensions.
+    /// Returns traffic_type ("organic", "synthetic", or "unknown") and an optional context.
+    /// When opentelemetry is disabled, returns "unknown" and None.
+    #[cfg(feature = "opentelemetry")]
+    fn extract_otel_info<R>(
+        request: &Request<R>,
+    ) -> (&'static str, Option<opentelemetry::Context>) {
+        let traffic_type = get_traffic_type_from_tonic_request(request);
+        let cx = get_otel_context_from_tonic_request(request);
+        (traffic_type, cx)
+    }
+
+    /// Extracts traffic type when opentelemetry is disabled.
+    /// Returns "unknown" and None for context.
+    #[cfg(not(feature = "opentelemetry"))]
+    fn extract_otel_info<R>(_request: &Request<R>) -> (&'static str, Option<()>) {
+        ("unknown", None)
+    }
+
+    /// Creates a tonic::Request with OpenTelemetry context injected for forwarding.
+    #[cfg(feature = "opentelemetry")]
+    fn create_forwarding_request<T>(inner: T, cx: Option<opentelemetry::Context>) -> Request<T> {
+        create_request_with_context(inner, cx.as_ref())
+    }
+
+    /// Creates a tonic::Request without OpenTelemetry context (feature disabled).
+    #[cfg(not(feature = "opentelemetry"))]
+    fn create_forwarding_request<T>(inner: T, _cx: Option<()>) -> Request<T> {
+        Request::new(inner)
+    }
+
     #[allow(clippy::result_large_err)]
     #[instrument(skip_all, fields(remote_addr = ?request.remote_addr(), chain_id = ?request.get_ref().chain_id()))]
     fn worker_client<R>(
@@ -335,20 +403,21 @@ where
     fn log_and_return_proxy_request_outcome(
         result: Result<Response<ChainInfoResult>, Status>,
         method_name: &str,
+        traffic_type: &str,
     ) -> Result<Response<ChainInfoResult>, Status> {
         #![allow(unused_variables)]
         match result {
             Ok(chain_info_result) => {
                 #[cfg(with_metrics)]
                 metrics::PROXY_REQUEST_SUCCESS
-                    .with_label_values(&[method_name])
+                    .with_label_values(&[method_name, traffic_type])
                     .inc();
                 Ok(chain_info_result)
             }
             Err(status) => {
                 #[cfg(with_metrics)]
                 metrics::PROXY_REQUEST_ERROR
-                    .with_label_values(&[method_name])
+                    .with_label_values(&[method_name, traffic_type])
                     .inc();
                 Err(status)
             }
@@ -483,10 +552,13 @@ where
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        let (traffic_type, cx) = Self::extract_otel_info(&request);
         let (mut client, inner) = self.worker_client(request)?;
+        let forwarding_request = Self::create_forwarding_request(inner, cx);
         Self::log_and_return_proxy_request_outcome(
-            client.handle_block_proposal(inner).await,
+            client.handle_block_proposal(forwarding_request).await,
             "handle_block_proposal",
+            traffic_type,
         )
     }
 
@@ -495,10 +567,13 @@ where
         &self,
         request: Request<LiteCertificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        let (traffic_type, cx) = Self::extract_otel_info(&request);
         let (mut client, inner) = self.worker_client(request)?;
+        let forwarding_request = Self::create_forwarding_request(inner, cx);
         Self::log_and_return_proxy_request_outcome(
-            client.handle_lite_certificate(inner).await,
+            client.handle_lite_certificate(forwarding_request).await,
             "handle_lite_certificate",
+            traffic_type,
         )
     }
 
@@ -511,10 +586,15 @@ where
         &self,
         request: Request<api::HandleConfirmedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        let (traffic_type, cx) = Self::extract_otel_info(&request);
         let (mut client, inner) = self.worker_client(request)?;
+        let forwarding_request = Self::create_forwarding_request(inner, cx);
         Self::log_and_return_proxy_request_outcome(
-            client.handle_confirmed_certificate(inner).await,
+            client
+                .handle_confirmed_certificate(forwarding_request)
+                .await,
             "handle_confirmed_certificate",
+            traffic_type,
         )
     }
 
@@ -527,10 +607,15 @@ where
         &self,
         request: Request<api::HandleValidatedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        let (traffic_type, cx) = Self::extract_otel_info(&request);
         let (mut client, inner) = self.worker_client(request)?;
+        let forwarding_request = Self::create_forwarding_request(inner, cx);
         Self::log_and_return_proxy_request_outcome(
-            client.handle_validated_certificate(inner).await,
+            client
+                .handle_validated_certificate(forwarding_request)
+                .await,
             "handle_validated_certificate",
+            traffic_type,
         )
     }
 
@@ -539,10 +624,13 @@ where
         &self,
         request: Request<api::HandleTimeoutCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        let (traffic_type, cx) = Self::extract_otel_info(&request);
         let (mut client, inner) = self.worker_client(request)?;
+        let forwarding_request = Self::create_forwarding_request(inner, cx);
         Self::log_and_return_proxy_request_outcome(
-            client.handle_timeout_certificate(inner).await,
+            client.handle_timeout_certificate(forwarding_request).await,
             "handle_timeout_certificate",
+            traffic_type,
         )
     }
 
@@ -551,10 +639,13 @@ where
         &self,
         request: Request<api::ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        let (traffic_type, cx) = Self::extract_otel_info(&request);
         let (mut client, inner) = self.worker_client(request)?;
+        let forwarding_request = Self::create_forwarding_request(inner, cx);
         Self::log_and_return_proxy_request_outcome(
-            client.handle_chain_info_query(inner).await,
+            client.handle_chain_info_query(forwarding_request).await,
             "handle_chain_info_query",
+            traffic_type,
         )
     }
 
@@ -636,20 +727,23 @@ where
         &self,
         request: Request<PendingBlobRequest>,
     ) -> Result<Response<PendingBlobResult>, Status> {
+        #[cfg_attr(not(with_metrics), allow(unused_variables))]
+        let (traffic_type, cx) = Self::extract_otel_info(&request);
         let (mut client, inner) = self.worker_client(request)?;
+        let forwarding_request = Self::create_forwarding_request(inner, cx);
         #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
-        match client.download_pending_blob(inner).await {
+        match client.download_pending_blob(forwarding_request).await {
             Ok(blob_result) => {
                 #[cfg(with_metrics)]
                 metrics::PROXY_REQUEST_SUCCESS
-                    .with_label_values(&["download_pending_blob"])
+                    .with_label_values(&["download_pending_blob", traffic_type])
                     .inc();
                 Ok(blob_result)
             }
             Err(status) => {
                 #[cfg(with_metrics)]
                 metrics::PROXY_REQUEST_ERROR
-                    .with_label_values(&["download_pending_blob"])
+                    .with_label_values(&["download_pending_blob", traffic_type])
                     .inc();
                 Err(status)
             }
@@ -661,20 +755,23 @@ where
         &self,
         request: Request<HandlePendingBlobRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        #[cfg_attr(not(with_metrics), allow(unused_variables))]
+        let (traffic_type, cx) = Self::extract_otel_info(&request);
         let (mut client, inner) = self.worker_client(request)?;
+        let forwarding_request = Self::create_forwarding_request(inner, cx);
         #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
-        match client.handle_pending_blob(inner).await {
+        match client.handle_pending_blob(forwarding_request).await {
             Ok(blob_result) => {
                 #[cfg(with_metrics)]
                 metrics::PROXY_REQUEST_SUCCESS
-                    .with_label_values(&["handle_pending_blob"])
+                    .with_label_values(&["handle_pending_blob", traffic_type])
                     .inc();
                 Ok(blob_result)
             }
             Err(status) => {
                 #[cfg(with_metrics)]
                 metrics::PROXY_REQUEST_ERROR
-                    .with_label_values(&["handle_pending_blob"])
+                    .with_label_values(&["handle_pending_blob", traffic_type])
                     .inc();
                 Err(status)
             }

@@ -38,6 +38,10 @@ use super::{
     pool::GrpcConnectionPool,
     GrpcError, GRPC_MAX_MESSAGE_SIZE,
 };
+#[cfg(all(with_metrics, feature = "opentelemetry"))]
+use crate::propagation::get_traffic_type_from_request;
+#[cfg(feature = "opentelemetry")]
+use crate::propagation::{get_traffic_type_from_tonic_request, OtelContextLayer};
 use crate::{
     config::{CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig},
     cross_chain_message_queue, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
@@ -56,24 +60,34 @@ mod metrics {
     };
     use prometheus::{HistogramVec, IntCounterVec};
 
+    /// Label for distinguishing organic vs synthetic (benchmark) traffic.
+    pub const TRAFFIC_TYPE_LABEL: &str = "traffic_type";
+
+    /// Label for the gRPC method name.
+    pub const METHOD_NAME_LABEL: &str = "method_name";
+
     pub static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "server_request_latency",
             "Server request latency",
-            &[],
+            &[TRAFFIC_TYPE_LABEL],
             linear_bucket_interval(1.0, 25.0, 2000.0),
         )
     });
 
     pub static SERVER_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("server_request_count", "Server request count", &[])
+        register_int_counter_vec(
+            "server_request_count",
+            "Server request count",
+            &[TRAFFIC_TYPE_LABEL],
+        )
     });
 
     pub static SERVER_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "server_request_success",
             "Server request success",
-            &["method_name"],
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
         )
     });
 
@@ -81,7 +95,7 @@ mod metrics {
         register_int_counter_vec(
             "server_request_error",
             "Server request error",
-            &["method_name"],
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
         )
     });
 
@@ -90,7 +104,7 @@ mod metrics {
             register_histogram_vec(
                 "server_request_latency_per_request_type",
                 "Server request latency per request type",
-                &["method_name"],
+                &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
                 linear_bucket_interval(1.0, 25.0, 2000.0),
             )
         });
@@ -142,10 +156,11 @@ impl<S> Layer<S> for GrpcPrometheusMetricsMiddlewareLayer {
     }
 }
 
-impl<S, Req> Service<Req> for GrpcPrometheusMetricsMiddlewareService<S>
+impl<S, B> Service<http::Request<B>> for GrpcPrometheusMetricsMiddlewareService<S>
 where
     S::Future: Send + 'static,
-    S: Service<Req> + std::marker::Send,
+    S: Service<http::Request<B>> + std::marker::Send,
+    B: Send + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -155,18 +170,29 @@ where
         self.service.poll_ready(cx)
     }
 
-    fn call(&mut self, request: Req) -> Self::Future {
+    fn call(&mut self, request: http::Request<B>) -> Self::Future {
         #[cfg(with_metrics)]
         let start = Instant::now();
+
+        // Extract traffic type from request extensions (set by OtelContextLayer).
+        // When opentelemetry is enabled but no baggage is set, defaults to "organic".
+        // When opentelemetry is disabled, defaults to "unknown".
+        #[cfg(all(with_metrics, feature = "opentelemetry"))]
+        let traffic_type: &'static str = get_traffic_type_from_request(&request);
+        #[cfg(all(with_metrics, not(feature = "opentelemetry")))]
+        let traffic_type: &'static str = "unknown";
+
         let future = self.service.call(request);
         async move {
             let response = future.await?;
             #[cfg(with_metrics)]
             {
                 metrics::SERVER_REQUEST_LATENCY
-                    .with_label_values(&[])
+                    .with_label_values(&[traffic_type])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
-                metrics::SERVER_REQUEST_COUNT.with_label_values(&[]).inc();
+                metrics::SERVER_REQUEST_COUNT
+                    .with_label_values(&[traffic_type])
+                    .inc();
             }
             Ok(response)
         }
@@ -266,12 +292,21 @@ where
                 .set_serving::<ValidatorWorkerServer<Self>>()
                 .await;
 
+            // Build the layer stack for the server.
+            // When opentelemetry is enabled, OtelContextLayer extracts context from incoming
+            // requests, which is then used by GrpcPrometheusMetricsMiddlewareLayer for metrics.
+            #[cfg(feature = "opentelemetry")]
+            let layers = ServiceBuilder::new()
+                .layer(OtelContextLayer)
+                .layer(GrpcPrometheusMetricsMiddlewareLayer)
+                .into_inner();
+            #[cfg(not(feature = "opentelemetry"))]
+            let layers = ServiceBuilder::new()
+                .layer(GrpcPrometheusMetricsMiddlewareLayer)
+                .into_inner();
+
             tonic::transport::Server::builder()
-                .layer(
-                    ServiceBuilder::new()
-                        .layer(GrpcPrometheusMetricsMiddlewareLayer)
-                        .into_inner(),
-                )
+                .layer(layers)
                 .add_service(health_service)
                 .add_service(reflection_service)
                 .add_service(worker_node)
@@ -444,23 +479,40 @@ where
         .await;
     }
 
-    fn log_request_outcome_and_latency(start: Instant, success: bool, method_name: &str) {
+    fn log_request_outcome_and_latency(
+        start: Instant,
+        success: bool,
+        method_name: &str,
+        traffic_type: &str,
+    ) {
         #![cfg_attr(not(with_metrics), allow(unused_variables))]
         #[cfg(with_metrics)]
         {
             metrics::SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
-                .with_label_values(&[method_name])
+                .with_label_values(&[method_name, traffic_type])
                 .observe(start.elapsed().as_secs_f64() * 1000.0);
             if success {
                 metrics::SERVER_REQUEST_SUCCESS
-                    .with_label_values(&[method_name])
+                    .with_label_values(&[method_name, traffic_type])
                     .inc();
             } else {
                 metrics::SERVER_REQUEST_ERROR
-                    .with_label_values(&[method_name])
+                    .with_label_values(&[method_name, traffic_type])
                     .inc();
             }
         }
+    }
+
+    /// Extracts traffic type from a tonic request's extensions.
+    #[cfg(feature = "opentelemetry")]
+    fn get_traffic_type<R>(request: &Request<R>) -> &'static str {
+        get_traffic_type_from_tonic_request(request)
+    }
+
+    /// Returns "unknown" when opentelemetry feature is disabled.
+    #[cfg(not(feature = "opentelemetry"))]
+    fn get_traffic_type<R>(_request: &Request<R>) -> &'static str {
+        "unknown"
     }
 
     fn log_error(&self, error: &linera_core::worker::WorkerError, context: &str) {
@@ -492,17 +544,28 @@ where
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
+        let traffic_type = Self::get_traffic_type(&request);
         let proposal = request.into_inner().try_into()?;
         trace!(?proposal, "Handling block proposal");
         Ok(Response::new(
             match self.state.clone().handle_block_proposal(proposal).await {
                 Ok((info, actions)) => {
-                    Self::log_request_outcome_and_latency(start, true, "handle_block_proposal");
+                    Self::log_request_outcome_and_latency(
+                        start,
+                        true,
+                        "handle_block_proposal",
+                        traffic_type,
+                    );
                     self.handle_network_actions(actions);
                     info.try_into()?
                 }
                 Err(error) => {
-                    Self::log_request_outcome_and_latency(start, false, "handle_block_proposal");
+                    Self::log_request_outcome_and_latency(
+                        start,
+                        false,
+                        "handle_block_proposal",
+                        traffic_type,
+                    );
                     self.log_error(&error, "Failed to handle block proposal");
                     NodeError::from(error).try_into()?
                 }
@@ -524,6 +587,7 @@ where
         request: Request<LiteCertificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
+        let traffic_type = Self::get_traffic_type(&request);
         let HandleLiteCertRequest {
             certificate,
             wait_for_outgoing_messages,
@@ -538,7 +602,12 @@ where
         .await
         {
             Ok((info, actions)) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_lite_certificate");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    true,
+                    "handle_lite_certificate",
+                    traffic_type,
+                );
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -548,7 +617,12 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_lite_certificate");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    false,
+                    "handle_lite_certificate",
+                    traffic_type,
+                );
                 self.log_error(&error, "Failed to handle lite certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -569,6 +643,7 @@ where
         request: Request<api::HandleConfirmedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
+        let traffic_type = Self::get_traffic_type(&request);
         let HandleConfirmedCertificateRequest {
             certificate,
             wait_for_outgoing_messages,
@@ -582,7 +657,12 @@ where
             .await
         {
             Ok((info, actions)) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_confirmed_certificate");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    true,
+                    "handle_confirmed_certificate",
+                    traffic_type,
+                );
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -592,7 +672,12 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_confirmed_certificate");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    false,
+                    "handle_confirmed_certificate",
+                    traffic_type,
+                );
                 self.log_error(&error, "Failed to handle confirmed certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -613,6 +698,7 @@ where
         request: Request<api::HandleValidatedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
+        let traffic_type = Self::get_traffic_type(&request);
         let HandleValidatedCertificateRequest { certificate } = request.into_inner().try_into()?;
         trace!(?certificate, "Handling certificate");
         match self
@@ -622,12 +708,22 @@ where
             .await
         {
             Ok((info, actions)) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_validated_certificate");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    true,
+                    "handle_validated_certificate",
+                    traffic_type,
+                );
                 self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_validated_certificate");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    false,
+                    "handle_validated_certificate",
+                    traffic_type,
+                );
                 self.log_error(&error, "Failed to handle validated certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -648,6 +744,7 @@ where
         request: Request<api::HandleTimeoutCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
+        let traffic_type = Self::get_traffic_type(&request);
         let HandleTimeoutCertificateRequest { certificate } = request.into_inner().try_into()?;
         trace!(?certificate, "Handling Timeout certificate");
         match self
@@ -657,11 +754,21 @@ where
             .await
         {
             Ok((info, _actions)) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_timeout_certificate");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    true,
+                    "handle_timeout_certificate",
+                    traffic_type,
+                );
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_timeout_certificate");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    false,
+                    "handle_timeout_certificate",
+                    traffic_type,
+                );
                 self.log_error(&error, "Failed to handle timeout certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -682,16 +789,27 @@ where
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
+        let traffic_type = Self::get_traffic_type(&request);
         let query = request.into_inner().try_into()?;
         trace!(?query, "Handling chain info query");
         match self.state.clone().handle_chain_info_query(query).await {
             Ok((info, actions)) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_chain_info_query");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    true,
+                    "handle_chain_info_query",
+                    traffic_type,
+                );
                 self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_chain_info_query");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    false,
+                    "handle_chain_info_query",
+                    traffic_type,
+                );
                 self.log_error(&error, "Failed to handle chain info query");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -712,6 +830,7 @@ where
         request: Request<PendingBlobRequest>,
     ) -> Result<Response<PendingBlobResult>, Status> {
         let start = Instant::now();
+        let traffic_type = Self::get_traffic_type(&request);
         let (chain_id, blob_id) = request.into_inner().try_into()?;
         trace!(?chain_id, ?blob_id, "Download pending blob");
         match self
@@ -721,11 +840,21 @@ where
             .await
         {
             Ok(blob) => {
-                Self::log_request_outcome_and_latency(start, true, "download_pending_blob");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    true,
+                    "download_pending_blob",
+                    traffic_type,
+                );
                 Ok(Response::new(blob.into_content().try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "download_pending_blob");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    false,
+                    "download_pending_blob",
+                    traffic_type,
+                );
                 self.log_error(&error, "Failed to download pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -746,17 +875,28 @@ where
         request: Request<HandlePendingBlobRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
+        let traffic_type = Self::get_traffic_type(&request);
         let (chain_id, blob_content) = request.into_inner().try_into()?;
         let blob = Blob::new(blob_content);
         let blob_id = blob.id();
         trace!(?chain_id, ?blob_id, "Handle pending blob");
         match self.state.clone().handle_pending_blob(chain_id, blob).await {
             Ok(info) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_pending_blob");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    true,
+                    "handle_pending_blob",
+                    traffic_type,
+                );
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_pending_blob");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    false,
+                    "handle_pending_blob",
+                    traffic_type,
+                );
                 self.log_error(&error, "Failed to handle pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -777,15 +917,31 @@ where
         request: Request<CrossChainRequest>,
     ) -> Result<Response<()>, Status> {
         let start = Instant::now();
-        let request = request.into_inner().try_into()?;
-        trace!(?request, "Handling cross-chain request");
-        match self.state.clone().handle_cross_chain_request(request).await {
+        let traffic_type = Self::get_traffic_type(&request);
+        let cross_chain_request = request.into_inner().try_into()?;
+        trace!(?cross_chain_request, "Handling cross-chain request");
+        match self
+            .state
+            .clone()
+            .handle_cross_chain_request(cross_chain_request)
+            .await
+        {
             Ok(actions) => {
-                Self::log_request_outcome_and_latency(start, true, "handle_cross_chain_request");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    true,
+                    "handle_cross_chain_request",
+                    traffic_type,
+                );
                 self.handle_network_actions(actions)
             }
             Err(error) => {
-                Self::log_request_outcome_and_latency(start, false, "handle_cross_chain_request");
+                Self::log_request_outcome_and_latency(
+                    start,
+                    false,
+                    "handle_cross_chain_request",
+                    traffic_type,
+                );
                 let nickname = self.state.nickname();
                 error!(nickname, %error, "Failed to handle cross-chain request");
             }
