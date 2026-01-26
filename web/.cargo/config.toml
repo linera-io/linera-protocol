@@ -1,7 +1,7 @@
 [target.wasm32-unknown-unknown]
 rustflags = [
     # support threading
-    "-C", "target-feature=+atomics,+bulk-memory,+mutable-globals,+reference-types",
+    "-C", "target-feature=+atomics,+mutable-globals,+reference-types",
     # allow linking C code (for `rust_secp256k1`)
     "--cfg=web_sys_unstable_apis",
     "-Z", "wasm_c_abi=spec",

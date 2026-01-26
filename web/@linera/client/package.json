@@ -40,6 +40,7 @@
     "ethers": "^6.15.0"
   },
   "devDependencies": {
+    "@types/node": "22.7.5",
     "@vitest/browser": "^3.2.4",
     "playwright": "1.54.0",
     "prettier": "3.5.3",
