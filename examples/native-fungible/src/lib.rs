@@ -16,6 +16,7 @@ pub struct AccountEntry {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[doc(hidden)]
 pub enum Message {
     Notify,
 }

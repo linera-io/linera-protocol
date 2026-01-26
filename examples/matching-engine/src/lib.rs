@@ -185,6 +185,7 @@ pub enum Operation {
 
 /// Messages that can be processed by the application.
 #[derive(Debug, Deserialize, Serialize)]
+#[doc(hidden)]
 pub enum Message {
     /// The order being transmitted from the chain and received by the chain of the order book.
     ExecuteOrder { order: Order },

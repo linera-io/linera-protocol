@@ -278,6 +278,7 @@ impl Board {
 
 /// Messages sent between chains for the Hex game.
 #[derive(Debug, Serialize, Deserialize)]
+#[doc(hidden)]
 pub enum Message {
     /// Initializes a game. Sent from the main chain to a temporary chain.
     Start {

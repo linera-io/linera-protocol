@@ -42,6 +42,7 @@ pub enum Operation {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[doc(hidden)]
 pub enum Message {
     /// Like a post, author of a post receives the message.
     Like { key: Key },

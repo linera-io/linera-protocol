@@ -56,6 +56,7 @@ pub enum Operation {
 
 /// Messages that can be exchanged across chains from the same application instance.
 #[derive(Debug, Deserialize, Serialize)]
+#[doc(hidden)]
 pub enum Message {
     /// Pledge some tokens to the campaign (from an account on the receiver chain).
     PledgeWithAccount { owner: AccountOwner, amount: Amount },

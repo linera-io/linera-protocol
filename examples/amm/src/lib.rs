@@ -75,6 +75,7 @@ pub enum Operation {
 scalar!(Operation);
 
 #[derive(Debug, Deserialize, Serialize)]
+#[doc(hidden)]
 pub enum Message {
     Swap {
         owner: AccountOwner,

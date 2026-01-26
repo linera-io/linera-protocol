@@ -63,6 +63,7 @@ pub enum Operation {
 
 /// A message.
 #[derive(Debug, Deserialize, Serialize)]
+#[doc(hidden)]
 pub enum Message {
     /// Transfers to the given `target` account, unless the message is bouncing, in which case
     /// we transfer back to the `source`.
