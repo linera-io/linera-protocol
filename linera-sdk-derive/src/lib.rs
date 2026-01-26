@@ -97,6 +97,7 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
         pub struct #mutation_root_name<Application>
         where
             Application: #crate_root::Service,
+            Application::Abi: #crate_root::abi::ContractAbi<Operation = #enum_name>,
             #crate_root::ServiceRuntime<Application>: Send + Sync,
         {
             runtime: ::std::sync::Arc<#crate_root::ServiceRuntime<Application>>,
@@ -106,6 +107,7 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
         impl<Application> #mutation_root_name<Application>
         where
             Application: #crate_root::Service,
+            Application::Abi: #crate_root::abi::ContractAbi<Operation = #enum_name>,
             #crate_root::ServiceRuntime<Application>: Send + Sync,
         {
             #(#methods)*
@@ -114,6 +116,7 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
         impl<Application> #crate_root::graphql::GraphQLMutationRoot<Application> for #enum_name
         where
             Application: #crate_root::Service,
+            Application::Abi: #crate_root::abi::ContractAbi<Operation = #enum_name>,
             #crate_root::ServiceRuntime<Application>: Send + Sync,
         {
             type MutationRoot = #mutation_root_name<Application>;
@@ -163,6 +166,7 @@ pub mod tests {
             pub struct SomeOperationMutationRoot<Application>
             where
                 Application: linera_sdk::Service,
+                Application::Abi: linera_sdk::abi::ContractAbi<Operation = SomeOperation>,
                 linera_sdk::ServiceRuntime<Application>: Send + Sync,
             {
                 runtime: ::std::sync::Arc<linera_sdk::ServiceRuntime<Application>>,
@@ -172,6 +176,7 @@ pub mod tests {
             impl<Application> SomeOperationMutationRoot<Application>
             where
                 Application: linera_sdk::Service,
+                Application::Abi: linera_sdk::abi::ContractAbi<Operation = SomeOperation>,
                 linera_sdk::ServiceRuntime<Application>: Send + Sync,
             {
                 async fn tuple_variant(&self, field0: String,) -> [u8; 0] {
@@ -197,6 +202,7 @@ pub mod tests {
                 for SomeOperation
             where
                 Application: linera_sdk::Service,
+                Application::Abi: linera_sdk::abi::ContractAbi<Operation = SomeOperation>,
                 linera_sdk::ServiceRuntime<Application>: Send + Sync,
             {
                 type MutationRoot = SomeOperationMutationRoot<Application>;

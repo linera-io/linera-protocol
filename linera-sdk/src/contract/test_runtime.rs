@@ -862,7 +862,7 @@ where
         application: ApplicationId<A>,
         call: &A::Operation,
     ) -> A::Response {
-        let call_bytes = A::serialize_operation(call)
+        let call_bytes = <A as ContractAbi>::serialize_operation(call)
             .expect("Failed to serialize `Operation` in test runtime cross-application call");
 
         let handler = self.call_application_handler.as_mut().expect(

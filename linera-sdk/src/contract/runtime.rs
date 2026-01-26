@@ -249,7 +249,7 @@ where
         application: ApplicationId<A>,
         call: &A::Operation,
     ) -> A::Response {
-        let call_bytes = A::serialize_operation(call)
+        let call_bytes = <A as ContractAbi>::serialize_operation(call)
             .expect("Failed to serialize `Operation` in cross-application call");
 
         let response_bytes = contract_wit::try_call_application(
