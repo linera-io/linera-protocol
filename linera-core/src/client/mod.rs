@@ -1477,6 +1477,10 @@ impl<Env: Environment> Client<Env> {
     /// Attempts to execute the block locally. If any incoming message execution fails, that
     /// message is rejected and execution is retried, until the block accepts only messages
     /// that succeed.
+    ///
+    /// If a message fails due to block limits being exceeded and it's not the first
+    /// transaction, the message is removed (not rejected) so it can be retried in a later
+    /// block. All subsequent messages from the same sender are also removed.
     // TODO(#2806): Measure how failing messages affect the execution times.
     #[tracing::instrument(level = "trace", skip(self, block))]
     async fn stage_block_execution_and_discard_failing_messages(
@@ -1498,33 +1502,69 @@ impl<Env: Environment> Client<Env> {
                     ChainExecutionContext::IncomingBundle(index),
                 ) = &**chain_error
                 {
+                    let index = *index as usize;
                     let transaction = block
                         .transactions
-                        .get_mut(*index as usize)
+                        .get_mut(index)
                         .expect("Transaction at given index should exist");
-                    let Transaction::ReceiveMessages(message) = transaction else {
+                    let Transaction::ReceiveMessages(incoming_bundle) = transaction else {
                         panic!(
                             "Expected incoming bundle at transaction index {}, found operation",
                             index
                         );
                     };
                     ensure!(
-                        !message.bundle.is_protected(),
+                        !incoming_bundle.bundle.is_protected(),
                         ChainClientError::BlockProposalError(
                             "Protected incoming message failed to execute locally"
                         )
                     );
-                    if message.action == MessageAction::Reject {
+                    if incoming_bundle.action == MessageAction::Reject {
                         return result;
                     }
-                    // Reject the faulty message from the block and continue.
+
+                    // Check if this is a block limit error.
+                    if error.is_limit_error() {
+                        if index == 0 {
+                            // First transaction: it's inherently too large, reject it.
+                            info!(
+                                %error, origin = ?incoming_bundle.origin,
+                                "First message bundle exceeds block limits and will be rejected."
+                            );
+                            incoming_bundle.action = MessageAction::Reject;
+                        } else {
+                            // Not the first transaction: might succeed in a later block.
+                            // Remove it and all subsequent bundles from the same sender.
+                            let origin = incoming_bundle.origin;
+                            info!(
+                                %error, %index, ?origin,
+                                "Message bundle exceeded block limits and will be removed for retry in a later block."
+                            );
+                            // Remove the failed bundle and all subsequent bundles from the same sender.
+                            let mut i = index;
+                            while i < block.transactions.len() {
+                                let same_sender = matches!(
+                                    &block.transactions[i],
+                                    Transaction::ReceiveMessages(bundle) if bundle.origin == origin
+                                );
+                                if same_sender {
+                                    block.transactions.remove(i);
+                                } else {
+                                    i += 1;
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    // Non-limit error: reject the faulty message from the block and continue.
                     // TODO(#1420): This is potentially a bit heavy-handed for
                     // retryable errors.
                     info!(
-                        %error, origin = ?message.origin,
+                        %error, origin = ?incoming_bundle.origin,
                         "Message failed to execute locally and will be rejected."
                     );
-                    message.action = MessageAction::Reject;
+                    incoming_bundle.action = MessageAction::Reject;
                     continue;
                 }
             }
