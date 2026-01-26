@@ -386,7 +386,7 @@ fn generate_sync_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2
             }
 
             fn load(context: #context) -> Result<Self, linera_views::ViewError> {
-                use linera_views::{context::SyncContext as _, store::ReadableSyncKeyValueStore as _};
+                use linera_views::{context::SyncContext as _, store::SyncReadableKeyValueStore as _};
                 #load_metrics
                 if Self::NUM_INIT_KEYS == 0 {
                     Self::post_load(context, &[])

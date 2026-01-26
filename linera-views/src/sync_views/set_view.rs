@@ -10,7 +10,7 @@ use crate::{
     batch::Batch,
     common::{CustomSerialize, Update},
     context::{BaseKey, SyncContext},
-    store::ReadableSyncKeyValueStore as _,
+    store::SyncReadableKeyValueStore as _,
     sync_views::SyncView,
     ViewError,
 };

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use linera_base::ensure;
 use linera_views::{
     batch::Batch,
-    store::{ReadableSyncKeyValueStore, WithError, WritableSyncKeyValueStore},
+    store::{SyncReadableKeyValueStore, WithError, SyncWritableKeyValueStore},
 };
 use thiserror::Error;
 
@@ -102,7 +102,7 @@ impl linera_views::store::KeyValueStoreError for KeyValueStoreError {
     const BACKEND: &'static str = "key_value_store";
 }
 
-impl ReadableSyncKeyValueStore for KeyValueStore {
+impl SyncReadableKeyValueStore for KeyValueStore {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
 
     fn max_stream_queries(&self) -> usize {
@@ -184,7 +184,7 @@ impl ReadableSyncKeyValueStore for KeyValueStore {
     }
 }
 
-impl WritableSyncKeyValueStore for KeyValueStore {
+impl SyncWritableKeyValueStore for KeyValueStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     fn write_batch(&self, batch: Batch) -> Result<(), KeyValueStoreError> {

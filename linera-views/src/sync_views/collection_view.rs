@@ -17,7 +17,7 @@ use crate::{
     batch::Batch,
     common::{CustomSerialize, SliceExt as _, Update},
     context::{BaseKey, SyncContext},
-    store::ReadableSyncKeyValueStore as _,
+    store::SyncReadableKeyValueStore as _,
     sync_views::{SyncView, MIN_VIEW_TAG},
     ViewError,
 };

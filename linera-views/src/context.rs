@@ -7,8 +7,8 @@ use crate::{
     batch::DeletePrefixExpander,
     memory::{MemoryStore, SyncMemoryStore},
     store::{
-        KeyValueStoreError, ReadableKeyValueStore, ReadableSyncKeyValueStore, WithError,
-        WritableKeyValueStore, WritableSyncKeyValueStore,
+        KeyValueStoreError, ReadableKeyValueStore, SyncReadableKeyValueStore, WithError,
+        WritableKeyValueStore, SyncWritableKeyValueStore,
     },
     views::MIN_VIEW_TAG,
 };
@@ -143,8 +143,8 @@ where
     crate::ViewError: From<Self::Error>,
 {
     /// The type of the key-value store used by this context.
-    type Store: ReadableSyncKeyValueStore
-        + WritableSyncKeyValueStore
+    type Store: SyncReadableKeyValueStore
+        + SyncWritableKeyValueStore
         + WithError<Error = Self::Error>;
 
     /// User-provided data to be carried along.
@@ -279,7 +279,7 @@ where
 impl<E, S> SyncContext for ViewContext<E, S>
 where
     E: Clone + linera_base::util::traits::AutoTraits,
-    S: ReadableSyncKeyValueStore + WritableSyncKeyValueStore + Clone,
+    S: SyncReadableKeyValueStore + SyncWritableKeyValueStore + Clone,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
 {
     type Extra = E;
@@ -305,7 +305,7 @@ where
 }
 
 /// Implementation of the [`SyncContext`] trait on top of a DB client implementing
-/// [`crate::store::ReadableSyncKeyValueStore`] and [`crate::store::WritableSyncKeyValueStore`].
+/// [`crate::store::SyncReadableKeyValueStore`] and [`crate::store::SyncWritableKeyValueStore`].
 #[derive(Debug, Default, Clone)]
 pub struct ViewSyncContext<E, S> {
     /// The DB client that is shared between views.
@@ -318,7 +318,7 @@ pub struct ViewSyncContext<E, S> {
 
 impl<E, S> ViewSyncContext<E, S>
 where
-    S: ReadableSyncKeyValueStore + WritableSyncKeyValueStore,
+    S: SyncReadableKeyValueStore + SyncWritableKeyValueStore,
 {
     /// Creates a context suitable for a root view, using the given store. If the
     /// journal's store is non-empty, it will be cleared first, before the context is
@@ -345,7 +345,7 @@ impl<E, S> ViewSyncContext<E, S> {
 impl<E, S> SyncContext for ViewSyncContext<E, S>
 where
     E: Clone + linera_base::util::traits::AutoTraits,
-    S: ReadableSyncKeyValueStore + WritableSyncKeyValueStore + Clone,
+    S: SyncReadableKeyValueStore + SyncWritableKeyValueStore + Clone,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
 {
     type Extra = E;

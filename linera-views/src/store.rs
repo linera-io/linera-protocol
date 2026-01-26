@@ -116,7 +116,7 @@ pub trait WritableKeyValueStore: WithError {
 }
 
 /// Synchronous read key-value operations.
-pub trait ReadableSyncKeyValueStore: WithError {
+pub trait SyncReadableKeyValueStore: WithError {
     /// The maximal size of keys that can be stored.
     const MAX_KEY_SIZE: usize;
 
@@ -170,7 +170,7 @@ pub trait ReadableSyncKeyValueStore: WithError {
 }
 
 /// Synchronous write key-value operations.
-pub trait WritableSyncKeyValueStore: WithError {
+pub trait SyncWritableKeyValueStore: WithError {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
@@ -202,19 +202,19 @@ pub trait DirectWritableSyncKeyValueStore: WithError {
 
 /// A key-value store that can perform both read and direct write operations.
 pub trait DirectSyncKeyValueStore:
-    ReadableSyncKeyValueStore + DirectWritableSyncKeyValueStore
+    SyncReadableKeyValueStore + DirectWritableSyncKeyValueStore
 {
 }
 
 impl<T> DirectSyncKeyValueStore for T where
-    T: ReadableSyncKeyValueStore + DirectWritableSyncKeyValueStore
+    T: SyncReadableKeyValueStore + DirectWritableSyncKeyValueStore
 {
 }
 
 /// A key-value store that can perform both read and write operations.
-pub trait SyncKeyValueStore: ReadableSyncKeyValueStore + WritableSyncKeyValueStore {}
+pub trait SyncKeyValueStore: SyncReadableKeyValueStore + SyncWritableKeyValueStore {}
 
-impl<T> SyncKeyValueStore for T where T: ReadableSyncKeyValueStore + WritableSyncKeyValueStore {}
+impl<T> SyncKeyValueStore for T where T: SyncReadableKeyValueStore + SyncWritableKeyValueStore {}
 
 /// Asynchronous direct write key-value operations with simplified batch.
 ///

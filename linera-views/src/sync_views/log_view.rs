@@ -13,7 +13,7 @@ use crate::{
     batch::Batch,
     common::from_bytes_option_or_default,
     context::SyncContext,
-    store::ReadableSyncKeyValueStore as _,
+    store::SyncReadableKeyValueStore as _,
     sync_views::{SyncView, MIN_VIEW_TAG},
     ViewError,
 };

@@ -49,7 +49,7 @@ pub trait SyncView: Sized {
         if Self::NUM_INIT_KEYS == 0 {
             Self::post_load(context, &[])
         } else {
-            use crate::{context::SyncContext as _, store::ReadableSyncKeyValueStore as _};
+            use crate::{context::SyncContext as _, store::SyncReadableKeyValueStore as _};
             let keys = Self::pre_load(&context)?;
             let values = context.store().read_multi_values_bytes(&keys)?;
             Self::post_load(context, &values)
@@ -91,7 +91,7 @@ pub trait SyncView: Sized {
 pub trait SyncRootView: SyncView {
     /// Saves the root view to the database context.
     fn save(&mut self) -> Result<(), ViewError> {
-        use crate::{context::SyncContext as _, store::WritableSyncKeyValueStore as _};
+        use crate::{context::SyncContext as _, store::SyncWritableKeyValueStore as _};
         let mut batch = Batch::new();
         self.pre_save(&mut batch)?;
         if !batch.is_empty() {
