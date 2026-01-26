@@ -1507,19 +1507,19 @@ impl<Env: Environment> Client<Env> {
                         .transactions
                         .get_mut(index)
                         .expect("Transaction at given index should exist");
-                    let Transaction::ReceiveMessages(message) = transaction else {
+                    let Transaction::ReceiveMessages(incoming_bundle) = transaction else {
                         panic!(
                             "Expected incoming bundle at transaction index {}, found operation",
                             index
                         );
                     };
                     ensure!(
-                        !message.bundle.is_protected(),
+                        !incoming_bundle.bundle.is_protected(),
                         ChainClientError::BlockProposalError(
                             "Protected incoming message failed to execute locally"
                         )
                     );
-                    if message.action == MessageAction::Reject {
+                    if incoming_bundle.action == MessageAction::Reject {
                         return result;
                     }
 
@@ -1561,10 +1561,10 @@ impl<Env: Environment> Client<Env> {
                     // TODO(#1420): This is potentially a bit heavy-handed for
                     // retryable errors.
                     info!(
-                        %error, origin = ?message.origin,
+                        %error, origin = ?incoming_bundle.origin,
                         "Message failed to execute locally and will be rejected."
                     );
-                    message.action = MessageAction::Reject;
+                    incoming_bundle.action = MessageAction::Reject;
                     continue;
                 }
             }
