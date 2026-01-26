@@ -33,7 +33,7 @@ use crate::{
     },
     context::{BaseKey, SyncContext},
     store::ReadableSyncKeyValueStore as _,
-    sync_view::SyncView,
+    sync_views::SyncView,
     ViewError,
 };
 
@@ -152,8 +152,8 @@ where
     /// Inserts or resets the value of a key of the map.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -166,8 +166,8 @@ where
     /// Removes a value. If absent then nothing is done.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], "Hello");
@@ -184,8 +184,8 @@ where
     /// Removes values by prefix. If absent then nothing is done.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -213,8 +213,8 @@ where
     /// Returns `true` if the map contains a value for the specified key.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -245,8 +245,8 @@ where
     /// Reads the value at the given position, if any.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -270,8 +270,8 @@ where
     /// Reads the values at the given positions, if any.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -307,8 +307,8 @@ where
     /// Reads the key-value pairs at the given positions, if any.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -333,8 +333,8 @@ where
     /// Obtains a mutable reference to a value at a given position if available.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -373,8 +373,8 @@ where
     /// function and if it returns false, then the loop exits.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -445,8 +445,8 @@ where
     /// Keys are visited in the lexicographic order.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -478,8 +478,8 @@ where
     /// Returns the list of keys of the map in lexicographic order.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -506,8 +506,8 @@ where
     /// Returns the list of keys of the map having a specified prefix in lexicographic order.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -536,8 +536,8 @@ where
     /// Returns the number of keys of the map.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -620,8 +620,8 @@ where
     /// Applies a function f on each index/value pair matching a prefix.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -659,8 +659,8 @@ where
     /// Applies a function f on each key/value pair matching a prefix.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -698,8 +698,8 @@ where
     /// Returns the list of keys and values of the map matching a prefix in lexicographic order.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![1, 2], String::from("Hello"));
@@ -728,8 +728,8 @@ where
     /// Returns the list of keys and values of the map in lexicographic order.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![1, 2], String::from("Hello"));
@@ -751,8 +751,8 @@ where
     /// Obtains a mutable reference to a value at a given position. Default value if the index is missing.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncByteMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncByteMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
@@ -857,8 +857,8 @@ where
     /// Inserts or resets a value at an index.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map: SyncMapView<_, u32, _> = SyncMapView::load(context).unwrap();
     /// map.insert(&(24 as u32), String::from("Hello")).unwrap();
@@ -877,8 +877,8 @@ where
     /// Removes a value. If absent then the operation does nothing.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncMapView::<_, u32, String>::load(context).unwrap();
     /// map.remove(&(37 as u32)).unwrap();
@@ -902,8 +902,8 @@ where
     /// Returns `true` if the map contains a value for the specified key.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncMapView::<_, u32, String>::load(context).unwrap();
     /// map.insert(&(37 as u32), String::from("Hello")).unwrap();
@@ -929,8 +929,8 @@ where
     /// Reads the value at the given position, if any.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map: SyncMapView<_, u32, _> = SyncMapView::load(context).unwrap();
     /// map.insert(&(37 as u32), String::from("Hello")).unwrap();
@@ -949,8 +949,8 @@ where
     /// Reads values at given positions, if any.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map: SyncMapView<_, u32, _> = SyncMapView::load(context).unwrap();
     /// map.insert(&(37 as u32), String::from("Hello")).unwrap();
@@ -982,8 +982,8 @@ where
     /// Obtains a mutable reference to a value at a given position if available.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map: SyncMapView<_, u32, String> = SyncMapView::load(context).unwrap();
     /// map.insert(&(37 as u32), String::from("Hello")).unwrap();
@@ -1012,8 +1012,8 @@ where
     /// Default value if the index is missing.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map: SyncMapView<_, u32, u128> = SyncMapView::load(context).unwrap();
     /// let value = map.get_mut_or_default(&(34 as u32)).unwrap();
@@ -1039,8 +1039,8 @@ where
     /// visited in an order determined by serialization.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map: SyncMapView<_, Vec<u8>, _> = SyncMapView::load(context).unwrap();
     /// map.insert(&vec![0, 1], String::from("Hello")).unwrap();
@@ -1070,8 +1070,8 @@ where
     /// Obtains all the `(index,value)` pairs.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map: SyncMapView<_, String, _> = SyncMapView::load(context).unwrap();
     /// map.insert("Italian", String::from("Ciao")).unwrap();
@@ -1094,8 +1094,8 @@ where
     /// Returns the list of keys of the map in the order determined by the serialization.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map: SyncMapView<_, u32, String> = SyncMapView::load(context).unwrap();
     /// map.insert(&(37 as u32), String::from("Hello")).unwrap();
@@ -1117,8 +1117,8 @@ where
     /// Returns the number of keys of the map.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map: SyncMapView<_, u32, String> = SyncMapView::load(context).unwrap();
     /// map.insert(&(37 as u32), String::from("Hello")).unwrap();
@@ -1192,8 +1192,8 @@ impl<C: SyncContext, I: CustomSerialize, V> SyncCustomMapView<C, I, V> {
     /// Inserts or resets a value.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map: SyncCustomMapView<_, u128, _> = SyncCustomMapView::load(context).unwrap();
     /// map.insert(&(24 as u128), String::from("Hello")).unwrap();
@@ -1212,8 +1212,8 @@ impl<C: SyncContext, I: CustomSerialize, V> SyncCustomMapView<C, I, V> {
     /// Removes a value. If absent then this does not do anything.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::<_, u128, _>::load(context).unwrap();
     /// map.insert(&(37 as u128), String::from("Hello")).unwrap();
@@ -1238,8 +1238,8 @@ impl<C: SyncContext, I: CustomSerialize, V> SyncCustomMapView<C, I, V> {
     /// Returns `true` if the map contains a value for the specified key.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::<_, u128, _>::load(context).unwrap();
     /// map.insert(&(24 as u128), String::from("Hello")).unwrap();
@@ -1265,8 +1265,8 @@ where
     /// Reads the value at the given position, if any.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::<_, u128, _>::load(context).unwrap();
     /// map.insert(&(34 as u128), String::from("Hello")).unwrap();
@@ -1284,8 +1284,8 @@ where
     /// Read values at several positions, if any.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::<_, u128, _>::load(context).unwrap();
     /// map.insert(&(34 as u128), String::from("Hello")).unwrap();
@@ -1314,8 +1314,8 @@ where
     /// Read index-value pairs at several positions, if any.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::<_, u128, _>::load(context).unwrap();
     /// map.insert(&(34 as u128), String::from("Hello")).unwrap();
@@ -1346,8 +1346,8 @@ where
     /// Obtains a mutable reference to a value at a given position if available.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::<_, u128, _>::load(context).unwrap();
     /// map.insert(&(34 as u128), String::from("Hello")).unwrap();
@@ -1375,8 +1375,8 @@ where
     /// Default value if the index is missing.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::<_, u128, String>::load(context).unwrap();
     /// map.insert(&(24 as u128), String::from("Hello")).unwrap();
@@ -1405,8 +1405,8 @@ where
     /// by the custom serialization.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::<_, u128, _>::load(context).unwrap();
     /// map.insert(&(34 as u128), String::from("Hello")).unwrap();
@@ -1427,8 +1427,8 @@ where
     /// then the loop ends prematurely.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::load(context).unwrap();
     /// map.insert(&(34 as u128), String::from("Hello")).unwrap();
@@ -1460,8 +1460,8 @@ where
     /// determined by the custom serialization.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::load(context).unwrap();
     /// map.insert(&(34 as u128), String::from("Hello")).unwrap();
@@ -1494,8 +1494,8 @@ where
     /// If the function returns false, then the loop ends prematurely.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::<_, u128, String>::load(context).unwrap();
     /// map.insert(&(34 as u128), String::from("Hello")).unwrap();
@@ -1527,8 +1527,8 @@ where
     /// visited in an order determined by the custom serialization.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::<_, u128, _>::load(context).unwrap();
     /// map.insert(&(34 as u128), String::from("Hello")).unwrap();
@@ -1559,8 +1559,8 @@ where
     /// Obtains all the `(index,value)` pairs.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::<_, u128, _>::load(context).unwrap();
     /// map.insert(&(24 as u128), String::from("Ciao")).unwrap();
@@ -1580,8 +1580,8 @@ where
     /// Obtains the number of entries in the map.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::map_view::SyncCustomMapView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::map_view::SyncCustomMapView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncCustomMapView::<_, u128, String>::load(context).unwrap();
     /// map.insert(&(24 as u128), String::from("Ciao")).unwrap();

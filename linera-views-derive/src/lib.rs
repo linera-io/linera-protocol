@@ -299,14 +299,14 @@ fn generate_sync_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2
             let idx_u8 = idx as u8;
             quote! {
                 let __linera_reserved_index = #idx_u8;
-                let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::sync_view::MIN_VIEW_TAG, &__linera_reserved_index)?;
+                let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::sync_views::MIN_VIEW_TAG, &__linera_reserved_index)?;
             }
         } else {
             assert!(num_fields < 65536);
             let idx_u16 = idx as u16;
             quote! {
                 let __linera_reserved_index = #idx_u16;
-                let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::sync_view::MIN_VIEW_TAG, &__linera_reserved_index)?;
+                let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::sync_views::MIN_VIEW_TAG, &__linera_reserved_index)?;
             }
         };
 
@@ -354,13 +354,13 @@ fn generate_sync_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2
     };
 
     Ok(quote! {
-        impl #impl_generics linera_views::sync_view::SyncView for #struct_name #type_generics
+        impl #impl_generics linera_views::sync_views::SyncView for #struct_name #type_generics
         where
             #context: linera_views::context::SyncContext,
             #(#input_constraints,)*
-            #(#field_types: linera_views::sync_view::SyncView<Context = #context>,)*
+            #(#field_types: linera_views::sync_views::SyncView<Context = #context>,)*
         {
-            const NUM_INIT_KEYS: usize = #(<#field_types as linera_views::sync_view::SyncView>::NUM_INIT_KEYS)+*;
+            const NUM_INIT_KEYS: usize = #(<#field_types as linera_views::sync_views::SyncView>::NUM_INIT_KEYS)+*;
 
             type Context = #context;
 
@@ -494,10 +494,10 @@ fn generate_sync_root_view_code(input: ItemStruct) -> TokenStream2 {
     let struct_name = &input.ident;
 
     quote! {
-        impl #impl_generics linera_views::sync_view::SyncRootView for #struct_name #type_generics
+        impl #impl_generics linera_views::sync_views::SyncRootView for #struct_name #type_generics
         where
             #(#input_constraints,)*
-            Self: linera_views::sync_view::SyncView,
+            Self: linera_views::sync_views::SyncView,
         {
         }
     }

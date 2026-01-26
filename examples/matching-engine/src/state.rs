@@ -11,20 +11,20 @@ use linera_sdk::{
     views::{linera_views, linera_views::context::SyncContext as _, SyncView as _},
     KeyValueStore,
 };
-use linera_views::sync_view::SyncRootView;
+use linera_views::sync_views::SyncRootView;
 use matching_engine::{OrderId, OrderNature, Parameters, Price, PriceAsk, PriceBid};
 use serde::{Deserialize, Serialize};
 
 pub type SyncContext = linera_views::context::ViewSyncContext<Parameters, KeyValueStore>;
 
 pub type CustomCollectionView<K, V> =
-    linera_views::sync_view::collection_view::SyncCustomCollectionView<SyncContext, K, V>;
+    linera_views::sync_views::collection_view::SyncCustomCollectionView<SyncContext, K, V>;
 
-pub type MapView<K, V> = linera_views::sync_view::map_view::SyncMapView<SyncContext, K, V>;
+pub type MapView<K, V> = linera_views::sync_views::map_view::SyncMapView<SyncContext, K, V>;
 
-pub type QueueView<T> = linera_views::sync_view::queue_view::SyncQueueView<SyncContext, T>;
+pub type QueueView<T> = linera_views::sync_views::queue_view::SyncQueueView<SyncContext, T>;
 
-pub type RegisterView<T> = linera_views::sync_view::register_view::SyncRegisterView<SyncContext, T>;
+pub type RegisterView<T> = linera_views::sync_views::register_view::SyncRegisterView<SyncContext, T>;
 
 /// The order entry in the order book
 #[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]

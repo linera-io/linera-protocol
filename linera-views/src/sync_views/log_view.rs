@@ -14,7 +14,7 @@ use crate::{
     common::from_bytes_option_or_default,
     context::SyncContext,
     store::ReadableSyncKeyValueStore as _,
-    sync_view::{SyncView, MIN_VIEW_TAG},
+    sync_views::{SyncView, MIN_VIEW_TAG},
     ViewError,
 };
 
@@ -127,8 +127,8 @@ where
     /// Pushes a value to the end of the log.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::log_view::SyncLogView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::log_view::SyncLogView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut log = SyncLogView::load(context).unwrap();
     /// log.push(34);
@@ -140,8 +140,8 @@ where
     /// Reads the size of the log.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::log_view::SyncLogView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::log_view::SyncLogView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut log = SyncLogView::load(context).unwrap();
     /// log.push(34);
@@ -170,8 +170,8 @@ where
     /// Reads the logged value with the given index (including staged ones).
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::log_view::SyncLogView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::log_view::SyncLogView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut log = SyncLogView::load(context).unwrap();
     /// log.push(34);
@@ -195,8 +195,8 @@ where
     /// Reads several logged keys (including staged ones)
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::log_view::SyncLogView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::log_view::SyncLogView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut log = SyncLogView::load(context).unwrap();
     /// log.push(34);
@@ -245,8 +245,8 @@ where
     /// Reads the index-value pairs at the given positions.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::log_view::SyncLogView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::log_view::SyncLogView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut log = SyncLogView::load(context).unwrap();
     /// log.push(34);
@@ -289,8 +289,8 @@ where
     /// Reads the logged values in the given range (including staged ones).
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::log_view::SyncLogView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::log_view::SyncLogView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut log = SyncLogView::load(context).unwrap();
     /// log.push(34);

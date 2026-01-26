@@ -15,7 +15,7 @@ use crate::{
     common::from_bytes_option_or_default,
     context::SyncContext,
     store::ReadableSyncKeyValueStore as _,
-    sync_view::{SyncView, MIN_VIEW_TAG},
+    sync_views::{SyncView, MIN_VIEW_TAG},
     ViewError,
 };
 
@@ -178,8 +178,8 @@ where
     /// Reads the front value, if any.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::queue_view::SyncQueueView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::queue_view::SyncQueueView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut queue = SyncQueueView::load(context).unwrap();
     /// queue.push_back(34);
@@ -199,8 +199,8 @@ where
     /// Reads the back value, if any.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::queue_view::SyncQueueView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::queue_view::SyncQueueView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut queue = SyncQueueView::load(context).unwrap();
     /// queue.push_back(34);
@@ -218,8 +218,8 @@ where
     /// Deletes the front value, if any.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::queue_view::SyncQueueView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::queue_view::SyncQueueView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut queue = SyncQueueView::load(context).unwrap();
     /// queue.push_back(34 as u128);
@@ -237,8 +237,8 @@ where
     /// Pushes a value to the end of the queue.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::queue_view::SyncQueueView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::queue_view::SyncQueueView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut queue = SyncQueueView::load(context).unwrap();
     /// queue.push_back(34);
@@ -252,8 +252,8 @@ where
     /// Reads the size of the queue.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::queue_view::SyncQueueView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::queue_view::SyncQueueView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut queue = SyncQueueView::load(context).unwrap();
     /// queue.push_back(34);
@@ -293,8 +293,8 @@ where
     /// Reads the `count` next values in the queue (including staged ones).
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::queue_view::SyncQueueView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::queue_view::SyncQueueView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut queue = SyncQueueView::load(context).unwrap();
     /// queue.push_back(34);
@@ -331,8 +331,8 @@ where
     /// Reads the `count` last values in the queue (including staged ones).
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::queue_view::SyncQueueView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::queue_view::SyncQueueView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut queue = SyncQueueView::load(context).unwrap();
     /// queue.push_back(34);
@@ -365,8 +365,8 @@ where
     /// Reads all the elements
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::queue_view::SyncQueueView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::queue_view::SyncQueueView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut queue = SyncQueueView::load(context).unwrap();
     /// queue.push_back(34);
@@ -400,8 +400,8 @@ where
     /// Gets a mutable iterator on the entries of the queue
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::queue_view::SyncQueueView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::queue_view::SyncQueueView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut queue = SyncQueueView::load(context).unwrap();
     /// queue.push_back(34);

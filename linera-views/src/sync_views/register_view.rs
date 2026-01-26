@@ -5,7 +5,7 @@ use allocative::Allocative;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
-    batch::Batch, common::from_bytes_option_or_default, context::SyncContext, sync_view::SyncView,
+    batch::Batch, common::from_bytes_option_or_default, context::SyncContext, sync_views::SyncView,
     ViewError,
 };
 
@@ -100,8 +100,8 @@ where
     /// Access the current value in the register.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut register = SyncRegisterView::<_, u32>::load(context).unwrap();
     /// let value = register.get();
@@ -117,8 +117,8 @@ where
     /// Sets the value in the register.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut register = SyncRegisterView::load(context).unwrap();
     /// register.set(5);
@@ -144,8 +144,8 @@ where
     /// Obtains a mutable reference to the value in the register.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut register: SyncRegisterView<_, u32> = SyncRegisterView::load(context).unwrap();
     /// let value = register.get_mut();

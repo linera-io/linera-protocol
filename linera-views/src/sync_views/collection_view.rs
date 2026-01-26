@@ -18,7 +18,7 @@ use crate::{
     common::{CustomSerialize, SliceExt as _, Update},
     context::{BaseKey, SyncContext},
     store::ReadableSyncKeyValueStore as _,
-    sync_view::{SyncView, MIN_VIEW_TAG},
+    sync_views::{SyncView, MIN_VIEW_TAG},
     ViewError,
 };
 
@@ -205,9 +205,9 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// can be modified.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncByteCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncByteCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncByteCollectionView<_, SyncRegisterView<_, String>> =
     ///     SyncByteCollectionView::load(context).unwrap();
@@ -262,9 +262,9 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// May fail if one subview is already being visited.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncByteCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncByteCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncByteCollectionView<_, SyncRegisterView<_, String>> =
     ///     SyncByteCollectionView::load(context).unwrap();
@@ -318,9 +318,9 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// The entries in `short_keys` have to be all distinct.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncByteCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncByteCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncByteCollectionView<_, SyncRegisterView<_, String>> =
     ///     SyncByteCollectionView::load(context).unwrap();
@@ -408,9 +408,9 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// Loads multiple entries for reading at once with their keys.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncByteCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncByteCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncByteCollectionView<_, SyncRegisterView<_, String>> =
     ///     SyncByteCollectionView::load(context).unwrap();
@@ -438,9 +438,9 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// Load all entries for reading at once.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncByteCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncByteCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncByteCollectionView<_, SyncRegisterView<_, String>> =
     ///     SyncByteCollectionView::load(context).unwrap();
@@ -517,9 +517,9 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// Resets an entry to the default value.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncByteCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncByteCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncByteCollectionView<_, SyncRegisterView<_, String>> =
     ///     SyncByteCollectionView::load(context).unwrap();
@@ -547,9 +547,9 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// Tests if the collection contains a specified key and returns a boolean.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncByteCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncByteCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncByteCollectionView<_, SyncRegisterView<_, String>> =
     ///     SyncByteCollectionView::load(context).unwrap();
@@ -579,9 +579,9 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// Marks the entry as removed. If absent then nothing is done.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncByteCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncByteCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncByteCollectionView<_, SyncRegisterView<_, String>> =
     ///     SyncByteCollectionView::load(context).unwrap();
@@ -614,9 +614,9 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// ends prematurely.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncByteCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncByteCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncByteCollectionView<_, SyncRegisterView<_, String>> =
     ///     SyncByteCollectionView::load(context).unwrap();
@@ -678,9 +678,9 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// lexicographic order.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncByteCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncByteCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncByteCollectionView<_, SyncRegisterView<_, String>> =
     ///     SyncByteCollectionView::load(context).unwrap();
@@ -707,9 +707,9 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// Returns the list of keys in the collection. The order is lexicographic.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncByteCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncByteCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncByteCollectionView<_, SyncRegisterView<_, String>> =
     ///     SyncByteCollectionView::load(context).unwrap();
@@ -730,9 +730,9 @@ impl<W: SyncView> SyncByteCollectionView<W::Context, W> {
     /// Returns the number of entries in the collection.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncByteCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncByteCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncByteCollectionView<_, SyncRegisterView<_, String>> =
     ///     SyncByteCollectionView::load(context).unwrap();
@@ -811,9 +811,9 @@ impl<I: Serialize, W: SyncView> SyncCollectionView<W::Context, I, W> {
     /// can be modified.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
     ///     SyncCollectionView::load(context).unwrap();
@@ -835,9 +835,9 @@ impl<I: Serialize, W: SyncView> SyncCollectionView<W::Context, I, W> {
     /// May fail if one subview is already being visited.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
     ///     SyncCollectionView::load(context).unwrap();
@@ -867,9 +867,9 @@ impl<I: Serialize, W: SyncView> SyncCollectionView<W::Context, I, W> {
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
     ///     SyncCollectionView::load(context).unwrap();
@@ -900,9 +900,9 @@ impl<I: Serialize, W: SyncView> SyncCollectionView<W::Context, I, W> {
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
     ///     SyncCollectionView::load(context).unwrap();
@@ -931,9 +931,9 @@ impl<I: Serialize, W: SyncView> SyncCollectionView<W::Context, I, W> {
     /// Resets an entry to the default value.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
     ///     SyncCollectionView::load(context).unwrap();
@@ -957,9 +957,9 @@ impl<I: Serialize, W: SyncView> SyncCollectionView<W::Context, I, W> {
     /// Removes an entry from the `SyncCollectionView`. If absent nothing happens.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
     ///     SyncCollectionView::load(context).unwrap();
@@ -983,9 +983,9 @@ impl<I: Serialize, W: SyncView> SyncCollectionView<W::Context, I, W> {
     /// Tests if the collection contains a specified key and returns a boolean.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
     ///     SyncCollectionView::load(context).unwrap();
@@ -1017,9 +1017,9 @@ where
     /// Load all entries for reading at once.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
     ///     SyncCollectionView::load(context).unwrap();
@@ -1044,9 +1044,9 @@ where
     /// the serialization.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
     ///     SyncCollectionView::load(context).unwrap();
@@ -1067,9 +1067,9 @@ where
     /// Returns the number of entries in the collection.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
     ///     SyncCollectionView::load(context).unwrap();
@@ -1088,9 +1088,9 @@ impl<I: DeserializeOwned, W: SyncView> SyncCollectionView<W::Context, I, W> {
     /// the loop ends prematurely.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
     ///     SyncCollectionView::load(context).unwrap();
@@ -1119,9 +1119,9 @@ impl<I: DeserializeOwned, W: SyncView> SyncCollectionView<W::Context, I, W> {
     /// determined by the serialization.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCollectionView<_, u64, SyncRegisterView<_, String>> =
     ///     SyncCollectionView::load(context).unwrap();
@@ -1205,9 +1205,9 @@ impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W>
     /// can be modified.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
     ///     SyncCustomCollectionView::load(context).unwrap();
@@ -1229,9 +1229,9 @@ impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W>
     /// May fail if one subview is already being visited.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
     ///     SyncCustomCollectionView::load(context).unwrap();
@@ -1261,9 +1261,9 @@ impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W>
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
     ///     SyncCustomCollectionView::load(context).unwrap();
@@ -1293,9 +1293,9 @@ impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W>
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
     ///     SyncCustomCollectionView::load(context).unwrap();
@@ -1324,9 +1324,9 @@ impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W>
     /// Marks the entry so that it is removed in the next flush.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
     ///     SyncCustomCollectionView::load(context).unwrap();
@@ -1350,9 +1350,9 @@ impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W>
     /// Removes an entry from the `SyncCustomCollectionView`. If absent nothing happens.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
     ///     SyncCustomCollectionView::load(context).unwrap();
@@ -1376,9 +1376,9 @@ impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W>
     /// Tests if the collection contains a specified key and returns a boolean.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
     ///     SyncCustomCollectionView::load(context).unwrap();
@@ -1407,9 +1407,9 @@ impl<I: CustomSerialize + Send, W: SyncView> SyncCustomCollectionView<W::Context
     /// Load all entries for reading at once.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
     ///     SyncCustomCollectionView::load(context).unwrap();
@@ -1433,9 +1433,9 @@ impl<I: CustomSerialize + Send, W: SyncView> SyncCustomCollectionView<W::Context
     /// Returns the list of indices in the collection in the order determined by the custom serialization.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
     ///     SyncCustomCollectionView::load(context).unwrap();
@@ -1456,9 +1456,9 @@ impl<I: CustomSerialize + Send, W: SyncView> SyncCustomCollectionView<W::Context
     /// Returns the number of entries in the collection.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view =
     ///     SyncCustomCollectionView::<_, u128, SyncRegisterView<_, String>>::load(context).unwrap();
@@ -1477,9 +1477,9 @@ impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W>
     /// then the loop ends prematurely.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
     ///     SyncCustomCollectionView::load(context).unwrap();
@@ -1509,9 +1509,9 @@ impl<I: CustomSerialize, W: SyncView> SyncCustomCollectionView<W::Context, I, W>
     /// determined by the custom serialization.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::collection_view::SyncCustomCollectionView;
-    /// # use linera_views::sync_view::register_view::SyncRegisterView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::collection_view::SyncCustomCollectionView;
+    /// # use linera_views::sync_views::register_view::SyncRegisterView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut view: SyncCustomCollectionView<_, u128, SyncRegisterView<_, String>> =
     ///     SyncCustomCollectionView::load(context).unwrap();
@@ -1545,7 +1545,7 @@ mod graphql {
     use super::{SyncCollectionView, SyncCustomCollectionView, SyncReadGuardedView};
     use crate::{
         graphql::{hash_name, mangle, missing_key_error, Entry, MapInput},
-        sync_view::SyncView,
+        sync_views::SyncView,
     };
 
     impl<T: async_graphql::OutputType> async_graphql::OutputType for SyncReadGuardedView<'_, T> {

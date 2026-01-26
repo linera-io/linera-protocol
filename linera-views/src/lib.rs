@@ -84,7 +84,7 @@ pub use error::ViewError;
 pub mod views;
 
 /// Synchronous views and containers.
-pub mod sync_view;
+pub mod sync_views;
 
 /// Backend implementing the [`crate::store::KeyValueStore`] trait.
 pub mod backends;

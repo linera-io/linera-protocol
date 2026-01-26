@@ -11,7 +11,7 @@ use crate::{
     common::{CustomSerialize, Update},
     context::{BaseKey, SyncContext},
     store::ReadableSyncKeyValueStore as _,
-    sync_view::SyncView,
+    sync_views::SyncView,
     ViewError,
 };
 
@@ -99,8 +99,8 @@ impl<C: SyncContext> SyncView for SyncByteSetView<C> {
 impl<C: SyncContext> SyncByteSetView<C> {
     /// Inserts a value. If already present then it has no effect.
     /// ```rust
-    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncByteSetView};
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::{context::SyncMemoryContext, sync_views::set_view::SyncByteSetView};
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncByteSetView::load(context).unwrap();
     /// set.insert(vec![0, 1]);
@@ -112,8 +112,8 @@ impl<C: SyncContext> SyncByteSetView<C> {
 
     /// Removes a value from the set. If absent then no effect.
     /// ```rust
-    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncByteSetView};
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::{context::SyncMemoryContext, sync_views::set_view::SyncByteSetView};
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncByteSetView::load(context).unwrap();
     /// set.remove(vec![0, 1]);
@@ -137,8 +137,8 @@ impl<C: SyncContext> SyncByteSetView<C> {
 impl<C: SyncContext> SyncByteSetView<C> {
     /// Returns true if the given index exists in the set.
     /// ```rust
-    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncByteSetView};
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::{context::SyncMemoryContext, sync_views::set_view::SyncByteSetView};
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncByteSetView::load(context).unwrap();
     /// set.insert(vec![0, 1]);
@@ -164,8 +164,8 @@ impl<C: SyncContext> SyncByteSetView<C> {
 impl<C: SyncContext> SyncByteSetView<C> {
     /// Returns the list of keys in the set. The order is lexicographic.
     /// ```rust
-    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncByteSetView};
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::{context::SyncMemoryContext, sync_views::set_view::SyncByteSetView};
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncByteSetView::load(context).unwrap();
     /// set.insert(vec![0, 1]);
@@ -183,8 +183,8 @@ impl<C: SyncContext> SyncByteSetView<C> {
 
     /// Returns the number of entries in the set.
     /// ```rust
-    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncByteSetView};
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::{context::SyncMemoryContext, sync_views::set_view::SyncByteSetView};
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncByteSetView::load(context).unwrap();
     /// set.insert(vec![0, 1]);
@@ -204,8 +204,8 @@ impl<C: SyncContext> SyncByteSetView<C> {
     /// lexicographic order. If the function returns false, then the loop ends
     /// prematurely.
     /// ```rust
-    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncByteSetView};
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::{context::SyncMemoryContext, sync_views::set_view::SyncByteSetView};
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncByteSetView::load(context).unwrap();
     /// set.insert(vec![0, 1]);
@@ -265,8 +265,8 @@ impl<C: SyncContext> SyncByteSetView<C> {
     /// Applies a function f on each serialized index (aka key). Keys are visited in a
     /// lexicographic order.
     /// ```rust
-    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncByteSetView};
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::{context::SyncMemoryContext, sync_views::set_view::SyncByteSetView};
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncByteSetView::load(context).unwrap();
     /// set.insert(vec![0, 1]);
@@ -348,8 +348,8 @@ impl<C: SyncContext, I: Serialize> SyncSetView<C, I> {
     /// Inserts a value. If already present then no effect.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::set_view::SyncSetView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::set_view::SyncSetView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncSetView::<_, u32>::load(context).unwrap();
     /// set.insert(&(34 as u32)).unwrap();
@@ -367,8 +367,8 @@ impl<C: SyncContext, I: Serialize> SyncSetView<C, I> {
 
     /// Removes a value. If absent then nothing is done.
     /// ```rust
-    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncSetView};
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::{context::SyncMemoryContext, sync_views::set_view::SyncSetView};
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncSetView::<_, u32>::load(context).unwrap();
     /// set.remove(&(34 as u32)).unwrap();
@@ -393,8 +393,8 @@ impl<C: SyncContext, I: Serialize> SyncSetView<C, I> {
 impl<C: SyncContext, I: Serialize> SyncSetView<C, I> {
     /// Returns true if the given index exists in the set.
     /// ```rust
-    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncSetView};
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::{context::SyncMemoryContext, sync_views::set_view::SyncSetView};
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set: SyncSetView<_, u32> = SyncSetView::load(context).unwrap();
     /// set.insert(&(34 as u32)).unwrap();
@@ -414,8 +414,8 @@ impl<C: SyncContext, I: Serialize> SyncSetView<C, I> {
 impl<C: SyncContext, I: Serialize + DeserializeOwned + Send> SyncSetView<C, I> {
     /// Returns the list of indices in the set. The order is determined by serialization.
     /// ```rust
-    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncSetView};
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::{context::SyncMemoryContext, sync_views::set_view::SyncSetView};
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set: SyncSetView<_, u32> = SyncSetView::load(context).unwrap();
     /// set.insert(&(34 as u32)).unwrap();
@@ -432,8 +432,8 @@ impl<C: SyncContext, I: Serialize + DeserializeOwned + Send> SyncSetView<C, I> {
 
     /// Returns the number of entries in the set.
     /// ```rust
-    /// # use linera_views::{context::SyncMemoryContext, sync_view::set_view::SyncSetView};
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::{context::SyncMemoryContext, sync_views::set_view::SyncSetView};
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set: SyncSetView<_, u32> = SyncSetView::load(context).unwrap();
     /// set.insert(&(34 as u32)).unwrap();
@@ -448,8 +448,8 @@ impl<C: SyncContext, I: Serialize + DeserializeOwned + Send> SyncSetView<C, I> {
     /// loop ends prematurely.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::set_view::SyncSetView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::set_view::SyncSetView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncSetView::<_, u32>::load(context).unwrap();
     /// set.insert(&(34 as u32)).unwrap();
@@ -478,8 +478,8 @@ impl<C: SyncContext, I: Serialize + DeserializeOwned + Send> SyncSetView<C, I> {
     /// determined by the serialization.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::set_view::SyncSetView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::set_view::SyncSetView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncSetView::<_, u32>::load(context).unwrap();
     /// set.insert(&(34 as u32)).unwrap();
@@ -566,8 +566,8 @@ impl<C: SyncContext, I: CustomSerialize> SyncCustomSetView<C, I> {
     /// Inserts a value. If present then it has no effect.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
     /// set.insert(&(34 as u128)).unwrap();
@@ -586,8 +586,8 @@ impl<C: SyncContext, I: CustomSerialize> SyncCustomSetView<C, I> {
     /// Removes a value. If absent then nothing is done.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
     /// set.remove(&(34 as u128)).unwrap();
@@ -617,8 +617,8 @@ where
     /// Returns true if the given index exists in the set.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
     /// set.insert(&(34 as u128)).unwrap();
@@ -644,8 +644,8 @@ where
     /// serialization.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
     /// set.insert(&(34 as u128)).unwrap();
@@ -664,8 +664,8 @@ where
     /// Returns the number of entries of the set.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
     /// set.insert(&(34 as u128)).unwrap();
@@ -681,8 +681,8 @@ where
     /// false, then the loop prematurely ends.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
     /// set.insert(&(34 as u128)).unwrap();
@@ -711,8 +711,8 @@ where
     /// determined by the custom serialization.
     /// ```rust
     /// # use linera_views::context::SyncMemoryContext;
-    /// # use linera_views::sync_view::set_view::SyncCustomSetView;
-    /// # use linera_views::sync_view::SyncView;
+    /// # use linera_views::sync_views::set_view::SyncCustomSetView;
+    /// # use linera_views::sync_views::SyncView;
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut set = SyncCustomSetView::<_, u128>::load(context).unwrap();
     /// set.insert(&(34 as u128)).unwrap();

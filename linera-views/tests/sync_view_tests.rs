@@ -4,7 +4,7 @@
 use linera_views::{
     context::ViewContext,
     memory::SyncMemoryStore,
-    sync_view::{map_view::SyncMapView, register_view::SyncRegisterView, SyncRootView, SyncView},
+    sync_views::{map_view::SyncMapView, register_view::SyncRegisterView, SyncRootView, SyncView},
     ViewError,
 };
 
