@@ -486,6 +486,8 @@ impl<Env: Environment> ClientContext<Env> {
     ) -> Result<(), Error> {
         self.client
             .extend_chain_mode(chain_id, ListeningMode::FullChain);
+        // Ensure that we have the chain description.
+        self.client.get_chain_description_blob(chain_id).await?;
         let client = self.make_chain_client(chain_id).await?;
         let info = client.chain_info().await?;
 

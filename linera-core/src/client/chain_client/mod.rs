@@ -650,7 +650,8 @@ impl<Env: Environment> ChainClient<Env> {
             BTreeSet::new()
         };
 
-        let is_owner = manager.ownership.is_owner(&preferred_owner)
+        let is_owner = manager.ownership.open_multi_leader_rounds
+            || manager.ownership.is_owner(&preferred_owner)
             || fallback_owners.contains(&preferred_owner);
 
         if !is_owner {
