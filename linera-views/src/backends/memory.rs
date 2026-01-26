@@ -18,7 +18,7 @@ use crate::{
     common::get_key_range_for_prefix,
     store::{
         KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, SyncReadableKeyValueStore,
-        WithError, WritableKeyValueStore, SyncWritableKeyValueStore,
+        SyncWritableKeyValueStore, WithError, WritableKeyValueStore,
     },
 };
 

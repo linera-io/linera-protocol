@@ -7,8 +7,8 @@ use crate::{
     batch::DeletePrefixExpander,
     memory::{MemoryStore, SyncMemoryStore},
     store::{
-        KeyValueStoreError, ReadableKeyValueStore, SyncReadableKeyValueStore, WithError,
-        WritableKeyValueStore, SyncWritableKeyValueStore,
+        KeyValueStoreError, ReadableKeyValueStore, SyncReadableKeyValueStore,
+        SyncWritableKeyValueStore, WithError, WritableKeyValueStore,
     },
     views::MIN_VIEW_TAG,
 };

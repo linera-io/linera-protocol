@@ -12,7 +12,8 @@ pub type ByteCollectionView<V> =
 
 /// An alias to [`linera_views::sync_views::map_view::SyncByteMapView`] that uses the
 /// WebAssembly-specific [`ViewStorageContext`].
-pub type ByteMapView<V> = linera_views::sync_views::map_view::SyncByteMapView<ViewStorageContext, V>;
+pub type ByteMapView<V> =
+    linera_views::sync_views::map_view::SyncByteMapView<ViewStorageContext, V>;
 
 /// An alias to [`linera_views::sync_views::set_view::SyncByteSetView`] that uses the WebAssembly-specific
 /// [`ViewStorageContext`].

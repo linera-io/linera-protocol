@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use linera_views::{
     batch::Batch,
-    context::{ViewSyncContext, SyncContext as _},
+    context::{SyncContext as _, ViewSyncContext},
     memory::SyncMemoryStore,
     random::make_deterministic_rng,
     store::SyncWritableKeyValueStore as _,
@@ -16,8 +16,7 @@ use linera_views::{
         queue_view::SyncQueueView,
         register_view::SyncRegisterView,
         set_view::SyncSetView,
-        SyncRootView,
-        SyncView,
+        SyncRootView, SyncView,
     },
     ViewError,
 };
