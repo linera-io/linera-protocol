@@ -1035,6 +1035,73 @@ where
     I: Serialize + DeserializeOwned + Send,
     V: Clone + Serialize + DeserializeOwned + Send + 'static,
 {
+    /// Applies a function f on each index. Indices are visited in an order
+    /// determined by the serialization. If the function returns false, then
+    /// the loop ends prematurely.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_views::map_view::SyncMapView;
+    /// # use linera_views::sync_views::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut map: SyncMapView<_, u128, String> = SyncMapView::load(context).unwrap();
+    /// map.insert(&(34 as u128), String::from("Thanks")).unwrap();
+    /// map.insert(&(37 as u128), String::from("Spasiba")).unwrap();
+    /// map.insert(&(38 as u128), String::from("Merci")).unwrap();
+    /// let mut count = 0;
+    /// map.for_each_index_while(|_index| {
+    ///     count += 1;
+    ///     Ok(count < 2)
+    /// })
+    /// .unwrap();
+    /// assert_eq!(count, 2);
+    /// ```
+    pub fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<bool, ViewError> + Send,
+    {
+        let prefix = Vec::new();
+        self.map.for_each_key_while(
+            |key| {
+                let index = BaseKey::deserialize_value(key)?;
+                f(index)
+            },
+            prefix,
+        )?;
+        Ok(())
+    }
+
+    /// Applies a function f on each index. Indices are visited in the order
+    /// determined by serialization.
+    /// ```rust
+    /// # use linera_views::context::SyncMemoryContext;
+    /// # use linera_views::sync_views::map_view::SyncMapView;
+    /// # use linera_views::sync_views::SyncView;
+    /// # let context = SyncMemoryContext::new_for_testing(());
+    /// let mut map: SyncMapView<_, u128, String> = SyncMapView::load(context).unwrap();
+    /// map.insert(&(34 as u128), String::from("Hello")).unwrap();
+    /// let mut count = 0;
+    /// map.for_each_index(|_index| {
+    ///     count += 1;
+    ///     Ok(())
+    /// })
+    /// .unwrap();
+    /// assert_eq!(count, 1);
+    /// ```
+    pub fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        let prefix = Vec::new();
+        self.map.for_each_key(
+            |key| {
+                let index = BaseKey::deserialize_value(key)?;
+                f(index)
+            },
+            prefix,
+        )?;
+        Ok(())
+    }
+
     /// Applies a function on each index/value pair. Indices and values are
     /// visited in an order determined by serialization.
     /// ```rust
