@@ -486,20 +486,15 @@ impl<Env: Environment> ClientContext<Env> {
     ) -> Result<(), Error> {
         self.client
             .extend_chain_mode(chain_id, ListeningMode::FullChain);
-        // Ensure that we have the chain description.
-        self.client.get_chain_description_blob(chain_id).await?;
         let client = self.make_chain_client(chain_id).await?;
-        let info = client.chain_info().await?;
-
-        if !info.manager.ownership.is_owner(&owner)
-            && !info.manager.ownership.open_multi_leader_rounds
-        {
+        let info = client.prepare_for_owner(owner).await.map_err(|error| {
             tracing::error!(
+                %error,
                 "The chain with the ID returned by the faucet is not owned by you. \
                 Please make sure you are connecting to a genuine faucet."
             );
-            return Err(error::Inner::ChainOwnership.into());
-        }
+            error::Inner::ChainOwnership
+        })?;
 
         // Try to modify existing chain entry, setting the owner.
         let timestamp = info.timestamp;

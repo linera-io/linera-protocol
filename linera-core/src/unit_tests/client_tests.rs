@@ -3455,3 +3455,75 @@ where
 
     Ok(())
 }
+
+/// Tests that with `open_multi_leader_rounds`, a client that is not an owner can be assigned
+/// to the chain via `prepare_for_owner`, but cannot transfer chain funds.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_open_multi_leader_rounds<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+
+    // Create a chain and get its owner.
+    let client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let owner = client.identity().await?;
+    let chain_id = client.chain_id();
+
+    // Configure open multi-leader rounds.
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
+        super_owners: vec![],
+        owners: vec![(owner, 100)],
+        first_leader: None,
+        multi_leader_rounds: 10,
+        open_multi_leader_rounds: true,
+        timeout_config: TimeoutConfig::default(),
+    });
+    client.execute_operation(owner_change_op).await.unwrap();
+    let info = client.chain_info().await?;
+
+    // Create a new client for the same chain with a non-owner key.
+    // This simulates a client that was assigned the chain (e.g., via a faucet with
+    // open_multi_leader_rounds) without having the owner key.
+    let non_owner: AccountOwner = builder.signer.generate_new().into();
+    let mut non_owner_client = builder
+        .make_client(chain_id, info.block_hash, info.next_block_height)
+        .await?;
+    non_owner_client.set_preferred_owner(non_owner);
+
+    // Synchronize to get the latest chain state (with open_multi_leader_rounds enabled).
+    non_owner_client.synchronize_from_validators().await?;
+
+    // The non-owner client can successfully prepare_for_owner because open_multi_leader_rounds
+    // is enabled. This is the code path used by assign_new_chain_to_key.
+    let info = non_owner_client.prepare_for_owner(non_owner).await?;
+    assert!(info.manager.ownership.open_multi_leader_rounds);
+
+    // But the non-owner client cannot burn tokens (requires ownership).
+    let result = non_owner_client
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await;
+    assert_matches!(
+        result,
+        Err(chain_client::Error::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::ChainError(ref chain_error))
+        )) if matches!(&**chain_error, ChainError::ExecutionError(
+            error, ChainExecutionContext::Operation(_)
+        ) if matches!(**error, ExecutionError::UnauthenticatedTransferOwner))
+    );
+
+    // The original owner can still use the chain.
+    let certificate = client
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.round, Round::MultiLeader(0));
+
+    Ok(())
+}

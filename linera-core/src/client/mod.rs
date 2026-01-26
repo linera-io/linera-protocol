@@ -667,8 +667,8 @@ impl<Env: Environment> Client<Env> {
             .await?;
         if let Some(blob) = blob {
             // We have the blob - return it.
-            return Ok(bcs::from_bytes(blob.bytes())?);
-        };
+            return Ok(blob);
+        }
         // Recover history from the current validators, according to the admin chain.
         self.synchronize_chain_state(self.admin_chain_id).await?;
         let nodes = self.validator_nodes().await?;
