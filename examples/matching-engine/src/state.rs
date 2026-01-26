@@ -4,13 +4,12 @@
 #![allow(dead_code)]
 
 use std::{cmp::min, collections::BTreeSet};
-use linera_sdk::RootView;
 
 use async_graphql::SimpleObject;
 use linera_sdk::{
     linera_base_types::{Account, AccountOwner, Amount},
     views::{linera_views, linera_views::context::SyncContext as _, View as _},
-    KeyValueStore,
+    KeyValueStore, RootView,
 };
 use matching_engine::{OrderId, OrderNature, Parameters, Price, PriceAsk, PriceBid};
 use serde::{Deserialize, Serialize};
@@ -24,7 +23,8 @@ pub type MapView<K, V> = linera_views::sync_views::map_view::SyncMapView<SyncCon
 
 pub type QueueView<T> = linera_views::sync_views::queue_view::SyncQueueView<SyncContext, T>;
 
-pub type RegisterView<T> = linera_views::sync_views::register_view::SyncRegisterView<SyncContext, T>;
+pub type RegisterView<T> =
+    linera_views::sync_views::register_view::SyncRegisterView<SyncContext, T>;
 
 /// The order entry in the order book
 #[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]

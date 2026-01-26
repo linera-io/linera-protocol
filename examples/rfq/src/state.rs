@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{InputObject, SimpleObject, Union};
-use linera_sdk::RootView;
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, ChainId},
     views::{linera_views, MapView, RegisterView, ViewStorageContext},
+    RootView,
 };
 use rfq::{RequestId, TokenPair, Tokens};
 use serde::{Deserialize, Serialize};

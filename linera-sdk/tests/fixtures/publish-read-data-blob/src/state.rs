@@ -4,8 +4,8 @@
 use linera_sdk::{
     linera_base_types::DataBlobHash,
     views::{linera_views, RegisterView, ViewStorageContext},
+    RootView,
 };
-use linera_sdk::RootView;
 
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]

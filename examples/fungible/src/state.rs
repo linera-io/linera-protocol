@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fungible::{InitialState, OwnerSpender};
-use linera_sdk::RootView;
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount},
     views::{linera_views, MapView, ViewStorageContext},
+    RootView,
 };
 
 /// The application state.

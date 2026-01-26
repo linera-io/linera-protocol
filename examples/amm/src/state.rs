@@ -4,8 +4,8 @@
 use linera_sdk::{
     linera_base_types::{Account, Amount},
     views::{linera_views, MapView, RegisterView, ViewStorageContext},
+    RootView,
 };
-use linera_sdk::RootView;
 
 #[derive(RootView, async_graphql::SimpleObject)]
 #[view(context = ViewStorageContext)]

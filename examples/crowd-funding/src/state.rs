@@ -6,8 +6,8 @@ use crowd_funding::InstantiationArgument;
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount},
     views::{linera_views, MapView, RegisterView, ViewStorageContext},
+    RootView,
 };
-use linera_sdk::RootView;
 use serde::{Deserialize, Serialize};
 
 /// The status of a crowd-funding campaign.
