@@ -22,6 +22,7 @@ interface contract-runtime-api {
     unsubscribe-from-events: func(chain-id: chain-id, application-id: application-id, name: stream-name);
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
     consume-fuel: func(fuel: u64);
+    remaining-fuel: func() -> u64;
     validation-round: func() -> option<u32>;
     write-batch: func(operations: list<write-operation>);
     has-empty-storage: func(application: application-id) -> bool;
