@@ -36,7 +36,6 @@ impl Service for FungibleTokenService {
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = FungibleTokenState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         FungibleTokenService {
             state: Arc::new(state),

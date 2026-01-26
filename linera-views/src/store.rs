@@ -115,6 +115,107 @@ pub trait WritableKeyValueStore: WithError {
     async fn clear_journal(&self) -> Result<(), Self::Error>;
 }
 
+/// Synchronous read key-value operations.
+pub trait SyncReadableKeyValueStore: WithError {
+    /// The maximal size of keys that can be stored.
+    const MAX_KEY_SIZE: usize;
+
+    /// Retrieve the number of stream queries.
+    fn max_stream_queries(&self) -> usize;
+
+    /// Gets the root key of the store.
+    fn root_key(&self) -> Result<Vec<u8>, Self::Error>;
+
+    /// Retrieves a `Vec<u8>` from the database using the provided `key`.
+    fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+
+    /// Tests whether a key exists in the database
+    fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
+
+    /// Tests whether a list of keys exist in the database
+    fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error>;
+
+    /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
+    fn read_multi_values_bytes(
+        &self,
+        keys: &[Vec<u8>],
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
+
+    /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
+    fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
+
+    /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
+    #[allow(clippy::type_complexity)]
+    fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error>;
+
+    /// Reads a single `key` and deserializes the result if present.
+    fn read_value<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error> {
+        Ok(from_bytes_option(&self.read_value_bytes(key)?)?)
+    }
+
+    /// Reads multiple `keys` and deserializes the results if present.
+    fn read_multi_values<V: DeserializeOwned + Send + Sync>(
+        &self,
+        keys: &[Vec<u8>],
+    ) -> Result<Vec<Option<V>>, Self::Error> {
+        let mut values = Vec::with_capacity(keys.len());
+        for entry in self.read_multi_values_bytes(keys)? {
+            values.push(from_bytes_option(&entry)?);
+        }
+        Ok(values)
+    }
+}
+
+/// Synchronous write key-value operations.
+pub trait SyncWritableKeyValueStore: WithError {
+    /// The maximal size of values that can be stored.
+    const MAX_VALUE_SIZE: usize;
+
+    /// Writes the `batch` in the database.
+    fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
+
+    /// Clears any journal entry that may remain.
+    /// The journal is located at the `root_key`.
+    fn clear_journal(&self) -> Result<(), Self::Error>;
+}
+
+/// Synchronous direct write key-value operations with simplified batch.
+pub trait DirectWritableSyncKeyValueStore: WithError {
+    /// The maximal number of items in a batch.
+    const MAX_BATCH_SIZE: usize;
+
+    /// The maximal number of bytes of a batch.
+    const MAX_BATCH_TOTAL_SIZE: usize;
+
+    /// The maximal size of values that can be stored.
+    const MAX_VALUE_SIZE: usize;
+
+    /// The batch type.
+    type Batch: SimplifiedBatch + Serialize + DeserializeOwned + Default;
+
+    /// Writes the batch to the database.
+    fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error>;
+}
+
+/// A key-value store that can perform both read and direct write operations.
+pub trait DirectSyncKeyValueStore:
+    SyncReadableKeyValueStore + DirectWritableSyncKeyValueStore
+{
+}
+
+impl<T> DirectSyncKeyValueStore for T where
+    T: SyncReadableKeyValueStore + DirectWritableSyncKeyValueStore
+{
+}
+
+/// A key-value store that can perform both read and write operations.
+pub trait SyncKeyValueStore: SyncReadableKeyValueStore + SyncWritableKeyValueStore {}
+
+impl<T> SyncKeyValueStore for T where T: SyncReadableKeyValueStore + SyncWritableKeyValueStore {}
+
 /// Asynchronous direct write key-value operations with simplified batch.
 ///
 /// Some backend cannot implement `WritableKeyValueStore` directly and will require

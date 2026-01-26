@@ -34,7 +34,6 @@ impl Contract for CrowdFundingContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = CrowdFundingState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         CrowdFundingContract { state, runtime }
     }
@@ -56,13 +55,13 @@ impl Contract for CrowdFundingContract {
         match operation {
             Operation::Pledge { owner, amount } => {
                 if self.runtime.chain_id() == self.runtime.application_creator_chain_id() {
-                    self.execute_pledge_with_account(owner, amount).await;
+                    self.execute_pledge_with_account(owner, amount);
                 } else {
                     self.execute_pledge_with_transfer(owner, amount);
                 }
             }
             Operation::Collect => self.collect_pledges(),
-            Operation::Cancel => self.cancel_campaign().await,
+            Operation::Cancel => self.cancel_campaign(),
         }
     }
 
@@ -75,13 +74,13 @@ impl Contract for CrowdFundingContract {
                     "Action can only be executed on the chain that created the crowd-funding \
                     campaign"
                 );
-                self.execute_pledge_with_account(owner, amount).await;
+                self.execute_pledge_with_account(owner, amount);
             }
         }
     }
 
     async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 
@@ -117,21 +116,20 @@ impl CrowdFundingContract {
     }
 
     /// Adds a pledge from a local account to the campaign chain.
-    async fn execute_pledge_with_account(&mut self, owner: AccountOwner, amount: Amount) {
+    fn execute_pledge_with_account(&mut self, owner: AccountOwner, amount: Amount) {
         assert!(amount > Amount::ZERO, "Pledge is empty");
         self.receive_from_account(owner, amount);
-        self.finish_pledge(owner, amount).await
+        self.finish_pledge(owner, amount)
     }
 
     /// Marks a pledge in the application state, so that it can be returned if the campaign is
     /// cancelled.
-    async fn finish_pledge(&mut self, source: AccountOwner, amount: Amount) {
+    fn finish_pledge(&mut self, source: AccountOwner, amount: Amount) {
         match self.state.status.get() {
             Status::Active => self
                 .state
                 .pledges
                 .get_mut_or_default(&source)
-                .await
                 .expect("view access should not fail")
                 .saturating_add_assign(amount),
             Status::Complete => self.send_to(amount, self.instantiation_argument().owner),
@@ -160,7 +158,7 @@ impl CrowdFundingContract {
     }
 
     /// Cancels the campaign if the deadline has passed, refunding all pledges.
-    async fn cancel_campaign(&mut self) {
+    fn cancel_campaign(&mut self) {
         assert!(
             !self.state.status.get().is_complete(),
             "Crowd-funding campaign has already been completed"
@@ -181,7 +179,6 @@ impl CrowdFundingContract {
                 pledges.push((pledger, amount));
                 Ok(())
             })
-            .await
             .expect("view iteration should not fail");
         for (pledger, amount) in pledges {
             self.send_to(amount, pledger);

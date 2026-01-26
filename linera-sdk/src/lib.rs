@@ -53,6 +53,7 @@ use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     data_types::StreamUpdate,
 };
+pub use linera_views_derive::{SyncRootView as RootView, SyncView as View};
 use serde::{de::DeserializeOwned, Serialize};
 pub use serde_json;
 

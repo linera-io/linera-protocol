@@ -169,6 +169,7 @@ opentelemetry-otlp = { version = "0.30.0", features = [
 ] }
 opentelemetry_sdk = { version = "0.30.0", features = ["trace", "rt-tokio"] }
 papaya = "0.1.5"
+parking_lot = "0.12.3"
 pathdiff = "0.2.1"
 port-selector = "0.1.6"
 prettyplease = "0.2.16"

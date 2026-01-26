@@ -13,14 +13,15 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{BlobId, ChainId},
 };
-use linera_sdk::{
-    ensure,
-    views::{RootView, View},
-};
+use linera_sdk::ensure;
 use linera_service::config::DestinationId;
 use linera_views::{
-    context::Context, log_view::LogView, map_view::MapView, register_view::RegisterView,
-    set_view::SetView, views::ClonableView,
+    context::Context,
+    log_view::LogView,
+    map_view::MapView,
+    register_view::RegisterView,
+    set_view::SetView,
+    views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
 

@@ -34,7 +34,6 @@ impl Contract for EthereumTrackerContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = EthereumTrackerState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         EthereumTrackerContract { state, runtime }
     }
@@ -51,18 +50,15 @@ impl Contract for EthereumTrackerContract {
         self.state.ethereum_endpoint.set(ethereum_endpoint);
         self.state.contract_address.set(contract_address);
         self.state.start_block.set(start_block);
-        self.state
-            .save()
-            .await
-            .expect("Failed to write updated storage");
+        self.state.save().expect("Failed to write updated storage");
 
-        self.read_initial().await;
+        self.read_initial();
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         // The only input is updating the database
         match operation {
-            Self::Operation::Update { to_block } => self.update(to_block).await,
+            Self::Operation::Update { to_block } => self.update(to_block),
         }
     }
 
@@ -71,14 +67,14 @@ impl Contract for EthereumTrackerContract {
     }
 
     async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 
 impl EthereumTrackerContract {
     /// Reads the initial event emitted by the Ethereum contract, with the initial account and its
     /// balance.
-    async fn read_initial(&mut self) {
+    fn read_initial(&mut self) {
         let request = async_graphql::Request::new("query { readInitialEvent }");
 
         let application_id = self.runtime.application_id();
@@ -109,7 +105,7 @@ impl EthereumTrackerContract {
     }
 
     /// Updates the accounts based on the transfer events emitted up to the `end_block`.
-    async fn update(&mut self, end_block: u64) {
+    fn update(&mut self, end_block: u64) {
         let request = async_graphql::Request::new(format!(
             r#"query {{ readTransferEvents(endBlock: {end_block}) }}"#
         ));
@@ -148,7 +144,6 @@ impl EthereumTrackerContract {
                     .state
                     .accounts
                     .get_mut_or_default(source)
-                    .await
                     .expect("Failed to read account balance for source address");
                 source_balance.value -= value;
             }
@@ -157,7 +152,6 @@ impl EthereumTrackerContract {
                     .state
                     .accounts
                     .get_mut_or_default(destination)
-                    .await
                     .expect("Failed to read account balance for destination address");
                 destination_balance.value += value;
             }

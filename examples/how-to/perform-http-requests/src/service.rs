@@ -56,7 +56,7 @@ impl Query {
     ///
     /// Note that any headers in the response are discarded.
     pub async fn perform_http_request(&self) -> async_graphql::Result<Vec<u8>> {
-        self.service.perform_http_request()
+        self.service.perform_http_request().await
     }
 }
 
@@ -65,7 +65,7 @@ impl Service {
     /// code is OK.
     ///
     /// Note that any headers in the response are discarded.
-    pub fn perform_http_request(&self) -> async_graphql::Result<Vec<u8>> {
+    pub async fn perform_http_request(&self) -> async_graphql::Result<Vec<u8>> {
         let url = self.runtime.application_parameters();
         let response = self.runtime.http_request(http::Request::get(url));
 
@@ -91,7 +91,7 @@ impl Mutation {
     /// Performs an HTTP query in the service, and sends the response to the contract by scheduling
     /// an [`Operation::HandleHttpResponse`].
     pub async fn perform_http_request(&self) -> async_graphql::Result<bool> {
-        let response = self.service.perform_http_request()?;
+        let response = self.service.perform_http_request().await?;
 
         self.service
             .runtime

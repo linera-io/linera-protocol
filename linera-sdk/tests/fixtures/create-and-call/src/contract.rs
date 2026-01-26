@@ -34,7 +34,6 @@ impl Contract for CreateAndCallContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = CreateAndCallState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         CreateAndCallContract { state, runtime }
     }
@@ -89,6 +88,6 @@ impl Contract for CreateAndCallContract {
     }
 
     async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
