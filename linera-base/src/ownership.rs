@@ -155,14 +155,15 @@ impl ChainOwnership {
             || self.timeout_config.fallback_duration == TimeDelta::ZERO
     }
 
-    /// Returns `true` if this is an owner or super owner.
+    /// Returns `true` if this is a regular owner or super owner or the designated first leader.
     pub fn is_owner(&self, owner: &AccountOwner) -> bool {
         self.super_owners.contains(owner)
             || self.owners.contains_key(owner)
             || self.first_leader.as_ref().is_some_and(|fl| fl == owner)
     }
 
-    /// Returns `true` if this is an owner or if `open_multi_leader_rounds`.
+    /// Returns `true` if this owner can participate in multi-leader rounds, i.e. it
+    /// is a regular owner or super owner or `open_multi_leader_rounds == true`.
     pub fn is_multi_leader_owner(&self, owner: &AccountOwner) -> bool {
         self.open_multi_leader_rounds
             || self.owners.contains_key(owner)
