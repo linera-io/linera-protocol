@@ -10,10 +10,6 @@ port = {{ .Values.blockExporter.port }}
 committee_destination = true
 
 [[destination_config.destinations]]
-file_name = "/data/linera-exporter.log"
-kind = "Logging"
-
-[[destination_config.destinations]]
 kind = "Indexer"
 {{- if .Values.blockExporter.indexerEndpoint }}
 tls = "Tls"
