@@ -1,6 +1,8 @@
 steps:
-  - name: "docker:latest"
+  - name: "gcr.io/cloud-builders/docker"
     entrypoint: "docker"
+    env:
+      - "DOCKER_BUILDKIT=1"
     args:
       [
         "build",
