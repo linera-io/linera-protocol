@@ -62,6 +62,10 @@ where
         F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
         <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
     {
+        tracing::info!(
+            startup_destinations=?self.startup_destinations,
+            "spawning startup exporters"
+        );
         for id in self.startup_destinations.clone() {
             self.spawn(id.clone());
         }
@@ -85,7 +89,7 @@ where
                 tracing::info!(id=?destination, "starting committee exporter");
                 self.spawn(destination);
             } else {
-                tracing::info!(id=?destination, "skipping already running committee exporter");
+                tracing::info!(id=?destination, "skipping startup destination");
             }
         }
     }
