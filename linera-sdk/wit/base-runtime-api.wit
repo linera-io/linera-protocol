@@ -5,6 +5,7 @@ interface base-runtime-api {
     get-block-height: func() -> block-height;
     get-application-id: func() -> application-id;
     get-application-creator-chain-id: func() -> chain-id;
+    read-application-description: func(application-id: application-id) -> application-description;
     application-parameters: func() -> list<u8>;
     get-chain-ownership: func() -> chain-ownership;
     get-application-permissions: func() -> application-permissions;
@@ -39,6 +40,15 @@ interface base-runtime-api {
 
     record amount {
         inner0: u128,
+    }
+
+    record application-description {
+        module-id: module-id,
+        creator-chain-id: chain-id,
+        block-height: block-height,
+        application-index: u32,
+        parameters: list<u8>,
+        required-application-ids: list<application-id>,
     }
 
     record application-id {
@@ -123,6 +133,17 @@ interface base-runtime-api {
         info,
         debug,
         trace,
+    }
+
+    enum vm-runtime {
+        wasm,
+        evm,
+    }
+
+    record module-id {
+        contract-blob-hash: crypto-hash,
+        service-blob-hash: crypto-hash,
+        vm-runtime: vm-runtime,
     }
 
     record time-delta {

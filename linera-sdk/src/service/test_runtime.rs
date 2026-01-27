@@ -11,7 +11,7 @@ use std::{
 
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, ApplicationDescription, BlockHeight, Timestamp},
     hex, http,
     identifiers::{AccountOwner, ApplicationId, ChainId, DataBlobHash},
 };
@@ -26,6 +26,7 @@ where
     application_parameters: Mutex<Option<Application::Parameters>>,
     application_id: Mutex<Option<ApplicationId<Application::Abi>>>,
     application_creator_chain_id: Mutex<Option<ChainId>>,
+    application_descriptions: Mutex<HashMap<ApplicationId, ApplicationDescription>>,
     chain_id: Mutex<Option<ChainId>>,
     next_block_height: Mutex<Option<BlockHeight>>,
     timestamp: Mutex<Option<Timestamp>>,
@@ -57,6 +58,7 @@ where
             application_parameters: Mutex::new(None),
             application_id: Mutex::new(None),
             application_creator_chain_id: Mutex::new(None),
+            application_descriptions: Mutex::new(HashMap::new()),
             chain_id: Mutex::new(None),
             next_block_height: Mutex::new(None),
             timestamp: Mutex::new(None),
@@ -147,6 +149,50 @@ where
             "Application creator chain ID has not been mocked, \
             please call `MockServiceRuntime::set_application_creator_chain_id` first",
         )
+    }
+
+    /// Configures the application description to return for a specific application during the test.
+    pub fn with_application_description(
+        self,
+        application_id: ApplicationId,
+        description: ApplicationDescription,
+    ) -> Self {
+        self.application_descriptions
+            .lock()
+            .unwrap()
+            .insert(application_id, description);
+        self
+    }
+
+    /// Configures the application description to return for a specific application during the test.
+    pub fn set_application_description(
+        &self,
+        application_id: ApplicationId,
+        description: ApplicationDescription,
+    ) -> &Self {
+        self.application_descriptions
+            .lock()
+            .unwrap()
+            .insert(application_id, description);
+        self
+    }
+
+    /// Returns the description of the given application.
+    pub fn read_application_description(
+        &self,
+        application_id: ApplicationId,
+    ) -> ApplicationDescription {
+        self.application_descriptions
+            .lock()
+            .unwrap()
+            .get(&application_id)
+            .cloned()
+            .unwrap_or_else(|| {
+                panic!(
+                    "Application description for {application_id:?} has not been mocked, \
+                    please call `MockServiceRuntime::set_application_description` first"
+                )
+            })
     }
 
     /// Configures the chain ID to return during the test.
