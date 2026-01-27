@@ -95,7 +95,7 @@ impl Contract for ControllerContract {
                 } else {
                     log::info!(
                         "Sending worker command from {} to {creator_chain_id} \
-                                for remote execution: {owner} {command:?}",
+                        for remote execution: {owner} {command:?}",
                         self.runtime.chain_id()
                     );
                     self.runtime
@@ -114,7 +114,7 @@ impl Contract for ControllerContract {
                 } else {
                     log::info!(
                         "Sending controller command from {} to {creator_chain_id} \
-                                for remote execution: {admin} {command:?}",
+                        for remote execution: {admin} {command:?}",
                         self.runtime.chain_id()
                     );
                     self.runtime
