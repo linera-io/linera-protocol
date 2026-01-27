@@ -492,7 +492,7 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
     let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
 
     let mut chains_to_listen = BTreeMap::new();
-    chains_to_listen.insert(chain_id0, ListeningMode::FullChain);
+    chains_to_listen.insert(chain_id0, Some(client0.identity().await?));
     command_sender
         .send(ListenerCommand::Listen(chains_to_listen))
         .expect("Failed to send Listen command");
