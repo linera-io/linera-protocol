@@ -13,7 +13,7 @@ use futures::{
     Future, FutureExt as _, StreamExt,
 };
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, Signer},
     data_types::{ChainDescription, Epoch, MessagePolicy, Timestamp},
     identifiers::{AccountOwner, BlobType, ChainId},
     task::NonBlockingFuture,
@@ -198,8 +198,9 @@ impl<C: ClientContext> ListeningClient<C> {
 
 /// Commands to the chain listener.
 pub enum ListenerCommand {
-    /// Command: start listening to the given chains, using specified listening modes.
-    Listen(BTreeMap<ChainId, ListeningMode>),
+    /// Command: start listening to the given chains. If the chain must produce blocks,
+    /// an owner is required.
+    Listen(BTreeMap<ChainId, Option<AccountOwner>>),
     /// Command: stop listening to the given chains.
     StopListening(BTreeSet<ChainId>),
     /// Command: set the message policies of some chain clients.
@@ -596,12 +597,8 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     match command {
                         ListenerCommand::Listen(new_chains) => {
                             debug!(?new_chains, "received command to listen to new chains");
-                            self.listen_recursively(new_chains.clone()).await?;
-                            for chain_id in new_chains.keys() {
-                                if let Err(error) = self.update_wallet(*chain_id).await {
-                                    error!(%error, %chain_id, "error updating the wallet with a chain");
-                                }
-                            }
+                            let listening_modes = self.update_wallet_for_listening(new_chains).await?;
+                            self.listen_recursively(listening_modes).await?;
                         }
                         ListenerCommand::StopListening(chains) => {
                             debug!(?chains, "received command to stop listening to chains");
@@ -691,6 +688,62 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             .client;
         self.context.lock().await.update_wallet(client).await?;
         Ok(())
+    }
+
+    /// Updates the wallet with the set of chains we're supposed to start listening to,
+    /// and returns the appropriate listening modes based on whether we have the private
+    /// keys corresponding to the given chains' owners.
+    async fn update_wallet_for_listening(
+        &self,
+        new_chains: BTreeMap<ChainId, Option<AccountOwner>>,
+    ) -> Result<BTreeMap<ChainId, ListeningMode>, Error> {
+        let mut chains = BTreeMap::new();
+        let context_guard = self.context.lock().await;
+        for (chain_id, owner) in new_chains {
+            if let Some(owner) = owner {
+                if context_guard
+                    .client()
+                    .signer()
+                    .contains_key(&owner)
+                    .await
+                    .map_err(chain_client::Error::signer_failure)?
+                {
+                    // Try to modify existing chain entry, setting the owner.
+                    let modified = context_guard
+                        .wallet()
+                        .modify(chain_id, |chain| chain.owner = Some(owner))
+                        .await
+                        .map_err(error::Inner::wallet)?;
+                    // If the chain didn't exist, insert a new entry.
+                    if modified.is_none() {
+                        let chain_description = context_guard
+                            .client()
+                            .get_chain_description(chain_id)
+                            .await?;
+                        let timestamp = chain_description.timestamp();
+                        let epoch = chain_description.config().epoch;
+                        context_guard
+                            .wallet()
+                            .insert(
+                                chain_id,
+                                linera_core::wallet::Chain {
+                                    owner: Some(owner),
+                                    timestamp,
+                                    epoch: Some(epoch),
+                                    ..Default::default()
+                                },
+                            )
+                            .await
+                            .map_err(error::Inner::wallet)?;
+                    }
+
+                    chains.insert(chain_id, ListeningMode::FullChain);
+                }
+            } else {
+                chains.insert(chain_id, ListeningMode::FollowChain);
+            }
+        }
+        Ok(chains)
     }
 
     /// Processes the inbox, unless `skip_process_inbox` is set.
