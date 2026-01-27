@@ -87,6 +87,11 @@ where
         })
     }
 
+    /// Returns the chain ID that created the given application.
+    pub fn other_application_creator_chain_id(&self, application_id: ApplicationId) -> ChainId {
+        base_wit::other_application_creator_chain_id(application_id.forget_abi().into()).into()
+    }
+
     /// Returns the ID of the current chain.
     pub fn chain_id(&self) -> ChainId {
         Self::fetch_value_through_cache(&self.chain_id, || base_wit::get_chain_id().into())

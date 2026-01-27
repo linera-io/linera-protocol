@@ -26,6 +26,7 @@ where
     application_parameters: Mutex<Option<Application::Parameters>>,
     application_id: Mutex<Option<ApplicationId<Application::Abi>>>,
     application_creator_chain_id: Mutex<Option<ChainId>>,
+    application_creator_chain_ids: Mutex<HashMap<ApplicationId, ChainId>>,
     chain_id: Mutex<Option<ChainId>>,
     next_block_height: Mutex<Option<BlockHeight>>,
     timestamp: Mutex<Option<Timestamp>>,
@@ -57,6 +58,7 @@ where
             application_parameters: Mutex::new(None),
             application_id: Mutex::new(None),
             application_creator_chain_id: Mutex::new(None),
+            application_creator_chain_ids: Mutex::new(HashMap::new()),
             chain_id: Mutex::new(None),
             next_block_height: Mutex::new(None),
             timestamp: Mutex::new(None),
@@ -147,6 +149,47 @@ where
             "Application creator chain ID has not been mocked, \
             please call `MockServiceRuntime::set_application_creator_chain_id` first",
         )
+    }
+
+    /// Configures the creator chain ID to return for a specific application during the test.
+    pub fn with_application_creator_chain_id_for(
+        self,
+        application_id: ApplicationId,
+        chain_id: ChainId,
+    ) -> Self {
+        self.application_creator_chain_ids
+            .lock()
+            .unwrap()
+            .insert(application_id, chain_id);
+        self
+    }
+
+    /// Configures the creator chain ID to return for a specific application during the test.
+    pub fn set_application_creator_chain_id_for(
+        &self,
+        application_id: ApplicationId,
+        chain_id: ChainId,
+    ) -> &Self {
+        self.application_creator_chain_ids
+            .lock()
+            .unwrap()
+            .insert(application_id, chain_id);
+        self
+    }
+
+    /// Returns the chain ID that created the given application.
+    pub fn other_application_creator_chain_id(&self, application_id: ApplicationId) -> ChainId {
+        *self
+            .application_creator_chain_ids
+            .lock()
+            .unwrap()
+            .get(&application_id)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Application creator chain ID for {application_id:?} has not been mocked, \
+                    please call `MockServiceRuntime::set_application_creator_chain_id_for` first"
+                )
+            })
     }
 
     /// Configures the chain ID to return during the test.

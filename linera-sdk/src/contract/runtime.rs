@@ -97,6 +97,11 @@ where
             .get_or_insert_with(|| base_wit::get_application_creator_chain_id().into())
     }
 
+    /// Returns the chain ID that created the given application.
+    pub fn other_application_creator_chain_id(&mut self, application_id: ApplicationId) -> ChainId {
+        base_wit::other_application_creator_chain_id(application_id.forget_abi().into()).into()
+    }
+
     /// Returns the ID of the current chain.
     pub fn chain_id(&mut self) -> ChainId {
         *self

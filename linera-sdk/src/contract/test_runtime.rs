@@ -53,6 +53,7 @@ where
     application_parameters: Option<Application::Parameters>,
     application_id: Option<ApplicationId<Application::Abi>>,
     application_creator_chain_id: Option<ChainId>,
+    application_creator_chain_ids: HashMap<ApplicationId, ChainId>,
     chain_id: Option<ChainId>,
     authenticated_owner: Option<Option<AccountOwner>>,
     block_height: Option<BlockHeight>,
@@ -103,6 +104,7 @@ where
             application_parameters: None,
             application_id: None,
             application_creator_chain_id: None,
+            application_creator_chain_ids: HashMap::new(),
             chain_id: None,
             authenticated_owner: None,
             block_height: None,
@@ -212,6 +214,41 @@ where
             "Application creator chain ID has not been mocked, \
             please call `MockContractRuntime::set_application_creator_chain_id` first",
         )
+    }
+
+    /// Configures the creator chain ID to return for a specific application during the test.
+    pub fn with_application_creator_chain_id_for(
+        mut self,
+        application_id: ApplicationId,
+        chain_id: ChainId,
+    ) -> Self {
+        self.application_creator_chain_ids
+            .insert(application_id, chain_id);
+        self
+    }
+
+    /// Configures the creator chain ID to return for a specific application during the test.
+    pub fn set_application_creator_chain_id_for(
+        &mut self,
+        application_id: ApplicationId,
+        chain_id: ChainId,
+    ) -> &mut Self {
+        self.application_creator_chain_ids
+            .insert(application_id, chain_id);
+        self
+    }
+
+    /// Returns the chain ID that created the given application.
+    pub fn other_application_creator_chain_id(&mut self, application_id: ApplicationId) -> ChainId {
+        *self
+            .application_creator_chain_ids
+            .get(&application_id)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Application creator chain ID for {application_id:?} has not been mocked, \
+                please call `MockContractRuntime::set_application_creator_chain_id_for` first"
+                )
+            })
     }
 
     /// Configures the chain ID to return during the test.

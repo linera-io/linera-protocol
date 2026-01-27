@@ -238,6 +238,18 @@ where
                 callback.respond(permissions);
             }
 
+            DescribeApplication {
+                application_id,
+                callback,
+            } => {
+                let description = self
+                    .state
+                    .system
+                    .describe_application(application_id, self.txn_tracker)
+                    .await?;
+                callback.respond(description);
+            }
+
             ContainsKey { id, key, callback } => {
                 let view = self.state.users.try_load_entry(&id).await?;
                 let result = match view {
@@ -1165,6 +1177,12 @@ pub enum ExecutionRequest {
     ApplicationPermissions {
         #[debug(skip)]
         callback: Sender<ApplicationPermissions>,
+    },
+
+    DescribeApplication {
+        application_id: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<ApplicationDescription>,
     },
 
     ReadValueBytes {

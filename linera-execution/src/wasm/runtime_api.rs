@@ -119,6 +119,18 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Returns the chain ID that created the given application.
+    fn other_application_creator_chain_id(
+        caller: &mut Caller,
+        application_id: ApplicationId,
+    ) -> Result<ChainId, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .other_application_creator_chain_id(application_id)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Returns the application parameters provided when the application was created.
     fn application_parameters(caller: &mut Caller) -> Result<Vec<u8>, RuntimeError> {
         caller
