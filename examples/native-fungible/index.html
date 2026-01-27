@@ -139,14 +139,6 @@
       </div>
     </div>
 
-    <script type="importmap">
-      {
-          "imports": {
-              "@linera/client": "./js/@linera/client/index.js"
-          }
-      }
-    </script>
-
     <script type="module">
       import * as linera from '@linera/client';
       import { ethers } from 'ethers';
@@ -168,9 +160,8 @@
               gql(`query { tickerSymbol, accounts { entry(key: "${owner}") { value } } }`),
               { blockHash },
           ));
-          console.debug('application response:', response);
           document.querySelector('#ticker-symbol').textContent = response.data.tickerSymbol;
-          document.querySelector('#balance').textContent = (+(response?.data?.accounts?.entry.value || 0)).toFixed(2);
+          document.querySelector('#balance').textContent = (+( response.data.accounts.entry?.value || 0)).toFixed(2);
       }
 
       async function transfer(application, donor, amount, recipient) {
@@ -187,7 +178,7 @@
               const query = gql(`mutation(
                   $donor: AccountOwner!,
                   $amount: Amount!,
-                  $recipient: FungibleAccount!,
+                  $recipient: Account!,
               ) {
                   transfer(owner: $donor, amount: $amount, targetAccount: $recipient)
               }`, {
@@ -215,7 +206,7 @@
               event.preventDefault();
               transfer(
                   application,
-                  me,
+                  owner,
                   event.target.elements.amount.value,
                   event.target.elements.recipient.value,
               );
@@ -233,37 +224,33 @@
           const wallet = await faucet.createWallet();
           const owner = signer.address();
           const chainId = await faucet.claimChain(wallet, owner);
-          const client = await new linera.Client(wallet, signer, false, true);
+          const client = await new linera.Client(wallet, signer);
           document.querySelector('#chain-id').innerText = chainId;
           document.querySelector('#owner').innerText = owner;
 
-          console.log('using application id:', import.meta.env.LINERA_APPLICATION_ID);
-          const application = await client.application(import.meta.env.LINERA_APPLICATION_ID);
+          const chain = await client.chain(chainId);
+          const application = await chain.application(import.meta.env.LINERA_APPLICATION_ID);
 
           await updateBalance(application, owner, null);
 
-          client.onNotification(notification => {
+          chain.onNotification(notification => {
               let newBlock = notification.reason.NewBlock;
-              console.debug('notification:', notification);
-              if (notification.reason.BlockExecuted) {
-                let blockHash = notification.reason.BlockExecuted.hash;
-                updateBalance(application, owner, blockHash);
-              } else {
-                if (!newBlock) return;
+              if (notification.reason.BlockExecuted)
+                updateBalance(application, owner, notification.reason.BlockExecuted.hash);
+              else if (newBlock) {
                 prependEntry(document.querySelector('#logs'), newBlock);
-                updateBalance(application, owner, null);
+                updateBalance(application, owner);
               }
           });
 
           submitButton.disabled = false;
 
-          const me = await client.identity();
-          document.querySelector('#account-id').textContent = `${me}@${chainId}`;
+          document.querySelector('#account-id').textContent = `${owner}@${chainId}`;
 
-          await client.transfer({
+          await chain.transfer({
               recipient: {
                   chain_id: chainId,
-                  owner: me,
+                  owner,
               },
               amount: 10,
           });
