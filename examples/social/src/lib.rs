@@ -99,6 +99,7 @@ pub struct Key {
 
 /// An event emitted by the social app.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[doc(hidden)]
 pub enum Event {
     /// A new post was created
     Post { post: OwnPost, index: u32 },
