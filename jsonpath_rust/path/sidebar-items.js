@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["json_path_instance"],"trait":["Path"],"type":["PathInstance"]};

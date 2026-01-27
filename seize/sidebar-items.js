@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["unprotected"],"mod":["guide","reclaim"],"struct":["Collector","Deferred","Link","Linked","LocalGuard","OwnedGuard","UnprotectedGuard"],"trait":["AsLink","Guard"]};

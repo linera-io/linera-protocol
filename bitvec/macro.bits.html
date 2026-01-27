@@ -1,0 +1,114 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Bit-Slice Region Constructor"><title>bits in bitvec - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="bitvec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../bitvec/index.html">bitvec</a><span class="version">1.0.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">bits</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#bit-slice-region-constructor" title="Bit-Slice Region Constructor">Bit-Slice Region Constructor</a><ul><li><a href="#argument-syntax" title="Argument Syntax">Argument Syntax</a></li><li><a href="#safety" title="Safety">Safety</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate bitvec</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">bitvec</a></div><h1>Macro <span class="macro">bits</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/bitvec/macros.rs.html#162-332">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! bits {
+    (static mut Cell&lt;$store:ident&gt;, $order:ty; $val:expr; $len:expr) =&gt; { ... };
+    (static mut $store:ident, $order:ident; $val:expr; $len:expr) =&gt; { ... };
+    (static mut Cell&lt;$store:ident&gt;, $order:ident; $($val:expr),* $(,)?) =&gt; { ... };
+    (static mut $store:ident, $order:ident; $($val:expr),* $(,)?) =&gt; { ... };
+    (static mut $val:expr; $len:expr) =&gt; { ... };
+    (static mut $($val:expr),* $(,)?) =&gt; { ... };
+    (static Cell&lt;$store:ident&gt;, $order:ty; $val:expr; $len:expr) =&gt; { ... };
+    (static Cell&lt;$store:ident&gt;, $order:ident; $($val:expr),* $(,)?) =&gt; { ... };
+    (static $store:ident, $order:ident; $val:expr; $len:expr) =&gt; { ... };
+    (static $val:expr; $len:expr) =&gt; { ... };
+    (static $store:ident, $order:ident; $($val:expr),* $(,)?) =&gt; { ... };
+    (static $($val:expr),* $(,)?) =&gt; { ... };
+    (mut Cell&lt;$store:ident&gt;, $order:ident; $($val:expr),* $(,)?) =&gt; { ... };
+    (mut Cell&lt;$store:ident&gt;, $order:path; $($val:expr),* $(,)?) =&gt; { ... };
+    (mut $store:ident, $order:ident; $($val:expr),* $(,)?) =&gt; { ... };
+    (mut $store:ident, $order:path; $($val:expr),* $(,)?) =&gt; { ... };
+    (mut $store:ty, $order:ty; $val:expr; $len:expr) =&gt; { ... };
+    (mut $val:expr; $len:expr) =&gt; { ... };
+    (mut $($val:expr),* $(,)?) =&gt; { ... };
+    ($store:ty, $order:ty; $val:expr; $len:expr) =&gt; { ... };
+    (Cell&lt;$store:ident&gt;, $order:ident; $($val:expr),* $(,)?) =&gt; { ... };
+    ($store:ident, $order:ident; $($val:expr),* $(,)?) =&gt; { ... };
+    (Cell&lt;$store:ident&gt;, $order:path; $($val:expr),* $(,)?) =&gt; { ... };
+    ($store:ident, $order:path; $($val:expr),* $(,)?) =&gt; { ... };
+    ($val:expr; $len:expr) =&gt; { ... };
+    ($($val:expr),* $(,)?) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="bit-slice-region-constructor"><a class="doc-anchor" href="#bit-slice-region-constructor">§</a>Bit-Slice Region Constructor</h2>
+<p>This macro provides a bit-initializer syntax for <a href="slice/struct.BitSlice.html" title="struct bitvec::slice::BitSlice"><code>BitSlice</code></a> reference values.
+It takes a superset of the <a href="https://doc.rust-lang.org/1.86.0/alloc/macro.vec.html" title="macro alloc::vec"><code>vec!</code></a> arguments, and is capable of producing
+bit-slices in <code>const</code> contexts (for known type parameters).</p>
+<p>Like <code>vec!</code>, it can accept a sequence of comma-separated bit values, or a
+semicolon-separated pair of a bit value and a repetition counter. Bit values may
+be any integer or name of a <code>const</code> integer, but <em>should</em> only be <code>0</code> or <code>1</code>.</p>
+<h3 id="argument-syntax"><a class="doc-anchor" href="#argument-syntax">§</a>Argument Syntax</h3>
+<p>It accepts two modifier prefixes, zero or two type parameters, and the bit
+expressions described above.</p>
+<p>The modifier prefixes are separated from the remaining arguments by clearspace.</p>
+<ul>
+<li><code>static</code>: If the first argument is the keyword <code>static</code>, then this produces a
+<code>&amp;'static BitSlice</code> reference bound into a (hidden, unnameable)
+<code>static BitArray</code> item. If not, then it produces a stack temporary that the
+Rust compiler automatically extends to have the lifetime of the returned
+reference. Note that non-<code>static</code> invocations rely on the compiler’s escape
+analysis, and you should typically not try to move them up the call stack.</li>
+<li><code>mut</code>: If the first argument is the keyword <code>mut</code>, then this produces a <code>&amp;mut</code>
+writable <code>BitSlice</code>.</li>
+<li><code>static mut</code>: These can be combined to create a <code>&amp;'static mut BitSlice</code>. It is
+always safe to use this reference, because the <code>static mut BitArray</code> it
+creates is concealed and unreachable by any other codepath, and so the
+produced reference is always the sole handle that can reach it.</li>
+</ul>
+<p>The next possible arguments are a pair of <code>BitOrder</code>/<code>BitStore</code> type parameters.</p>
+<ul>
+<li>
+<p><code>$order ,</code>: When this is one of the three literal tokens <code>LocalBits</code>, <code>Lsb0</code>,
+or <code>Msb0</code>, then the macro is able to compute the encoded bit-array contents at
+compile time, including in <code>const</code> contexts. When it is anything else, the
+encoding must take place at runtime. The name or path chosen must be in scope
+at the macro invocation site.</p>
+<p>When not provided, this defaults to <code>Lsb0</code>.</p>
+</li>
+<li>
+<p><code>$store ;</code>: This must be one of <code>uTYPE</code>, <code>Cell&lt;uTYPE&gt;</code>, <code>AtomicUTYPE</code>, or
+<code>RadiumUTYPE</code> where <code>TYPE</code> is one of <code>8</code>, <code>16</code>, <code>32</code>, <code>64</code>, or <code>size</code>. The
+macro recognizes this token textually, and does not have access to the type
+system resolver, so it will not accept aliases or qualified paths.</p>
+<p>When not provided, this defaults to <code>usize</code>.</p>
+</li>
+</ul>
+<p>The <code>static</code>/<code>mut</code> modifiers may be individually present or absent independently
+of the type-parameter pair. The pair must be either both absent or both present
+together.</p>
+<blockquote>
+<p>Previous versions of <code>bitvec</code> supported $order`-only arguments. This has been
+removed for clarity of use and ease of implementation.</p>
+</blockquote>
+<h3 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h3>
+<p>Rust considers all <code>static mut</code> bindings to be <code>unsafe</code> to use. While <code>bits!</code>
+can prevent <em>some</em> of this unsafety by preventing direct access to the created
+<code>static mut</code> buffer, there are still ways to create multiple names referring to
+the same underlying buffer.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">fn </span>unsound() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw-2">mut </span>BitSlice&lt;usize, Lsb0&gt; {
+  <span class="kw">unsafe </span>{ <span class="macro">bits!</span>[<span class="kw">static </span><span class="kw-2">mut </span><span class="number">0</span>; <span class="number">64</span>] }
+}
+
+<span class="kw">let </span>a = unsound();
+<span class="kw">let </span>b = unsound();</code></pre></div>
+<p>The two names <code>a</code> and <code>b</code> can be used to produce aliasing <code>&amp;mut [usize]</code>
+references.</p>
+<p><strong>You must not invoke <code>bits![static mut …]</code> in a context where it can be used</strong>
+<strong>to create multiple escaping names</strong>. This, and only this, argument combination
+of the macro produces a value that requires a call-site <code>unsafe</code> block to use.</p>
+<p>If you do not use this behavior to create multiple names over the same
+underlying buffer, then the macro’s expansion is safe to use, as <code>bitvec</code>’s
+existing alias-protection behavior suffices.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>core::cell::Cell;
+<span class="kw">use </span>radium::types::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>a: <span class="kw-2">&amp;</span>BitSlice = <span class="macro">bits!</span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>];
+
+<span class="kw">let </span>b: <span class="kw-2">&amp;</span>BitSlice = <span class="macro">bits!</span>[<span class="number">1</span>; <span class="number">5</span>];
+<span class="macro">assert_eq!</span>(b.len(), <span class="number">5</span>);
+
+<span class="kw">let </span>c = <span class="macro">bits!</span>[u16, Lsb0; <span class="number">0</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>];
+<span class="kw">let </span>d = <span class="macro">bits!</span>[<span class="kw">static </span>Cell&lt;u16&gt;, Msb0; <span class="number">1</span>; <span class="number">10</span>];
+<span class="kw">let </span>e = <span class="kw">unsafe </span>{ <span class="macro">bits!</span>[<span class="kw">static </span><span class="kw-2">mut </span>u32, LocalBits; <span class="number">0</span>; <span class="number">15</span>] };
+<span class="kw">let </span>f = <span class="macro">bits!</span>[RadiumU32, Msb0; <span class="number">1</span>; <span class="number">20</span>];</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unarray-0.1.4/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="unarray" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">unarray/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! # Unarray
+<a href=#2 id=2 data-nosnippet>2</a>//!
+<a href=#3 id=3 data-nosnippet>3</a>//! Helper utilities for working with arrays of uninitialized memory.
+<a href=#4 id=4 data-nosnippet>4</a>//!
+<a href=#5 id=5 data-nosnippet>5</a>//! ## Current stable Rust
+<a href=#6 id=6 data-nosnippet>6</a>//!
+<a href=#7 id=7 data-nosnippet>7</a>//! Creating arrays in Rust can be somewhat painful. Currently, your best option in the general
+<a href=#8 id=8 data-nosnippet>8</a>//! case is to allocate your elements in a `Vec`, then convert to an array:
+<a href=#9 id=9 data-nosnippet>9</a>//! ```
+<a href=#10 id=10 data-nosnippet>10</a>//! # use core::convert::TryInto;
+<a href=#11 id=11 data-nosnippet>11</a>//! const LEN: usize = 1000;
+<a href=#12 id=12 data-nosnippet>12</a>//! let mut elements = Vec::with_capacity(LEN);  // heap allocation here
+<a href=#13 id=13 data-nosnippet>13</a>//!
+<a href=#14 id=14 data-nosnippet>14</a>//! for i in 0..LEN {
+<a href=#15 id=15 data-nosnippet>15</a>//!   elements.push(123);
+<a href=#16 id=16 data-nosnippet>16</a>//! }
+<a href=#17 id=17 data-nosnippet>17</a>//!
+<a href=#18 id=18 data-nosnippet>18</a>//! let result: [i32; LEN] = elements.try_into().unwrap();
+<a href=#19 id=19 data-nosnippet>19</a>//! ```
+<a href=#20 id=20 data-nosnippet>20</a>//! This needlessly allocates space on the heap, which is then immediately freed. If your type
+<a href=#21 id=21 data-nosnippet>21</a>//! implements `Copy`, and has a sensible default value, you can avoid this allocation by creating
+<a href=#22 id=22 data-nosnippet>22</a>//! an array literal (e.g. `[0; 1000]`), then iterating over each element and setting it, but this
+<a href=#23 id=23 data-nosnippet>23</a>//! also incurrs an unnecessary initialization cost. Why set each element to `0`, then set it
+<a href=#24 id=24 data-nosnippet>24</a>//! again, when you could just set it once?
+<a href=#25 id=25 data-nosnippet>25</a>//!
+<a href=#26 id=26 data-nosnippet>26</a>//! ## `uninit_buf` and `mark_initialized`
+<a href=#27 id=27 data-nosnippet>27</a>//!
+<a href=#28 id=28 data-nosnippet>28</a>//! The lowest-level tools provided by this library are the pair of functions: [`uninit_buf`] and
+<a href=#29 id=29 data-nosnippet>29</a>//! [`mark_initialized`]. These are ergonomic wrappers around the [`core::mem::MaybeUninit`] type.
+<a href=#30 id=30 data-nosnippet>30</a>//! Roughly speaking, most uses of these functions will follow the following steps:
+<a href=#31 id=31 data-nosnippet>31</a>//!  - Stack-allocate a region of uninitialized memory with [`uninit_buf`]
+<a href=#32 id=32 data-nosnippet>32</a>//!  - Initialize each element
+<a href=#33 id=33 data-nosnippet>33</a>//!  - Unsafely declare that all elements are initialized using [`mark_initialized`]
+<a href=#34 id=34 data-nosnippet>34</a>//!
+<a href=#35 id=35 data-nosnippet>35</a>//! For example:
+<a href=#36 id=36 data-nosnippet>36</a>//! ```
+<a href=#37 id=37 data-nosnippet>37</a>//! # use unarray::*;
+<a href=#38 id=38 data-nosnippet>38</a>//! let mut buffer = uninit_buf();  
+<a href=#39 id=39 data-nosnippet>39</a>//!
+<a href=#40 id=40 data-nosnippet>40</a>//! for elem in &amp;mut buffer {
+<a href=#41 id=41 data-nosnippet>41</a>//!   elem.write(123);  
+<a href=#42 id=42 data-nosnippet>42</a>//! }
+<a href=#43 id=43 data-nosnippet>43</a>//!
+<a href=#44 id=44 data-nosnippet>44</a>//! let result = unsafe { mark_initialized(buffer) };
+<a href=#45 id=45 data-nosnippet>45</a>//! assert_eq!(result, [123; 1000]);
+<a href=#46 id=46 data-nosnippet>46</a>//! ```
+<a href=#47 id=47 data-nosnippet>47</a>//! These functions closely map onto tools provided by [`core::mem::MaybeUninit`], so should feel
+<a href=#48 id=48 data-nosnippet>48</a>//! familiar. However, [`mark_initialized`] is an unsafe function, since it's possible to create
+<a href=#49 id=49 data-nosnippet>49</a>//! uninitialized values that aren't wrapped in `MaybeUninit`. It's up to the programmer to make
+<a href=#50 id=50 data-nosnippet>50</a>//! sure every element has been initialized before calling [`mark_initialized`], otherwise it's UB.
+<a href=#51 id=51 data-nosnippet>51</a>//!
+<a href=#52 id=52 data-nosnippet>52</a>//! For this, there are also fully safe APIs that cover some of the common patterns via an
+<a href=#53 id=53 data-nosnippet>53</a>//! extension trait on `[T; N]`:
+<a href=#54 id=54 data-nosnippet>54</a>//!
+<a href=#55 id=55 data-nosnippet>55</a>//! ## `UnarrayArrayExt` extension trait
+<a href=#56 id=56 data-nosnippet>56</a>//!
+<a href=#57 id=57 data-nosnippet>57</a>//! ```
+<a href=#58 id=58 data-nosnippet>58</a>//! # use unarray::*;
+<a href=#59 id=59 data-nosnippet>59</a>//! // mapping an array via a `Result`
+<a href=#60 id=60 data-nosnippet>60</a>//! let strings = ["123", "234"];
+<a href=#61 id=61 data-nosnippet>61</a>//! let numbers = strings.map_result(|s| s.parse());
+<a href=#62 id=62 data-nosnippet>62</a>//! assert_eq!(numbers, Ok([123, 234]));
+<a href=#63 id=63 data-nosnippet>63</a>//!
+<a href=#64 id=64 data-nosnippet>64</a>//! let bad_strings = ["123", "uh oh"];
+<a href=#65 id=65 data-nosnippet>65</a>//! let result = bad_strings.map_result(|s| s.parse::&lt;i32&gt;());
+<a href=#66 id=66 data-nosnippet>66</a>//! assert!(result.is_err());  // since one of the element fails, the whole operation fails
+<a href=#67 id=67 data-nosnippet>67</a>//! ```
+<a href=#68 id=68 data-nosnippet>68</a>//! There is also `map_option` for functions which return an `Option`
+<a href=#69 id=69 data-nosnippet>69</a>//!
+<a href=#70 id=70 data-nosnippet>70</a>//! ## Collecting iterators
+<a href=#71 id=71 data-nosnippet>71</a>//!
+<a href=#72 id=72 data-nosnippet>72</a>//! Iterators generally don't know their length at compile time. But it's often the case that the
+<a href=#73 id=73 data-nosnippet>73</a>//! programmer knows the length ahead of time. In cases like this, it's common to want to collect
+<a href=#74 id=74 data-nosnippet>74</a>//! these elements into an array, without heap allocation or initializing default elements.
+<a href=#75 id=75 data-nosnippet>75</a>//!
+<a href=#76 id=76 data-nosnippet>76</a>//! Arrays don't implement `FromIterator` for this very reason. So this library provides
+<a href=#77 id=77 data-nosnippet>77</a>//! `ArrayFromIter`:
+<a href=#78 id=78 data-nosnippet>78</a>//! ```
+<a href=#79 id=79 data-nosnippet>79</a>//! # use unarray::*;
+<a href=#80 id=80 data-nosnippet>80</a>//! let iter = [1, 2, 3].into_iter().map(|i| i * 2);
+<a href=#81 id=81 data-nosnippet>81</a>//! let ArrayFromIter(array) = iter.collect();  // inferred to be `ArrayFromIter::&lt;i32, 3&gt;`
+<a href=#82 id=82 data-nosnippet>82</a>//! assert_eq!(array, Some([2, 4, 6]));
+<a href=#83 id=83 data-nosnippet>83</a>//! ```
+<a href=#84 id=84 data-nosnippet>84</a>//! However, this can fail, since the iterator may not actually yield the right number of elements.
+<a href=#85 id=85 data-nosnippet>85</a>//! In these cases, the inner option is `None`:
+<a href=#86 id=86 data-nosnippet>86</a>//! ```
+<a href=#87 id=87 data-nosnippet>87</a>//! # use unarray::*;
+<a href=#88 id=88 data-nosnippet>88</a>//! let iter = [1, 2, 3, 4].into_iter();
+<a href=#89 id=89 data-nosnippet>89</a>//! match iter.collect() {
+<a href=#90 id=90 data-nosnippet>90</a>//!   ArrayFromIter(Some([a, b, c])) =&gt; println!("3 elements, {a}, {b}, {c}"),
+<a href=#91 id=91 data-nosnippet>91</a>//!   ArrayFromIter(None) =&gt; println!("not 3 elements"),
+<a href=#92 id=92 data-nosnippet>92</a>//! }
+<a href=#93 id=93 data-nosnippet>93</a>//! ```
+<a href=#94 id=94 data-nosnippet>94</a>//! ## `build_array-*` functions
+<a href=#95 id=95 data-nosnippet>95</a>//!
+<a href=#96 id=96 data-nosnippet>96</a>//! Finally, it's often the case that you want to initialize each array element based on its index.
+<a href=#97 id=97 data-nosnippet>97</a>//! For that, [`build_array`] takes a const generic length, and a function that takes an index and
+<a href=#98 id=98 data-nosnippet>98</a>//! returns an element, and builds the array for you:
+<a href=#99 id=99 data-nosnippet>99</a>//! ```
+<a href=#100 id=100 data-nosnippet>100</a>//! use unarray::*;
+<a href=#101 id=101 data-nosnippet>101</a>//! let array: [usize; 5] = build_array(|i| i * 2);
+<a href=#102 id=102 data-nosnippet>102</a>//! assert_eq!(array, [0, 2, 4, 6, 8]);
+<a href=#103 id=103 data-nosnippet>103</a>//! ```
+<a href=#104 id=104 data-nosnippet>104</a>//! There are also variants that allow fallibly constructing an array, via [`build_array_result`]
+<a href=#105 id=105 data-nosnippet>105</a>//! or [`build_array_option`], similar to [`UnarrayArrayExt::map_result`] and [`UnarrayArrayExt::map_option`].
+<a href=#106 id=106 data-nosnippet>106</a>
+<a href=#107 id=107 data-nosnippet>107</a></span><span class="attr">#![cfg_attr(not(test), no_std)]
+<a href=#108 id=108 data-nosnippet>108</a>#![deny(clippy::missing_safety_doc, missing_docs)]
+<a href=#109 id=109 data-nosnippet>109</a></span><span class="kw">use </span>core::mem::MaybeUninit;
+<a href=#110 id=110 data-nosnippet>110</a>
+<a href=#111 id=111 data-nosnippet>111</a><span class="kw">mod </span>build;
+<a href=#112 id=112 data-nosnippet>112</a><span class="kw">mod </span>map;
+<a href=#113 id=113 data-nosnippet>113</a><span class="kw">mod </span>from_iter;
+<a href=#114 id=114 data-nosnippet>114</a><span class="attr">#[cfg(test)]
+<a href=#115 id=115 data-nosnippet>115</a></span><span class="kw">mod </span>testing;
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a><span class="kw">pub use </span>build::{build_array, build_array_option, build_array_result};
+<a href=#118 id=118 data-nosnippet>118</a><span class="kw">pub use </span>map::UnarrayArrayExt;
+<a href=#119 id=119 data-nosnippet>119</a><span class="kw">pub use </span>from_iter::ArrayFromIter;
+<a href=#120 id=120 data-nosnippet>120</a>
+<a href=#121 id=121 data-nosnippet>121</a><span class="doccomment">/// Convert a `[MaybeUninit&lt;T&gt;; N]` to a `[T; N]`
+<a href=#122 id=122 data-nosnippet>122</a>///
+<a href=#123 id=123 data-nosnippet>123</a>/// ```
+<a href=#124 id=124 data-nosnippet>124</a>/// # use unarray::*;
+<a href=#125 id=125 data-nosnippet>125</a>/// let mut buffer = uninit_buf::&lt;i32, 1000&gt;();
+<a href=#126 id=126 data-nosnippet>126</a>///
+<a href=#127 id=127 data-nosnippet>127</a>/// for elem in &amp;mut buffer {
+<a href=#128 id=128 data-nosnippet>128</a>///   elem.write(123);
+<a href=#129 id=129 data-nosnippet>129</a>/// }
+<a href=#130 id=130 data-nosnippet>130</a>///
+<a href=#131 id=131 data-nosnippet>131</a>/// let result = unsafe { mark_initialized(buffer) };
+<a href=#132 id=132 data-nosnippet>132</a>/// assert_eq!(result, [123; 1000])
+<a href=#133 id=133 data-nosnippet>133</a>/// ```
+<a href=#134 id=134 data-nosnippet>134</a>///
+<a href=#135 id=135 data-nosnippet>135</a>/// This largely acts as a workaround to the fact that [`core::mem::transmute`] cannot be used with
+<a href=#136 id=136 data-nosnippet>136</a>/// const generic arrays, as it can't prove they have the same size (even when intuitively they are
+<a href=#137 id=137 data-nosnippet>137</a>/// the same, e.g. `[i32; N]` and `[u32; N]`).
+<a href=#138 id=138 data-nosnippet>138</a>///
+<a href=#139 id=139 data-nosnippet>139</a>/// This is similar to the nightly-only [`core::mem::MaybeUninit::array_assume_init`]
+<a href=#140 id=140 data-nosnippet>140</a>///
+<a href=#141 id=141 data-nosnippet>141</a>/// # Safety
+<a href=#142 id=142 data-nosnippet>142</a>///
+<a href=#143 id=143 data-nosnippet>143</a>/// Internally, this uses [`core::mem::transmute_copy`] to convert a `[MaybeUninit&lt;T&gt;; N]` to `[T; N]`.
+<a href=#144 id=144 data-nosnippet>144</a>/// As such, you must make sure every element has been initialized before calling this function. If
+<a href=#145 id=145 data-nosnippet>145</a>/// there are uninitialized elements in `src`, these will be converted to `T`s, which is UB. For
+<a href=#146 id=146 data-nosnippet>146</a>/// example:
+<a href=#147 id=147 data-nosnippet>147</a>/// ```no_run
+<a href=#148 id=148 data-nosnippet>148</a>/// # use unarray::*;
+<a href=#149 id=149 data-nosnippet>149</a>/// // ⚠️ This example produces UB ⚠️
+<a href=#150 id=150 data-nosnippet>150</a>/// let bools = uninit_buf::&lt;bool, 10&gt;();
+<a href=#151 id=151 data-nosnippet>151</a>/// let uh_oh = unsafe { mark_initialized(bools) };  // UB: creating an invalid instance
+<a href=#152 id=152 data-nosnippet>152</a>/// if uh_oh[0] {                                    // double UB: reading from unintiailized memory
+<a href=#153 id=153 data-nosnippet>153</a>///   // ...
+<a href=#154 id=154 data-nosnippet>154</a>/// }
+<a href=#155 id=155 data-nosnippet>155</a>/// ```
+<a href=#156 id=156 data-nosnippet>156</a>/// Even if you never use a value, it's still UB. This is especially true for types with
+<a href=#157 id=157 data-nosnippet>157</a>/// [`core::ops::Drop`] implementations:
+<a href=#158 id=158 data-nosnippet>158</a>/// ```no_run
+<a href=#159 id=159 data-nosnippet>159</a>/// # use unarray::*;
+<a href=#160 id=160 data-nosnippet>160</a>/// // ⚠️ This example produces UB ⚠️
+<a href=#161 id=161 data-nosnippet>161</a>/// let strings = uninit_buf::&lt;String, 10&gt;();
+<a href=#162 id=162 data-nosnippet>162</a>/// let uh_oh = unsafe { mark_initialized(strings) };  // UB: creating an invalid instance
+<a href=#163 id=163 data-nosnippet>163</a>///
+<a href=#164 id=164 data-nosnippet>164</a>/// // uh_oh is dropped here, freeing memory at random addresses
+<a href=#165 id=165 data-nosnippet>165</a>/// ```
+<a href=#166 id=166 data-nosnippet>166</a></span><span class="kw">pub unsafe fn </span>mark_initialized&lt;T, <span class="kw">const </span>N: usize&gt;(src: [MaybeUninit&lt;T&gt;; N]) -&gt; [T; N] {
+<a href=#167 id=167 data-nosnippet>167</a>    core::mem::transmute_copy::&lt;[MaybeUninit&lt;T&gt;; N], [T; N]&gt;(<span class="kw-2">&amp;</span>src)
+<a href=#168 id=168 data-nosnippet>168</a>}
+<a href=#169 id=169 data-nosnippet>169</a>
+<a href=#170 id=170 data-nosnippet>170</a><span class="doccomment">/// Create an array of unintialized memory
+<a href=#171 id=171 data-nosnippet>171</a>///
+<a href=#172 id=172 data-nosnippet>172</a>/// This function is just a safe wrapper around `MaybeUninit::uninit().assume_init()`, which is
+<a href=#173 id=173 data-nosnippet>173</a>/// safe when used to create a `[MaybeUninit&lt;T&gt;; N]`, since this type explicitly requires no
+<a href=#174 id=174 data-nosnippet>174</a>/// initialization
+<a href=#175 id=175 data-nosnippet>175</a>///
+<a href=#176 id=176 data-nosnippet>176</a>/// ```
+<a href=#177 id=177 data-nosnippet>177</a>/// # use unarray::*;
+<a href=#178 id=178 data-nosnippet>178</a>/// let mut buffer = uninit_buf::&lt;i32, 1000&gt;();
+<a href=#179 id=179 data-nosnippet>179</a>///
+<a href=#180 id=180 data-nosnippet>180</a>/// for elem in &amp;mut buffer {
+<a href=#181 id=181 data-nosnippet>181</a>///   elem.write(123);
+<a href=#182 id=182 data-nosnippet>182</a>/// }
+<a href=#183 id=183 data-nosnippet>183</a>///
+<a href=#184 id=184 data-nosnippet>184</a>/// let result = unsafe { mark_initialized(buffer) };
+<a href=#185 id=185 data-nosnippet>185</a>/// assert_eq!(result, [123; 1000])
+<a href=#186 id=186 data-nosnippet>186</a>/// ```
+<a href=#187 id=187 data-nosnippet>187</a>///
+<a href=#188 id=188 data-nosnippet>188</a>/// This is similar to the nightly-only [`core::mem::MaybeUninit::uninit_array`]
+<a href=#189 id=189 data-nosnippet>189</a></span><span class="kw">pub fn </span>uninit_buf&lt;T, <span class="kw">const </span>N: usize&gt;() -&gt; [MaybeUninit&lt;T&gt;; N] {
+<a href=#190 id=190 data-nosnippet>190</a>    <span class="comment">// SAFETY:
+<a href=#191 id=191 data-nosnippet>191</a>    // This is safe because we are assuming that a `[MaybeUninit&lt;T&gt;; N]` is initialized. However,
+<a href=#192 id=192 data-nosnippet>192</a>    // since `MaybeUninit` doesn't require initialization, doing nothing counts as "initializing",
+<a href=#193 id=193 data-nosnippet>193</a>    // so this is always safe
+<a href=#194 id=194 data-nosnippet>194</a>    </span><span class="kw">unsafe </span>{ MaybeUninit::uninit().assume_init() }
+<a href=#195 id=195 data-nosnippet>195</a>}</code></pre></div></section></main></body></html>

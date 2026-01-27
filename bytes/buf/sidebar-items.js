@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Chain","IntoIter","Limit","Reader","Take","UninitSlice","Writer"],"trait":["Buf","BufMut"]};

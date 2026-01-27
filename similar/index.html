@@ -1,0 +1,128 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate implements diffing utilities.  It attempts to provide an abstraction interface over different types of diffing algorithms.  The design of the library is inspired by pijul’s diff library by Pierre-Étienne Meunier and also inherits the patience diff algorithm from there."><title>similar - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="similar" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../similar/index.html">similar</a><span class="version">2.7.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#sequence-diffing" title="Sequence Diffing">Sequence Diffing</a></li><li><a href="#text-diffing" title="Text Diffing">Text Diffing</a><ul><li><a href="#trailing-newlines" title="Trailing Newlines">Trailing Newlines</a></li><li><a href="#bytes-vs-unicode" title="Bytes vs Unicode">Bytes vs Unicode</a></li></ul></li><li><a href="#ops-vs-changes" title="Ops vs Changes">Ops vs Changes</a></li><li><a href="#deadlines-and-performance" title="Deadlines and Performance">Deadlines and Performance</a></li><li><a href="#feature-flags" title="Feature Flags">Feature Flags</a></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>similar</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/similar/lib.rs.html#1-176">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate implements diffing utilities.  It attempts to provide an abstraction
+interface over different types of diffing algorithms.  The design of the
+library is inspired by pijul’s diff library by Pierre-Étienne Meunier and
+also inherits the patience diff algorithm from there.</p>
+<p>The API of the crate is split into high and low level functionality.  Most
+of what you probably want to use is available top level.  Additionally the
+following sub modules exist:</p>
+<ul>
+<li><a href="algorithms/index.html" title="mod similar::algorithms"><code>algorithms</code></a>: This implements the different types of diffing algorithms.
+It provides both low level access to the algorithms with the minimal
+trait bounds necessary, as well as a generic interface.</li>
+<li><a href="udiff/index.html" title="mod similar::udiff"><code>udiff</code></a>: Unified diff functionality.</li>
+<li><a href="utils/index.html" title="mod similar::utils"><code>utils</code></a>: utilities for common diff related operations.  This module
+provides additional diffing functions for working with text diffs.</li>
+</ul>
+<h2 id="sequence-diffing"><a class="doc-anchor" href="#sequence-diffing">§</a>Sequence Diffing</h2>
+<p>If you want to diff sequences generally indexable things you can use the
+<a href="fn.capture_diff.html" title="fn similar::capture_diff"><code>capture_diff</code></a> and <a href="fn.capture_diff_slices.html" title="fn similar::capture_diff_slices"><code>capture_diff_slices</code></a> functions.  They will directly
+diff an indexable object or slice and return a vector of <a href="enum.DiffOp.html" title="enum similar::DiffOp"><code>DiffOp</code></a> objects.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>similar::{Algorithm, capture_diff_slices};
+
+<span class="kw">let </span>a = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>];
+<span class="kw">let </span>b = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">7</span>];
+<span class="kw">let </span>ops = capture_diff_slices(Algorithm::Myers, <span class="kw-2">&amp;</span>a, <span class="kw-2">&amp;</span>b);</code></pre></div>
+<h2 id="text-diffing"><a class="doc-anchor" href="#text-diffing">§</a>Text Diffing</h2>
+<p>Similar provides helpful utilities for text (and more specifically line) diff
+operations.  The main type you want to work with is <a href="struct.TextDiff.html" title="struct similar::TextDiff"><code>TextDiff</code></a> which
+uses the underlying diff algorithms to expose a convenient API to work with
+texts:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>similar::{ChangeTag, TextDiff};
+
+<span class="kw">let </span>diff = TextDiff::from_lines(
+    <span class="string">"Hello World\nThis is the second line.\nThis is the third."</span>,
+    <span class="string">"Hallo Welt\nThis is the second line.\nThis is life.\nMoar and more"</span>,
+);
+
+<span class="kw">for </span>change <span class="kw">in </span>diff.iter_all_changes() {
+    <span class="kw">let </span>sign = <span class="kw">match </span>change.tag() {
+        ChangeTag::Delete =&gt; <span class="string">"-"</span>,
+        ChangeTag::Insert =&gt; <span class="string">"+"</span>,
+        ChangeTag::Equal =&gt; <span class="string">" "</span>,
+    };
+    <span class="macro">print!</span>(<span class="string">"{}{}"</span>, sign, change);
+}</code></pre></div>
+<h3 id="trailing-newlines"><a class="doc-anchor" href="#trailing-newlines">§</a>Trailing Newlines</h3>
+<p>When working with line diffs (and unified diffs in general) there are two
+“philosophies” to look at lines.  One is to diff lines without their newline
+character, the other is to diff with the newline character.  Typically the
+latter is done because text files do not <em>have</em> to end in a newline character.
+As a result there is a difference between <code>foo\n</code> and <code>foo</code> as far as diffs
+are concerned.</p>
+<p>In similar this is handled on the <a href="struct.Change.html" title="struct similar::Change"><code>Change</code></a> or <a href="struct.InlineChange.html" title="struct similar::InlineChange"><code>InlineChange</code></a> level.  If
+a diff was created via <a href="struct.TextDiff.html#method.from_lines" title="associated function similar::TextDiff::from_lines"><code>TextDiff::from_lines</code></a> the text diffing system is
+instructed to check if there are missing newlines encountered
+(<a href="struct.TextDiff.html#method.newline_terminated" title="method similar::TextDiff::newline_terminated"><code>TextDiff::newline_terminated</code></a> returns true).</p>
+<p>In any case the <a href="struct.Change.html" title="struct similar::Change"><code>Change</code></a> object has a convenience method called
+<a href="struct.Change.html#method.missing_newline" title="method similar::Change::missing_newline"><code>Change::missing_newline</code></a> which returns <code>true</code> if the change is missing
+a trailing newline.  Armed with that information the caller knows to handle
+this by either rendering a virtual newline at that position or to indicate
+it in different ways.  For instance the unified diff code will render the
+special <code>\ No newline at end of file</code> marker.</p>
+<h3 id="bytes-vs-unicode"><a class="doc-anchor" href="#bytes-vs-unicode">§</a>Bytes vs Unicode</h3>
+<p>Similar module concerns itself with a looser definition of “text” than you would
+normally see in Rust.  While by default it can only operate on <a href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html" title="primitive str"><code>str</code></a> types,
+by enabling the <code>bytes</code> feature it gains support for byte slices with some
+caveats.</p>
+<p>A lot of text diff functionality assumes that what is being diffed constitutes
+text, but in the real world it can often be challenging to ensure that this is
+all valid utf-8.  Because of this the crate is built so that most functionality
+also still works with bytes for as long as they are roughly ASCII compatible.</p>
+<p>This means you will be successful in creating a unified diff from latin1
+encoded bytes but if you try to do the same with EBCDIC encoded bytes you
+will only get garbage.</p>
+<h2 id="ops-vs-changes"><a class="doc-anchor" href="#ops-vs-changes">§</a>Ops vs Changes</h2>
+<p>Because very commonly two compared sequences will largely match this module
+splits its functionality into two layers:</p>
+<p>Changes are encoded as <a href="enum.DiffOp.html" title="enum similar::DiffOp">diff operations</a>.  These are
+ranges of the differences by index in the source sequence.  Because this
+can be cumbersome to work with, a separate method <a href="enum.DiffOp.html#method.iter_changes" title="method similar::DiffOp::iter_changes"><code>DiffOp::iter_changes</code></a>
+(and <a href="struct.TextDiff.html#method.iter_changes" title="method similar::TextDiff::iter_changes"><code>TextDiff::iter_changes</code></a> when working with text diffs) is provided
+which expands all the changes on an item by item level encoded in an operation.</p>
+<p>As the <a href="struct.TextDiff.html#method.grouped_ops" title="method similar::TextDiff::grouped_ops"><code>TextDiff::grouped_ops</code></a> method can isolate clusters of changes
+this even works for very long files if paired with this method.</p>
+<h2 id="deadlines-and-performance"><a class="doc-anchor" href="#deadlines-and-performance">§</a>Deadlines and Performance</h2>
+<p>For large and very distinct inputs the algorithms as implemented can take
+a very, very long time to execute.  Too long to make sense in practice.
+To work around this issue all diffing algorithms also provide a version
+that accepts a deadline which is the point in time as defined by an
+[<code>Instant</code>] after which the algorithm should give up.  What giving up means
+depends on the algorithm.  For instance due to the recursive, divide and
+conquer nature of Myer’s diff you will still get a pretty decent diff in
+many cases when a deadline is reached.  Whereas on the other hand the LCS
+diff is unlikely to give any decent results in such a situation.</p>
+<p>The <a href="struct.TextDiff.html" title="struct similar::TextDiff"><code>TextDiff</code></a> type also lets you configure a deadline and/or timeout
+when performing a text diff.</p>
+<p>Note that on wasm targets calling [<code>Instant::now</code>] will result in a panic
+unless you enable the <code>wasm32_web_time</code> feataure.  By default similar will
+silently disable the deadline checks internally unless that feature is
+enabled.</p>
+<h2 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature Flags</h2>
+<p>The crate by default does not have any dependencies however for some use
+cases it’s useful to pull in extra functionality.  Likewise you can turn
+off some functionality.</p>
+<ul>
+<li><code>text</code>: this feature is enabled by default and enables the text based
+diffing types such as <a href="struct.TextDiff.html" title="struct similar::TextDiff"><code>TextDiff</code></a>.
+If the crate is used without default features it’s removed.</li>
+<li><code>unicode</code>: when this feature is enabled the text diffing functionality
+gains the ability to diff on a grapheme instead of character level.  This
+is particularly useful when working with text containing emojis.  This
+pulls in some relatively complex dependencies for working with the unicode
+database.</li>
+<li><code>bytes</code>: this feature adds support for working with byte slices in text
+APIs in addition to unicode strings.  This pulls in the
+[<code>bstr</code>] dependency.</li>
+<li><code>inline</code>: this feature gives access to additional functionality of the
+text diffing to provide inline information about which values changed
+in a line diff.  This currently also enables the <code>unicode</code> feature.</li>
+<li><code>serde</code>: this feature enables serialization to some types in this
+crate.  For enums without payload deserialization is then also supported.</li>
+<li><code>wasm32_web_time</code>: this feature swaps out the use of <a href="https://doc.rust-lang.org/1.86.0/std/time/index.html" title="mod std::time"><code>std::time</code></a> for
+the <code>web_time</code> crate.  Because this is a change to the public interface,
+this feature must be used with care.  The instant type for this crate is
+then re-exported top-level module.</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="algorithms/index.html" title="mod similar::algorithms">algorithms</a></dt><dd>Various diff (longest common subsequence) algorithms.</dd><dt><a class="mod" href="iter/index.html" title="mod similar::iter">iter</a></dt><dd>The various iterators this crate provides.</dd><dt><a class="mod" href="udiff/index.html" title="mod similar::udiff">udiff</a></dt><dd>This module provides unified diff functionality.</dd><dt><a class="mod" href="utils/index.html" title="mod similar::utils">utils</a></dt><dd>Utilities for common diff related operations.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Change.html" title="struct similar::Change">Change</a></dt><dd>Represents the expanded <a href="enum.DiffOp.html" title="enum similar::DiffOp"><code>DiffOp</code></a> change.</dd><dt><a class="struct" href="struct.InlineChange.html" title="struct similar::InlineChange">Inline<wbr>Change</a></dt><dd>Represents the expanded textual change with inline highlights.</dd><dt><a class="struct" href="struct.TextDiff.html" title="struct similar::TextDiff">Text<wbr>Diff</a></dt><dd>Captures diff op codes for textual diffs.</dd><dt><a class="struct" href="struct.TextDiffConfig.html" title="struct similar::TextDiffConfig">Text<wbr>Diff<wbr>Config</a></dt><dd>A builder type config for more complex uses of <a href="struct.TextDiff.html" title="struct similar::TextDiff"><code>TextDiff</code></a>.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Algorithm.html" title="enum similar::Algorithm">Algorithm</a></dt><dd>An enum representing a diffing algorithm.</dd><dt><a class="enum" href="enum.ChangeTag.html" title="enum similar::ChangeTag">Change<wbr>Tag</a></dt><dd>The tag of a change.</dd><dt><a class="enum" href="enum.DiffOp.html" title="enum similar::DiffOp">DiffOp</a></dt><dd>Utility enum to capture a diff operation.</dd><dt><a class="enum" href="enum.DiffTag.html" title="enum similar::DiffTag">DiffTag</a></dt><dd>The tag of a diff operation.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.DiffableStr.html" title="trait similar::DiffableStr">Diffable<wbr>Str</a></dt><dd>All supported diffable strings.</dd><dt><a class="trait" href="trait.DiffableStrRef.html" title="trait similar::DiffableStrRef">Diffable<wbr>StrRef</a></dt><dd>Reference to a <a href="trait.DiffableStr.html" title="trait similar::DiffableStr"><code>DiffableStr</code></a>.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.capture_diff.html" title="fn similar::capture_diff">capture_<wbr>diff</a></dt><dd>Creates a diff between old and new with the given algorithm capturing the ops.</dd><dt><a class="fn" href="fn.capture_diff_deadline.html" title="fn similar::capture_diff_deadline">capture_<wbr>diff_<wbr>deadline</a></dt><dd>Creates a diff between old and new with the given algorithm capturing the ops.</dd><dt><a class="fn" href="fn.capture_diff_slices.html" title="fn similar::capture_diff_slices">capture_<wbr>diff_<wbr>slices</a></dt><dd>Creates a diff between old and new with the given algorithm capturing the ops.</dd><dt><a class="fn" href="fn.capture_diff_slices_deadline.html" title="fn similar::capture_diff_slices_deadline">capture_<wbr>diff_<wbr>slices_<wbr>deadline</a></dt><dd>Creates a diff between old and new with the given algorithm capturing the ops.</dd><dt><a class="fn" href="fn.get_close_matches.html" title="fn similar::get_close_matches">get_<wbr>close_<wbr>matches</a></dt><dd>Use the text differ to find <code>n</code> close matches.</dd><dt><a class="fn" href="fn.get_diff_ratio.html" title="fn similar::get_diff_ratio">get_<wbr>diff_<wbr>ratio</a></dt><dd>Return a measure of similarity in the range <code>0..=1</code>.</dd><dt><a class="fn" href="fn.group_diff_ops.html" title="fn similar::group_diff_ops">group_<wbr>diff_<wbr>ops</a></dt><dd>Isolate change clusters by eliminating ranges with no changes.</dd></dl></section></div></main></body></html>

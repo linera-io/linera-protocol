@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["compress","compress_to_buffer","decompress","decompress_to_buffer"],"struct":["Compressor","Decompressor"]};

@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Mini Moka is a fast, concurrent cache library for Rust. Mini Moka is a light edition of Moka."><title>mini_moka - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="mini_moka" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../mini_moka/index.html">mini_<wbr>moka</a><span class="version">0.10.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#features" title="Features">Features</a></li><li><a href="#examples" title="Examples">Examples</a></li><li><a href="#minimum-supported-rust-versions" title="Minimum Supported Rust Versions">Minimum Supported Rust Versions</a></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>mini_moka</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/mini_moka/lib.rs.html#1-79">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Mini Moka is a fast, concurrent cache library for Rust. Mini Moka is a light
+edition of <a href="https://github.com/moka-rs/moka">Moka</a>.</p>
+<p>Mini Moka provides an in-memory concurrent cache implementation on top of hash
+map. It supports high expected concurrency of retrievals and updates.</p>
+<p>Mini Moka also provides an in-memory, non-thread-safe cache implementation for
+single thread applications.</p>
+<p>All cache implementations perform a best-effort bounding of the map using an
+entry replacement algorithm to determine which entries to evict when the capacity
+is exceeded.</p>
+<h2 id="features"><a class="doc-anchor" href="#features">§</a>Features</h2>
+<ul>
+<li>A thread-safe, highly concurrent in-memory cache implementation.</li>
+<li>A cache can be bounded by one of the followings:
+<ul>
+<li>The maximum number of entries.</li>
+<li>The total weighted size of entries. (Size aware eviction)</li>
+</ul>
+</li>
+<li>Maintains good hit rate by using entry replacement algorithms inspired by
+<a href="https://github.com/ben-manes/caffeine">Caffeine</a>:
+<ul>
+<li>Admission to a cache is controlled by the Least Frequently Used (LFU) policy.</li>
+<li>Eviction from a cache is controlled by the Least Recently Used (LRU) policy.</li>
+</ul>
+</li>
+<li>Supports expiration policies:
+<ul>
+<li>Time to live</li>
+<li>Time to idle</li>
+</ul>
+</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>See the following document:</p>
+<ul>
+<li>A thread-safe, synchronous cache:
+<ul>
+<li><a href="./sync/struct.Cache.html"><code>sync::Cache</code></a></li>
+</ul>
+</li>
+<li>A not thread-safe, blocking cache for single threaded applications:
+<ul>
+<li><a href="./unsync/struct.Cache.html"><code>unsync::Cache</code></a></li>
+</ul>
+</li>
+</ul>
+<h2 id="minimum-supported-rust-versions"><a class="doc-anchor" href="#minimum-supported-rust-versions">§</a>Minimum Supported Rust Versions</h2>
+<p>This crate’s minimum supported Rust versions (MSRV) are the followings:</p>
+<div><table><thead><tr><th style="text-align: left">Feature</th><th style="text-align: center">MSRV</th></tr></thead><tbody>
+<tr><td style="text-align: left">default features</td><td style="text-align: center">Rust 1.61.0 (May 19, 2022)</td></tr>
+</tbody></table>
+</div>
+<p>If only the default features are enabled, MSRV will be updated conservatively.
+When using other features, MSRV might be updated more frequently, up to the
+latest stable. In both cases, increasing MSRV is <em>not</em> considered a
+semver-breaking change.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="sync/index.html" title="mod mini_moka::sync">sync</a></dt><dd>Provides a thread-safe, concurrent cache implementation built upon
+<a href="https://docs.rs/dashmap/*/dashmap/struct.DashMap.html"><code>dashmap::DashMap</code></a>.</dd><dt><a class="mod" href="unsync/index.html" title="mod mini_moka::unsync">unsync</a></dt><dd>Provides a <em>not</em> thread-safe cache implementation built upon
+<a href="https://doc.rust-lang.org/std/collections/struct.HashMap.html"><code>std::collections::HashMap</code></a>.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Policy.html" title="struct mini_moka::Policy">Policy</a></dt><dd>The policy of a cache.</dd></dl></section></div></main></body></html>

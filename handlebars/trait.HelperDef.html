@@ -1,0 +1,96 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Helper Definition"><title>HelperDef in handlebars - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="handlebars" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../handlebars/index.html">handlebars</a><span class="version">5.1.2</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Helper<wbr>Def</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#define-an-inline-helper" title="Define an inline helper">Define an inline helper</a></li><li><a href="#define-block-helper" title="Define block helper">Define block helper</a></li><li><a href="#define-helper-function-using-macro" title="Define helper function using macro">Define helper function using macro</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.call" title="call">call</a></li><li><a href="#method.call_inner" title="call_inner">call_inner</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate handlebars</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">handlebars</a></div><h1>Trait <span class="trait">HelperDef</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/handlebars/helpers/mod.rs.html#78-143">Source</a> </span></div><pre class="rust item-decl"><code>pub trait HelperDef {
+    // Provided methods
+    fn <a href="#method.call_inner" class="fn">call_inner</a>&lt;'reg: 'rc, 'rc&gt;(
+        &amp;self,
+        _: &amp;<a class="struct" href="struct.Helper.html" title="struct handlebars::Helper">Helper</a>&lt;'rc&gt;,
+        _: &amp;'reg <a class="struct" href="struct.Handlebars.html" title="struct handlebars::Handlebars">Registry</a>&lt;'reg&gt;,
+        _: &amp;'rc <a class="struct" href="struct.Context.html" title="struct handlebars::Context">Context</a>,
+        _: &amp;mut <a class="struct" href="struct.RenderContext.html" title="struct handlebars::RenderContext">RenderContext</a>&lt;'reg, 'rc&gt;,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="enum.ScopedJson.html" title="enum handlebars::ScopedJson">ScopedJson</a>&lt;'rc&gt;, <a class="struct" href="struct.RenderError.html" title="struct handlebars::RenderError">RenderError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.call" class="fn">call</a>&lt;'reg: 'rc, 'rc&gt;(
+        &amp;self,
+        h: &amp;<a class="struct" href="struct.Helper.html" title="struct handlebars::Helper">Helper</a>&lt;'rc&gt;,
+        r: &amp;'reg <a class="struct" href="struct.Handlebars.html" title="struct handlebars::Handlebars">Registry</a>&lt;'reg&gt;,
+        ctx: &amp;'rc <a class="struct" href="struct.Context.html" title="struct handlebars::Context">Context</a>,
+        rc: &amp;mut <a class="struct" href="struct.RenderContext.html" title="struct handlebars::RenderContext">RenderContext</a>&lt;'reg, 'rc&gt;,
+        out: &amp;mut dyn <a class="trait" href="trait.Output.html" title="trait handlebars::Output">Output</a>,
+    ) -&gt; <a class="type" href="type.HelperResult.html" title="type handlebars::HelperResult">HelperResult</a> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Helper Definition</p>
+<p>Implement <code>HelperDef</code> to create custom helpers. You can retrieve useful information from these arguments.</p>
+<ul>
+<li><code>&amp;Helper</code>: current helper template information, contains name, params, hashes and nested template</li>
+<li><code>&amp;Registry</code>: the global registry, you can find templates by name from registry</li>
+<li><code>&amp;Context</code>: the whole data to render, in most case you can use data from <code>Helper</code></li>
+<li><code>&amp;mut RenderContext</code>: you can access data or modify variables (starts with @)/partials in render context, for example, @index of #each. See its document for detail.</li>
+<li><code>&amp;mut dyn Output</code>: where you write output to</li>
+</ul>
+<p>By default, you can use a bare function as a helper definition because we have supported unboxed_closure. If you have stateful or configurable helper, you can create a struct to implement <code>HelperDef</code>.</p>
+<h3 id="define-an-inline-helper"><a class="doc-anchor" href="#define-an-inline-helper">§</a>Define an inline helper</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>handlebars::<span class="kw-2">*</span>;
+
+<span class="kw">fn </span>upper(h: <span class="kw-2">&amp;</span>Helper&lt; <span class="lifetime">'_</span>&gt;, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Handlebars&lt;<span class="lifetime">'_</span>&gt;, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Context, rc:
+<span class="kw-2">&amp;mut </span>RenderContext&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;, out: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Output)
+    -&gt; HelperResult {
+   <span class="comment">// get parameter from helper or throw an error
+   </span><span class="kw">let </span>param = h.param(<span class="number">0</span>).and_then(|v| v.value().as_str()).unwrap_or(<span class="string">""</span>);
+   out.write(param.to_uppercase().as_ref())<span class="question-mark">?</span>;
+   <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h3 id="define-block-helper"><a class="doc-anchor" href="#define-block-helper">§</a>Define block helper</h3>
+<p>Block helper is like <code>#if</code> or <code>#each</code> which has a inner template and an optional <em>inverse</em> template (the template in else branch). You can access the inner template by <code>helper.template()</code> and <code>helper.inverse()</code>. In most cases you will just call <code>render</code> on it.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>handlebars::<span class="kw-2">*</span>;
+
+<span class="kw">fn </span>dummy_block&lt;<span class="lifetime">'reg</span>, <span class="lifetime">'rc</span>&gt;(
+    h: <span class="kw-2">&amp;</span>Helper&lt;<span class="lifetime">'rc</span>&gt;,
+    r: <span class="kw-2">&amp;</span><span class="lifetime">'reg </span>Handlebars&lt;<span class="lifetime">'reg</span>&gt;,
+    ctx: <span class="kw-2">&amp;</span><span class="lifetime">'rc </span>Context,
+    rc: <span class="kw-2">&amp;mut </span>RenderContext&lt;<span class="lifetime">'reg</span>, <span class="lifetime">'rc</span>&gt;,
+    out: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Output,
+) -&gt; HelperResult {
+    h.template()
+        .map(|t| t.render(r, ctx, rc, out))
+        .unwrap_or(<span class="prelude-val">Ok</span>(()))
+}</code></pre></div>
+<h3 id="define-helper-function-using-macro"><a class="doc-anchor" href="#define-helper-function-using-macro">§</a>Define helper function using macro</h3>
+<p>In most cases you just need some simple function to call from templates. We have a <code>handlebars_helper!</code> macro to simplify the job.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>handlebars::<span class="kw-2">*</span>;
+
+<span class="macro">handlebars_helper!</span>(plus: |x: i64, y: i64| x + y);
+
+<span class="kw">let </span><span class="kw-2">mut </span>hbs = Handlebars::new();
+hbs.register_helper(<span class="string">"plus"</span>, Box::new(plus));</code></pre></div>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.call_inner" class="method"><a class="src rightside" href="../src/handlebars/helpers/mod.rs.html#91-99">Source</a><h4 class="code-header">fn <a href="#method.call_inner" class="fn">call_inner</a>&lt;'reg: 'rc, 'rc&gt;(
+    &amp;self,
+    _: &amp;<a class="struct" href="struct.Helper.html" title="struct handlebars::Helper">Helper</a>&lt;'rc&gt;,
+    _: &amp;'reg <a class="struct" href="struct.Handlebars.html" title="struct handlebars::Handlebars">Registry</a>&lt;'reg&gt;,
+    _: &amp;'rc <a class="struct" href="struct.Context.html" title="struct handlebars::Context">Context</a>,
+    _: &amp;mut <a class="struct" href="struct.RenderContext.html" title="struct handlebars::RenderContext">RenderContext</a>&lt;'reg, 'rc&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="enum.ScopedJson.html" title="enum handlebars::ScopedJson">ScopedJson</a>&lt;'rc&gt;, <a class="struct" href="struct.RenderError.html" title="struct handlebars::RenderError">RenderError</a>&gt;</h4></section></summary><div class="docblock"><p>A simplified api to define helper</p>
+<p>To implement your own <code>call_inner</code>, you will return a new <code>ScopedJson</code>
+which has a JSON value computed from current context.</p>
+<h6 id="calling-from-subexpression"><a class="doc-anchor" href="#calling-from-subexpression">§</a>Calling from subexpression</h6>
+<p>When calling the helper as a subexpression, the value and its type can
+be received by upper level helpers.</p>
+<p>Note that the value can be <code>json!(null)</code> which is treated as <code>false</code> in
+helpers like <code>if</code> and rendered as empty string.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.call" class="method"><a class="src rightside" href="../src/handlebars/helpers/mod.rs.html#114-142">Source</a><h4 class="code-header">fn <a href="#method.call" class="fn">call</a>&lt;'reg: 'rc, 'rc&gt;(
+    &amp;self,
+    h: &amp;<a class="struct" href="struct.Helper.html" title="struct handlebars::Helper">Helper</a>&lt;'rc&gt;,
+    r: &amp;'reg <a class="struct" href="struct.Handlebars.html" title="struct handlebars::Handlebars">Registry</a>&lt;'reg&gt;,
+    ctx: &amp;'rc <a class="struct" href="struct.Context.html" title="struct handlebars::Context">Context</a>,
+    rc: &amp;mut <a class="struct" href="struct.RenderContext.html" title="struct handlebars::RenderContext">RenderContext</a>&lt;'reg, 'rc&gt;,
+    out: &amp;mut dyn <a class="trait" href="trait.Output.html" title="trait handlebars::Output">Output</a>,
+) -&gt; <a class="type" href="type.HelperResult.html" title="type handlebars::HelperResult">HelperResult</a></h4></section></summary><div class="docblock"><p>A complex version of helper interface.</p>
+<p>This function offers <code>Output</code>, which you can write custom string into
+and render child template. Helpers like <code>if</code> and <code>each</code> are implemented
+with this. Because the data written into <code>Output</code> are typically without
+type information. So helpers defined by this function are not composable.</p>
+<h6 id="calling-from-subexpression-1"><a class="doc-anchor" href="#calling-from-subexpression-1">§</a>Calling from subexpression</h6>
+<p>Although helpers defined by this are not composable, when called from
+subexpression, handlebars tries to parse the string output as JSON to
+re-build its type. This can be buggy with numrical and other literal values.
+So it is not recommended to use these helpers in subexpression.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-HelperDef-for-F" class="impl"><a class="src rightside" href="../src/handlebars/helpers/mod.rs.html#146-166">Source</a><a href="#impl-HelperDef-for-F" class="anchor">§</a><h3 class="code-header">impl&lt;F: for&lt;'reg, 'rc&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(&amp;<a class="struct" href="struct.Helper.html" title="struct handlebars::Helper">Helper</a>&lt;'rc&gt;, &amp;'reg <a class="struct" href="struct.Handlebars.html" title="struct handlebars::Handlebars">Registry</a>&lt;'reg&gt;, &amp;'rc <a class="struct" href="struct.Context.html" title="struct handlebars::Context">Context</a>, &amp;mut <a class="struct" href="struct.RenderContext.html" title="struct handlebars::RenderContext">RenderContext</a>&lt;'reg, 'rc&gt;, &amp;mut dyn <a class="trait" href="trait.Output.html" title="trait handlebars::Output">Output</a>) -&gt; <a class="type" href="type.HelperResult.html" title="type handlebars::HelperResult">HelperResult</a>&gt; <a class="trait" href="trait.HelperDef.html" title="trait handlebars::HelperDef">HelperDef</a> for F</h3><div class="docblock"><p>implement HelperDef for bare function so we can use function as helper</p>
+</div></section></div><script src="../trait.impl/handlebars/helpers/trait.HelperDef.js" async></script></section></div></main></body></html>

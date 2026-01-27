@@ -1,0 +1,426 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.15/src/math/j0.rs`."><title>j0.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="libm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">libm/math/</div>j0.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">/* origin: FreeBSD /usr/src/lib/msun/src/e_j0.c */
+<a href=#2 id=2 data-nosnippet>2</a>/*
+<a href=#3 id=3 data-nosnippet>3</a> * ====================================================
+<a href=#4 id=4 data-nosnippet>4</a> * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+<a href=#5 id=5 data-nosnippet>5</a> *
+<a href=#6 id=6 data-nosnippet>6</a> * Developed at SunSoft, a Sun Microsystems, Inc. business.
+<a href=#7 id=7 data-nosnippet>7</a> * Permission to use, copy, modify, and distribute this
+<a href=#8 id=8 data-nosnippet>8</a> * software is freely granted, provided that this notice
+<a href=#9 id=9 data-nosnippet>9</a> * is preserved.
+<a href=#10 id=10 data-nosnippet>10</a> * ====================================================
+<a href=#11 id=11 data-nosnippet>11</a> */
+<a href=#12 id=12 data-nosnippet>12</a>/* j0(x), y0(x)
+<a href=#13 id=13 data-nosnippet>13</a> * Bessel function of the first and second kinds of order zero.
+<a href=#14 id=14 data-nosnippet>14</a> * Method -- j0(x):
+<a href=#15 id=15 data-nosnippet>15</a> *      1. For tiny x, we use j0(x) = 1 - x^2/4 + x^4/64 - ...
+<a href=#16 id=16 data-nosnippet>16</a> *      2. Reduce x to |x| since j0(x)=j0(-x),  and
+<a href=#17 id=17 data-nosnippet>17</a> *         for x in (0,2)
+<a href=#18 id=18 data-nosnippet>18</a> *              j0(x) = 1-z/4+ z^2*R0/S0,  where z = x*x;
+<a href=#19 id=19 data-nosnippet>19</a> *         (precision:  |j0-1+z/4-z^2R0/S0 |&lt;2**-63.67 )
+<a href=#20 id=20 data-nosnippet>20</a> *         for x in (2,inf)
+<a href=#21 id=21 data-nosnippet>21</a> *              j0(x) = sqrt(2/(pi*x))*(p0(x)*cos(x0)-q0(x)*sin(x0))
+<a href=#22 id=22 data-nosnippet>22</a> *         where x0 = x-pi/4. It is better to compute sin(x0),cos(x0)
+<a href=#23 id=23 data-nosnippet>23</a> *         as follow:
+<a href=#24 id=24 data-nosnippet>24</a> *              cos(x0) = cos(x)cos(pi/4)+sin(x)sin(pi/4)
+<a href=#25 id=25 data-nosnippet>25</a> *                      = 1/sqrt(2) * (cos(x) + sin(x))
+<a href=#26 id=26 data-nosnippet>26</a> *              sin(x0) = sin(x)cos(pi/4)-cos(x)sin(pi/4)
+<a href=#27 id=27 data-nosnippet>27</a> *                      = 1/sqrt(2) * (sin(x) - cos(x))
+<a href=#28 id=28 data-nosnippet>28</a> *         (To avoid cancellation, use
+<a href=#29 id=29 data-nosnippet>29</a> *              sin(x) +- cos(x) = -cos(2x)/(sin(x) -+ cos(x))
+<a href=#30 id=30 data-nosnippet>30</a> *          to compute the worse one.)
+<a href=#31 id=31 data-nosnippet>31</a> *
+<a href=#32 id=32 data-nosnippet>32</a> *      3 Special cases
+<a href=#33 id=33 data-nosnippet>33</a> *              j0(nan)= nan
+<a href=#34 id=34 data-nosnippet>34</a> *              j0(0) = 1
+<a href=#35 id=35 data-nosnippet>35</a> *              j0(inf) = 0
+<a href=#36 id=36 data-nosnippet>36</a> *
+<a href=#37 id=37 data-nosnippet>37</a> * Method -- y0(x):
+<a href=#38 id=38 data-nosnippet>38</a> *      1. For x&lt;2.
+<a href=#39 id=39 data-nosnippet>39</a> *         Since
+<a href=#40 id=40 data-nosnippet>40</a> *              y0(x) = 2/pi*(j0(x)*(ln(x/2)+Euler) + x^2/4 - ...)
+<a href=#41 id=41 data-nosnippet>41</a> *         therefore y0(x)-2/pi*j0(x)*ln(x) is an even function.
+<a href=#42 id=42 data-nosnippet>42</a> *         We use the following function to approximate y0,
+<a href=#43 id=43 data-nosnippet>43</a> *              y0(x) = U(z)/V(z) + (2/pi)*(j0(x)*ln(x)), z= x^2
+<a href=#44 id=44 data-nosnippet>44</a> *         where
+<a href=#45 id=45 data-nosnippet>45</a> *              U(z) = u00 + u01*z + ... + u06*z^6
+<a href=#46 id=46 data-nosnippet>46</a> *              V(z) = 1  + v01*z + ... + v04*z^4
+<a href=#47 id=47 data-nosnippet>47</a> *         with absolute approximation error bounded by 2**-72.
+<a href=#48 id=48 data-nosnippet>48</a> *         Note: For tiny x, U/V = u0 and j0(x)~1, hence
+<a href=#49 id=49 data-nosnippet>49</a> *              y0(tiny) = u0 + (2/pi)*ln(tiny), (choose tiny&lt;2**-27)
+<a href=#50 id=50 data-nosnippet>50</a> *      2. For x&gt;=2.
+<a href=#51 id=51 data-nosnippet>51</a> *              y0(x) = sqrt(2/(pi*x))*(p0(x)*cos(x0)+q0(x)*sin(x0))
+<a href=#52 id=52 data-nosnippet>52</a> *         where x0 = x-pi/4. It is better to compute sin(x0),cos(x0)
+<a href=#53 id=53 data-nosnippet>53</a> *         by the method mentioned above.
+<a href=#54 id=54 data-nosnippet>54</a> *      3. Special cases: y0(0)=-inf, y0(x&lt;0)=NaN, y0(inf)=0.
+<a href=#55 id=55 data-nosnippet>55</a> */
+<a href=#56 id=56 data-nosnippet>56</a>
+<a href=#57 id=57 data-nosnippet>57</a></span><span class="kw">use super</span>::{cos, fabs, get_high_word, get_low_word, log, sin, sqrt};
+<a href=#58 id=58 data-nosnippet>58</a><span class="kw">const </span>INVSQRTPI: f64 = <span class="number">5.64189583547756279280e-01</span>; <span class="comment">/* 0x3FE20DD7, 0x50429B6D */
+<a href=#59 id=59 data-nosnippet>59</a></span><span class="kw">const </span>TPI: f64 = <span class="number">6.36619772367581382433e-01</span>; <span class="comment">/* 0x3FE45F30, 0x6DC9C883 */
+<a href=#60 id=60 data-nosnippet>60</a>
+<a href=#61 id=61 data-nosnippet>61</a>/* common method when |x|&gt;=2 */
+<a href=#62 id=62 data-nosnippet>62</a></span><span class="kw">fn </span>common(ix: u32, x: f64, y0: bool) -&gt; f64 {
+<a href=#63 id=63 data-nosnippet>63</a>    <span class="kw">let </span>s: f64;
+<a href=#64 id=64 data-nosnippet>64</a>    <span class="kw">let </span><span class="kw-2">mut </span>c: f64;
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="kw">let </span><span class="kw-2">mut </span>ss: f64;
+<a href=#66 id=66 data-nosnippet>66</a>    <span class="kw">let </span><span class="kw-2">mut </span>cc: f64;
+<a href=#67 id=67 data-nosnippet>67</a>    <span class="kw">let </span>z: f64;
+<a href=#68 id=68 data-nosnippet>68</a>
+<a href=#69 id=69 data-nosnippet>69</a>    <span class="comment">/*
+<a href=#70 id=70 data-nosnippet>70</a>     * j0(x) = sqrt(2/(pi*x))*(p0(x)*cos(x-pi/4)-q0(x)*sin(x-pi/4))
+<a href=#71 id=71 data-nosnippet>71</a>     * y0(x) = sqrt(2/(pi*x))*(p0(x)*sin(x-pi/4)+q0(x)*cos(x-pi/4))
+<a href=#72 id=72 data-nosnippet>72</a>     *
+<a href=#73 id=73 data-nosnippet>73</a>     * sin(x-pi/4) = (sin(x) - cos(x))/sqrt(2)
+<a href=#74 id=74 data-nosnippet>74</a>     * cos(x-pi/4) = (sin(x) + cos(x))/sqrt(2)
+<a href=#75 id=75 data-nosnippet>75</a>     * sin(x) +- cos(x) = -cos(2x)/(sin(x) -+ cos(x))
+<a href=#76 id=76 data-nosnippet>76</a>     */
+<a href=#77 id=77 data-nosnippet>77</a>    </span>s = sin(x);
+<a href=#78 id=78 data-nosnippet>78</a>    c = cos(x);
+<a href=#79 id=79 data-nosnippet>79</a>    <span class="kw">if </span>y0 {
+<a href=#80 id=80 data-nosnippet>80</a>        c = -c;
+<a href=#81 id=81 data-nosnippet>81</a>    }
+<a href=#82 id=82 data-nosnippet>82</a>    cc = s + c;
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="comment">/* avoid overflow in 2*x, big ulp error when x&gt;=0x1p1023 */
+<a href=#84 id=84 data-nosnippet>84</a>    </span><span class="kw">if </span>ix &lt; <span class="number">0x7fe00000 </span>{
+<a href=#85 id=85 data-nosnippet>85</a>        ss = s - c;
+<a href=#86 id=86 data-nosnippet>86</a>        z = -cos(<span class="number">2.0 </span>* x);
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="kw">if </span>s * c &lt; <span class="number">0.0 </span>{
+<a href=#88 id=88 data-nosnippet>88</a>            cc = z / ss;
+<a href=#89 id=89 data-nosnippet>89</a>        } <span class="kw">else </span>{
+<a href=#90 id=90 data-nosnippet>90</a>            ss = z / cc;
+<a href=#91 id=91 data-nosnippet>91</a>        }
+<a href=#92 id=92 data-nosnippet>92</a>        <span class="kw">if </span>ix &lt; <span class="number">0x48000000 </span>{
+<a href=#93 id=93 data-nosnippet>93</a>            <span class="kw">if </span>y0 {
+<a href=#94 id=94 data-nosnippet>94</a>                ss = -ss;
+<a href=#95 id=95 data-nosnippet>95</a>            }
+<a href=#96 id=96 data-nosnippet>96</a>            cc = pzero(x) * cc - qzero(x) * ss;
+<a href=#97 id=97 data-nosnippet>97</a>        }
+<a href=#98 id=98 data-nosnippet>98</a>    }
+<a href=#99 id=99 data-nosnippet>99</a>    <span class="kw">return </span>INVSQRTPI * cc / sqrt(x);
+<a href=#100 id=100 data-nosnippet>100</a>}
+<a href=#101 id=101 data-nosnippet>101</a>
+<a href=#102 id=102 data-nosnippet>102</a><span class="comment">/* R0/S0 on [0, 2.00] */
+<a href=#103 id=103 data-nosnippet>103</a></span><span class="kw">const </span>R02: f64 = <span class="number">1.56249999999999947958e-02</span>; <span class="comment">/* 0x3F8FFFFF, 0xFFFFFFFD */
+<a href=#104 id=104 data-nosnippet>104</a></span><span class="kw">const </span>R03: f64 = -<span class="number">1.89979294238854721751e-04</span>; <span class="comment">/* 0xBF28E6A5, 0xB61AC6E9 */
+<a href=#105 id=105 data-nosnippet>105</a></span><span class="kw">const </span>R04: f64 = <span class="number">1.82954049532700665670e-06</span>; <span class="comment">/* 0x3EBEB1D1, 0x0C503919 */
+<a href=#106 id=106 data-nosnippet>106</a></span><span class="kw">const </span>R05: f64 = -<span class="number">4.61832688532103189199e-09</span>; <span class="comment">/* 0xBE33D5E7, 0x73D63FCE */
+<a href=#107 id=107 data-nosnippet>107</a></span><span class="kw">const </span>S01: f64 = <span class="number">1.56191029464890010492e-02</span>; <span class="comment">/* 0x3F8FFCE8, 0x82C8C2A4 */
+<a href=#108 id=108 data-nosnippet>108</a></span><span class="kw">const </span>S02: f64 = <span class="number">1.16926784663337450260e-04</span>; <span class="comment">/* 0x3F1EA6D2, 0xDD57DBF4 */
+<a href=#109 id=109 data-nosnippet>109</a></span><span class="kw">const </span>S03: f64 = <span class="number">5.13546550207318111446e-07</span>; <span class="comment">/* 0x3EA13B54, 0xCE84D5A9 */
+<a href=#110 id=110 data-nosnippet>110</a></span><span class="kw">const </span>S04: f64 = <span class="number">1.16614003333790000205e-09</span>; <span class="comment">/* 0x3E1408BC, 0xF4745D8F */
+<a href=#111 id=111 data-nosnippet>111</a>
+<a href=#112 id=112 data-nosnippet>112</a></span><span class="doccomment">/// Zeroth order of the [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the first kind (f64).
+<a href=#113 id=113 data-nosnippet>113</a></span><span class="attr">#[cfg_attr(all(test, assert_no_panic), no_panic::no_panic)]
+<a href=#114 id=114 data-nosnippet>114</a></span><span class="kw">pub fn </span>j0(<span class="kw-2">mut </span>x: f64) -&gt; f64 {
+<a href=#115 id=115 data-nosnippet>115</a>    <span class="kw">let </span>z: f64;
+<a href=#116 id=116 data-nosnippet>116</a>    <span class="kw">let </span>r: f64;
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="kw">let </span>s: f64;
+<a href=#118 id=118 data-nosnippet>118</a>    <span class="kw">let </span><span class="kw-2">mut </span>ix: u32;
+<a href=#119 id=119 data-nosnippet>119</a>
+<a href=#120 id=120 data-nosnippet>120</a>    ix = get_high_word(x);
+<a href=#121 id=121 data-nosnippet>121</a>    ix &amp;= <span class="number">0x7fffffff</span>;
+<a href=#122 id=122 data-nosnippet>122</a>
+<a href=#123 id=123 data-nosnippet>123</a>    <span class="comment">/* j0(+-inf)=0, j0(nan)=nan */
+<a href=#124 id=124 data-nosnippet>124</a>    </span><span class="kw">if </span>ix &gt;= <span class="number">0x7ff00000 </span>{
+<a href=#125 id=125 data-nosnippet>125</a>        <span class="kw">return </span><span class="number">1.0 </span>/ (x * x);
+<a href=#126 id=126 data-nosnippet>126</a>    }
+<a href=#127 id=127 data-nosnippet>127</a>    x = fabs(x);
+<a href=#128 id=128 data-nosnippet>128</a>
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="kw">if </span>ix &gt;= <span class="number">0x40000000 </span>{
+<a href=#130 id=130 data-nosnippet>130</a>        <span class="comment">/* |x| &gt;= 2 */
+<a href=#131 id=131 data-nosnippet>131</a>        /* large ulp error near zeros: 2.4, 5.52, 8.6537,.. */
+<a href=#132 id=132 data-nosnippet>132</a>        </span><span class="kw">return </span>common(ix, x, <span class="bool-val">false</span>);
+<a href=#133 id=133 data-nosnippet>133</a>    }
+<a href=#134 id=134 data-nosnippet>134</a>
+<a href=#135 id=135 data-nosnippet>135</a>    <span class="comment">/* 1 - x*x/4 + x*x*R(x^2)/S(x^2) */
+<a href=#136 id=136 data-nosnippet>136</a>    </span><span class="kw">if </span>ix &gt;= <span class="number">0x3f200000 </span>{
+<a href=#137 id=137 data-nosnippet>137</a>        <span class="comment">/* |x| &gt;= 2**-13 */
+<a href=#138 id=138 data-nosnippet>138</a>        /* up to 4ulp error close to 2 */
+<a href=#139 id=139 data-nosnippet>139</a>        </span>z = x * x;
+<a href=#140 id=140 data-nosnippet>140</a>        r = z * (R02 + z * (R03 + z * (R04 + z * R05)));
+<a href=#141 id=141 data-nosnippet>141</a>        s = <span class="number">1.0 </span>+ z * (S01 + z * (S02 + z * (S03 + z * S04)));
+<a href=#142 id=142 data-nosnippet>142</a>        <span class="kw">return </span>(<span class="number">1.0 </span>+ x / <span class="number">2.0</span>) * (<span class="number">1.0 </span>- x / <span class="number">2.0</span>) + z * (r / s);
+<a href=#143 id=143 data-nosnippet>143</a>    }
+<a href=#144 id=144 data-nosnippet>144</a>
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="comment">/* 1 - x*x/4 */
+<a href=#146 id=146 data-nosnippet>146</a>    /* prevent underflow */
+<a href=#147 id=147 data-nosnippet>147</a>    /* inexact should be raised when x!=0, this is not done correctly */
+<a href=#148 id=148 data-nosnippet>148</a>    </span><span class="kw">if </span>ix &gt;= <span class="number">0x38000000 </span>{
+<a href=#149 id=149 data-nosnippet>149</a>        <span class="comment">/* |x| &gt;= 2**-127 */
+<a href=#150 id=150 data-nosnippet>150</a>        </span>x = <span class="number">0.25 </span>* x * x;
+<a href=#151 id=151 data-nosnippet>151</a>    }
+<a href=#152 id=152 data-nosnippet>152</a>    <span class="kw">return </span><span class="number">1.0 </span>- x;
+<a href=#153 id=153 data-nosnippet>153</a>}
+<a href=#154 id=154 data-nosnippet>154</a>
+<a href=#155 id=155 data-nosnippet>155</a><span class="kw">const </span>U00: f64 = -<span class="number">7.38042951086872317523e-02</span>; <span class="comment">/* 0xBFB2E4D6, 0x99CBD01F */
+<a href=#156 id=156 data-nosnippet>156</a></span><span class="kw">const </span>U01: f64 = <span class="number">1.76666452509181115538e-01</span>; <span class="comment">/* 0x3FC69D01, 0x9DE9E3FC */
+<a href=#157 id=157 data-nosnippet>157</a></span><span class="kw">const </span>U02: f64 = -<span class="number">1.38185671945596898896e-02</span>; <span class="comment">/* 0xBF8C4CE8, 0xB16CFA97 */
+<a href=#158 id=158 data-nosnippet>158</a></span><span class="kw">const </span>U03: f64 = <span class="number">3.47453432093683650238e-04</span>; <span class="comment">/* 0x3F36C54D, 0x20B29B6B */
+<a href=#159 id=159 data-nosnippet>159</a></span><span class="kw">const </span>U04: f64 = -<span class="number">3.81407053724364161125e-06</span>; <span class="comment">/* 0xBECFFEA7, 0x73D25CAD */
+<a href=#160 id=160 data-nosnippet>160</a></span><span class="kw">const </span>U05: f64 = <span class="number">1.95590137035022920206e-08</span>; <span class="comment">/* 0x3E550057, 0x3B4EABD4 */
+<a href=#161 id=161 data-nosnippet>161</a></span><span class="kw">const </span>U06: f64 = -<span class="number">3.98205194132103398453e-11</span>; <span class="comment">/* 0xBDC5E43D, 0x693FB3C8 */
+<a href=#162 id=162 data-nosnippet>162</a></span><span class="kw">const </span>V01: f64 = <span class="number">1.27304834834123699328e-02</span>; <span class="comment">/* 0x3F8A1270, 0x91C9C71A */
+<a href=#163 id=163 data-nosnippet>163</a></span><span class="kw">const </span>V02: f64 = <span class="number">7.60068627350353253702e-05</span>; <span class="comment">/* 0x3F13ECBB, 0xF578C6C1 */
+<a href=#164 id=164 data-nosnippet>164</a></span><span class="kw">const </span>V03: f64 = <span class="number">2.59150851840457805467e-07</span>; <span class="comment">/* 0x3E91642D, 0x7FF202FD */
+<a href=#165 id=165 data-nosnippet>165</a></span><span class="kw">const </span>V04: f64 = <span class="number">4.41110311332675467403e-10</span>; <span class="comment">/* 0x3DFE5018, 0x3BD6D9EF */
+<a href=#166 id=166 data-nosnippet>166</a>
+<a href=#167 id=167 data-nosnippet>167</a></span><span class="doccomment">/// Zeroth order of the [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the second kind (f64).
+<a href=#168 id=168 data-nosnippet>168</a></span><span class="attr">#[cfg_attr(all(test, assert_no_panic), no_panic::no_panic)]
+<a href=#169 id=169 data-nosnippet>169</a></span><span class="kw">pub fn </span>y0(x: f64) -&gt; f64 {
+<a href=#170 id=170 data-nosnippet>170</a>    <span class="kw">let </span>z: f64;
+<a href=#171 id=171 data-nosnippet>171</a>    <span class="kw">let </span>u: f64;
+<a href=#172 id=172 data-nosnippet>172</a>    <span class="kw">let </span>v: f64;
+<a href=#173 id=173 data-nosnippet>173</a>    <span class="kw">let </span>ix: u32;
+<a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">let </span>lx: u32;
+<a href=#175 id=175 data-nosnippet>175</a>
+<a href=#176 id=176 data-nosnippet>176</a>    ix = get_high_word(x);
+<a href=#177 id=177 data-nosnippet>177</a>    lx = get_low_word(x);
+<a href=#178 id=178 data-nosnippet>178</a>
+<a href=#179 id=179 data-nosnippet>179</a>    <span class="comment">/* y0(nan)=nan, y0(&lt;0)=nan, y0(0)=-inf, y0(inf)=0 */
+<a href=#180 id=180 data-nosnippet>180</a>    </span><span class="kw">if </span>((ix &lt;&lt; <span class="number">1</span>) | lx) == <span class="number">0 </span>{
+<a href=#181 id=181 data-nosnippet>181</a>        <span class="kw">return </span>-<span class="number">1.0 </span>/ <span class="number">0.0</span>;
+<a href=#182 id=182 data-nosnippet>182</a>    }
+<a href=#183 id=183 data-nosnippet>183</a>    <span class="kw">if </span>(ix &gt;&gt; <span class="number">31</span>) != <span class="number">0 </span>{
+<a href=#184 id=184 data-nosnippet>184</a>        <span class="kw">return </span><span class="number">0.0 </span>/ <span class="number">0.0</span>;
+<a href=#185 id=185 data-nosnippet>185</a>    }
+<a href=#186 id=186 data-nosnippet>186</a>    <span class="kw">if </span>ix &gt;= <span class="number">0x7ff00000 </span>{
+<a href=#187 id=187 data-nosnippet>187</a>        <span class="kw">return </span><span class="number">1.0 </span>/ x;
+<a href=#188 id=188 data-nosnippet>188</a>    }
+<a href=#189 id=189 data-nosnippet>189</a>
+<a href=#190 id=190 data-nosnippet>190</a>    <span class="kw">if </span>ix &gt;= <span class="number">0x40000000 </span>{
+<a href=#191 id=191 data-nosnippet>191</a>        <span class="comment">/* x &gt;= 2 */
+<a href=#192 id=192 data-nosnippet>192</a>        /* large ulp errors near zeros: 3.958, 7.086,.. */
+<a href=#193 id=193 data-nosnippet>193</a>        </span><span class="kw">return </span>common(ix, x, <span class="bool-val">true</span>);
+<a href=#194 id=194 data-nosnippet>194</a>    }
+<a href=#195 id=195 data-nosnippet>195</a>
+<a href=#196 id=196 data-nosnippet>196</a>    <span class="comment">/* U(x^2)/V(x^2) + (2/pi)*j0(x)*log(x) */
+<a href=#197 id=197 data-nosnippet>197</a>    </span><span class="kw">if </span>ix &gt;= <span class="number">0x3e400000 </span>{
+<a href=#198 id=198 data-nosnippet>198</a>        <span class="comment">/* x &gt;= 2**-27 */
+<a href=#199 id=199 data-nosnippet>199</a>        /* large ulp error near the first zero, x ~= 0.89 */
+<a href=#200 id=200 data-nosnippet>200</a>        </span>z = x * x;
+<a href=#201 id=201 data-nosnippet>201</a>        u = U00 + z * (U01 + z * (U02 + z * (U03 + z * (U04 + z * (U05 + z * U06)))));
+<a href=#202 id=202 data-nosnippet>202</a>        v = <span class="number">1.0 </span>+ z * (V01 + z * (V02 + z * (V03 + z * V04)));
+<a href=#203 id=203 data-nosnippet>203</a>        <span class="kw">return </span>u / v + TPI * (j0(x) * log(x));
+<a href=#204 id=204 data-nosnippet>204</a>    }
+<a href=#205 id=205 data-nosnippet>205</a>    <span class="kw">return </span>U00 + TPI * log(x);
+<a href=#206 id=206 data-nosnippet>206</a>}
+<a href=#207 id=207 data-nosnippet>207</a>
+<a href=#208 id=208 data-nosnippet>208</a><span class="comment">/* The asymptotic expansions of pzero is
+<a href=#209 id=209 data-nosnippet>209</a> *      1 - 9/128 s^2 + 11025/98304 s^4 - ...,  where s = 1/x.
+<a href=#210 id=210 data-nosnippet>210</a> * For x &gt;= 2, We approximate pzero by
+<a href=#211 id=211 data-nosnippet>211</a> *      pzero(x) = 1 + (R/S)
+<a href=#212 id=212 data-nosnippet>212</a> * where  R = pR0 + pR1*s^2 + pR2*s^4 + ... + pR5*s^10
+<a href=#213 id=213 data-nosnippet>213</a> *        S = 1 + pS0*s^2 + ... + pS4*s^10
+<a href=#214 id=214 data-nosnippet>214</a> * and
+<a href=#215 id=215 data-nosnippet>215</a> *      | pzero(x)-1-R/S | &lt;= 2  ** ( -60.26)
+<a href=#216 id=216 data-nosnippet>216</a> */
+<a href=#217 id=217 data-nosnippet>217</a></span><span class="kw">const </span>PR8: [f64; <span class="number">6</span>] = [
+<a href=#218 id=218 data-nosnippet>218</a>    <span class="comment">/* for x in [inf, 8]=1/[0,0.125] */
+<a href=#219 id=219 data-nosnippet>219</a>    </span><span class="number">0.00000000000000000000e+00</span>,  <span class="comment">/* 0x00000000, 0x00000000 */
+<a href=#220 id=220 data-nosnippet>220</a>    </span>-<span class="number">7.03124999999900357484e-02</span>, <span class="comment">/* 0xBFB1FFFF, 0xFFFFFD32 */
+<a href=#221 id=221 data-nosnippet>221</a>    </span>-<span class="number">8.08167041275349795626e+00</span>, <span class="comment">/* 0xC02029D0, 0xB44FA779 */
+<a href=#222 id=222 data-nosnippet>222</a>    </span>-<span class="number">2.57063105679704847262e+02</span>, <span class="comment">/* 0xC0701102, 0x7B19E863 */
+<a href=#223 id=223 data-nosnippet>223</a>    </span>-<span class="number">2.48521641009428822144e+03</span>, <span class="comment">/* 0xC0A36A6E, 0xCD4DCAFC */
+<a href=#224 id=224 data-nosnippet>224</a>    </span>-<span class="number">5.25304380490729545272e+03</span>, <span class="comment">/* 0xC0B4850B, 0x36CC643D */
+<a href=#225 id=225 data-nosnippet>225</a></span>];
+<a href=#226 id=226 data-nosnippet>226</a><span class="kw">const </span>PS8: [f64; <span class="number">5</span>] = [
+<a href=#227 id=227 data-nosnippet>227</a>    <span class="number">1.16534364619668181717e+02</span>, <span class="comment">/* 0x405D2233, 0x07A96751 */
+<a href=#228 id=228 data-nosnippet>228</a>    </span><span class="number">3.83374475364121826715e+03</span>, <span class="comment">/* 0x40ADF37D, 0x50596938 */
+<a href=#229 id=229 data-nosnippet>229</a>    </span><span class="number">4.05978572648472545552e+04</span>, <span class="comment">/* 0x40E3D2BB, 0x6EB6B05F */
+<a href=#230 id=230 data-nosnippet>230</a>    </span><span class="number">1.16752972564375915681e+05</span>, <span class="comment">/* 0x40FC810F, 0x8F9FA9BD */
+<a href=#231 id=231 data-nosnippet>231</a>    </span><span class="number">4.76277284146730962675e+04</span>, <span class="comment">/* 0x40E74177, 0x4F2C49DC */
+<a href=#232 id=232 data-nosnippet>232</a></span>];
+<a href=#233 id=233 data-nosnippet>233</a>
+<a href=#234 id=234 data-nosnippet>234</a><span class="kw">const </span>PR5: [f64; <span class="number">6</span>] = [
+<a href=#235 id=235 data-nosnippet>235</a>    <span class="comment">/* for x in [8,4.5454]=1/[0.125,0.22001] */
+<a href=#236 id=236 data-nosnippet>236</a>    </span>-<span class="number">1.14125464691894502584e-11</span>, <span class="comment">/* 0xBDA918B1, 0x47E495CC */
+<a href=#237 id=237 data-nosnippet>237</a>    </span>-<span class="number">7.03124940873599280078e-02</span>, <span class="comment">/* 0xBFB1FFFF, 0xE69AFBC6 */
+<a href=#238 id=238 data-nosnippet>238</a>    </span>-<span class="number">4.15961064470587782438e+00</span>, <span class="comment">/* 0xC010A370, 0xF90C6BBF */
+<a href=#239 id=239 data-nosnippet>239</a>    </span>-<span class="number">6.76747652265167261021e+01</span>, <span class="comment">/* 0xC050EB2F, 0x5A7D1783 */
+<a href=#240 id=240 data-nosnippet>240</a>    </span>-<span class="number">3.31231299649172967747e+02</span>, <span class="comment">/* 0xC074B3B3, 0x6742CC63 */
+<a href=#241 id=241 data-nosnippet>241</a>    </span>-<span class="number">3.46433388365604912451e+02</span>, <span class="comment">/* 0xC075A6EF, 0x28A38BD7 */
+<a href=#242 id=242 data-nosnippet>242</a></span>];
+<a href=#243 id=243 data-nosnippet>243</a><span class="kw">const </span>PS5: [f64; <span class="number">5</span>] = [
+<a href=#244 id=244 data-nosnippet>244</a>    <span class="number">6.07539382692300335975e+01</span>, <span class="comment">/* 0x404E6081, 0x0C98C5DE */
+<a href=#245 id=245 data-nosnippet>245</a>    </span><span class="number">1.05125230595704579173e+03</span>, <span class="comment">/* 0x40906D02, 0x5C7E2864 */
+<a href=#246 id=246 data-nosnippet>246</a>    </span><span class="number">5.97897094333855784498e+03</span>, <span class="comment">/* 0x40B75AF8, 0x8FBE1D60 */
+<a href=#247 id=247 data-nosnippet>247</a>    </span><span class="number">9.62544514357774460223e+03</span>, <span class="comment">/* 0x40C2CCB8, 0xFA76FA38 */
+<a href=#248 id=248 data-nosnippet>248</a>    </span><span class="number">2.40605815922939109441e+03</span>, <span class="comment">/* 0x40A2CC1D, 0xC70BE864 */
+<a href=#249 id=249 data-nosnippet>249</a></span>];
+<a href=#250 id=250 data-nosnippet>250</a>
+<a href=#251 id=251 data-nosnippet>251</a><span class="kw">const </span>PR3: [f64; <span class="number">6</span>] = [
+<a href=#252 id=252 data-nosnippet>252</a>    <span class="comment">/* for x in [4.547,2.8571]=1/[0.2199,0.35001] */
+<a href=#253 id=253 data-nosnippet>253</a>    </span>-<span class="number">2.54704601771951915620e-09</span>, <span class="comment">/* 0xBE25E103, 0x6FE1AA86 */
+<a href=#254 id=254 data-nosnippet>254</a>    </span>-<span class="number">7.03119616381481654654e-02</span>, <span class="comment">/* 0xBFB1FFF6, 0xF7C0E24B */
+<a href=#255 id=255 data-nosnippet>255</a>    </span>-<span class="number">2.40903221549529611423e+00</span>, <span class="comment">/* 0xC00345B2, 0xAEA48074 */
+<a href=#256 id=256 data-nosnippet>256</a>    </span>-<span class="number">2.19659774734883086467e+01</span>, <span class="comment">/* 0xC035F74A, 0x4CB94E14 */
+<a href=#257 id=257 data-nosnippet>257</a>    </span>-<span class="number">5.80791704701737572236e+01</span>, <span class="comment">/* 0xC04D0A22, 0x420A1A45 */
+<a href=#258 id=258 data-nosnippet>258</a>    </span>-<span class="number">3.14479470594888503854e+01</span>, <span class="comment">/* 0xC03F72AC, 0xA892D80F */
+<a href=#259 id=259 data-nosnippet>259</a></span>];
+<a href=#260 id=260 data-nosnippet>260</a><span class="kw">const </span>PS3: [f64; <span class="number">5</span>] = [
+<a href=#261 id=261 data-nosnippet>261</a>    <span class="number">3.58560338055209726349e+01</span>, <span class="comment">/* 0x4041ED92, 0x84077DD3 */
+<a href=#262 id=262 data-nosnippet>262</a>    </span><span class="number">3.61513983050303863820e+02</span>, <span class="comment">/* 0x40769839, 0x464A7C0E */
+<a href=#263 id=263 data-nosnippet>263</a>    </span><span class="number">1.19360783792111533330e+03</span>, <span class="comment">/* 0x4092A66E, 0x6D1061D6 */
+<a href=#264 id=264 data-nosnippet>264</a>    </span><span class="number">1.12799679856907414432e+03</span>, <span class="comment">/* 0x40919FFC, 0xB8C39B7E */
+<a href=#265 id=265 data-nosnippet>265</a>    </span><span class="number">1.73580930813335754692e+02</span>, <span class="comment">/* 0x4065B296, 0xFC379081 */
+<a href=#266 id=266 data-nosnippet>266</a></span>];
+<a href=#267 id=267 data-nosnippet>267</a>
+<a href=#268 id=268 data-nosnippet>268</a><span class="kw">const </span>PR2: [f64; <span class="number">6</span>] = [
+<a href=#269 id=269 data-nosnippet>269</a>    <span class="comment">/* for x in [2.8570,2]=1/[0.3499,0.5] */
+<a href=#270 id=270 data-nosnippet>270</a>    </span>-<span class="number">8.87534333032526411254e-08</span>, <span class="comment">/* 0xBE77D316, 0xE927026D */
+<a href=#271 id=271 data-nosnippet>271</a>    </span>-<span class="number">7.03030995483624743247e-02</span>, <span class="comment">/* 0xBFB1FF62, 0x495E1E42 */
+<a href=#272 id=272 data-nosnippet>272</a>    </span>-<span class="number">1.45073846780952986357e+00</span>, <span class="comment">/* 0xBFF73639, 0x8A24A843 */
+<a href=#273 id=273 data-nosnippet>273</a>    </span>-<span class="number">7.63569613823527770791e+00</span>, <span class="comment">/* 0xC01E8AF3, 0xEDAFA7F3 */
+<a href=#274 id=274 data-nosnippet>274</a>    </span>-<span class="number">1.11931668860356747786e+01</span>, <span class="comment">/* 0xC02662E6, 0xC5246303 */
+<a href=#275 id=275 data-nosnippet>275</a>    </span>-<span class="number">3.23364579351335335033e+00</span>, <span class="comment">/* 0xC009DE81, 0xAF8FE70F */
+<a href=#276 id=276 data-nosnippet>276</a></span>];
+<a href=#277 id=277 data-nosnippet>277</a><span class="kw">const </span>PS2: [f64; <span class="number">5</span>] = [
+<a href=#278 id=278 data-nosnippet>278</a>    <span class="number">2.22202997532088808441e+01</span>, <span class="comment">/* 0x40363865, 0x908B5959 */
+<a href=#279 id=279 data-nosnippet>279</a>    </span><span class="number">1.36206794218215208048e+02</span>, <span class="comment">/* 0x4061069E, 0x0EE8878F */
+<a href=#280 id=280 data-nosnippet>280</a>    </span><span class="number">2.70470278658083486789e+02</span>, <span class="comment">/* 0x4070E786, 0x42EA079B */
+<a href=#281 id=281 data-nosnippet>281</a>    </span><span class="number">1.53875394208320329881e+02</span>, <span class="comment">/* 0x40633C03, 0x3AB6FAFF */
+<a href=#282 id=282 data-nosnippet>282</a>    </span><span class="number">1.46576176948256193810e+01</span>, <span class="comment">/* 0x402D50B3, 0x44391809 */
+<a href=#283 id=283 data-nosnippet>283</a></span>];
+<a href=#284 id=284 data-nosnippet>284</a>
+<a href=#285 id=285 data-nosnippet>285</a><span class="kw">fn </span>pzero(x: f64) -&gt; f64 {
+<a href=#286 id=286 data-nosnippet>286</a>    <span class="kw">let </span>p: <span class="kw-2">&amp;</span>[f64; <span class="number">6</span>];
+<a href=#287 id=287 data-nosnippet>287</a>    <span class="kw">let </span>q: <span class="kw-2">&amp;</span>[f64; <span class="number">5</span>];
+<a href=#288 id=288 data-nosnippet>288</a>    <span class="kw">let </span>z: f64;
+<a href=#289 id=289 data-nosnippet>289</a>    <span class="kw">let </span>r: f64;
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="kw">let </span>s: f64;
+<a href=#291 id=291 data-nosnippet>291</a>    <span class="kw">let </span><span class="kw-2">mut </span>ix: u32;
+<a href=#292 id=292 data-nosnippet>292</a>
+<a href=#293 id=293 data-nosnippet>293</a>    ix = get_high_word(x);
+<a href=#294 id=294 data-nosnippet>294</a>    ix &amp;= <span class="number">0x7fffffff</span>;
+<a href=#295 id=295 data-nosnippet>295</a>    <span class="kw">if </span>ix &gt;= <span class="number">0x40200000 </span>{
+<a href=#296 id=296 data-nosnippet>296</a>        p = <span class="kw-2">&amp;</span>PR8;
+<a href=#297 id=297 data-nosnippet>297</a>        q = <span class="kw-2">&amp;</span>PS8;
+<a href=#298 id=298 data-nosnippet>298</a>    } <span class="kw">else if </span>ix &gt;= <span class="number">0x40122E8B </span>{
+<a href=#299 id=299 data-nosnippet>299</a>        p = <span class="kw-2">&amp;</span>PR5;
+<a href=#300 id=300 data-nosnippet>300</a>        q = <span class="kw-2">&amp;</span>PS5;
+<a href=#301 id=301 data-nosnippet>301</a>    } <span class="kw">else if </span>ix &gt;= <span class="number">0x4006DB6D </span>{
+<a href=#302 id=302 data-nosnippet>302</a>        p = <span class="kw-2">&amp;</span>PR3;
+<a href=#303 id=303 data-nosnippet>303</a>        q = <span class="kw-2">&amp;</span>PS3;
+<a href=#304 id=304 data-nosnippet>304</a>    } <span class="kw">else
+<a href=#305 id=305 data-nosnippet>305</a>    </span><span class="comment">/*ix &gt;= 0x40000000*/
+<a href=#306 id=306 data-nosnippet>306</a>    </span>{
+<a href=#307 id=307 data-nosnippet>307</a>        p = <span class="kw-2">&amp;</span>PR2;
+<a href=#308 id=308 data-nosnippet>308</a>        q = <span class="kw-2">&amp;</span>PS2;
+<a href=#309 id=309 data-nosnippet>309</a>    }
+<a href=#310 id=310 data-nosnippet>310</a>    z = <span class="number">1.0 </span>/ (x * x);
+<a href=#311 id=311 data-nosnippet>311</a>    r = p[<span class="number">0</span>] + z * (p[<span class="number">1</span>] + z * (p[<span class="number">2</span>] + z * (p[<span class="number">3</span>] + z * (p[<span class="number">4</span>] + z * p[<span class="number">5</span>]))));
+<a href=#312 id=312 data-nosnippet>312</a>    s = <span class="number">1.0 </span>+ z * (q[<span class="number">0</span>] + z * (q[<span class="number">1</span>] + z * (q[<span class="number">2</span>] + z * (q[<span class="number">3</span>] + z * q[<span class="number">4</span>]))));
+<a href=#313 id=313 data-nosnippet>313</a>    <span class="kw">return </span><span class="number">1.0 </span>+ r / s;
+<a href=#314 id=314 data-nosnippet>314</a>}
+<a href=#315 id=315 data-nosnippet>315</a>
+<a href=#316 id=316 data-nosnippet>316</a><span class="comment">/* For x &gt;= 8, the asymptotic expansions of qzero is
+<a href=#317 id=317 data-nosnippet>317</a> *      -1/8 s + 75/1024 s^3 - ..., where s = 1/x.
+<a href=#318 id=318 data-nosnippet>318</a> * We approximate pzero by
+<a href=#319 id=319 data-nosnippet>319</a> *      qzero(x) = s*(-1.25 + (R/S))
+<a href=#320 id=320 data-nosnippet>320</a> * where  R = qR0 + qR1*s^2 + qR2*s^4 + ... + qR5*s^10
+<a href=#321 id=321 data-nosnippet>321</a> *        S = 1 + qS0*s^2 + ... + qS5*s^12
+<a href=#322 id=322 data-nosnippet>322</a> * and
+<a href=#323 id=323 data-nosnippet>323</a> *      | qzero(x)/s +1.25-R/S | &lt;= 2  ** ( -61.22)
+<a href=#324 id=324 data-nosnippet>324</a> */
+<a href=#325 id=325 data-nosnippet>325</a></span><span class="kw">const </span>QR8: [f64; <span class="number">6</span>] = [
+<a href=#326 id=326 data-nosnippet>326</a>    <span class="comment">/* for x in [inf, 8]=1/[0,0.125] */
+<a href=#327 id=327 data-nosnippet>327</a>    </span><span class="number">0.00000000000000000000e+00</span>, <span class="comment">/* 0x00000000, 0x00000000 */
+<a href=#328 id=328 data-nosnippet>328</a>    </span><span class="number">7.32421874999935051953e-02</span>, <span class="comment">/* 0x3FB2BFFF, 0xFFFFFE2C */
+<a href=#329 id=329 data-nosnippet>329</a>    </span><span class="number">1.17682064682252693899e+01</span>, <span class="comment">/* 0x40278952, 0x5BB334D6 */
+<a href=#330 id=330 data-nosnippet>330</a>    </span><span class="number">5.57673380256401856059e+02</span>, <span class="comment">/* 0x40816D63, 0x15301825 */
+<a href=#331 id=331 data-nosnippet>331</a>    </span><span class="number">8.85919720756468632317e+03</span>, <span class="comment">/* 0x40C14D99, 0x3E18F46D */
+<a href=#332 id=332 data-nosnippet>332</a>    </span><span class="number">3.70146267776887834771e+04</span>, <span class="comment">/* 0x40E212D4, 0x0E901566 */
+<a href=#333 id=333 data-nosnippet>333</a></span>];
+<a href=#334 id=334 data-nosnippet>334</a><span class="kw">const </span>QS8: [f64; <span class="number">6</span>] = [
+<a href=#335 id=335 data-nosnippet>335</a>    <span class="number">1.63776026895689824414e+02</span>,  <span class="comment">/* 0x406478D5, 0x365B39BC */
+<a href=#336 id=336 data-nosnippet>336</a>    </span><span class="number">8.09834494656449805916e+03</span>,  <span class="comment">/* 0x40BFA258, 0x4E6B0563 */
+<a href=#337 id=337 data-nosnippet>337</a>    </span><span class="number">1.42538291419120476348e+05</span>,  <span class="comment">/* 0x41016652, 0x54D38C3F */
+<a href=#338 id=338 data-nosnippet>338</a>    </span><span class="number">8.03309257119514397345e+05</span>,  <span class="comment">/* 0x412883DA, 0x83A52B43 */
+<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="number">8.40501579819060512818e+05</span>,  <span class="comment">/* 0x4129A66B, 0x28DE0B3D */
+<a href=#340 id=340 data-nosnippet>340</a>    </span>-<span class="number">3.43899293537866615225e+05</span>, <span class="comment">/* 0xC114FD6D, 0x2C9530C5 */
+<a href=#341 id=341 data-nosnippet>341</a></span>];
+<a href=#342 id=342 data-nosnippet>342</a>
+<a href=#343 id=343 data-nosnippet>343</a><span class="kw">const </span>QR5: [f64; <span class="number">6</span>] = [
+<a href=#344 id=344 data-nosnippet>344</a>    <span class="comment">/* for x in [8,4.5454]=1/[0.125,0.22001] */
+<a href=#345 id=345 data-nosnippet>345</a>    </span><span class="number">1.84085963594515531381e-11</span>, <span class="comment">/* 0x3DB43D8F, 0x29CC8CD9 */
+<a href=#346 id=346 data-nosnippet>346</a>    </span><span class="number">7.32421766612684765896e-02</span>, <span class="comment">/* 0x3FB2BFFF, 0xD172B04C */
+<a href=#347 id=347 data-nosnippet>347</a>    </span><span class="number">5.83563508962056953777e+00</span>, <span class="comment">/* 0x401757B0, 0xB9953DD3 */
+<a href=#348 id=348 data-nosnippet>348</a>    </span><span class="number">1.35111577286449829671e+02</span>, <span class="comment">/* 0x4060E392, 0x0A8788E9 */
+<a href=#349 id=349 data-nosnippet>349</a>    </span><span class="number">1.02724376596164097464e+03</span>, <span class="comment">/* 0x40900CF9, 0x9DC8C481 */
+<a href=#350 id=350 data-nosnippet>350</a>    </span><span class="number">1.98997785864605384631e+03</span>, <span class="comment">/* 0x409F17E9, 0x53C6E3A6 */
+<a href=#351 id=351 data-nosnippet>351</a></span>];
+<a href=#352 id=352 data-nosnippet>352</a><span class="kw">const </span>QS5: [f64; <span class="number">6</span>] = [
+<a href=#353 id=353 data-nosnippet>353</a>    <span class="number">8.27766102236537761883e+01</span>,  <span class="comment">/* 0x4054B1B3, 0xFB5E1543 */
+<a href=#354 id=354 data-nosnippet>354</a>    </span><span class="number">2.07781416421392987104e+03</span>,  <span class="comment">/* 0x40A03BA0, 0xDA21C0CE */
+<a href=#355 id=355 data-nosnippet>355</a>    </span><span class="number">1.88472887785718085070e+04</span>,  <span class="comment">/* 0x40D267D2, 0x7B591E6D */
+<a href=#356 id=356 data-nosnippet>356</a>    </span><span class="number">5.67511122894947329769e+04</span>,  <span class="comment">/* 0x40EBB5E3, 0x97E02372 */
+<a href=#357 id=357 data-nosnippet>357</a>    </span><span class="number">3.59767538425114471465e+04</span>,  <span class="comment">/* 0x40E19118, 0x1F7A54A0 */
+<a href=#358 id=358 data-nosnippet>358</a>    </span>-<span class="number">5.35434275601944773371e+03</span>, <span class="comment">/* 0xC0B4EA57, 0xBEDBC609 */
+<a href=#359 id=359 data-nosnippet>359</a></span>];
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a><span class="kw">const </span>QR3: [f64; <span class="number">6</span>] = [
+<a href=#362 id=362 data-nosnippet>362</a>    <span class="comment">/* for x in [4.547,2.8571]=1/[0.2199,0.35001] */
+<a href=#363 id=363 data-nosnippet>363</a>    </span><span class="number">4.37741014089738620906e-09</span>, <span class="comment">/* 0x3E32CD03, 0x6ADECB82 */
+<a href=#364 id=364 data-nosnippet>364</a>    </span><span class="number">7.32411180042911447163e-02</span>, <span class="comment">/* 0x3FB2BFEE, 0x0E8D0842 */
+<a href=#365 id=365 data-nosnippet>365</a>    </span><span class="number">3.34423137516170720929e+00</span>, <span class="comment">/* 0x400AC0FC, 0x61149CF5 */
+<a href=#366 id=366 data-nosnippet>366</a>    </span><span class="number">4.26218440745412650017e+01</span>, <span class="comment">/* 0x40454F98, 0x962DAEDD */
+<a href=#367 id=367 data-nosnippet>367</a>    </span><span class="number">1.70808091340565596283e+02</span>, <span class="comment">/* 0x406559DB, 0xE25EFD1F */
+<a href=#368 id=368 data-nosnippet>368</a>    </span><span class="number">1.66733948696651168575e+02</span>, <span class="comment">/* 0x4064D77C, 0x81FA21E0 */
+<a href=#369 id=369 data-nosnippet>369</a></span>];
+<a href=#370 id=370 data-nosnippet>370</a><span class="kw">const </span>QS3: [f64; <span class="number">6</span>] = [
+<a href=#371 id=371 data-nosnippet>371</a>    <span class="number">4.87588729724587182091e+01</span>,  <span class="comment">/* 0x40486122, 0xBFE343A6 */
+<a href=#372 id=372 data-nosnippet>372</a>    </span><span class="number">7.09689221056606015736e+02</span>,  <span class="comment">/* 0x40862D83, 0x86544EB3 */
+<a href=#373 id=373 data-nosnippet>373</a>    </span><span class="number">3.70414822620111362994e+03</span>,  <span class="comment">/* 0x40ACF04B, 0xE44DFC63 */
+<a href=#374 id=374 data-nosnippet>374</a>    </span><span class="number">6.46042516752568917582e+03</span>,  <span class="comment">/* 0x40B93C6C, 0xD7C76A28 */
+<a href=#375 id=375 data-nosnippet>375</a>    </span><span class="number">2.51633368920368957333e+03</span>,  <span class="comment">/* 0x40A3A8AA, 0xD94FB1C0 */
+<a href=#376 id=376 data-nosnippet>376</a>    </span>-<span class="number">1.49247451836156386662e+02</span>, <span class="comment">/* 0xC062A7EB, 0x201CF40F */
+<a href=#377 id=377 data-nosnippet>377</a></span>];
+<a href=#378 id=378 data-nosnippet>378</a>
+<a href=#379 id=379 data-nosnippet>379</a><span class="kw">const </span>QR2: [f64; <span class="number">6</span>] = [
+<a href=#380 id=380 data-nosnippet>380</a>    <span class="comment">/* for x in [2.8570,2]=1/[0.3499,0.5] */
+<a href=#381 id=381 data-nosnippet>381</a>    </span><span class="number">1.50444444886983272379e-07</span>, <span class="comment">/* 0x3E84313B, 0x54F76BDB */
+<a href=#382 id=382 data-nosnippet>382</a>    </span><span class="number">7.32234265963079278272e-02</span>, <span class="comment">/* 0x3FB2BEC5, 0x3E883E34 */
+<a href=#383 id=383 data-nosnippet>383</a>    </span><span class="number">1.99819174093815998816e+00</span>, <span class="comment">/* 0x3FFFF897, 0xE727779C */
+<a href=#384 id=384 data-nosnippet>384</a>    </span><span class="number">1.44956029347885735348e+01</span>, <span class="comment">/* 0x402CFDBF, 0xAAF96FE5 */
+<a href=#385 id=385 data-nosnippet>385</a>    </span><span class="number">3.16662317504781540833e+01</span>, <span class="comment">/* 0x403FAA8E, 0x29FBDC4A */
+<a href=#386 id=386 data-nosnippet>386</a>    </span><span class="number">1.62527075710929267416e+01</span>, <span class="comment">/* 0x403040B1, 0x71814BB4 */
+<a href=#387 id=387 data-nosnippet>387</a></span>];
+<a href=#388 id=388 data-nosnippet>388</a><span class="kw">const </span>QS2: [f64; <span class="number">6</span>] = [
+<a href=#389 id=389 data-nosnippet>389</a>    <span class="number">3.03655848355219184498e+01</span>,  <span class="comment">/* 0x403E5D96, 0xF7C07AED */
+<a href=#390 id=390 data-nosnippet>390</a>    </span><span class="number">2.69348118608049844624e+02</span>,  <span class="comment">/* 0x4070D591, 0xE4D14B40 */
+<a href=#391 id=391 data-nosnippet>391</a>    </span><span class="number">8.44783757595320139444e+02</span>,  <span class="comment">/* 0x408A6645, 0x22B3BF22 */
+<a href=#392 id=392 data-nosnippet>392</a>    </span><span class="number">8.82935845112488550512e+02</span>,  <span class="comment">/* 0x408B977C, 0x9C5CC214 */
+<a href=#393 id=393 data-nosnippet>393</a>    </span><span class="number">2.12666388511798828631e+02</span>,  <span class="comment">/* 0x406A9553, 0x0E001365 */
+<a href=#394 id=394 data-nosnippet>394</a>    </span>-<span class="number">5.31095493882666946917e+00</span>, <span class="comment">/* 0xC0153E6A, 0xF8B32931 */
+<a href=#395 id=395 data-nosnippet>395</a></span>];
+<a href=#396 id=396 data-nosnippet>396</a>
+<a href=#397 id=397 data-nosnippet>397</a><span class="kw">fn </span>qzero(x: f64) -&gt; f64 {
+<a href=#398 id=398 data-nosnippet>398</a>    <span class="kw">let </span>p: <span class="kw-2">&amp;</span>[f64; <span class="number">6</span>];
+<a href=#399 id=399 data-nosnippet>399</a>    <span class="kw">let </span>q: <span class="kw-2">&amp;</span>[f64; <span class="number">6</span>];
+<a href=#400 id=400 data-nosnippet>400</a>    <span class="kw">let </span>s: f64;
+<a href=#401 id=401 data-nosnippet>401</a>    <span class="kw">let </span>r: f64;
+<a href=#402 id=402 data-nosnippet>402</a>    <span class="kw">let </span>z: f64;
+<a href=#403 id=403 data-nosnippet>403</a>    <span class="kw">let </span><span class="kw-2">mut </span>ix: u32;
+<a href=#404 id=404 data-nosnippet>404</a>
+<a href=#405 id=405 data-nosnippet>405</a>    ix = get_high_word(x);
+<a href=#406 id=406 data-nosnippet>406</a>    ix &amp;= <span class="number">0x7fffffff</span>;
+<a href=#407 id=407 data-nosnippet>407</a>    <span class="kw">if </span>ix &gt;= <span class="number">0x40200000 </span>{
+<a href=#408 id=408 data-nosnippet>408</a>        p = <span class="kw-2">&amp;</span>QR8;
+<a href=#409 id=409 data-nosnippet>409</a>        q = <span class="kw-2">&amp;</span>QS8;
+<a href=#410 id=410 data-nosnippet>410</a>    } <span class="kw">else if </span>ix &gt;= <span class="number">0x40122E8B </span>{
+<a href=#411 id=411 data-nosnippet>411</a>        p = <span class="kw-2">&amp;</span>QR5;
+<a href=#412 id=412 data-nosnippet>412</a>        q = <span class="kw-2">&amp;</span>QS5;
+<a href=#413 id=413 data-nosnippet>413</a>    } <span class="kw">else if </span>ix &gt;= <span class="number">0x4006DB6D </span>{
+<a href=#414 id=414 data-nosnippet>414</a>        p = <span class="kw-2">&amp;</span>QR3;
+<a href=#415 id=415 data-nosnippet>415</a>        q = <span class="kw-2">&amp;</span>QS3;
+<a href=#416 id=416 data-nosnippet>416</a>    } <span class="kw">else
+<a href=#417 id=417 data-nosnippet>417</a>    </span><span class="comment">/*ix &gt;= 0x40000000*/
+<a href=#418 id=418 data-nosnippet>418</a>    </span>{
+<a href=#419 id=419 data-nosnippet>419</a>        p = <span class="kw-2">&amp;</span>QR2;
+<a href=#420 id=420 data-nosnippet>420</a>        q = <span class="kw-2">&amp;</span>QS2;
+<a href=#421 id=421 data-nosnippet>421</a>    }
+<a href=#422 id=422 data-nosnippet>422</a>    z = <span class="number">1.0 </span>/ (x * x);
+<a href=#423 id=423 data-nosnippet>423</a>    r = p[<span class="number">0</span>] + z * (p[<span class="number">1</span>] + z * (p[<span class="number">2</span>] + z * (p[<span class="number">3</span>] + z * (p[<span class="number">4</span>] + z * p[<span class="number">5</span>]))));
+<a href=#424 id=424 data-nosnippet>424</a>    s = <span class="number">1.0 </span>+ z * (q[<span class="number">0</span>] + z * (q[<span class="number">1</span>] + z * (q[<span class="number">2</span>] + z * (q[<span class="number">3</span>] + z * (q[<span class="number">4</span>] + z * q[<span class="number">5</span>])))));
+<a href=#425 id=425 data-nosnippet>425</a>    <span class="kw">return </span>(-<span class="number">0.125 </span>+ r / s) / x;
+<a href=#426 id=426 data-nosnippet>426</a>}</code></pre></div></section></main></body></html>

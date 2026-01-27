@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["run_with_tempdir","run_with_tempdir_sync"]};

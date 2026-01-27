@@ -1,0 +1,1608 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aho-corasick-1.1.3/src/automaton.rs`."><title>automaton.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="aho_corasick" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">aho_corasick/</div>automaton.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">/*!
+<a href=#2 id=2 data-nosnippet>2</a>Provides [`Automaton`] trait for abstracting over Aho-Corasick automata.
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a>The `Automaton` trait provides a way to write generic code over any
+<a href=#5 id=5 data-nosnippet>5</a>Aho-Corasick automaton. It also provides access to lower level APIs that
+<a href=#6 id=6 data-nosnippet>6</a>permit walking the state transitions of an Aho-Corasick automaton manually.
+<a href=#7 id=7 data-nosnippet>7</a>*/
+<a href=#8 id=8 data-nosnippet>8</a>
+<a href=#9 id=9 data-nosnippet>9</a></span><span class="kw">use </span>alloc::{string::String, vec::Vec};
+<a href=#10 id=10 data-nosnippet>10</a>
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span><span class="kw">crate</span>::util::{
+<a href=#12 id=12 data-nosnippet>12</a>    error::MatchError,
+<a href=#13 id=13 data-nosnippet>13</a>    primitives::PatternID,
+<a href=#14 id=14 data-nosnippet>14</a>    search::{Anchored, Input, Match, MatchKind, Span},
+<a href=#15 id=15 data-nosnippet>15</a>};
+<a href=#16 id=16 data-nosnippet>16</a>
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">pub use </span><span class="kw">crate</span>::util::{
+<a href=#18 id=18 data-nosnippet>18</a>    prefilter::{Candidate, Prefilter},
+<a href=#19 id=19 data-nosnippet>19</a>    primitives::{StateID, StateIDError},
+<a href=#20 id=20 data-nosnippet>20</a>};
+<a href=#21 id=21 data-nosnippet>21</a>
+<a href=#22 id=22 data-nosnippet>22</a><span class="doccomment">/// We seal the `Automaton` trait for now. It's a big trait, and it's
+<a href=#23 id=23 data-nosnippet>23</a>/// conceivable that I might want to add new required methods, and sealing the
+<a href=#24 id=24 data-nosnippet>24</a>/// trait permits doing that in a backwards compatible fashion. On other the
+<a href=#25 id=25 data-nosnippet>25</a>/// hand, if you have a solid use case for implementing the trait yourself,
+<a href=#26 id=26 data-nosnippet>26</a>/// please file an issue and we can discuss it. This was *mostly* done as a
+<a href=#27 id=27 data-nosnippet>27</a>/// conservative step.
+<a href=#28 id=28 data-nosnippet>28</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>private {
+<a href=#29 id=29 data-nosnippet>29</a>    <span class="kw">pub trait </span>Sealed {}
+<a href=#30 id=30 data-nosnippet>30</a>}
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">impl </span>private::Sealed <span class="kw">for </span><span class="kw">crate</span>::nfa::noncontiguous::NFA {}
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">impl </span>private::Sealed <span class="kw">for </span><span class="kw">crate</span>::nfa::contiguous::NFA {}
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">impl </span>private::Sealed <span class="kw">for </span><span class="kw">crate</span>::dfa::DFA {}
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T: private::Sealed + <span class="question-mark">?</span>Sized&gt; private::Sealed <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">'a </span>T {}
+<a href=#36 id=36 data-nosnippet>36</a>
+<a href=#37 id=37 data-nosnippet>37</a><span class="doccomment">/// A trait that abstracts over Aho-Corasick automata.
+<a href=#38 id=38 data-nosnippet>38</a>///
+<a href=#39 id=39 data-nosnippet>39</a>/// This trait primarily exists for niche use cases such as:
+<a href=#40 id=40 data-nosnippet>40</a>///
+<a href=#41 id=41 data-nosnippet>41</a>/// * Using an NFA or DFA directly, bypassing the top-level
+<a href=#42 id=42 data-nosnippet>42</a>/// [`AhoCorasick`](crate::AhoCorasick) searcher. Currently, these include
+<a href=#43 id=43 data-nosnippet>43</a>/// [`noncontiguous::NFA`](crate::nfa::noncontiguous::NFA),
+<a href=#44 id=44 data-nosnippet>44</a>/// [`contiguous::NFA`](crate::nfa::contiguous::NFA) and
+<a href=#45 id=45 data-nosnippet>45</a>/// [`dfa::DFA`](crate::dfa::DFA).
+<a href=#46 id=46 data-nosnippet>46</a>/// * Implementing your own custom search routine by walking the automaton
+<a href=#47 id=47 data-nosnippet>47</a>/// yourself. This might be useful for implementing search on non-contiguous
+<a href=#48 id=48 data-nosnippet>48</a>/// strings or streams.
+<a href=#49 id=49 data-nosnippet>49</a>///
+<a href=#50 id=50 data-nosnippet>50</a>/// For most use cases, it is not expected that users will need
+<a href=#51 id=51 data-nosnippet>51</a>/// to use or even know about this trait. Indeed, the top level
+<a href=#52 id=52 data-nosnippet>52</a>/// [`AhoCorasick`](crate::AhoCorasick) searcher does not expose any details
+<a href=#53 id=53 data-nosnippet>53</a>/// about this trait, nor does it implement it itself.
+<a href=#54 id=54 data-nosnippet>54</a>///
+<a href=#55 id=55 data-nosnippet>55</a>/// Note that this trait defines a number of default methods, such as
+<a href=#56 id=56 data-nosnippet>56</a>/// [`Automaton::try_find`] and [`Automaton::try_find_iter`], which implement
+<a href=#57 id=57 data-nosnippet>57</a>/// higher level search routines in terms of the lower level automata API.
+<a href=#58 id=58 data-nosnippet>58</a>///
+<a href=#59 id=59 data-nosnippet>59</a>/// # Sealed
+<a href=#60 id=60 data-nosnippet>60</a>///
+<a href=#61 id=61 data-nosnippet>61</a>/// Currently, this trait is sealed. That means users of this crate can write
+<a href=#62 id=62 data-nosnippet>62</a>/// generic routines over this trait but cannot implement it themselves. This
+<a href=#63 id=63 data-nosnippet>63</a>/// restriction may be lifted in the future, but sealing the trait permits
+<a href=#64 id=64 data-nosnippet>64</a>/// adding new required methods in a backwards compatible fashion.
+<a href=#65 id=65 data-nosnippet>65</a>///
+<a href=#66 id=66 data-nosnippet>66</a>/// # Special states
+<a href=#67 id=67 data-nosnippet>67</a>///
+<a href=#68 id=68 data-nosnippet>68</a>/// This trait encodes a notion of "special" states in an automaton. Namely,
+<a href=#69 id=69 data-nosnippet>69</a>/// a state is treated as special if it is a dead, match or start state:
+<a href=#70 id=70 data-nosnippet>70</a>///
+<a href=#71 id=71 data-nosnippet>71</a>/// * A dead state is a state that cannot be left once entered. All transitions
+<a href=#72 id=72 data-nosnippet>72</a>/// on a dead state lead back to itself. The dead state is meant to be treated
+<a href=#73 id=73 data-nosnippet>73</a>/// as a sentinel indicating that the search should stop and return a match if
+<a href=#74 id=74 data-nosnippet>74</a>/// one has been found, and nothing otherwise.
+<a href=#75 id=75 data-nosnippet>75</a>/// * A match state is a state that indicates one or more patterns have
+<a href=#76 id=76 data-nosnippet>76</a>/// matched. Depending on the [`MatchKind`] of the automaton, a search may
+<a href=#77 id=77 data-nosnippet>77</a>/// stop once a match is seen, or it may continue looking for matches until
+<a href=#78 id=78 data-nosnippet>78</a>/// it enters a dead state or sees the end of the haystack.
+<a href=#79 id=79 data-nosnippet>79</a>/// * A start state is a state that a search begins in. It is useful to know
+<a href=#80 id=80 data-nosnippet>80</a>/// when a search enters a start state because it may mean that a prefilter can
+<a href=#81 id=81 data-nosnippet>81</a>/// be used to skip ahead and quickly look for candidate matches. Unlike dead
+<a href=#82 id=82 data-nosnippet>82</a>/// and match states, it is never necessary to explicitly handle start states
+<a href=#83 id=83 data-nosnippet>83</a>/// for correctness. Indeed, in this crate, implementations of `Automaton`
+<a href=#84 id=84 data-nosnippet>84</a>/// will only treat start states as "special" when a prefilter is enabled and
+<a href=#85 id=85 data-nosnippet>85</a>/// active. Otherwise, treating it as special has no purpose and winds up
+<a href=#86 id=86 data-nosnippet>86</a>/// slowing down the overall search because it results in ping-ponging between
+<a href=#87 id=87 data-nosnippet>87</a>/// the main state transition and the "special" state logic.
+<a href=#88 id=88 data-nosnippet>88</a>///
+<a href=#89 id=89 data-nosnippet>89</a>/// Since checking whether a state is special by doing three different
+<a href=#90 id=90 data-nosnippet>90</a>/// checks would be too expensive inside a fast search loop, the
+<a href=#91 id=91 data-nosnippet>91</a>/// [`Automaton::is_special`] method is provided for quickly checking whether
+<a href=#92 id=92 data-nosnippet>92</a>/// the state is special. The `Automaton::is_dead`, `Automaton::is_match` and
+<a href=#93 id=93 data-nosnippet>93</a>/// `Automaton::is_start` predicates can then be used to determine which kind
+<a href=#94 id=94 data-nosnippet>94</a>/// of special state it is.
+<a href=#95 id=95 data-nosnippet>95</a>///
+<a href=#96 id=96 data-nosnippet>96</a>/// # Panics
+<a href=#97 id=97 data-nosnippet>97</a>///
+<a href=#98 id=98 data-nosnippet>98</a>/// Most of the APIs on this trait should panic or give incorrect results
+<a href=#99 id=99 data-nosnippet>99</a>/// if invalid inputs are given to it. For example, `Automaton::next_state`
+<a href=#100 id=100 data-nosnippet>100</a>/// has unspecified behavior if the state ID given to it is not a valid
+<a href=#101 id=101 data-nosnippet>101</a>/// state ID for the underlying automaton. Valid state IDs can only be
+<a href=#102 id=102 data-nosnippet>102</a>/// retrieved in one of two ways: calling `Automaton::start_state` or calling
+<a href=#103 id=103 data-nosnippet>103</a>/// `Automaton::next_state` with a valid state ID.
+<a href=#104 id=104 data-nosnippet>104</a>///
+<a href=#105 id=105 data-nosnippet>105</a>/// # Safety
+<a href=#106 id=106 data-nosnippet>106</a>///
+<a href=#107 id=107 data-nosnippet>107</a>/// This trait is not safe to implement so that code may rely on the
+<a href=#108 id=108 data-nosnippet>108</a>/// correctness of implementations of this trait to avoid undefined behavior.
+<a href=#109 id=109 data-nosnippet>109</a>/// The primary correctness guarantees are:
+<a href=#110 id=110 data-nosnippet>110</a>///
+<a href=#111 id=111 data-nosnippet>111</a>/// * `Automaton::start_state` always returns a valid state ID or an error or
+<a href=#112 id=112 data-nosnippet>112</a>/// panics.
+<a href=#113 id=113 data-nosnippet>113</a>/// * `Automaton::next_state`, when given a valid state ID, always returns
+<a href=#114 id=114 data-nosnippet>114</a>/// a valid state ID for all values of `anchored` and `byte`, or otherwise
+<a href=#115 id=115 data-nosnippet>115</a>/// panics.
+<a href=#116 id=116 data-nosnippet>116</a>///
+<a href=#117 id=117 data-nosnippet>117</a>/// In general, the rest of the methods on `Automaton` need to uphold their
+<a href=#118 id=118 data-nosnippet>118</a>/// contracts as well. For example, `Automaton::is_dead` should only returns
+<a href=#119 id=119 data-nosnippet>119</a>/// true if the given state ID is actually a dead state.
+<a href=#120 id=120 data-nosnippet>120</a>///
+<a href=#121 id=121 data-nosnippet>121</a>/// Note that currently this crate does not rely on the safety property defined
+<a href=#122 id=122 data-nosnippet>122</a>/// here to avoid undefined behavior. Instead, this was done to make it
+<a href=#123 id=123 data-nosnippet>123</a>/// _possible_ to do in the future.
+<a href=#124 id=124 data-nosnippet>124</a>///
+<a href=#125 id=125 data-nosnippet>125</a>/// # Example
+<a href=#126 id=126 data-nosnippet>126</a>///
+<a href=#127 id=127 data-nosnippet>127</a>/// This example shows how one might implement a basic but correct search
+<a href=#128 id=128 data-nosnippet>128</a>/// routine. We keep things simple by not using prefilters or worrying about
+<a href=#129 id=129 data-nosnippet>129</a>/// anchored searches, but do make sure our search is correct for all possible
+<a href=#130 id=130 data-nosnippet>130</a>/// [`MatchKind`] semantics. (The comments in the code below note the parts
+<a href=#131 id=131 data-nosnippet>131</a>/// that are needed to support certain `MatchKind` semantics.)
+<a href=#132 id=132 data-nosnippet>132</a>///
+<a href=#133 id=133 data-nosnippet>133</a>/// ```
+<a href=#134 id=134 data-nosnippet>134</a>/// use aho_corasick::{
+<a href=#135 id=135 data-nosnippet>135</a>///     automaton::Automaton,
+<a href=#136 id=136 data-nosnippet>136</a>///     nfa::noncontiguous::NFA,
+<a href=#137 id=137 data-nosnippet>137</a>///     Anchored, Match, MatchError, MatchKind,
+<a href=#138 id=138 data-nosnippet>138</a>/// };
+<a href=#139 id=139 data-nosnippet>139</a>///
+<a href=#140 id=140 data-nosnippet>140</a>/// // Run an unanchored search for 'aut' in 'haystack'. Return the first match
+<a href=#141 id=141 data-nosnippet>141</a>/// // seen according to the automaton's match semantics. This returns an error
+<a href=#142 id=142 data-nosnippet>142</a>/// // if the given automaton does not support unanchored searches.
+<a href=#143 id=143 data-nosnippet>143</a>/// fn find&lt;A: Automaton&gt;(
+<a href=#144 id=144 data-nosnippet>144</a>///     aut: A,
+<a href=#145 id=145 data-nosnippet>145</a>///     haystack: &amp;[u8],
+<a href=#146 id=146 data-nosnippet>146</a>/// ) -&gt; Result&lt;Option&lt;Match&gt;, MatchError&gt; {
+<a href=#147 id=147 data-nosnippet>147</a>///     let mut sid = aut.start_state(Anchored::No)?;
+<a href=#148 id=148 data-nosnippet>148</a>///     let mut at = 0;
+<a href=#149 id=149 data-nosnippet>149</a>///     let mut mat = None;
+<a href=#150 id=150 data-nosnippet>150</a>///     let get_match = |sid, at| {
+<a href=#151 id=151 data-nosnippet>151</a>///         let pid = aut.match_pattern(sid, 0);
+<a href=#152 id=152 data-nosnippet>152</a>///         let len = aut.pattern_len(pid);
+<a href=#153 id=153 data-nosnippet>153</a>///         Match::new(pid, (at - len)..at)
+<a href=#154 id=154 data-nosnippet>154</a>///     };
+<a href=#155 id=155 data-nosnippet>155</a>///     // Start states can be match states!
+<a href=#156 id=156 data-nosnippet>156</a>///     if aut.is_match(sid) {
+<a href=#157 id=157 data-nosnippet>157</a>///         mat = Some(get_match(sid, at));
+<a href=#158 id=158 data-nosnippet>158</a>///         // Standard semantics require matches to be reported as soon as
+<a href=#159 id=159 data-nosnippet>159</a>///         // they're seen. Otherwise, we continue until we see a dead state
+<a href=#160 id=160 data-nosnippet>160</a>///         // or the end of the haystack.
+<a href=#161 id=161 data-nosnippet>161</a>///         if matches!(aut.match_kind(), MatchKind::Standard) {
+<a href=#162 id=162 data-nosnippet>162</a>///             return Ok(mat);
+<a href=#163 id=163 data-nosnippet>163</a>///         }
+<a href=#164 id=164 data-nosnippet>164</a>///     }
+<a href=#165 id=165 data-nosnippet>165</a>///     while at &lt; haystack.len() {
+<a href=#166 id=166 data-nosnippet>166</a>///         sid = aut.next_state(Anchored::No, sid, haystack[at]);
+<a href=#167 id=167 data-nosnippet>167</a>///         if aut.is_special(sid) {
+<a href=#168 id=168 data-nosnippet>168</a>///             if aut.is_dead(sid) {
+<a href=#169 id=169 data-nosnippet>169</a>///                 return Ok(mat);
+<a href=#170 id=170 data-nosnippet>170</a>///             } else if aut.is_match(sid) {
+<a href=#171 id=171 data-nosnippet>171</a>///                 mat = Some(get_match(sid, at + 1));
+<a href=#172 id=172 data-nosnippet>172</a>///                 // As above, standard semantics require that we return
+<a href=#173 id=173 data-nosnippet>173</a>///                 // immediately once a match is found.
+<a href=#174 id=174 data-nosnippet>174</a>///                 if matches!(aut.match_kind(), MatchKind::Standard) {
+<a href=#175 id=175 data-nosnippet>175</a>///                     return Ok(mat);
+<a href=#176 id=176 data-nosnippet>176</a>///                 }
+<a href=#177 id=177 data-nosnippet>177</a>///             }
+<a href=#178 id=178 data-nosnippet>178</a>///         }
+<a href=#179 id=179 data-nosnippet>179</a>///         at += 1;
+<a href=#180 id=180 data-nosnippet>180</a>///     }
+<a href=#181 id=181 data-nosnippet>181</a>///     Ok(mat)
+<a href=#182 id=182 data-nosnippet>182</a>/// }
+<a href=#183 id=183 data-nosnippet>183</a>///
+<a href=#184 id=184 data-nosnippet>184</a>/// // Show that it works for standard searches.
+<a href=#185 id=185 data-nosnippet>185</a>/// let nfa = NFA::new(&amp;["samwise", "sam"]).unwrap();
+<a href=#186 id=186 data-nosnippet>186</a>/// assert_eq!(Some(Match::must(1, 0..3)), find(&amp;nfa, b"samwise")?);
+<a href=#187 id=187 data-nosnippet>187</a>///
+<a href=#188 id=188 data-nosnippet>188</a>/// // But also works when using leftmost-first. Notice how the match result
+<a href=#189 id=189 data-nosnippet>189</a>/// // has changed!
+<a href=#190 id=190 data-nosnippet>190</a>/// let nfa = NFA::builder()
+<a href=#191 id=191 data-nosnippet>191</a>///     .match_kind(MatchKind::LeftmostFirst)
+<a href=#192 id=192 data-nosnippet>192</a>///     .build(&amp;["samwise", "sam"])
+<a href=#193 id=193 data-nosnippet>193</a>///     .unwrap();
+<a href=#194 id=194 data-nosnippet>194</a>/// assert_eq!(Some(Match::must(0, 0..7)), find(&amp;nfa, b"samwise")?);
+<a href=#195 id=195 data-nosnippet>195</a>///
+<a href=#196 id=196 data-nosnippet>196</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#197 id=197 data-nosnippet>197</a>/// ```
+<a href=#198 id=198 data-nosnippet>198</a></span><span class="kw">pub unsafe trait </span>Automaton: private::Sealed {
+<a href=#199 id=199 data-nosnippet>199</a>    <span class="doccomment">/// Returns the starting state for the given anchor mode.
+<a href=#200 id=200 data-nosnippet>200</a>    ///
+<a href=#201 id=201 data-nosnippet>201</a>    /// Upon success, the state ID returned is guaranteed to be valid for
+<a href=#202 id=202 data-nosnippet>202</a>    /// this automaton.
+<a href=#203 id=203 data-nosnippet>203</a>    ///
+<a href=#204 id=204 data-nosnippet>204</a>    /// # Errors
+<a href=#205 id=205 data-nosnippet>205</a>    ///
+<a href=#206 id=206 data-nosnippet>206</a>    /// This returns an error when the given search configuration is not
+<a href=#207 id=207 data-nosnippet>207</a>    /// supported by the underlying automaton. For example, if the underlying
+<a href=#208 id=208 data-nosnippet>208</a>    /// automaton only supports unanchored searches but the given configuration
+<a href=#209 id=209 data-nosnippet>209</a>    /// was set to an anchored search, then this must return an error.
+<a href=#210 id=210 data-nosnippet>210</a>    </span><span class="kw">fn </span>start_state(<span class="kw-2">&amp;</span><span class="self">self</span>, anchored: Anchored) -&gt; <span class="prelude-ty">Result</span>&lt;StateID, MatchError&gt;;
+<a href=#211 id=211 data-nosnippet>211</a>
+<a href=#212 id=212 data-nosnippet>212</a>    <span class="doccomment">/// Performs a state transition from `sid` for `byte` and returns the next
+<a href=#213 id=213 data-nosnippet>213</a>    /// state.
+<a href=#214 id=214 data-nosnippet>214</a>    ///
+<a href=#215 id=215 data-nosnippet>215</a>    /// `anchored` should be [`Anchored::Yes`] when executing an anchored
+<a href=#216 id=216 data-nosnippet>216</a>    /// search and [`Anchored::No`] otherwise. For some implementations of
+<a href=#217 id=217 data-nosnippet>217</a>    /// `Automaton`, it is required to know whether the search is anchored
+<a href=#218 id=218 data-nosnippet>218</a>    /// or not in order to avoid following failure transitions. Other
+<a href=#219 id=219 data-nosnippet>219</a>    /// implementations may ignore `anchored` altogether and depend on
+<a href=#220 id=220 data-nosnippet>220</a>    /// `Automaton::start_state` returning a state that walks a different path
+<a href=#221 id=221 data-nosnippet>221</a>    /// through the automaton depending on whether the search is anchored or
+<a href=#222 id=222 data-nosnippet>222</a>    /// not.
+<a href=#223 id=223 data-nosnippet>223</a>    ///
+<a href=#224 id=224 data-nosnippet>224</a>    /// # Panics
+<a href=#225 id=225 data-nosnippet>225</a>    ///
+<a href=#226 id=226 data-nosnippet>226</a>    /// This routine may panic or return incorrect results when the given state
+<a href=#227 id=227 data-nosnippet>227</a>    /// ID is invalid. A state ID is valid if and only if:
+<a href=#228 id=228 data-nosnippet>228</a>    ///
+<a href=#229 id=229 data-nosnippet>229</a>    /// 1. It came from a call to `Automaton::start_state`, or
+<a href=#230 id=230 data-nosnippet>230</a>    /// 2. It came from a previous call to `Automaton::next_state` with a
+<a href=#231 id=231 data-nosnippet>231</a>    /// valid state ID.
+<a href=#232 id=232 data-nosnippet>232</a>    ///
+<a href=#233 id=233 data-nosnippet>233</a>    /// Implementations must treat all possible values of `byte` as valid.
+<a href=#234 id=234 data-nosnippet>234</a>    ///
+<a href=#235 id=235 data-nosnippet>235</a>    /// Implementations may panic on unsupported values of `anchored`, but are
+<a href=#236 id=236 data-nosnippet>236</a>    /// not required to do so.
+<a href=#237 id=237 data-nosnippet>237</a>    </span><span class="kw">fn </span>next_state(
+<a href=#238 id=238 data-nosnippet>238</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#239 id=239 data-nosnippet>239</a>        anchored: Anchored,
+<a href=#240 id=240 data-nosnippet>240</a>        sid: StateID,
+<a href=#241 id=241 data-nosnippet>241</a>        byte: u8,
+<a href=#242 id=242 data-nosnippet>242</a>    ) -&gt; StateID;
+<a href=#243 id=243 data-nosnippet>243</a>
+<a href=#244 id=244 data-nosnippet>244</a>    <span class="doccomment">/// Returns true if the given ID represents a "special" state. A special
+<a href=#245 id=245 data-nosnippet>245</a>    /// state is a dead, match or start state.
+<a href=#246 id=246 data-nosnippet>246</a>    ///
+<a href=#247 id=247 data-nosnippet>247</a>    /// Note that implementations may choose to return false when the given ID
+<a href=#248 id=248 data-nosnippet>248</a>    /// corresponds to a start state. Namely, it always correct to treat start
+<a href=#249 id=249 data-nosnippet>249</a>    /// states as non-special. Implementations must return true for states that
+<a href=#250 id=250 data-nosnippet>250</a>    /// are dead or contain matches.
+<a href=#251 id=251 data-nosnippet>251</a>    ///
+<a href=#252 id=252 data-nosnippet>252</a>    /// This has unspecified behavior when given an invalid state ID.
+<a href=#253 id=253 data-nosnippet>253</a>    </span><span class="kw">fn </span>is_special(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool;
+<a href=#254 id=254 data-nosnippet>254</a>
+<a href=#255 id=255 data-nosnippet>255</a>    <span class="doccomment">/// Returns true if the given ID represents a dead state.
+<a href=#256 id=256 data-nosnippet>256</a>    ///
+<a href=#257 id=257 data-nosnippet>257</a>    /// A dead state is a type of "sink" in a finite state machine. It
+<a href=#258 id=258 data-nosnippet>258</a>    /// corresponds to a state whose transitions all loop back to itself. That
+<a href=#259 id=259 data-nosnippet>259</a>    /// is, once entered, it can never be left. In practice, it serves as a
+<a href=#260 id=260 data-nosnippet>260</a>    /// sentinel indicating that the search should terminate.
+<a href=#261 id=261 data-nosnippet>261</a>    ///
+<a href=#262 id=262 data-nosnippet>262</a>    /// This has unspecified behavior when given an invalid state ID.
+<a href=#263 id=263 data-nosnippet>263</a>    </span><span class="kw">fn </span>is_dead(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool;
+<a href=#264 id=264 data-nosnippet>264</a>
+<a href=#265 id=265 data-nosnippet>265</a>    <span class="doccomment">/// Returns true if the given ID represents a match state.
+<a href=#266 id=266 data-nosnippet>266</a>    ///
+<a href=#267 id=267 data-nosnippet>267</a>    /// A match state is always associated with one or more pattern IDs that
+<a href=#268 id=268 data-nosnippet>268</a>    /// matched at the position in the haystack when the match state was
+<a href=#269 id=269 data-nosnippet>269</a>    /// entered. When a match state is entered, the match semantics dictate
+<a href=#270 id=270 data-nosnippet>270</a>    /// whether it should be returned immediately (for `MatchKind::Standard`)
+<a href=#271 id=271 data-nosnippet>271</a>    /// or if the search should continue (for `MatchKind::LeftmostFirst` and
+<a href=#272 id=272 data-nosnippet>272</a>    /// `MatchKind::LeftmostLongest`) until a dead state is seen or the end of
+<a href=#273 id=273 data-nosnippet>273</a>    /// the haystack has been reached.
+<a href=#274 id=274 data-nosnippet>274</a>    ///
+<a href=#275 id=275 data-nosnippet>275</a>    /// This has unspecified behavior when given an invalid state ID.
+<a href=#276 id=276 data-nosnippet>276</a>    </span><span class="kw">fn </span>is_match(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool;
+<a href=#277 id=277 data-nosnippet>277</a>
+<a href=#278 id=278 data-nosnippet>278</a>    <span class="doccomment">/// Returns true if the given ID represents a start state.
+<a href=#279 id=279 data-nosnippet>279</a>    ///
+<a href=#280 id=280 data-nosnippet>280</a>    /// While it is never incorrect to ignore start states during a search
+<a href=#281 id=281 data-nosnippet>281</a>    /// (except for the start of the search of course), knowing whether one has
+<a href=#282 id=282 data-nosnippet>282</a>    /// entered a start state can be useful for certain classes of performance
+<a href=#283 id=283 data-nosnippet>283</a>    /// optimizations. For example, if one is in a start state, it may be legal
+<a href=#284 id=284 data-nosnippet>284</a>    /// to try to skip ahead and look for match candidates more quickly than
+<a href=#285 id=285 data-nosnippet>285</a>    /// would otherwise be accomplished by walking the automaton.
+<a href=#286 id=286 data-nosnippet>286</a>    ///
+<a href=#287 id=287 data-nosnippet>287</a>    /// Implementations of `Automaton` in this crate "unspecialize" start
+<a href=#288 id=288 data-nosnippet>288</a>    /// states when a prefilter is not active or enabled. In this case, it
+<a href=#289 id=289 data-nosnippet>289</a>    /// is possible for `Automaton::is_special(sid)` to return false while
+<a href=#290 id=290 data-nosnippet>290</a>    /// `Automaton::is_start(sid)` returns true.
+<a href=#291 id=291 data-nosnippet>291</a>    ///
+<a href=#292 id=292 data-nosnippet>292</a>    /// This has unspecified behavior when given an invalid state ID.
+<a href=#293 id=293 data-nosnippet>293</a>    </span><span class="kw">fn </span>is_start(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool;
+<a href=#294 id=294 data-nosnippet>294</a>
+<a href=#295 id=295 data-nosnippet>295</a>    <span class="doccomment">/// Returns the match semantics that this automaton was built with.
+<a href=#296 id=296 data-nosnippet>296</a>    </span><span class="kw">fn </span>match_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MatchKind;
+<a href=#297 id=297 data-nosnippet>297</a>
+<a href=#298 id=298 data-nosnippet>298</a>    <span class="doccomment">/// Returns the total number of matches for the given state ID.
+<a href=#299 id=299 data-nosnippet>299</a>    ///
+<a href=#300 id=300 data-nosnippet>300</a>    /// This has unspecified behavior if the given ID does not refer to a match
+<a href=#301 id=301 data-nosnippet>301</a>    /// state.
+<a href=#302 id=302 data-nosnippet>302</a>    </span><span class="kw">fn </span>match_len(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; usize;
+<a href=#303 id=303 data-nosnippet>303</a>
+<a href=#304 id=304 data-nosnippet>304</a>    <span class="doccomment">/// Returns the pattern ID for the match state given by `sid` at the
+<a href=#305 id=305 data-nosnippet>305</a>    /// `index` given.
+<a href=#306 id=306 data-nosnippet>306</a>    ///
+<a href=#307 id=307 data-nosnippet>307</a>    /// Typically, `index` is only ever greater than `0` when implementing an
+<a href=#308 id=308 data-nosnippet>308</a>    /// overlapping search. Otherwise, it's likely that your search only cares
+<a href=#309 id=309 data-nosnippet>309</a>    /// about reporting the first pattern ID in a match state.
+<a href=#310 id=310 data-nosnippet>310</a>    ///
+<a href=#311 id=311 data-nosnippet>311</a>    /// This has unspecified behavior if the given ID does not refer to a match
+<a href=#312 id=312 data-nosnippet>312</a>    /// state, or if the index is greater than or equal to the total number of
+<a href=#313 id=313 data-nosnippet>313</a>    /// matches in this match state.
+<a href=#314 id=314 data-nosnippet>314</a>    </span><span class="kw">fn </span>match_pattern(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID, index: usize) -&gt; PatternID;
+<a href=#315 id=315 data-nosnippet>315</a>
+<a href=#316 id=316 data-nosnippet>316</a>    <span class="doccomment">/// Returns the total number of patterns compiled into this automaton.
+<a href=#317 id=317 data-nosnippet>317</a>    </span><span class="kw">fn </span>patterns_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+<a href=#318 id=318 data-nosnippet>318</a>
+<a href=#319 id=319 data-nosnippet>319</a>    <span class="doccomment">/// Returns the length of the pattern for the given ID.
+<a href=#320 id=320 data-nosnippet>320</a>    ///
+<a href=#321 id=321 data-nosnippet>321</a>    /// This has unspecified behavior when given an invalid pattern
+<a href=#322 id=322 data-nosnippet>322</a>    /// ID. A pattern ID is valid if and only if it is less than
+<a href=#323 id=323 data-nosnippet>323</a>    /// `Automaton::patterns_len`.
+<a href=#324 id=324 data-nosnippet>324</a>    </span><span class="kw">fn </span>pattern_len(<span class="kw-2">&amp;</span><span class="self">self</span>, pid: PatternID) -&gt; usize;
+<a href=#325 id=325 data-nosnippet>325</a>
+<a href=#326 id=326 data-nosnippet>326</a>    <span class="doccomment">/// Returns the length, in bytes, of the shortest pattern in this
+<a href=#327 id=327 data-nosnippet>327</a>    /// automaton.
+<a href=#328 id=328 data-nosnippet>328</a>    </span><span class="kw">fn </span>min_pattern_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+<a href=#329 id=329 data-nosnippet>329</a>
+<a href=#330 id=330 data-nosnippet>330</a>    <span class="doccomment">/// Returns the length, in bytes, of the longest pattern in this automaton.
+<a href=#331 id=331 data-nosnippet>331</a>    </span><span class="kw">fn </span>max_pattern_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+<a href=#332 id=332 data-nosnippet>332</a>
+<a href=#333 id=333 data-nosnippet>333</a>    <span class="doccomment">/// Returns the heap memory usage, in bytes, used by this automaton.
+<a href=#334 id=334 data-nosnippet>334</a>    </span><span class="kw">fn </span>memory_usage(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+<a href=#335 id=335 data-nosnippet>335</a>
+<a href=#336 id=336 data-nosnippet>336</a>    <span class="doccomment">/// Returns a prefilter, if available, that can be used to accelerate
+<a href=#337 id=337 data-nosnippet>337</a>    /// searches for this automaton.
+<a href=#338 id=338 data-nosnippet>338</a>    ///
+<a href=#339 id=339 data-nosnippet>339</a>    /// The typical way this is used is when the start state is entered during
+<a href=#340 id=340 data-nosnippet>340</a>    /// a search. When that happens, one can use a prefilter to skip ahead and
+<a href=#341 id=341 data-nosnippet>341</a>    /// look for candidate matches without having to walk the automaton on the
+<a href=#342 id=342 data-nosnippet>342</a>    /// bytes between candidates.
+<a href=#343 id=343 data-nosnippet>343</a>    ///
+<a href=#344 id=344 data-nosnippet>344</a>    /// Typically a prefilter is only available when there are a small (&lt;100)
+<a href=#345 id=345 data-nosnippet>345</a>    /// number of patterns built into the automaton.
+<a href=#346 id=346 data-nosnippet>346</a>    </span><span class="kw">fn </span>prefilter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Prefilter&gt;;
+<a href=#347 id=347 data-nosnippet>347</a>
+<a href=#348 id=348 data-nosnippet>348</a>    <span class="doccomment">/// Executes a non-overlapping search with this automaton using the given
+<a href=#349 id=349 data-nosnippet>349</a>    /// configuration.
+<a href=#350 id=350 data-nosnippet>350</a>    ///
+<a href=#351 id=351 data-nosnippet>351</a>    /// See
+<a href=#352 id=352 data-nosnippet>352</a>    /// [`AhoCorasick::try_find`](crate::AhoCorasick::try_find)
+<a href=#353 id=353 data-nosnippet>353</a>    /// for more documentation and examples.
+<a href=#354 id=354 data-nosnippet>354</a>    </span><span class="kw">fn </span>try_find(
+<a href=#355 id=355 data-nosnippet>355</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#356 id=356 data-nosnippet>356</a>        input: <span class="kw-2">&amp;</span>Input&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#357 id=357 data-nosnippet>357</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Match&gt;, MatchError&gt; {
+<a href=#358 id=358 data-nosnippet>358</a>        try_find_fwd(<span class="kw-2">&amp;</span><span class="self">self</span>, input)
+<a href=#359 id=359 data-nosnippet>359</a>    }
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a>    <span class="doccomment">/// Executes a overlapping search with this automaton using the given
+<a href=#362 id=362 data-nosnippet>362</a>    /// configuration.
+<a href=#363 id=363 data-nosnippet>363</a>    ///
+<a href=#364 id=364 data-nosnippet>364</a>    /// See
+<a href=#365 id=365 data-nosnippet>365</a>    /// [`AhoCorasick::try_find_overlapping`](crate::AhoCorasick::try_find_overlapping)
+<a href=#366 id=366 data-nosnippet>366</a>    /// for more documentation and examples.
+<a href=#367 id=367 data-nosnippet>367</a>    </span><span class="kw">fn </span>try_find_overlapping(
+<a href=#368 id=368 data-nosnippet>368</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#369 id=369 data-nosnippet>369</a>        input: <span class="kw-2">&amp;</span>Input&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#370 id=370 data-nosnippet>370</a>        state: <span class="kw-2">&amp;mut </span>OverlappingState,
+<a href=#371 id=371 data-nosnippet>371</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), MatchError&gt; {
+<a href=#372 id=372 data-nosnippet>372</a>        try_find_overlapping_fwd(<span class="kw-2">&amp;</span><span class="self">self</span>, input, state)
+<a href=#373 id=373 data-nosnippet>373</a>    }
+<a href=#374 id=374 data-nosnippet>374</a>
+<a href=#375 id=375 data-nosnippet>375</a>    <span class="doccomment">/// Returns an iterator of non-overlapping matches with this automaton
+<a href=#376 id=376 data-nosnippet>376</a>    /// using the given configuration.
+<a href=#377 id=377 data-nosnippet>377</a>    ///
+<a href=#378 id=378 data-nosnippet>378</a>    /// See
+<a href=#379 id=379 data-nosnippet>379</a>    /// [`AhoCorasick::try_find_iter`](crate::AhoCorasick::try_find_iter)
+<a href=#380 id=380 data-nosnippet>380</a>    /// for more documentation and examples.
+<a href=#381 id=381 data-nosnippet>381</a>    </span><span class="kw">fn </span>try_find_iter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'h</span>&gt;(
+<a href=#382 id=382 data-nosnippet>382</a>        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+<a href=#383 id=383 data-nosnippet>383</a>        input: Input&lt;<span class="lifetime">'h</span>&gt;,
+<a href=#384 id=384 data-nosnippet>384</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;FindIter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'h</span>, <span class="self">Self</span>&gt;, MatchError&gt;
+<a href=#385 id=385 data-nosnippet>385</a>    <span class="kw">where
+<a href=#386 id=386 data-nosnippet>386</a>        </span><span class="self">Self</span>: Sized,
+<a href=#387 id=387 data-nosnippet>387</a>    {
+<a href=#388 id=388 data-nosnippet>388</a>        FindIter::new(<span class="self">self</span>, input)
+<a href=#389 id=389 data-nosnippet>389</a>    }
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a>    <span class="doccomment">/// Returns an iterator of overlapping matches with this automaton
+<a href=#392 id=392 data-nosnippet>392</a>    /// using the given configuration.
+<a href=#393 id=393 data-nosnippet>393</a>    ///
+<a href=#394 id=394 data-nosnippet>394</a>    /// See
+<a href=#395 id=395 data-nosnippet>395</a>    /// [`AhoCorasick::try_find_overlapping_iter`](crate::AhoCorasick::try_find_overlapping_iter)
+<a href=#396 id=396 data-nosnippet>396</a>    /// for more documentation and examples.
+<a href=#397 id=397 data-nosnippet>397</a>    </span><span class="kw">fn </span>try_find_overlapping_iter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'h</span>&gt;(
+<a href=#398 id=398 data-nosnippet>398</a>        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+<a href=#399 id=399 data-nosnippet>399</a>        input: Input&lt;<span class="lifetime">'h</span>&gt;,
+<a href=#400 id=400 data-nosnippet>400</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;FindOverlappingIter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'h</span>, <span class="self">Self</span>&gt;, MatchError&gt;
+<a href=#401 id=401 data-nosnippet>401</a>    <span class="kw">where
+<a href=#402 id=402 data-nosnippet>402</a>        </span><span class="self">Self</span>: Sized,
+<a href=#403 id=403 data-nosnippet>403</a>    {
+<a href=#404 id=404 data-nosnippet>404</a>        <span class="kw">if </span>!<span class="self">self</span>.match_kind().is_standard() {
+<a href=#405 id=405 data-nosnippet>405</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(MatchError::unsupported_overlapping(
+<a href=#406 id=406 data-nosnippet>406</a>                <span class="self">self</span>.match_kind(),
+<a href=#407 id=407 data-nosnippet>407</a>            ));
+<a href=#408 id=408 data-nosnippet>408</a>        }
+<a href=#409 id=409 data-nosnippet>409</a>        <span class="comment">//  We might consider lifting this restriction. The reason why I added
+<a href=#410 id=410 data-nosnippet>410</a>        // it was to ban the combination of "anchored search" and "overlapping
+<a href=#411 id=411 data-nosnippet>411</a>        // iteration." The match semantics aren't totally clear in that case.
+<a href=#412 id=412 data-nosnippet>412</a>        // Should we allow *any* matches that are adjacent to *any* previous
+<a href=#413 id=413 data-nosnippet>413</a>        // match? Or only following the most recent one? Or only matches
+<a href=#414 id=414 data-nosnippet>414</a>        // that start at the beginning of the search? We might also elect to
+<a href=#415 id=415 data-nosnippet>415</a>        // just keep this restriction in place, as callers should be able to
+<a href=#416 id=416 data-nosnippet>416</a>        // implement it themselves if they want to.
+<a href=#417 id=417 data-nosnippet>417</a>        </span><span class="kw">if </span>input.get_anchored().is_anchored() {
+<a href=#418 id=418 data-nosnippet>418</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(MatchError::invalid_input_anchored());
+<a href=#419 id=419 data-nosnippet>419</a>        }
+<a href=#420 id=420 data-nosnippet>420</a>        <span class="kw">let _ </span>= <span class="self">self</span>.start_state(input.get_anchored())<span class="question-mark">?</span>;
+<a href=#421 id=421 data-nosnippet>421</a>        <span class="kw">let </span>state = OverlappingState::start();
+<a href=#422 id=422 data-nosnippet>422</a>        <span class="prelude-val">Ok</span>(FindOverlappingIter { aut: <span class="self">self</span>, input, state })
+<a href=#423 id=423 data-nosnippet>423</a>    }
+<a href=#424 id=424 data-nosnippet>424</a>
+<a href=#425 id=425 data-nosnippet>425</a>    <span class="doccomment">/// Replaces all non-overlapping matches in `haystack` with
+<a href=#426 id=426 data-nosnippet>426</a>    /// strings from `replace_with` depending on the pattern that
+<a href=#427 id=427 data-nosnippet>427</a>    /// matched. The `replace_with` slice must have length equal to
+<a href=#428 id=428 data-nosnippet>428</a>    /// `Automaton::patterns_len`.
+<a href=#429 id=429 data-nosnippet>429</a>    ///
+<a href=#430 id=430 data-nosnippet>430</a>    /// See
+<a href=#431 id=431 data-nosnippet>431</a>    /// [`AhoCorasick::try_replace_all`](crate::AhoCorasick::try_replace_all)
+<a href=#432 id=432 data-nosnippet>432</a>    /// for more documentation and examples.
+<a href=#433 id=433 data-nosnippet>433</a>    </span><span class="kw">fn </span>try_replace_all&lt;B&gt;(
+<a href=#434 id=434 data-nosnippet>434</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#435 id=435 data-nosnippet>435</a>        haystack: <span class="kw-2">&amp;</span>str,
+<a href=#436 id=436 data-nosnippet>436</a>        replace_with: <span class="kw-2">&amp;</span>[B],
+<a href=#437 id=437 data-nosnippet>437</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, MatchError&gt;
+<a href=#438 id=438 data-nosnippet>438</a>    <span class="kw">where
+<a href=#439 id=439 data-nosnippet>439</a>        </span><span class="self">Self</span>: Sized,
+<a href=#440 id=440 data-nosnippet>440</a>        B: AsRef&lt;str&gt;,
+<a href=#441 id=441 data-nosnippet>441</a>    {
+<a href=#442 id=442 data-nosnippet>442</a>        <span class="macro">assert_eq!</span>(
+<a href=#443 id=443 data-nosnippet>443</a>            replace_with.len(),
+<a href=#444 id=444 data-nosnippet>444</a>            <span class="self">self</span>.patterns_len(),
+<a href=#445 id=445 data-nosnippet>445</a>            <span class="string">"replace_all requires a replacement for every pattern \
+<a href=#446 id=446 data-nosnippet>446</a>             in the automaton"
+<a href=#447 id=447 data-nosnippet>447</a>        </span>);
+<a href=#448 id=448 data-nosnippet>448</a>        <span class="kw">let </span><span class="kw-2">mut </span>dst = String::with_capacity(haystack.len());
+<a href=#449 id=449 data-nosnippet>449</a>        <span class="self">self</span>.try_replace_all_with(haystack, <span class="kw-2">&amp;mut </span>dst, |mat, <span class="kw">_</span>, dst| {
+<a href=#450 id=450 data-nosnippet>450</a>            dst.push_str(replace_with[mat.pattern()].as_ref());
+<a href=#451 id=451 data-nosnippet>451</a>            <span class="bool-val">true
+<a href=#452 id=452 data-nosnippet>452</a>        </span>})<span class="question-mark">?</span>;
+<a href=#453 id=453 data-nosnippet>453</a>        <span class="prelude-val">Ok</span>(dst)
+<a href=#454 id=454 data-nosnippet>454</a>    }
+<a href=#455 id=455 data-nosnippet>455</a>
+<a href=#456 id=456 data-nosnippet>456</a>    <span class="doccomment">/// Replaces all non-overlapping matches in `haystack` with
+<a href=#457 id=457 data-nosnippet>457</a>    /// strings from `replace_with` depending on the pattern that
+<a href=#458 id=458 data-nosnippet>458</a>    /// matched. The `replace_with` slice must have length equal to
+<a href=#459 id=459 data-nosnippet>459</a>    /// `Automaton::patterns_len`.
+<a href=#460 id=460 data-nosnippet>460</a>    ///
+<a href=#461 id=461 data-nosnippet>461</a>    /// See
+<a href=#462 id=462 data-nosnippet>462</a>    /// [`AhoCorasick::try_replace_all_bytes`](crate::AhoCorasick::try_replace_all_bytes)
+<a href=#463 id=463 data-nosnippet>463</a>    /// for more documentation and examples.
+<a href=#464 id=464 data-nosnippet>464</a>    </span><span class="kw">fn </span>try_replace_all_bytes&lt;B&gt;(
+<a href=#465 id=465 data-nosnippet>465</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#466 id=466 data-nosnippet>466</a>        haystack: <span class="kw-2">&amp;</span>[u8],
+<a href=#467 id=467 data-nosnippet>467</a>        replace_with: <span class="kw-2">&amp;</span>[B],
+<a href=#468 id=468 data-nosnippet>468</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, MatchError&gt;
+<a href=#469 id=469 data-nosnippet>469</a>    <span class="kw">where
+<a href=#470 id=470 data-nosnippet>470</a>        </span><span class="self">Self</span>: Sized,
+<a href=#471 id=471 data-nosnippet>471</a>        B: AsRef&lt;[u8]&gt;,
+<a href=#472 id=472 data-nosnippet>472</a>    {
+<a href=#473 id=473 data-nosnippet>473</a>        <span class="macro">assert_eq!</span>(
+<a href=#474 id=474 data-nosnippet>474</a>            replace_with.len(),
+<a href=#475 id=475 data-nosnippet>475</a>            <span class="self">self</span>.patterns_len(),
+<a href=#476 id=476 data-nosnippet>476</a>            <span class="string">"replace_all requires a replacement for every pattern \
+<a href=#477 id=477 data-nosnippet>477</a>             in the automaton"
+<a href=#478 id=478 data-nosnippet>478</a>        </span>);
+<a href=#479 id=479 data-nosnippet>479</a>        <span class="kw">let </span><span class="kw-2">mut </span>dst = Vec::with_capacity(haystack.len());
+<a href=#480 id=480 data-nosnippet>480</a>        <span class="self">self</span>.try_replace_all_with_bytes(haystack, <span class="kw-2">&amp;mut </span>dst, |mat, <span class="kw">_</span>, dst| {
+<a href=#481 id=481 data-nosnippet>481</a>            dst.extend(replace_with[mat.pattern()].as_ref());
+<a href=#482 id=482 data-nosnippet>482</a>            <span class="bool-val">true
+<a href=#483 id=483 data-nosnippet>483</a>        </span>})<span class="question-mark">?</span>;
+<a href=#484 id=484 data-nosnippet>484</a>        <span class="prelude-val">Ok</span>(dst)
+<a href=#485 id=485 data-nosnippet>485</a>    }
+<a href=#486 id=486 data-nosnippet>486</a>
+<a href=#487 id=487 data-nosnippet>487</a>    <span class="doccomment">/// Replaces all non-overlapping matches in `haystack` by calling the
+<a href=#488 id=488 data-nosnippet>488</a>    /// `replace_with` closure given.
+<a href=#489 id=489 data-nosnippet>489</a>    ///
+<a href=#490 id=490 data-nosnippet>490</a>    /// See
+<a href=#491 id=491 data-nosnippet>491</a>    /// [`AhoCorasick::try_replace_all_with`](crate::AhoCorasick::try_replace_all_with)
+<a href=#492 id=492 data-nosnippet>492</a>    /// for more documentation and examples.
+<a href=#493 id=493 data-nosnippet>493</a>    </span><span class="kw">fn </span>try_replace_all_with&lt;F&gt;(
+<a href=#494 id=494 data-nosnippet>494</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#495 id=495 data-nosnippet>495</a>        haystack: <span class="kw-2">&amp;</span>str,
+<a href=#496 id=496 data-nosnippet>496</a>        dst: <span class="kw-2">&amp;mut </span>String,
+<a href=#497 id=497 data-nosnippet>497</a>        <span class="kw-2">mut </span>replace_with: F,
+<a href=#498 id=498 data-nosnippet>498</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), MatchError&gt;
+<a href=#499 id=499 data-nosnippet>499</a>    <span class="kw">where
+<a href=#500 id=500 data-nosnippet>500</a>        </span><span class="self">Self</span>: Sized,
+<a href=#501 id=501 data-nosnippet>501</a>        F: FnMut(<span class="kw-2">&amp;</span>Match, <span class="kw-2">&amp;</span>str, <span class="kw-2">&amp;mut </span>String) -&gt; bool,
+<a href=#502 id=502 data-nosnippet>502</a>    {
+<a href=#503 id=503 data-nosnippet>503</a>        <span class="kw">let </span><span class="kw-2">mut </span>last_match = <span class="number">0</span>;
+<a href=#504 id=504 data-nosnippet>504</a>        <span class="kw">for </span>m <span class="kw">in </span><span class="self">self</span>.try_find_iter(Input::new(haystack))<span class="question-mark">? </span>{
+<a href=#505 id=505 data-nosnippet>505</a>            <span class="comment">// Since there are no restrictions on what kinds of patterns are
+<a href=#506 id=506 data-nosnippet>506</a>            // in an Aho-Corasick automaton, we might get matches that split
+<a href=#507 id=507 data-nosnippet>507</a>            // a codepoint, or even matches of a partial codepoint. When that
+<a href=#508 id=508 data-nosnippet>508</a>            // happens, we just skip the match.
+<a href=#509 id=509 data-nosnippet>509</a>            </span><span class="kw">if </span>!haystack.is_char_boundary(m.start())
+<a href=#510 id=510 data-nosnippet>510</a>                || !haystack.is_char_boundary(m.end())
+<a href=#511 id=511 data-nosnippet>511</a>            {
+<a href=#512 id=512 data-nosnippet>512</a>                <span class="kw">continue</span>;
+<a href=#513 id=513 data-nosnippet>513</a>            }
+<a href=#514 id=514 data-nosnippet>514</a>            dst.push_str(<span class="kw-2">&amp;</span>haystack[last_match..m.start()]);
+<a href=#515 id=515 data-nosnippet>515</a>            last_match = m.end();
+<a href=#516 id=516 data-nosnippet>516</a>            <span class="kw">if </span>!replace_with(<span class="kw-2">&amp;</span>m, <span class="kw-2">&amp;</span>haystack[m.start()..m.end()], dst) {
+<a href=#517 id=517 data-nosnippet>517</a>                <span class="kw">break</span>;
+<a href=#518 id=518 data-nosnippet>518</a>            };
+<a href=#519 id=519 data-nosnippet>519</a>        }
+<a href=#520 id=520 data-nosnippet>520</a>        dst.push_str(<span class="kw-2">&amp;</span>haystack[last_match..]);
+<a href=#521 id=521 data-nosnippet>521</a>        <span class="prelude-val">Ok</span>(())
+<a href=#522 id=522 data-nosnippet>522</a>    }
+<a href=#523 id=523 data-nosnippet>523</a>
+<a href=#524 id=524 data-nosnippet>524</a>    <span class="doccomment">/// Replaces all non-overlapping matches in `haystack` by calling the
+<a href=#525 id=525 data-nosnippet>525</a>    /// `replace_with` closure given.
+<a href=#526 id=526 data-nosnippet>526</a>    ///
+<a href=#527 id=527 data-nosnippet>527</a>    /// See
+<a href=#528 id=528 data-nosnippet>528</a>    /// [`AhoCorasick::try_replace_all_with_bytes`](crate::AhoCorasick::try_replace_all_with_bytes)
+<a href=#529 id=529 data-nosnippet>529</a>    /// for more documentation and examples.
+<a href=#530 id=530 data-nosnippet>530</a>    </span><span class="kw">fn </span>try_replace_all_with_bytes&lt;F&gt;(
+<a href=#531 id=531 data-nosnippet>531</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#532 id=532 data-nosnippet>532</a>        haystack: <span class="kw-2">&amp;</span>[u8],
+<a href=#533 id=533 data-nosnippet>533</a>        dst: <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;,
+<a href=#534 id=534 data-nosnippet>534</a>        <span class="kw-2">mut </span>replace_with: F,
+<a href=#535 id=535 data-nosnippet>535</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), MatchError&gt;
+<a href=#536 id=536 data-nosnippet>536</a>    <span class="kw">where
+<a href=#537 id=537 data-nosnippet>537</a>        </span><span class="self">Self</span>: Sized,
+<a href=#538 id=538 data-nosnippet>538</a>        F: FnMut(<span class="kw-2">&amp;</span>Match, <span class="kw-2">&amp;</span>[u8], <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;) -&gt; bool,
+<a href=#539 id=539 data-nosnippet>539</a>    {
+<a href=#540 id=540 data-nosnippet>540</a>        <span class="kw">let </span><span class="kw-2">mut </span>last_match = <span class="number">0</span>;
+<a href=#541 id=541 data-nosnippet>541</a>        <span class="kw">for </span>m <span class="kw">in </span><span class="self">self</span>.try_find_iter(Input::new(haystack))<span class="question-mark">? </span>{
+<a href=#542 id=542 data-nosnippet>542</a>            dst.extend(<span class="kw-2">&amp;</span>haystack[last_match..m.start()]);
+<a href=#543 id=543 data-nosnippet>543</a>            last_match = m.end();
+<a href=#544 id=544 data-nosnippet>544</a>            <span class="kw">if </span>!replace_with(<span class="kw-2">&amp;</span>m, <span class="kw-2">&amp;</span>haystack[m.start()..m.end()], dst) {
+<a href=#545 id=545 data-nosnippet>545</a>                <span class="kw">break</span>;
+<a href=#546 id=546 data-nosnippet>546</a>            };
+<a href=#547 id=547 data-nosnippet>547</a>        }
+<a href=#548 id=548 data-nosnippet>548</a>        dst.extend(<span class="kw-2">&amp;</span>haystack[last_match..]);
+<a href=#549 id=549 data-nosnippet>549</a>        <span class="prelude-val">Ok</span>(())
+<a href=#550 id=550 data-nosnippet>550</a>    }
+<a href=#551 id=551 data-nosnippet>551</a>
+<a href=#552 id=552 data-nosnippet>552</a>    <span class="doccomment">/// Returns an iterator of non-overlapping matches with this automaton
+<a href=#553 id=553 data-nosnippet>553</a>    /// from the stream given.
+<a href=#554 id=554 data-nosnippet>554</a>    ///
+<a href=#555 id=555 data-nosnippet>555</a>    /// See
+<a href=#556 id=556 data-nosnippet>556</a>    /// [`AhoCorasick::try_stream_find_iter`](crate::AhoCorasick::try_stream_find_iter)
+<a href=#557 id=557 data-nosnippet>557</a>    /// for more documentation and examples.
+<a href=#558 id=558 data-nosnippet>558</a>    </span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#559 id=559 data-nosnippet>559</a>    </span><span class="kw">fn </span>try_stream_find_iter&lt;<span class="lifetime">'a</span>, R: std::io::Read&gt;(
+<a href=#560 id=560 data-nosnippet>560</a>        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+<a href=#561 id=561 data-nosnippet>561</a>        rdr: R,
+<a href=#562 id=562 data-nosnippet>562</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;StreamFindIter&lt;<span class="lifetime">'a</span>, <span class="self">Self</span>, R&gt;, MatchError&gt;
+<a href=#563 id=563 data-nosnippet>563</a>    <span class="kw">where
+<a href=#564 id=564 data-nosnippet>564</a>        </span><span class="self">Self</span>: Sized,
+<a href=#565 id=565 data-nosnippet>565</a>    {
+<a href=#566 id=566 data-nosnippet>566</a>        <span class="prelude-val">Ok</span>(StreamFindIter { it: StreamChunkIter::new(<span class="self">self</span>, rdr)<span class="question-mark">? </span>})
+<a href=#567 id=567 data-nosnippet>567</a>    }
+<a href=#568 id=568 data-nosnippet>568</a>
+<a href=#569 id=569 data-nosnippet>569</a>    <span class="doccomment">/// Replaces all non-overlapping matches in `rdr` with strings from
+<a href=#570 id=570 data-nosnippet>570</a>    /// `replace_with` depending on the pattern that matched, and writes the
+<a href=#571 id=571 data-nosnippet>571</a>    /// result to `wtr`. The `replace_with` slice must have length equal to
+<a href=#572 id=572 data-nosnippet>572</a>    /// `Automaton::patterns_len`.
+<a href=#573 id=573 data-nosnippet>573</a>    ///
+<a href=#574 id=574 data-nosnippet>574</a>    /// See
+<a href=#575 id=575 data-nosnippet>575</a>    /// [`AhoCorasick::try_stream_replace_all`](crate::AhoCorasick::try_stream_replace_all)
+<a href=#576 id=576 data-nosnippet>576</a>    /// for more documentation and examples.
+<a href=#577 id=577 data-nosnippet>577</a>    </span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#578 id=578 data-nosnippet>578</a>    </span><span class="kw">fn </span>try_stream_replace_all&lt;R, W, B&gt;(
+<a href=#579 id=579 data-nosnippet>579</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#580 id=580 data-nosnippet>580</a>        rdr: R,
+<a href=#581 id=581 data-nosnippet>581</a>        wtr: W,
+<a href=#582 id=582 data-nosnippet>582</a>        replace_with: <span class="kw-2">&amp;</span>[B],
+<a href=#583 id=583 data-nosnippet>583</a>    ) -&gt; std::io::Result&lt;()&gt;
+<a href=#584 id=584 data-nosnippet>584</a>    <span class="kw">where
+<a href=#585 id=585 data-nosnippet>585</a>        </span><span class="self">Self</span>: Sized,
+<a href=#586 id=586 data-nosnippet>586</a>        R: std::io::Read,
+<a href=#587 id=587 data-nosnippet>587</a>        W: std::io::Write,
+<a href=#588 id=588 data-nosnippet>588</a>        B: AsRef&lt;[u8]&gt;,
+<a href=#589 id=589 data-nosnippet>589</a>    {
+<a href=#590 id=590 data-nosnippet>590</a>        <span class="macro">assert_eq!</span>(
+<a href=#591 id=591 data-nosnippet>591</a>            replace_with.len(),
+<a href=#592 id=592 data-nosnippet>592</a>            <span class="self">self</span>.patterns_len(),
+<a href=#593 id=593 data-nosnippet>593</a>            <span class="string">"streaming replace_all requires a replacement for every pattern \
+<a href=#594 id=594 data-nosnippet>594</a>             in the automaton"</span>,
+<a href=#595 id=595 data-nosnippet>595</a>        );
+<a href=#596 id=596 data-nosnippet>596</a>        <span class="self">self</span>.try_stream_replace_all_with(rdr, wtr, |mat, <span class="kw">_</span>, wtr| {
+<a href=#597 id=597 data-nosnippet>597</a>            wtr.write_all(replace_with[mat.pattern()].as_ref())
+<a href=#598 id=598 data-nosnippet>598</a>        })
+<a href=#599 id=599 data-nosnippet>599</a>    }
+<a href=#600 id=600 data-nosnippet>600</a>
+<a href=#601 id=601 data-nosnippet>601</a>    <span class="doccomment">/// Replaces all non-overlapping matches in `rdr` by calling the
+<a href=#602 id=602 data-nosnippet>602</a>    /// `replace_with` closure given and writing the result to `wtr`.
+<a href=#603 id=603 data-nosnippet>603</a>    ///
+<a href=#604 id=604 data-nosnippet>604</a>    /// See
+<a href=#605 id=605 data-nosnippet>605</a>    /// [`AhoCorasick::try_stream_replace_all_with`](crate::AhoCorasick::try_stream_replace_all_with)
+<a href=#606 id=606 data-nosnippet>606</a>    /// for more documentation and examples.
+<a href=#607 id=607 data-nosnippet>607</a>    </span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#608 id=608 data-nosnippet>608</a>    </span><span class="kw">fn </span>try_stream_replace_all_with&lt;R, W, F&gt;(
+<a href=#609 id=609 data-nosnippet>609</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#610 id=610 data-nosnippet>610</a>        rdr: R,
+<a href=#611 id=611 data-nosnippet>611</a>        <span class="kw-2">mut </span>wtr: W,
+<a href=#612 id=612 data-nosnippet>612</a>        <span class="kw-2">mut </span>replace_with: F,
+<a href=#613 id=613 data-nosnippet>613</a>    ) -&gt; std::io::Result&lt;()&gt;
+<a href=#614 id=614 data-nosnippet>614</a>    <span class="kw">where
+<a href=#615 id=615 data-nosnippet>615</a>        </span><span class="self">Self</span>: Sized,
+<a href=#616 id=616 data-nosnippet>616</a>        R: std::io::Read,
+<a href=#617 id=617 data-nosnippet>617</a>        W: std::io::Write,
+<a href=#618 id=618 data-nosnippet>618</a>        F: FnMut(<span class="kw-2">&amp;</span>Match, <span class="kw-2">&amp;</span>[u8], <span class="kw-2">&amp;mut </span>W) -&gt; std::io::Result&lt;()&gt;,
+<a href=#619 id=619 data-nosnippet>619</a>    {
+<a href=#620 id=620 data-nosnippet>620</a>        <span class="kw">let </span><span class="kw-2">mut </span>it = StreamChunkIter::new(<span class="self">self</span>, rdr).map_err(|e| {
+<a href=#621 id=621 data-nosnippet>621</a>            <span class="kw">let </span>kind = std::io::ErrorKind::Other;
+<a href=#622 id=622 data-nosnippet>622</a>            std::io::Error::new(kind, e)
+<a href=#623 id=623 data-nosnippet>623</a>        })<span class="question-mark">?</span>;
+<a href=#624 id=624 data-nosnippet>624</a>        <span class="kw">while let </span><span class="prelude-val">Some</span>(result) = it.next() {
+<a href=#625 id=625 data-nosnippet>625</a>            <span class="kw">let </span>chunk = result<span class="question-mark">?</span>;
+<a href=#626 id=626 data-nosnippet>626</a>            <span class="kw">match </span>chunk {
+<a href=#627 id=627 data-nosnippet>627</a>                StreamChunk::NonMatch { bytes, .. } =&gt; {
+<a href=#628 id=628 data-nosnippet>628</a>                    wtr.write_all(bytes)<span class="question-mark">?</span>;
+<a href=#629 id=629 data-nosnippet>629</a>                }
+<a href=#630 id=630 data-nosnippet>630</a>                StreamChunk::Match { bytes, mat } =&gt; {
+<a href=#631 id=631 data-nosnippet>631</a>                    replace_with(<span class="kw-2">&amp;</span>mat, bytes, <span class="kw-2">&amp;mut </span>wtr)<span class="question-mark">?</span>;
+<a href=#632 id=632 data-nosnippet>632</a>                }
+<a href=#633 id=633 data-nosnippet>633</a>            }
+<a href=#634 id=634 data-nosnippet>634</a>        }
+<a href=#635 id=635 data-nosnippet>635</a>        <span class="prelude-val">Ok</span>(())
+<a href=#636 id=636 data-nosnippet>636</a>    }
+<a href=#637 id=637 data-nosnippet>637</a>}
+<a href=#638 id=638 data-nosnippet>638</a>
+<a href=#639 id=639 data-nosnippet>639</a><span class="comment">// SAFETY: This just defers to the underlying 'AcAutomaton' and thus inherits
+<a href=#640 id=640 data-nosnippet>640</a>// its safety properties.
+<a href=#641 id=641 data-nosnippet>641</a></span><span class="kw">unsafe impl</span>&lt;<span class="lifetime">'a</span>, A: Automaton + <span class="question-mark">?</span>Sized&gt; Automaton <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">'a </span>A {
+<a href=#642 id=642 data-nosnippet>642</a>    <span class="attr">#[inline(always)]
+<a href=#643 id=643 data-nosnippet>643</a>    </span><span class="kw">fn </span>start_state(<span class="kw-2">&amp;</span><span class="self">self</span>, anchored: Anchored) -&gt; <span class="prelude-ty">Result</span>&lt;StateID, MatchError&gt; {
+<a href=#644 id=644 data-nosnippet>644</a>        (<span class="kw-2">**</span><span class="self">self</span>).start_state(anchored)
+<a href=#645 id=645 data-nosnippet>645</a>    }
+<a href=#646 id=646 data-nosnippet>646</a>
+<a href=#647 id=647 data-nosnippet>647</a>    <span class="attr">#[inline(always)]
+<a href=#648 id=648 data-nosnippet>648</a>    </span><span class="kw">fn </span>next_state(
+<a href=#649 id=649 data-nosnippet>649</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#650 id=650 data-nosnippet>650</a>        anchored: Anchored,
+<a href=#651 id=651 data-nosnippet>651</a>        sid: StateID,
+<a href=#652 id=652 data-nosnippet>652</a>        byte: u8,
+<a href=#653 id=653 data-nosnippet>653</a>    ) -&gt; StateID {
+<a href=#654 id=654 data-nosnippet>654</a>        (<span class="kw-2">**</span><span class="self">self</span>).next_state(anchored, sid, byte)
+<a href=#655 id=655 data-nosnippet>655</a>    }
+<a href=#656 id=656 data-nosnippet>656</a>
+<a href=#657 id=657 data-nosnippet>657</a>    <span class="attr">#[inline(always)]
+<a href=#658 id=658 data-nosnippet>658</a>    </span><span class="kw">fn </span>is_special(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool {
+<a href=#659 id=659 data-nosnippet>659</a>        (<span class="kw-2">**</span><span class="self">self</span>).is_special(sid)
+<a href=#660 id=660 data-nosnippet>660</a>    }
+<a href=#661 id=661 data-nosnippet>661</a>
+<a href=#662 id=662 data-nosnippet>662</a>    <span class="attr">#[inline(always)]
+<a href=#663 id=663 data-nosnippet>663</a>    </span><span class="kw">fn </span>is_dead(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool {
+<a href=#664 id=664 data-nosnippet>664</a>        (<span class="kw-2">**</span><span class="self">self</span>).is_dead(sid)
+<a href=#665 id=665 data-nosnippet>665</a>    }
+<a href=#666 id=666 data-nosnippet>666</a>
+<a href=#667 id=667 data-nosnippet>667</a>    <span class="attr">#[inline(always)]
+<a href=#668 id=668 data-nosnippet>668</a>    </span><span class="kw">fn </span>is_match(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool {
+<a href=#669 id=669 data-nosnippet>669</a>        (<span class="kw-2">**</span><span class="self">self</span>).is_match(sid)
+<a href=#670 id=670 data-nosnippet>670</a>    }
+<a href=#671 id=671 data-nosnippet>671</a>
+<a href=#672 id=672 data-nosnippet>672</a>    <span class="attr">#[inline(always)]
+<a href=#673 id=673 data-nosnippet>673</a>    </span><span class="kw">fn </span>is_start(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool {
+<a href=#674 id=674 data-nosnippet>674</a>        (<span class="kw-2">**</span><span class="self">self</span>).is_start(sid)
+<a href=#675 id=675 data-nosnippet>675</a>    }
+<a href=#676 id=676 data-nosnippet>676</a>
+<a href=#677 id=677 data-nosnippet>677</a>    <span class="attr">#[inline(always)]
+<a href=#678 id=678 data-nosnippet>678</a>    </span><span class="kw">fn </span>match_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MatchKind {
+<a href=#679 id=679 data-nosnippet>679</a>        (<span class="kw-2">**</span><span class="self">self</span>).match_kind()
+<a href=#680 id=680 data-nosnippet>680</a>    }
+<a href=#681 id=681 data-nosnippet>681</a>
+<a href=#682 id=682 data-nosnippet>682</a>    <span class="attr">#[inline(always)]
+<a href=#683 id=683 data-nosnippet>683</a>    </span><span class="kw">fn </span>match_len(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; usize {
+<a href=#684 id=684 data-nosnippet>684</a>        (<span class="kw-2">**</span><span class="self">self</span>).match_len(sid)
+<a href=#685 id=685 data-nosnippet>685</a>    }
+<a href=#686 id=686 data-nosnippet>686</a>
+<a href=#687 id=687 data-nosnippet>687</a>    <span class="attr">#[inline(always)]
+<a href=#688 id=688 data-nosnippet>688</a>    </span><span class="kw">fn </span>match_pattern(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID, index: usize) -&gt; PatternID {
+<a href=#689 id=689 data-nosnippet>689</a>        (<span class="kw-2">**</span><span class="self">self</span>).match_pattern(sid, index)
+<a href=#690 id=690 data-nosnippet>690</a>    }
+<a href=#691 id=691 data-nosnippet>691</a>
+<a href=#692 id=692 data-nosnippet>692</a>    <span class="attr">#[inline(always)]
+<a href=#693 id=693 data-nosnippet>693</a>    </span><span class="kw">fn </span>patterns_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#694 id=694 data-nosnippet>694</a>        (<span class="kw-2">**</span><span class="self">self</span>).patterns_len()
+<a href=#695 id=695 data-nosnippet>695</a>    }
+<a href=#696 id=696 data-nosnippet>696</a>
+<a href=#697 id=697 data-nosnippet>697</a>    <span class="attr">#[inline(always)]
+<a href=#698 id=698 data-nosnippet>698</a>    </span><span class="kw">fn </span>pattern_len(<span class="kw-2">&amp;</span><span class="self">self</span>, pid: PatternID) -&gt; usize {
+<a href=#699 id=699 data-nosnippet>699</a>        (<span class="kw-2">**</span><span class="self">self</span>).pattern_len(pid)
+<a href=#700 id=700 data-nosnippet>700</a>    }
+<a href=#701 id=701 data-nosnippet>701</a>
+<a href=#702 id=702 data-nosnippet>702</a>    <span class="attr">#[inline(always)]
+<a href=#703 id=703 data-nosnippet>703</a>    </span><span class="kw">fn </span>min_pattern_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#704 id=704 data-nosnippet>704</a>        (<span class="kw-2">**</span><span class="self">self</span>).min_pattern_len()
+<a href=#705 id=705 data-nosnippet>705</a>    }
+<a href=#706 id=706 data-nosnippet>706</a>
+<a href=#707 id=707 data-nosnippet>707</a>    <span class="attr">#[inline(always)]
+<a href=#708 id=708 data-nosnippet>708</a>    </span><span class="kw">fn </span>max_pattern_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#709 id=709 data-nosnippet>709</a>        (<span class="kw-2">**</span><span class="self">self</span>).max_pattern_len()
+<a href=#710 id=710 data-nosnippet>710</a>    }
+<a href=#711 id=711 data-nosnippet>711</a>
+<a href=#712 id=712 data-nosnippet>712</a>    <span class="attr">#[inline(always)]
+<a href=#713 id=713 data-nosnippet>713</a>    </span><span class="kw">fn </span>memory_usage(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#714 id=714 data-nosnippet>714</a>        (<span class="kw-2">**</span><span class="self">self</span>).memory_usage()
+<a href=#715 id=715 data-nosnippet>715</a>    }
+<a href=#716 id=716 data-nosnippet>716</a>
+<a href=#717 id=717 data-nosnippet>717</a>    <span class="attr">#[inline(always)]
+<a href=#718 id=718 data-nosnippet>718</a>    </span><span class="kw">fn </span>prefilter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Prefilter&gt; {
+<a href=#719 id=719 data-nosnippet>719</a>        (<span class="kw-2">**</span><span class="self">self</span>).prefilter()
+<a href=#720 id=720 data-nosnippet>720</a>    }
+<a href=#721 id=721 data-nosnippet>721</a>}
+<a href=#722 id=722 data-nosnippet>722</a>
+<a href=#723 id=723 data-nosnippet>723</a><span class="doccomment">/// Represents the current state of an overlapping search.
+<a href=#724 id=724 data-nosnippet>724</a>///
+<a href=#725 id=725 data-nosnippet>725</a>/// This is used for overlapping searches since they need to know something
+<a href=#726 id=726 data-nosnippet>726</a>/// about the previous search. For example, when multiple patterns match at the
+<a href=#727 id=727 data-nosnippet>727</a>/// same position, this state tracks the last reported pattern so that the next
+<a href=#728 id=728 data-nosnippet>728</a>/// search knows whether to report another matching pattern or continue with
+<a href=#729 id=729 data-nosnippet>729</a>/// the search at the next position. Additionally, it also tracks which state
+<a href=#730 id=730 data-nosnippet>730</a>/// the last search call terminated in and the current offset of the search
+<a href=#731 id=731 data-nosnippet>731</a>/// in the haystack.
+<a href=#732 id=732 data-nosnippet>732</a>///
+<a href=#733 id=733 data-nosnippet>733</a>/// This type provides limited introspection capabilities. The only thing a
+<a href=#734 id=734 data-nosnippet>734</a>/// caller can do is construct it and pass it around to permit search routines
+<a href=#735 id=735 data-nosnippet>735</a>/// to use it to track state, and to ask whether a match has been found.
+<a href=#736 id=736 data-nosnippet>736</a>///
+<a href=#737 id=737 data-nosnippet>737</a>/// Callers should always provide a fresh state constructed via
+<a href=#738 id=738 data-nosnippet>738</a>/// [`OverlappingState::start`] when starting a new search. That same state
+<a href=#739 id=739 data-nosnippet>739</a>/// should be reused for subsequent searches on the same `Input`. The state
+<a href=#740 id=740 data-nosnippet>740</a>/// given will advance through the haystack itself. Callers can detect the end
+<a href=#741 id=741 data-nosnippet>741</a>/// of a search when neither an error nor a match is returned.
+<a href=#742 id=742 data-nosnippet>742</a>///
+<a href=#743 id=743 data-nosnippet>743</a>/// # Example
+<a href=#744 id=744 data-nosnippet>744</a>///
+<a href=#745 id=745 data-nosnippet>745</a>/// This example shows how to manually iterate over all overlapping matches. If
+<a href=#746 id=746 data-nosnippet>746</a>/// you need this, you might consider using
+<a href=#747 id=747 data-nosnippet>747</a>/// [`AhoCorasick::find_overlapping_iter`](crate::AhoCorasick::find_overlapping_iter)
+<a href=#748 id=748 data-nosnippet>748</a>/// instead, but this shows how to correctly use an `OverlappingState`.
+<a href=#749 id=749 data-nosnippet>749</a>///
+<a href=#750 id=750 data-nosnippet>750</a>/// ```
+<a href=#751 id=751 data-nosnippet>751</a>/// use aho_corasick::{
+<a href=#752 id=752 data-nosnippet>752</a>///     automaton::OverlappingState,
+<a href=#753 id=753 data-nosnippet>753</a>///     AhoCorasick, Input, Match,
+<a href=#754 id=754 data-nosnippet>754</a>/// };
+<a href=#755 id=755 data-nosnippet>755</a>///
+<a href=#756 id=756 data-nosnippet>756</a>/// let patterns = &amp;["append", "appendage", "app"];
+<a href=#757 id=757 data-nosnippet>757</a>/// let haystack = "append the app to the appendage";
+<a href=#758 id=758 data-nosnippet>758</a>///
+<a href=#759 id=759 data-nosnippet>759</a>/// let ac = AhoCorasick::new(patterns).unwrap();
+<a href=#760 id=760 data-nosnippet>760</a>/// let mut state = OverlappingState::start();
+<a href=#761 id=761 data-nosnippet>761</a>/// let mut matches = vec![];
+<a href=#762 id=762 data-nosnippet>762</a>///
+<a href=#763 id=763 data-nosnippet>763</a>/// loop {
+<a href=#764 id=764 data-nosnippet>764</a>///     ac.find_overlapping(haystack, &amp;mut state);
+<a href=#765 id=765 data-nosnippet>765</a>///     let mat = match state.get_match() {
+<a href=#766 id=766 data-nosnippet>766</a>///         None =&gt; break,
+<a href=#767 id=767 data-nosnippet>767</a>///         Some(mat) =&gt; mat,
+<a href=#768 id=768 data-nosnippet>768</a>///     };
+<a href=#769 id=769 data-nosnippet>769</a>///     matches.push(mat);
+<a href=#770 id=770 data-nosnippet>770</a>/// }
+<a href=#771 id=771 data-nosnippet>771</a>/// let expected = vec![
+<a href=#772 id=772 data-nosnippet>772</a>///     Match::must(2, 0..3),
+<a href=#773 id=773 data-nosnippet>773</a>///     Match::must(0, 0..6),
+<a href=#774 id=774 data-nosnippet>774</a>///     Match::must(2, 11..14),
+<a href=#775 id=775 data-nosnippet>775</a>///     Match::must(2, 22..25),
+<a href=#776 id=776 data-nosnippet>776</a>///     Match::must(0, 22..28),
+<a href=#777 id=777 data-nosnippet>777</a>///     Match::must(1, 22..31),
+<a href=#778 id=778 data-nosnippet>778</a>/// ];
+<a href=#779 id=779 data-nosnippet>779</a>/// assert_eq!(expected, matches);
+<a href=#780 id=780 data-nosnippet>780</a>/// ```
+<a href=#781 id=781 data-nosnippet>781</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#782 id=782 data-nosnippet>782</a></span><span class="kw">pub struct </span>OverlappingState {
+<a href=#783 id=783 data-nosnippet>783</a>    <span class="doccomment">/// The match reported by the most recent overlapping search to use this
+<a href=#784 id=784 data-nosnippet>784</a>    /// state.
+<a href=#785 id=785 data-nosnippet>785</a>    ///
+<a href=#786 id=786 data-nosnippet>786</a>    /// If a search does not find any matches, then it is expected to clear
+<a href=#787 id=787 data-nosnippet>787</a>    /// this value.
+<a href=#788 id=788 data-nosnippet>788</a>    </span>mat: <span class="prelude-ty">Option</span>&lt;Match&gt;,
+<a href=#789 id=789 data-nosnippet>789</a>    <span class="doccomment">/// The state ID of the state at which the search was in when the call
+<a href=#790 id=790 data-nosnippet>790</a>    /// terminated. When this is a match state, `last_match` must be set to a
+<a href=#791 id=791 data-nosnippet>791</a>    /// non-None value.
+<a href=#792 id=792 data-nosnippet>792</a>    ///
+<a href=#793 id=793 data-nosnippet>793</a>    /// A `None` value indicates the start state of the corresponding
+<a href=#794 id=794 data-nosnippet>794</a>    /// automaton. We cannot use the actual ID, since any one automaton may
+<a href=#795 id=795 data-nosnippet>795</a>    /// have many start states, and which one is in use depends on search-time
+<a href=#796 id=796 data-nosnippet>796</a>    /// factors (such as whether the search is anchored or not).
+<a href=#797 id=797 data-nosnippet>797</a>    </span>id: <span class="prelude-ty">Option</span>&lt;StateID&gt;,
+<a href=#798 id=798 data-nosnippet>798</a>    <span class="doccomment">/// The position of the search.
+<a href=#799 id=799 data-nosnippet>799</a>    ///
+<a href=#800 id=800 data-nosnippet>800</a>    /// When `id` is None (i.e., we are starting a search), this is set to
+<a href=#801 id=801 data-nosnippet>801</a>    /// the beginning of the search as given by the caller regardless of its
+<a href=#802 id=802 data-nosnippet>802</a>    /// current value. Subsequent calls to an overlapping search pick up at
+<a href=#803 id=803 data-nosnippet>803</a>    /// this offset.
+<a href=#804 id=804 data-nosnippet>804</a>    </span>at: usize,
+<a href=#805 id=805 data-nosnippet>805</a>    <span class="doccomment">/// The index into the matching patterns of the next match to report if the
+<a href=#806 id=806 data-nosnippet>806</a>    /// current state is a match state. Note that this may be 1 greater than
+<a href=#807 id=807 data-nosnippet>807</a>    /// the total number of matches to report for the current match state. (In
+<a href=#808 id=808 data-nosnippet>808</a>    /// which case, no more matches should be reported at the current position
+<a href=#809 id=809 data-nosnippet>809</a>    /// and the search should advance to the next position.)
+<a href=#810 id=810 data-nosnippet>810</a>    </span>next_match_index: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+<a href=#811 id=811 data-nosnippet>811</a>}
+<a href=#812 id=812 data-nosnippet>812</a>
+<a href=#813 id=813 data-nosnippet>813</a><span class="kw">impl </span>OverlappingState {
+<a href=#814 id=814 data-nosnippet>814</a>    <span class="doccomment">/// Create a new overlapping state that begins at the start state.
+<a href=#815 id=815 data-nosnippet>815</a>    </span><span class="kw">pub fn </span>start() -&gt; OverlappingState {
+<a href=#816 id=816 data-nosnippet>816</a>        OverlappingState { mat: <span class="prelude-val">None</span>, id: <span class="prelude-val">None</span>, at: <span class="number">0</span>, next_match_index: <span class="prelude-val">None </span>}
+<a href=#817 id=817 data-nosnippet>817</a>    }
+<a href=#818 id=818 data-nosnippet>818</a>
+<a href=#819 id=819 data-nosnippet>819</a>    <span class="doccomment">/// Return the match result of the most recent search to execute with this
+<a href=#820 id=820 data-nosnippet>820</a>    /// state.
+<a href=#821 id=821 data-nosnippet>821</a>    ///
+<a href=#822 id=822 data-nosnippet>822</a>    /// Every search will clear this result automatically, such that if no
+<a href=#823 id=823 data-nosnippet>823</a>    /// match is found, this will always correctly report `None`.
+<a href=#824 id=824 data-nosnippet>824</a>    </span><span class="kw">pub fn </span>get_match(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Match&gt; {
+<a href=#825 id=825 data-nosnippet>825</a>        <span class="self">self</span>.mat
+<a href=#826 id=826 data-nosnippet>826</a>    }
+<a href=#827 id=827 data-nosnippet>827</a>}
+<a href=#828 id=828 data-nosnippet>828</a>
+<a href=#829 id=829 data-nosnippet>829</a><span class="doccomment">/// An iterator of non-overlapping matches in a particular haystack.
+<a href=#830 id=830 data-nosnippet>830</a>///
+<a href=#831 id=831 data-nosnippet>831</a>/// This iterator yields matches according to the [`MatchKind`] used by this
+<a href=#832 id=832 data-nosnippet>832</a>/// automaton.
+<a href=#833 id=833 data-nosnippet>833</a>///
+<a href=#834 id=834 data-nosnippet>834</a>/// This iterator is constructed via the [`Automaton::try_find_iter`] method.
+<a href=#835 id=835 data-nosnippet>835</a>///
+<a href=#836 id=836 data-nosnippet>836</a>/// The type variable `A` refers to the implementation of the [`Automaton`]
+<a href=#837 id=837 data-nosnippet>837</a>/// trait used to execute the search.
+<a href=#838 id=838 data-nosnippet>838</a>///
+<a href=#839 id=839 data-nosnippet>839</a>/// The lifetime `'a` refers to the lifetime of the [`Automaton`]
+<a href=#840 id=840 data-nosnippet>840</a>/// implementation.
+<a href=#841 id=841 data-nosnippet>841</a>///
+<a href=#842 id=842 data-nosnippet>842</a>/// The lifetime `'h` refers to the lifetime of the haystack being searched.
+<a href=#843 id=843 data-nosnippet>843</a></span><span class="attr">#[derive(Debug)]
+<a href=#844 id=844 data-nosnippet>844</a></span><span class="kw">pub struct </span>FindIter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'h</span>, A&gt; {
+<a href=#845 id=845 data-nosnippet>845</a>    <span class="doccomment">/// The automaton used to drive the search.
+<a href=#846 id=846 data-nosnippet>846</a>    </span>aut: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>A,
+<a href=#847 id=847 data-nosnippet>847</a>    <span class="doccomment">/// The input parameters to give to each search call.
+<a href=#848 id=848 data-nosnippet>848</a>    ///
+<a href=#849 id=849 data-nosnippet>849</a>    /// The start position of the search is mutated during iteration.
+<a href=#850 id=850 data-nosnippet>850</a>    </span>input: Input&lt;<span class="lifetime">'h</span>&gt;,
+<a href=#851 id=851 data-nosnippet>851</a>    <span class="doccomment">/// Records the end offset of the most recent match. This is necessary to
+<a href=#852 id=852 data-nosnippet>852</a>    /// handle a corner case for preventing empty matches from overlapping with
+<a href=#853 id=853 data-nosnippet>853</a>    /// the ending bounds of a prior match.
+<a href=#854 id=854 data-nosnippet>854</a>    </span>last_match_end: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+<a href=#855 id=855 data-nosnippet>855</a>}
+<a href=#856 id=856 data-nosnippet>856</a>
+<a href=#857 id=857 data-nosnippet>857</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, <span class="lifetime">'h</span>, A: Automaton&gt; FindIter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'h</span>, A&gt; {
+<a href=#858 id=858 data-nosnippet>858</a>    <span class="doccomment">/// Creates a new non-overlapping iterator. If the given automaton would
+<a href=#859 id=859 data-nosnippet>859</a>    /// return an error on a search with the given input configuration, then
+<a href=#860 id=860 data-nosnippet>860</a>    /// that error is returned here.
+<a href=#861 id=861 data-nosnippet>861</a>    </span><span class="kw">fn </span>new(
+<a href=#862 id=862 data-nosnippet>862</a>        aut: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>A,
+<a href=#863 id=863 data-nosnippet>863</a>        input: Input&lt;<span class="lifetime">'h</span>&gt;,
+<a href=#864 id=864 data-nosnippet>864</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;FindIter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'h</span>, A&gt;, MatchError&gt; {
+<a href=#865 id=865 data-nosnippet>865</a>        <span class="comment">// The only way this search can fail is if we cannot retrieve the start
+<a href=#866 id=866 data-nosnippet>866</a>        // state. e.g., Asking for an anchored search when only unanchored
+<a href=#867 id=867 data-nosnippet>867</a>        // searches are supported.
+<a href=#868 id=868 data-nosnippet>868</a>        </span><span class="kw">let _ </span>= aut.start_state(input.get_anchored())<span class="question-mark">?</span>;
+<a href=#869 id=869 data-nosnippet>869</a>        <span class="prelude-val">Ok</span>(FindIter { aut, input, last_match_end: <span class="prelude-val">None </span>})
+<a href=#870 id=870 data-nosnippet>870</a>    }
+<a href=#871 id=871 data-nosnippet>871</a>
+<a href=#872 id=872 data-nosnippet>872</a>    <span class="doccomment">/// Executes a search and returns a match if one is found.
+<a href=#873 id=873 data-nosnippet>873</a>    ///
+<a href=#874 id=874 data-nosnippet>874</a>    /// This does not advance the input forward. It just executes a search
+<a href=#875 id=875 data-nosnippet>875</a>    /// based on the current configuration/offsets.
+<a href=#876 id=876 data-nosnippet>876</a>    </span><span class="kw">fn </span>search(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Match&gt; {
+<a href=#877 id=877 data-nosnippet>877</a>        <span class="comment">// The unwrap is OK here because we check at iterator construction time
+<a href=#878 id=878 data-nosnippet>878</a>        // that no subsequent search call (using the same configuration) will
+<a href=#879 id=879 data-nosnippet>879</a>        // ever return an error.
+<a href=#880 id=880 data-nosnippet>880</a>        </span><span class="self">self</span>.aut
+<a href=#881 id=881 data-nosnippet>881</a>            .try_find(<span class="kw-2">&amp;</span><span class="self">self</span>.input)
+<a href=#882 id=882 data-nosnippet>882</a>            .expect(<span class="string">"already checked that no match error can occur"</span>)
+<a href=#883 id=883 data-nosnippet>883</a>    }
+<a href=#884 id=884 data-nosnippet>884</a>
+<a href=#885 id=885 data-nosnippet>885</a>    <span class="doccomment">/// Handles the special case of an empty match by ensuring that 1) the
+<a href=#886 id=886 data-nosnippet>886</a>    /// iterator always advances and 2) empty matches never overlap with other
+<a href=#887 id=887 data-nosnippet>887</a>    /// matches.
+<a href=#888 id=888 data-nosnippet>888</a>    ///
+<a href=#889 id=889 data-nosnippet>889</a>    /// (1) is necessary because we principally make progress by setting the
+<a href=#890 id=890 data-nosnippet>890</a>    /// starting location of the next search to the ending location of the last
+<a href=#891 id=891 data-nosnippet>891</a>    /// match. But if a match is empty, then this results in a search that does
+<a href=#892 id=892 data-nosnippet>892</a>    /// not advance and thus does not terminate.
+<a href=#893 id=893 data-nosnippet>893</a>    ///
+<a href=#894 id=894 data-nosnippet>894</a>    /// (2) is not strictly necessary, but makes intuitive sense and matches
+<a href=#895 id=895 data-nosnippet>895</a>    /// the presiding behavior of most general purpose regex engines.
+<a href=#896 id=896 data-nosnippet>896</a>    /// (Obviously this crate isn't a regex engine, but we choose to match
+<a href=#897 id=897 data-nosnippet>897</a>    /// their semantics.) The "intuitive sense" here is that we want to report
+<a href=#898 id=898 data-nosnippet>898</a>    /// NON-overlapping matches. So for example, given the patterns 'a' and
+<a href=#899 id=899 data-nosnippet>899</a>    /// '' (an empty string) against the haystack 'a', without the special
+<a href=#900 id=900 data-nosnippet>900</a>    /// handling, you'd get the matches [0, 1) and [1, 1), where the latter
+<a href=#901 id=901 data-nosnippet>901</a>    /// overlaps with the end bounds of the former.
+<a href=#902 id=902 data-nosnippet>902</a>    ///
+<a href=#903 id=903 data-nosnippet>903</a>    /// Note that we mark this cold and forcefully prevent inlining because
+<a href=#904 id=904 data-nosnippet>904</a>    /// handling empty matches like this is extremely rare and does require
+<a href=#905 id=905 data-nosnippet>905</a>    /// quite a bit of code, comparatively. Keeping this code out of the main
+<a href=#906 id=906 data-nosnippet>906</a>    /// iterator function keeps it smaller and more amenable to inlining
+<a href=#907 id=907 data-nosnippet>907</a>    /// itself.
+<a href=#908 id=908 data-nosnippet>908</a>    </span><span class="attr">#[cold]
+<a href=#909 id=909 data-nosnippet>909</a>    #[inline(never)]
+<a href=#910 id=910 data-nosnippet>910</a>    </span><span class="kw">fn </span>handle_overlapping_empty_match(
+<a href=#911 id=911 data-nosnippet>911</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#912 id=912 data-nosnippet>912</a>        <span class="kw-2">mut </span>m: Match,
+<a href=#913 id=913 data-nosnippet>913</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Match&gt; {
+<a href=#914 id=914 data-nosnippet>914</a>        <span class="macro">assert!</span>(m.is_empty());
+<a href=#915 id=915 data-nosnippet>915</a>        <span class="kw">if </span><span class="prelude-val">Some</span>(m.end()) == <span class="self">self</span>.last_match_end {
+<a href=#916 id=916 data-nosnippet>916</a>            <span class="self">self</span>.input.set_start(<span class="self">self</span>.input.start().checked_add(<span class="number">1</span>).unwrap());
+<a href=#917 id=917 data-nosnippet>917</a>            m = <span class="self">self</span>.search()<span class="question-mark">?</span>;
+<a href=#918 id=918 data-nosnippet>918</a>        }
+<a href=#919 id=919 data-nosnippet>919</a>        <span class="prelude-val">Some</span>(m)
+<a href=#920 id=920 data-nosnippet>920</a>    }
+<a href=#921 id=921 data-nosnippet>921</a>}
+<a href=#922 id=922 data-nosnippet>922</a>
+<a href=#923 id=923 data-nosnippet>923</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, <span class="lifetime">'h</span>, A: Automaton&gt; Iterator <span class="kw">for </span>FindIter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'h</span>, A&gt; {
+<a href=#924 id=924 data-nosnippet>924</a>    <span class="kw">type </span>Item = Match;
+<a href=#925 id=925 data-nosnippet>925</a>
+<a href=#926 id=926 data-nosnippet>926</a>    <span class="attr">#[inline(always)]
+<a href=#927 id=927 data-nosnippet>927</a>    </span><span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Match&gt; {
+<a href=#928 id=928 data-nosnippet>928</a>        <span class="kw">let </span><span class="kw-2">mut </span>m = <span class="self">self</span>.search()<span class="question-mark">?</span>;
+<a href=#929 id=929 data-nosnippet>929</a>        <span class="kw">if </span>m.is_empty() {
+<a href=#930 id=930 data-nosnippet>930</a>            m = <span class="self">self</span>.handle_overlapping_empty_match(m)<span class="question-mark">?</span>;
+<a href=#931 id=931 data-nosnippet>931</a>        }
+<a href=#932 id=932 data-nosnippet>932</a>        <span class="self">self</span>.input.set_start(m.end());
+<a href=#933 id=933 data-nosnippet>933</a>        <span class="self">self</span>.last_match_end = <span class="prelude-val">Some</span>(m.end());
+<a href=#934 id=934 data-nosnippet>934</a>        <span class="prelude-val">Some</span>(m)
+<a href=#935 id=935 data-nosnippet>935</a>    }
+<a href=#936 id=936 data-nosnippet>936</a>}
+<a href=#937 id=937 data-nosnippet>937</a>
+<a href=#938 id=938 data-nosnippet>938</a><span class="doccomment">/// An iterator of overlapping matches in a particular haystack.
+<a href=#939 id=939 data-nosnippet>939</a>///
+<a href=#940 id=940 data-nosnippet>940</a>/// This iterator will report all possible matches in a particular haystack,
+<a href=#941 id=941 data-nosnippet>941</a>/// even when the matches overlap.
+<a href=#942 id=942 data-nosnippet>942</a>///
+<a href=#943 id=943 data-nosnippet>943</a>/// This iterator is constructed via the
+<a href=#944 id=944 data-nosnippet>944</a>/// [`Automaton::try_find_overlapping_iter`] method.
+<a href=#945 id=945 data-nosnippet>945</a>///
+<a href=#946 id=946 data-nosnippet>946</a>/// The type variable `A` refers to the implementation of the [`Automaton`]
+<a href=#947 id=947 data-nosnippet>947</a>/// trait used to execute the search.
+<a href=#948 id=948 data-nosnippet>948</a>///
+<a href=#949 id=949 data-nosnippet>949</a>/// The lifetime `'a` refers to the lifetime of the [`Automaton`]
+<a href=#950 id=950 data-nosnippet>950</a>/// implementation.
+<a href=#951 id=951 data-nosnippet>951</a>///
+<a href=#952 id=952 data-nosnippet>952</a>/// The lifetime `'h` refers to the lifetime of the haystack being searched.
+<a href=#953 id=953 data-nosnippet>953</a></span><span class="attr">#[derive(Debug)]
+<a href=#954 id=954 data-nosnippet>954</a></span><span class="kw">pub struct </span>FindOverlappingIter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'h</span>, A&gt; {
+<a href=#955 id=955 data-nosnippet>955</a>    aut: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>A,
+<a href=#956 id=956 data-nosnippet>956</a>    input: Input&lt;<span class="lifetime">'h</span>&gt;,
+<a href=#957 id=957 data-nosnippet>957</a>    state: OverlappingState,
+<a href=#958 id=958 data-nosnippet>958</a>}
+<a href=#959 id=959 data-nosnippet>959</a>
+<a href=#960 id=960 data-nosnippet>960</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, <span class="lifetime">'h</span>, A: Automaton&gt; Iterator <span class="kw">for </span>FindOverlappingIter&lt;<span class="lifetime">'a</span>, <span class="lifetime">'h</span>, A&gt; {
+<a href=#961 id=961 data-nosnippet>961</a>    <span class="kw">type </span>Item = Match;
+<a href=#962 id=962 data-nosnippet>962</a>
+<a href=#963 id=963 data-nosnippet>963</a>    <span class="attr">#[inline(always)]
+<a href=#964 id=964 data-nosnippet>964</a>    </span><span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Match&gt; {
+<a href=#965 id=965 data-nosnippet>965</a>        <span class="self">self</span>.aut
+<a href=#966 id=966 data-nosnippet>966</a>            .try_find_overlapping(<span class="kw-2">&amp;</span><span class="self">self</span>.input, <span class="kw-2">&amp;mut </span><span class="self">self</span>.state)
+<a href=#967 id=967 data-nosnippet>967</a>            .expect(<span class="string">"already checked that no match error can occur here"</span>);
+<a href=#968 id=968 data-nosnippet>968</a>        <span class="self">self</span>.state.get_match()
+<a href=#969 id=969 data-nosnippet>969</a>    }
+<a href=#970 id=970 data-nosnippet>970</a>}
+<a href=#971 id=971 data-nosnippet>971</a>
+<a href=#972 id=972 data-nosnippet>972</a><span class="doccomment">/// An iterator that reports matches in a stream.
+<a href=#973 id=973 data-nosnippet>973</a>///
+<a href=#974 id=974 data-nosnippet>974</a>/// This iterator yields elements of type `io::Result&lt;Match&gt;`, where an error
+<a href=#975 id=975 data-nosnippet>975</a>/// is reported if there was a problem reading from the underlying stream.
+<a href=#976 id=976 data-nosnippet>976</a>/// The iterator terminates only when the underlying stream reaches `EOF`.
+<a href=#977 id=977 data-nosnippet>977</a>///
+<a href=#978 id=978 data-nosnippet>978</a>/// This iterator is constructed via the [`Automaton::try_stream_find_iter`]
+<a href=#979 id=979 data-nosnippet>979</a>/// method.
+<a href=#980 id=980 data-nosnippet>980</a>///
+<a href=#981 id=981 data-nosnippet>981</a>/// The type variable `A` refers to the implementation of the [`Automaton`]
+<a href=#982 id=982 data-nosnippet>982</a>/// trait used to execute the search.
+<a href=#983 id=983 data-nosnippet>983</a>///
+<a href=#984 id=984 data-nosnippet>984</a>/// The type variable `R` refers to the `io::Read` stream that is being read
+<a href=#985 id=985 data-nosnippet>985</a>/// from.
+<a href=#986 id=986 data-nosnippet>986</a>///
+<a href=#987 id=987 data-nosnippet>987</a>/// The lifetime `'a` refers to the lifetime of the [`Automaton`]
+<a href=#988 id=988 data-nosnippet>988</a>/// implementation.
+<a href=#989 id=989 data-nosnippet>989</a></span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#990 id=990 data-nosnippet>990</a>#[derive(Debug)]
+<a href=#991 id=991 data-nosnippet>991</a></span><span class="kw">pub struct </span>StreamFindIter&lt;<span class="lifetime">'a</span>, A, R&gt; {
+<a href=#992 id=992 data-nosnippet>992</a>    it: StreamChunkIter&lt;<span class="lifetime">'a</span>, A, R&gt;,
+<a href=#993 id=993 data-nosnippet>993</a>}
+<a href=#994 id=994 data-nosnippet>994</a>
+<a href=#995 id=995 data-nosnippet>995</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#996 id=996 data-nosnippet>996</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, A: Automaton, R: std::io::Read&gt; Iterator
+<a href=#997 id=997 data-nosnippet>997</a>    <span class="kw">for </span>StreamFindIter&lt;<span class="lifetime">'a</span>, A, R&gt;
+<a href=#998 id=998 data-nosnippet>998</a>{
+<a href=#999 id=999 data-nosnippet>999</a>    <span class="kw">type </span>Item = std::io::Result&lt;Match&gt;;
+<a href=#1000 id=1000 data-nosnippet>1000</a>
+<a href=#1001 id=1001 data-nosnippet>1001</a>    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;std::io::Result&lt;Match&gt;&gt; {
+<a href=#1002 id=1002 data-nosnippet>1002</a>        <span class="kw">loop </span>{
+<a href=#1003 id=1003 data-nosnippet>1003</a>            <span class="kw">match </span><span class="self">self</span>.it.next() {
+<a href=#1004 id=1004 data-nosnippet>1004</a>                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
+<a href=#1005 id=1005 data-nosnippet>1005</a>                <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(err)) =&gt; <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(err)),
+<a href=#1006 id=1006 data-nosnippet>1006</a>                <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(StreamChunk::NonMatch { .. })) =&gt; {}
+<a href=#1007 id=1007 data-nosnippet>1007</a>                <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(StreamChunk::Match { mat, .. })) =&gt; {
+<a href=#1008 id=1008 data-nosnippet>1008</a>                    <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(mat));
+<a href=#1009 id=1009 data-nosnippet>1009</a>                }
+<a href=#1010 id=1010 data-nosnippet>1010</a>            }
+<a href=#1011 id=1011 data-nosnippet>1011</a>        }
+<a href=#1012 id=1012 data-nosnippet>1012</a>    }
+<a href=#1013 id=1013 data-nosnippet>1013</a>}
+<a href=#1014 id=1014 data-nosnippet>1014</a>
+<a href=#1015 id=1015 data-nosnippet>1015</a><span class="doccomment">/// An iterator that reports matches in a stream.
+<a href=#1016 id=1016 data-nosnippet>1016</a>///
+<a href=#1017 id=1017 data-nosnippet>1017</a>/// (This doesn't actually implement the `Iterator` trait because it returns
+<a href=#1018 id=1018 data-nosnippet>1018</a>/// something with a lifetime attached to a buffer it owns, but that's OK. It
+<a href=#1019 id=1019 data-nosnippet>1019</a>/// still has a `next` method and is iterator-like enough to be fine.)
+<a href=#1020 id=1020 data-nosnippet>1020</a>///
+<a href=#1021 id=1021 data-nosnippet>1021</a>/// This iterator yields elements of type `io::Result&lt;StreamChunk&gt;`, where
+<a href=#1022 id=1022 data-nosnippet>1022</a>/// an error is reported if there was a problem reading from the underlying
+<a href=#1023 id=1023 data-nosnippet>1023</a>/// stream. The iterator terminates only when the underlying stream reaches
+<a href=#1024 id=1024 data-nosnippet>1024</a>/// `EOF`.
+<a href=#1025 id=1025 data-nosnippet>1025</a>///
+<a href=#1026 id=1026 data-nosnippet>1026</a>/// The idea here is that each chunk represents either a match or a non-match,
+<a href=#1027 id=1027 data-nosnippet>1027</a>/// and if you concatenated all of the chunks together, you'd reproduce the
+<a href=#1028 id=1028 data-nosnippet>1028</a>/// entire contents of the stream, byte-for-byte.
+<a href=#1029 id=1029 data-nosnippet>1029</a>///
+<a href=#1030 id=1030 data-nosnippet>1030</a>/// This chunk machinery is a bit complicated and it isn't strictly required
+<a href=#1031 id=1031 data-nosnippet>1031</a>/// for a stream searcher that just reports matches. But we do need something
+<a href=#1032 id=1032 data-nosnippet>1032</a>/// like this to deal with the "replacement" API, which needs to know which
+<a href=#1033 id=1033 data-nosnippet>1033</a>/// chunks it can copy and which it needs to replace.
+<a href=#1034 id=1034 data-nosnippet>1034</a></span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#1035 id=1035 data-nosnippet>1035</a>#[derive(Debug)]
+<a href=#1036 id=1036 data-nosnippet>1036</a></span><span class="kw">struct </span>StreamChunkIter&lt;<span class="lifetime">'a</span>, A, R&gt; {
+<a href=#1037 id=1037 data-nosnippet>1037</a>    <span class="doccomment">/// The underlying automaton to do the search.
+<a href=#1038 id=1038 data-nosnippet>1038</a>    </span>aut: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>A,
+<a href=#1039 id=1039 data-nosnippet>1039</a>    <span class="doccomment">/// The source of bytes we read from.
+<a href=#1040 id=1040 data-nosnippet>1040</a>    </span>rdr: R,
+<a href=#1041 id=1041 data-nosnippet>1041</a>    <span class="doccomment">/// A roll buffer for managing bytes from `rdr`. Basically, this is used
+<a href=#1042 id=1042 data-nosnippet>1042</a>    /// to handle the case of a match that is split by two different
+<a href=#1043 id=1043 data-nosnippet>1043</a>    /// calls to `rdr.read()`. This isn't strictly needed if all we needed to
+<a href=#1044 id=1044 data-nosnippet>1044</a>    /// do was report matches, but here we are reporting chunks of non-matches
+<a href=#1045 id=1045 data-nosnippet>1045</a>    /// and matches and in order to do that, we really just cannot treat our
+<a href=#1046 id=1046 data-nosnippet>1046</a>    /// stream as non-overlapping blocks of bytes. We need to permit some
+<a href=#1047 id=1047 data-nosnippet>1047</a>    /// overlap while we retain bytes from a previous `read` call in memory.
+<a href=#1048 id=1048 data-nosnippet>1048</a>    </span>buf: <span class="kw">crate</span>::util::buffer::Buffer,
+<a href=#1049 id=1049 data-nosnippet>1049</a>    <span class="doccomment">/// The unanchored starting state of this automaton.
+<a href=#1050 id=1050 data-nosnippet>1050</a>    </span>start: StateID,
+<a href=#1051 id=1051 data-nosnippet>1051</a>    <span class="doccomment">/// The state of the automaton.
+<a href=#1052 id=1052 data-nosnippet>1052</a>    </span>sid: StateID,
+<a href=#1053 id=1053 data-nosnippet>1053</a>    <span class="doccomment">/// The absolute position over the entire stream.
+<a href=#1054 id=1054 data-nosnippet>1054</a>    </span>absolute_pos: usize,
+<a href=#1055 id=1055 data-nosnippet>1055</a>    <span class="doccomment">/// The position we're currently at within `buf`.
+<a href=#1056 id=1056 data-nosnippet>1056</a>    </span>buffer_pos: usize,
+<a href=#1057 id=1057 data-nosnippet>1057</a>    <span class="doccomment">/// The buffer position of the end of the bytes that we last returned
+<a href=#1058 id=1058 data-nosnippet>1058</a>    /// to the caller. Basically, whenever we find a match, we look to see if
+<a href=#1059 id=1059 data-nosnippet>1059</a>    /// there is a difference between where the match started and the position
+<a href=#1060 id=1060 data-nosnippet>1060</a>    /// of the last byte we returned to the caller. If there's a difference,
+<a href=#1061 id=1061 data-nosnippet>1061</a>    /// then we need to return a 'NonMatch' chunk.
+<a href=#1062 id=1062 data-nosnippet>1062</a>    </span>buffer_reported_pos: usize,
+<a href=#1063 id=1063 data-nosnippet>1063</a>}
+<a href=#1064 id=1064 data-nosnippet>1064</a>
+<a href=#1065 id=1065 data-nosnippet>1065</a><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#1066 id=1066 data-nosnippet>1066</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, A: Automaton, R: std::io::Read&gt; StreamChunkIter&lt;<span class="lifetime">'a</span>, A, R&gt; {
+<a href=#1067 id=1067 data-nosnippet>1067</a>    <span class="kw">fn </span>new(
+<a href=#1068 id=1068 data-nosnippet>1068</a>        aut: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>A,
+<a href=#1069 id=1069 data-nosnippet>1069</a>        rdr: R,
+<a href=#1070 id=1070 data-nosnippet>1070</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;StreamChunkIter&lt;<span class="lifetime">'a</span>, A, R&gt;, MatchError&gt; {
+<a href=#1071 id=1071 data-nosnippet>1071</a>        <span class="comment">// This restriction is a carry-over from older versions of this crate.
+<a href=#1072 id=1072 data-nosnippet>1072</a>        // I didn't have the bandwidth to think through how to handle, say,
+<a href=#1073 id=1073 data-nosnippet>1073</a>        // leftmost-first or leftmost-longest matching, but... it should be
+<a href=#1074 id=1074 data-nosnippet>1074</a>        // possible? The main problem is that once you see a match state in
+<a href=#1075 id=1075 data-nosnippet>1075</a>        // leftmost-first semantics, you can't just stop at that point and
+<a href=#1076 id=1076 data-nosnippet>1076</a>        // report a match. You have to keep going until you either hit a dead
+<a href=#1077 id=1077 data-nosnippet>1077</a>        // state or EOF. So how do you know when you'll hit a dead state? Well,
+<a href=#1078 id=1078 data-nosnippet>1078</a>        // you don't. With Aho-Corasick, I believe you can put a bound on it
+<a href=#1079 id=1079 data-nosnippet>1079</a>        // and say, "once a match has been seen, you'll need to scan forward at
+<a href=#1080 id=1080 data-nosnippet>1080</a>        // most N bytes" where N=aut.max_pattern_len().
+<a href=#1081 id=1081 data-nosnippet>1081</a>        //
+<a href=#1082 id=1082 data-nosnippet>1082</a>        // Which is fine, but it does mean that state about whether we're still
+<a href=#1083 id=1083 data-nosnippet>1083</a>        // looking for a dead state or not needs to persist across buffer
+<a href=#1084 id=1084 data-nosnippet>1084</a>        // refills. Which this code doesn't really handle. It does preserve
+<a href=#1085 id=1085 data-nosnippet>1085</a>        // *some* state across buffer refills, basically ensuring that a match
+<a href=#1086 id=1086 data-nosnippet>1086</a>        // span is always in memory.
+<a href=#1087 id=1087 data-nosnippet>1087</a>        </span><span class="kw">if </span>!aut.match_kind().is_standard() {
+<a href=#1088 id=1088 data-nosnippet>1088</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(MatchError::unsupported_stream(aut.match_kind()));
+<a href=#1089 id=1089 data-nosnippet>1089</a>        }
+<a href=#1090 id=1090 data-nosnippet>1090</a>        <span class="comment">// This is kind of a cop-out, but empty matches are SUPER annoying.
+<a href=#1091 id=1091 data-nosnippet>1091</a>        // If we know they can't happen (which is what we enforce here), then
+<a href=#1092 id=1092 data-nosnippet>1092</a>        // it makes a lot of logic much simpler. With that said, I'm open to
+<a href=#1093 id=1093 data-nosnippet>1093</a>        // supporting this case, but we need to define proper semantics for it
+<a href=#1094 id=1094 data-nosnippet>1094</a>        // first. It wasn't totally clear to me what it should do at the time
+<a href=#1095 id=1095 data-nosnippet>1095</a>        // of writing, so I decided to just be conservative.
+<a href=#1096 id=1096 data-nosnippet>1096</a>        //
+<a href=#1097 id=1097 data-nosnippet>1097</a>        // It also seems like a very weird case to support anyway. Why search a
+<a href=#1098 id=1098 data-nosnippet>1098</a>        // stream if you're just going to get a match at every position?
+<a href=#1099 id=1099 data-nosnippet>1099</a>        //
+<a href=#1100 id=1100 data-nosnippet>1100</a>        // ¯\_(ツ)_/¯
+<a href=#1101 id=1101 data-nosnippet>1101</a>        </span><span class="kw">if </span>aut.min_pattern_len() == <span class="number">0 </span>{
+<a href=#1102 id=1102 data-nosnippet>1102</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(MatchError::unsupported_empty());
+<a href=#1103 id=1103 data-nosnippet>1103</a>        }
+<a href=#1104 id=1104 data-nosnippet>1104</a>        <span class="kw">let </span>start = aut.start_state(Anchored::No)<span class="question-mark">?</span>;
+<a href=#1105 id=1105 data-nosnippet>1105</a>        <span class="prelude-val">Ok</span>(StreamChunkIter {
+<a href=#1106 id=1106 data-nosnippet>1106</a>            aut,
+<a href=#1107 id=1107 data-nosnippet>1107</a>            rdr,
+<a href=#1108 id=1108 data-nosnippet>1108</a>            buf: <span class="kw">crate</span>::util::buffer::Buffer::new(aut.max_pattern_len()),
+<a href=#1109 id=1109 data-nosnippet>1109</a>            start,
+<a href=#1110 id=1110 data-nosnippet>1110</a>            sid: start,
+<a href=#1111 id=1111 data-nosnippet>1111</a>            absolute_pos: <span class="number">0</span>,
+<a href=#1112 id=1112 data-nosnippet>1112</a>            buffer_pos: <span class="number">0</span>,
+<a href=#1113 id=1113 data-nosnippet>1113</a>            buffer_reported_pos: <span class="number">0</span>,
+<a href=#1114 id=1114 data-nosnippet>1114</a>        })
+<a href=#1115 id=1115 data-nosnippet>1115</a>    }
+<a href=#1116 id=1116 data-nosnippet>1116</a>
+<a href=#1117 id=1117 data-nosnippet>1117</a>    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;std::io::Result&lt;StreamChunk&gt;&gt; {
+<a href=#1118 id=1118 data-nosnippet>1118</a>        <span class="comment">// This code is pretty gnarly. It IS simpler than the equivalent code
+<a href=#1119 id=1119 data-nosnippet>1119</a>        // in the previous aho-corasick release, in part because we inline
+<a href=#1120 id=1120 data-nosnippet>1120</a>        // automaton traversal here and also in part because we have abdicated
+<a href=#1121 id=1121 data-nosnippet>1121</a>        // support for automatons that contain an empty pattern.
+<a href=#1122 id=1122 data-nosnippet>1122</a>        //
+<a href=#1123 id=1123 data-nosnippet>1123</a>        // I suspect this code could be made a bit simpler by designing a
+<a href=#1124 id=1124 data-nosnippet>1124</a>        // better buffer abstraction.
+<a href=#1125 id=1125 data-nosnippet>1125</a>        //
+<a href=#1126 id=1126 data-nosnippet>1126</a>        // But in general, this code is basically write-only. So you'll need
+<a href=#1127 id=1127 data-nosnippet>1127</a>        // to go through it step-by-step to grok it. One of the key bits of
+<a href=#1128 id=1128 data-nosnippet>1128</a>        // complexity is tracking a few different offsets. 'buffer_pos' is
+<a href=#1129 id=1129 data-nosnippet>1129</a>        // where we are in the buffer for search. 'buffer_reported_pos' is the
+<a href=#1130 id=1130 data-nosnippet>1130</a>        // position immediately following the last byte in the buffer that
+<a href=#1131 id=1131 data-nosnippet>1131</a>        // we've returned to the caller. And 'absolute_pos' is the overall
+<a href=#1132 id=1132 data-nosnippet>1132</a>        // current absolute position of the search in the entire stream, and
+<a href=#1133 id=1133 data-nosnippet>1133</a>        // this is what match spans are reported in terms of.
+<a href=#1134 id=1134 data-nosnippet>1134</a>        </span><span class="kw">loop </span>{
+<a href=#1135 id=1135 data-nosnippet>1135</a>            <span class="kw">if </span><span class="self">self</span>.aut.is_match(<span class="self">self</span>.sid) {
+<a href=#1136 id=1136 data-nosnippet>1136</a>                <span class="kw">let </span>mat = <span class="self">self</span>.get_match();
+<a href=#1137 id=1137 data-nosnippet>1137</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(r) = <span class="self">self</span>.get_non_match_chunk(mat) {
+<a href=#1138 id=1138 data-nosnippet>1138</a>                    <span class="self">self</span>.buffer_reported_pos += r.len();
+<a href=#1139 id=1139 data-nosnippet>1139</a>                    <span class="kw">let </span>bytes = <span class="kw-2">&amp;</span><span class="self">self</span>.buf.buffer()[r];
+<a href=#1140 id=1140 data-nosnippet>1140</a>                    <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(StreamChunk::NonMatch { bytes }));
+<a href=#1141 id=1141 data-nosnippet>1141</a>                }
+<a href=#1142 id=1142 data-nosnippet>1142</a>                <span class="self">self</span>.sid = <span class="self">self</span>.start;
+<a href=#1143 id=1143 data-nosnippet>1143</a>                <span class="kw">let </span>r = <span class="self">self</span>.get_match_chunk(mat);
+<a href=#1144 id=1144 data-nosnippet>1144</a>                <span class="self">self</span>.buffer_reported_pos += r.len();
+<a href=#1145 id=1145 data-nosnippet>1145</a>                <span class="kw">let </span>bytes = <span class="kw-2">&amp;</span><span class="self">self</span>.buf.buffer()[r];
+<a href=#1146 id=1146 data-nosnippet>1146</a>                <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(StreamChunk::Match { bytes, mat }));
+<a href=#1147 id=1147 data-nosnippet>1147</a>            }
+<a href=#1148 id=1148 data-nosnippet>1148</a>            <span class="kw">if </span><span class="self">self</span>.buffer_pos &gt;= <span class="self">self</span>.buf.buffer().len() {
+<a href=#1149 id=1149 data-nosnippet>1149</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(r) = <span class="self">self</span>.get_pre_roll_non_match_chunk() {
+<a href=#1150 id=1150 data-nosnippet>1150</a>                    <span class="self">self</span>.buffer_reported_pos += r.len();
+<a href=#1151 id=1151 data-nosnippet>1151</a>                    <span class="kw">let </span>bytes = <span class="kw-2">&amp;</span><span class="self">self</span>.buf.buffer()[r];
+<a href=#1152 id=1152 data-nosnippet>1152</a>                    <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(StreamChunk::NonMatch { bytes }));
+<a href=#1153 id=1153 data-nosnippet>1153</a>                }
+<a href=#1154 id=1154 data-nosnippet>1154</a>                <span class="kw">if </span><span class="self">self</span>.buf.buffer().len() &gt;= <span class="self">self</span>.buf.min_buffer_len() {
+<a href=#1155 id=1155 data-nosnippet>1155</a>                    <span class="self">self</span>.buffer_pos = <span class="self">self</span>.buf.min_buffer_len();
+<a href=#1156 id=1156 data-nosnippet>1156</a>                    <span class="self">self</span>.buffer_reported_pos -=
+<a href=#1157 id=1157 data-nosnippet>1157</a>                        <span class="self">self</span>.buf.buffer().len() - <span class="self">self</span>.buf.min_buffer_len();
+<a href=#1158 id=1158 data-nosnippet>1158</a>                    <span class="self">self</span>.buf.roll();
+<a href=#1159 id=1159 data-nosnippet>1159</a>                }
+<a href=#1160 id=1160 data-nosnippet>1160</a>                <span class="kw">match </span><span class="self">self</span>.buf.fill(<span class="kw-2">&amp;mut </span><span class="self">self</span>.rdr) {
+<a href=#1161 id=1161 data-nosnippet>1161</a>                    <span class="prelude-val">Err</span>(err) =&gt; <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(err)),
+<a href=#1162 id=1162 data-nosnippet>1162</a>                    <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>) =&gt; {}
+<a href=#1163 id=1163 data-nosnippet>1163</a>                    <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>) =&gt; {
+<a href=#1164 id=1164 data-nosnippet>1164</a>                        <span class="comment">// We've hit EOF, but if there are still some
+<a href=#1165 id=1165 data-nosnippet>1165</a>                        // unreported bytes remaining, return them now.
+<a href=#1166 id=1166 data-nosnippet>1166</a>                        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(r) = <span class="self">self</span>.get_eof_non_match_chunk() {
+<a href=#1167 id=1167 data-nosnippet>1167</a>                            <span class="self">self</span>.buffer_reported_pos += r.len();
+<a href=#1168 id=1168 data-nosnippet>1168</a>                            <span class="kw">let </span>bytes = <span class="kw-2">&amp;</span><span class="self">self</span>.buf.buffer()[r];
+<a href=#1169 id=1169 data-nosnippet>1169</a>                            <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(StreamChunk::NonMatch { bytes }));
+<a href=#1170 id=1170 data-nosnippet>1170</a>                        }
+<a href=#1171 id=1171 data-nosnippet>1171</a>                        <span class="comment">// We've reported everything!
+<a href=#1172 id=1172 data-nosnippet>1172</a>                        </span><span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#1173 id=1173 data-nosnippet>1173</a>                    }
+<a href=#1174 id=1174 data-nosnippet>1174</a>                }
+<a href=#1175 id=1175 data-nosnippet>1175</a>            }
+<a href=#1176 id=1176 data-nosnippet>1176</a>            <span class="kw">let </span>start = <span class="self">self</span>.absolute_pos;
+<a href=#1177 id=1177 data-nosnippet>1177</a>            <span class="kw">for </span><span class="kw-2">&amp;</span>byte <span class="kw">in </span><span class="self">self</span>.buf.buffer()[<span class="self">self</span>.buffer_pos..].iter() {
+<a href=#1178 id=1178 data-nosnippet>1178</a>                <span class="self">self</span>.sid = <span class="self">self</span>.aut.next_state(Anchored::No, <span class="self">self</span>.sid, byte);
+<a href=#1179 id=1179 data-nosnippet>1179</a>                <span class="self">self</span>.absolute_pos += <span class="number">1</span>;
+<a href=#1180 id=1180 data-nosnippet>1180</a>                <span class="kw">if </span><span class="self">self</span>.aut.is_match(<span class="self">self</span>.sid) {
+<a href=#1181 id=1181 data-nosnippet>1181</a>                    <span class="kw">break</span>;
+<a href=#1182 id=1182 data-nosnippet>1182</a>                }
+<a href=#1183 id=1183 data-nosnippet>1183</a>            }
+<a href=#1184 id=1184 data-nosnippet>1184</a>            <span class="self">self</span>.buffer_pos += <span class="self">self</span>.absolute_pos - start;
+<a href=#1185 id=1185 data-nosnippet>1185</a>        }
+<a href=#1186 id=1186 data-nosnippet>1186</a>    }
+<a href=#1187 id=1187 data-nosnippet>1187</a>
+<a href=#1188 id=1188 data-nosnippet>1188</a>    <span class="doccomment">/// Return a match chunk for the given match. It is assumed that the match
+<a href=#1189 id=1189 data-nosnippet>1189</a>    /// ends at the current `buffer_pos`.
+<a href=#1190 id=1190 data-nosnippet>1190</a>    </span><span class="kw">fn </span>get_match_chunk(<span class="kw-2">&amp;</span><span class="self">self</span>, mat: Match) -&gt; core::ops::Range&lt;usize&gt; {
+<a href=#1191 id=1191 data-nosnippet>1191</a>        <span class="kw">let </span>start = <span class="self">self</span>.buffer_pos - mat.len();
+<a href=#1192 id=1192 data-nosnippet>1192</a>        <span class="kw">let </span>end = <span class="self">self</span>.buffer_pos;
+<a href=#1193 id=1193 data-nosnippet>1193</a>        start..end
+<a href=#1194 id=1194 data-nosnippet>1194</a>    }
+<a href=#1195 id=1195 data-nosnippet>1195</a>
+<a href=#1196 id=1196 data-nosnippet>1196</a>    <span class="doccomment">/// Return a non-match chunk, if necessary, just before reporting a match.
+<a href=#1197 id=1197 data-nosnippet>1197</a>    /// This returns `None` if there is nothing to report. Otherwise, this
+<a href=#1198 id=1198 data-nosnippet>1198</a>    /// assumes that the given match ends at the current `buffer_pos`.
+<a href=#1199 id=1199 data-nosnippet>1199</a>    </span><span class="kw">fn </span>get_non_match_chunk(
+<a href=#1200 id=1200 data-nosnippet>1200</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1201 id=1201 data-nosnippet>1201</a>        mat: Match,
+<a href=#1202 id=1202 data-nosnippet>1202</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;core::ops::Range&lt;usize&gt;&gt; {
+<a href=#1203 id=1203 data-nosnippet>1203</a>        <span class="kw">let </span>buffer_mat_start = <span class="self">self</span>.buffer_pos - mat.len();
+<a href=#1204 id=1204 data-nosnippet>1204</a>        <span class="kw">if </span>buffer_mat_start &gt; <span class="self">self</span>.buffer_reported_pos {
+<a href=#1205 id=1205 data-nosnippet>1205</a>            <span class="kw">let </span>start = <span class="self">self</span>.buffer_reported_pos;
+<a href=#1206 id=1206 data-nosnippet>1206</a>            <span class="kw">let </span>end = buffer_mat_start;
+<a href=#1207 id=1207 data-nosnippet>1207</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(start..end);
+<a href=#1208 id=1208 data-nosnippet>1208</a>        }
+<a href=#1209 id=1209 data-nosnippet>1209</a>        <span class="prelude-val">None
+<a href=#1210 id=1210 data-nosnippet>1210</a>    </span>}
+<a href=#1211 id=1211 data-nosnippet>1211</a>
+<a href=#1212 id=1212 data-nosnippet>1212</a>    <span class="doccomment">/// Look for any bytes that should be reported as a non-match just before
+<a href=#1213 id=1213 data-nosnippet>1213</a>    /// rolling the buffer.
+<a href=#1214 id=1214 data-nosnippet>1214</a>    ///
+<a href=#1215 id=1215 data-nosnippet>1215</a>    /// Note that this only reports bytes up to `buffer.len() -
+<a href=#1216 id=1216 data-nosnippet>1216</a>    /// min_buffer_len`, as it's not possible to know whether the bytes
+<a href=#1217 id=1217 data-nosnippet>1217</a>    /// following that will participate in a match or not.
+<a href=#1218 id=1218 data-nosnippet>1218</a>    </span><span class="kw">fn </span>get_pre_roll_non_match_chunk(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;core::ops::Range&lt;usize&gt;&gt; {
+<a href=#1219 id=1219 data-nosnippet>1219</a>        <span class="kw">let </span>end =
+<a href=#1220 id=1220 data-nosnippet>1220</a>            <span class="self">self</span>.buf.buffer().len().saturating_sub(<span class="self">self</span>.buf.min_buffer_len());
+<a href=#1221 id=1221 data-nosnippet>1221</a>        <span class="kw">if </span><span class="self">self</span>.buffer_reported_pos &lt; end {
+<a href=#1222 id=1222 data-nosnippet>1222</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="self">self</span>.buffer_reported_pos..end);
+<a href=#1223 id=1223 data-nosnippet>1223</a>        }
+<a href=#1224 id=1224 data-nosnippet>1224</a>        <span class="prelude-val">None
+<a href=#1225 id=1225 data-nosnippet>1225</a>    </span>}
+<a href=#1226 id=1226 data-nosnippet>1226</a>
+<a href=#1227 id=1227 data-nosnippet>1227</a>    <span class="doccomment">/// Return any unreported bytes as a non-match up to the end of the buffer.
+<a href=#1228 id=1228 data-nosnippet>1228</a>    ///
+<a href=#1229 id=1229 data-nosnippet>1229</a>    /// This should only be called when the entire contents of the buffer have
+<a href=#1230 id=1230 data-nosnippet>1230</a>    /// been searched and EOF has been hit when trying to fill the buffer.
+<a href=#1231 id=1231 data-nosnippet>1231</a>    </span><span class="kw">fn </span>get_eof_non_match_chunk(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;core::ops::Range&lt;usize&gt;&gt; {
+<a href=#1232 id=1232 data-nosnippet>1232</a>        <span class="kw">if </span><span class="self">self</span>.buffer_reported_pos &lt; <span class="self">self</span>.buf.buffer().len() {
+<a href=#1233 id=1233 data-nosnippet>1233</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="self">self</span>.buffer_reported_pos..<span class="self">self</span>.buf.buffer().len());
+<a href=#1234 id=1234 data-nosnippet>1234</a>        }
+<a href=#1235 id=1235 data-nosnippet>1235</a>        <span class="prelude-val">None
+<a href=#1236 id=1236 data-nosnippet>1236</a>    </span>}
+<a href=#1237 id=1237 data-nosnippet>1237</a>
+<a href=#1238 id=1238 data-nosnippet>1238</a>    <span class="doccomment">/// Return the match at the current position for the current state.
+<a href=#1239 id=1239 data-nosnippet>1239</a>    ///
+<a href=#1240 id=1240 data-nosnippet>1240</a>    /// This panics if `self.aut.is_match(self.sid)` isn't true.
+<a href=#1241 id=1241 data-nosnippet>1241</a>    </span><span class="kw">fn </span>get_match(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Match {
+<a href=#1242 id=1242 data-nosnippet>1242</a>        get_match(<span class="self">self</span>.aut, <span class="self">self</span>.sid, <span class="number">0</span>, <span class="self">self</span>.absolute_pos)
+<a href=#1243 id=1243 data-nosnippet>1243</a>    }
+<a href=#1244 id=1244 data-nosnippet>1244</a>}
+<a href=#1245 id=1245 data-nosnippet>1245</a>
+<a href=#1246 id=1246 data-nosnippet>1246</a><span class="doccomment">/// A single chunk yielded by the stream chunk iterator.
+<a href=#1247 id=1247 data-nosnippet>1247</a>///
+<a href=#1248 id=1248 data-nosnippet>1248</a>/// The `'r` lifetime refers to the lifetime of the stream chunk iterator.
+<a href=#1249 id=1249 data-nosnippet>1249</a></span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)]
+<a href=#1250 id=1250 data-nosnippet>1250</a>#[derive(Debug)]
+<a href=#1251 id=1251 data-nosnippet>1251</a></span><span class="kw">enum </span>StreamChunk&lt;<span class="lifetime">'r</span>&gt; {
+<a href=#1252 id=1252 data-nosnippet>1252</a>    <span class="doccomment">/// A chunk that does not contain any matches.
+<a href=#1253 id=1253 data-nosnippet>1253</a>    </span>NonMatch { bytes: <span class="kw-2">&amp;</span><span class="lifetime">'r </span>[u8] },
+<a href=#1254 id=1254 data-nosnippet>1254</a>    <span class="doccomment">/// A chunk that precisely contains a match.
+<a href=#1255 id=1255 data-nosnippet>1255</a>    </span>Match { bytes: <span class="kw-2">&amp;</span><span class="lifetime">'r </span>[u8], mat: Match },
+<a href=#1256 id=1256 data-nosnippet>1256</a>}
+<a href=#1257 id=1257 data-nosnippet>1257</a>
+<a href=#1258 id=1258 data-nosnippet>1258</a><span class="attr">#[inline(never)]
+<a href=#1259 id=1259 data-nosnippet>1259</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>try_find_fwd&lt;A: Automaton + <span class="question-mark">?</span>Sized&gt;(
+<a href=#1260 id=1260 data-nosnippet>1260</a>    aut: <span class="kw-2">&amp;</span>A,
+<a href=#1261 id=1261 data-nosnippet>1261</a>    input: <span class="kw-2">&amp;</span>Input&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1262 id=1262 data-nosnippet>1262</a>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Match&gt;, MatchError&gt; {
+<a href=#1263 id=1263 data-nosnippet>1263</a>    <span class="kw">if </span>input.is_done() {
+<a href=#1264 id=1264 data-nosnippet>1264</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+<a href=#1265 id=1265 data-nosnippet>1265</a>    }
+<a href=#1266 id=1266 data-nosnippet>1266</a>    <span class="kw">let </span>earliest = aut.match_kind().is_standard() || input.get_earliest();
+<a href=#1267 id=1267 data-nosnippet>1267</a>    <span class="kw">if </span>input.get_anchored().is_anchored() {
+<a href=#1268 id=1268 data-nosnippet>1268</a>        try_find_fwd_imp(aut, input, <span class="prelude-val">None</span>, Anchored::Yes, earliest)
+<a href=#1269 id=1269 data-nosnippet>1269</a>    } <span class="kw">else if let </span><span class="prelude-val">Some</span>(pre) = aut.prefilter() {
+<a href=#1270 id=1270 data-nosnippet>1270</a>        <span class="kw">if </span>earliest {
+<a href=#1271 id=1271 data-nosnippet>1271</a>            try_find_fwd_imp(aut, input, <span class="prelude-val">Some</span>(pre), Anchored::No, <span class="bool-val">true</span>)
+<a href=#1272 id=1272 data-nosnippet>1272</a>        } <span class="kw">else </span>{
+<a href=#1273 id=1273 data-nosnippet>1273</a>            try_find_fwd_imp(aut, input, <span class="prelude-val">Some</span>(pre), Anchored::No, <span class="bool-val">false</span>)
+<a href=#1274 id=1274 data-nosnippet>1274</a>        }
+<a href=#1275 id=1275 data-nosnippet>1275</a>    } <span class="kw">else </span>{
+<a href=#1276 id=1276 data-nosnippet>1276</a>        <span class="kw">if </span>earliest {
+<a href=#1277 id=1277 data-nosnippet>1277</a>            try_find_fwd_imp(aut, input, <span class="prelude-val">None</span>, Anchored::No, <span class="bool-val">true</span>)
+<a href=#1278 id=1278 data-nosnippet>1278</a>        } <span class="kw">else </span>{
+<a href=#1279 id=1279 data-nosnippet>1279</a>            try_find_fwd_imp(aut, input, <span class="prelude-val">None</span>, Anchored::No, <span class="bool-val">false</span>)
+<a href=#1280 id=1280 data-nosnippet>1280</a>        }
+<a href=#1281 id=1281 data-nosnippet>1281</a>    }
+<a href=#1282 id=1282 data-nosnippet>1282</a>}
+<a href=#1283 id=1283 data-nosnippet>1283</a>
+<a href=#1284 id=1284 data-nosnippet>1284</a><span class="attr">#[inline(always)]
+<a href=#1285 id=1285 data-nosnippet>1285</a></span><span class="kw">fn </span>try_find_fwd_imp&lt;A: Automaton + <span class="question-mark">?</span>Sized&gt;(
+<a href=#1286 id=1286 data-nosnippet>1286</a>    aut: <span class="kw-2">&amp;</span>A,
+<a href=#1287 id=1287 data-nosnippet>1287</a>    input: <span class="kw-2">&amp;</span>Input&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1288 id=1288 data-nosnippet>1288</a>    pre: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Prefilter&gt;,
+<a href=#1289 id=1289 data-nosnippet>1289</a>    anchored: Anchored,
+<a href=#1290 id=1290 data-nosnippet>1290</a>    earliest: bool,
+<a href=#1291 id=1291 data-nosnippet>1291</a>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Match&gt;, MatchError&gt; {
+<a href=#1292 id=1292 data-nosnippet>1292</a>    <span class="kw">let </span><span class="kw-2">mut </span>sid = aut.start_state(input.get_anchored())<span class="question-mark">?</span>;
+<a href=#1293 id=1293 data-nosnippet>1293</a>    <span class="kw">let </span><span class="kw-2">mut </span>at = input.start();
+<a href=#1294 id=1294 data-nosnippet>1294</a>    <span class="kw">let </span><span class="kw-2">mut </span>mat = <span class="prelude-val">None</span>;
+<a href=#1295 id=1295 data-nosnippet>1295</a>    <span class="kw">if </span>aut.is_match(sid) {
+<a href=#1296 id=1296 data-nosnippet>1296</a>        mat = <span class="prelude-val">Some</span>(get_match(aut, sid, <span class="number">0</span>, at));
+<a href=#1297 id=1297 data-nosnippet>1297</a>        <span class="kw">if </span>earliest {
+<a href=#1298 id=1298 data-nosnippet>1298</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(mat);
+<a href=#1299 id=1299 data-nosnippet>1299</a>        }
+<a href=#1300 id=1300 data-nosnippet>1300</a>    }
+<a href=#1301 id=1301 data-nosnippet>1301</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(pre) = pre {
+<a href=#1302 id=1302 data-nosnippet>1302</a>        <span class="kw">match </span>pre.find_in(input.haystack(), input.get_span()) {
+<a href=#1303 id=1303 data-nosnippet>1303</a>            Candidate::None =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+<a href=#1304 id=1304 data-nosnippet>1304</a>            Candidate::Match(m) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(m)),
+<a href=#1305 id=1305 data-nosnippet>1305</a>            Candidate::PossibleStartOfMatch(i) =&gt; {
+<a href=#1306 id=1306 data-nosnippet>1306</a>                at = i;
+<a href=#1307 id=1307 data-nosnippet>1307</a>            }
+<a href=#1308 id=1308 data-nosnippet>1308</a>        }
+<a href=#1309 id=1309 data-nosnippet>1309</a>    }
+<a href=#1310 id=1310 data-nosnippet>1310</a>    <span class="kw">while </span>at &lt; input.end() {
+<a href=#1311 id=1311 data-nosnippet>1311</a>        <span class="comment">// I've tried unrolling this loop and eliding bounds checks, but no
+<a href=#1312 id=1312 data-nosnippet>1312</a>        // matter what I did, I could not observe a consistent improvement on
+<a href=#1313 id=1313 data-nosnippet>1313</a>        // any benchmark I could devise. (If someone wants to re-litigate this,
+<a href=#1314 id=1314 data-nosnippet>1314</a>        // the way to do it is to add an 'next_state_unchecked' method to the
+<a href=#1315 id=1315 data-nosnippet>1315</a>        // 'Automaton' trait with a default impl that uses 'next_state'. Then
+<a href=#1316 id=1316 data-nosnippet>1316</a>        // use 'aut.next_state_unchecked' here and implement it on DFA using
+<a href=#1317 id=1317 data-nosnippet>1317</a>        // unchecked slice index acces.)
+<a href=#1318 id=1318 data-nosnippet>1318</a>        </span>sid = aut.next_state(anchored, sid, input.haystack()[at]);
+<a href=#1319 id=1319 data-nosnippet>1319</a>        <span class="kw">if </span>aut.is_special(sid) {
+<a href=#1320 id=1320 data-nosnippet>1320</a>            <span class="kw">if </span>aut.is_dead(sid) {
+<a href=#1321 id=1321 data-nosnippet>1321</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(mat);
+<a href=#1322 id=1322 data-nosnippet>1322</a>            } <span class="kw">else if </span>aut.is_match(sid) {
+<a href=#1323 id=1323 data-nosnippet>1323</a>                <span class="comment">// We use 'at + 1' here because the match state is entered
+<a href=#1324 id=1324 data-nosnippet>1324</a>                // at the last byte of the pattern. Since we use half-open
+<a href=#1325 id=1325 data-nosnippet>1325</a>                // intervals, the end of the range of the match is one past the
+<a href=#1326 id=1326 data-nosnippet>1326</a>                // last byte.
+<a href=#1327 id=1327 data-nosnippet>1327</a>                </span><span class="kw">let </span>m = get_match(aut, sid, <span class="number">0</span>, at + <span class="number">1</span>);
+<a href=#1328 id=1328 data-nosnippet>1328</a>                <span class="comment">// For the automata in this crate, we make a size trade off
+<a href=#1329 id=1329 data-nosnippet>1329</a>                // where we reuse the same automaton for both anchored and
+<a href=#1330 id=1330 data-nosnippet>1330</a>                // unanchored searches. We achieve this, principally, by simply
+<a href=#1331 id=1331 data-nosnippet>1331</a>                // not following failure transitions while computing the next
+<a href=#1332 id=1332 data-nosnippet>1332</a>                // state. Instead, if we fail to find the next state, we return
+<a href=#1333 id=1333 data-nosnippet>1333</a>                // a dead state, which instructs the search to stop. (This
+<a href=#1334 id=1334 data-nosnippet>1334</a>                // is why 'next_state' needs to know whether the search is
+<a href=#1335 id=1335 data-nosnippet>1335</a>                // anchored or not.) In addition, we have different start
+<a href=#1336 id=1336 data-nosnippet>1336</a>                // states for anchored and unanchored searches. The latter has
+<a href=#1337 id=1337 data-nosnippet>1337</a>                // a self-loop where as the former does not.
+<a href=#1338 id=1338 data-nosnippet>1338</a>                //
+<a href=#1339 id=1339 data-nosnippet>1339</a>                // In this way, we can use the same trie to execute both
+<a href=#1340 id=1340 data-nosnippet>1340</a>                // anchored and unanchored searches. There is a catch though.
+<a href=#1341 id=1341 data-nosnippet>1341</a>                // When building an Aho-Corasick automaton for unanchored
+<a href=#1342 id=1342 data-nosnippet>1342</a>                // searches, we copy matches from match states to other states
+<a href=#1343 id=1343 data-nosnippet>1343</a>                // (which would otherwise not be match states) if they are
+<a href=#1344 id=1344 data-nosnippet>1344</a>                // reachable via a failure transition. In the case of an
+<a href=#1345 id=1345 data-nosnippet>1345</a>                // anchored search, we *specifically* do not want to report
+<a href=#1346 id=1346 data-nosnippet>1346</a>                // these matches because they represent matches that start past
+<a href=#1347 id=1347 data-nosnippet>1347</a>                // the beginning of the search.
+<a href=#1348 id=1348 data-nosnippet>1348</a>                //
+<a href=#1349 id=1349 data-nosnippet>1349</a>                // Now we could tweak the automaton somehow to differentiate
+<a href=#1350 id=1350 data-nosnippet>1350</a>                // anchored from unanchored match states, but this would make
+<a href=#1351 id=1351 data-nosnippet>1351</a>                // 'aut.is_match' and potentially 'aut.is_special' slower. And
+<a href=#1352 id=1352 data-nosnippet>1352</a>                // also make the automaton itself more complex.
+<a href=#1353 id=1353 data-nosnippet>1353</a>                //
+<a href=#1354 id=1354 data-nosnippet>1354</a>                // Instead, we insert a special hack: if the search is
+<a href=#1355 id=1355 data-nosnippet>1355</a>                // anchored, we simply ignore matches that don't begin at
+<a href=#1356 id=1356 data-nosnippet>1356</a>                // the start of the search. This is not quite ideal, but we
+<a href=#1357 id=1357 data-nosnippet>1357</a>                // do specialize this function in such a way that unanchored
+<a href=#1358 id=1358 data-nosnippet>1358</a>                // searches don't pay for this additional branch. While this
+<a href=#1359 id=1359 data-nosnippet>1359</a>                // might cause a search to continue on for more than it
+<a href=#1360 id=1360 data-nosnippet>1360</a>                // otherwise optimally would, it will be no more than the
+<a href=#1361 id=1361 data-nosnippet>1361</a>                // longest pattern in the automaton. The reason for this is
+<a href=#1362 id=1362 data-nosnippet>1362</a>                // that we ensure we don't follow failure transitions during
+<a href=#1363 id=1363 data-nosnippet>1363</a>                // an anchored search. Combined with using a different anchored
+<a href=#1364 id=1364 data-nosnippet>1364</a>                // starting state with no self-loop, we guarantee that we'll
+<a href=#1365 id=1365 data-nosnippet>1365</a>                // at worst move through a number of transitions equal to the
+<a href=#1366 id=1366 data-nosnippet>1366</a>                // longest pattern.
+<a href=#1367 id=1367 data-nosnippet>1367</a>                //
+<a href=#1368 id=1368 data-nosnippet>1368</a>                // Now for DFAs, the whole point of them is to eliminate
+<a href=#1369 id=1369 data-nosnippet>1369</a>                // failure transitions entirely. So there is no way to say "if
+<a href=#1370 id=1370 data-nosnippet>1370</a>                // it's an anchored search don't follow failure transitions."
+<a href=#1371 id=1371 data-nosnippet>1371</a>                // Instead, we actually have to build two entirely separate
+<a href=#1372 id=1372 data-nosnippet>1372</a>                // automatons into the transition table. One with failure
+<a href=#1373 id=1373 data-nosnippet>1373</a>                // transitions built into it and another that is effectively
+<a href=#1374 id=1374 data-nosnippet>1374</a>                // just an encoding of the base trie into a transition table.
+<a href=#1375 id=1375 data-nosnippet>1375</a>                // DFAs still need this check though, because the match states
+<a href=#1376 id=1376 data-nosnippet>1376</a>                // still carry matches only reachable via a failure transition.
+<a href=#1377 id=1377 data-nosnippet>1377</a>                // Why? Because removing them seems difficult, although I
+<a href=#1378 id=1378 data-nosnippet>1378</a>                // haven't given it a lot of thought.
+<a href=#1379 id=1379 data-nosnippet>1379</a>                </span><span class="kw">if </span>!(anchored.is_anchored() &amp;&amp; m.start() &gt; input.start()) {
+<a href=#1380 id=1380 data-nosnippet>1380</a>                    mat = <span class="prelude-val">Some</span>(m);
+<a href=#1381 id=1381 data-nosnippet>1381</a>                    <span class="kw">if </span>earliest {
+<a href=#1382 id=1382 data-nosnippet>1382</a>                        <span class="kw">return </span><span class="prelude-val">Ok</span>(mat);
+<a href=#1383 id=1383 data-nosnippet>1383</a>                    }
+<a href=#1384 id=1384 data-nosnippet>1384</a>                }
+<a href=#1385 id=1385 data-nosnippet>1385</a>            } <span class="kw">else if let </span><span class="prelude-val">Some</span>(pre) = pre {
+<a href=#1386 id=1386 data-nosnippet>1386</a>                <span class="comment">// If we're here, we know it's a special state that is not a
+<a href=#1387 id=1387 data-nosnippet>1387</a>                // dead or a match state AND that a prefilter is active. Thus,
+<a href=#1388 id=1388 data-nosnippet>1388</a>                // it must be a start state.
+<a href=#1389 id=1389 data-nosnippet>1389</a>                </span><span class="macro">debug_assert!</span>(aut.is_start(sid));
+<a href=#1390 id=1390 data-nosnippet>1390</a>                <span class="comment">// We don't care about 'Candidate::Match' here because if such
+<a href=#1391 id=1391 data-nosnippet>1391</a>                // a match were possible, it would have been returned above
+<a href=#1392 id=1392 data-nosnippet>1392</a>                // when we run the prefilter before walking the automaton.
+<a href=#1393 id=1393 data-nosnippet>1393</a>                </span><span class="kw">let </span>span = Span::from(at..input.end());
+<a href=#1394 id=1394 data-nosnippet>1394</a>                <span class="kw">match </span>pre.find_in(input.haystack(), span).into_option() {
+<a href=#1395 id=1395 data-nosnippet>1395</a>                    <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+<a href=#1396 id=1396 data-nosnippet>1396</a>                    <span class="prelude-val">Some</span>(i) =&gt; {
+<a href=#1397 id=1397 data-nosnippet>1397</a>                        <span class="kw">if </span>i &gt; at {
+<a href=#1398 id=1398 data-nosnippet>1398</a>                            at = i;
+<a href=#1399 id=1399 data-nosnippet>1399</a>                            <span class="kw">continue</span>;
+<a href=#1400 id=1400 data-nosnippet>1400</a>                        }
+<a href=#1401 id=1401 data-nosnippet>1401</a>                    }
+<a href=#1402 id=1402 data-nosnippet>1402</a>                }
+<a href=#1403 id=1403 data-nosnippet>1403</a>            } <span class="kw">else </span>{
+<a href=#1404 id=1404 data-nosnippet>1404</a>                <span class="comment">// When pre.is_none(), then starting states should not be
+<a href=#1405 id=1405 data-nosnippet>1405</a>                // treated as special. That is, without a prefilter, is_special
+<a href=#1406 id=1406 data-nosnippet>1406</a>                // should only return true when the state is a dead or a match
+<a href=#1407 id=1407 data-nosnippet>1407</a>                // state.
+<a href=#1408 id=1408 data-nosnippet>1408</a>                //
+<a href=#1409 id=1409 data-nosnippet>1409</a>                // It is possible to execute a search without a prefilter even
+<a href=#1410 id=1410 data-nosnippet>1410</a>                // when the underlying searcher has one: an anchored search.
+<a href=#1411 id=1411 data-nosnippet>1411</a>                // But in this case, the automaton makes it impossible to move
+<a href=#1412 id=1412 data-nosnippet>1412</a>                // back to the start state by construction, and thus, we should
+<a href=#1413 id=1413 data-nosnippet>1413</a>                // never reach this branch.
+<a href=#1414 id=1414 data-nosnippet>1414</a>                </span><span class="macro">debug_assert!</span>(<span class="bool-val">false</span>, <span class="string">"unreachable"</span>);
+<a href=#1415 id=1415 data-nosnippet>1415</a>            }
+<a href=#1416 id=1416 data-nosnippet>1416</a>        }
+<a href=#1417 id=1417 data-nosnippet>1417</a>        at += <span class="number">1</span>;
+<a href=#1418 id=1418 data-nosnippet>1418</a>    }
+<a href=#1419 id=1419 data-nosnippet>1419</a>    <span class="prelude-val">Ok</span>(mat)
+<a href=#1420 id=1420 data-nosnippet>1420</a>}
+<a href=#1421 id=1421 data-nosnippet>1421</a>
+<a href=#1422 id=1422 data-nosnippet>1422</a><span class="attr">#[inline(never)]
+<a href=#1423 id=1423 data-nosnippet>1423</a></span><span class="kw">fn </span>try_find_overlapping_fwd&lt;A: Automaton + <span class="question-mark">?</span>Sized&gt;(
+<a href=#1424 id=1424 data-nosnippet>1424</a>    aut: <span class="kw-2">&amp;</span>A,
+<a href=#1425 id=1425 data-nosnippet>1425</a>    input: <span class="kw-2">&amp;</span>Input&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1426 id=1426 data-nosnippet>1426</a>    state: <span class="kw-2">&amp;mut </span>OverlappingState,
+<a href=#1427 id=1427 data-nosnippet>1427</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(), MatchError&gt; {
+<a href=#1428 id=1428 data-nosnippet>1428</a>    state.mat = <span class="prelude-val">None</span>;
+<a href=#1429 id=1429 data-nosnippet>1429</a>    <span class="kw">if </span>input.is_done() {
+<a href=#1430 id=1430 data-nosnippet>1430</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#1431 id=1431 data-nosnippet>1431</a>    }
+<a href=#1432 id=1432 data-nosnippet>1432</a>    <span class="comment">// Searching with a pattern ID is always anchored, so we should only ever
+<a href=#1433 id=1433 data-nosnippet>1433</a>    // use a prefilter when no pattern ID is given.
+<a href=#1434 id=1434 data-nosnippet>1434</a>    </span><span class="kw">if </span>aut.prefilter().is_some() &amp;&amp; !input.get_anchored().is_anchored() {
+<a href=#1435 id=1435 data-nosnippet>1435</a>        <span class="kw">let </span>pre = aut.prefilter().unwrap();
+<a href=#1436 id=1436 data-nosnippet>1436</a>        try_find_overlapping_fwd_imp(aut, input, <span class="prelude-val">Some</span>(pre), state)
+<a href=#1437 id=1437 data-nosnippet>1437</a>    } <span class="kw">else </span>{
+<a href=#1438 id=1438 data-nosnippet>1438</a>        try_find_overlapping_fwd_imp(aut, input, <span class="prelude-val">None</span>, state)
+<a href=#1439 id=1439 data-nosnippet>1439</a>    }
+<a href=#1440 id=1440 data-nosnippet>1440</a>}
+<a href=#1441 id=1441 data-nosnippet>1441</a>
+<a href=#1442 id=1442 data-nosnippet>1442</a><span class="attr">#[inline(always)]
+<a href=#1443 id=1443 data-nosnippet>1443</a></span><span class="kw">fn </span>try_find_overlapping_fwd_imp&lt;A: Automaton + <span class="question-mark">?</span>Sized&gt;(
+<a href=#1444 id=1444 data-nosnippet>1444</a>    aut: <span class="kw-2">&amp;</span>A,
+<a href=#1445 id=1445 data-nosnippet>1445</a>    input: <span class="kw-2">&amp;</span>Input&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1446 id=1446 data-nosnippet>1446</a>    pre: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Prefilter&gt;,
+<a href=#1447 id=1447 data-nosnippet>1447</a>    state: <span class="kw-2">&amp;mut </span>OverlappingState,
+<a href=#1448 id=1448 data-nosnippet>1448</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(), MatchError&gt; {
+<a href=#1449 id=1449 data-nosnippet>1449</a>    <span class="kw">let </span><span class="kw-2">mut </span>sid = <span class="kw">match </span>state.id {
+<a href=#1450 id=1450 data-nosnippet>1450</a>        <span class="prelude-val">None </span>=&gt; {
+<a href=#1451 id=1451 data-nosnippet>1451</a>            <span class="kw">let </span>sid = aut.start_state(input.get_anchored())<span class="question-mark">?</span>;
+<a href=#1452 id=1452 data-nosnippet>1452</a>            <span class="comment">// Handle the case where the start state is a match state. That is,
+<a href=#1453 id=1453 data-nosnippet>1453</a>            // the empty string is in our automaton. We report every match we
+<a href=#1454 id=1454 data-nosnippet>1454</a>            // can here before moving on and updating 'state.at' and 'state.id'
+<a href=#1455 id=1455 data-nosnippet>1455</a>            // to find more matches in other parts of the haystack.
+<a href=#1456 id=1456 data-nosnippet>1456</a>            </span><span class="kw">if </span>aut.is_match(sid) {
+<a href=#1457 id=1457 data-nosnippet>1457</a>                <span class="kw">let </span>i = state.next_match_index.unwrap_or(<span class="number">0</span>);
+<a href=#1458 id=1458 data-nosnippet>1458</a>                <span class="kw">let </span>len = aut.match_len(sid);
+<a href=#1459 id=1459 data-nosnippet>1459</a>                <span class="kw">if </span>i &lt; len {
+<a href=#1460 id=1460 data-nosnippet>1460</a>                    state.next_match_index = <span class="prelude-val">Some</span>(i + <span class="number">1</span>);
+<a href=#1461 id=1461 data-nosnippet>1461</a>                    state.mat = <span class="prelude-val">Some</span>(get_match(aut, sid, i, input.start()));
+<a href=#1462 id=1462 data-nosnippet>1462</a>                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#1463 id=1463 data-nosnippet>1463</a>                }
+<a href=#1464 id=1464 data-nosnippet>1464</a>            }
+<a href=#1465 id=1465 data-nosnippet>1465</a>            state.at = input.start();
+<a href=#1466 id=1466 data-nosnippet>1466</a>            state.id = <span class="prelude-val">Some</span>(sid);
+<a href=#1467 id=1467 data-nosnippet>1467</a>            state.next_match_index = <span class="prelude-val">None</span>;
+<a href=#1468 id=1468 data-nosnippet>1468</a>            state.mat = <span class="prelude-val">None</span>;
+<a href=#1469 id=1469 data-nosnippet>1469</a>            sid
+<a href=#1470 id=1470 data-nosnippet>1470</a>        }
+<a href=#1471 id=1471 data-nosnippet>1471</a>        <span class="prelude-val">Some</span>(sid) =&gt; {
+<a href=#1472 id=1472 data-nosnippet>1472</a>            <span class="comment">// If we still have matches left to report in this state then
+<a href=#1473 id=1473 data-nosnippet>1473</a>            // report them until we've exhausted them. Only after that do we
+<a href=#1474 id=1474 data-nosnippet>1474</a>            // advance to the next offset in the haystack.
+<a href=#1475 id=1475 data-nosnippet>1475</a>            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(i) = state.next_match_index {
+<a href=#1476 id=1476 data-nosnippet>1476</a>                <span class="kw">let </span>len = aut.match_len(sid);
+<a href=#1477 id=1477 data-nosnippet>1477</a>                <span class="kw">if </span>i &lt; len {
+<a href=#1478 id=1478 data-nosnippet>1478</a>                    state.next_match_index = <span class="prelude-val">Some</span>(i + <span class="number">1</span>);
+<a href=#1479 id=1479 data-nosnippet>1479</a>                    state.mat = <span class="prelude-val">Some</span>(get_match(aut, sid, i, state.at + <span class="number">1</span>));
+<a href=#1480 id=1480 data-nosnippet>1480</a>                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#1481 id=1481 data-nosnippet>1481</a>                }
+<a href=#1482 id=1482 data-nosnippet>1482</a>                <span class="comment">// Once we've reported all matches at a given position, we need
+<a href=#1483 id=1483 data-nosnippet>1483</a>                // to advance the search to the next position.
+<a href=#1484 id=1484 data-nosnippet>1484</a>                </span>state.at += <span class="number">1</span>;
+<a href=#1485 id=1485 data-nosnippet>1485</a>                state.next_match_index = <span class="prelude-val">None</span>;
+<a href=#1486 id=1486 data-nosnippet>1486</a>                state.mat = <span class="prelude-val">None</span>;
+<a href=#1487 id=1487 data-nosnippet>1487</a>            }
+<a href=#1488 id=1488 data-nosnippet>1488</a>            sid
+<a href=#1489 id=1489 data-nosnippet>1489</a>        }
+<a href=#1490 id=1490 data-nosnippet>1490</a>    };
+<a href=#1491 id=1491 data-nosnippet>1491</a>    <span class="kw">while </span>state.at &lt; input.end() {
+<a href=#1492 id=1492 data-nosnippet>1492</a>        sid = aut.next_state(
+<a href=#1493 id=1493 data-nosnippet>1493</a>            input.get_anchored(),
+<a href=#1494 id=1494 data-nosnippet>1494</a>            sid,
+<a href=#1495 id=1495 data-nosnippet>1495</a>            input.haystack()[state.at],
+<a href=#1496 id=1496 data-nosnippet>1496</a>        );
+<a href=#1497 id=1497 data-nosnippet>1497</a>        <span class="kw">if </span>aut.is_special(sid) {
+<a href=#1498 id=1498 data-nosnippet>1498</a>            state.id = <span class="prelude-val">Some</span>(sid);
+<a href=#1499 id=1499 data-nosnippet>1499</a>            <span class="kw">if </span>aut.is_dead(sid) {
+<a href=#1500 id=1500 data-nosnippet>1500</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#1501 id=1501 data-nosnippet>1501</a>            } <span class="kw">else if </span>aut.is_match(sid) {
+<a href=#1502 id=1502 data-nosnippet>1502</a>                state.next_match_index = <span class="prelude-val">Some</span>(<span class="number">1</span>);
+<a href=#1503 id=1503 data-nosnippet>1503</a>                state.mat = <span class="prelude-val">Some</span>(get_match(aut, sid, <span class="number">0</span>, state.at + <span class="number">1</span>));
+<a href=#1504 id=1504 data-nosnippet>1504</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#1505 id=1505 data-nosnippet>1505</a>            } <span class="kw">else if let </span><span class="prelude-val">Some</span>(pre) = pre {
+<a href=#1506 id=1506 data-nosnippet>1506</a>                <span class="comment">// If we're here, we know it's a special state that is not a
+<a href=#1507 id=1507 data-nosnippet>1507</a>                // dead or a match state AND that a prefilter is active. Thus,
+<a href=#1508 id=1508 data-nosnippet>1508</a>                // it must be a start state.
+<a href=#1509 id=1509 data-nosnippet>1509</a>                </span><span class="macro">debug_assert!</span>(aut.is_start(sid));
+<a href=#1510 id=1510 data-nosnippet>1510</a>                <span class="kw">let </span>span = Span::from(state.at..input.end());
+<a href=#1511 id=1511 data-nosnippet>1511</a>                <span class="kw">match </span>pre.find_in(input.haystack(), span).into_option() {
+<a href=#1512 id=1512 data-nosnippet>1512</a>                    <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(()),
+<a href=#1513 id=1513 data-nosnippet>1513</a>                    <span class="prelude-val">Some</span>(i) =&gt; {
+<a href=#1514 id=1514 data-nosnippet>1514</a>                        <span class="kw">if </span>i &gt; state.at {
+<a href=#1515 id=1515 data-nosnippet>1515</a>                            state.at = i;
+<a href=#1516 id=1516 data-nosnippet>1516</a>                            <span class="kw">continue</span>;
+<a href=#1517 id=1517 data-nosnippet>1517</a>                        }
+<a href=#1518 id=1518 data-nosnippet>1518</a>                    }
+<a href=#1519 id=1519 data-nosnippet>1519</a>                }
+<a href=#1520 id=1520 data-nosnippet>1520</a>            } <span class="kw">else </span>{
+<a href=#1521 id=1521 data-nosnippet>1521</a>                <span class="comment">// When pre.is_none(), then starting states should not be
+<a href=#1522 id=1522 data-nosnippet>1522</a>                // treated as special. That is, without a prefilter, is_special
+<a href=#1523 id=1523 data-nosnippet>1523</a>                // should only return true when the state is a dead or a match
+<a href=#1524 id=1524 data-nosnippet>1524</a>                // state.
+<a href=#1525 id=1525 data-nosnippet>1525</a>                //
+<a href=#1526 id=1526 data-nosnippet>1526</a>                // ... except for one special case: in stream searching, we
+<a href=#1527 id=1527 data-nosnippet>1527</a>                // currently call overlapping search with a 'None' prefilter,
+<a href=#1528 id=1528 data-nosnippet>1528</a>                // regardless of whether one exists or not, because stream
+<a href=#1529 id=1529 data-nosnippet>1529</a>                // searching can't currently deal with prefilters correctly in
+<a href=#1530 id=1530 data-nosnippet>1530</a>                // all cases.
+<a href=#1531 id=1531 data-nosnippet>1531</a>            </span>}
+<a href=#1532 id=1532 data-nosnippet>1532</a>        }
+<a href=#1533 id=1533 data-nosnippet>1533</a>        state.at += <span class="number">1</span>;
+<a href=#1534 id=1534 data-nosnippet>1534</a>    }
+<a href=#1535 id=1535 data-nosnippet>1535</a>    state.id = <span class="prelude-val">Some</span>(sid);
+<a href=#1536 id=1536 data-nosnippet>1536</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1537 id=1537 data-nosnippet>1537</a>}
+<a href=#1538 id=1538 data-nosnippet>1538</a>
+<a href=#1539 id=1539 data-nosnippet>1539</a><span class="attr">#[inline(always)]
+<a href=#1540 id=1540 data-nosnippet>1540</a></span><span class="kw">fn </span>get_match&lt;A: Automaton + <span class="question-mark">?</span>Sized&gt;(
+<a href=#1541 id=1541 data-nosnippet>1541</a>    aut: <span class="kw-2">&amp;</span>A,
+<a href=#1542 id=1542 data-nosnippet>1542</a>    sid: StateID,
+<a href=#1543 id=1543 data-nosnippet>1543</a>    index: usize,
+<a href=#1544 id=1544 data-nosnippet>1544</a>    at: usize,
+<a href=#1545 id=1545 data-nosnippet>1545</a>) -&gt; Match {
+<a href=#1546 id=1546 data-nosnippet>1546</a>    <span class="kw">let </span>pid = aut.match_pattern(sid, index);
+<a href=#1547 id=1547 data-nosnippet>1547</a>    <span class="kw">let </span>len = aut.pattern_len(pid);
+<a href=#1548 id=1548 data-nosnippet>1548</a>    Match::new(pid, (at - len)..at)
+<a href=#1549 id=1549 data-nosnippet>1549</a>}
+<a href=#1550 id=1550 data-nosnippet>1550</a>
+<a href=#1551 id=1551 data-nosnippet>1551</a><span class="doccomment">/// Write a prefix "state" indicator for fmt::Debug impls. It always writes
+<a href=#1552 id=1552 data-nosnippet>1552</a>/// exactly two printable bytes to the given formatter.
+<a href=#1553 id=1553 data-nosnippet>1553</a>///
+<a href=#1554 id=1554 data-nosnippet>1554</a>/// Specifically, this tries to succinctly distinguish the different types of
+<a href=#1555 id=1555 data-nosnippet>1555</a>/// states: dead states, start states and match states. It even accounts for
+<a href=#1556 id=1556 data-nosnippet>1556</a>/// the possible overlappings of different state types. (The only possible
+<a href=#1557 id=1557 data-nosnippet>1557</a>/// overlapping is that of match and start states.)
+<a href=#1558 id=1558 data-nosnippet>1558</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>fmt_state_indicator&lt;A: Automaton&gt;(
+<a href=#1559 id=1559 data-nosnippet>1559</a>    f: <span class="kw-2">&amp;mut </span>core::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1560 id=1560 data-nosnippet>1560</a>    aut: A,
+<a href=#1561 id=1561 data-nosnippet>1561</a>    id: StateID,
+<a href=#1562 id=1562 data-nosnippet>1562</a>) -&gt; core::fmt::Result {
+<a href=#1563 id=1563 data-nosnippet>1563</a>    <span class="kw">if </span>aut.is_dead(id) {
+<a href=#1564 id=1564 data-nosnippet>1564</a>        <span class="macro">write!</span>(f, <span class="string">"D "</span>)<span class="question-mark">?</span>;
+<a href=#1565 id=1565 data-nosnippet>1565</a>    } <span class="kw">else if </span>aut.is_match(id) {
+<a href=#1566 id=1566 data-nosnippet>1566</a>        <span class="kw">if </span>aut.is_start(id) {
+<a href=#1567 id=1567 data-nosnippet>1567</a>            <span class="macro">write!</span>(f, <span class="string">"*&gt;"</span>)<span class="question-mark">?</span>;
+<a href=#1568 id=1568 data-nosnippet>1568</a>        } <span class="kw">else </span>{
+<a href=#1569 id=1569 data-nosnippet>1569</a>            <span class="macro">write!</span>(f, <span class="string">"* "</span>)<span class="question-mark">?</span>;
+<a href=#1570 id=1570 data-nosnippet>1570</a>        }
+<a href=#1571 id=1571 data-nosnippet>1571</a>    } <span class="kw">else if </span>aut.is_start(id) {
+<a href=#1572 id=1572 data-nosnippet>1572</a>        <span class="macro">write!</span>(f, <span class="string">" &gt;"</span>)<span class="question-mark">?</span>;
+<a href=#1573 id=1573 data-nosnippet>1573</a>    } <span class="kw">else </span>{
+<a href=#1574 id=1574 data-nosnippet>1574</a>        <span class="macro">write!</span>(f, <span class="string">"  "</span>)<span class="question-mark">?</span>;
+<a href=#1575 id=1575 data-nosnippet>1575</a>    }
+<a href=#1576 id=1576 data-nosnippet>1576</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1577 id=1577 data-nosnippet>1577</a>}
+<a href=#1578 id=1578 data-nosnippet>1578</a>
+<a href=#1579 id=1579 data-nosnippet>1579</a><span class="doccomment">/// Return an iterator of transitions in a sparse format given an iterator
+<a href=#1580 id=1580 data-nosnippet>1580</a>/// of all explicitly defined transitions. The iterator yields ranges of
+<a href=#1581 id=1581 data-nosnippet>1581</a>/// transitions, such that any adjacent transitions mapped to the same
+<a href=#1582 id=1582 data-nosnippet>1582</a>/// state are combined into a single range.
+<a href=#1583 id=1583 data-nosnippet>1583</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>sparse_transitions&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#1584 id=1584 data-nosnippet>1584</a>    <span class="kw-2">mut </span>it: <span class="kw">impl </span>Iterator&lt;Item = (u8, StateID)&gt; + <span class="lifetime">'a</span>,
+<a href=#1585 id=1585 data-nosnippet>1585</a>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (u8, u8, StateID)&gt; + <span class="lifetime">'a </span>{
+<a href=#1586 id=1586 data-nosnippet>1586</a>    <span class="kw">let </span><span class="kw-2">mut </span>cur: <span class="prelude-ty">Option</span>&lt;(u8, u8, StateID)&gt; = <span class="prelude-val">None</span>;
+<a href=#1587 id=1587 data-nosnippet>1587</a>    core::iter::from_fn(<span class="kw">move </span>|| {
+<a href=#1588 id=1588 data-nosnippet>1588</a>        <span class="kw">while let </span><span class="prelude-val">Some</span>((class, next)) = it.next() {
+<a href=#1589 id=1589 data-nosnippet>1589</a>            <span class="kw">let </span>(prev_start, prev_end, prev_next) = <span class="kw">match </span>cur {
+<a href=#1590 id=1590 data-nosnippet>1590</a>                <span class="prelude-val">Some</span>(x) =&gt; x,
+<a href=#1591 id=1591 data-nosnippet>1591</a>                <span class="prelude-val">None </span>=&gt; {
+<a href=#1592 id=1592 data-nosnippet>1592</a>                    cur = <span class="prelude-val">Some</span>((class, class, next));
+<a href=#1593 id=1593 data-nosnippet>1593</a>                    <span class="kw">continue</span>;
+<a href=#1594 id=1594 data-nosnippet>1594</a>                }
+<a href=#1595 id=1595 data-nosnippet>1595</a>            };
+<a href=#1596 id=1596 data-nosnippet>1596</a>            <span class="kw">if </span>prev_next == next {
+<a href=#1597 id=1597 data-nosnippet>1597</a>                cur = <span class="prelude-val">Some</span>((prev_start, class, prev_next));
+<a href=#1598 id=1598 data-nosnippet>1598</a>            } <span class="kw">else </span>{
+<a href=#1599 id=1599 data-nosnippet>1599</a>                cur = <span class="prelude-val">Some</span>((class, class, next));
+<a href=#1600 id=1600 data-nosnippet>1600</a>                <span class="kw">return </span><span class="prelude-val">Some</span>((prev_start, prev_end, prev_next));
+<a href=#1601 id=1601 data-nosnippet>1601</a>            }
+<a href=#1602 id=1602 data-nosnippet>1602</a>        }
+<a href=#1603 id=1603 data-nosnippet>1603</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>((start, end, next)) = cur.take() {
+<a href=#1604 id=1604 data-nosnippet>1604</a>            <span class="kw">return </span><span class="prelude-val">Some</span>((start, end, next));
+<a href=#1605 id=1605 data-nosnippet>1605</a>        }
+<a href=#1606 id=1606 data-nosnippet>1606</a>        <span class="prelude-val">None
+<a href=#1607 id=1607 data-nosnippet>1607</a>    </span>})
+<a href=#1608 id=1608 data-nosnippet>1608</a>}</code></pre></div></section></main></body></html>

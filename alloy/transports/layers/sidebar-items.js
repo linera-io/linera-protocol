@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["FallbackLayer","FallbackService","RateLimitRetryPolicy","RetryBackoffLayer","RetryBackoffService"],"trait":["RetryPolicy"]};

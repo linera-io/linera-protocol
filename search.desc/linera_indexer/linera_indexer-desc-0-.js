@@ -1,0 +1,1 @@
+searchState.loadedDescShard("linera_indexer", 0, "An example of an indexer with the operations plugin.")

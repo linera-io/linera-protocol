@@ -1,0 +1,186 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/displaydoc-0.2.5/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="displaydoc" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">displaydoc/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! This library provides a convenient derive macro for the standard library's
+<a href=#2 id=2 data-nosnippet>2</a>//! [`core::fmt::Display`] trait.
+<a href=#3 id=3 data-nosnippet>3</a>//!
+<a href=#4 id=4 data-nosnippet>4</a>//! [`core::fmt::Display`]: https://doc.rust-lang.org/std/fmt/trait.Display.html
+<a href=#5 id=5 data-nosnippet>5</a>//!
+<a href=#6 id=6 data-nosnippet>6</a>//! ```toml
+<a href=#7 id=7 data-nosnippet>7</a>//! [dependencies]
+<a href=#8 id=8 data-nosnippet>8</a>//! displaydoc = "0.2"
+<a href=#9 id=9 data-nosnippet>9</a>//! ```
+<a href=#10 id=10 data-nosnippet>10</a>//!
+<a href=#11 id=11 data-nosnippet>11</a>//! *Compiler support: requires rustc 1.56+*
+<a href=#12 id=12 data-nosnippet>12</a>//!
+<a href=#13 id=13 data-nosnippet>13</a>//! &lt;br&gt;
+<a href=#14 id=14 data-nosnippet>14</a>//!
+<a href=#15 id=15 data-nosnippet>15</a>//! ## Example
+<a href=#16 id=16 data-nosnippet>16</a>//!
+<a href=#17 id=17 data-nosnippet>17</a>//! *Demonstration alongside the [`Error`][std::error::Error] derive macro from [`thiserror`](https://docs.rs/thiserror/1.0.25/thiserror/index.html),
+<a href=#18 id=18 data-nosnippet>18</a>//! to propagate source locations from [`io::Error`][std::io::Error] with the `#[source]` attribute:*
+<a href=#19 id=19 data-nosnippet>19</a>//! ```rust
+<a href=#20 id=20 data-nosnippet>20</a>//! use std::io;
+<a href=#21 id=21 data-nosnippet>21</a>//! use displaydoc::Display;
+<a href=#22 id=22 data-nosnippet>22</a>//! use thiserror::Error;
+<a href=#23 id=23 data-nosnippet>23</a>//!
+<a href=#24 id=24 data-nosnippet>24</a>//! #[derive(Display, Error, Debug)]
+<a href=#25 id=25 data-nosnippet>25</a>//! pub enum DataStoreError {
+<a href=#26 id=26 data-nosnippet>26</a>//!     /// data store disconnected
+<a href=#27 id=27 data-nosnippet>27</a>//!     Disconnect(#[source] io::Error),
+<a href=#28 id=28 data-nosnippet>28</a>//!     /// the data for key `{0}` is not available
+<a href=#29 id=29 data-nosnippet>29</a>//!     Redaction(String),
+<a href=#30 id=30 data-nosnippet>30</a>//!     /// invalid header (expected {expected:?}, found {found:?})
+<a href=#31 id=31 data-nosnippet>31</a>//!     InvalidHeader {
+<a href=#32 id=32 data-nosnippet>32</a>//!         expected: String,
+<a href=#33 id=33 data-nosnippet>33</a>//!         found: String,
+<a href=#34 id=34 data-nosnippet>34</a>//!     },
+<a href=#35 id=35 data-nosnippet>35</a>//!     /// unknown data store error
+<a href=#36 id=36 data-nosnippet>36</a>//!     Unknown,
+<a href=#37 id=37 data-nosnippet>37</a>//! }
+<a href=#38 id=38 data-nosnippet>38</a>//!
+<a href=#39 id=39 data-nosnippet>39</a>//! let error = DataStoreError::Redaction("CLASSIFIED CONTENT".to_string());
+<a href=#40 id=40 data-nosnippet>40</a>//! assert!("the data for key `CLASSIFIED CONTENT` is not available" == &amp;format!("{}", error));
+<a href=#41 id=41 data-nosnippet>41</a>//! ```
+<a href=#42 id=42 data-nosnippet>42</a>//! *Note that although [`io::Error`][std::io::Error] implements `Display`, we do not add it to the
+<a href=#43 id=43 data-nosnippet>43</a>//! generated message for `DataStoreError::Disconnect`, since it is already made available via
+<a href=#44 id=44 data-nosnippet>44</a>//! `#[source]`. See further context on avoiding duplication in error reports at the rust blog
+<a href=#45 id=45 data-nosnippet>45</a>//! [here](https://github.com/yaahc/blog.rust-lang.org/blob/master/posts/inside-rust/2021-05-15-What-the-error-handling-project-group-is-working-towards.md#duplicate-information-issue).*
+<a href=#46 id=46 data-nosnippet>46</a>//!
+<a href=#47 id=47 data-nosnippet>47</a>//! &lt;br&gt;
+<a href=#48 id=48 data-nosnippet>48</a>//!
+<a href=#49 id=49 data-nosnippet>49</a>//! ## Details
+<a href=#50 id=50 data-nosnippet>50</a>//!
+<a href=#51 id=51 data-nosnippet>51</a>//! - A `fmt::Display` impl is generated for your enum if you provide
+<a href=#52 id=52 data-nosnippet>52</a>//!   a docstring comment on each variant as shown above in the example. The
+<a href=#53 id=53 data-nosnippet>53</a>//!   `Display` derive macro supports a shorthand for interpolating fields from
+<a href=#54 id=54 data-nosnippet>54</a>//!   the error:
+<a href=#55 id=55 data-nosnippet>55</a>//!     - `/// {var}` ⟶ `write!("{}", self.var)`
+<a href=#56 id=56 data-nosnippet>56</a>//!     - `/// {0}` ⟶ `write!("{}", self.0)`
+<a href=#57 id=57 data-nosnippet>57</a>//!     - `/// {var:?}` ⟶ `write!("{:?}", self.var)`
+<a href=#58 id=58 data-nosnippet>58</a>//!     - `/// {0:?}` ⟶ `write!("{:?}", self.0)`
+<a href=#59 id=59 data-nosnippet>59</a>//! - This also works with structs and [generic types][crate::Display#generic-type-parameters]:
+<a href=#60 id=60 data-nosnippet>60</a>//! ```rust
+<a href=#61 id=61 data-nosnippet>61</a>//! # use displaydoc::Display;
+<a href=#62 id=62 data-nosnippet>62</a>//! /// oh no, an error: {0}
+<a href=#63 id=63 data-nosnippet>63</a>//! #[derive(Display)]
+<a href=#64 id=64 data-nosnippet>64</a>//! pub struct Error&lt;E&gt;(pub E);
+<a href=#65 id=65 data-nosnippet>65</a>//!
+<a href=#66 id=66 data-nosnippet>66</a>//! let error: Error&lt;&amp;str&gt; = Error("muahaha i am an error");
+<a href=#67 id=67 data-nosnippet>67</a>//! assert!("oh no, an error: muahaha i am an error" == &amp;format!("{}", error));
+<a href=#68 id=68 data-nosnippet>68</a>//! ```
+<a href=#69 id=69 data-nosnippet>69</a>//!
+<a href=#70 id=70 data-nosnippet>70</a>//! - Two optional attributes can be added to your types next to the derive:
+<a href=#71 id=71 data-nosnippet>71</a>//!
+<a href=#72 id=72 data-nosnippet>72</a>//!     - `#[ignore_extra_doc_attributes]` makes the macro ignore any doc
+<a href=#73 id=73 data-nosnippet>73</a>//!       comment attributes (or `///` lines) after the first. Multi-line
+<a href=#74 id=74 data-nosnippet>74</a>//!       comments using `///` are otherwise treated as an error, so use this
+<a href=#75 id=75 data-nosnippet>75</a>//!       attribute or consider switching to block doc comments (`/** */`).
+<a href=#76 id=76 data-nosnippet>76</a>//!
+<a href=#77 id=77 data-nosnippet>77</a>//!     - `#[prefix_enum_doc_attributes]` combines the doc comment message on
+<a href=#78 id=78 data-nosnippet>78</a>//!       your enum itself with the messages for each variant, in the format
+<a href=#79 id=79 data-nosnippet>79</a>//!       “enum: variant”. When added to an enum, the doc comment on the enum
+<a href=#80 id=80 data-nosnippet>80</a>//!       becomes mandatory. When added to any other type, it has no effect.
+<a href=#81 id=81 data-nosnippet>81</a>//!
+<a href=#82 id=82 data-nosnippet>82</a>//! - In case you want to have an independent doc comment, the
+<a href=#83 id=83 data-nosnippet>83</a>//!   `#[displaydoc("...")` atrribute may be used on the variant or struct to
+<a href=#84 id=84 data-nosnippet>84</a>//!   override it.
+<a href=#85 id=85 data-nosnippet>85</a>//!
+<a href=#86 id=86 data-nosnippet>86</a>//! &lt;br&gt;
+<a href=#87 id=87 data-nosnippet>87</a>//!
+<a href=#88 id=88 data-nosnippet>88</a>//! ## FAQ
+<a href=#89 id=89 data-nosnippet>89</a>//!
+<a href=#90 id=90 data-nosnippet>90</a>//! 1. **Is this crate `no_std` compatible?**
+<a href=#91 id=91 data-nosnippet>91</a>//!     * Yes! This crate implements the [`core::fmt::Display`] trait, not the [`std::fmt::Display`] trait, so it should work in `std` and `no_std` environments. Just add `default-features = false`.
+<a href=#92 id=92 data-nosnippet>92</a>//!
+<a href=#93 id=93 data-nosnippet>93</a>//! 2. **Does this crate work with `Path` and `PathBuf` via the `Display` trait?**
+<a href=#94 id=94 data-nosnippet>94</a>//!     * Yuuup. This crate uses @dtolnay's [autoref specialization technique](https://github.com/dtolnay/case-studies/blob/master/autoref-specialization/README.md) to add a special trait for types to get the display impl. It then specializes for `Path` and `PathBuf`, and when either of these types are found, it calls `self.display()` to get a `std::path::Display&lt;'_&gt;` type which can be used with the `Display` format specifier!
+<a href=#95 id=95 data-nosnippet>95</a></span><span class="attr">#![doc(html_root_url = <span class="string">"https://docs.rs/displaydoc/0.2.3"</span>)]
+<a href=#96 id=96 data-nosnippet>96</a>#![cfg_attr(docsrs, feature(doc_cfg))]
+<a href=#97 id=97 data-nosnippet>97</a>#![warn(
+<a href=#98 id=98 data-nosnippet>98</a>    rust_2018_idioms,
+<a href=#99 id=99 data-nosnippet>99</a>    unreachable_pub,
+<a href=#100 id=100 data-nosnippet>100</a>    bad_style,
+<a href=#101 id=101 data-nosnippet>101</a>    dead_code,
+<a href=#102 id=102 data-nosnippet>102</a>    improper_ctypes,
+<a href=#103 id=103 data-nosnippet>103</a>    non_shorthand_field_patterns,
+<a href=#104 id=104 data-nosnippet>104</a>    no_mangle_generic_items,
+<a href=#105 id=105 data-nosnippet>105</a>    overflowing_literals,
+<a href=#106 id=106 data-nosnippet>106</a>    path_statements,
+<a href=#107 id=107 data-nosnippet>107</a>    patterns_in_fns_without_body,
+<a href=#108 id=108 data-nosnippet>108</a>    unconditional_recursion,
+<a href=#109 id=109 data-nosnippet>109</a>    unused,
+<a href=#110 id=110 data-nosnippet>110</a>    unused_allocation,
+<a href=#111 id=111 data-nosnippet>111</a>    unused_comparisons,
+<a href=#112 id=112 data-nosnippet>112</a>    unused_parens,
+<a href=#113 id=113 data-nosnippet>113</a>    while_true
+<a href=#114 id=114 data-nosnippet>114</a>)]
+<a href=#115 id=115 data-nosnippet>115</a>#![allow(clippy::try_err)]
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a>#[allow(unused_extern_crates)]
+<a href=#118 id=118 data-nosnippet>118</a></span><span class="kw">extern crate </span>proc_macro;
+<a href=#119 id=119 data-nosnippet>119</a>
+<a href=#120 id=120 data-nosnippet>120</a><span class="kw">mod </span>attr;
+<a href=#121 id=121 data-nosnippet>121</a><span class="kw">mod </span>expand;
+<a href=#122 id=122 data-nosnippet>122</a><span class="kw">mod </span>fmt;
+<a href=#123 id=123 data-nosnippet>123</a>
+<a href=#124 id=124 data-nosnippet>124</a><span class="kw">use </span>proc_macro::TokenStream;
+<a href=#125 id=125 data-nosnippet>125</a><span class="kw">use </span>syn::{parse_macro_input, DeriveInput};
+<a href=#126 id=126 data-nosnippet>126</a>
+<a href=#127 id=127 data-nosnippet>127</a><span class="doccomment">/// [Custom `#[derive(...)]` macro](https://doc.rust-lang.org/edition-guide/rust-2018/macros/custom-derive.html)
+<a href=#128 id=128 data-nosnippet>128</a>/// for implementing [`fmt::Display`][core::fmt::Display] via doc comment attributes.
+<a href=#129 id=129 data-nosnippet>129</a>///
+<a href=#130 id=130 data-nosnippet>130</a>/// ### Generic Type Parameters
+<a href=#131 id=131 data-nosnippet>131</a>///
+<a href=#132 id=132 data-nosnippet>132</a>/// Type parameters to an enum or struct using this macro should *not* need to
+<a href=#133 id=133 data-nosnippet>133</a>/// have an explicit `Display` constraint at the struct or enum definition
+<a href=#134 id=134 data-nosnippet>134</a>/// site. A `Display` implementation for the `derive`d struct or enum is
+<a href=#135 id=135 data-nosnippet>135</a>/// generated assuming each type parameter implements `Display`, but that should
+<a href=#136 id=136 data-nosnippet>136</a>/// be possible without adding the constraint to the struct definition itself:
+<a href=#137 id=137 data-nosnippet>137</a>/// ```rust
+<a href=#138 id=138 data-nosnippet>138</a>/// use displaydoc::Display;
+<a href=#139 id=139 data-nosnippet>139</a>///
+<a href=#140 id=140 data-nosnippet>140</a>/// /// oh no, an error: {0}
+<a href=#141 id=141 data-nosnippet>141</a>/// #[derive(Display)]
+<a href=#142 id=142 data-nosnippet>142</a>/// pub struct Error&lt;E&gt;(pub E);
+<a href=#143 id=143 data-nosnippet>143</a>///
+<a href=#144 id=144 data-nosnippet>144</a>/// // No need to require `E: Display`, since `displaydoc::Display` adds that implicitly.
+<a href=#145 id=145 data-nosnippet>145</a>/// fn generate_error&lt;E&gt;(e: E) -&gt; Error&lt;E&gt; { Error(e) }
+<a href=#146 id=146 data-nosnippet>146</a>///
+<a href=#147 id=147 data-nosnippet>147</a>/// assert!("oh no, an error: muahaha" == &amp;format!("{}", generate_error("muahaha")));
+<a href=#148 id=148 data-nosnippet>148</a>/// ```
+<a href=#149 id=149 data-nosnippet>149</a>///
+<a href=#150 id=150 data-nosnippet>150</a>/// ### Using [`Debug`][core::fmt::Debug] Implementations with Type Parameters
+<a href=#151 id=151 data-nosnippet>151</a>/// However, if a type parameter must instead be constrained with the
+<a href=#152 id=152 data-nosnippet>152</a>/// [`Debug`][core::fmt::Debug] trait so that some field may be printed with
+<a href=#153 id=153 data-nosnippet>153</a>/// `{:?}`, that constraint must currently still also be specified redundantly
+<a href=#154 id=154 data-nosnippet>154</a>/// at the struct or enum definition site. If a struct or enum field is being
+<a href=#155 id=155 data-nosnippet>155</a>/// formatted with `{:?}` via [`displaydoc`][crate], and a generic type
+<a href=#156 id=156 data-nosnippet>156</a>/// parameter must implement `Debug` to do that, then that struct or enum
+<a href=#157 id=157 data-nosnippet>157</a>/// definition will need to propagate the `Debug` constraint to every type
+<a href=#158 id=158 data-nosnippet>158</a>/// parameter it's instantiated with:
+<a href=#159 id=159 data-nosnippet>159</a>/// ```rust
+<a href=#160 id=160 data-nosnippet>160</a>/// use core::fmt::Debug;
+<a href=#161 id=161 data-nosnippet>161</a>/// use displaydoc::Display;
+<a href=#162 id=162 data-nosnippet>162</a>///
+<a href=#163 id=163 data-nosnippet>163</a>/// /// oh no, an error: {0:?}
+<a href=#164 id=164 data-nosnippet>164</a>/// #[derive(Display)]
+<a href=#165 id=165 data-nosnippet>165</a>/// pub struct Error&lt;E: Debug&gt;(pub E);
+<a href=#166 id=166 data-nosnippet>166</a>///
+<a href=#167 id=167 data-nosnippet>167</a>/// // `E: Debug` now has to propagate to callers.
+<a href=#168 id=168 data-nosnippet>168</a>/// fn generate_error&lt;E: Debug&gt;(e: E) -&gt; Error&lt;E&gt; { Error(e) }
+<a href=#169 id=169 data-nosnippet>169</a>///
+<a href=#170 id=170 data-nosnippet>170</a>/// assert!("oh no, an error: \"cool\"" == &amp;format!("{}", generate_error("cool")));
+<a href=#171 id=171 data-nosnippet>171</a>///
+<a href=#172 id=172 data-nosnippet>172</a>/// // Try this with a struct that doesn't impl `Display` at all, unlike `str`.
+<a href=#173 id=173 data-nosnippet>173</a>/// #[derive(Debug)]
+<a href=#174 id=174 data-nosnippet>174</a>/// pub struct Oh;
+<a href=#175 id=175 data-nosnippet>175</a>/// assert!("oh no, an error: Oh" == &amp;format!("{}", generate_error(Oh)));
+<a href=#176 id=176 data-nosnippet>176</a>/// ```
+<a href=#177 id=177 data-nosnippet>177</a></span><span class="attr">#[proc_macro_derive(
+<a href=#178 id=178 data-nosnippet>178</a>    Display,
+<a href=#179 id=179 data-nosnippet>179</a>    attributes(ignore_extra_doc_attributes, prefix_enum_doc_attributes, displaydoc)
+<a href=#180 id=180 data-nosnippet>180</a>)]
+<a href=#181 id=181 data-nosnippet>181</a></span><span class="kw">pub fn </span>derive_error(input: TokenStream) -&gt; TokenStream {
+<a href=#182 id=182 data-nosnippet>182</a>    <span class="kw">let </span>input = <span class="macro">parse_macro_input!</span>(input <span class="kw">as </span>DeriveInput);
+<a href=#183 id=183 data-nosnippet>183</a>    expand::derive(<span class="kw-2">&amp;</span>input)
+<a href=#184 id=184 data-nosnippet>184</a>        .unwrap_or_else(|err| err.to_compile_error())
+<a href=#185 id=185 data-nosnippet>185</a>        .into()
+<a href=#186 id=186 data-nosnippet>186</a>}</code></pre></div></section></main></body></html>

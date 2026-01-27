@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AdditionError","CreationError","RecordError","SubtractionError"],"struct":["UsizeTypeTooSmall"]};
