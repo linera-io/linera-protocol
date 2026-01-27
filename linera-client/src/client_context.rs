@@ -499,8 +499,6 @@ impl<Env: Environment> ClientContext<Env> {
         }
 
         // Try to modify existing chain entry, setting the owner.
-        let timestamp = chain_description.timestamp();
-        let epoch = chain_description.config().epoch;
         let modified = self
             .wallet()
             .modify(chain_id, |chain| chain.owner = Some(owner))
@@ -508,6 +506,8 @@ impl<Env: Environment> ClientContext<Env> {
             .map_err(error::Inner::wallet)?;
         // If the chain didn't exist, insert a new entry.
         if modified.is_none() {
+            let timestamp = chain_description.timestamp();
+            let epoch = chain_description.config().epoch;
             self.wallet()
                 .insert(
                     chain_id,
