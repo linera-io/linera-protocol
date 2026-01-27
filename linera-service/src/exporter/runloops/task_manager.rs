@@ -79,9 +79,7 @@ where
             // We treat startup destinations as "MUST" always run
             // so we skip adding them to `current_committee_destinations` as those
             // can be turned off.
-            if !self.startup_destinations.contains(&destination)
-                && !self.current_committee_destinations.contains(&destination)
-            {
+            if !self.startup_destinations.contains(&destination) {
                 self.current_committee_destinations
                     .insert(destination.clone());
                 tracing::info!(id=?destination, "starting committee exporter");
