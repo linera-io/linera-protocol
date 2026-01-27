@@ -88,7 +88,7 @@ where
                 Some(next_block_notification) = self.new_block_queue.recv() => {
                     let walker = Walker::new(&mut self.storage);
                     match walker.walk(next_block_notification).await {
-                        Ok(Some(new_committee_blob)) if self.committee_destination_update => {
+                        Ok(Some(new_committee_blob)) => {
                             tracing::info!(?new_committee_blob, "new committee blob found, updating the committee destination.");
                                 let blob = match self.storage.get_blob(new_committee_blob).await {
                                     Ok(blob) => blob,
@@ -116,15 +116,12 @@ where
 
                                 let committee_destinations = committee.validator_addresses().map(|(_, address)| DestinationId::validator(address.to_owned()))
                                     .collect::<HashSet<_>>();
-                                self.exporters_tracker.shutdown_old_committee(committee_destinations.clone());
-                                self.storage.new_committee(committee_destinations.clone());
                                 self.storage.set_latest_committee_blob(new_committee_blob);
-                                self.exporters_tracker.start_committee_exporters(committee_destinations.clone());
-                        },
-
-                        Ok(Some(_)) => {
-                            tracing::info!(block=?next_block_notification, "New committee blob found but exporter is not configured \
-                             to update the committee destination, skipping.");
+                                if self.committee_destination_update {
+                                    self.exporters_tracker.shutdown_old_committee(committee_destinations.clone());
+                                    self.storage.new_committee(committee_destinations.clone());
+                                    self.exporters_tracker.start_committee_exporters(committee_destinations.clone());
+                                }
                         },
 
                         Ok(None) => {
