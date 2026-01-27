@@ -78,6 +78,10 @@ impl Contract for ControllerContract {
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+        log::info!(
+            "Processing operation on chain {}: {operation:?}",
+            self.runtime.chain_id()
+        );
         match operation {
             Operation::ExecuteWorkerCommand { owner, command } => {
                 self.runtime
@@ -89,6 +93,11 @@ impl Contract for ControllerContract {
                     self.execute_worker_command_locally(owner, command, creator_chain_id)
                         .await;
                 } else {
+                    log::info!(
+                        "Sending worker command from {} to {creator_chain_id} \
+                        for remote execution: {owner} {command:?}",
+                        self.runtime.chain_id()
+                    );
                     self.runtime
                         .prepare_message(Message::ExecuteWorkerCommand { owner, command })
                         .send_to(creator_chain_id);
@@ -103,6 +112,11 @@ impl Contract for ControllerContract {
                     self.execute_controller_command_locally(admin, command)
                         .await;
                 } else {
+                    log::info!(
+                        "Sending controller command from {} to {creator_chain_id} \
+                        for remote execution: {admin} {command:?}",
+                        self.runtime.chain_id()
+                    );
                     self.runtime
                         .prepare_message(Message::ExecuteControllerCommand { admin, command })
                         .send_to(creator_chain_id);
@@ -112,6 +126,10 @@ impl Contract for ControllerContract {
     }
 
     async fn execute_message(&mut self, message: Self::Message) {
+        log::info!(
+            "Processing message on chain {}: {message:?}",
+            self.runtime.chain_id()
+        );
         match message {
             Message::ExecuteWorkerCommand { owner, command } => {
                 assert_eq!(
@@ -198,6 +216,7 @@ impl ControllerContract {
         command: WorkerCommand,
         origin_chain_id: ChainId,
     ) {
+        log::info!("Executing worker command locally: {owner} {command:?} {origin_chain_id}");
         match command {
             WorkerCommand::RegisterWorker { capabilities } => {
                 let worker = Worker {
@@ -223,19 +242,20 @@ impl ControllerContract {
         admin: AccountOwner,
         command: ControllerCommand,
     ) {
-        let Some(admins) = self.state.admins.get() else {
+        log::info!("Executing controller command locally: {admin} {command:?}");
+        if let Some(admins) = self.state.admins.get() {
+            assert!(
+                admins.contains(&admin),
+                "Controller command can only be executed by an authorized admin account. Got {admin}"
+            );
+        } else {
             // No admin list was set yet. Hence, everyone is an owner. However, messages
             // are disallowed.
             assert!(
                 self.runtime.message_origin_chain_id().is_none(),
                 "Refusing to execute remote control command",
             );
-            return;
         };
-        assert!(
-            admins.contains(&admin),
-            "Controller command can only be executed by an authorized admin account. Got {admin}"
-        );
 
         match command {
             ControllerCommand::SetAdmins { admins } => {
@@ -334,6 +354,7 @@ impl ControllerContract {
         service_id: ManagedServiceId,
         new_workers: HashSet<ChainId>,
     ) {
+        log::info!("Updating {service_id:?}: {new_workers:?}");
         let existing_workers = self
             .state
             .services
@@ -345,6 +366,7 @@ impl ControllerContract {
         let message = Message::Start { service_id };
         for worker in &new_workers {
             if !existing_workers.contains(worker) {
+                log::info!("Notifying worker {worker}: {message:?}");
                 self.runtime
                     .prepare_message(message.clone())
                     .send_to(*worker);
@@ -353,6 +375,7 @@ impl ControllerContract {
         let message = Message::Stop { service_id };
         for worker in &existing_workers {
             if !new_workers.contains(worker) {
+                log::info!("Notifying worker {worker}: {message:?}");
                 self.runtime
                     .prepare_message(message.clone())
                     .send_to(*worker);
