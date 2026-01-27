@@ -13,7 +13,7 @@ use futures::{
     Future, FutureExt as _, StreamExt,
 };
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, Signer},
     data_types::{ChainDescription, MessagePolicy, Timestamp},
     identifiers::{AccountOwner, BlobType, ChainId},
     task::NonBlockingFuture,
@@ -260,10 +260,10 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .into_iter()
                 .map(|result| {
                     let (chain_id, chain) = result?;
-                    let mode = if let Some(owner) = chain.owner {
-                        (ListeningMode::FullChain, Some(owner))
+                    let mode = if chain.owner.is_some() {
+                        ListeningMode::FullChain
                     } else {
-                        (ListeningMode::FollowChain, None)
+                        ListeningMode::FollowChain
                     };
                     Ok((chain_id, mode))
                 })
@@ -277,7 +277,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             // typically don't own it.
             chain_ids
                 .entry(admin_chain_id)
-                .or_insert((ListeningMode::FollowChain, None));
+                .or_insert(ListeningMode::FollowChain);
             chain_ids
         };
 
@@ -392,7 +392,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     context_guard
                         .client()
                         .extend_chain_mode(new_chain_id, ListeningMode::FullChain);
-                    new_ids.insert(new_chain_id, (ListeningMode::FullChain, Some(chain_owner)));
+                    new_ids.insert(new_chain_id, ListeningMode::FullChain);
                 }
             }
         }
@@ -425,19 +425,16 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     /// event streams those chains are subscribed to.
     async fn listen_recursively(
         &mut self,
-        mut chain_ids: BTreeMap<ChainId, (ListeningMode, Option<AccountOwner>)>,
+        mut chain_ids: BTreeMap<ChainId, ListeningMode>,
     ) -> Result<(), Error> {
-        while let Some((chain_id, (listening_mode, maybe_owner))) = chain_ids.pop_first() {
-            for (new_chain_id, (new_listening_mode, maybe_new_owner)) in
-                self.listen(chain_id, listening_mode, maybe_owner).await?
-            {
+        while let Some((chain_id, listening_mode)) = chain_ids.pop_first() {
+            for (new_chain_id, new_listening_mode) in self.listen(chain_id, listening_mode).await? {
                 match chain_ids.entry(new_chain_id) {
                     Entry::Vacant(vacant) => {
-                        vacant.insert((new_listening_mode, maybe_new_owner));
+                        vacant.insert(new_listening_mode);
                     }
                     Entry::Occupied(mut occupied) => {
-                        occupied.get_mut().0.extend(Some(new_listening_mode));
-                        occupied.get_mut().1 = maybe_new_owner;
+                        occupied.get_mut().extend(Some(new_listening_mode));
                     }
                 }
             }
@@ -468,8 +465,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         &mut self,
         chain_id: ChainId,
         listening_mode: ListeningMode,
-        maybe_owner: Option<AccountOwner>,
-    ) -> Result<BTreeMap<ChainId, (ListeningMode, Option<AccountOwner>)>, Error> {
+    ) -> Result<BTreeMap<ChainId, ListeningMode>, Error> {
         let context_guard = self.context.lock().await;
         let existing_mode = context_guard.client().chain_mode(chain_id);
         // If we already have a listener with a sufficient mode, nothing to do.
@@ -486,15 +482,12 @@ impl<C: ClientContext + 'static> ChainListener<C> {
 
         // Start background tasks to sync received certificates, if enabled.
         let maybe_sync_cancellation_token = self.start_background_sync(chain_id).await;
-        let mut client = self
+        let client = self
             .context
             .lock()
             .await
             .make_chain_client(chain_id)
             .await?;
-        if let Some(owner) = maybe_owner {
-            client.set_preferred_owner(owner);
-        }
         let (listener, abort_handle, notification_stream) = client.listen().await?;
 
         let join_handle = linera_base::task::spawn(listener.in_current_span());
@@ -547,7 +540,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     async fn update_event_subscriptions(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<BTreeMap<ChainId, (ListeningMode, Option<AccountOwner>)>, Error> {
+    ) -> Result<BTreeMap<ChainId, ListeningMode>, Error> {
         let listening_client = self.listening.get_mut(&chain_id).expect("missing client");
         if !listening_client.client.is_tracked() {
             return Ok(BTreeMap::new());
@@ -557,7 +550,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             .event_stream_publishers()
             .await?
             .into_iter()
-            .map(|chain_id| (chain_id, (ListeningMode::FollowChain, None)))
+            .map(|chain_id| (chain_id, ListeningMode::FollowChain))
             .collect();
         for publisher_id in publishing_chains.keys() {
             self.event_subscribers
@@ -597,21 +590,8 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     match command {
                         ListenerCommand::Listen(new_chains) => {
                             debug!(?new_chains, "received command to listen to new chains");
-                            let chains =
-                                new_chains.into_iter().map(|(chain_id, owner)| {
-                                    if let Some(owner) = owner {
-                                        (chain_id, (ListeningMode::FullChain, Some(owner)))
-                                    } else {
-                                        (chain_id, (ListeningMode::FollowChain, None))
-                                    }
-                                })
-                                .collect::<BTreeMap<_, _>>();
-                            self.listen_recursively(chains.clone()).await?;
-                            for chain_id in chains.keys() {
-                                if let Err(error) = self.update_wallet(*chain_id).await {
-                                    error!(%error, %chain_id, "error updating the wallet with a chain");
-                                }
-                            }
+                            let listening_modes = self.update_wallet_for_listening(new_chains).await?;
+                            self.listen_recursively(listening_modes).await?;
                         }
                         ListenerCommand::StopListening(chains) => {
                             debug!(?chains, "received command to stop listening to chains");
@@ -701,6 +681,62 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             .client;
         self.context.lock().await.update_wallet(client).await?;
         Ok(())
+    }
+
+    /// Updates the wallet with the set of chains we're supposed to start listening to,
+    /// and returns the appropriate listening modes based on whether we have the private
+    /// keys corresponding to the given chains' owners.
+    async fn update_wallet_for_listening(
+        &self,
+        new_chains: BTreeMap<ChainId, Option<AccountOwner>>,
+    ) -> Result<BTreeMap<ChainId, ListeningMode>, Error> {
+        let mut chains = BTreeMap::new();
+        let context_guard = self.context.lock().await;
+        for (chain_id, owner) in new_chains {
+            if let Some(owner) = owner {
+                if context_guard
+                    .client()
+                    .signer()
+                    .contains_key(&owner)
+                    .await
+                    .map_err(ChainClientError::signer_failure)?
+                {
+                    // Try to modify existing chain entry, setting the owner.
+                    let modified = context_guard
+                        .wallet()
+                        .modify(chain_id, |chain| chain.owner = Some(owner))
+                        .await
+                        .map_err(error::Inner::wallet)?;
+                    // If the chain didn't exist, insert a new entry.
+                    if modified.is_none() {
+                        let chain_description = context_guard
+                            .client()
+                            .get_chain_description(chain_id)
+                            .await?;
+                        let timestamp = chain_description.timestamp();
+                        let epoch = chain_description.config().epoch;
+                        context_guard
+                            .wallet()
+                            .insert(
+                                chain_id,
+                                linera_core::wallet::Chain {
+                                    owner: Some(owner),
+                                    timestamp,
+                                    epoch: Some(epoch),
+                                    ..Default::default()
+                                },
+                            )
+                            .await
+                            .map_err(error::Inner::wallet)?;
+                    }
+
+                    chains.insert(chain_id, ListeningMode::FullChain);
+                }
+            } else {
+                chains.insert(chain_id, ListeningMode::FollowChain);
+            }
+        }
+        Ok(chains)
     }
 
     /// Processes the inbox, unless `skip_process_inbox` is set.
