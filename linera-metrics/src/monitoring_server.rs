@@ -8,36 +8,41 @@ use tokio::net::ToSocketAddrs;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-#[cfg(feature = "memory-profiling")]
+#[cfg(feature = "jemalloc")]
 use crate::memory_profiler::MemoryProfiler;
+
+/// Controls whether memory profiling endpoints are exposed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MemoryProfiling {
+    Enabled,
+    Disabled,
+}
+
+impl From<bool> for MemoryProfiling {
+    fn from(enabled: bool) -> Self {
+        if enabled {
+            MemoryProfiling::Enabled
+        } else {
+            MemoryProfiling::Disabled
+        }
+    }
+}
 
 pub fn start_metrics(
     address: impl ToSocketAddrs + Debug + Send + 'static,
     shutdown_signal: CancellationToken,
+    _memory_profiling: MemoryProfiling,
 ) {
-    #[cfg(feature = "memory-profiling")]
-    let app = {
-        // Try to add memory profiling endpoint
-        match MemoryProfiler::check_prof_ctl() {
-            Ok(()) => {
-                info!("Memory profiling available, enabling /debug/pprof and /debug/flamegraph endpoints");
-                Router::new()
-                    .route("/metrics", get(serve_metrics))
-                    .route("/debug/pprof", get(MemoryProfiler::heap_profile))
-                    .route("/debug/flamegraph", get(MemoryProfiler::heap_flamegraph))
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "Memory profiling not available: {}, serving metrics-only",
-                    e
-                );
-                Router::new().route("/metrics", get(serve_metrics))
-            }
-        }
-    };
-
-    #[cfg(not(feature = "memory-profiling"))]
     let app = Router::new().route("/metrics", get(serve_metrics));
+
+    #[cfg(feature = "jemalloc")]
+    let app = if _memory_profiling == MemoryProfiling::Enabled {
+        info!("Memory profiling enabled, adding /debug/pprof and /debug/flamegraph endpoints");
+        app.route("/debug/pprof", get(MemoryProfiler::heap_profile))
+            .route("/debug/flamegraph", get(MemoryProfiler::heap_flamegraph))
+    } else {
+        app
+    };
 
     tokio::spawn(async move {
         let listener = tokio::net::TcpListener::bind(address)

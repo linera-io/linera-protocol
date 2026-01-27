@@ -259,6 +259,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `--execution-state-cache-size <EXECUTION_STATE_CACHE_SIZE>` — Size of the execution state cache (default: 10000)
 
   Default value: `10000`
+* `--enable-memory-profiling` — Enable memory profiling (requires jemalloc feature and metrics). Exposes /debug/pprof and /debug/flamegraph endpoints on the metrics server
 
 
 

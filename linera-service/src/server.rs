@@ -9,20 +9,21 @@
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 // jemalloc configuration for memory profiling with jemalloc_pprof
-// prof:true,prof_active:true - Enable profiling from start
+// prof:true - Enable profiling infrastructure
+// prof_active:false - Sampling disabled by default, enabled via --enable-memory-profiling
 // lg_prof_sample:19 - Sample every 512KB for good detail/overhead balance
 
 // Linux/other platforms: use unprefixed malloc (with unprefixed_malloc_on_supported_platforms)
-#[cfg(all(feature = "memory-profiling", not(target_os = "macos")))]
+#[cfg(all(feature = "jemalloc", not(target_os = "macos")))]
 #[allow(non_upper_case_globals)]
 #[export_name = "malloc_conf"]
-pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+pub static malloc_conf: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
 // macOS: use prefixed malloc (without unprefixed_malloc_on_supported_platforms)
-#[cfg(all(feature = "memory-profiling", target_os = "macos"))]
+#[cfg(all(feature = "jemalloc", target_os = "macos"))]
 #[allow(non_upper_case_globals)]
 #[export_name = "_rjem_malloc_conf"]
-pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+pub static malloc_conf: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
 use std::{
     borrow::Cow,
@@ -73,6 +74,7 @@ struct ServerContext {
     block_cache_size: usize,
     execution_state_cache_size: usize,
     chain_info_max_received_log_entries: usize,
+    enable_memory_profiling: bool,
 }
 
 impl ServerContext {
@@ -134,6 +136,7 @@ impl ServerContext {
                 monitoring_server::start_metrics(
                     (listen_address.clone(), port),
                     shutdown_signal.clone(),
+                    self.enable_memory_profiling.into(),
                 );
             }
 
@@ -180,6 +183,7 @@ impl ServerContext {
                 monitoring_server::start_metrics(
                     (listen_address.to_string(), port),
                     shutdown_signal.clone(),
+                    self.enable_memory_profiling.into(),
                 );
             }
 
@@ -224,6 +228,20 @@ impl Runnable for ServerContext {
     where
         S: Storage + Clone + Send + Sync + 'static,
     {
+        // Activate memory profiling if requested
+        if self.enable_memory_profiling {
+            #[cfg(feature = "jemalloc")]
+            {
+                linera_metrics::memory_profiler::MemoryProfiler::activate()
+                    .await
+                    .expect("Failed to activate memory profiling");
+            }
+            #[cfg(not(feature = "jemalloc"))]
+            {
+                bail!("--enable-memory-profiling requires the binary to be compiled with the 'jemalloc' feature");
+            }
+        }
+
         let shutdown_notifier = CancellationToken::new();
         let listen_address = Self::get_listen_address();
 
@@ -290,6 +308,11 @@ struct ServerOptions {
         default_value = "10000"
     )]
     execution_state_cache_size: usize,
+
+    /// Enable memory profiling (requires jemalloc feature and metrics).
+    /// Exposes /debug/pprof and /debug/flamegraph endpoints on the metrics server.
+    #[arg(long, env = "LINERA_ENABLE_MEMORY_PROFILING")]
+    enable_memory_profiling: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -556,6 +579,7 @@ async fn run(options: ServerOptions) {
                 block_cache_size: options.block_cache_size,
                 execution_state_cache_size: options.execution_state_cache_size,
                 chain_info_max_received_log_entries,
+                enable_memory_profiling: options.enable_memory_profiling,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let store_config = storage_config

@@ -241,12 +241,20 @@ where
         ),
         err,
     )]
-    pub async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
+    pub async fn run(
+        self,
+        shutdown_signal: CancellationToken,
+        _enable_memory_profiling: bool,
+    ) -> Result<()> {
         info!("Starting proxy");
         let mut join_set = JoinSet::new();
 
         #[cfg(with_metrics)]
-        monitoring_server::start_metrics(self.metrics_address(), shutdown_signal.clone());
+        monitoring_server::start_metrics(
+            self.metrics_address(),
+            shutdown_signal.clone(),
+            _enable_memory_profiling.into(),
+        );
 
         let (health_reporter, health_service) = tonic_health::server::health_reporter();
         health_reporter

@@ -161,7 +161,11 @@ impl Runnable for ExporterContext {
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
         #[cfg(with_metrics)]
-        monitoring_server::start_metrics(self.config.metrics_address(), shutdown_notifier.clone());
+        monitoring_server::start_metrics(
+            self.config.metrics_address(),
+            shutdown_notifier.clone(),
+            monitoring_server::MemoryProfiling::Disabled,
+        );
 
         let (sender, handle) = start_block_processor_task(
             storage,

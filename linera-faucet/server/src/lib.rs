@@ -937,7 +937,11 @@ where
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
 
         #[cfg(feature = "metrics")]
-        monitoring_server::start_metrics(self.metrics_address(), cancellation_token.clone());
+        monitoring_server::start_metrics(
+            self.metrics_address(),
+            cancellation_token.clone(),
+            monitoring_server::MemoryProfiling::Disabled,
+        );
 
         let app = Router::new()
             .route("/", index_handler)
