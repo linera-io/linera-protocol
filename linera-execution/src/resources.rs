@@ -93,13 +93,14 @@ mod tests {
     use std::mem::size_of;
 
     use linera_base::{
-        data_types::{Amount, BlockHeight, Timestamp},
-        identifiers::{ApplicationId, ChainId},
+        data_types::{Amount, ApplicationDescription, BlockHeight, Timestamp},
+        identifiers::{ApplicationId, ChainId, ModuleId},
     };
 
     use crate::resources::{
         RUNTIME_AMOUNT_SIZE, RUNTIME_APPLICATION_ID_SIZE, RUNTIME_BLOCK_HEIGHT_SIZE,
-        RUNTIME_CHAIN_ID_SIZE, RUNTIME_OWNER_WEIGHT_SIZE, RUNTIME_TIMESTAMP_SIZE,
+        RUNTIME_CHAIN_ID_SIZE, RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE,
+        RUNTIME_OWNER_WEIGHT_SIZE, RUNTIME_TIMESTAMP_SIZE,
     };
 
     #[test]
@@ -113,6 +114,29 @@ mod tests {
         assert_eq!(RUNTIME_CHAIN_ID_SIZE as usize, size_of::<ChainId>());
         assert_eq!(RUNTIME_TIMESTAMP_SIZE as usize, size_of::<Timestamp>());
         assert_eq!(RUNTIME_OWNER_WEIGHT_SIZE as usize, size_of::<u64>());
+    }
+
+    /// Verifies that `RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE` matches the actual
+    /// structure of `ApplicationDescription`. This test will fail if a new fixed-size
+    /// field is added to the struct.
+    #[test]
+    fn test_application_description_size() {
+        // Verify using BCS serialization, which is architecture-independent.
+        // BCS encodes Vec length as ULEB128, so empty vectors add 1 byte each.
+        let description = ApplicationDescription {
+            module_id: ModuleId::default(),
+            creator_chain_id: ChainId::default(),
+            block_height: BlockHeight::default(),
+            application_index: 0,
+            parameters: vec![],
+            required_application_ids: vec![],
+        };
+        let serialized = bcs::to_bytes(&description).expect("serialization should succeed");
+        // Serialized size = fixed fields + 2 bytes for empty vectors (1 byte each for ULEB128 length).
+        assert_eq!(
+            serialized.len(),
+            RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE as usize + 2
+        );
     }
 }
 
