@@ -14,6 +14,8 @@ pub mod client;
 
 mod cross_chain_message_queue;
 mod message;
+#[cfg(feature = "opentelemetry")]
+pub mod propagation;
 #[cfg(with_simple_network)]
 pub mod simple;
 
