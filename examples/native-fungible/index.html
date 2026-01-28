@@ -178,7 +178,7 @@
               const query = gql(`mutation(
                   $donor: AccountOwner!,
                   $amount: Amount!,
-                  $recipient: Account!,
+                  $recipient: FungibleAccount!,
               ) {
                   transfer(owner: $donor, amount: $amount, targetAccount: $recipient)
               }`, {
