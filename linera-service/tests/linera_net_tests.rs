@@ -31,9 +31,11 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_core::worker::{Notification, Reason};
-use linera_sdk::abis::controller::{ControllerAbi, LocalWorkerState, ManagedService};
 use linera_sdk::{
-    abis::fungible::FungibleTokenAbi,
+    abis::{
+        controller::{ControllerAbi, LocalWorkerState, ManagedService},
+        fungible::FungibleTokenAbi,
+    },
     linera_base_types::{AccountSecretKey, BlobContent, BlockHeight, DataBlobHash},
 };
 #[cfg(any(
