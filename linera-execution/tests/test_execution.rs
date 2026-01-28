@@ -1409,3 +1409,43 @@ async fn test_message_receipt_spending_chain_balance(
 
     Ok(execution_result)
 }
+
+/// Tests that an application can read the description of another application.
+#[tokio::test]
+async fn test_read_application_description() -> anyhow::Result<()> {
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
+    let mut view = state.into_view().await;
+
+    let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
+    let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
+
+    // The creator chain ID for mock applications is dummy_chain_description(1).id().
+    let expected_creator_chain_id = dummy_chain_description(1).id();
+
+    caller_application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _operation| {
+            let description = runtime.read_application_description(target_id)?;
+            assert_eq!(description.creator_chain_id, expected_creator_chain_id);
+            Ok(vec![])
+        },
+    ));
+
+    target_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_finalize());
+
+    let context = create_dummy_operation_context(chain_id);
+    let mut controller = ResourceController::default();
+    let mut txn_tracker =
+        TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
+    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id: caller_id,
+                bytes: vec![],
+            },
+        )
+        .await?;
+
+    Ok(())
+}

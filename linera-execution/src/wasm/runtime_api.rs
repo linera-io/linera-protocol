@@ -5,7 +5,8 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Bytecode, SendMessageRequest, Timestamp,
+        Amount, ApplicationDescription, ApplicationPermissions, BlockHeight, Bytecode,
+        SendMessageRequest, Timestamp,
     },
     http,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, StreamName},
@@ -116,6 +117,18 @@ where
             .user_data_mut()
             .runtime
             .application_creator_chain_id()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the description of the given application.
+    fn read_application_description(
+        caller: &mut Caller,
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_application_description(application_id)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
