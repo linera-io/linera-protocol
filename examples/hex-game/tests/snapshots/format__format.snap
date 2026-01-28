@@ -1,0 +1,130 @@
+---
+source: hex-game/tests/format.rs
+expression: "HexApplication::formats().unwrap()"
+---
+REGISTRY:
+  AccountOwner:
+    ENUM:
+      0:
+        Reserved:
+          NEWTYPE: U8
+      1:
+        Address32:
+          NEWTYPE:
+            TYPENAME: CryptoHash
+      2:
+        Address20:
+          NEWTYPE:
+            TUPLEARRAY:
+              CONTENT: U8
+              SIZE: 20
+  Amount:
+    NEWTYPESTRUCT: U128
+  Board:
+    STRUCT:
+      - cells:
+          SEQ:
+            TYPENAME: Cell
+      - size: U16
+      - active:
+          TYPENAME: Player
+  Cell:
+    STRUCT:
+      - stone:
+          OPTION:
+            TYPENAME: Player
+      - connected: BOOL
+  Clock:
+    STRUCT:
+      - time_left:
+          TUPLEARRAY:
+            CONTENT:
+              TYPENAME: TimeDelta
+            SIZE: 2
+      - increment:
+          TYPENAME: TimeDelta
+      - current_turn_start:
+          TYPENAME: Timestamp
+      - block_delay:
+          TYPENAME: TimeDelta
+  CryptoHash:
+    NEWTYPESTRUCT:
+      TUPLEARRAY:
+        CONTENT: U8
+        SIZE: 32
+  HexOutcome:
+    ENUM:
+      0:
+        Winner:
+          NEWTYPE:
+            TYPENAME: Player
+      1:
+        Ok: UNIT
+  Message:
+    ENUM:
+      0:
+        Start:
+          STRUCT:
+            - players:
+                TUPLEARRAY:
+                  CONTENT:
+                    TYPENAME: AccountOwner
+                  SIZE: 2
+            - board_size: U16
+            - timeouts:
+                TYPENAME: Timeouts
+      1:
+        End:
+          STRUCT:
+            - winner:
+                TYPENAME: AccountOwner
+            - loser:
+                TYPENAME: AccountOwner
+  Operation:
+    ENUM:
+      0:
+        MakeMove:
+          STRUCT:
+            - x: U16
+            - y: U16
+      1:
+        ClaimVictory: UNIT
+      2:
+        Start:
+          STRUCT:
+            - players:
+                TUPLEARRAY:
+                  CONTENT:
+                    TYPENAME: AccountOwner
+                  SIZE: 2
+            - board_size: U16
+            - fee_budget:
+                TYPENAME: Amount
+            - timeouts:
+                OPTION:
+                  TYPENAME: Timeouts
+  Player:
+    ENUM:
+      0:
+        One: UNIT
+      1:
+        Two: UNIT
+  TimeDelta:
+    NEWTYPESTRUCT: U64
+  Timeouts:
+    STRUCT:
+      - startTime:
+          TYPENAME: TimeDelta
+      - increment:
+          TYPENAME: TimeDelta
+      - blockDelay:
+          TYPENAME: TimeDelta
+  Timestamp:
+    NEWTYPESTRUCT: U64
+OPERATION:
+  TYPENAME: Operation
+RESPONSE:
+  TYPENAME: HexOutcome
+MESSAGE:
+  TYPENAME: Message
+EVENT_VALUE: UNIT

@@ -1,0 +1,15 @@
+---
+source: counter-no-graphql/tests/format.rs
+expression: "CounterApplication::formats().unwrap()"
+---
+REGISTRY:
+  CounterOperation:
+    ENUM:
+      0:
+        Increment:
+          NEWTYPE: U64
+OPERATION:
+  TYPENAME: CounterOperation
+RESPONSE: U64
+MESSAGE: UNIT
+EVENT_VALUE: UNIT

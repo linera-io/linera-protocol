@@ -1,0 +1,132 @@
+---
+source: fungible/tests/format.rs
+expression: "fungible::formats().unwrap()"
+---
+REGISTRY:
+  Account:
+    STRUCT:
+      - chain_id:
+          TYPENAME: ChainId
+      - owner:
+          TYPENAME: AccountOwner
+  AccountOwner:
+    ENUM:
+      0:
+        Reserved:
+          NEWTYPE: U8
+      1:
+        Address32:
+          NEWTYPE:
+            TYPENAME: CryptoHash
+      2:
+        Address20:
+          NEWTYPE:
+            TUPLEARRAY:
+              CONTENT: U8
+              SIZE: 20
+  Amount:
+    NEWTYPESTRUCT: U128
+  ChainId:
+    NEWTYPESTRUCT:
+      TYPENAME: CryptoHash
+  CryptoHash:
+    NEWTYPESTRUCT:
+      TUPLEARRAY:
+        CONTENT: U8
+        SIZE: 32
+  FungibleOperation:
+    ENUM:
+      0:
+        Balance:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+      1:
+        TickerSymbol: UNIT
+      2:
+        Approve:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - spender:
+                TYPENAME: AccountOwner
+            - allowance:
+                TYPENAME: Amount
+      3:
+        Transfer:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - amount:
+                TYPENAME: Amount
+            - target_account:
+                TYPENAME: Account
+      4:
+        TransferFrom:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - spender:
+                TYPENAME: AccountOwner
+            - amount:
+                TYPENAME: Amount
+            - target_account:
+                TYPENAME: Account
+      5:
+        Claim:
+          STRUCT:
+            - source_account:
+                TYPENAME: Account
+            - amount:
+                TYPENAME: Amount
+            - target_account:
+                TYPENAME: Account
+  FungibleResponse:
+    ENUM:
+      0:
+        Ok: UNIT
+      1:
+        Balance:
+          NEWTYPE:
+            TYPENAME: Amount
+      2:
+        TickerSymbol:
+          NEWTYPE: STR
+  InitialState:
+    STRUCT:
+      - accounts:
+          MAP:
+            KEY:
+              TYPENAME: AccountOwner
+            VALUE:
+              TYPENAME: Amount
+  Message:
+    ENUM:
+      0:
+        Credit:
+          STRUCT:
+            - target:
+                TYPENAME: AccountOwner
+            - amount:
+                TYPENAME: Amount
+            - source:
+                TYPENAME: AccountOwner
+      1:
+        Withdraw:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - amount:
+                TYPENAME: Amount
+            - target_account:
+                TYPENAME: Account
+  Parameters:
+    STRUCT:
+      - ticker_symbol: STR
+OPERATION:
+  TYPENAME: FungibleOperation
+RESPONSE:
+  TYPENAME: FungibleResponse
+MESSAGE:
+  TYPENAME: Message
+EVENT_VALUE: UNIT

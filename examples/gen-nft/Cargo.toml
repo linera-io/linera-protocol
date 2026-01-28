@@ -22,10 +22,15 @@ serde.workspace = true
 sha3.workspace = true
 tokenizers.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+serde-reflection.workspace = true
+
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 fungible = { workspace = true, features = ["test"] }
-non-fungible = { workspace = true, features = ["test"] }
+insta.workspace = true
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+non-fungible = { workspace = true, features = ["test"] }
+serde-reflection.workspace = true
 tokio.workspace = true
 
 [[bin]]

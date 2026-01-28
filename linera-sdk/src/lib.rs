@@ -33,6 +33,8 @@ pub mod contract;
 #[cfg(feature = "ethereum")]
 pub mod ethereum;
 mod extensions;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod formats;
 pub mod graphql;
 pub mod linera_base_types;
 mod log;

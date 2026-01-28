@@ -19,6 +19,7 @@ use {
 
 /// A message.
 #[derive(Debug, Deserialize, Serialize)]
+#[doc(hidden)]
 pub enum Message {
     /// Credits the given `target` account, unless the message is bouncing, in which case
     /// `source` is credited instead.
@@ -58,6 +59,58 @@ impl OwnerSpender {
             panic!("owner should be different from spender");
         }
         Self { owner, spender }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod formats {
+    use linera_sdk::{
+        formats::{BcsApplication, Formats},
+        linera_base_types::AccountOwner,
+    };
+    use serde_reflection::{Samples, Tracer, TracerConfig};
+
+    use super::{
+        Account, FungibleOperation, FungibleResponse, FungibleTokenAbi, InitialState, Message,
+        Parameters,
+    };
+
+    /// The Fungible Token application.
+    pub struct FungibleApplication;
+
+    impl BcsApplication for FungibleApplication {
+        type Abi = FungibleTokenAbi;
+
+        fn formats() -> serde_reflection::Result<Formats> {
+            let mut tracer = Tracer::new(
+                TracerConfig::default()
+                    .record_samples_for_newtype_structs(true)
+                    .record_samples_for_tuple_structs(true),
+            );
+            let samples = Samples::new();
+
+            // Trace the ABI types
+            let (operation, _) = tracer.trace_type::<FungibleOperation>(&samples)?;
+            let (response, _) = tracer.trace_type::<FungibleResponse>(&samples)?;
+            let (message, _) = tracer.trace_type::<Message>(&samples)?;
+            let (event_value, _) = tracer.trace_type::<()>(&samples)?;
+
+            // Trace additional supporting types (notably all enums) to populate the registry
+            tracer.trace_type::<Parameters>(&samples)?;
+            tracer.trace_type::<InitialState>(&samples)?;
+            tracer.trace_type::<Account>(&samples)?;
+            tracer.trace_type::<AccountOwner>(&samples)?;
+
+            let registry = tracer.registry()?;
+
+            Ok(Formats {
+                registry,
+                operation,
+                response,
+                message,
+                event_value,
+            })
+        }
     }
 }
 

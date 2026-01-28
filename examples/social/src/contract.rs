@@ -10,8 +10,7 @@ use linera_sdk::{
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-use serde::{Deserialize, Serialize};
-use social::{Comment, Key, Message, Operation, OwnPost, Post, SocialAbi};
+use social::{Comment, Event, Key, Message, Operation, OwnPost, Post, SocialAbi};
 use state::SocialState;
 
 /// The stream name the application uses for events about posts, likes and comments.
@@ -202,14 +201,4 @@ impl SocialContract {
             .insert(&key, post)
             .expect("Failed to insert received post");
     }
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub enum Event {
-    /// A new post was created
-    Post { post: OwnPost, index: u32 },
-    /// A user liked a post
-    Like { key: Key },
-    /// A user commented on a post
-    Comment { key: Key, comment: String },
 }

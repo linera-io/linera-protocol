@@ -1,0 +1,18 @@
+---
+source: time-expiry/tests/format.rs
+expression: "TimeExpiryApplication::formats().unwrap()"
+---
+REGISTRY:
+  TimeDelta:
+    NEWTYPESTRUCT: U64
+  TimeExpiryOperation:
+    ENUM:
+      0:
+        ExpireAfter:
+          NEWTYPE:
+            TYPENAME: TimeDelta
+OPERATION:
+  TYPENAME: TimeExpiryOperation
+RESPONSE: UNIT
+MESSAGE: UNIT
+EVENT_VALUE: UNIT

@@ -1,0 +1,21 @@
+---
+source: task-processor/tests/format.rs
+expression: "TaskProcessorApplication::formats().unwrap()"
+---
+REGISTRY:
+  TaskProcessorOperation:
+    ENUM:
+      0:
+        RequestTask:
+          STRUCT:
+            - operator: STR
+            - input: STR
+      1:
+        StoreResult:
+          STRUCT:
+            - result: STR
+OPERATION:
+  TYPENAME: TaskProcessorOperation
+RESPONSE: UNIT
+MESSAGE: UNIT
+EVENT_VALUE: UNIT

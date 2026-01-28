@@ -722,11 +722,13 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
+ "insta",
  "linera-sdk",
  "matching-engine",
  "num-bigint",
  "num-traits",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -1377,8 +1379,10 @@ dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
  "assert_matches",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -1570,6 +1574,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "console"
+version = "0.15.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "054ccb5b10f9f2cbf51eb355ca1d05c2d279ce1804688d0db74b4733a5aeafd8"
+dependencies = [
+ "encode_unicode",
+ "libc",
+ "once_cell",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "const-hex"
 version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1595,9 +1611,10 @@ dependencies = [
  "async-graphql",
  "bcs",
  "futures",
+ "insta",
  "linera-sdk",
  "log",
- "serde",
+ "serde-reflection",
  "serde_json",
  "tokio",
 ]
@@ -1647,7 +1664,9 @@ dependencies = [
  "assert_matches",
  "async-graphql",
  "futures",
+ "insta",
  "linera-sdk",
+ "serde-reflection",
  "serde_json",
  "tokio",
 ]
@@ -1658,8 +1677,10 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "futures",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -1819,8 +1840,10 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "serde_json",
  "tokio",
 ]
@@ -2287,6 +2310,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "encode_unicode"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2355,6 +2384,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
+name = "erased-discriminant"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1a6df962265a53221f29081896c412ef325c17fa7d638cd9578febe53d3c82c"
+dependencies = [
+ "typeid",
+]
+
+[[package]]
 name = "errno"
 version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2377,8 +2415,10 @@ dependencies = [
  "alloy-primitives",
  "assert_matches",
  "async-graphql",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -2599,8 +2639,10 @@ dependencies = [
  "async-graphql",
  "fungible",
  "futures",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -2849,11 +2891,13 @@ dependencies = [
  "candle-transformers",
  "fungible",
  "getrandom 0.2.15",
+ "insta",
  "linera-sdk",
  "log",
  "non-fungible",
  "rand 0.8.5",
  "serde",
+ "serde-reflection",
  "sha3",
  "tokenizers",
  "tokio",
@@ -2925,9 +2969,11 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "bcs",
+ "insta",
  "linera-sdk",
  "log",
  "serde",
+ "serde-reflection",
  "serde_json",
  "test-log",
  "thiserror 1.0.65",
@@ -3093,9 +3139,11 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "bcs",
+ "insta",
  "linera-sdk",
  "log",
  "serde",
+ "serde-reflection",
  "serde_json",
  "test-log",
  "tokio",
@@ -3513,6 +3561,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "insta"
+version = "1.46.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "248b42847813a1550dafd15296fd9748c651d0c32194559dbc05d804d54b21e8"
+dependencies = [
+ "console",
+ "once_cell",
+ "serde",
+ "similar",
+ "tempfile",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3869,6 +3930,7 @@ dependencies = [
  "log",
  "papaya",
  "serde",
+ "serde-reflection",
  "serde_json",
  "thiserror 1.0.65",
  "tokio",
@@ -4184,9 +4246,11 @@ dependencies = [
  "candle-core",
  "candle-transformers",
  "getrandom 0.2.15",
+ "insta",
  "linera-sdk",
  "log",
  "rand 0.8.5",
+ "serde-reflection",
  "sha3",
  "tokenizers",
  "tokio",
@@ -4278,8 +4342,10 @@ dependencies = [
  "async-graphql",
  "bcs",
  "fungible",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -4433,10 +4499,12 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
+ "insta",
  "linera-sdk",
  "log",
  "native-fungible",
  "serde",
+ "serde-reflection",
  "test-log",
  "tokio",
 ]
@@ -4459,9 +4527,11 @@ dependencies = [
  "base64 0.22.1",
  "bcs",
  "fungible",
+ "insta",
  "linera-sdk",
  "non-fungible",
  "serde",
+ "serde-reflection",
  "sha3",
  "tokio",
 ]
@@ -5400,8 +5470,10 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -5752,6 +5824,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-reflection"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68fb2363ca88876b3e16442b02dde5305646fd50df297c79a4b54fc5f5cf51d4"
+dependencies = [
+ "erased-discriminant",
+ "once_cell",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.65",
+ "typeid",
+]
+
+[[package]]
 name = "serde-wasm-bindgen"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5978,6 +6064,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
+name = "similar"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
+
+[[package]]
 name = "slab"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6007,8 +6099,10 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "bcs",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -6301,8 +6395,10 @@ name = "task-processor"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -6435,8 +6531,10 @@ checksum = "ef927ca75afb808a4d64dd374f00a2adf8d0fcff8e7b184af886c3c87ec4a3f3"
 name = "time-expiry"
 version = "0.1.0"
 dependencies = [
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -6912,6 +7010,12 @@ name = "twox-hash"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b907da542cbced5261bd3256de1b3a1bf340a3d37f93425a07362a1d687de56"
+
+[[package]]
+name = "typeid"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
 
 [[package]]
 name = "typenum"

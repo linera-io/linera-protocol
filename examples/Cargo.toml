@@ -40,6 +40,7 @@ getrandom = { version = "0.2.12", default-features = false, features = [
     "custom",
 ] }
 hex = "0.4.3"
+insta = { version = "1.36.1", features = ["yaml"] }
 linera-sdk = { path = "../linera-sdk" }
 linera-views = { path = "../linera-views", default-features = false }
 log = "0.4.20"
@@ -47,6 +48,7 @@ num-bigint = "0.4.3"
 num-traits = "0.2.16"
 rand = "0.8.5"
 serde = { version = "1.0.152", features = ["derive"] }
+serde-reflection = "0.5.2"
 serde_json = "1.0.93"
 sha3 = "0.10.8"
 test-log = { version = "0.2.15", default-features = false, features = [

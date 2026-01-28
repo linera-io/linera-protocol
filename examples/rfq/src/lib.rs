@@ -104,6 +104,7 @@ pub enum Operation {
 scalar!(Operation);
 
 #[derive(Debug, Deserialize, Serialize)]
+#[doc(hidden)]
 pub enum Message {
     RequestQuote {
         seq_number: u64,
@@ -157,6 +158,55 @@ impl Message {
                 // unused
                 RequestId::new(other_chain_id, 0, false)
             }
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod formats {
+    use linera_sdk::{
+        formats::{BcsApplication, Formats},
+        linera_base_types::AccountOwner,
+    };
+    use serde_reflection::{Samples, Tracer, TracerConfig};
+
+    use super::{Message, Operation, RequestId, RfqAbi, TokenPair, Tokens};
+
+    /// The Rfq application.
+    pub struct RfqApplication;
+
+    impl BcsApplication for RfqApplication {
+        type Abi = RfqAbi;
+
+        fn formats() -> serde_reflection::Result<Formats> {
+            let mut tracer = Tracer::new(
+                TracerConfig::default()
+                    .record_samples_for_newtype_structs(true)
+                    .record_samples_for_tuple_structs(true),
+            );
+            let samples = Samples::new();
+
+            // Trace the ABI types
+            let (operation, _) = tracer.trace_type::<Operation>(&samples)?;
+            let (response, _) = tracer.trace_type::<()>(&samples)?;
+            let (message, _) = tracer.trace_type::<Message>(&samples)?;
+            let (event_value, _) = tracer.trace_type::<()>(&samples)?;
+
+            // Trace additional supporting types (notably all enums) to populate the registry
+            tracer.trace_type::<TokenPair>(&samples)?;
+            tracer.trace_type::<RequestId>(&samples)?;
+            tracer.trace_type::<Tokens>(&samples)?;
+            tracer.trace_type::<AccountOwner>(&samples)?;
+
+            let registry = tracer.registry()?;
+
+            Ok(Formats {
+                registry,
+                operation,
+                response,
+                message,
+                event_value,
+            })
         }
     }
 }

@@ -1,0 +1,164 @@
+---
+source: controller/tests/format.rs
+expression: "ControllerApplication::formats().unwrap()"
+---
+REGISTRY:
+  AccountOwner:
+    ENUM:
+      0:
+        Reserved:
+          NEWTYPE: U8
+      1:
+        Address32:
+          NEWTYPE:
+            TYPENAME: CryptoHash
+      2:
+        Address20:
+          NEWTYPE:
+            TUPLEARRAY:
+              CONTENT: U8
+              SIZE: 20
+  ChainId:
+    NEWTYPESTRUCT:
+      TYPENAME: CryptoHash
+  ControllerCommand:
+    ENUM:
+      0:
+        SetAdmins:
+          STRUCT:
+            - admins:
+                OPTION:
+                  SEQ:
+                    TYPENAME: AccountOwner
+      1:
+        RemoveWorker:
+          STRUCT:
+            - worker_id:
+                TYPENAME: ChainId
+      2:
+        UpdateService:
+          STRUCT:
+            - service_id:
+                TYPENAME: DataBlobHash
+            - workers:
+                SEQ:
+                  TYPENAME: ChainId
+      3:
+        RemoveService:
+          STRUCT:
+            - service_id:
+                TYPENAME: DataBlobHash
+      4:
+        UpdateAllServices:
+          STRUCT:
+            - services:
+                SEQ:
+                  TUPLE:
+                    - TYPENAME: DataBlobHash
+                    - SEQ:
+                        TYPENAME: ChainId
+      5:
+        UpdateChain:
+          STRUCT:
+            - chain_id:
+                TYPENAME: ChainId
+            - workers:
+                SEQ:
+                  TYPENAME: ChainId
+      6:
+        RemoveChain:
+          STRUCT:
+            - chain_id:
+                TYPENAME: ChainId
+      7:
+        UpdateAllChains:
+          STRUCT:
+            - chains:
+                SEQ:
+                  TUPLE:
+                    - TYPENAME: ChainId
+                    - SEQ:
+                        TYPENAME: ChainId
+  CryptoHash:
+    NEWTYPESTRUCT:
+      TUPLEARRAY:
+        CONTENT: U8
+        SIZE: 32
+  DataBlobHash:
+    NEWTYPESTRUCT:
+      TYPENAME: CryptoHash
+  Message:
+    ENUM:
+      0:
+        ExecuteWorkerCommand:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - command:
+                TYPENAME: WorkerCommand
+      1:
+        ExecuteControllerCommand:
+          STRUCT:
+            - admin:
+                TYPENAME: AccountOwner
+            - command:
+                TYPENAME: ControllerCommand
+      2:
+        Reset: UNIT
+      3:
+        Start:
+          STRUCT:
+            - service_id:
+                TYPENAME: DataBlobHash
+      4:
+        Stop:
+          STRUCT:
+            - service_id:
+                TYPENAME: DataBlobHash
+      5:
+        FollowChain:
+          STRUCT:
+            - chain_id:
+                TYPENAME: ChainId
+      6:
+        ForgetChain:
+          STRUCT:
+            - chain_id:
+                TYPENAME: ChainId
+  Operation:
+    ENUM:
+      0:
+        ExecuteWorkerCommand:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - command:
+                TYPENAME: WorkerCommand
+      1:
+        ExecuteControllerCommand:
+          STRUCT:
+            - admin:
+                TYPENAME: AccountOwner
+            - command:
+                TYPENAME: ControllerCommand
+  Worker:
+    STRUCT:
+      - owner:
+          TYPENAME: AccountOwner
+      - capabilities:
+          SEQ: STR
+  WorkerCommand:
+    ENUM:
+      0:
+        RegisterWorker:
+          STRUCT:
+            - capabilities:
+                SEQ: STR
+      1:
+        DeregisterWorker: UNIT
+OPERATION:
+  TYPENAME: Operation
+RESPONSE: UNIT
+MESSAGE:
+  TYPENAME: Message
+EVENT_VALUE: UNIT

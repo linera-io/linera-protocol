@@ -10,14 +10,13 @@ use std::collections::HashSet;
 use async_graphql::ComplexObject;
 use linera_sdk::{
     abis::controller::{
-        ControllerAbi, ControllerCommand, ManagedServiceId, Operation, Worker, WorkerCommand,
+        ControllerAbi, ControllerCommand, ManagedServiceId, Message, Operation, Worker,
+        WorkerCommand,
     },
-    graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, ChainId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-use serde::{Deserialize, Serialize};
 
 use self::state::ControllerState;
 
@@ -30,33 +29,6 @@ linera_sdk::contract!(ControllerContract);
 
 impl WithContractAbi for ControllerContract {
     type Abi = ControllerAbi;
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, GraphQLMutationRoot)]
-pub enum Message {
-    // -- Message to the controller chain --
-    ExecuteWorkerCommand {
-        owner: AccountOwner,
-        command: WorkerCommand,
-    },
-    ExecuteControllerCommand {
-        admin: AccountOwner,
-        command: ControllerCommand,
-    },
-    // -- Messages sent to the workers from the controller chain --
-    Reset,
-    Start {
-        service_id: ManagedServiceId,
-    },
-    Stop {
-        service_id: ManagedServiceId,
-    },
-    FollowChain {
-        chain_id: ChainId,
-    },
-    ForgetChain {
-        chain_id: ChainId,
-    },
 }
 
 impl Contract for ControllerContract {

@@ -56,7 +56,55 @@ pub enum Operation {
 
 /// Messages that can be exchanged across chains from the same application instance.
 #[derive(Debug, Deserialize, Serialize)]
+#[doc(hidden)]
 pub enum Message {
     /// Pledge some tokens to the campaign (from an account on the receiver chain).
     PledgeWithAccount { owner: AccountOwner, amount: Amount },
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod formats {
+    use linera_sdk::{
+        formats::{BcsApplication, Formats},
+        linera_base_types::AccountOwner,
+    };
+    use serde_reflection::{Samples, Tracer, TracerConfig};
+
+    use super::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
+
+    /// The CrowdFunding application.
+    pub struct CrowdFundingApplication;
+
+    impl BcsApplication for CrowdFundingApplication {
+        type Abi = CrowdFundingAbi;
+
+        fn formats() -> serde_reflection::Result<Formats> {
+            let mut tracer = Tracer::new(
+                TracerConfig::default()
+                    .record_samples_for_newtype_structs(true)
+                    .record_samples_for_tuple_structs(true),
+            );
+            let samples = Samples::new();
+
+            // Trace the ABI types
+            let (operation, _) = tracer.trace_type::<Operation>(&samples)?;
+            let (response, _) = tracer.trace_type::<()>(&samples)?;
+            let (message, _) = tracer.trace_type::<Message>(&samples)?;
+            let (event_value, _) = tracer.trace_type::<()>(&samples)?;
+
+            // Trace additional supporting types (notably all enums) to populate the registry
+            tracer.trace_type::<InstantiationArgument>(&samples)?;
+            tracer.trace_type::<AccountOwner>(&samples)?;
+
+            let registry = tracer.registry()?;
+
+            Ok(Formats {
+                registry,
+                operation,
+                response,
+                message,
+                event_value,
+            })
+        }
+    }
 }

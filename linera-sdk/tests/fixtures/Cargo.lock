@@ -673,6 +673,7 @@ dependencies = [
  "async-graphql",
  "futures",
  "linera-sdk",
+ "serde-reflection",
  "serde_json",
 ]
 
@@ -683,6 +684,7 @@ dependencies = [
  "futures",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -1275,6 +1277,15 @@ name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
+name = "erased-discriminant"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1a6df962265a53221f29081896c412ef325c17fa7d638cd9578febe53d3c82c"
+dependencies = [
+ "typeid",
+]
 
 [[package]]
 name = "errno"
@@ -2378,6 +2389,7 @@ dependencies = [
  "log",
  "papaya",
  "serde",
+ "serde-reflection",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
@@ -3787,6 +3799,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-reflection"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68fb2363ca88876b3e16442b02dde5305646fd50df297c79a4b54fc5f5cf51d4"
+dependencies = [
+ "erased-discriminant",
+ "once_cell",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "typeid",
+]
+
+[[package]]
 name = "serde-wasm-bindgen"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4809,6 +4835,12 @@ name = "twox-hash"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
+
+[[package]]
+name = "typeid"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
 
 [[package]]
 name = "typenum"
