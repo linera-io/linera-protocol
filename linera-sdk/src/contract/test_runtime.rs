@@ -249,7 +249,7 @@ where
             .unwrap_or_else(|| {
                 panic!(
                     "Application description for {application_id:?} has not been mocked, \
-                please call `MockContractRuntime::set_application_description` first"
+                    please call `MockContractRuntime::set_application_description` first"
                 )
             })
     }

@@ -641,7 +641,8 @@ where
                 callback,
             })?
             .recv_response()?;
-        this.resource_controller.track_runtime_application_id()?;
+        this.resource_controller
+            .track_runtime_application_description(&description)?;
         Ok(description)
     }
 

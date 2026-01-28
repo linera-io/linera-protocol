@@ -7,7 +7,7 @@ use std::{fmt, sync::Arc, time::Duration};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Amount, ArithmeticError, Blob},
+    data_types::{Amount, ApplicationDescription, ArithmeticError, Blob},
     ensure,
     identifiers::AccountOwner,
     ownership::ChainOwnership,
@@ -72,6 +72,21 @@ pub const RUNTIME_OWNER_WEIGHT_SIZE: u32 = 8;
 /// the `ChainOwnership`. The way we do it is not optimal:
 /// TODO(#4164): Implement a procedure for computing naive sizes.
 pub const RUNTIME_CONSTANT_CHAIN_OWNERSHIP_SIZE: u32 = 4 + 4 * 8;
+
+/// The runtime size of a `CryptoHash`.
+pub const RUNTIME_CRYPTO_HASH_SIZE: u32 = 32;
+
+/// The runtime size of a `VmRuntime` enum.
+pub const RUNTIME_VM_RUNTIME_SIZE: u32 = 1;
+
+/// The runtime constant part size of an `ApplicationDescription`.
+/// This includes: `ModuleId` (2 hashes + VmRuntime) + `ChainId` + `BlockHeight` + `u32`.
+/// Variable parts (`parameters` and `required_application_ids`) are calculated separately.
+pub const RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE: u32 =
+    2 * RUNTIME_CRYPTO_HASH_SIZE + RUNTIME_VM_RUNTIME_SIZE  // ModuleId
+    + RUNTIME_CHAIN_ID_SIZE                                  // creator_chain_id
+    + RUNTIME_BLOCK_HEIGHT_SIZE                              // block_height
+    + 4;                                                     // application_index (u32)
 
 #[cfg(test)]
 mod tests {
@@ -531,6 +546,19 @@ where
             size += account_owner.size() + RUNTIME_OWNER_WEIGHT_SIZE;
         }
         size += RUNTIME_CONSTANT_CHAIN_OWNERSHIP_SIZE;
+        self.track_size_runtime_operations(size)
+    }
+
+    /// Tracks runtime reading of an application description.
+    pub(crate) fn track_runtime_application_description(
+        &mut self,
+        description: &ApplicationDescription,
+    ) -> Result<(), ExecutionError> {
+        let parameters_size = description.parameters.len() as u32;
+        let required_apps_size =
+            description.required_application_ids.len() as u32 * RUNTIME_APPLICATION_ID_SIZE;
+        let size =
+            RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE + parameters_size + required_apps_size;
         self.track_size_runtime_operations(size)
     }
 
