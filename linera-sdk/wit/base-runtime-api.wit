@@ -135,11 +135,6 @@ interface base-runtime-api {
         trace,
     }
 
-    enum vm-runtime {
-        wasm,
-        evm,
-    }
-
     record module-id {
         contract-blob-hash: crypto-hash,
         service-blob-hash: crypto-hash,
@@ -162,4 +157,9 @@ interface base-runtime-api {
     }
 
     type u128 = tuple<u64, u64>;
+
+    enum vm-runtime {
+        wasm,
+        evm,
+    }
 }
