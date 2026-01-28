@@ -9,5 +9,7 @@ metadata:
 data:
   linera_general.json: {{ .Files.Get "grafana-dashboards/linera/general.json" | quote | indent 4 }}
   linera_execution.json: {{ .Files.Get "grafana-dashboards/linera/execution.json" | quote | indent 4 }}
-  linera_storage.json: {{ .Files.Get "grafana-dashboards/linera/storage.json" | quote | indent 4 }}
+  linera_storage.json: {{ .Files.Get "grafana-dashboards/linera/storage/storage.json" | quote | indent 4 }}
+  linera_storage_rocksdb.json: {{ .Files.Get "grafana-dashboards/linera/storage/rocksdb.json" | quote | indent 4 }}
+  linera_storage_scylladb.json: {{ .Files.Get "grafana-dashboards/linera/storage/scylladb.json" | quote | indent 4 }}
   linera_views.json: {{ .Files.Get "grafana-dashboards/linera/views.json" | quote | indent 4 }}

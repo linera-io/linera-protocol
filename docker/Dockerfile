@@ -65,9 +65,11 @@ ENV GIT_COMMIT=${git_commit}
 ENV RUSTFLAGS=${rustflags}
 
 # Build without explicit --target to use host architecture
-RUN cargo build ${build_flag:+"$build_flag"} --bin linera-proxy --features $build_features
-RUN cargo build ${build_flag:+"$build_flag"} --bin linera-server --features $build_features
-RUN cargo build ${build_flag:+"$build_flag"} --bin linera --features $build_features
+RUN cargo build ${build_flag:+"$build_flag"} \
+    --bin linera-proxy \
+    --bin linera-server \
+    --bin linera \
+    --features $build_features
 
 RUN mv \
     target/"$build_folder"/linera \

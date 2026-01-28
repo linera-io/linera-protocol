@@ -87,6 +87,12 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlock>, ViewError>;
 
+    /// Reads a number of confirmed blocks by their hashes.
+    async fn read_confirmed_blocks<I: IntoIterator<Item = CryptoHash> + Send>(
+        &self,
+        hashes: I,
+    ) -> Result<Vec<Option<ConfirmedBlock>>, ViewError>;
+
     /// Reads the blob with the given blob ID.
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
 
@@ -402,6 +408,30 @@ impl ResultReadCertificates {
             });
         if invalid_hashes.is_empty() {
             Self::Certificates(certificates)
+        } else {
+            Self::InvalidHashes(invalid_hashes)
+        }
+    }
+}
+
+/// The result of processing the obtained read confirmed blocks.
+pub enum ResultReadConfirmedBlocks {
+    Blocks(Vec<ConfirmedBlock>),
+    InvalidHashes(Vec<CryptoHash>),
+}
+
+impl ResultReadConfirmedBlocks {
+    /// Creating the processed read confirmed blocks.
+    pub fn new(blocks: Vec<Option<ConfirmedBlock>>, hashes: Vec<CryptoHash>) -> Self {
+        let (blocks, invalid_hashes) = blocks
+            .into_iter()
+            .zip(hashes)
+            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(block, hash)| match block {
+                Some(block) => itertools::Either::Left(block),
+                None => itertools::Either::Right(hash),
+            });
+        if invalid_hashes.is_empty() {
+            Self::Blocks(blocks)
         } else {
             Self::InvalidHashes(invalid_hashes)
         }
