@@ -5874,7 +5874,6 @@ dependencies = [
  "native-fungible",
  "non-fungible",
  "nonzero_lit",
- "opentelemetry",
  "papaya",
  "pathdiff",
  "port-selector",
