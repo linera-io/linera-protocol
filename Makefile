@@ -186,7 +186,7 @@ deploy-app-counter: build-wasm-counter ## Deploy counter app to blockchain
 		cd $(EXAMPLES_DIR)/counter && \
 		COUNTER_APP_ID=$$(../../$(LINERA_BIN) publish-and-create \
 			../target/wasm32-unknown-unknown/release/counter_{contract,service}.wasm \
-			--json-argument "1" 2>&1 | grep -oE '[a-f0-9]{64}' | head -1) && \
+			--json-argument "1" | grep -oE '[a-f0-9]{64}' | tail -1) && \
 		if [ -z "$$COUNTER_APP_ID" ]; then \
 			printf "$(RED)❌ Failed to deploy counter app$(NC)\n"; \
 			exit 1; \
@@ -222,7 +222,7 @@ deploy-app-fungible: build-wasm-fungible ## Deploy fungible app to blockchain
 		FUNGIBLE_APP_ID=$$(../../$(LINERA_BIN) publish-and-create \
 			../target/wasm32-unknown-unknown/release/native_fungible_{contract,service}.wasm \
 			--json-argument '{ "accounts": {} }' \
-			--json-parameters '{ "ticker_symbol": "NAT" }' 2>&1 | grep -oE '[a-f0-9]{64}' | head -1) && \
+			--json-parameters '{ "ticker_symbol": "NAT" }' | grep -oE '[a-f0-9]{64}' | tail -1) && \
 		if [ -z "$$FUNGIBLE_APP_ID" ]; then \
 			printf "$(RED)❌ Failed to deploy fungible app$(NC)\n"; \
 			exit 1; \
