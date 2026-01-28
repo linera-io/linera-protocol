@@ -636,7 +636,7 @@ where
         let mut this = self.inner();
         let description = this
             .execution_state_sender
-            .send_request(|callback| ExecutionRequest::DescribeApplication {
+            .send_request(|callback| ExecutionRequest::ReadApplicationDescription {
                 application_id,
                 callback,
             })?

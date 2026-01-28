@@ -238,15 +238,22 @@ where
                 callback.respond(permissions);
             }
 
-            DescribeApplication {
+            ReadApplicationDescription {
                 application_id,
                 callback,
             } => {
-                let description = self
-                    .state
-                    .system
-                    .describe_application(application_id, self.txn_tracker)
-                    .await?;
+                let blob_id = application_id.description_blob_id();
+                let description = match self.txn_tracker.get_blob_content(&blob_id) {
+                    Some(blob) => bcs::from_bytes(blob.bytes())?,
+                    None => {
+                        let blob_content = self.state.system.read_blob_content(blob_id).await?;
+                        self.state
+                            .system
+                            .blob_used(self.txn_tracker, blob_id)
+                            .await?;
+                        bcs::from_bytes(blob_content.bytes())?
+                    }
+                };
                 callback.respond(description);
             }
 
@@ -1179,7 +1186,7 @@ pub enum ExecutionRequest {
         callback: Sender<ApplicationPermissions>,
     },
 
-    DescribeApplication {
+    ReadApplicationDescription {
         application_id: ApplicationId,
         #[debug(skip)]
         callback: Sender<ApplicationDescription>,
