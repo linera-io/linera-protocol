@@ -29,10 +29,7 @@ use linera_metrics::monitoring_server;
 #[cfg(all(with_metrics, feature = "opentelemetry"))]
 use linera_rpc::propagation::get_traffic_type_from_request;
 #[cfg(feature = "opentelemetry")]
-use linera_rpc::propagation::{
-    create_request_with_context, get_otel_context_from_tonic_request,
-    get_traffic_type_from_tonic_request, OtelContextLayer,
-};
+use linera_rpc::propagation::{get_traffic_type_from_tonic_request, OtelContextLayer};
 use linera_rpc::{
     config::{ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig},
     grpc::{
@@ -348,34 +345,32 @@ where
         }
     }
 
-    /// Extracts traffic type and OpenTelemetry context from request extensions.
-    /// Returns traffic_type ("organic", "synthetic", or "unknown") and an optional context.
-    /// When opentelemetry is disabled, returns "unknown" and None.
+    /// Extracts traffic type from request for metrics labeling.
+    /// Returns "organic", "synthetic", or "unknown".
     #[cfg(feature = "opentelemetry")]
-    fn extract_otel_info<R>(
-        request: &Request<R>,
-    ) -> (&'static str, Option<opentelemetry::Context>) {
-        let traffic_type = get_traffic_type_from_tonic_request(request);
-        let cx = get_otel_context_from_tonic_request(request);
-        (traffic_type, cx)
+    fn extract_traffic_type<R>(request: &Request<R>) -> &'static str {
+        get_traffic_type_from_tonic_request(request)
     }
 
-    /// Extracts traffic type when opentelemetry is disabled.
-    /// Returns "unknown" and None for context.
+    /// Returns "unknown" traffic type when opentelemetry is disabled.
     #[cfg(not(feature = "opentelemetry"))]
-    fn extract_otel_info<R>(_request: &Request<R>) -> (&'static str, Option<()>) {
-        ("unknown", None)
+    fn extract_traffic_type<R>(_request: &Request<R>) -> &'static str {
+        "unknown"
     }
 
     /// Creates a tonic::Request with OpenTelemetry context injected for forwarding.
+    ///
+    /// Gets the context from the current tracing span (which has the parent set by
+    /// OtelContextLayer), ensuring downstream services (shards) create spans as
+    /// children of the proxy's span. This enables proper distributed tracing.
     #[cfg(feature = "opentelemetry")]
-    fn create_forwarding_request<T>(inner: T, cx: Option<opentelemetry::Context>) -> Request<T> {
-        create_request_with_context(inner, cx.as_ref())
+    fn create_forwarding_request<T>(inner: T) -> Request<T> {
+        linera_rpc::propagation::create_request_with_current_span_context(inner)
     }
 
     /// Creates a tonic::Request without OpenTelemetry context (feature disabled).
     #[cfg(not(feature = "opentelemetry"))]
-    fn create_forwarding_request<T>(inner: T, _cx: Option<()>) -> Request<T> {
+    fn create_forwarding_request<T>(inner: T) -> Request<T> {
         Request::new(inner)
     }
 
@@ -552,9 +547,9 @@ where
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (traffic_type, cx) = Self::extract_otel_info(&request);
+        let traffic_type = Self::extract_traffic_type(&request);
         let (mut client, inner) = self.worker_client(request)?;
-        let forwarding_request = Self::create_forwarding_request(inner, cx);
+        let forwarding_request = Self::create_forwarding_request(inner);
         Self::log_and_return_proxy_request_outcome(
             client.handle_block_proposal(forwarding_request).await,
             "handle_block_proposal",
@@ -567,9 +562,9 @@ where
         &self,
         request: Request<LiteCertificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (traffic_type, cx) = Self::extract_otel_info(&request);
+        let traffic_type = Self::extract_traffic_type(&request);
         let (mut client, inner) = self.worker_client(request)?;
-        let forwarding_request = Self::create_forwarding_request(inner, cx);
+        let forwarding_request = Self::create_forwarding_request(inner);
         Self::log_and_return_proxy_request_outcome(
             client.handle_lite_certificate(forwarding_request).await,
             "handle_lite_certificate",
@@ -586,9 +581,9 @@ where
         &self,
         request: Request<api::HandleConfirmedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (traffic_type, cx) = Self::extract_otel_info(&request);
+        let traffic_type = Self::extract_traffic_type(&request);
         let (mut client, inner) = self.worker_client(request)?;
-        let forwarding_request = Self::create_forwarding_request(inner, cx);
+        let forwarding_request = Self::create_forwarding_request(inner);
         Self::log_and_return_proxy_request_outcome(
             client
                 .handle_confirmed_certificate(forwarding_request)
@@ -607,9 +602,9 @@ where
         &self,
         request: Request<api::HandleValidatedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (traffic_type, cx) = Self::extract_otel_info(&request);
+        let traffic_type = Self::extract_traffic_type(&request);
         let (mut client, inner) = self.worker_client(request)?;
-        let forwarding_request = Self::create_forwarding_request(inner, cx);
+        let forwarding_request = Self::create_forwarding_request(inner);
         Self::log_and_return_proxy_request_outcome(
             client
                 .handle_validated_certificate(forwarding_request)
@@ -624,9 +619,9 @@ where
         &self,
         request: Request<api::HandleTimeoutCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (traffic_type, cx) = Self::extract_otel_info(&request);
+        let traffic_type = Self::extract_traffic_type(&request);
         let (mut client, inner) = self.worker_client(request)?;
-        let forwarding_request = Self::create_forwarding_request(inner, cx);
+        let forwarding_request = Self::create_forwarding_request(inner);
         Self::log_and_return_proxy_request_outcome(
             client.handle_timeout_certificate(forwarding_request).await,
             "handle_timeout_certificate",
@@ -639,9 +634,9 @@ where
         &self,
         request: Request<api::ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (traffic_type, cx) = Self::extract_otel_info(&request);
+        let traffic_type = Self::extract_traffic_type(&request);
         let (mut client, inner) = self.worker_client(request)?;
-        let forwarding_request = Self::create_forwarding_request(inner, cx);
+        let forwarding_request = Self::create_forwarding_request(inner);
         Self::log_and_return_proxy_request_outcome(
             client.handle_chain_info_query(forwarding_request).await,
             "handle_chain_info_query",
@@ -728,9 +723,9 @@ where
         request: Request<PendingBlobRequest>,
     ) -> Result<Response<PendingBlobResult>, Status> {
         #[cfg_attr(not(with_metrics), allow(unused_variables))]
-        let (traffic_type, cx) = Self::extract_otel_info(&request);
+        let traffic_type = Self::extract_traffic_type(&request);
         let (mut client, inner) = self.worker_client(request)?;
-        let forwarding_request = Self::create_forwarding_request(inner, cx);
+        let forwarding_request = Self::create_forwarding_request(inner);
         #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
         match client.download_pending_blob(forwarding_request).await {
             Ok(blob_result) => {
@@ -756,9 +751,9 @@ where
         request: Request<HandlePendingBlobRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         #[cfg_attr(not(with_metrics), allow(unused_variables))]
-        let (traffic_type, cx) = Self::extract_otel_info(&request);
+        let traffic_type = Self::extract_traffic_type(&request);
         let (mut client, inner) = self.worker_client(request)?;
-        let forwarding_request = Self::create_forwarding_request(inner, cx);
+        let forwarding_request = Self::create_forwarding_request(inner);
         #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
         match client.handle_pending_blob(forwarding_request).await {
             Ok(blob_result) => {

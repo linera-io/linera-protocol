@@ -328,6 +328,17 @@ pub fn create_request_with_context<T>(inner: T, cx: Option<&Context>) -> tonic::
     request
 }
 
+/// Creates a new tonic::Request with the current tracing span's context injected.
+///
+/// This gets the OpenTelemetry context from the current tracing span and injects it
+/// into the request metadata. Use this when forwarding requests to downstream services
+/// to ensure proper distributed tracing (child spans linked to parent spans).
+pub fn create_request_with_current_span_context<T>(inner: T) -> tonic::Request<T> {
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+    let cx = tracing::Span::current().context();
+    create_request_with_context(inner, Some(&cx))
+}
+
 #[cfg(test)]
 mod tests {
     use opentelemetry::{baggage::BaggageExt, Key, KeyValue};
