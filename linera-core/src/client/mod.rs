@@ -4079,6 +4079,18 @@ impl<Env: Environment> ChainClient<Env> {
         mut local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
     ) -> Result<(), ChainClientError> {
+        let dominated = self
+            .listening_mode()
+            .is_none_or(|mode| !mode.is_relevant(&notification.reason));
+        if dominated {
+            debug!(
+                chain_id = %self.chain_id,
+                reason = ?notification.reason,
+                listening_mode = ?self.listening_mode(),
+                "Ignoring notification due to listening mode"
+            );
+            return Ok(());
+        }
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
                 if self.local_next_height_to_receive(origin).await? > height {
