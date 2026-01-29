@@ -158,16 +158,6 @@ pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: Option<&str>) {
         .with_sampler(opentelemetry_sdk::trace::Sampler::AlwaysOn)
         .build();
 
-    // Configure composite propagator for W3C TraceContext + Baggage
-    // This enables:
-    // 1. Trace context propagation across gRPC boundaries (connected traces in Tempo)
-    // 2. Baggage propagation for traffic_type labeling (organic vs synthetic)
-    let propagator = TextMapCompositePropagator::new(vec![
-        Box::new(TraceContextPropagator::new()),
-        Box::new(BaggagePropagator::new()),
-    ]);
-    global::set_text_map_propagator(propagator);
-
     init_with_tracer_provider(log_name, tracer_provider);
 }
 

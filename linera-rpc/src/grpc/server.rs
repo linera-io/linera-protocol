@@ -38,10 +38,8 @@ use super::{
     pool::GrpcConnectionPool,
     GrpcError, GRPC_MAX_MESSAGE_SIZE,
 };
-#[cfg(all(with_metrics, feature = "opentelemetry"))]
-use crate::propagation::get_traffic_type_from_request;
 #[cfg(feature = "opentelemetry")]
-use crate::propagation::{get_traffic_type_from_tonic_request, OtelContextLayer};
+use crate::propagation::{get_traffic_type_from_request, OtelContextLayer};
 use crate::{
     config::{CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig},
     cross_chain_message_queue, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
@@ -506,7 +504,7 @@ where
     /// Extracts traffic type from a tonic request's extensions.
     #[cfg(feature = "opentelemetry")]
     fn get_traffic_type<R>(request: &Request<R>) -> &'static str {
-        get_traffic_type_from_tonic_request(request)
+        get_traffic_type_from_request(request)
     }
 
     /// Returns "unknown" when opentelemetry feature is disabled.

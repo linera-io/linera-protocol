@@ -26,10 +26,8 @@ use linera_core::{
 };
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
-#[cfg(all(with_metrics, feature = "opentelemetry"))]
-use linera_rpc::propagation::get_traffic_type_from_request;
 #[cfg(feature = "opentelemetry")]
-use linera_rpc::propagation::{get_traffic_type_from_tonic_request, OtelContextLayer};
+use linera_rpc::propagation::{get_traffic_type_from_request, OtelContextLayer};
 use linera_rpc::{
     config::{ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig},
     grpc::{
@@ -349,7 +347,7 @@ where
     /// Returns "organic", "synthetic", or "unknown".
     #[cfg(feature = "opentelemetry")]
     fn extract_traffic_type<R>(request: &Request<R>) -> &'static str {
-        get_traffic_type_from_tonic_request(request)
+        get_traffic_type_from_request(request)
     }
 
     /// Returns "unknown" traffic type when opentelemetry is disabled.
