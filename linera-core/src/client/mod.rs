@@ -4086,6 +4086,7 @@ impl<Env: Environment> ChainClient<Env> {
             debug!(
                 chain_id = %self.chain_id,
                 reason = ?notification.reason,
+                listening_mode = ?self.listening_mode(),
                 "Ignoring notification due to listening mode"
             );
             return Ok(());
