@@ -5010,12 +5010,6 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let admin_chain = admin_client.load_wallet()?.default_chain().unwrap();
     let admin_owner = admin_client.get_owner().unwrap();
 
-    let worker1_client = net.make_client().await;
-    worker1_client.wallet_init(None).await?;
-    let worker1_chain = admin_client
-        .open_and_assign(&worker1_client, Amount::from_tokens(1000))
-        .await?;
-
     let (contract, service) = admin_client.build_example("controller").await?;
     let controller_id = admin_client
         .publish_and_create::<ControllerAbi, (), ()>(
@@ -5042,6 +5036,25 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
             None,
         )
         .await?;
+
+    let worker1_client = net.make_client().await;
+    worker1_client.wallet_init(None).await?;
+    let worker1_chain = admin_client
+        .open_and_assign(&worker1_client, Amount::from_tokens(1000))
+        .await?;
+
+    let worker2_client = net.make_client().await;
+    worker2_client.wallet_init(None).await?;
+    let worker2_chain = admin_client
+        .open_and_assign(&worker2_client, Amount::from_tokens(1000))
+        .await?;
+
+    let admin_port = get_node_port().await;
+    let mut admin_node_service = admin_client
+        .run_node_service(admin_port, ProcessInbox::Automatic)
+        .await?;
+
+    let mut admin_notifications = admin_node_service.notifications(admin_chain).await?;
 
     let port1 = get_node_port().await;
     worker1_client.sync(worker1_chain).await?;
@@ -5071,12 +5084,6 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         "Worker should be on a different chain than admin"
     );
 
-    let worker2_client = net.make_client().await;
-    worker2_client.wallet_init(None).await?;
-    let worker2_chain = admin_client
-        .open_and_assign(&worker2_client, Amount::from_tokens(1000))
-        .await?;
-
     let port2 = get_node_port().await;
     worker2_client.sync(worker2_chain).await?;
 
@@ -5100,13 +5107,6 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         state.local_worker.is_some(),
         "Worker 2 should be registered after block notification"
     );
-
-    let admin_port = get_node_port().await;
-    let mut admin_node_service = admin_client
-        .run_node_service(admin_port, ProcessInbox::Automatic)
-        .await?;
-
-    let mut admin_notifications = admin_node_service.notifications(admin_chain).await?;
     admin_node_service.process_inbox(&admin_chain).await?;
     admin_notifications.wait_for_block(None).await?;
 
@@ -5140,7 +5140,6 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     );
     admin_app.mutate(&mutation).await?;
 
-    let mut notifications1 = node_service1.notifications(worker1_chain).await?;
     let mutation = format!(
         "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [\"{}\"] }} }})",
         admin_owner, service_id, worker1_chain
@@ -5153,7 +5152,6 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     assert_eq!(state.local_services.len(), 1);
     assert_eq!(state.local_services[0].name, "test-service");
 
-    let mut notifications1 = node_service1.notifications(worker1_chain).await?;
     let mutation = format!(
         "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [] }} }})",
         admin_owner, service_id
