@@ -300,15 +300,19 @@ where
     /// Pre-configures the public server with no services attached.
     /// If a certificate and key are defined, creates a TLS server.
     fn public_server(&self) -> Result<Server> {
-        match self.0.tls {
+        let server = match self.0.tls {
             TlsConfig::Tls => {
                 use linera_rpc::{CERT_PEM, KEY_PEM};
                 let identity = Identity::from_pem(CERT_PEM, KEY_PEM);
                 let tls_config = ServerTlsConfig::new().identity(identity);
-                Ok(Server::builder().tls_config(tls_config)?)
+                Server::builder().tls_config(tls_config)?
             }
-            TlsConfig::ClearText => Ok(Server::builder()),
-        }
+            TlsConfig::ClearText => Server::builder(),
+        };
+        Ok(server
+            .http2_keepalive_interval(Some(Duration::from_secs(30)))
+            .http2_keepalive_timeout(Some(Duration::from_secs(10)))
+            .tcp_keepalive(Some(Duration::from_secs(60))))
     }
 
     #[allow(clippy::result_large_err)]
