@@ -2233,7 +2233,7 @@ impl<Env: Environment> ChainClient<Env> {
             let old_committee_start = linera_base::time::Instant::now();
             self.communicate_chain_updates(old_committee, latest_certificate.clone())
                 .await?;
-            tracing::debug!(
+            debug!(
                 old_committee_ms = old_committee_start.elapsed().as_millis(),
                 "communicated chain updates to old committee"
             );
@@ -2245,7 +2245,7 @@ impl<Env: Environment> ChainClient<Env> {
                 let new_committee_start = linera_base::time::Instant::now();
                 self.communicate_chain_updates(&new_committee, latest_certificate)
                     .await?;
-                tracing::debug!(
+                debug!(
                     new_committee_ms = new_committee_start.elapsed().as_millis(),
                     "communicated chain updates to new committee"
                 );
@@ -2694,15 +2694,15 @@ impl<Env: Environment> ChainClient<Env> {
         blobs: Vec<Blob>,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         let timing_start = linera_base::time::Instant::now();
-        tracing::debug!("execute_operations started");
+        debug!("execute_operations started");
 
         let result = loop {
             let execute_block_start = linera_base::time::Instant::now();
             // TODO(#2066): Remove boxing once the call-stack is shallower
-            tracing::debug!("calling execute_block");
+            debug!("calling execute_block");
             match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await {
                 Ok(ClientOutcome::Committed(certificate)) => {
-                    tracing::debug!(
+                    debug!(
                         execute_block_ms = execute_block_start.elapsed().as_millis(),
                         "execute_block succeeded"
                     );
@@ -2736,7 +2736,7 @@ impl<Env: Environment> ChainClient<Env> {
         };
 
         self.send_timing(timing_start, TimingType::ExecuteOperations);
-        tracing::debug!(
+        debug!(
             total_execute_operations_ms = timing_start.elapsed().as_millis(),
             "execute_operations returning"
         );
@@ -2768,7 +2768,7 @@ impl<Env: Environment> ChainClient<Env> {
         let mutex = self.client_mutex();
         let lock_start = linera_base::time::Instant::now();
         let _guard = mutex.lock_owned().await;
-        tracing::debug!(
+        debug!(
             lock_wait_ms = lock_start.elapsed().as_millis(),
             "acquired client_mutex in execute_block"
         );
@@ -3204,7 +3204,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
         let process_start = linera_base::time::Instant::now();
-        tracing::debug!("process_pending_block_without_prepare started");
+        debug!("process_pending_block_without_prepare started");
         let info = self.request_leader_timeout_if_needed().await?;
 
         // If there is a validated block in the current round, finalize it.
@@ -3337,7 +3337,7 @@ impl<Env: Environment> ChainClient<Env> {
         debug!(round = %certificate.round, "Sending confirmed block to validators");
         let update_start = linera_base::time::Instant::now();
         Box::pin(self.update_validators(Some(&committee), Some(certificate.clone()))).await?;
-        tracing::debug!(
+        debug!(
             update_validators_ms = update_start.elapsed().as_millis(),
             total_process_ms = process_start.elapsed().as_millis(),
             "process_pending_block_without_prepare completing"
@@ -4084,6 +4084,7 @@ impl<Env: Environment> ChainClient<Env> {
             .is_none_or(|mode| !mode.is_relevant(&notification.reason));
         if dominated {
             debug!(
+                validator = %remote_node.public_key,
                 chain_id = %self.chain_id,
                 reason = ?notification.reason,
                 listening_mode = ?self.listening_mode(),
@@ -4091,6 +4092,10 @@ impl<Env: Environment> ChainClient<Env> {
             );
             return Ok(());
         }
+        debug!(
+            validator = %remote_node.public_key,
+            ?notification,
+            "Processing notification from validator");
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
                 if self.local_next_height_to_receive(origin).await? > height {
