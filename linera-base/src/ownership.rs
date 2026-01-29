@@ -153,6 +153,7 @@ impl ChainOwnership {
         !self.super_owners.is_empty()
             || !self.owners.is_empty()
             || self.timeout_config.fallback_duration == TimeDelta::ZERO
+            || self.open_multi_leader_rounds
     }
 
     /// Returns `true` if this is an owner or super owner.

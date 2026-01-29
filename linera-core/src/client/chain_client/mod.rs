@@ -653,7 +653,7 @@ impl<Env: Environment> ChainClient<Env> {
         let is_owner = manager.ownership.is_owner(&preferred_owner)
             || fallback_owners.contains(&preferred_owner);
 
-        if !is_owner {
+        if !is_owner && !manager.ownership.open_multi_leader_rounds {
             warn!(
                 chain_id = %self.chain_id,
                 ownership = ?manager.ownership,
@@ -1913,7 +1913,9 @@ impl<Env: Environment> ChainClient<Env> {
             .values()
             .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
             .collect();
-        if manager.should_propose(identity, round, seed, &current_committee) {
+        if manager.should_propose(identity, round, seed, &current_committee)
+            || manager.ownership.open_multi_leader_rounds
+        {
             return Ok(Either::Left(round));
         }
         if let Some(timeout) = info.round_timeout() {
