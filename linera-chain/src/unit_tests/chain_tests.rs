@@ -11,7 +11,7 @@ use std::{
 use assert_matches::assert_matches;
 use axum::{routing::get, Router};
 use linera_base::{
-    crypto::{AccountPublicKey, ValidatorPublicKey},
+    crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight, Bytecode,
         ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp,
@@ -26,7 +26,8 @@ use linera_execution::{
     committee::{Committee, ValidatorState},
     test_utils::{ExpectedCall, MockApplication},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    Operation, ResourceControlPolicy, ServiceRuntime, SystemOperation, TestExecutionRuntimeContext,
+    Message, MessageKind, Operation, ResourceControlPolicy, ServiceRuntime, SystemOperation,
+    TestExecutionRuntimeContext, FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE,
 };
 use linera_views::{
     context::{Context as _, MemoryContext, ViewContext},
@@ -37,7 +38,10 @@ use test_case::test_case;
 
 use crate::{
     block::{Block, ConfirmedBlock},
-    data_types::{BlockExecutionOutcome, ProposedBlock},
+    data_types::{
+        BlockExecutionOutcome, IncomingBundle, MessageAction, MessageBundle, PostedMessage,
+        ProposedBlock,
+    },
     test::{make_child_block, make_first_block, BlockTestExt, HttpServer},
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -363,6 +367,160 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .await?;
     let value = ConfirmedBlock::new(outcome.with(valid_block));
     chain.apply_confirmed_block(&value, time).await?;
+
+    Ok(())
+}
+
+/// Tests that mandatory applications can be satisfied by accepted messages but not rejected ones,
+/// when the `FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE` migration flag is set.
+#[tokio::test]
+async fn test_mandatory_applications_with_messages() -> anyhow::Result<()> {
+    let mut env = TestEnvironment::new();
+
+    let time = Timestamp::from(0);
+
+    // Create a mock application.
+    let (app_description, contract_blob, service_blob) = env.make_app_description();
+    let application_id = ApplicationId::from(&app_description);
+    let application = MockApplication::default();
+
+    // Configure the chain with a mandatory application.
+    let config = InitialChainConfig {
+        application_permissions: ApplicationPermissions::new_single(application_id),
+        ..env.make_open_chain_config()
+    };
+    let chain_desc = env.make_child_chain_description_with_config(3, config);
+    let chain_id = chain_desc.id();
+    let origin_chain_id = ChainId(CryptoHash::test_hash("origin"));
+
+    let mut chain = ChainStateView::new(chain_id).await;
+
+    let context = chain.context();
+    let extra = context.extra();
+    {
+        let pinned = extra.user_contracts().pin();
+        pinned.insert(application_id, application.clone().into());
+    }
+
+    extra
+        .add_blobs([committee_blob(Default::default())])
+        .await?;
+    extra.add_blobs(env.description_blobs()).await?;
+    extra
+        .add_blobs([
+            contract_blob.clone(),
+            service_blob.clone(),
+            Blob::new_application_description(&app_description),
+        ])
+        .await?;
+
+    // Initialize the chain.
+    chain.initialize_if_needed(time).await?;
+
+    // Create an incoming bundle with a user message from the mandatory application.
+    let user_message = Message::User {
+        application_id,
+        bytes: b"test_message".to_vec(),
+    };
+    let posted_message = PostedMessage {
+        authenticated_signer: None,
+        grant: Amount::ZERO,
+        refund_grant_to: None,
+        kind: MessageKind::Simple,
+        index: 0,
+        message: user_message,
+    };
+    let message_bundle = MessageBundle {
+        height: BlockHeight::ZERO,
+        timestamp: time,
+        certificate_hash: CryptoHash::test_hash("test"),
+        transaction_index: 0,
+        messages: vec![posted_message],
+    };
+
+    // Test 1: WITHOUT the flag, a rejected message SHOULD satisfy the mandatory app requirement
+    // (old behavior).
+    let rejected_bundle = IncomingBundle {
+        origin: origin_chain_id,
+        bundle: message_bundle.clone(),
+        action: MessageAction::Reject,
+    };
+    let block_with_rejected = make_first_block(chain_id).with_incoming_bundle(rejected_bundle);
+    let (outcome, _) = chain
+        .execute_block(&block_with_rejected, time, None, &[], None)
+        .await?;
+    let value = ConfirmedBlock::new(outcome.with(block_with_rejected));
+    chain.apply_confirmed_block(&value, time).await?;
+
+    // Now test with the migration flag enabled.
+    // We create a new chain with its own TestExecutionRuntimeContext (separate blob storage).
+    // The committee blob with the flag must be added BEFORE initialize_if_needed() is called,
+    // because initialization calls get_network_description() which dynamically finds the
+    // committee blob in storage and uses it as the genesis committee.
+    let chain_desc2 = env.make_child_chain_description_with_config(
+        4,
+        InitialChainConfig {
+            application_permissions: ApplicationPermissions::new_single(application_id),
+            ..env.make_open_chain_config()
+        },
+    );
+    let chain_id2 = chain_desc2.id();
+    let mut chain2 = ChainStateView::new(chain_id2).await;
+
+    let context2 = chain2.context();
+    let extra2 = context2.extra();
+    {
+        let pinned = extra2.user_contracts().pin();
+        pinned.insert(application_id, application.clone().into());
+    }
+
+    // Create committee with the migration flag enabled.
+    let policy_with_flag = ResourceControlPolicy {
+        http_request_allow_list: std::collections::BTreeSet::from([
+            FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE.to_string(),
+        ]),
+        ..Default::default()
+    };
+    extra2.add_blobs([committee_blob(policy_with_flag)]).await?;
+    extra2.add_blobs(env.description_blobs()).await?;
+    extra2
+        .add_blobs([
+            contract_blob,
+            service_blob,
+            Blob::new_application_description(&app_description),
+        ])
+        .await?;
+
+    chain2.initialize_if_needed(time).await?;
+
+    // Test 2: WITH the flag, a rejected message should NOT satisfy the mandatory app requirement.
+    let rejected_bundle2 = IncomingBundle {
+        origin: origin_chain_id,
+        bundle: message_bundle.clone(),
+        action: MessageAction::Reject,
+    };
+    let block_with_rejected2 = make_first_block(chain_id2).with_incoming_bundle(rejected_bundle2);
+    let result = chain2
+        .execute_block(&block_with_rejected2, time, None, &[], None)
+        .await;
+    assert_matches!(result, Err(ChainError::MissingMandatoryApplications(app_ids))
+        if app_ids == vec![application_id]
+    );
+
+    // Test 3: WITH the flag, an accepted message SHOULD satisfy the mandatory app requirement.
+    application.expect_call(ExpectedCall::execute_message(|_, _| Ok(())));
+    application.expect_call(ExpectedCall::default_finalize());
+    let accepted_bundle = IncomingBundle {
+        origin: origin_chain_id,
+        bundle: message_bundle,
+        action: MessageAction::Accept,
+    };
+    let block_with_accepted = make_first_block(chain_id2).with_incoming_bundle(accepted_bundle);
+    let (outcome, _) = chain2
+        .execute_block(&block_with_accepted, time, None, &[], None)
+        .await?;
+    let value = ConfirmedBlock::new(outcome.with(block_with_accepted));
+    chain2.apply_confirmed_block(&value, time).await?;
 
     Ok(())
 }
