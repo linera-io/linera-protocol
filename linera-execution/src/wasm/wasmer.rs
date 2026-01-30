@@ -11,6 +11,7 @@ use linera_witty::{
     ExportTo,
 };
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 use super::{
     module_cache::ModuleCache,
@@ -127,6 +128,7 @@ impl<Runtime> crate::UserContract for WasmerContractInstance<Runtime>
 where
     Runtime: ContractRuntime + Unpin + 'static,
 {
+    #[instrument(skip_all)]
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .instantiate(argument)
@@ -134,12 +136,14 @@ where
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         Ok(ContractEntrypoints::new(&mut self.instance)
             .execute_operation(operation)
             .map_err(WasmExecutionError::from)?)
     }
 
+    #[instrument(skip_all)]
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .execute_message(message)
@@ -147,6 +151,7 @@ where
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn process_streams(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .process_streams(updates)
@@ -154,6 +159,7 @@ where
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn finalize(&mut self) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .finalize()

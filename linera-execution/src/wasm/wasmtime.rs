@@ -8,6 +8,7 @@ use std::sync::LazyLock;
 use linera_base::data_types::{Bytecode, StreamUpdate};
 use linera_witty::{wasmtime::EntrypointInstance, ExportTo};
 use tokio::sync::Mutex;
+use tracing::instrument;
 use wasmtime::{Config, Engine, Linker, Module, Store};
 
 use super::{
@@ -131,6 +132,7 @@ impl<Runtime> crate::UserContract for WasmtimeContractInstance<Runtime>
 where
     Runtime: ContractRuntime + 'static,
 {
+    #[instrument(skip_all)]
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .instantiate(argument)
@@ -138,6 +140,7 @@ where
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         let result = ContractEntrypoints::new(&mut self.instance)
             .execute_operation(operation)
@@ -145,6 +148,7 @@ where
         Ok(result)
     }
 
+    #[instrument(skip_all)]
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .execute_message(message)
@@ -152,6 +156,7 @@ where
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn process_streams(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .process_streams(updates)
@@ -159,6 +164,7 @@ where
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn finalize(&mut self) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .finalize()
