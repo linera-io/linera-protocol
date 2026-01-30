@@ -105,6 +105,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id,
         block_height = %self.block_height,
+        transaction_index = %self.transaction_index,
+        transaction_type = %transaction_type_name(transaction),
     ))]
     pub async fn execute_transaction<C>(
         &mut self,
@@ -184,6 +186,13 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Executes a message as part of an incoming bundle in a block.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id,
+        block_height = %self.block_height,
+        origin = %incoming_bundle.origin,
+        action = ?incoming_bundle.action,
+        is_bouncing = %posted_message.is_bouncing(),
+    ))]
     async fn execute_message_in_block<C>(
         &mut self,
         chain: &mut ExecutionStateView<C>,
@@ -276,6 +285,14 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     /// so that the execution of the next transaction doesn't overwrite the previous ones.
     ///
     /// Tracks the resources used by the transaction - size of the incoming and outgoing messages, blobs, etc.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id,
+        block_height = %self.block_height,
+        transaction_index = %self.transaction_index,
+        outgoing_messages_count = %txn_outcome.outgoing_messages.len(),
+        events_count = %txn_outcome.events.len(),
+        blobs_count = %txn_outcome.blobs.len(),
+    ))]
     pub async fn process_txn_outcome<C>(
         &mut self,
         txn_outcome: TransactionOutcome,
@@ -421,3 +438,11 @@ pub(crate) type FinalizeExecutionResult = (
     Vec<OperationResult>,
     ResourceTracker,
 );
+
+/// Returns a human-readable name for the transaction type.
+fn transaction_type_name(transaction: &Transaction) -> &'static str {
+    match transaction {
+        Transaction::ReceiveMessages(_) => "ReceiveMessages",
+        Transaction::ExecuteOperation(_) => "ExecuteOperation",
+    }
+}

@@ -149,7 +149,7 @@ pub(crate) mod metrics {
             "state_hash_computation_latency",
             "Time to recompute the state hash",
             &[],
-            exponential_bucket_latencies(500.0),
+            exponential_bucket_latencies(2000.0),
         )
     });
 
