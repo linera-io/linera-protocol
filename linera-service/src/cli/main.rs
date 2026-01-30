@@ -48,7 +48,7 @@ use linera_base::{
     time::{Duration, Instant},
 };
 use linera_client::{
-    benchmark::BenchmarkConfig,
+    benchmark::{self, BenchmarkConfig, BenchmarkMode},
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
     config::{CommitteeConfig, GenesisConfig},
 };
@@ -94,6 +94,11 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
+
+/// Maximum concurrent PM faucet claim requests.
+const PM_FAUCET_CLAIM_CONCURRENCY: usize = 20;
+/// Maximum concurrent inbox processing tasks.
+const PM_INBOX_PROCESSING_CONCURRENCY: usize = 20;
 
 struct Job(Options);
 
@@ -630,12 +635,12 @@ impl Runnable for Job {
             Benchmark(benchmark_command) => match benchmark_command {
                 BenchmarkCommand::Single {
                     options: benchmark_options,
+                    fungible_application_id,
                 } => {
                     let BenchmarkOptions {
                         num_chains,
                         tokens_per_chain,
                         transactions_per_block,
-                        fungible_application_id,
                         bps,
                         close_chains,
                         health_check_endpoints,
@@ -644,6 +649,7 @@ impl Runnable for Job {
                         runtime_in_seconds,
                         delay_between_chains_ms,
                         config_path,
+                        single_destination_per_block,
                     } = benchmark_options;
                     assert!(
                         options.client_options.max_pending_message_bundles
@@ -671,14 +677,14 @@ impl Runnable for Job {
                     let mut context = options
                         .create_client_context(storage.clone(), wallet, signer.into_value())
                         .await?;
-                    let (chain_clients, blocks_infos) = context
+                    let chain_clients = context
                         .prepare_for_benchmark(
                             num_chains,
-                            transactions_per_block,
                             tokens_per_chain,
                             fungible_application_id,
                             pub_keys,
                             config_path.as_deref(),
+                            close_chains,
                         )
                         .await?;
 
@@ -724,17 +730,21 @@ impl Runnable for Job {
                         mpsc::unbounded_channel().1,
                         true, // Enabling background sync for benchmarks
                     );
-                    linera_client::benchmark::Benchmark::run_benchmark(
-                        num_chains,
-                        transactions_per_block,
+                    let all_chains: Vec<ChainId> =
+                        chain_clients.iter().map(|c| c.chain_id()).collect();
+                    let mode = BenchmarkMode::from_fungible_application_id(fungible_application_id);
+                    benchmark::Benchmark::run_benchmark(
                         bps,
                         chain_clients.clone(),
-                        blocks_infos,
+                        all_chains,
+                        transactions_per_block,
+                        mode,
                         health_check_endpoints.clone(),
                         runtime_in_seconds,
                         delay_between_chains_ms,
                         chain_listener,
                         &shutdown_notifier,
+                        single_destination_per_block,
                     )
                     .await?;
 
@@ -748,6 +758,7 @@ impl Runnable for Job {
 
                 BenchmarkCommand::Multi {
                     options: benchmark_options,
+                    fungible_application_id,
                     processes,
                     faucet,
                     client_state_dir,
@@ -756,6 +767,7 @@ impl Runnable for Job {
                 } => {
                     let mut command = BenchmarkCommand::Single {
                         options: benchmark_options.clone(),
+                        fungible_application_id,
                     };
                     let faucet_client = cli_wrappers::Faucet::new(faucet.clone());
                     let on_drop = if benchmark_options.close_chains {
@@ -856,7 +868,7 @@ impl Runnable for Job {
                         let (_, path) = NamedTempFile::new()?.keep()?;
                         config.save_to_file(&path)?;
                         info!("Saved chains configuration to {}", path.display());
-                        if let BenchmarkCommand::Single { options } = &mut command {
+                        if let BenchmarkCommand::Single { options, .. } = &mut command {
                             options.config_path = Some(path);
                         }
                     } else {
@@ -1027,6 +1039,280 @@ impl Runnable for Job {
                             }
                         }
                     }
+                }
+
+                BenchmarkCommand::Pm {
+                    options: benchmark_options,
+                    faucet: _faucet,
+                    pm_faucet,
+                    pm_engine_id,
+                    market_chain_id,
+                    order_pattern,
+                    price_scale,
+                    match_probability,
+                } => {
+                    let BenchmarkOptions {
+                        num_chains,
+                        tokens_per_chain,
+                        transactions_per_block,
+                        bps,
+                        close_chains: _, // PM benchmark always closes chains
+                        health_check_endpoints,
+                        wrap_up_max_in_flight,
+                        confirm_before_start,
+                        runtime_in_seconds,
+                        delay_between_chains_ms,
+                        config_path,
+                        single_destination_per_block,
+                    } = benchmark_options;
+                    // PM faucet tracks claims by owner, so chains can't be reused
+                    let close_chains = true;
+                    assert!(
+                        options.client_options.max_pending_message_bundles
+                            >= transactions_per_block,
+                        "max_pending_message_bundles must be set to at least the same as the \
+                         number of transactions per block ({transactions_per_block}) for benchmarking",
+                    );
+                    assert!(num_chains > 0, "Number of chains must be greater than 0");
+                    assert!(
+                        transactions_per_block > 0,
+                        "Number of transactions per block must be greater than 0"
+                    );
+                    assert!(bps > 0, "BPS must be greater than 0");
+
+                    let listener_config = ChainListenerConfig {
+                        skip_process_inbox: true,
+                        ..Default::default()
+                    };
+
+                    let pub_keys: Vec<_> = std::iter::repeat_with(|| signer.generate_new())
+                        .take(num_chains)
+                        .collect();
+                    signer.persist().await?;
+
+                    let mut context = options
+                        .create_client_context(storage.clone(), wallet, signer.into_value())
+                        .await?;
+
+                    // For PM benchmark, we still create chains via the normal flow
+                    // but we'll use PM mode for operation generation
+                    let chain_clients = context
+                        .prepare_for_benchmark(
+                            num_chains,
+                            tokens_per_chain,
+                            None, // No fungible app for PM benchmark setup
+                            pub_keys,
+                            config_path.as_deref(),
+                            close_chains,
+                        )
+                        .await?;
+                    let all_chains: Vec<ChainId> =
+                        chain_clients.iter().map(|c| c.chain_id()).collect();
+
+                    info!(
+                        "PM benchmark: {} chains created, targeting market chain {}",
+                        chain_clients.len(),
+                        market_chain_id
+                    );
+
+                    // Claim BASE tokens from PM faucet for each chain (in parallel)
+                    info!("Claiming BASE tokens from PM faucet at {}...", pm_faucet);
+                    let http_client = Arc::new(
+                        reqwest::Client::builder()
+                            .timeout(std::time::Duration::from_secs(30))
+                            .build()?,
+                    );
+
+                    let claim_futures: Vec<_> = chain_clients
+                        .iter()
+                        .filter_map(|client| {
+                            let chain_id = client.chain_id();
+                            let owner = client.preferred_owner()?;
+                            let http_client = http_client.clone();
+                            let pm_faucet = pm_faucet.clone();
+                            Some(async move {
+                                let query = format!(
+                                    "mutation {{ claim(owner: \"{}\", chainId: \"{}\") {{ chainId certificateHash amount }} }}",
+                                    owner, chain_id
+                                );
+                                let response = http_client
+                                    .post(&pm_faucet)
+                                    .json(&serde_json::json!({ "query": query }))
+                                    .send()
+                                    .await;
+
+                                match response {
+                                    Ok(resp) => {
+                                        let body = resp.text().await.unwrap_or_default();
+                                        // Parse GraphQL response to check for errors
+                                        let json: serde_json::Value = serde_json::from_str(&body)
+                                            .map_err(|e| anyhow::anyhow!(
+                                                "Failed to parse PM faucet response for chain {}: {}",
+                                                chain_id, e
+                                            ))?;
+                                        if let Some(errors) = json.get("errors") {
+                                            return Err(anyhow::anyhow!(
+                                                "PM faucet claim failed for chain {}: {}",
+                                                chain_id,
+                                                errors
+                                            ));
+                                        }
+                                        if let Some(data) = json.get("data").and_then(|d| d.get("claim")) {
+                                            debug!(
+                                                "PM faucet claim successful for chain {}: amount={}, certificateHash={}",
+                                                chain_id,
+                                                data.get("amount").unwrap_or(&serde_json::Value::Null),
+                                                data.get("certificateHash").unwrap_or(&serde_json::Value::Null)
+                                            );
+                                        }
+                                        Ok(())
+                                    }
+                                    Err(e) => Err(anyhow::anyhow!(
+                                        "PM faucet request failed for chain {}: {}",
+                                        chain_id,
+                                        e
+                                    )),
+                                }
+                            })
+                        })
+                        .collect();
+
+                    let claim_results: Vec<_> = futures::stream::iter(claim_futures)
+                        .buffer_unordered(PM_FAUCET_CLAIM_CONCURRENCY)
+                        .collect()
+                        .await;
+
+                    let mut claim_count = 0usize;
+                    for result in claim_results {
+                        match result {
+                            Ok(()) => claim_count += 1,
+                            Err(e) => {
+                                error!("{}", e);
+                                return Err(e);
+                            }
+                        }
+                    }
+                    info!("Claimed BASE tokens for {} chains", claim_count);
+
+                    // Process inbox on each chain to receive the tokens (in parallel)
+                    info!("Processing inboxes to receive BASE tokens...");
+                    let inbox_futures: Vec<_> = chain_clients
+                        .iter()
+                        .map(|client| {
+                            let chain_id = client.chain_id();
+                            async move {
+                                // Sync with validators first to see incoming messages
+                                if let Err(e) = client.synchronize_from_validators().await {
+                                    warn!(
+                                        "Failed to sync chain {} with validators: {}",
+                                        chain_id, e
+                                    );
+                                    return 0;
+                                }
+                                match Box::pin(client.process_inbox_without_prepare()).await {
+                                    Ok((certs, _)) => {
+                                        debug!(
+                                            "Processed inbox for chain {}: {} certificates",
+                                            chain_id,
+                                            certs.len()
+                                        );
+                                        certs.len()
+                                    }
+                                    Err(e) => {
+                                        warn!(
+                                            "Failed to process inbox for chain {}: {}",
+                                            chain_id, e
+                                        );
+                                        0
+                                    }
+                                }
+                            }
+                        })
+                        .collect();
+
+                    let inbox_results: Vec<usize> = futures::stream::iter(inbox_futures)
+                        .buffer_unordered(PM_INBOX_PROCESSING_CONCURRENCY)
+                        .collect()
+                        .await;
+                    let total_certs: usize = inbox_results.iter().sum();
+                    info!(
+                        "BASE tokens received on all chains: {} total certificates",
+                        total_certs
+                    );
+
+                    if confirm_before_start {
+                        info!("Ready to start PM benchmark. Say 'yes' when you want to proceed. Only 'yes' will be accepted");
+                        if !std::io::stdin()
+                            .lines()
+                            .next()
+                            .unwrap()?
+                            .eq_ignore_ascii_case("yes")
+                        {
+                            info!("Benchmark cancelled by user");
+                            context
+                                .wrap_up_benchmark(
+                                    chain_clients,
+                                    close_chains,
+                                    wrap_up_max_in_flight,
+                                )
+                                .await?;
+                            return Ok(());
+                        }
+                    }
+
+                    let shutdown_notifier = CancellationToken::new();
+                    tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+
+                    #[cfg(with_metrics)]
+                    {
+                        let metrics_address = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
+                        monitoring_server::start_metrics(
+                            metrics_address,
+                            shutdown_notifier.clone(),
+                        );
+                    }
+
+                    let shared_context = Arc::new(Mutex::new(context));
+                    let chain_listener = ChainListener::new(
+                        listener_config,
+                        shared_context.clone(),
+                        storage.clone(),
+                        shutdown_notifier.clone(),
+                        mpsc::unbounded_channel().1,
+                        true, // Enabling background sync for benchmarks
+                    );
+
+                    let mode = BenchmarkMode::Pm {
+                        pm_engine_id,
+                        market_chain_id,
+                        pattern: benchmark::OrderPattern::from_args(
+                            order_pattern,
+                            match_probability,
+                        )?,
+                        price_scale,
+                    };
+
+                    benchmark::Benchmark::run_benchmark(
+                        bps,
+                        chain_clients.clone(),
+                        all_chains,
+                        transactions_per_block,
+                        mode,
+                        health_check_endpoints.clone(),
+                        runtime_in_seconds,
+                        delay_between_chains_ms,
+                        chain_listener,
+                        &shutdown_notifier,
+                        single_destination_per_block,
+                    )
+                    .await?;
+
+                    let mut context = Arc::try_unwrap(shared_context)
+                        .map_err(|_| anyhow::anyhow!("Failed to unwrap shared context"))?
+                        .into_inner();
+                    context
+                        .wrap_up_benchmark(chain_clients, close_chains, wrap_up_max_in_flight)
+                        .await?;
                 }
             },
 

@@ -24,6 +24,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera benchmark`↴](#linera-benchmark)
 * [`linera benchmark single`↴](#linera-benchmark-single)
 * [`linera benchmark multi`↴](#linera-benchmark-multi)
+* [`linera benchmark pm`↴](#linera-benchmark-pm)
 * [`linera create-genesis-config`↴](#linera-create-genesis-config)
 * [`linera watch`↴](#linera-watch)
 * [`linera service`↴](#linera-service)
@@ -534,6 +535,7 @@ Run benchmarks to test network performance
 
 * `single` — Start a single benchmark process, maintaining a given TPS
 * `multi` — Run multiple benchmark processes in parallel
+* `pm` — Benchmark PM (Prediction Market) order submission
 
 
 
@@ -554,7 +556,6 @@ Start a single benchmark process, maintaining a given TPS
 * `--transactions-per-block <TRANSACTIONS_PER_BLOCK>` — How many transactions to put in each block
 
   Default value: `1`
-* `--fungible-application-id <FUNGIBLE_APPLICATION_ID>` — The application ID of a fungible token on the wallet's default chain. If none is specified, the benchmark uses the native token
 * `--bps <BPS>` — The fixed BPS (Blocks Per Second) rate that block proposals will be sent at
 
   Default value: `10`
@@ -567,6 +568,8 @@ Start a single benchmark process, maintaining a given TPS
 * `--runtime-in-seconds <RUNTIME_IN_SECONDS>` — How long to run the benchmark for. If not provided, the benchmark will run until it is interrupted
 * `--delay-between-chains-ms <DELAY_BETWEEN_CHAINS_MS>` — The delay between chains, in milliseconds. For example, if set to 200ms, the first chain will start, then the second will start 200 ms after the first one, the third 200 ms after the second one, and so on. This is used for slowly ramping up the TPS, so we don't pound the validators with the full TPS all at once
 * `--config-path <CONFIG_PATH>` — Path to YAML file containing chain IDs to send transfers to. If not provided, only transfers between chains in the same wallet
+* `--single-destination-per-block` — Transaction distribution mode. If false (default), distributes transactions evenly across chains within each block. If true, sends all transactions in each block to a single chain, rotating through chains for subsequent blocks
+* `--fungible-application-id <FUNGIBLE_APPLICATION_ID>` — The application ID of a fungible token on the wallet's default chain. If none is specified, the benchmark uses the native token
 
 
 
@@ -587,7 +590,6 @@ Run multiple benchmark processes in parallel
 * `--transactions-per-block <TRANSACTIONS_PER_BLOCK>` — How many transactions to put in each block
 
   Default value: `1`
-* `--fungible-application-id <FUNGIBLE_APPLICATION_ID>` — The application ID of a fungible token on the wallet's default chain. If none is specified, the benchmark uses the native token
 * `--bps <BPS>` — The fixed BPS (Blocks Per Second) rate that block proposals will be sent at
 
   Default value: `10`
@@ -600,6 +602,8 @@ Run multiple benchmark processes in parallel
 * `--runtime-in-seconds <RUNTIME_IN_SECONDS>` — How long to run the benchmark for. If not provided, the benchmark will run until it is interrupted
 * `--delay-between-chains-ms <DELAY_BETWEEN_CHAINS_MS>` — The delay between chains, in milliseconds. For example, if set to 200ms, the first chain will start, then the second will start 200 ms after the first one, the third 200 ms after the second one, and so on. This is used for slowly ramping up the TPS, so we don't pound the validators with the full TPS all at once
 * `--config-path <CONFIG_PATH>` — Path to YAML file containing chain IDs to send transfers to. If not provided, only transfers between chains in the same wallet
+* `--single-destination-per-block` — Transaction distribution mode. If false (default), distributes transactions evenly across chains within each block. If true, sends all transactions in each block to a single chain, rotating through chains for subsequent blocks
+* `--fungible-application-id <FUNGIBLE_APPLICATION_ID>` — The application ID of a fungible token on the wallet's default chain. If none is specified, the benchmark uses the native token
 * `--processes <PROCESSES>` — The number of benchmark processes to run in parallel
 
   Default value: `1`
@@ -609,6 +613,57 @@ Run multiple benchmark processes in parallel
 
   Default value: `10`
 * `--cross-wallet-transfers` — Whether to send transfers between chains in different wallets
+
+
+
+## `linera benchmark pm`
+
+Benchmark PM (Prediction Market) order submission
+
+**Usage:** `linera benchmark pm [OPTIONS] --faucet <FAUCET> --pm-faucet <PM_FAUCET> --pm-engine-id <PM_ENGINE_ID> --market-chain-id <MARKET_CHAIN_ID>`
+
+###### **Options:**
+
+* `--num-chains <NUM_CHAINS>` — How many chains to use
+
+  Default value: `10`
+* `--tokens-per-chain <TOKENS_PER_CHAIN>` — How many tokens to assign to each newly created chain. These need to cover the transaction fees per chain for the benchmark
+
+  Default value: `0.1`
+* `--transactions-per-block <TRANSACTIONS_PER_BLOCK>` — How many transactions to put in each block
+
+  Default value: `1`
+* `--bps <BPS>` — The fixed BPS (Blocks Per Second) rate that block proposals will be sent at
+
+  Default value: `10`
+* `--close-chains` — If provided, will close the chains after the benchmark is finished. Keep in mind that closing the chains might take a while, and will increase the validator latency while they're being closed
+* `--health-check-endpoints <HEALTH_CHECK_ENDPOINTS>` — A comma-separated list of host:port pairs to query for health metrics. If provided, the benchmark will check these endpoints for validator health and terminate if any validator is unhealthy. Example: "127.0.0.1:21100,validator-1.some-network.linera.net:21100"
+* `--wrap-up-max-in-flight <WRAP_UP_MAX_IN_FLIGHT>` — The maximum number of in-flight requests to validators when wrapping up the benchmark. While wrapping up, this controls the concurrency level when processing inboxes and closing chains
+
+  Default value: `5`
+* `--confirm-before-start` — Confirm before starting the benchmark
+* `--runtime-in-seconds <RUNTIME_IN_SECONDS>` — How long to run the benchmark for. If not provided, the benchmark will run until it is interrupted
+* `--delay-between-chains-ms <DELAY_BETWEEN_CHAINS_MS>` — The delay between chains, in milliseconds. For example, if set to 200ms, the first chain will start, then the second will start 200 ms after the first one, the third 200 ms after the second one, and so on. This is used for slowly ramping up the TPS, so we don't pound the validators with the full TPS all at once
+* `--config-path <CONFIG_PATH>` — Path to YAML file containing chain IDs to send transfers to. If not provided, only transfers between chains in the same wallet
+* `--single-destination-per-block` — Transaction distribution mode. If false (default), distributes transactions evenly across chains within each block. If true, sends all transactions in each block to a single chain, rotating through chains for subsequent blocks
+* `--faucet <FAUCET>` — The Linera faucet URL (for creating trader chains)
+* `--pm-faucet <PM_FAUCET>` — The PM faucet URL (for distributing BASE tokens to traders)
+* `--pm-engine-id <PM_ENGINE_ID>` — The PM engine application ID (from pm-infra data/engines/engine-X.json)
+* `--market-chain-id <MARKET_CHAIN_ID>` — The market chain ID (from pm-infra data/engines/engine-X.json)
+* `--order-pattern <ORDER_PATTERN>` — The order generation pattern
+
+  Default value: `matching`
+
+  Possible values:
+  - `matching`:
+    All orders will match. Generates YES bid + NO bid pairs at complementary prices
+  - `mixed`:
+    Mix of matching and non-matching orders. Use --match-probability to configure what fraction of orders will match (default: 0.5)
+
+* `--price-scale <PRICE_SCALE>` — The price scale for orders (e.g., 1000 means price 500 = 0.5)
+
+  Default value: `1000`
+* `--match-probability <MATCH_PROBABILITY>` — Probability of generating matching orders (0.0-1.0). Only used with --order-pattern mixed. Defaults to 0.5 if not specified
 
 
 
