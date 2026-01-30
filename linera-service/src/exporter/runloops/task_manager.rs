@@ -62,6 +62,10 @@ where
         F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
         <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
     {
+        tracing::info!(
+            startup_destinations=?self.startup_destinations,
+            "spawning startup exporters"
+        );
         for id in self.startup_destinations.clone() {
             self.spawn(id.clone());
         }
@@ -79,15 +83,13 @@ where
             // We treat startup destinations as "MUST" always run
             // so we skip adding them to `current_committee_destinations` as those
             // can be turned off.
-            if !self.startup_destinations.contains(&destination)
-                && !self.current_committee_destinations.contains(&destination)
-            {
+            if !self.startup_destinations.contains(&destination) {
                 self.current_committee_destinations
                     .insert(destination.clone());
                 tracing::info!(id=?destination, "starting committee exporter");
                 self.spawn(destination);
             } else {
-                tracing::info!(id=?destination, "skipping already running committee exporter");
+                tracing::info!(id=?destination, "skipping startup destination");
             }
         }
     }
@@ -116,12 +118,12 @@ where
     }
 
     fn spawn(&mut self, id: DestinationId) {
-        let exporter_builder = &self.exporters_builder;
-        let storage = self.storage.clone().expect("Failed to clone storage");
         if self.join_handles.contains_key(&id) {
             tracing::trace!(id=?id, "exporter already running, skipping spawn");
             return;
         }
+        let exporter_builder = &self.exporters_builder;
+        let storage = self.storage.clone().expect("Failed to clone storage");
         let join_handle = exporter_builder.spawn(id.clone(), storage);
         self.join_handles.insert(id, join_handle);
     }
