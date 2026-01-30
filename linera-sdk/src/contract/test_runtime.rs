@@ -11,8 +11,8 @@ use std::{
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Bytecode, Resources, SendMessageRequest,
-        Timestamp,
+        Amount, ApplicationDescription, ApplicationPermissions, BlockHeight, Bytecode, Resources,
+        SendMessageRequest, Timestamp,
     },
     ensure, http,
     identifiers::{
@@ -53,6 +53,7 @@ where
     application_parameters: Option<Application::Parameters>,
     application_id: Option<ApplicationId<Application::Abi>>,
     application_creator_chain_id: Option<ChainId>,
+    application_descriptions: HashMap<ApplicationId, ApplicationDescription>,
     chain_id: Option<ChainId>,
     authenticated_owner: Option<Option<AccountOwner>>,
     block_height: Option<BlockHeight>,
@@ -103,6 +104,7 @@ where
             application_parameters: None,
             application_id: None,
             application_creator_chain_id: None,
+            application_descriptions: HashMap::new(),
             chain_id: None,
             authenticated_owner: None,
             block_height: None,
@@ -212,6 +214,44 @@ where
             "Application creator chain ID has not been mocked, \
             please call `MockContractRuntime::set_application_creator_chain_id` first",
         )
+    }
+
+    /// Configures the application description to return for a specific application during the test.
+    pub fn with_application_description(
+        mut self,
+        application_id: ApplicationId,
+        description: ApplicationDescription,
+    ) -> Self {
+        self.application_descriptions
+            .insert(application_id, description);
+        self
+    }
+
+    /// Configures the application description to return for a specific application during the test.
+    pub fn set_application_description(
+        &mut self,
+        application_id: ApplicationId,
+        description: ApplicationDescription,
+    ) -> &mut Self {
+        self.application_descriptions
+            .insert(application_id, description);
+        self
+    }
+
+    /// Returns the description of the given application.
+    pub fn read_application_description(
+        &mut self,
+        application_id: ApplicationId,
+    ) -> ApplicationDescription {
+        self.application_descriptions
+            .get(&application_id)
+            .cloned()
+            .unwrap_or_else(|| {
+                panic!(
+                    "Application description for {application_id:?} has not been mocked, \
+                    please call `MockContractRuntime::set_application_description` first"
+                )
+            })
     }
 
     /// Configures the chain ID to return during the test.
