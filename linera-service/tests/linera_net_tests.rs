@@ -5127,9 +5127,10 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let admin_app = admin_node_service.make_application(&admin_chain, &controller_id)?;
     let response = admin_app.query("workers { keys }").await?;
     let worker_keys: Vec<String> = serde_json::from_value(response["workers"]["keys"].clone())?;
-    assert!(
-        worker_keys.len() >= 2,
-        "Expected at least 2 workers, got {}",
+    assert_eq!(
+        worker_keys.len(),
+        2,
+        "Expected exactly 2 workers, got {}",
         worker_keys.len()
     );
 
