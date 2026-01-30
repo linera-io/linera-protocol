@@ -239,6 +239,25 @@ where
                 callback.respond(permissions);
             }
 
+            ReadApplicationDescription {
+                application_id,
+                callback,
+            } => {
+                let blob_id = application_id.description_blob_id();
+                let description = match self.txn_tracker.get_blob_content(&blob_id) {
+                    Some(blob) => bcs::from_bytes(blob.bytes())?,
+                    None => {
+                        let blob_content = self.state.system.read_blob_content(blob_id).await?;
+                        self.state
+                            .system
+                            .blob_used(self.txn_tracker, blob_id)
+                            .await?;
+                        bcs::from_bytes(blob_content.bytes())?
+                    }
+                };
+                callback.respond(description);
+            }
+
             ContainsKey { id, key, callback } => {
                 let view = self.state.users.try_load_entry(&id).await?;
                 let result = match view {
@@ -1136,6 +1155,12 @@ pub enum ExecutionRequest {
     ApplicationPermissions {
         #[debug(skip)]
         callback: Sender<ApplicationPermissions>,
+    },
+
+    ReadApplicationDescription {
+        application_id: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<ApplicationDescription>,
     },
 
     ReadValueBytes {
