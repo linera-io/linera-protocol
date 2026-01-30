@@ -97,6 +97,11 @@ pub const FLAG_ZERO_HASH: &str = "FLAG_ZERO_HASH.linera.network";
 /// messages are free of charge if they are bouncing, and operation outcomes are counted only
 /// by payload size, so that rejecting messages is free.
 pub const FLAG_FREE_REJECT: &str = "FLAG_FREE_REJECT.linera.network";
+/// The flag that makes mandatory application checks require accepted messages. If this is
+/// present, only accepted incoming messages (not rejected ones) satisfy the mandatory
+/// applications requirement for a block.
+pub const FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE: &str =
+    "FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE.linera.network";
 
 /// An implementation of [`UserContractModule`].
 #[derive(Clone)]

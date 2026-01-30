@@ -20,7 +20,7 @@ use linera_base::{
 use linera_execution::{
     committee::Committee, ExecutionRuntimeContext, ExecutionStateView, Message, Operation,
     OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController, ResourceTracker,
-    ServiceRuntimeEndpoint, TransactionTracker,
+    ServiceRuntimeEndpoint, TransactionTracker, FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE,
 };
 use linera_views::{
     bucket_queue_view::BucketQueueView,
@@ -39,8 +39,8 @@ use crate::{
     block::{Block, ConfirmedBlock},
     block_tracker::BlockExecutionTracker,
     data_types::{
-        BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageBundle, ProposedBlock,
-        Transaction,
+        BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
+        ProposedBlock, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -887,9 +887,20 @@ where
             ensure!(block.has_only_rejected_messages(), ChainError::ClosedChain);
         }
 
+        let mandatory_apps_need_accepted_message = self
+            .execution_state
+            .system
+            .current_committee()
+            .is_some_and(|(_epoch, committee)| {
+                committee
+                    .policy()
+                    .http_request_allow_list
+                    .contains(FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE)
+            });
         Self::check_app_permissions(
             self.execution_state.system.application_permissions.get(),
             block,
+            mandatory_apps_need_accepted_message,
         )?;
 
         Self::execute_block_inner(
@@ -978,6 +989,7 @@ where
     fn check_app_permissions(
         app_permissions: &ApplicationPermissions,
         block: &ProposedBlock,
+        mandatory_apps_need_accepted_message: bool,
     ) -> Result<(), ChainError> {
         let mut mandatory = HashSet::<ApplicationId>::from_iter(
             app_permissions.mandatory_applications.iter().copied(),
@@ -1000,13 +1012,17 @@ where
                         mandatory.remove(application_id);
                     }
                 }
-                Transaction::ReceiveMessages(incoming_bundle) => {
+                Transaction::ReceiveMessages(incoming_bundle)
+                    if !mandatory_apps_need_accepted_message
+                        || incoming_bundle.action == MessageAction::Accept =>
+                {
                     for pending in incoming_bundle.messages() {
                         if let Message::User { application_id, .. } = &pending.message {
                             mandatory.remove(application_id);
                         }
                     }
                 }
+                Transaction::ReceiveMessages(_) => {}
             }
         }
         ensure!(
