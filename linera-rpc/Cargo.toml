@@ -32,6 +32,8 @@ metrics = [
     "linera-storage/metrics",
 ]
 
+opentelemetry = ["dep:opentelemetry", "dep:tracing-opentelemetry"]
+
 server = ["tokio-util", "tonic-health", "tonic-reflection"]
 simple-network = ["tokio-util/net"]
 transport = ["tonic-prost-build/transport"]
@@ -77,11 +79,15 @@ tracing.workspace = true
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml"] }
 linera-rpc = { path = ".", default-features = false, features = ["test"] }
+opentelemetry_sdk.workspace = true
 proptest.workspace = true
 serde-reflection.workspace = true
 test-strategy.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+http.workspace = true
+opentelemetry = { workspace = true, optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
 tonic = { workspace = true, features = [
     "tls-webpki-roots",
     "codegen",

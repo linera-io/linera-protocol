@@ -3,14 +3,17 @@
 
 //! OpenTelemetry integration for tracing with OTLP export and Chrome trace export.
 
+#[cfg(all(with_testing, feature = "opentelemetry"))]
+use opentelemetry_sdk::trace::InMemorySpanExporter;
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 #[cfg(feature = "opentelemetry")]
 use {
-    opentelemetry::{global, trace::TracerProvider},
+    opentelemetry::{global, propagation::TextMapCompositePropagator, trace::TracerProvider},
     opentelemetry_otlp::{SpanExporter, WithExportConfig},
     opentelemetry_sdk::{
-        trace::{InMemorySpanExporter, SdkTracerProvider},
+        propagation::{BaggagePropagator, TraceContextPropagator},
+        trace::SdkTracerProvider,
         Resource,
     },
     tracing_opentelemetry::OpenTelemetryLayer,
@@ -113,6 +116,15 @@ pub fn build_opentelemetry_layer_with_test_exporter(
 /// This prevents DNS errors in environments where OpenTelemetry is not deployed.
 #[cfg(feature = "opentelemetry")]
 pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: Option<&str>) {
+    // Always set up the propagator for baggage support, even without OTLP export.
+    // This enables traffic_type labeling (organic vs synthetic) to work regardless
+    // of whether traces are being exported.
+    let propagator = TextMapCompositePropagator::new(vec![
+        Box::new(TraceContextPropagator::new()),
+        Box::new(BaggagePropagator::new()),
+    ]);
+    global::set_text_map_propagator(propagator);
+
     // Check if OpenTelemetry endpoint is configured via parameter or env var
     let endpoint = match otlp_endpoint {
         Some(ep) if !ep.is_empty() => ep.to_string(),
@@ -121,7 +133,8 @@ pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: Option<&str>) {
             _ => {
                 eprintln!(
                     "LINERA_OTLP_EXPORTER_ENDPOINT not set and no endpoint provided. \
-                     Falling back to standard tracing without OpenTelemetry support."
+                     Falling back to standard tracing without OpenTelemetry span export. \
+                     Baggage propagation is still enabled."
                 );
                 crate::tracing::init(log_name);
                 return;
