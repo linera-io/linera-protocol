@@ -7,7 +7,7 @@ use std::{fmt, sync::Arc, time::Duration};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Amount, ArithmeticError, Blob},
+    data_types::{Amount, ApplicationDescription, ArithmeticError, Blob},
     ensure,
     identifiers::AccountOwner,
     ownership::ChainOwnership,
@@ -73,18 +73,33 @@ pub const RUNTIME_OWNER_WEIGHT_SIZE: u32 = 8;
 /// TODO(#4164): Implement a procedure for computing naive sizes.
 pub const RUNTIME_CONSTANT_CHAIN_OWNERSHIP_SIZE: u32 = 4 + 4 * 8;
 
+/// The runtime size of a `CryptoHash`.
+pub const RUNTIME_CRYPTO_HASH_SIZE: u32 = 32;
+
+/// The runtime size of a `VmRuntime` enum.
+pub const RUNTIME_VM_RUNTIME_SIZE: u32 = 1;
+
+/// The runtime constant part size of an `ApplicationDescription`.
+/// This includes: `ModuleId` (2 hashes + VmRuntime) + `ChainId` + `BlockHeight` + `u32`.
+/// Variable parts (`parameters` and `required_application_ids`) are calculated separately.
+pub const RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE: u32 = 2 * RUNTIME_CRYPTO_HASH_SIZE + RUNTIME_VM_RUNTIME_SIZE  // ModuleId
+    + RUNTIME_CHAIN_ID_SIZE                                  // creator_chain_id
+    + RUNTIME_BLOCK_HEIGHT_SIZE                              // block_height
+    + 4; // application_index (u32)
+
 #[cfg(test)]
 mod tests {
     use std::mem::size_of;
 
     use linera_base::{
-        data_types::{Amount, BlockHeight, Timestamp},
-        identifiers::{ApplicationId, ChainId},
+        data_types::{Amount, ApplicationDescription, BlockHeight, Timestamp},
+        identifiers::{ApplicationId, ChainId, ModuleId},
     };
 
     use crate::resources::{
         RUNTIME_AMOUNT_SIZE, RUNTIME_APPLICATION_ID_SIZE, RUNTIME_BLOCK_HEIGHT_SIZE,
-        RUNTIME_CHAIN_ID_SIZE, RUNTIME_OWNER_WEIGHT_SIZE, RUNTIME_TIMESTAMP_SIZE,
+        RUNTIME_CHAIN_ID_SIZE, RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE,
+        RUNTIME_OWNER_WEIGHT_SIZE, RUNTIME_TIMESTAMP_SIZE,
     };
 
     #[test]
@@ -98,6 +113,29 @@ mod tests {
         assert_eq!(RUNTIME_CHAIN_ID_SIZE as usize, size_of::<ChainId>());
         assert_eq!(RUNTIME_TIMESTAMP_SIZE as usize, size_of::<Timestamp>());
         assert_eq!(RUNTIME_OWNER_WEIGHT_SIZE as usize, size_of::<u64>());
+    }
+
+    /// Verifies that `RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE` matches the actual
+    /// structure of `ApplicationDescription`. This test will fail if a new fixed-size
+    /// field is added to the struct.
+    #[test]
+    fn test_application_description_size() {
+        // Verify using BCS serialization, which is architecture-independent.
+        // BCS encodes Vec length as ULEB128, so empty vectors add 1 byte each.
+        let description = ApplicationDescription {
+            module_id: ModuleId::default(),
+            creator_chain_id: ChainId::default(),
+            block_height: BlockHeight::default(),
+            application_index: 0,
+            parameters: vec![],
+            required_application_ids: vec![],
+        };
+        let serialized = bcs::to_bytes(&description).expect("serialization should succeed");
+        // Serialized size = fixed fields + 2 bytes for empty vectors (1 byte each for ULEB128 length).
+        assert_eq!(
+            serialized.len(),
+            RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE as usize + 2
+        );
     }
 }
 
@@ -506,6 +544,19 @@ where
             size += account_owner.size() + RUNTIME_OWNER_WEIGHT_SIZE;
         }
         size += RUNTIME_CONSTANT_CHAIN_OWNERSHIP_SIZE;
+        self.track_size_runtime_operations(size)
+    }
+
+    /// Tracks runtime reading of an application description.
+    pub(crate) fn track_runtime_application_description(
+        &mut self,
+        description: &ApplicationDescription,
+    ) -> Result<(), ExecutionError> {
+        let parameters_size = description.parameters.len() as u32;
+        let required_apps_size =
+            description.required_application_ids.len() as u32 * RUNTIME_APPLICATION_ID_SIZE;
+        let size =
+            RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE + parameters_size + required_apps_size;
         self.track_size_runtime_operations(size)
     }
 

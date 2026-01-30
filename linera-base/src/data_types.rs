@@ -1077,7 +1077,7 @@ pub enum OracleResponse {
 impl BcsHashable<'_> for OracleResponse {}
 
 /// Description of a user application.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize, WitType, WitLoad, WitStore)]
 pub struct ApplicationDescription {
     /// The unique ID of the bytecode to use for the application.
     pub module_id: ModuleId,

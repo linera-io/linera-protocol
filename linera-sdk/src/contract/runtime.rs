@@ -6,8 +6,8 @@
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Bytecode, Resources, SendMessageRequest,
-        Timestamp,
+        Amount, ApplicationDescription, ApplicationPermissions, BlockHeight, Bytecode, Resources,
+        SendMessageRequest, Timestamp,
     },
     ensure, http,
     identifiers::{
@@ -98,6 +98,14 @@ where
         *self
             .application_creator_chain_id
             .get_or_insert_with(|| base_wit::get_application_creator_chain_id().into())
+    }
+
+    /// Returns the description of the given application.
+    pub fn read_application_description(
+        &mut self,
+        application_id: ApplicationId,
+    ) -> ApplicationDescription {
+        base_wit::read_application_description(application_id.forget_abi().into()).into()
     }
 
     /// Returns the ID of the current chain.
