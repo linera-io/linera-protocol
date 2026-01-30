@@ -59,11 +59,16 @@ impl Exporter {
         let mut client = IndexerClient::new(address, self.options)?;
         let destination_state = storage.load_destination_state(&self.destination_id);
 
-        tracing::info!(start_index=&destination_state.load(Ordering::SeqCst), indexer_address=%address, "starting indexer exporter");
+        tracing::info!(
+            start_index=&destination_state.load(Ordering::SeqCst),
+            indexer_address=%address,
+            "starting indexer exporter"
+        );
 
         loop {
             let (outgoing_stream, incoming_stream) =
                 client.setup_indexer_client(self.work_queue_size).await?;
+
             let mut streamer = ExportTaskQueue::new(
                 self.work_queue_size,
                 destination_state.load(Ordering::Acquire) as usize,
@@ -81,24 +86,27 @@ impl Exporter {
                 _ = &mut pinned_shutdown_signal => {break},
 
                 res = streamer.run() => {
-                    if let Err(e) = res {
-                        tracing::error!("unexpected error: {e}, re-trying to establish a stream");
-                        sleep(Duration::from_secs(1)).await;
+                    if let Err(error) = res {
+                        tracing::error!(?error, "exporter stream error. re-trying to establish a stream");
+                        client = IndexerClient::new(address, self.options)?;
+                        sleep(Duration::from_millis(500)).await;
                     }
                 },
 
                 res = acknowledgement_task.run() => {
                     match res {
-                        Err(e) => {
-                            tracing::error!("unexpected error: {e}, re-trying to establish a stream");
+                        Err(error) => {
+                            tracing::error!(?error, "ack stream error. re-trying to establish a stream");
+                            client = IndexerClient::new(address, self.options)?;
                         }
 
                         Ok(_) => {
-                            tracing::error!("stream closed unexpectedly, retrying to establish a stream");
+                            tracing::error!("ack stream unexpectedly. retrying to establish a stream");
+                            client = IndexerClient::new(address, self.options)?;
                         }
                     }
 
-                    sleep(Duration::from_secs(1)).await;
+                    sleep(Duration::from_millis(500)).await;
                 },
 
             }
