@@ -367,6 +367,47 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         self.resource_controller
     }
 
+    /// Saves a checkpoint of the tracker's mutable state.
+    ///
+    /// This captures all state that could be modified during transaction execution,
+    /// allowing restoration if execution fails.
+    pub fn save_checkpoint(&self) -> TrackerCheckpoint {
+        TrackerCheckpoint {
+            resource_tracker: self.resource_controller.tracker,
+            next_application_index: self.next_application_index,
+            next_chain_index: self.next_chain_index,
+            transaction_index: self.transaction_index,
+            oracle_responses_len: self.oracle_responses.len(),
+            events_len: self.events.len(),
+            blobs_len: self.blobs.len(),
+            messages_len: self.messages.len(),
+            operation_results_len: self.operation_results.len(),
+        }
+    }
+
+    /// Restores the tracker's mutable state from a checkpoint.
+    ///
+    /// This reverts all state to what it was when the checkpoint was saved,
+    /// as if the failed transaction execution never happened.
+    pub fn restore_checkpoint(&mut self, checkpoint: TrackerCheckpoint) {
+        self.resource_controller.tracker = checkpoint.resource_tracker;
+        self.next_application_index = checkpoint.next_application_index;
+        self.next_chain_index = checkpoint.next_chain_index;
+        self.transaction_index = checkpoint.transaction_index;
+        self.oracle_responses
+            .truncate(checkpoint.oracle_responses_len);
+        self.events.truncate(checkpoint.events_len);
+        self.blobs.truncate(checkpoint.blobs_len);
+        self.messages.truncate(checkpoint.messages_len);
+        self.operation_results
+            .truncate(checkpoint.operation_results_len);
+    }
+
+    /// Updates the expected outcomes count when transactions are removed from the block.
+    pub fn update_expected_outcomes_count(&mut self, new_count: usize) {
+        self.expected_outcomes_count = new_count;
+    }
+
     /// Finalizes the execution and returns the collected results.
     ///
     /// This method should be called after all transactions have been processed.
@@ -415,3 +456,17 @@ pub(crate) type FinalizeExecutionResult = (
     Vec<OperationResult>,
     ResourceTracker,
 );
+
+/// Checkpoint of the tracker's mutable state for restoration on failure.
+#[derive(Clone)]
+pub struct TrackerCheckpoint {
+    pub(crate) resource_tracker: ResourceTracker,
+    pub(crate) next_application_index: u32,
+    pub(crate) next_chain_index: u32,
+    pub(crate) transaction_index: u32,
+    pub(crate) oracle_responses_len: usize,
+    pub(crate) events_len: usize,
+    pub(crate) blobs_len: usize,
+    pub(crate) messages_len: usize,
+    pub(crate) operation_results_len: usize,
+}

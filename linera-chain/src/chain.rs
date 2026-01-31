@@ -31,14 +31,14 @@ use linera_views::{
     views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{info, instrument};
 
 use crate::{
     block::{Block, ConfirmedBlock},
     block_tracker::BlockExecutionTracker,
     data_types::{
-        BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
-        ProposedBlock, Transaction,
+        BlockExecutionOutcome, BundleExecutionPolicy, ChainAndHeight, IncomingBundle,
+        MessageAction, MessageBundle, ProposedBlock, Transaction,
     },
     inbox::{InboxError, InboxStateView},
     manager::ChainManager,
@@ -684,26 +684,29 @@ where
         optional_vec.ok_or_else(|| ChainError::InternalError("Missing outboxes".into()))
     }
 
-    /// Executes a block: first the incoming messages, then the main operation.
-    /// Does not update chain state other than the execution state.
+    /// Executes a block with a specified policy for handling bundle failures.
+    ///
+    /// Unlike `execute_block_inner`, this method supports automatic retry with checkpointing.
+    #[allow(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(
         chain_id = %block.chain_id,
         block_height = %block.height
     ))]
-    async fn execute_block_inner(
+    async fn execute_block_inner_with_policy(
         chain: &mut ExecutionStateView<C>,
         confirmed_log: &LogView<C, CryptoHash>,
-        block: &ProposedBlock,
+        block: &mut ProposedBlock,
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
+        policy: BundleExecutionPolicy,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
         #[cfg(with_metrics)]
         let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency_us();
         chain.system.timestamp.set(block.timestamp);
 
-        let policy = chain
+        let committee_policy = chain
             .system
             .current_committee()
             .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?
@@ -712,7 +715,7 @@ where
             .clone();
 
         let mut resource_controller = ResourceController::new(
-            Arc::new(policy),
+            Arc::new(committee_policy),
             ResourceTracker::default(),
             block.authenticated_owner,
         );
@@ -726,8 +729,6 @@ where
             chain.system.used_blobs.insert(&blob_id)?;
         }
 
-        // Execute each incoming bundle as a transaction, then each operation.
-        // Collect messages, events and oracle responses, each as one list per transaction.
         let mut block_execution_tracker = BlockExecutionTracker::new(
             &mut resource_controller,
             published_blobs
@@ -739,11 +740,135 @@ where
             block,
         )?;
 
-        for transaction in block.transaction_refs() {
-            block_execution_tracker
-                .execute_transaction(transaction, round, chain)
-                .await?;
+        // Extract max_failures from policy.
+        let max_failures = match policy {
+            BundleExecutionPolicy::Abort => 0,
+            BundleExecutionPolicy::AutoRetry { max_failures } => max_failures,
+        };
+        let auto_retry = !matches!(policy, BundleExecutionPolicy::Abort);
+        let mut failure_count = 0u32;
+        let mut removed_all_remaining = false;
+
+        let mut i = 0;
+        while i < block.transactions.len() {
+            let transaction = &block.transactions[i];
+            let is_bundle = matches!(transaction, Transaction::ReceiveMessages(_));
+
+            // Checkpoint before bundle transactions if using auto-retry.
+            let checkpoint = if auto_retry && is_bundle {
+                Some((
+                    chain.clone_unchecked()?,
+                    block_execution_tracker.save_checkpoint(),
+                ))
+            } else {
+                None
+            };
+
+            let result = block_execution_tracker
+                .execute_transaction(&block.transactions[i], round, chain)
+                .await;
+
+            match result {
+                Ok(()) => {
+                    i += 1;
+                }
+                Err(ChainError::ExecutionError(
+                    error,
+                    ChainExecutionContext::IncomingBundle(_),
+                )) if auto_retry => {
+                    let Transaction::ReceiveMessages(incoming_bundle) = &mut block.transactions[i]
+                    else {
+                        unreachable!("IncomingBundle context implies ReceiveMessages transaction");
+                    };
+
+                    // Cannot retry protected bundles or bundles already marked as Reject.
+                    if incoming_bundle.bundle.is_protected()
+                        || incoming_bundle.action == MessageAction::Reject
+                    {
+                        return Err(ChainError::ExecutionError(
+                            error,
+                            ChainExecutionContext::IncomingBundle(i as u32),
+                        ));
+                    }
+
+                    // Transient errors (e.g., missing blobs) should fail the block entirely
+                    // so it can be retried after syncing.
+                    if error.is_transient_error() {
+                        return Err(ChainError::ExecutionError(
+                            error,
+                            ChainExecutionContext::IncomingBundle(i as u32),
+                        ));
+                    }
+
+                    let is_limit_error = error.is_limit_error();
+                    // Capture error message for logging before we potentially drop the error.
+                    let error_msg = format!("{error}");
+
+                    // Restore checkpoint.
+                    if let Some((saved_chain, saved_tracker)) = checkpoint {
+                        *chain = saved_chain;
+                        block_execution_tracker.restore_checkpoint(saved_tracker);
+                    }
+
+                    failure_count += 1;
+
+                    // If we've exceeded max failures, remove all remaining message bundles.
+                    if failure_count > max_failures && !removed_all_remaining {
+                        info!(
+                            failure_count,
+                            max_failures,
+                            "Exceeded max bundle failures, removing all remaining message bundles"
+                        );
+                        Self::remove_remaining_bundles(block, i);
+                        block_execution_tracker
+                            .update_expected_outcomes_count(block.transactions.len());
+                        removed_all_remaining = true;
+                        // Don't retry - we've removed the failed bundle.
+                        continue;
+                    }
+
+                    if is_limit_error {
+                        if i == 0 {
+                            // First transaction is inherently too large - reject it.
+                            info!(
+                                error = %error_msg,
+                                origin = ?incoming_bundle.origin,
+                                "First message bundle exceeds block limits and will be rejected"
+                            );
+                            incoming_bundle.action = MessageAction::Reject;
+                            // Retry the transaction as rejected (don't increment i).
+                        } else {
+                            // Not the first - remove it and same-sender subsequent bundles.
+                            let origin = incoming_bundle.origin;
+                            info!(
+                                error = %error_msg,
+                                index = i,
+                                ?origin,
+                                "Message bundle exceeded block limits and will be removed for retry in a later block"
+                            );
+                            Self::remove_bundle_and_same_sender(block, i);
+                            block_execution_tracker
+                                .update_expected_outcomes_count(block.transactions.len());
+                            // Continue without incrementing i (next transaction is now at i).
+                        }
+                    } else {
+                        // Non-limit error: reject the bundle.
+                        info!(
+                            error = %error_msg,
+                            index = i,
+                            origin = ?incoming_bundle.origin,
+                            "Message bundle failed to execute and will be rejected"
+                        );
+                        incoming_bundle.action = MessageAction::Reject;
+                        // Retry the transaction as rejected (don't increment i).
+                    }
+                }
+                Err(e) => return Err(e),
+            }
         }
+
+        // Ensure the block is not empty after modifications.
+        ensure!(!block.transactions.is_empty(), ChainError::EmptyBlock);
 
         let recipients = block_execution_tracker.recipients();
         let mut recipient_heights = Vec::new();
@@ -815,6 +940,39 @@ where
         ))
     }
 
+    /// Removes a bundle at the given index and all subsequent bundles from the same sender.
+    fn remove_bundle_and_same_sender(block: &mut ProposedBlock, index: usize) {
+        let origin = match &block.transactions[index] {
+            Transaction::ReceiveMessages(bundle) => bundle.origin,
+            _ => return,
+        };
+
+        let mut i = index;
+        while i < block.transactions.len() {
+            let same_sender = matches!(
+                &block.transactions[i],
+                Transaction::ReceiveMessages(bundle) if bundle.origin == origin
+            );
+            if same_sender {
+                block.transactions.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+    }
+
+    /// Removes all message bundles starting from the given index.
+    fn remove_remaining_bundles(block: &mut ProposedBlock, start_index: usize) {
+        let mut i = start_index;
+        while i < block.transactions.len() {
+            if matches!(&block.transactions[i], Transaction::ReceiveMessages(_)) {
+                block.transactions.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+    }
+
     /// Executes a block: first the incoming messages, then the main operation.
     /// Does not update chain state other than the execution state.
     #[instrument(skip_all, fields(
@@ -828,6 +986,43 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
+        // Clone the block since execute_block_with_policy takes &mut, but with Abort
+        // policy the block is never modified.
+        let mut block = block.clone();
+        self.execute_block_with_policy(
+            &mut block,
+            local_time,
+            round,
+            published_blobs,
+            replaying_oracle_responses,
+            BundleExecutionPolicy::Abort,
+        )
+        .await
+    }
+
+    /// Executes a block with a specified policy for handling bundle failures.
+    ///
+    /// This method supports automatic retry with checkpointing when bundles fail:
+    /// - For limit errors (block too large, fuel exceeded, etc.): the bundle is removed
+    ///   so it can be retried in a later block, unless it's the first transaction
+    ///   (which gets rejected as inherently too large).
+    /// - For non-limit errors: the bundle is rejected (triggering bounced messages).
+    /// - After `max_failures` failed bundles, all remaining message bundles are removed.
+    ///
+    /// The block is modified in place to reflect the actual executed transactions.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id(),
+        block_height = %block.height
+    ))]
+    pub async fn execute_block_with_policy(
+        &mut self,
+        block: &mut ProposedBlock,
+        local_time: Timestamp,
+        round: Option<u32>,
+        published_blobs: &[Blob],
+        replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
+        policy: BundleExecutionPolicy,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
         assert_eq!(
             block.chain_id,
@@ -864,7 +1059,7 @@ where
             block,
         )?;
 
-        Self::execute_block_inner(
+        Self::execute_block_inner_with_policy(
             &mut self.execution_state,
             &self.confirmed_log,
             block,
@@ -872,6 +1067,7 @@ where
             round,
             published_blobs,
             replaying_oracle_responses,
+            policy,
         )
         .await
     }

@@ -23,7 +23,9 @@ use linera_base::{
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, ProposedBlock},
+    data_types::{
+        BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock,
+    },
     types::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
@@ -760,6 +762,30 @@ where
                 block,
                 round,
                 published_blobs,
+                callback,
+            }
+        })
+        .await
+    }
+
+    /// Tries to execute a block proposal with a policy for handling bundle failures.
+    ///
+    /// Returns the modified block (bundles may be rejected/removed), the executed block,
+    /// chain info response, and resource tracker.
+    #[instrument(level = "trace", skip(self, block))]
+    pub async fn stage_block_execution_with_policy(
+        &self,
+        block: ProposedBlock,
+        round: Option<u32>,
+        published_blobs: Vec<Blob>,
+        policy: BundleExecutionPolicy,
+    ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
+        self.query_chain_worker(block.chain_id, move |callback| {
+            ChainWorkerRequest::StageBlockExecutionWithPolicy {
+                block,
+                round,
+                published_blobs,
+                policy,
                 callback,
             }
         })

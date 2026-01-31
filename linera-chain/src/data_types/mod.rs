@@ -316,6 +316,37 @@ pub enum MessageAction {
     Reject,
 }
 
+/// Policy for handling message bundle execution failures during block execution.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub enum BundleExecutionPolicy {
+    /// Abort block execution on any bundle failure.
+    #[default]
+    Abort,
+    /// Automatically handle failing bundles with checkpointing and retry.
+    ///
+    /// - For limit errors (block too large, fuel exceeded, etc.): remove the bundle
+    ///   so it can be retried in a later block, unless it's the first transaction
+    ///   (in which case it's inherently too large and gets rejected).
+    /// - For non-limit errors: reject the bundle (triggering bounced messages).
+    /// - After `max_failures` failed bundles, remove all remaining message bundles.
+    AutoRetry {
+        /// Maximum number of bundle failures before removing all remaining message bundles.
+        max_failures: u32,
+    },
+}
+
+impl BundleExecutionPolicy {
+    /// Creates an `AutoRetry` policy with the default maximum failures (3).
+    pub fn auto_retry() -> Self {
+        Self::AutoRetry { max_failures: 3 }
+    }
+
+    /// Creates an `AutoRetry` policy with a custom maximum failures limit.
+    pub fn auto_retry_with_max_failures(max_failures: u32) -> Self {
+        Self::AutoRetry { max_failures }
+    }
+}
+
 /// A set of messages from a single block, for a single destination.
 #[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize, Deserialize, SimpleObject, Allocative)]
 pub struct MessageBundle {

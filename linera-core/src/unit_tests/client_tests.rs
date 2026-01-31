@@ -17,7 +17,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
-    data_types::{IncomingBundle, MessageBundle, PostedMessage, Transaction},
+    data_types::{IncomingBundle, MessageAction, MessageBundle, PostedMessage, Transaction},
     manager::LockingBlock,
     types::Timeout,
     ChainError, ChainExecutionContext,
@@ -45,7 +45,7 @@ use crate::test_utils::ServiceStorageBuilder;
 use crate::{
     client::{
         chain_client::{self, ChainClient},
-        ClientOutcome, ListeningMode, MessageAction,
+        ClientOutcome, ListeningMode,
     },
     local_node::LocalNodeError,
     node::{
