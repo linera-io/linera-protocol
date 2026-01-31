@@ -148,6 +148,9 @@ Client implementation and command-line tool for the Linera blockchain
   Default value: `10`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
 * `--allow-fast-blocks` — Whether to allow creating blocks in the fast round. Fast blocks have lower latency but must be used carefully so that there are never any conflicting fast block proposals
+* `--max-block-limit-drops <MAX_BLOCK_LIMIT_DROPS>` — Maximum number of times the block staging loop will drop individual sender messages due to block limits before dropping all remaining transactions
+
+  Default value: `3`
 * `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries
 * `--blanket-message-policy <BLANKET_MESSAGE_POLICY>` — The policy for handling incoming messages
 

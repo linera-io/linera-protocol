@@ -105,13 +105,17 @@ pub struct Options {
     /// Whether to allow creating blocks in the fast round. Fast blocks have lower latency but
     /// must be used carefully so that there are never any conflicting fast block proposals.
     pub allow_fast_blocks: bool,
+    /// Maximum number of times the block staging loop will drop individual sender messages
+    /// due to block limits before dropping all remaining transactions.
+    pub max_block_limit_drops: usize,
 }
 
 #[cfg(with_testing)]
 impl Options {
     pub fn test_default() -> Self {
         use super::{
-            DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_MAX_BLOCK_LIMIT_DROPS,
+            DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         };
         use crate::DEFAULT_QUORUM_GRACE_PERIOD;
 
@@ -126,6 +130,7 @@ impl Options {
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
+            max_block_limit_drops: DEFAULT_MAX_BLOCK_LIMIT_DROPS,
         }
     }
 }

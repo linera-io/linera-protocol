@@ -96,6 +96,11 @@ pub struct Options {
     #[arg(long)]
     pub allow_fast_blocks: bool,
 
+    /// Maximum number of times the block staging loop will drop individual sender messages
+    /// due to block limits before dropping all remaining transactions.
+    #[arg(long, default_value_t = linera_core::client::DEFAULT_MAX_BLOCK_LIMIT_DROPS)]
+    pub max_block_limit_drops: usize,
+
     /// (EXPERIMENTAL) Whether application services can persist in some cases between queries.
     #[arg(long)]
     pub long_lived_services: bool,
@@ -269,6 +274,7 @@ impl Options {
             sender_certificate_download_batch_size: self.sender_certificate_download_batch_size,
             max_joined_tasks: self.max_joined_tasks,
             allow_fast_blocks: self.allow_fast_blocks,
+            max_block_limit_drops: self.max_block_limit_drops,
         }
     }
 

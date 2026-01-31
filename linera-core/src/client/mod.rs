@@ -129,6 +129,8 @@ mod metrics {
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
 
+pub static DEFAULT_MAX_BLOCK_LIMIT_DROPS: usize = 3;
+
 #[derive(Debug, Clone, Copy)]
 pub enum TimingType {
     ExecuteOperations,
@@ -1548,6 +1550,9 @@ impl<Env: Environment> Client<Env> {
     /// If a message fails due to block limits being exceeded and it's not the first
     /// transaction, the message is removed (not rejected) so it can be retried in a later
     /// block. All subsequent messages from the same sender are also removed.
+    ///
+    /// After `max_block_limit_drops` such removals, all remaining messages (from all
+    /// senders) are removed instead.
     // TODO(#2806): Measure how failing messages affect the execution times.
     #[tracing::instrument(level = "trace", skip(self, block))]
     async fn stage_block_execution_and_discard_failing_messages(
@@ -1556,6 +1561,7 @@ impl<Env: Environment> Client<Env> {
         round: Option<u32>,
         published_blobs: Vec<Blob>,
     ) -> Result<(Block, ChainInfoResponse), chain_client::Error> {
+        let mut block_limit_drops = 0;
         loop {
             let result = self
                 .stage_block_execution(block.clone(), round, published_blobs.clone())
@@ -1601,23 +1607,46 @@ impl<Env: Environment> Client<Env> {
                             incoming_bundle.action = MessageAction::Reject;
                         } else {
                             // Not the first transaction: might succeed in a later block.
-                            // Remove it and all subsequent bundles from the same sender.
-                            let origin = incoming_bundle.origin;
-                            info!(
-                                %error, %index, ?origin,
-                                "Message bundle exceeded block limits and will be removed for retry in a later block."
-                            );
-                            // Remove the failed bundle and all subsequent bundles from the same sender.
-                            let mut i = index;
-                            while i < block.transactions.len() {
-                                let same_sender = matches!(
-                                    &block.transactions[i],
-                                    Transaction::ReceiveMessages(bundle) if bundle.origin == origin
+                            block_limit_drops += 1;
+
+                            if block_limit_drops > self.options.max_block_limit_drops {
+                                // Exceeded the limit: remove all remaining message bundles.
+                                info!(
+                                    %error, %index, %block_limit_drops,
+                                    "Exceeded max block limit drops; removing all remaining message bundles."
                                 );
-                                if same_sender {
-                                    block.transactions.remove(i);
-                                } else {
-                                    i += 1;
+                                let mut i = index;
+                                while i < block.transactions.len() {
+                                    if matches!(
+                                        &block.transactions[i],
+                                        Transaction::ReceiveMessages(_)
+                                    ) {
+                                        block.transactions.remove(i);
+                                    } else {
+                                        i += 1;
+                                    }
+                                }
+                            } else {
+                                let origin = incoming_bundle.origin;
+                                info!(
+                                    %error, %index, ?origin, %block_limit_drops,
+                                    "Message bundle exceeded block limits and will be removed \
+                                     for retry in a later block."
+                                );
+                                // Remove the failed bundle and all subsequent bundles from the
+                                // same sender.
+                                let mut i = index;
+                                while i < block.transactions.len() {
+                                    let same_sender = matches!(
+                                        &block.transactions[i],
+                                        Transaction::ReceiveMessages(bundle)
+                                            if bundle.origin == origin
+                                    );
+                                    if same_sender {
+                                        block.transactions.remove(i);
+                                    } else {
+                                        i += 1;
+                                    }
                                 }
                             }
                         }
