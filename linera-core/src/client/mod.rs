@@ -1609,44 +1609,35 @@ impl<Env: Environment> Client<Env> {
                             // Not the first transaction: might succeed in a later block.
                             block_limit_drops += 1;
 
-                            if block_limit_drops > self.options.max_block_limit_drops {
+                            let origin = if block_limit_drops > self.options.max_block_limit_drops {
                                 // Exceeded the limit: remove all remaining message bundles.
                                 info!(
                                     %error, %index, %block_limit_drops,
                                     "Exceeded max block limit drops; removing all remaining message bundles."
                                 );
-                                let mut i = index;
-                                while i < block.transactions.len() {
-                                    if matches!(
-                                        &block.transactions[i],
-                                        Transaction::ReceiveMessages(_)
-                                    ) {
-                                        block.transactions.remove(i);
-                                    } else {
-                                        i += 1;
-                                    }
-                                }
+                                None
                             } else {
+                                // Remove the failed bundle and all subsequent bundles from the
+                                // same sender.
                                 let origin = incoming_bundle.origin;
                                 info!(
                                     %error, %index, ?origin, %block_limit_drops,
                                     "Message bundle exceeded block limits and will be removed \
                                      for retry in a later block."
                                 );
-                                // Remove the failed bundle and all subsequent bundles from the
-                                // same sender.
-                                let mut i = index;
-                                while i < block.transactions.len() {
-                                    let same_sender = matches!(
-                                        &block.transactions[i],
-                                        Transaction::ReceiveMessages(bundle)
-                                            if bundle.origin == origin
-                                    );
-                                    if same_sender {
-                                        block.transactions.remove(i);
-                                    } else {
-                                        i += 1;
-                                    }
+                                Some(origin)
+                            };
+                            let mut i = index;
+                            while i < block.transactions.len() {
+                                let same_sender = matches!(
+                                    &block.transactions[i],
+                                    Transaction::ReceiveMessages(bundle)
+                                        if origin.is_none_or(|origin| bundle.origin == origin)
+                                );
+                                if same_sender {
+                                    block.transactions.remove(i);
+                                } else {
+                                    i += 1;
                                 }
                             }
                         }
