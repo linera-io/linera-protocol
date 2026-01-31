@@ -32,6 +32,9 @@ async fn service_query_performs_http_request() -> anyhow::Result<()> {
                 .insert("localhost".to_owned());
         })
         .await;
+    // Tests that we can create test chains after the change of epoch
+    // due to the change of policy.
+    let _user_chain = validator.new_chain().await;
 
     let QueryOutcome { response, .. } = chain
         .graphql_query(application_id, "query { performHttpRequest }")
