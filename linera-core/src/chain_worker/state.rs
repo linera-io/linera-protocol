@@ -827,7 +827,7 @@ where
                 .get_committees(epoch..=epoch)
                 .await
                 .map_err(|error| {
-                    ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
+                    ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block, None)
                 })?
                 .remove(&epoch)
                 .ok_or_else(|| {

@@ -225,6 +225,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
         Err(ChainError::ExecutionError(
             execution_error,
             ChainExecutionContext::Operation(1),
+            _,
         )) if matches!(*execution_error, ExecutionError::BlockTooLarge)
     );
 
@@ -554,7 +555,7 @@ async fn test_service_as_oracle_exceeding_time_limit(
 
     let result = chain.execute_block(&block, time, None, &[], None).await;
 
-    let Err(ChainError::ExecutionError(execution_error, ChainExecutionContext::Operation(0))) =
+    let Err(ChainError::ExecutionError(execution_error, ChainExecutionContext::Operation(0), _)) =
         result
     else {
         panic!("Expected a block execution error, got: {result:#?}");
@@ -620,7 +621,7 @@ async fn test_service_as_oracle_timeout_early_stop(
     let result = chain.execute_block(&block, time, None, &[], None).await;
     let execution_time = execution_start.elapsed();
 
-    let Err(ChainError::ExecutionError(execution_error, ChainExecutionContext::Operation(0))) =
+    let Err(ChainError::ExecutionError(execution_error, ChainExecutionContext::Operation(0), _)) =
         result
     else {
         panic!("Expected a block execution error, got: {result:#?}");
@@ -640,7 +641,7 @@ async fn test_service_as_oracle_timeout_early_stop(
 #[test_case(50, 49 => matches Ok(_); "smaller than limit")]
 #[test_case(
     50, 51
-    => matches Err(ChainError::ExecutionError(execution_error, _))
+    => matches Err(ChainError::ExecutionError(execution_error, ..))
         if matches!(*execution_error, ExecutionError::ServiceOracleResponseTooLarge);
     "larger than limit"
 )]
@@ -678,19 +679,19 @@ async fn test_service_as_oracle_response_size_limit(
 #[test_case(150, 140, 139 => matches Ok(_); "smaller than both limits")]
 #[test_case(
     150, 140, 141
-    => matches Err(ChainError::ExecutionError(execution_error, _))
+    => matches Err(ChainError::ExecutionError(execution_error, ..))
         if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
     "larger than http limit"
 )]
 #[test_case(
     140, 150, 142
-    => matches Err(ChainError::ExecutionError(execution_error, _))
+    => matches Err(ChainError::ExecutionError(execution_error, ..))
         if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
     "larger than oracle limit"
 )]
 #[test_case(
     140, 150, 1000
-    => matches Err(ChainError::ExecutionError(execution_error, _))
+    => matches Err(ChainError::ExecutionError(execution_error, ..))
         if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
     "larger than both limits"
 )]
@@ -738,13 +739,13 @@ async fn test_contract_http_response_size_limit(
 #[test_case(140, 150, 142 => matches Ok(_); "larger than oracle limit")]
 #[test_case(
     150, 140, 141
-    => matches Err(ChainError::ExecutionError(execution_error, _))
+    => matches Err(ChainError::ExecutionError(execution_error, ..))
         if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
     "larger than http limit"
 )]
 #[test_case(
     140, 150, 1000
-    => matches Err(ChainError::ExecutionError(execution_error, _))
+    => matches Err(ChainError::ExecutionError(execution_error, ..))
         if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
     "larger than both limits"
 )]

@@ -28,9 +28,19 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
-use linera_execution::ExecutionError;
+use linera_execution::{ExecutionError, ResourceTracker};
 use linera_views::ViewError;
 use thiserror::Error;
+
+/// Context about a limit error, including resources used before the failed transaction
+/// and the limit that was exceeded.
+#[derive(Copy, Clone, Debug)]
+pub struct LimitErrorContext {
+    /// Resources consumed before the failed transaction.
+    pub resources_before_error: ResourceTracker,
+    /// The limit value that was exceeded.
+    pub limit_exceeded: u64,
+}
 
 #[derive(Error, Debug)]
 pub enum ChainError {
@@ -40,8 +50,17 @@ pub enum ChainError {
     ArithmeticError(#[from] ArithmeticError),
     #[error(transparent)]
     ViewError(#[from] ViewError),
+    /// An error during execution.
+    ///
+    /// The optional `LimitErrorContext` contains information about limit errors, including
+    /// the resources used before the failed transaction and the limit that was exceeded.
+    /// This is useful for determining whether the block was close to its resource limits.
     #[error("Execution error: {0} during {1:?}")]
-    ExecutionError(Box<ExecutionError>, ChainExecutionContext),
+    ExecutionError(
+        Box<ExecutionError>,
+        ChainExecutionContext,
+        Option<Box<LimitErrorContext>>,
+    ),
 
     #[error("The chain being queried is not active {0}")]
     InactiveChain(ChainId),
@@ -199,7 +218,7 @@ impl ChainError {
             | ChainError::UnexpectedMessage { .. }
             | ChainError::InternalError(_)
             | ChainError::BcsError(_) => true,
-            ChainError::ExecutionError(execution_error, _) => execution_error.is_local(),
+            ChainError::ExecutionError(execution_error, _, _) => execution_error.is_local(),
         }
     }
 }
@@ -223,6 +242,39 @@ where
     E: Into<ExecutionError>,
 {
     fn with_execution_context(self, context: ChainExecutionContext) -> Result<T, ChainError> {
-        self.map_err(|error| ChainError::ExecutionError(Box::new(error.into()), context))
+        self.map_err(|error| ChainError::ExecutionError(Box::new(error.into()), context, None))
+    }
+}
+
+impl ChainError {
+    /// Sets the limit error context for an execution error.
+    ///
+    /// This is used to record the resources consumed before a transaction failed
+    /// and the limit that was exceeded, which helps determine whether the block
+    /// was close to its resource limits.
+    pub fn with_limit_error_context(
+        self,
+        resources_before_error: ResourceTracker,
+        limit_exceeded: u64,
+    ) -> Self {
+        match self {
+            ChainError::ExecutionError(error, context, _) => ChainError::ExecutionError(
+                error,
+                context,
+                Some(Box::new(LimitErrorContext {
+                    resources_before_error,
+                    limit_exceeded,
+                })),
+            ),
+            other => other,
+        }
+    }
+
+    /// Returns the limit error context, if available.
+    pub fn limit_error_context(&self) -> Option<&LimitErrorContext> {
+        match self {
+            ChainError::ExecutionError(_, _, context) => context.as_deref(),
+            _ => None,
+        }
     }
 }

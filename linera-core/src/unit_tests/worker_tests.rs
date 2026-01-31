@@ -732,7 +732,7 @@ where
         Err(
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
-            execution_error, ChainExecutionContext::Operation(_)
+            execution_error, ChainExecutionContext::Operation(_), _
         ) if matches!(**execution_error, ExecutionError::IncorrectTransferAmount))
     );
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
@@ -1370,7 +1370,7 @@ where
                 Err(
                     WorkerError::ChainError(error)
                 ) if matches!(&*error, ChainError::ExecutionError(
-                    execution_error, ChainExecutionContext::Operation(_)
+                    execution_error, ChainExecutionContext::Operation(_), _
                 ) if matches!(**execution_error, ExecutionError::InsufficientBalance { .. }))
         );
     }
@@ -1617,7 +1617,7 @@ where
         Err(
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
-                execution_error, ChainExecutionContext::Operation(_)
+                execution_error, ChainExecutionContext::Operation(_), _
         ) if matches!(**execution_error, ExecutionError::InsufficientBalance { .. }))
     );
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
@@ -3786,7 +3786,7 @@ where
         .unwrap();
     let result = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(error)) if matches!(&*error,
-        ChainError::ExecutionError(error, _) if matches!(&**error,
+        ChainError::ExecutionError(error, ..) if matches!(&**error,
         ExecutionError::UnauthenticatedTransferOwner
     )));
 

@@ -541,7 +541,7 @@ where
             Ok(_) => (),
             // if the only issue was that we couldn't initialize the chain because of a
             // missing chain description blob, we might still want to update the inbox
-            Err(ChainError::ExecutionError(exec_err, _))
+            Err(ChainError::ExecutionError(exec_err, _, _))
                 if matches!(*exec_err, ExecutionError::BlobsNotFound(ref blobs)
                 if blobs.iter().all(|blob_id| {
                     blob_id.blob_type == BlobType::ChainDescription && blob_id.hash == chain_id.0
@@ -740,9 +740,24 @@ where
         )?;
 
         for transaction in block.transaction_refs() {
+            // Record the resources before executing this transaction.
+            let resources_before = *block_execution_tracker.resource_controller_mut().tracker();
+            let policy = block_execution_tracker
+                .resource_controller_mut()
+                .policy()
+                .clone();
             block_execution_tracker
                 .execute_transaction(transaction, round, chain)
-                .await?;
+                .await
+                .map_err(|err| {
+                    // Attach limit error context if this is a limit error.
+                    if let ChainError::ExecutionError(ref exec_err, _, _) = err {
+                        if let Some(limit) = exec_err.get_limit_exceeded(&policy) {
+                            return err.with_limit_error_context(resources_before, limit);
+                        }
+                    }
+                    err
+                })?;
         }
 
         let recipients = block_execution_tracker.recipients();

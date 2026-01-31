@@ -402,13 +402,16 @@ impl From<ChainError> for NodeError {
                 height,
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
-            ChainError::ExecutionError(execution_error, context) => match *execution_error {
-                ExecutionError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-                ExecutionError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
-                _ => Self::ChainError {
-                    error: ChainError::ExecutionError(execution_error, context).to_string(),
-                },
-            },
+            ChainError::ExecutionError(execution_error, context, resources) => {
+                match *execution_error {
+                    ExecutionError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+                    ExecutionError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
+                    _ => Self::ChainError {
+                        error: ChainError::ExecutionError(execution_error, context, resources)
+                            .to_string(),
+                    },
+                }
+            }
             ChainError::UnexpectedBlockHeight {
                 expected_block_height,
                 found_block_height,

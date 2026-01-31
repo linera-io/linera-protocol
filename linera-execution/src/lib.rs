@@ -441,6 +441,46 @@ impl ExecutionError {
                 | ExecutionError::BlockTooLarge
         )
     }
+
+    /// Returns the limit that was exceeded, if this is a limit error.
+    ///
+    /// This is useful for determining if the resources before the error were close to
+    /// the limit (i.e., above a soft limit threshold).
+    pub fn get_limit_exceeded(&self, policy: &ResourceControlPolicy) -> Option<u64> {
+        match self {
+            ExecutionError::ExcessiveRead => Some(policy.maximum_bytes_read_per_block),
+            ExecutionError::ExcessiveWrite => Some(policy.maximum_bytes_written_per_block),
+            ExecutionError::MaximumFuelExceeded(VmRuntime::Wasm) => {
+                Some(policy.maximum_wasm_fuel_per_block)
+            }
+            ExecutionError::MaximumFuelExceeded(VmRuntime::Evm) => {
+                Some(policy.maximum_evm_fuel_per_block)
+            }
+            ExecutionError::MaximumServiceOracleExecutionTimeExceeded => {
+                Some(policy.maximum_service_oracle_execution_ms)
+            }
+            ExecutionError::BlockTooLarge => Some(policy.maximum_block_size),
+            _ => None,
+        }
+    }
+
+    /// Returns the resource value from the tracker that corresponds to this limit error.
+    ///
+    /// This is useful for determining if the resources before the error were close to
+    /// the limit (i.e., above a soft limit threshold).
+    pub fn get_resource_used(&self, resources: &ResourceTracker) -> Option<u64> {
+        match self {
+            ExecutionError::ExcessiveRead => Some(resources.bytes_read),
+            ExecutionError::ExcessiveWrite => Some(resources.bytes_written),
+            ExecutionError::MaximumFuelExceeded(VmRuntime::Wasm) => Some(resources.wasm_fuel),
+            ExecutionError::MaximumFuelExceeded(VmRuntime::Evm) => Some(resources.evm_fuel),
+            ExecutionError::MaximumServiceOracleExecutionTimeExceeded => {
+                Some(resources.service_oracle_execution.as_millis() as u64)
+            }
+            ExecutionError::BlockTooLarge => Some(resources.block_size),
+            _ => None,
+        }
+    }
 }
 
 /// The public entry points provided by the contract part of an application.

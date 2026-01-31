@@ -151,6 +151,11 @@ Client implementation and command-line tool for the Linera blockchain
 * `--max-block-limit-drops <MAX_BLOCK_LIMIT_DROPS>` — Maximum number of times the block staging loop will drop individual sender messages due to block limits before dropping all remaining transactions
 
   Default value: `3`
+* `--soft-block-limit-threshold <SOFT_BLOCK_LIMIT_THRESHOLD>` — Soft block limit threshold (0.0 to 1.0) as a percentage of the actual block limit.
+
+   When a transaction exceeds block limits and the resources before that transaction were already above this threshold, all remaining messages are dropped instead of just the sender's messages.
+
+  Default value: `0.8`
 * `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries
 * `--blanket-message-policy <BLANKET_MESSAGE_POLICY>` — The policy for handling incoming messages
 

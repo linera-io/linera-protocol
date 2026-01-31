@@ -648,15 +648,18 @@ where
             ))) => {
                 tracing::debug!("Local worker error executing operations: {chain_err}");
                 match *chain_err {
-                    ChainError::ExecutionError(exec_err, ChainExecutionContext::Operation(i))
-                        if i > 0
-                            && matches!(
-                                *exec_err,
-                                ExecutionError::BlockTooLarge
-                                    | ExecutionError::FeesExceedFunding { .. }
-                                    | ExecutionError::InsufficientBalance { .. }
-                                    | ExecutionError::MaximumFuelExceeded(_)
-                            ) =>
+                    ChainError::ExecutionError(
+                        exec_err,
+                        ChainExecutionContext::Operation(i),
+                        _,
+                    ) if i > 0
+                        && matches!(
+                            *exec_err,
+                            ExecutionError::BlockTooLarge
+                                | ExecutionError::FeesExceedFunding { .. }
+                                | ExecutionError::InsufficientBalance { .. }
+                                | ExecutionError::MaximumFuelExceeded(_)
+                        ) =>
                     {
                         tracing::error!(%exec_err, "Execution of operation {i} failed; reducing batch size");
 

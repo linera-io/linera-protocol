@@ -19,7 +19,7 @@ pub fn assert_insufficient_balance_during_operation<T>(
         panic!("Expected a chain_client::Error::LocalNodeError with a WorkerError::ChainError");
     };
 
-    let ChainError::ExecutionError(execution_error, context) = *error else {
+    let ChainError::ExecutionError(execution_error, context, _) = *error else {
         panic!("Expected a ChainError::ExecutionError, found: {error:#?}");
     };
 
@@ -45,7 +45,7 @@ pub fn assert_fees_exceed_funding<T>(obtained_error: Result<T, chain_client::Err
         panic!("Expected a chain_client::Error::LocalNodeError with a WorkerError::ChainError");
     };
 
-    let ChainError::ExecutionError(execution_error, _context) = *error else {
+    let ChainError::ExecutionError(execution_error, _context, _) = *error else {
         panic!("Expected a ChainError::ExecutionError, found: {error:#?}");
     };
 
@@ -68,7 +68,7 @@ pub fn assert_insufficient_funding<T>(
         panic!("Expected a chain_client::Error::LocalNodeError with a WorkerError::ChainError");
     };
 
-    let ChainError::ExecutionError(execution_error, context) = *error else {
+    let ChainError::ExecutionError(execution_error, context, _) = *error else {
         panic!("Expected a ChainError::ExecutionError, found: {error:#?}");
     };
 

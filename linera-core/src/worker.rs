@@ -428,14 +428,17 @@ impl From<ChainError> for WorkerError {
     #[instrument(level = "trace", skip(chain_error))]
     fn from(chain_error: ChainError) -> Self {
         match chain_error {
-            ChainError::ExecutionError(execution_error, context) => match *execution_error {
-                ExecutionError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-                ExecutionError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
-                _ => Self::ChainError(Box::new(ChainError::ExecutionError(
-                    execution_error,
-                    context,
-                ))),
-            },
+            ChainError::ExecutionError(execution_error, context, resources) => {
+                match *execution_error {
+                    ExecutionError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+                    ExecutionError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
+                    _ => Self::ChainError(Box::new(ChainError::ExecutionError(
+                        execution_error,
+                        context,
+                        resources,
+                    ))),
+                }
+            }
             error => Self::ChainError(Box::new(error)),
         }
     }
@@ -453,7 +456,7 @@ impl WorkerError {
             panic!("Expected an `ExecutionError`. Got: {self:#?}");
         };
 
-        let ChainError::ExecutionError(execution_error, context) = *chain_error else {
+        let ChainError::ExecutionError(execution_error, context, _) = *chain_error else {
             panic!("Expected an `ExecutionError`. Got: {chain_error:#?}");
         };
 

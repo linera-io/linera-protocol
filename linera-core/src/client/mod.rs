@@ -131,6 +131,12 @@ pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
 
 pub static DEFAULT_MAX_BLOCK_LIMIT_DROPS: usize = 3;
 
+/// Default soft block limit threshold (80% of the actual block limit).
+///
+/// When a transaction exceeds block limits and the resources before that transaction were already
+/// above this threshold, all remaining messages are dropped instead of just the sender's messages.
+pub static DEFAULT_SOFT_BLOCK_LIMIT_THRESHOLD: f64 = 0.8;
+
 #[derive(Debug, Clone, Copy)]
 pub enum TimingType {
     ExecuteOperations,
@@ -1573,6 +1579,7 @@ impl<Env: Environment> Client<Env> {
                 if let ChainError::ExecutionError(
                     error,
                     ChainExecutionContext::IncomingBundle(index),
+                    limit_error_context,
                 ) = &**chain_error
                 {
                     let index = *index as usize;
@@ -1609,11 +1616,29 @@ impl<Env: Environment> Client<Env> {
                             // Not the first transaction: might succeed in a later block.
                             block_limit_drops += 1;
 
-                            let origin = if block_limit_drops > self.options.max_block_limit_drops {
-                                // Exceeded the limit: remove all remaining message bundles.
+                            // Check if the block was already close to its limits before this
+                            // transaction. If so, drop all remaining messages instead of just the
+                            // sender's messages.
+                            let above_soft_limit =
+                                limit_error_context.as_ref().is_some_and(|ctx| {
+                                    error
+                                        .get_resource_used(&ctx.resources_before_error)
+                                        .is_some_and(|used| {
+                                            used as f64
+                                                > self.options.soft_block_limit_threshold
+                                                    * ctx.limit_exceeded as f64
+                                        })
+                                });
+
+                            let origin = if block_limit_drops > self.options.max_block_limit_drops
+                                || above_soft_limit
+                            {
+                                // Exceeded the limit or above soft limit: remove all remaining
+                                // message bundles.
                                 info!(
-                                    %error, %index, %block_limit_drops,
-                                    "Exceeded max block limit drops; removing all remaining message bundles."
+                                    %error, %index, %block_limit_drops, %above_soft_limit,
+                                    "Exceeded max block limit drops or above soft limit; \
+                                     removing all remaining message bundles."
                                 );
                                 None
                             } else {

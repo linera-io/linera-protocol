@@ -101,6 +101,14 @@ pub struct Options {
     #[arg(long, default_value_t = linera_core::client::DEFAULT_MAX_BLOCK_LIMIT_DROPS)]
     pub max_block_limit_drops: usize,
 
+    /// Soft block limit threshold (0.0 to 1.0) as a percentage of the actual block limit.
+    ///
+    /// When a transaction exceeds block limits and the resources before that transaction were
+    /// already above this threshold, all remaining messages are dropped instead of just the
+    /// sender's messages.
+    #[arg(long, default_value_t = linera_core::client::DEFAULT_SOFT_BLOCK_LIMIT_THRESHOLD)]
+    pub soft_block_limit_threshold: f64,
+
     /// (EXPERIMENTAL) Whether application services can persist in some cases between queries.
     #[arg(long)]
     pub long_lived_services: bool,
@@ -275,6 +283,7 @@ impl Options {
             max_joined_tasks: self.max_joined_tasks,
             allow_fast_blocks: self.allow_fast_blocks,
             max_block_limit_drops: self.max_block_limit_drops,
+            soft_block_limit_threshold: self.soft_block_limit_threshold,
         }
     }
 

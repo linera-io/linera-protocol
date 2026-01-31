@@ -2903,7 +2903,7 @@ where
         Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
         )) if matches!(&*chain_error, ChainError::ExecutionError(
-            error, ChainExecutionContext::Block
+            error, ChainExecutionContext::Block, _
         ) if matches!(**error, ExecutionError::BlobTooLarge))
     );
 
