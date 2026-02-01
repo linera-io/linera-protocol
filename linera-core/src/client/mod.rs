@@ -654,11 +654,11 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Ensures that the client has the `ChainDescription` blob corresponding to this
-    /// client's `ChainId`.
-    pub async fn get_chain_description(
+    /// client's `ChainId`, and returns the chain description blob.
+    pub async fn get_chain_description_blob(
         &self,
         chain_id: ChainId,
-    ) -> Result<ChainDescription, chain_client::Error> {
+    ) -> Result<Blob, chain_client::Error> {
         let chain_desc_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
         let blob = self
             .local_node
@@ -667,16 +667,25 @@ impl<Env: Environment> Client<Env> {
             .await?;
         if let Some(blob) = blob {
             // We have the blob - return it.
-            return Ok(bcs::from_bytes(blob.bytes())?);
-        };
+            return Ok(blob);
+        }
         // Recover history from the current validators, according to the admin chain.
         self.synchronize_chain_state(self.admin_chain_id).await?;
         let nodes = self.validator_nodes().await?;
-        let blob = self
+        Ok(self
             .update_local_node_with_blobs_from(vec![chain_desc_id], &nodes)
             .await?
             .pop()
-            .unwrap(); // Returns exactly as many blobs as passed-in IDs.
+            .unwrap()) // Returns exactly as many blobs as passed-in IDs.
+    }
+
+    /// Ensures that the client has the `ChainDescription` blob corresponding to this
+    /// client's `ChainId`, and returns the chain description.
+    pub async fn get_chain_description(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainDescription, chain_client::Error> {
+        let blob = self.get_chain_description_blob(chain_id).await?;
         Ok(bcs::from_bytes(blob.bytes())?)
     }
 

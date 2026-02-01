@@ -650,7 +650,8 @@ impl<Env: Environment> ChainClient<Env> {
             BTreeSet::new()
         };
 
-        let is_owner = manager.ownership.is_owner(&preferred_owner)
+        let is_owner = manager.ownership.open_multi_leader_rounds
+            || manager.ownership.is_owner(&preferred_owner)
             || fallback_owners.contains(&preferred_owner);
 
         if !is_owner {
@@ -674,6 +675,33 @@ impl<Env: Environment> ChainClient<Env> {
         }
 
         Ok(preferred_owner)
+    }
+
+    /// Prepares the chain for a new owner by fetching the chain description and validating access.
+    ///
+    /// This is useful when assigning a chain to a client that may not have the owner key,
+    /// e.g. when a faucet creates a chain with `open_multi_leader_rounds`.
+    ///
+    /// Returns the chain info if the owner can propose on this chain (either because they are
+    /// an owner, or because `open_multi_leader_rounds` is enabled).
+    #[instrument(level = "trace")]
+    pub async fn prepare_for_owner(&self, owner: AccountOwner) -> Result<Box<ChainInfo>, Error> {
+        // Ensure we have the chain description blob.
+        self.client
+            .get_chain_description_blob(self.chain_id)
+            .await?;
+
+        // Get chain info.
+        let info = self.chain_info().await?;
+
+        // Validate that the owner can propose on this chain.
+        ensure!(
+            info.manager.ownership.is_owner(&owner)
+                || info.manager.ownership.open_multi_leader_rounds,
+            Error::NotAnOwner(self.chain_id)
+        );
+
+        Ok(info)
     }
 
     /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
