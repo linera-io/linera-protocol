@@ -34,7 +34,7 @@ async fn service_query_performs_http_request() -> anyhow::Result<()> {
         .await;
     // Tests that we can create test chains after the change of epoch
     // due to the change of policy.
-    std::hint::black_box(validator.new_chain().await);
+    validator.new_chain().await;
 
     let QueryOutcome { response, .. } = chain
         .graphql_query(application_id, "query { performHttpRequest }")
