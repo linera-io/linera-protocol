@@ -629,6 +629,23 @@ where
         Ok(application_creator_chain_id)
     }
 
+    fn read_application_description(
+        &mut self,
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, ExecutionError> {
+        let mut this = self.inner();
+        let description = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::ReadApplicationDescription {
+                application_id,
+                callback,
+            })?
+            .recv_response()?;
+        this.resource_controller
+            .track_runtime_application_description(&description)?;
+        Ok(description)
+    }
+
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
         let mut this = self.inner();
         let parameters = this.current_application().description.parameters.clone();

@@ -5,10 +5,13 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ApplicationPermissions, BlockHeight, TimeDelta, Timestamp},
+    data_types::{
+        Amount, ApplicationDescription, ApplicationPermissions, BlockHeight, TimeDelta, Timestamp,
+    },
     http,
-    identifiers::{AccountOwner, ApplicationId, ChainId, DataBlobHash},
+    identifiers::{AccountOwner, ApplicationId, ChainId, DataBlobHash, ModuleId},
     ownership::{ChainOwnership, TimeoutConfig},
+    vm::VmRuntime,
 };
 
 use crate::{
@@ -180,6 +183,42 @@ macro_rules! impl_from_wit {
         impl From<$wit_base_api::HttpHeader> for http::Header {
             fn from(header: $wit_base_api::HttpHeader) -> http::Header {
                 http::Header::new(header.name, header.value)
+            }
+        }
+
+        impl From<$wit_base_api::VmRuntime> for VmRuntime {
+            fn from(vm_runtime: $wit_base_api::VmRuntime) -> Self {
+                match vm_runtime {
+                    $wit_base_api::VmRuntime::Wasm => VmRuntime::Wasm,
+                    $wit_base_api::VmRuntime::Evm => VmRuntime::Evm,
+                }
+            }
+        }
+
+        impl From<$wit_base_api::ModuleId> for ModuleId {
+            fn from(module_id: $wit_base_api::ModuleId) -> Self {
+                ModuleId::new(
+                    module_id.contract_blob_hash.into(),
+                    module_id.service_blob_hash.into(),
+                    module_id.vm_runtime.into(),
+                )
+            }
+        }
+
+        impl From<$wit_base_api::ApplicationDescription> for ApplicationDescription {
+            fn from(description: $wit_base_api::ApplicationDescription) -> Self {
+                ApplicationDescription {
+                    module_id: description.module_id.into(),
+                    creator_chain_id: description.creator_chain_id.into(),
+                    block_height: description.block_height.into(),
+                    application_index: description.application_index,
+                    parameters: description.parameters,
+                    required_application_ids: description
+                        .required_application_ids
+                        .into_iter()
+                        .map(Into::into)
+                        .collect(),
+                }
             }
         }
     };

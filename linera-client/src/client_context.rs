@@ -497,8 +497,6 @@ impl<Env: Environment> ClientContext<Env> {
         })?;
 
         // Try to modify existing chain entry, setting the owner.
-        let timestamp = info.timestamp;
-        let epoch = info.epoch;
         let modified = self
             .wallet()
             .modify(chain_id, |chain| chain.owner = Some(owner))
@@ -511,8 +509,8 @@ impl<Env: Environment> ClientContext<Env> {
                     chain_id,
                     wallet::Chain {
                         owner: Some(owner),
-                        timestamp,
-                        epoch: Some(epoch),
+                        timestamp: info.timestamp,
+                        epoch: Some(info.epoch),
                         ..Default::default()
                     },
                 )

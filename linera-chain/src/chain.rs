@@ -37,8 +37,8 @@ use crate::{
     block::{Block, ConfirmedBlock},
     block_tracker::BlockExecutionTracker,
     data_types::{
-        BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageBundle, ProposedBlock,
-        Transaction,
+        BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
+        ProposedBlock, Transaction,
     },
     inbox::{InboxError, InboxStateView},
     manager::ChainManager,
@@ -968,13 +968,16 @@ where
                         mandatory.remove(application_id);
                     }
                 }
-                Transaction::ReceiveMessages(incoming_bundle) => {
+                Transaction::ReceiveMessages(incoming_bundle)
+                    if incoming_bundle.action == MessageAction::Accept =>
+                {
                     for pending in incoming_bundle.messages() {
                         if let Message::User { application_id, .. } = &pending.message {
                             mandatory.remove(application_id);
                         }
                     }
                 }
+                Transaction::ReceiveMessages(_) => {}
             }
         }
         ensure!(

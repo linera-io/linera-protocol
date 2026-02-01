@@ -137,10 +137,10 @@ init-wallet: setup ## Initialize wallet and request chain from faucet
 	@$(LINERA_BIN) wallet init \
 			--faucet https://faucet.$(NETWORK_NAME).linera.net
 	@printf "$(YELLOW)⛓️  Requesting chain...$(NC)\n"
-	@INFO=$$($(LINERA_BIN) wallet request-chain \
-			--faucet https://faucet.$(NETWORK_NAME).linera.net | tr '\n' ' ') && \
-		CHAIN=$$(echo "$$INFO" | awk '{print $$1}') && \
-		OWNER=$$(echo "$$INFO" | awk '{print $$2}') && \
+	@INFO=($$($(LINERA_BIN) wallet request-chain \
+			--faucet https://faucet.$(NETWORK_NAME).linera.net)) && \
+		CHAIN="$${INFO[0]}" && \
+		OWNER="$${INFO[1]}" && \
 		printf "$(BLUE)  🔗 Chain ID: $$CHAIN$(NC)\n" && \
 		printf "$(BLUE)  👤 Owner: $$OWNER$(NC)\n" && \
 		echo "CHAIN=$$CHAIN" > .env.wallet && \
@@ -186,7 +186,7 @@ deploy-app-counter: build-wasm-counter ## Deploy counter app to blockchain
 		cd $(EXAMPLES_DIR)/counter && \
 		COUNTER_APP_ID=$$(../../$(LINERA_BIN) publish-and-create \
 			../target/wasm32-unknown-unknown/release/counter_{contract,service}.wasm \
-			--json-argument "1" 2>&1 | grep -oE '[a-f0-9]{64}' | head -1) && \
+			--json-argument "1") && \
 		if [ -z "$$COUNTER_APP_ID" ]; then \
 			printf "$(RED)❌ Failed to deploy counter app$(NC)\n"; \
 			exit 1; \
@@ -222,7 +222,7 @@ deploy-app-fungible: build-wasm-fungible ## Deploy fungible app to blockchain
 		FUNGIBLE_APP_ID=$$(../../$(LINERA_BIN) publish-and-create \
 			../target/wasm32-unknown-unknown/release/native_fungible_{contract,service}.wasm \
 			--json-argument '{ "accounts": {} }' \
-			--json-parameters '{ "ticker_symbol": "NAT" }' 2>&1 | grep -oE '[a-f0-9]{64}' | head -1) && \
+			--json-parameters '{ "ticker_symbol": "NAT" }') && \
 		if [ -z "$$FUNGIBLE_APP_ID" ]; then \
 			printf "$(RED)❌ Failed to deploy fungible app$(NC)\n"; \
 			exit 1; \

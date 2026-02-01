@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     marker::PhantomData,
     sync::{atomic::AtomicU64, Arc},
 };
@@ -206,6 +206,7 @@ where
         Ok(ExporterStorage::new(self.shared_storage.clone()?))
     }
 
+    #[allow(unused)]
     pub(crate) fn get_latest_index(&self) -> usize {
         self.shared_storage.shared_canonical_state.latest_index()
     }
@@ -329,7 +330,7 @@ where
         self.shared_storage.push_block(block)
     }
 
-    pub(super) fn new_committee(&mut self, committee_destinations: Vec<DestinationId>) {
+    pub(super) fn new_committee(&mut self, committee_destinations: HashSet<DestinationId>) {
         committee_destinations.into_iter().for_each(|id| {
             let state = match self.shared_storage.destination_states.get(&id) {
                 None => {

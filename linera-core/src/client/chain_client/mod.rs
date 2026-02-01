@@ -2540,13 +2540,15 @@ impl<Env: Environment> ChainClient<Env> {
         mut local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
     ) -> Result<(), Error> {
-        let dominated = self
-            .listening_mode()
-            .is_none_or(|mode| !mode.is_relevant(&notification.reason));
-        if dominated {
+        let listening_mode = self.listening_mode();
+        let relevant = listening_mode
+            .as_ref()
+            .is_some_and(|mode| mode.is_relevant(&notification.reason));
+        if !relevant {
             debug!(
                 chain_id = %self.chain_id,
                 reason = ?notification.reason,
+                ?listening_mode,
                 "Ignoring notification due to listening mode"
             );
             return Ok(());

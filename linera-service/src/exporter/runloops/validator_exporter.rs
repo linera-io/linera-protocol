@@ -152,6 +152,7 @@ where
                 Err(e) => Err(e),
                 Ok(blob) => {
                     tracing::info!(
+                        destination=?self.node.address(),
                         blob_id=?blob.id(),
                         "dispatching blob",
                     );
@@ -183,7 +184,7 @@ where
     ) -> Result<(), NodeError> {
         let delivery = CrossChainMessageDelivery::NonBlocking;
         let block_id = BlockId::from_confirmed_block(certificate.value());
-        tracing::info!(?block_id, "dispatching block");
+        tracing::info!(destination=?self.node.address(), ?block_id, "dispatching block");
         #[cfg(with_metrics)]
         let start = linera_base::time::Instant::now();
         match Box::pin(
