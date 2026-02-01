@@ -1548,7 +1548,7 @@ impl Runnable for Job {
 
                 let description = cli_wrappers::Faucet::new(faucet_url).claim(&owner).await?;
 
-                if !description.config().ownership.verify_owner(&owner) {
+                if !description.config().ownership.is_multi_leader_owner(&owner) {
                     anyhow::bail!(
                         "The chain with the ID returned by the faucet is not owned by you. \
                          Please make sure you are connecting to a genuine faucet."

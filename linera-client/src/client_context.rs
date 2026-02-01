@@ -477,10 +477,17 @@ impl<Env: Environment> ClientContext<Env> {
         self.client
             .extend_chain_mode(chain_id, ListeningMode::FullChain);
         let client = self.make_chain_client(chain_id).await?;
-        let chain_description = client.get_chain_description().await?;
-        let config = chain_description.config();
 
-        if !config.ownership.verify_owner(&owner) {
+        // Ensure we have the chain description blob.
+        client.get_chain_description().await?;
+
+        // Synchronize and get chain info.
+        client.synchronize_from_validators().await?;
+        let info = client.chain_info().await?;
+
+        // Validate that the owner can propose on this chain (either as owner or via
+        // open_multi_leader_rounds).
+        if !info.manager.ownership.is_multi_leader_owner(&owner) {
             tracing::error!(
                 "The chain with the ID returned by the faucet is not owned by you. \
                 Please make sure you are connecting to a genuine faucet."
@@ -489,8 +496,6 @@ impl<Env: Environment> ClientContext<Env> {
         }
 
         // Try to modify existing chain entry, setting the owner.
-        let timestamp = chain_description.timestamp();
-        let epoch = chain_description.config().epoch;
         let modified = self
             .wallet()
             .modify(chain_id, |chain| chain.owner = Some(owner))
@@ -503,8 +508,8 @@ impl<Env: Environment> ClientContext<Env> {
                     chain_id,
                     wallet::Chain {
                         owner: Some(owner),
-                        timestamp,
-                        epoch: Some(epoch),
+                        timestamp: info.timestamp,
+                        epoch: Some(info.epoch),
                         ..Default::default()
                     },
                 )
