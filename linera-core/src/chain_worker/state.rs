@@ -172,18 +172,15 @@ where
                 )
                 .is_ok(),
             ChainWorkerRequest::StageBlockExecutionWithPolicy {
-                mut block,
+                block,
                 round,
                 published_blobs,
                 policy,
                 callback,
             } => {
                 let result = self
-                    .stage_block_execution_with_policy(&mut block, round, &published_blobs, policy)
-                    .await
-                    .map(|(executed_block, response, tracker)| {
-                        (block, executed_block, response, tracker)
-                    });
+                    .stage_block_execution_with_policy(block, round, &published_blobs, policy)
+                    .await;
                 callback.send(result).is_ok()
             }
             ChainWorkerRequest::ProcessTimeout {
@@ -966,9 +963,9 @@ where
                     .await;
                 outcome.clone()
             } else {
-                let (verified, _resource_tracker) = chain
+                let (_, verified, _resource_tracker) = chain
                     .execute_block(
-                        &proposed_block,
+                        proposed_block,
                         local_time,
                         None,
                         &published_blobs,
@@ -1495,11 +1492,11 @@ where
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
         let (executed_block, resource_tracker) =
-            Box::pin(self.execute_block(&block, local_time, round, published_blobs)).await?;
+            Box::pin(self.execute_block(block, local_time, round, published_blobs)).await?;
 
         // No need to sign: only used internally.
         let mut response = ChainInfoResponse::new(&self.chain, None);
-        if let Some(owner) = block.authenticated_owner {
+        if let Some(owner) = executed_block.header.authenticated_owner {
             response.info.requested_owner_balance = self
                 .chain
                 .execution_state
@@ -1515,7 +1512,7 @@ where
     /// Executes a block without persisting any changes to the state, with a specified
     /// policy for handling bundle failures.
     ///
-    /// The block is modified in place to reflect the actual executed transactions
+    /// The block may be modified to reflect the actual executed transactions
     /// (bundles may be rejected or removed based on the policy).
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
@@ -1523,11 +1520,11 @@ where
     ))]
     async fn stage_block_execution_with_policy(
         &mut self,
-        block: &mut ProposedBlock,
+        block: ProposedBlock,
         round: Option<u32>,
         published_blobs: &[Blob],
         policy: BundleExecutionPolicy,
-    ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
+    ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
         let (_, committee) = self.chain.current_committee()?;
@@ -1547,7 +1544,7 @@ where
 
         // No need to sign: only used internally.
         let mut response = ChainInfoResponse::new(&self.chain, None);
-        if let Some(owner) = block.authenticated_owner {
+        if let Some(owner) = executed_block.header.authenticated_owner {
             response.info.requested_owner_balance = self
                 .chain
                 .execution_state
@@ -1557,7 +1554,8 @@ where
                 .await?;
         }
 
-        Ok((executed_block, response, resource_tracker))
+        let (proposed_block, _) = executed_block.clone().into_proposal();
+        Ok((proposed_block, executed_block, response, resource_tracker))
     }
 
     /// Validates and executes a block proposed to extend this chain.
@@ -1676,7 +1674,7 @@ where
             outcome.clone().with(proposal.content.block.clone())
         } else {
             let (executed_block, _resource_tracker) = Box::pin(self.execute_block(
-                block,
+                block.clone(),
                 local_time,
                 round.multi_leader(),
                 &published_blobs,
@@ -1799,18 +1797,18 @@ where
     ))]
     async fn execute_block(
         &mut self,
-        block: &ProposedBlock,
+        block: ProposedBlock,
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
     ) -> Result<(Block, ResourceTracker), WorkerError> {
-        let (outcome, resource_tracker) =
+        let (proposed_block, outcome, resource_tracker) =
             Box::pin(
                 self.chain
                     .execute_block(block, local_time, round, published_blobs, None),
             )
             .await?;
-        let block = Block::new(block.clone(), outcome);
+        let block = Block::new(proposed_block, outcome);
         let block_hash = CryptoHash::new(&block);
         self.execution_state_cache.insert_owned(
             &block_hash,
@@ -1826,29 +1824,30 @@ where
 
     /// Executes a block with a specified policy for handling bundle failures.
     ///
-    /// The block is modified in place to reflect the actual executed transactions.
+    /// The block may be modified to reflect the actual executed transactions.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.height
     ))]
     async fn execute_block_with_policy(
         &mut self,
-        block: &mut ProposedBlock,
+        block: ProposedBlock,
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
         policy: BundleExecutionPolicy,
     ) -> Result<(Block, ResourceTracker), WorkerError> {
-        let (outcome, resource_tracker) = Box::pin(self.chain.execute_block_with_policy(
-            block,
-            local_time,
-            round,
-            published_blobs,
-            None,
-            policy,
-        ))
-        .await?;
-        let executed_block = Block::new(block.clone(), outcome);
+        let (proposed_block, outcome, resource_tracker) =
+            Box::pin(self.chain.execute_block_with_policy(
+                block,
+                local_time,
+                round,
+                published_blobs,
+                None,
+                policy,
+            ))
+            .await?;
+        let executed_block = Block::new(proposed_block, outcome);
         let block_hash = CryptoHash::new(&executed_block);
         self.execution_state_cache.insert_owned(
             &block_hash,

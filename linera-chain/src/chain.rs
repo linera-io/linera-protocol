@@ -941,17 +941,14 @@ where
     ))]
     pub async fn execute_block(
         &mut self,
-        block: &ProposedBlock,
+        block: ProposedBlock,
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
-        // Clone the block since execute_block_with_policy takes &mut, but with Abort
-        // policy the block is never modified.
-        let mut block = block.clone();
+    ) -> Result<(ProposedBlock, BlockExecutionOutcome, ResourceTracker), ChainError> {
         self.execute_block_with_policy(
-            &mut block,
+            block,
             local_time,
             round,
             published_blobs,
@@ -970,20 +967,20 @@ where
     /// - For non-limit errors: the bundle is rejected (triggering bounced messages).
     /// - After `max_failures` failed bundles, all remaining message bundles are removed.
     ///
-    /// The block is modified in place to reflect the actual executed transactions.
+    /// The block may be modified to reflect the actual executed transactions.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.height
     ))]
     pub async fn execute_block_with_policy(
         &mut self,
-        block: &mut ProposedBlock,
+        mut block: ProposedBlock,
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
+    ) -> Result<(ProposedBlock, BlockExecutionOutcome, ResourceTracker), ChainError> {
         assert_eq!(
             block.chain_id,
             self.execution_state.context().extra().chain_id()
@@ -1016,13 +1013,13 @@ where
 
         Self::check_app_permissions(
             self.execution_state.system.application_permissions.get(),
-            block,
+            &block,
         )?;
 
         Self::execute_block_inner(
             &mut self.execution_state,
             &self.confirmed_log,
-            block,
+            &mut block,
             local_time,
             round,
             published_blobs,
@@ -1030,6 +1027,7 @@ where
             policy,
         )
         .await
+        .map(|(outcome, tracker)| (block, outcome, tracker))
     }
 
     /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain
