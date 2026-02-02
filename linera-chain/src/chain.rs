@@ -783,37 +783,20 @@ where
                 }
                 Err(ChainError::ExecutionError(
                     error,
-                    ChainExecutionContext::IncomingBundle(_),
+                    context @ ChainExecutionContext::IncomingBundle(_),
                 )) if auto_retry => {
                     let Transaction::ReceiveMessages(incoming_bundle) = &mut block.transactions[i]
                     else {
                         unreachable!("IncomingBundle context implies ReceiveMessages transaction");
                     };
 
-                    // Protected bundles cannot be rejected or modified; they can only be removed
-                    // from the block (to be retried in a later block). If they fail, the block fails.
-                    // Bundles already marked as Reject should also fail if rejection itself fails.
-                    if incoming_bundle.bundle.is_protected()
-                        || incoming_bundle.action == MessageAction::Reject
-                    {
-                        return Err(ChainError::ExecutionError(
-                            error,
-                            ChainExecutionContext::IncomingBundle(i as u32),
-                        ));
-                    }
-
+                    // Bundles already marked as Reject should fail if rejection itself fails.
                     // Transient errors (e.g., missing blobs) should fail the block entirely
                     // so it can be retried after syncing.
-                    if error.is_transient_error() {
-                        return Err(ChainError::ExecutionError(
-                            error,
-                            ChainExecutionContext::IncomingBundle(i as u32),
-                        ));
+                    if incoming_bundle.action == MessageAction::Reject || error.is_transient_error()
+                    {
+                        return Err(ChainError::ExecutionError(error, context));
                     }
-
-                    let is_limit_error = error.is_limit_error();
-                    // Capture error message for logging before we potentially drop the error.
-                    let error_msg = format!("{error}");
 
                     // Restore checkpoint.
                     if let Some((saved_chain, saved_tracker)) = checkpoint {
@@ -836,32 +819,26 @@ where
                         continue;
                     }
 
-                    if is_limit_error {
-                        if i == 0 {
-                            // First transaction is inherently too large - reject it.
-                            info!(
-                                error = %error_msg,
-                                origin = ?incoming_bundle.origin,
-                                "First message bundle exceeds block limits and will be rejected"
-                            );
-                            incoming_bundle.action = MessageAction::Reject;
-                            // Retry the transaction as rejected (don't increment i).
-                        } else {
-                            // Not the first - remove it and same-sender subsequent bundles.
-                            let origin = incoming_bundle.origin;
-                            info!(
-                                error = %error_msg,
-                                index = i,
-                                ?origin,
-                                "Message bundle exceeded block limits and will be removed for retry in a later block"
-                            );
-                            Self::remove_bundle_and_same_sender(block, i);
-                            // Continue without incrementing i (next transaction is now at i).
-                        }
-                    } else {
-                        // Non-limit error: reject the bundle.
+                    if error.is_limit_error() && i > 0 {
+                        // Not the first - remove it and same-sender subsequent bundles.
+                        let origin = incoming_bundle.origin;
                         info!(
-                            error = %error_msg,
+                            %error,
+                            index = i,
+                            ?origin,
+                            "Message bundle exceeded block limits and will be removed for retry \
+                            in a later block"
+                        );
+                        Self::remove_bundle_and_same_sender(block, i);
+                        // Continue without incrementing i (next transaction is now at i).
+                    } else if incoming_bundle.bundle.is_protected() {
+                        // Protected bundles cannot be rejected.
+                        return Err(ChainError::ExecutionError(error, context));
+                    } else {
+                        // Reject the bundle: either a non-limit error, or the first bundle
+                        // exceeded limits (and is inherently too large for any block).
+                        info!(
+                            %error,
                             index = i,
                             origin = ?incoming_bundle.origin,
                             "Message bundle failed to execute and will be rejected"
