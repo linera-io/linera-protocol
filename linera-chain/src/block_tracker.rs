@@ -58,9 +58,6 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
 
     // Blobs published in the block.
     published_blobs: BTreeMap<BlobId, &'blobs Blob>,
-
-    // We expect the number of outcomes to be equal to the number of transactions in the block.
-    expected_outcomes_count: usize,
 }
 
 impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
@@ -96,7 +93,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             operation_results: Vec::new(),
             transaction_index: 0,
             published_blobs,
-            expected_outcomes_count: proposal.transactions.len(),
         })
     }
 
@@ -390,35 +386,42 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     /// This reverts all state to what it was when the checkpoint was saved,
     /// as if the failed transaction execution never happened.
     pub fn restore_checkpoint(&mut self, checkpoint: TrackerCheckpoint) {
-        self.resource_controller.tracker = checkpoint.resource_tracker;
-        self.next_application_index = checkpoint.next_application_index;
-        self.next_chain_index = checkpoint.next_chain_index;
-        self.transaction_index = checkpoint.transaction_index;
-        self.oracle_responses
-            .truncate(checkpoint.oracle_responses_len);
-        self.events.truncate(checkpoint.events_len);
-        self.blobs.truncate(checkpoint.blobs_len);
-        self.messages.truncate(checkpoint.messages_len);
-        self.operation_results
-            .truncate(checkpoint.operation_results_len);
-    }
+        // Destructure to ensure all fields are handled (compiler will warn on new fields).
+        let TrackerCheckpoint {
+            resource_tracker,
+            next_application_index,
+            next_chain_index,
+            transaction_index,
+            oracle_responses_len,
+            events_len,
+            blobs_len,
+            messages_len,
+            operation_results_len,
+        } = checkpoint;
 
-    /// Updates the expected outcomes count when transactions are removed from the block.
-    pub fn update_expected_outcomes_count(&mut self, new_count: usize) {
-        self.expected_outcomes_count = new_count;
+        self.resource_controller.tracker = resource_tracker;
+        self.next_application_index = next_application_index;
+        self.next_chain_index = next_chain_index;
+        self.transaction_index = transaction_index;
+        self.oracle_responses.truncate(oracle_responses_len);
+        self.events.truncate(events_len);
+        self.blobs.truncate(blobs_len);
+        self.messages.truncate(messages_len);
+        self.operation_results.truncate(operation_results_len);
     }
 
     /// Finalizes the execution and returns the collected results.
     ///
     /// This method should be called after all transactions have been processed.
+    /// The `expected_outcomes_count` should be the number of transactions in the final block.
     /// Panics if the number of lists of oracle responses, outgoing messages,
     /// events, or blobs does not match the expected counts.
-    pub fn finalize(self) -> FinalizeExecutionResult {
+    pub fn finalize(self, expected_outcomes_count: usize) -> FinalizeExecutionResult {
         // Asserts that the number of outcomes matches the expected count.
-        assert_eq!(self.oracle_responses.len(), self.expected_outcomes_count);
-        assert_eq!(self.messages.len(), self.expected_outcomes_count);
-        assert_eq!(self.events.len(), self.expected_outcomes_count);
-        assert_eq!(self.blobs.len(), self.expected_outcomes_count);
+        assert_eq!(self.oracle_responses.len(), expected_outcomes_count);
+        assert_eq!(self.messages.len(), expected_outcomes_count);
+        assert_eq!(self.events.len(), expected_outcomes_count);
+        assert_eq!(self.blobs.len(), expected_outcomes_count);
 
         #[cfg(with_metrics)]
         crate::chain::metrics::track_block_metrics(&self.resource_controller.tracker);

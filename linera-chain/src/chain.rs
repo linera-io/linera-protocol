@@ -700,8 +700,17 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-        policy: BundleExecutionPolicy,
+        exec_policy: BundleExecutionPolicy,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
+        // AutoRetry is incompatible with replaying oracle responses because removing or
+        // rejecting bundles would change which transactions execute.
+        if !matches!(exec_policy, BundleExecutionPolicy::Abort) {
+            assert!(
+                replaying_oracle_responses.is_none(),
+                "Cannot use AutoRetry policy when replaying oracle responses"
+            );
+        }
+
         #[cfg(with_metrics)]
         let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency_us();
         chain.system.timestamp.set(block.timestamp);
@@ -740,12 +749,12 @@ where
             block,
         )?;
 
-        // Extract max_failures from policy.
-        let max_failures = match policy {
+        // Extract max_failures from exec_policy.
+        let max_failures = match exec_policy {
             BundleExecutionPolicy::Abort => 0,
             BundleExecutionPolicy::AutoRetry { max_failures } => max_failures,
         };
-        let auto_retry = !matches!(policy, BundleExecutionPolicy::Abort);
+        let auto_retry = !matches!(exec_policy, BundleExecutionPolicy::Abort);
         let mut failure_count = 0u32;
         let mut removed_all_remaining = false;
 
@@ -781,7 +790,9 @@ where
                         unreachable!("IncomingBundle context implies ReceiveMessages transaction");
                     };
 
-                    // Cannot retry protected bundles or bundles already marked as Reject.
+                    // Protected bundles cannot be rejected or modified; they can only be removed
+                    // from the block (to be retried in a later block). If they fail, the block fails.
+                    // Bundles already marked as Reject should also fail if rejection itself fails.
                     if incoming_bundle.bundle.is_protected()
                         || incoming_bundle.action == MessageAction::Reject
                     {
@@ -820,8 +831,6 @@ where
                             "Exceeded max bundle failures, removing all remaining message bundles"
                         );
                         Self::remove_remaining_bundles(block, i);
-                        block_execution_tracker
-                            .update_expected_outcomes_count(block.transactions.len());
                         removed_all_remaining = true;
                         // Don't retry - we've removed the failed bundle.
                         continue;
@@ -847,8 +856,6 @@ where
                                 "Message bundle exceeded block limits and will be removed for retry in a later block"
                             );
                             Self::remove_bundle_and_same_sender(block, i);
-                            block_execution_tracker
-                                .update_expected_outcomes_count(block.transactions.len());
                             // Continue without incrementing i (next transaction is now at i).
                         }
                     } else {
@@ -867,7 +874,8 @@ where
             }
         }
 
-        // Ensure the block is not empty after modifications.
+        // This can only happen if all transactions were incoming bundles that all got removed
+        // due to resource limit errors. This is unlikely in practice but theoretically possible.
         ensure!(!block.transactions.is_empty(), ChainError::EmptyBlock);
 
         let recipients = block_execution_tracker.recipients();
@@ -923,7 +931,7 @@ where
         };
 
         let (messages, oracle_responses, events, blobs, operation_results, resource_tracker) =
-            block_execution_tracker.finalize();
+            block_execution_tracker.finalize(block.transactions.len());
 
         Ok((
             BlockExecutionOutcome {
