@@ -2023,8 +2023,8 @@ impl<Env: Environment> ChainClient<Env> {
             .get_chain_description_blob(self.chain_id)
             .await?;
 
-        // Get chain info with manager values (needed for ownership).
-        let info = self.chain_info_with_manager_values().await?;
+        // Get chain info.
+        let info = self.chain_info().await?;
 
         // Validate that the owner can propose on this chain.
         ensure!(
@@ -2173,12 +2173,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         // Check if the preferred owner can propose on this chain: either they are an owner,
         // the current leader, or open_multi_leader_rounds is enabled.
-        let is_owner = manager.ownership.open_multi_leader_rounds
-            || manager
-                .ownership
-                .all_owners()
-                .chain(&manager.leader)
-                .any(|owner| *owner == preferred_owner);
+        let is_owner = manager.ownership.is_multi_leader_owner(&preferred_owner);
 
         if !is_owner {
             let accepted_owners = manager
