@@ -947,7 +947,7 @@ where
         chain_id = %self.chain_id(),
         block_height = %block.height
     ))]
-    pub async fn execute_block_with_policy(
+    pub async fn execute_block(
         &mut self,
         mut block: ProposedBlock,
         local_time: Timestamp,

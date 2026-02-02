@@ -964,7 +964,7 @@ where
                 outcome.clone()
             } else {
                 let (_, verified, _resource_tracker) = chain
-                    .execute_block_with_policy(
+                    .execute_block(
                         proposed_block,
                         local_time,
                         None,
@@ -1519,14 +1519,8 @@ where
         self.chain
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
-        let (executed_block, resource_tracker) = Box::pin(self.execute_block_with_policy(
-            block,
-            local_time,
-            round,
-            published_blobs,
-            policy,
-        ))
-        .await?;
+        let (executed_block, resource_tracker) =
+            Box::pin(self.execute_block(block, local_time, round, published_blobs, policy)).await?;
 
         // No need to sign: only used internally.
         let mut response = ChainInfoResponse::new(&self.chain, None);
@@ -1659,7 +1653,7 @@ where
         let block = if let Some(outcome) = outcome {
             outcome.clone().with(proposal.content.block.clone())
         } else {
-            let (executed_block, _resource_tracker) = Box::pin(self.execute_block_with_policy(
+            let (executed_block, _resource_tracker) = Box::pin(self.execute_block(
                 block.clone(),
                 local_time,
                 round.multi_leader(),
@@ -1784,7 +1778,7 @@ where
         chain_id = %self.chain_id(),
         block_height = %block.height
     ))]
-    async fn execute_block_with_policy(
+    async fn execute_block(
         &mut self,
         block: ProposedBlock,
         local_time: Timestamp,
@@ -1792,16 +1786,15 @@ where
         published_blobs: &[Blob],
         policy: BundleExecutionPolicy,
     ) -> Result<(Block, ResourceTracker), WorkerError> {
-        let (proposed_block, outcome, resource_tracker) =
-            Box::pin(self.chain.execute_block_with_policy(
-                block,
-                local_time,
-                round,
-                published_blobs,
-                None,
-                policy,
-            ))
-            .await?;
+        let (proposed_block, outcome, resource_tracker) = Box::pin(self.chain.execute_block(
+            block,
+            local_time,
+            round,
+            published_blobs,
+            None,
+            policy,
+        ))
+        .await?;
         let executed_block = Block::new(proposed_block, outcome);
         let block_hash = CryptoHash::new(&executed_block);
         self.execution_state_cache.insert_owned(
