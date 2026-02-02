@@ -1563,13 +1563,14 @@ impl<Env: Environment> Client<Env> {
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
+        max_failures: u32,
     ) -> Result<(Block, ChainInfoResponse), chain_client::Error> {
         let (executed_block, response) = self
             .stage_block_execution_with_policy(
                 block,
                 round,
                 published_blobs,
-                BundleExecutionPolicy::auto_retry(),
+                BundleExecutionPolicy::AutoRetry { max_failures },
             )
             .await?;
         Ok((executed_block, response))

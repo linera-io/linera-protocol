@@ -55,6 +55,11 @@ pub struct Options {
     #[arg(long, default_value = "10")]
     pub max_pending_message_bundles: usize,
 
+    /// Maximum number of message bundles to remove from a block proposal due to block limit
+    /// errors before removing all remaining bundles.
+    #[arg(long, default_value = "3")]
+    pub max_block_limit_errors: u32,
+
     /// The duration in milliseconds after which an idle chain worker will free its memory.
     #[arg(
         long = "chain-worker-ttl-ms",
@@ -260,6 +265,7 @@ impl Options {
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
         chain_client::Options {
             max_pending_message_bundles: self.max_pending_message_bundles,
+            max_block_limit_errors: self.max_block_limit_errors,
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,

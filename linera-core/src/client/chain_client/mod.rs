@@ -83,6 +83,9 @@ use crate::{
 pub struct Options {
     /// Maximum number of pending message bundles processed at a time in a block.
     pub max_pending_message_bundles: usize,
+    /// Maximum number of loaded message bundles to remove from a block proposal due to
+    /// block limit errors before removing all remaining bundles.
+    pub max_block_limit_errors: u32,
     /// The policy for automatically handling incoming messages.
     pub message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
@@ -117,6 +120,7 @@ impl Options {
 
         Options {
             max_pending_message_bundles: 10,
+            max_block_limit_errors: 3,
             message_policy: MessagePolicy::new_accept_all(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
@@ -1393,6 +1397,7 @@ impl<Env: Environment> ChainClient<Env> {
                 proposed_block,
                 round,
                 blobs.clone(),
+                self.options.max_block_limit_errors,
             )
             .await?;
         let (proposed_block, _) = block.clone().into_proposal();
@@ -1557,7 +1562,12 @@ impl<Env: Environment> ChainClient<Env> {
         };
         match self
             .client
-            .stage_block_execution_and_discard_failing_messages(block, None, Vec::new())
+            .stage_block_execution_and_discard_failing_messages(
+                block,
+                None,
+                Vec::new(),
+                self.options.max_block_limit_errors,
+            )
             .await
         {
             Ok((_, response)) => Ok((
