@@ -2028,7 +2028,9 @@ impl<Env: Environment> ChainClient<Env> {
 
         // Validate that the owner can propose on this chain.
         ensure!(
-            info.manager.ownership.is_multi_leader_owner(&owner),
+            info.manager
+                .ownership
+                .can_propose_in_multi_leader_round(&owner),
             ChainClientError::NotAnOwner(self.chain_id)
         );
 
@@ -2173,7 +2175,9 @@ impl<Env: Environment> ChainClient<Env> {
 
         // Check if the preferred owner can propose on this chain: either they are an owner,
         // the current leader, or open_multi_leader_rounds is enabled.
-        let is_owner = manager.ownership.is_multi_leader_owner(&preferred_owner);
+        let is_owner = manager
+            .ownership
+            .can_propose_in_multi_leader_round(&preferred_owner);
 
         if !is_owner {
             let accepted_owners = manager

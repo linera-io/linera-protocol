@@ -1432,6 +1432,7 @@ impl Runnable for Job {
             }
 
             Assign { owner, chain_id } => {
+                ensure!(signer.contains_key(&owner).await?, "Missing key for owner");
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
@@ -1548,7 +1549,11 @@ impl Runnable for Job {
 
                 let description = cli_wrappers::Faucet::new(faucet_url).claim(&owner).await?;
 
-                if !description.config().ownership.is_multi_leader_owner(&owner) {
+                if !description
+                    .config()
+                    .ownership
+                    .can_propose_in_multi_leader_round(&owner)
+                {
                     anyhow::bail!(
                         "The chain with the ID returned by the faucet is not owned by you. \
                          Please make sure you are connecting to a genuine faucet."

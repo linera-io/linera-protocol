@@ -487,7 +487,11 @@ impl<Env: Environment> ClientContext<Env> {
 
         // Validate that the owner can propose on this chain (either as owner or via
         // open_multi_leader_rounds).
-        if !info.manager.ownership.is_multi_leader_owner(&owner) {
+        if !info
+            .manager
+            .ownership
+            .can_propose_in_multi_leader_round(&owner)
+        {
             tracing::error!(
                 "The chain with the ID returned by the faucet is not owned by you. \
                 Please make sure you are connecting to a genuine faucet."
