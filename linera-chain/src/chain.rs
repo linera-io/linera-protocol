@@ -685,14 +685,12 @@ where
     }
 
     /// Executes a block with a specified policy for handling bundle failures.
-    ///
-    /// Unlike `execute_block_inner`, this method supports automatic retry with checkpointing.
     #[allow(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(
         chain_id = %block.chain_id,
         block_height = %block.height
     ))]
-    async fn execute_block_inner_with_policy(
+    async fn execute_block_inner(
         chain: &mut ExecutionStateView<C>,
         confirmed_log: &LogView<C, CryptoHash>,
         block: &mut ProposedBlock,
@@ -1021,7 +1019,7 @@ where
             block,
         )?;
 
-        Self::execute_block_inner_with_policy(
+        Self::execute_block_inner(
             &mut self.execution_state,
             &self.confirmed_log,
             block,

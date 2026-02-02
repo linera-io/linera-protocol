@@ -338,18 +338,6 @@ pub enum BundleExecutionPolicy {
     },
 }
 
-impl BundleExecutionPolicy {
-    /// Creates an `AutoRetry` policy with the default maximum failures (3).
-    pub fn auto_retry() -> Self {
-        Self::AutoRetry { max_failures: 3 }
-    }
-
-    /// Creates an `AutoRetry` policy with a custom maximum failures limit.
-    pub fn auto_retry_with_max_failures(max_failures: u32) -> Self {
-        Self::AutoRetry { max_failures }
-    }
-}
-
 /// A set of messages from a single block, for a single destination.
 #[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize, Deserialize, SimpleObject, Allocative)]
 pub struct MessageBundle {

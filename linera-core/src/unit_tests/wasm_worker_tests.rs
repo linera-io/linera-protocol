@@ -449,7 +449,7 @@ where
             proposed_block.clone(),
             None,
             vec![],
-            BundleExecutionPolicy::auto_retry(),
+            BundleExecutionPolicy::AutoRetry { max_failures: 3 },
         )
         .await?;
 
