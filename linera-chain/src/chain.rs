@@ -756,11 +756,10 @@ where
         };
         let auto_retry = !matches!(exec_policy, BundleExecutionPolicy::Abort);
         let mut failure_count = 0u32;
-        let mut removed_all_remaining = false;
 
         let mut i = 0;
         while i < block.transactions.len() {
-            let transaction = &block.transactions[i];
+            let transaction = &mut block.transactions[i];
             let is_bundle = matches!(transaction, Transaction::ReceiveMessages(_));
 
             // Checkpoint before bundle transactions if using auto-retry.
@@ -774,80 +773,72 @@ where
             };
 
             let result = block_execution_tracker
-                .execute_transaction(&block.transactions[i], round, chain)
+                .execute_transaction(&*transaction, round, chain)
                 .await;
 
-            match result {
-                Ok(()) => {
-                    i += 1;
-                }
-                Err(ChainError::ExecutionError(
-                    error,
-                    context @ ChainExecutionContext::IncomingBundle(_),
-                )) if auto_retry => {
-                    let Transaction::ReceiveMessages(incoming_bundle) = &mut block.transactions[i]
-                    else {
-                        unreachable!("IncomingBundle context implies ReceiveMessages transaction");
-                    };
-
-                    // Bundles already marked as Reject should fail if rejection itself fails.
-                    // Transient errors (e.g., missing blobs) should fail the block entirely
-                    // so it can be retried after syncing.
-                    if incoming_bundle.action == MessageAction::Reject || error.is_transient_error()
-                    {
-                        return Err(ChainError::ExecutionError(error, context));
-                    }
-
-                    // Restore checkpoint.
-                    if let Some((saved_chain, saved_tracker)) = checkpoint {
-                        *chain = saved_chain;
-                        block_execution_tracker.restore_checkpoint(saved_tracker);
-                    }
-
-                    failure_count += 1;
-
-                    // If we've exceeded max failures, remove all remaining message bundles.
-                    if failure_count > max_failures && !removed_all_remaining {
-                        info!(
-                            failure_count,
-                            max_failures,
-                            "Exceeded max bundle failures, removing all remaining message bundles"
-                        );
-                        Self::remove_remaining_bundles(block, i);
-                        removed_all_remaining = true;
-                        // Don't retry - we've removed the failed bundle.
+            // If the transaction executed successfully, we move on to the next one.
+            // On transient errors (e.g. missing blobs) we fail, so it can be retried after
+            // syncing. In auto-retry mode, we can remove or reject message bundles that failed
+            // with non-transient errors.
+            let (error, context, incoming_bundle, saved_chain, saved_tracker) =
+                match (result, transaction, checkpoint) {
+                    (Ok(()), _, _) => {
+                        i += 1;
                         continue;
                     }
-
-                    if error.is_limit_error() && i > 0 {
-                        // Not the first - remove it and same-sender subsequent bundles.
-                        let origin = incoming_bundle.origin;
-                        info!(
-                            %error,
-                            index = i,
-                            ?origin,
-                            "Message bundle exceeded block limits and will be removed for retry \
-                            in a later block"
-                        );
-                        Self::remove_bundle_and_same_sender(block, i);
-                        // Continue without incrementing i (next transaction is now at i).
-                    } else if incoming_bundle.bundle.is_protected() {
-                        // Protected bundles cannot be rejected.
-                        return Err(ChainError::ExecutionError(error, context));
-                    } else {
-                        // Reject the bundle: either a non-limit error, or the first bundle
-                        // exceeded limits (and is inherently too large for any block).
-                        info!(
-                            %error,
-                            index = i,
-                            origin = ?incoming_bundle.origin,
-                            "Message bundle failed to execute and will be rejected"
-                        );
-                        incoming_bundle.action = MessageAction::Reject;
-                        // Retry the transaction as rejected (don't increment i).
+                    (
+                        Err(ChainError::ExecutionError(error, context)),
+                        Transaction::ReceiveMessages(incoming_bundle),
+                        Some((saved_chain, saved_tracker)),
+                    ) if !error.is_transient_error() => {
+                        (error, context, incoming_bundle, saved_chain, saved_tracker)
                     }
-                }
-                Err(e) => return Err(e),
+                    (Err(e), _, _) => return Err(e),
+                };
+
+            // Restore checkpoint.
+            *chain = saved_chain;
+            block_execution_tracker.restore_checkpoint(saved_tracker);
+
+            if error.is_limit_error() && i > 0 {
+                failure_count += 1;
+                // If we've exceeded max failures, remove all remaining message bundles.
+                let maybe_sender = if failure_count > max_failures {
+                    info!(
+                        failure_count,
+                        max_failures,
+                        "Exceeded max bundle failures, removing all remaining message bundles"
+                    );
+                    None
+                } else {
+                    // Not the first - remove it and same-sender subsequent bundles.
+                    info!(
+                        %error,
+                        index = i,
+                        origin = %incoming_bundle.origin,
+                        "Message bundle exceeded block limits and will be removed for \
+                        retry in a later block"
+                    );
+                    Some(incoming_bundle.origin)
+                };
+                Self::remove_remaining_bundles(block, i, maybe_sender);
+                // Continue without incrementing i (next transaction is now at i).
+            } else if incoming_bundle.bundle.is_protected()
+                || incoming_bundle.action == MessageAction::Reject
+            {
+                // Protected bundles cannot be rejected. Failed rejected bundles fail the block.
+                return Err(ChainError::ExecutionError(error, context));
+            } else {
+                // Reject the bundle: either a non-limit error, or the first bundle
+                // exceeded limits (and is inherently too large for any block).
+                info!(
+                    %error,
+                    index = i,
+                    origin = %incoming_bundle.origin,
+                    "Message bundle failed to execute and will be rejected"
+                );
+                incoming_bundle.action = MessageAction::Reject;
+                // Retry the transaction as rejected (don't increment i).
             }
         }
 
@@ -925,35 +916,21 @@ where
         ))
     }
 
-    /// Removes a bundle at the given index and all subsequent bundles from the same sender.
-    fn remove_bundle_and_same_sender(block: &mut ProposedBlock, index: usize) {
-        let origin = match &block.transactions[index] {
-            Transaction::ReceiveMessages(bundle) => bundle.origin,
-            _ => return,
-        };
-
-        let mut i = index;
-        while i < block.transactions.len() {
-            let same_sender = matches!(
-                &block.transactions[i],
-                Transaction::ReceiveMessages(bundle) if bundle.origin == origin
-            );
-            if same_sender {
-                block.transactions.remove(i);
+    /// Removes all bundles from the given origin (or all if `None`), starting at the given index.
+    fn remove_remaining_bundles(
+        block: &mut ProposedBlock,
+        mut index: usize,
+        maybe_origin: Option<ChainId>,
+    ) {
+        while index < block.transactions.len() {
+            if matches!(
+                &block.transactions[index],
+                Transaction::ReceiveMessages(bundle)
+                if maybe_origin.is_none_or(|origin| bundle.origin == origin)
+            ) {
+                block.transactions.remove(index);
             } else {
-                i += 1;
-            }
-        }
-    }
-
-    /// Removes all message bundles starting from the given index.
-    fn remove_remaining_bundles(block: &mut ProposedBlock, start_index: usize) {
-        let mut i = start_index;
-        while i < block.transactions.len() {
-            if matches!(&block.transactions[i], Transaction::ReceiveMessages(_)) {
-                block.transactions.remove(i);
-            } else {
-                i += 1;
+                index += 1;
             }
         }
     }
