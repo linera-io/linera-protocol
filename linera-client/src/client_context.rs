@@ -487,16 +487,14 @@ impl<Env: Environment> ClientContext<Env> {
         self.client
             .extend_chain_mode(chain_id, ListeningMode::FullChain);
         let client = self.make_chain_client(chain_id).await?;
-        let chain_description = client.get_chain_description().await?;
-        let config = chain_description.config();
-
-        if !config.ownership.is_owner(&owner) {
+        let info = client.prepare_for_owner(owner).await.map_err(|error| {
             tracing::error!(
+                %error,
                 "The chain with the ID returned by the faucet is not owned by you. \
                 Please make sure you are connecting to a genuine faucet."
             );
-            return Err(error::Inner::ChainOwnership.into());
-        }
+            error::Inner::ChainOwnership
+        })?;
 
         // Try to modify existing chain entry, setting the owner.
         let modified = self
@@ -506,15 +504,13 @@ impl<Env: Environment> ClientContext<Env> {
             .map_err(error::Inner::wallet)?;
         // If the chain didn't exist, insert a new entry.
         if modified.is_none() {
-            let timestamp = chain_description.timestamp();
-            let epoch = chain_description.config().epoch;
             self.wallet()
                 .insert(
                     chain_id,
                     wallet::Chain {
                         owner: Some(owner),
-                        timestamp,
-                        epoch: Some(epoch),
+                        timestamp: info.timestamp,
+                        epoch: Some(info.epoch),
                         ..Default::default()
                     },
                 )

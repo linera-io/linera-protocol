@@ -318,14 +318,27 @@ impl TestValidator {
             .get(&admin_chain_id)
             .expect("Admin chain should be created when the `TestValidator` is constructed");
 
-        let (epoch, _) = self.committee.lock().await.clone();
-
         let open_chain_config = OpenChainConfig {
             ownership: ChainOwnership::single(owner),
             balance: Amount::from_tokens(10),
             application_permissions: ApplicationPermissions::default(),
         };
-        let new_chain_config = open_chain_config.init_chain_config(epoch, epoch, epoch);
+
+        // Query the admin chain's committees to get the correct min/max active epochs,
+        // matching what the execution does in `SystemExecutionStateView::open_chain`.
+        let chain_state = self
+            .worker
+            .chain_state_view(admin_chain_id)
+            .await
+            .expect("Failed to read admin chain state");
+        let committees = chain_state.execution_state.system.committees.get();
+        let epoch = *chain_state.execution_state.system.epoch.get();
+        let min_active_epoch = committees.keys().min().copied().unwrap_or(Epoch::ZERO);
+        let max_active_epoch = committees.keys().max().copied().unwrap_or(Epoch::ZERO);
+        drop(chain_state);
+
+        let new_chain_config =
+            open_chain_config.init_chain_config(epoch, min_active_epoch, max_active_epoch);
 
         let (certificate, _) = admin_chain
             .add_block(|block| {
