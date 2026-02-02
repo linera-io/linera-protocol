@@ -709,417 +709,443 @@ impl Runnable for Job {
                 );
             }
 
-            Benchmark(benchmark_command) => match benchmark_command {
-                BenchmarkCommand::Single {
-                    options: benchmark_options,
-                } => {
-                    let BenchmarkOptions {
-                        num_chains,
-                        tokens_per_chain,
-                        transactions_per_block,
-                        fungible_application_id,
-                        bps,
-                        close_chains,
-                        health_check_endpoints,
-                        wrap_up_max_in_flight,
-                        confirm_before_start,
-                        runtime_in_seconds,
-                        delay_between_chains_ms,
-                        config_path,
-                        single_destination_per_block,
-                    } = benchmark_options;
-                    assert!(
+            #[cfg_attr(
+                not(feature = "opentelemetry"),
+                allow(unreachable_code, unused_variables)
+            )]
+            Benchmark(benchmark_command) => {
+                // Require opentelemetry feature for benchmarks to ensure traffic is properly
+                // labeled as synthetic. Without this, benchmark traffic would be mislabeled
+                // as "organic" and corrupt production metrics.
+                #[cfg(not(feature = "opentelemetry"))]
+                anyhow::bail!(
+                    "Benchmark requires the 'opentelemetry' feature to be enabled. \
+                     Run with: cargo run --features opentelemetry --bin linera -- benchmark ..."
+                );
+
+                // Mark all benchmark traffic as synthetic for observability filtering.
+                std::env::set_var("LINERA_TRAFFIC_TYPE", "synthetic");
+
+                match benchmark_command {
+                    BenchmarkCommand::Single {
+                        options: benchmark_options,
+                    } => {
+                        let BenchmarkOptions {
+                            num_chains,
+                            tokens_per_chain,
+                            transactions_per_block,
+                            fungible_application_id,
+                            bps,
+                            close_chains,
+                            health_check_endpoints,
+                            wrap_up_max_in_flight,
+                            confirm_before_start,
+                            runtime_in_seconds,
+                            delay_between_chains_ms,
+                            config_path,
+                            single_destination_per_block,
+                        } = benchmark_options;
+                        assert!(
                         options.client_options.max_pending_message_bundles
                             >= transactions_per_block,
                         "max_pending_message_bundles must be set to at least the same as the \
                          number of transactions per block ({transactions_per_block}) for benchmarking",
                     );
-                    assert!(num_chains > 0, "Number of chains must be greater than 0");
-                    assert!(
-                        transactions_per_block > 0,
-                        "Number of transactions per block must be greater than 0"
-                    );
-                    assert!(bps > 0, "BPS must be greater than 0");
+                        assert!(num_chains > 0, "Number of chains must be greater than 0");
+                        assert!(
+                            transactions_per_block > 0,
+                            "Number of transactions per block must be greater than 0"
+                        );
+                        assert!(bps > 0, "BPS must be greater than 0");
 
-                    let listener_config = ChainListenerConfig {
-                        skip_process_inbox: true,
-                        ..Default::default()
-                    };
+                        let listener_config = ChainListenerConfig {
+                            skip_process_inbox: true,
+                            ..Default::default()
+                        };
 
-                    let pub_keys: Vec<_> = std::iter::repeat_with(|| signer.generate_new())
-                        .take(num_chains)
-                        .collect();
-                    signer.persist().await?;
+                        let pub_keys: Vec<_> = std::iter::repeat_with(|| signer.generate_new())
+                            .take(num_chains)
+                            .collect();
+                        signer.persist().await?;
 
-                    let mut context = options
-                        .create_client_context(storage.clone(), wallet, signer.into_value())
-                        .await?;
-                    let (chain_clients, all_chains) = context
-                        .prepare_for_benchmark(
-                            num_chains,
-                            tokens_per_chain,
+                        let mut context = options
+                            .create_client_context(storage.clone(), wallet, signer.into_value())
+                            .await?;
+                        let (chain_clients, all_chains) = context
+                            .prepare_for_benchmark(
+                                num_chains,
+                                tokens_per_chain,
+                                fungible_application_id,
+                                pub_keys,
+                                config_path.as_deref(),
+                            )
+                            .await?;
+
+                        if confirm_before_start {
+                            info!("Ready to start benchmark. Say 'yes' when you want to proceed. Only 'yes' will be accepted");
+                            if !std::io::stdin()
+                                .lines()
+                                .next()
+                                .unwrap()?
+                                .eq_ignore_ascii_case("yes")
+                            {
+                                info!("Benchmark cancelled by user");
+                                context
+                                    .wrap_up_benchmark(
+                                        chain_clients,
+                                        close_chains,
+                                        wrap_up_max_in_flight,
+                                    )
+                                    .await?;
+                                return Ok(());
+                            }
+                        }
+
+                        let shutdown_notifier = CancellationToken::new();
+                        tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+
+                        // Start metrics server for benchmark monitoring
+                        #[cfg(with_metrics)]
+                        {
+                            let metrics_address = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
+                            monitoring_server::start_metrics(
+                                metrics_address,
+                                shutdown_notifier.clone(),
+                            );
+                        }
+
+                        let shared_context =
+                            std::sync::Arc::new(futures::lock::Mutex::new(context));
+                        let chain_listener = ChainListener::new(
+                            listener_config,
+                            shared_context.clone(),
+                            storage.clone(),
+                            shutdown_notifier.clone(),
+                            mpsc::unbounded_channel().1,
+                            true, // Enabling background sync for benchmarks
+                        );
+                        linera_client::benchmark::Benchmark::run_benchmark(
+                            bps,
+                            chain_clients.clone(),
+                            all_chains,
+                            transactions_per_block,
                             fungible_application_id,
-                            pub_keys,
-                            config_path.as_deref(),
+                            health_check_endpoints.clone(),
+                            runtime_in_seconds,
+                            delay_between_chains_ms,
+                            chain_listener,
+                            &shutdown_notifier,
+                            single_destination_per_block,
                         )
                         .await?;
 
-                    if confirm_before_start {
-                        info!("Ready to start benchmark. Say 'yes' when you want to proceed. Only 'yes' will be accepted");
-                        if !std::io::stdin()
-                            .lines()
-                            .next()
-                            .unwrap()?
-                            .eq_ignore_ascii_case("yes")
-                        {
-                            info!("Benchmark cancelled by user");
-                            context
-                                .wrap_up_benchmark(
-                                    chain_clients,
-                                    close_chains,
-                                    wrap_up_max_in_flight,
-                                )
-                                .await?;
-                            return Ok(());
-                        }
+                        let mut context = std::sync::Arc::try_unwrap(shared_context)
+                            .map_err(|_| anyhow::anyhow!("Failed to unwrap shared context"))?
+                            .into_inner();
+                        context
+                            .wrap_up_benchmark(chain_clients, close_chains, wrap_up_max_in_flight)
+                            .await?;
                     }
 
-                    let shutdown_notifier = CancellationToken::new();
-                    tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
-
-                    // Start metrics server for benchmark monitoring
-                    #[cfg(with_metrics)]
-                    {
-                        let metrics_address = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
-                        monitoring_server::start_metrics(
-                            metrics_address,
-                            shutdown_notifier.clone(),
-                        );
-                    }
-
-                    let shared_context = std::sync::Arc::new(futures::lock::Mutex::new(context));
-                    let chain_listener = ChainListener::new(
-                        listener_config,
-                        shared_context.clone(),
-                        storage.clone(),
-                        shutdown_notifier.clone(),
-                        mpsc::unbounded_channel().1,
-                        true, // Enabling background sync for benchmarks
-                    );
-                    linera_client::benchmark::Benchmark::run_benchmark(
-                        bps,
-                        chain_clients.clone(),
-                        all_chains,
-                        transactions_per_block,
-                        fungible_application_id,
-                        health_check_endpoints.clone(),
-                        runtime_in_seconds,
-                        delay_between_chains_ms,
-                        chain_listener,
-                        &shutdown_notifier,
-                        single_destination_per_block,
-                    )
-                    .await?;
-
-                    let mut context = std::sync::Arc::try_unwrap(shared_context)
-                        .map_err(|_| anyhow::anyhow!("Failed to unwrap shared context"))?
-                        .into_inner();
-                    context
-                        .wrap_up_benchmark(chain_clients, close_chains, wrap_up_max_in_flight)
-                        .await?;
-                }
-
-                BenchmarkCommand::Multi {
-                    options: benchmark_options,
-                    processes,
-                    faucet,
-                    client_state_dir,
-                    delay_between_processes,
-                    cross_wallet_transfers,
-                } => {
-                    let mut command = BenchmarkCommand::Single {
-                        options: benchmark_options.clone(),
-                    };
-                    let faucet_client = cli_wrappers::Faucet::new(faucet.clone());
-                    let on_drop = if benchmark_options.close_chains {
-                        OnClientDrop::CloseChains
-                    } else {
-                        OnClientDrop::LeakChains
-                    };
-
-                    let clients = (0..processes)
-                        .map(|n| {
-                            let path_provider = if let Some(client_state_dir) = &client_state_dir {
-                                PathProvider::from_path_option(&Some(
-                                    tempfile::tempdir_in(client_state_dir)?
-                                        .keep()
-                                        .display()
-                                        .to_string(),
-                                ))?
-                            } else {
-                                PathProvider::from_path_option(&client_state_dir)?
-                            };
-                            Ok(Arc::new(ClientWrapper::new_with_extra_args(
-                                path_provider,
-                                Network::Grpc,
-                                None,
-                                n,
-                                on_drop,
-                                vec![
-                                    "--storage-max-stream-queries".to_string(),
-                                    "50".to_string(),
-                                    "--timings".to_string(),
-                                ],
-                            )))
-                        })
-                        .collect::<Result<Vec<_>, anyhow::Error>>()?;
-
-                    info!("Initializing wallets...");
-                    let mut join_set = JoinSet::new();
-
-                    if cross_wallet_transfers {
-                        for client in &clients {
-                            let client = client.clone();
-                            let faucet_client = faucet_client.clone();
-                            join_set.spawn(async move {
-                                retry_faucet_operation(|| client.wallet_init(Some(&faucet_client)))
-                                    .await?;
-                                retry_faucet_operation(|| {
-                                    client.request_chain(&faucet_client, true)
-                                })
-                                .await?;
-                                Ok::<_, anyhow::Error>(())
-                            });
-                        }
-
-                        join_set
-                            .join_all()
-                            .await
-                            .into_iter()
-                            .collect::<Result<Vec<_>, _>>()?;
-
-                        let chains_per_wallet = benchmark_options.num_chains;
-                        info!(
-                            "Creating {} chains per wallet ({} total chains)...",
-                            chains_per_wallet,
-                            chains_per_wallet * processes
-                        );
-
-                        let mut join_set = JoinSet::new();
-                        for client in &clients {
-                            let default_chain_id = client.default_chain().ok_or_else(|| {
-                                anyhow::anyhow!("No default chain found for client")
-                            })?;
-                            let client = client.clone();
-                            join_set.spawn(async move {
-                                let mut chain_ids = Vec::new();
-                                for _ in 0..chains_per_wallet {
-                                    let (chain_id, _owner) = client
-                                        .open_chain_super_owner(
-                                            default_chain_id,
-                                            None,
-                                            benchmark_options.tokens_per_chain,
-                                        )
-                                        .await?;
-                                    chain_ids.push(chain_id);
-                                }
-                                Ok::<Vec<ChainId>, anyhow::Error>(chain_ids)
-                            });
-                        }
-
-                        let all_chain_ids = join_set
-                            .join_all()
-                            .await
-                            .into_iter()
-                            .collect::<Result<Vec<_>, _>>()?
-                            .into_iter()
-                            .flatten()
-                            .collect::<Vec<_>>();
-
-                        let config = BenchmarkConfig {
-                            chain_ids: all_chain_ids,
+                    BenchmarkCommand::Multi {
+                        options: benchmark_options,
+                        processes,
+                        faucet,
+                        client_state_dir,
+                        delay_between_processes,
+                        cross_wallet_transfers,
+                    } => {
+                        let mut command = BenchmarkCommand::Single {
+                            options: benchmark_options.clone(),
+                        };
+                        let faucet_client = cli_wrappers::Faucet::new(faucet.clone());
+                        let on_drop = if benchmark_options.close_chains {
+                            OnClientDrop::CloseChains
+                        } else {
+                            OnClientDrop::LeakChains
                         };
 
-                        let (_, path) = NamedTempFile::new()?.keep()?;
-                        config.save_to_file(&path)?;
-                        info!("Saved chains configuration to {}", path.display());
-                        if let BenchmarkCommand::Single { options } = &mut command {
-                            options.config_path = Some(path);
-                        }
-                    } else {
-                        for client in clients.clone() {
-                            let faucet_client = faucet_client.clone();
-                            join_set.spawn(async move {
-                                retry_faucet_operation(|| client.wallet_init(Some(&faucet_client)))
-                                    .await?;
-                                retry_faucet_operation(|| {
-                                    client.request_chain(&faucet_client, true)
-                                })
-                                .await?;
-                                Ok::<_, anyhow::Error>(())
-                            });
-                        }
+                        let clients = (0..processes)
+                            .map(|n| {
+                                let path_provider =
+                                    if let Some(client_state_dir) = &client_state_dir {
+                                        PathProvider::from_path_option(&Some(
+                                            tempfile::tempdir_in(client_state_dir)?
+                                                .keep()
+                                                .display()
+                                                .to_string(),
+                                        ))?
+                                    } else {
+                                        PathProvider::from_path_option(&client_state_dir)?
+                                    };
+                                Ok(Arc::new(ClientWrapper::new_with_extra_args(
+                                    path_provider,
+                                    Network::Grpc,
+                                    None,
+                                    n,
+                                    on_drop,
+                                    vec![
+                                        "--storage-max-stream-queries".to_string(),
+                                        "50".to_string(),
+                                        "--timings".to_string(),
+                                    ],
+                                )))
+                            })
+                            .collect::<Result<Vec<_>, anyhow::Error>>()?;
 
-                        join_set
-                            .join_all()
-                            .await
-                            .into_iter()
-                            .collect::<Result<Vec<_>, _>>()?;
-                    }
+                        info!("Initializing wallets...");
+                        let mut join_set = JoinSet::new();
 
-                    info!("Starting benchmark processes...");
-                    let mut join_set = JoinSet::new();
-                    for client in clients.clone() {
-                        let command = command.clone();
-                        let (tx, rx) = oneshot::channel();
-                        join_set.spawn(async move {
-                            let result = client.benchmark_detached(command, tx).await?;
-                            Ok::<_, anyhow::Error>((result, rx))
-                        });
-                    }
-
-                    let results = join_set
-                        .join_all()
-                        .await
-                        .into_iter()
-                        .collect::<Result<Vec<_>, _>>()?;
-
-                    let mut children = Vec::new();
-                    let mut stdout_handles = Vec::new();
-                    let mut stderr_handles = Vec::new();
-                    let mut rx_handles = Vec::new();
-                    for ((child, stdout_handle, stderr_handle), rx) in results {
-                        children.push(child);
-                        stdout_handles.push(stdout_handle);
-                        stderr_handles.push(stderr_handle);
-                        rx_handles.push(rx);
-                    }
-
-                    if benchmark_options.confirm_before_start {
-                        info!("Waiting until all child processes are ready...");
-                        let mut ready_count = 0;
-                        for rx in rx_handles {
-                            rx.await?;
-                            ready_count += 1;
-                            info!("{}/{} child processes are ready", ready_count, processes);
-                        }
-
-                        info!("Ready to start benchmark. Say 'yes' when you want to proceed. Only 'yes' will be accepted");
-                        if !std::io::stdin()
-                            .lines()
-                            .next()
-                            .unwrap()?
-                            .eq_ignore_ascii_case("yes")
-                        {
-                            info!("Benchmark cancelled by user");
-                            let mut join_set = JoinSet::new();
-                            for mut child in children {
-                                let mut stdin: ChildStdin = child.stdin.take().unwrap();
-                                stdin.write_all(b"no\n").await?;
-                                stdin.flush().await?;
+                        if cross_wallet_transfers {
+                            for client in &clients {
+                                let client = client.clone();
+                                let faucet_client = faucet_client.clone();
                                 join_set.spawn(async move {
-                                    child.wait().await?;
+                                    retry_faucet_operation(|| {
+                                        client.wallet_init(Some(&faucet_client))
+                                    })
+                                    .await?;
+                                    retry_faucet_operation(|| {
+                                        client.request_chain(&faucet_client, true)
+                                    })
+                                    .await?;
                                     Ok::<_, anyhow::Error>(())
                                 });
                             }
+
                             join_set
                                 .join_all()
                                 .await
                                 .into_iter()
                                 .collect::<Result<Vec<_>, _>>()?;
-                            return Ok(());
-                        }
 
-                        let mut previous = time::Instant::now();
-                        let mut first = true;
-                        let mut started_count = 0;
-                        for child in &mut children {
-                            if first {
-                                first = false;
-                            } else if !cross_wallet_transfers {
-                                let time_elapsed = previous.elapsed();
-                                if time_elapsed < Duration::from_secs(delay_between_processes) {
-                                    time::sleep(
-                                        Duration::from_secs(delay_between_processes) - time_elapsed,
-                                    )
-                                    .await;
-                                }
+                            let chains_per_wallet = benchmark_options.num_chains;
+                            info!(
+                                "Creating {} chains per wallet ({} total chains)...",
+                                chains_per_wallet,
+                                chains_per_wallet * processes
+                            );
+
+                            let mut join_set = JoinSet::new();
+                            for client in &clients {
+                                let default_chain_id = client.default_chain().ok_or_else(|| {
+                                    anyhow::anyhow!("No default chain found for client")
+                                })?;
+                                let client = client.clone();
+                                join_set.spawn(async move {
+                                    let mut chain_ids = Vec::new();
+                                    for _ in 0..chains_per_wallet {
+                                        let (chain_id, _owner) = client
+                                            .open_chain_super_owner(
+                                                default_chain_id,
+                                                None,
+                                                benchmark_options.tokens_per_chain,
+                                            )
+                                            .await?;
+                                        chain_ids.push(chain_id);
+                                    }
+                                    Ok::<Vec<ChainId>, anyhow::Error>(chain_ids)
+                                });
                             }
 
-                            let mut stdin: ChildStdin = child.stdin.take().unwrap();
-                            stdin.write_all(b"yes\n").await?;
-                            stdin.flush().await?;
-                            started_count += 1;
-                            info!("{}/{} benchmarks started", started_count, processes);
+                            let all_chain_ids = join_set
+                                .join_all()
+                                .await
+                                .into_iter()
+                                .collect::<Result<Vec<_>, _>>()?
+                                .into_iter()
+                                .flatten()
+                                .collect::<Vec<_>>();
 
-                            previous = time::Instant::now();
+                            let config = BenchmarkConfig {
+                                chain_ids: all_chain_ids,
+                            };
+
+                            let (_, path) = NamedTempFile::new()?.keep()?;
+                            config.save_to_file(&path)?;
+                            info!("Saved chains configuration to {}", path.display());
+                            if let BenchmarkCommand::Single { options } = &mut command {
+                                options.config_path = Some(path);
+                            }
+                        } else {
+                            for client in clients.clone() {
+                                let faucet_client = faucet_client.clone();
+                                join_set.spawn(async move {
+                                    retry_faucet_operation(|| {
+                                        client.wallet_init(Some(&faucet_client))
+                                    })
+                                    .await?;
+                                    retry_faucet_operation(|| {
+                                        client.request_chain(&faucet_client, true)
+                                    })
+                                    .await?;
+                                    Ok::<_, anyhow::Error>(())
+                                });
+                            }
+
+                            join_set
+                                .join_all()
+                                .await
+                                .into_iter()
+                                .collect::<Result<Vec<_>, _>>()?;
                         }
-                    }
 
-                    let shutdown_notifier = CancellationToken::new();
-                    tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+                        info!("Starting benchmark processes...");
+                        let mut join_set = JoinSet::new();
+                        for client in clients.clone() {
+                            let command = command.clone();
+                            let (tx, rx) = oneshot::channel();
+                            join_set.spawn(async move {
+                                let result = client.benchmark_detached(command, tx).await?;
+                                Ok::<_, anyhow::Error>((result, rx))
+                            });
+                        }
 
-                    // Start metrics server for multi-process benchmark monitoring
-                    #[cfg(with_metrics)]
-                    {
-                        let metrics_address = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
-                        monitoring_server::start_metrics(
-                            metrics_address,
-                            shutdown_notifier.clone(),
-                        );
-                    }
+                        let results = join_set
+                            .join_all()
+                            .await
+                            .into_iter()
+                            .collect::<Result<Vec<_>, _>>()?;
 
-                    let mut join_set = JoinSet::new();
-                    let children_pids: Vec<u32> = children.iter().filter_map(|c| c.id()).collect();
+                        let mut children = Vec::new();
+                        let mut stdout_handles = Vec::new();
+                        let mut stderr_handles = Vec::new();
+                        let mut rx_handles = Vec::new();
+                        for ((child, stdout_handle, stderr_handle), rx) in results {
+                            children.push(child);
+                            stdout_handles.push(stdout_handle);
+                            stderr_handles.push(stderr_handle);
+                            rx_handles.push(rx);
+                        }
 
-                    for ((mut child, stdout_handle), stderr_handle) in
-                        children.into_iter().zip(stdout_handles).zip(stderr_handles)
-                    {
-                        join_set.spawn(async move {
-                            let pid = child.id();
-                            let status = child.wait().await?;
-                            stdout_handle.await?;
-                            stderr_handle.await?;
-                            Ok::<_, anyhow::Error>((pid, status))
-                        });
-                    }
+                        if benchmark_options.confirm_before_start {
+                            info!("Waiting until all child processes are ready...");
+                            let mut ready_count = 0;
+                            for rx in rx_handles {
+                                rx.await?;
+                                ready_count += 1;
+                                info!("{}/{} child processes are ready", ready_count, processes);
+                            }
 
-                    loop {
-                        tokio::select! {
-                            result = join_set.join_next() => {
-                                match result {
-                                    Some(Ok(Ok((pid, status)))) => {
-                                        if !status.success() {
-                                            error!("Benchmark process (pid {:?}) failed with status: {:?}", pid, status);
+                            info!("Ready to start benchmark. Say 'yes' when you want to proceed. Only 'yes' will be accepted");
+                            if !std::io::stdin()
+                                .lines()
+                                .next()
+                                .unwrap()?
+                                .eq_ignore_ascii_case("yes")
+                            {
+                                info!("Benchmark cancelled by user");
+                                let mut join_set = JoinSet::new();
+                                for mut child in children {
+                                    let mut stdin: ChildStdin = child.stdin.take().unwrap();
+                                    stdin.write_all(b"no\n").await?;
+                                    stdin.flush().await?;
+                                    join_set.spawn(async move {
+                                        child.wait().await?;
+                                        Ok::<_, anyhow::Error>(())
+                                    });
+                                }
+                                join_set
+                                    .join_all()
+                                    .await
+                                    .into_iter()
+                                    .collect::<Result<Vec<_>, _>>()?;
+                                return Ok(());
+                            }
+
+                            let mut previous = time::Instant::now();
+                            let mut first = true;
+                            let mut started_count = 0;
+                            for child in &mut children {
+                                if first {
+                                    first = false;
+                                } else if !cross_wallet_transfers {
+                                    let time_elapsed = previous.elapsed();
+                                    if time_elapsed < Duration::from_secs(delay_between_processes) {
+                                        time::sleep(
+                                            Duration::from_secs(delay_between_processes)
+                                                - time_elapsed,
+                                        )
+                                        .await;
+                                    }
+                                }
+
+                                let mut stdin: ChildStdin = child.stdin.take().unwrap();
+                                stdin.write_all(b"yes\n").await?;
+                                stdin.flush().await?;
+                                started_count += 1;
+                                info!("{}/{} benchmarks started", started_count, processes);
+
+                                previous = time::Instant::now();
+                            }
+                        }
+
+                        let shutdown_notifier = CancellationToken::new();
+                        tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+
+                        // Start metrics server for multi-process benchmark monitoring
+                        #[cfg(with_metrics)]
+                        {
+                            let metrics_address = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
+                            monitoring_server::start_metrics(
+                                metrics_address,
+                                shutdown_notifier.clone(),
+                            );
+                        }
+
+                        let mut join_set = JoinSet::new();
+                        let children_pids: Vec<u32> =
+                            children.iter().filter_map(|c| c.id()).collect();
+
+                        for ((mut child, stdout_handle), stderr_handle) in
+                            children.into_iter().zip(stdout_handles).zip(stderr_handles)
+                        {
+                            join_set.spawn(async move {
+                                let pid = child.id();
+                                let status = child.wait().await?;
+                                stdout_handle.await?;
+                                stderr_handle.await?;
+                                Ok::<_, anyhow::Error>((pid, status))
+                            });
+                        }
+
+                        loop {
+                            tokio::select! {
+                                result = join_set.join_next() => {
+                                    match result {
+                                        Some(Ok(Ok((pid, status)))) => {
+                                            if !status.success() {
+                                                error!("Benchmark process (pid {:?}) failed with status: {:?}", pid, status);
+                                                kill_all_processes(&children_pids).await;
+                                                return Err(anyhow::anyhow!("Benchmark process (pid {:?}) failed", pid));
+                                            }
+                                        }
+                                        Some(Ok(Err(e))) => {
+                                            error!("Benchmark process failed: {}", e);
                                             kill_all_processes(&children_pids).await;
-                                            return Err(anyhow::anyhow!("Benchmark process (pid {:?}) failed", pid));
+                                            return Err(e);
+                                        }
+                                        Some(Err(e)) => {
+                                            error!("Benchmark process panicked: {}", e);
+                                            kill_all_processes(&children_pids).await;
+                                            return Err(e.into());
+                                        }
+                                        None => {
+                                            info!("All benchmark processes have finished");
+                                            break;
                                         }
                                     }
-                                    Some(Ok(Err(e))) => {
-                                        error!("Benchmark process failed: {}", e);
-                                        kill_all_processes(&children_pids).await;
-                                        return Err(e);
-                                    }
-                                    Some(Err(e)) => {
-                                        error!("Benchmark process panicked: {}", e);
-                                        kill_all_processes(&children_pids).await;
-                                        return Err(e.into());
-                                    }
-                                    None => {
-                                        info!("All benchmark processes have finished");
-                                        break;
-                                    }
                                 }
-                            }
-                            _ = shutdown_notifier.cancelled() => {
-                                info!("Shutdown signal received, waiting for all benchmark processes to finish");
-                                join_set.join_all().await.into_iter().collect::<Result<Vec<_>, _>>()?;
-                                break;
+                                _ = shutdown_notifier.cancelled() => {
+                                    info!("Shutdown signal received, waiting for all benchmark processes to finish");
+                                    join_set.join_all().await.into_iter().collect::<Result<Vec<_>, _>>()?;
+                                    break;
+                                }
                             }
                         }
                     }
                 }
-            },
+            }
 
             Watch { chain_id, raw } => {
                 let context = options
@@ -1838,13 +1864,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
 fn init_tracing(
     options: &Options,
 ) -> anyhow::Result<Option<linera_service::tracing::chrome::ChromeTraceGuard>> {
-    if matches!(&options.command, ClientCommand::Faucet { .. }) {
-        linera_service::tracing::opentelemetry::init(
-            &options.command.log_file_name(),
-            options.otlp_exporter_endpoint.as_deref(),
-        );
-        Ok(None)
-    } else if options.chrome_trace_exporter {
+    if options.chrome_trace_exporter {
         let trace_file_path = options.chrome_trace_file.as_deref().map_or_else(
             || format!("{}.trace.json", options.command.log_file_name()),
             |s| s.to_string(),
@@ -1855,7 +1875,13 @@ fn init_tracing(
             writer,
         )))
     } else {
-        linera_service::tracing::init(&options.command.log_file_name());
+        // Always use opentelemetry::init to ensure baggage propagation is set up.
+        // This enables traffic_type labeling (organic vs synthetic) to work regardless
+        // of whether traces are being exported to OTLP.
+        linera_service::tracing::opentelemetry::init(
+            &options.command.log_file_name(),
+            options.otlp_exporter_endpoint.as_deref(),
+        );
         Ok(None)
     }
 }

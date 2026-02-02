@@ -31,6 +31,8 @@ use super::{
     api::{self, validator_node_client::ValidatorNodeClient, SubscriptionRequest},
     transport, GRPC_MAX_MESSAGE_SIZE,
 };
+#[cfg(feature = "opentelemetry")]
+use crate::propagation::{get_context_with_traffic_type, inject_context};
 use crate::{
     grpc::api::RawCertificate, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
     HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
@@ -110,7 +112,14 @@ impl GrpcClient {
             error: "could not convert request to proto".to_string(),
         })?;
         loop {
-            match f(self.client.clone(), Request::new(request_inner.clone())).await {
+            #[allow(unused_mut)]
+            let mut request = Request::new(request_inner.clone());
+            // Inject OpenTelemetry context (trace context + baggage) into gRPC metadata.
+            // This uses get_context_with_traffic_type() to also check the LINERA_TRAFFIC_TYPE
+            // environment variable, allowing benchmark tools to mark their traffic as synthetic.
+            #[cfg(feature = "opentelemetry")]
+            inject_context(&get_context_with_traffic_type(), request.metadata_mut());
+            match f(self.client.clone(), request).await {
                 Err(s) if Self::is_retryable(&s) && retry_count < self.max_retries => {
                     let delay = self.retry_delay.saturating_mul(retry_count);
                     retry_count += 1;
