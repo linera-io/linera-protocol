@@ -933,31 +933,6 @@ where
         }
     }
 
-    /// Executes a block: first the incoming messages, then the main operation.
-    /// Does not update chain state other than the execution state.
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        block_height = %block.height
-    ))]
-    pub async fn execute_block(
-        &mut self,
-        block: ProposedBlock,
-        local_time: Timestamp,
-        round: Option<u32>,
-        published_blobs: &[Blob],
-        replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<(ProposedBlock, BlockExecutionOutcome, ResourceTracker), ChainError> {
-        self.execute_block_with_policy(
-            block,
-            local_time,
-            round,
-            published_blobs,
-            replaying_oracle_responses,
-            BundleExecutionPolicy::Abort,
-        )
-        .await
-    }
-
     /// Executes a block with a specified policy for handling bundle failures.
     ///
     /// This method supports automatic retry with checkpointing when bundles fail:
