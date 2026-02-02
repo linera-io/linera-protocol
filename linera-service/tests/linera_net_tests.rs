@@ -5048,14 +5048,14 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let worker1_client = net.make_client().await;
     worker1_client.wallet_init(None).await?;
     let worker1_chain = admin_client
-        .open_and_assign(&worker1_client, Amount::from_tokens(1000))
+        .open_and_assign(&worker1_client, Amount::from_tokens(100))
         .await?;
 
     // Admin chain block 5: open chain for worker 2
     let worker2_client = net.make_client().await;
     worker2_client.wallet_init(None).await?;
     let worker2_chain = admin_client
-        .open_and_assign(&worker2_client, Amount::from_tokens(1000))
+        .open_and_assign(&worker2_client, Amount::from_tokens(100))
         .await?;
 
     let admin_port = get_node_port().await;
