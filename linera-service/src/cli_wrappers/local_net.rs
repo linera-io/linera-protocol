@@ -194,6 +194,7 @@ pub struct LocalNetConfig {
     pub num_shards: usize,
     pub num_proxies: usize,
     pub policy_config: ResourceControlPolicyConfig,
+    pub http_request_allow_list: Option<Vec<String>>,
     pub cross_chain_config: CrossChainConfig,
     pub storage_config_builder: InnerStorageConfigBuilder,
     pub path_provider: PathProvider,
@@ -347,6 +348,7 @@ impl LocalNetConfig {
             storage_config_builder,
             path_provider,
             block_exporters: ExportersSetup::Local(vec![]),
+            http_request_allow_list: Some(vec!["localhost".to_string()]),
         }
     }
 }
@@ -387,7 +389,9 @@ impl LineraNetConfig for LocalNetConfig {
                 self.num_other_initial_chains,
                 self.initial_amount,
                 self.policy_config,
-                Some(vec!["localhost".to_owned()]),
+                self.http_request_allow_list
+                    .clone()
+                    .or_else(|| Some(vec!["localhost".to_owned()])),
             )
             .await?;
         net.run().await?;
