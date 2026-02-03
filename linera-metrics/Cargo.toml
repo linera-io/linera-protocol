@@ -15,7 +15,7 @@ version.workspace = true
 workspace = true
 
 [features]
-memory-profiling = ["jemalloc_pprof"]
+jemalloc = ["jemalloc_pprof"]
 
 [dependencies]
 anyhow.workspace = true

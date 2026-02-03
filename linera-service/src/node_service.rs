@@ -1027,7 +1027,11 @@ where
             axum::routing::get(util::graphiql).post(Self::application_handler);
 
         #[cfg(with_metrics)]
-        monitoring_server::start_metrics(self.metrics_address(), cancellation_token.clone());
+        monitoring_server::start_metrics(
+            self.metrics_address(),
+            cancellation_token.clone(),
+            monitoring_server::MemoryProfiling::Disabled,
+        );
 
         let base_router = Router::new()
             .route("/", index_handler)

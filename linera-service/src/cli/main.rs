@@ -9,20 +9,21 @@
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 // jemalloc configuration for memory profiling with jemalloc_pprof
-// prof:true,prof_active:true - Enable profiling from start
+// prof:true - Enable profiling infrastructure
+// prof_active:false - Sampling disabled by default, enabled via --enable-memory-profiling
 // lg_prof_sample:19 - Sample every 512KB for good detail/overhead balance
 
 // Linux/other platforms: use unprefixed malloc (with unprefixed_malloc_on_supported_platforms)
-#[cfg(all(feature = "memory-profiling", not(target_os = "macos")))]
+#[cfg(all(feature = "jemalloc", not(target_os = "macos")))]
 #[allow(non_upper_case_globals)]
 #[export_name = "malloc_conf"]
-pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+pub static malloc_conf: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
 // macOS: use prefixed malloc (without unprefixed_malloc_on_supported_platforms)
-#[cfg(all(feature = "memory-profiling", target_os = "macos"))]
+#[cfg(all(feature = "jemalloc", target_os = "macos"))]
 #[allow(non_upper_case_globals)]
 #[export_name = "_rjem_malloc_conf"]
-pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+pub static malloc_conf: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
 mod options;
 use std::{
@@ -794,6 +795,7 @@ impl Runnable for Job {
                         monitoring_server::start_metrics(
                             metrics_address,
                             shutdown_notifier.clone(),
+                            options.enable_memory_profiling.into(),
                         );
                     }
 
@@ -1066,6 +1068,7 @@ impl Runnable for Job {
                         monitoring_server::start_metrics(
                             metrics_address,
                             shutdown_notifier.clone(),
+                            options.enable_memory_profiling.into(),
                         );
                     }
 
@@ -1907,6 +1910,21 @@ fn main() -> anyhow::Result<process::ExitCode> {
 
 async fn run(options: &Options) -> Result<i32, Error> {
     let _guard = init_tracing(options)?;
+
+    // Activate memory profiling if requested
+    if options.enable_memory_profiling {
+        #[cfg(feature = "jemalloc")]
+        {
+            linera_metrics::memory_profiler::MemoryProfiler::activate()
+                .await
+                .expect("Failed to activate memory profiling");
+        }
+        #[cfg(not(feature = "jemalloc"))]
+        {
+            bail!("--enable-memory-profiling requires the binary to be compiled with the 'jemalloc' feature");
+        }
+    }
+
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<Options>();
