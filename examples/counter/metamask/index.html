@@ -70,12 +70,16 @@
      document.getElementById('chain-id').innerText = chainId;
 
      // For autosigning: first we set up a local (in-memory) signer, and provide it to the
-     // client along with the MetaMask signer
+     // client along with the MetaMask signer.
+     // We set it as the default owner of the chain in the wallet.
      const autosigner = linera.signer.PrivateKey.createRandom();
-     const client = await new linera.Client(wallet, new linera.signer.Composite(autosigner, signer));
+     wallet.setOwner(chainId, autosigner.address());
 
-     // Connect to our user chain.
-     const chain = await client.chain(chainId);
+     const client = await new linera.Client(wallet, new linera.signer.Composite(autosigner, signer));
+     const chain = await client.chain(chainId, { owner });
+
+     // For autosigning: we then add the in-memory signer as an owner of the chain to allow it to sign transactions.
+     await chain.addOwner(autosigner.address());
 
      // Connect to the counter application on the chain.
      const counter = await chain.application(import.meta.env.LINERA_APPLICATION_ID);
@@ -87,12 +91,6 @@
          addLogEntry(newBlock);
          updateCount(newBlock.hash);
      });
-
-     // For autosigning: we then add the in-memory signer as an owner of the chain in the
-     // wallet, and set it as the default owner (so it will be used to process messages and
-     // events).
-     await chain.addOwner(autosigner.address());
-     wallet.setOwner(chainId, autosigner.address());
 
      function addLogEntry(block) {
          const entry = logs.getElementsByTagName('template')[0].content.cloneNode(true);
@@ -109,9 +107,7 @@
      updateCount();
 
      incrementButton.addEventListener('click', () => {
-         // For autosigning: when we make user-initiated mutations, we explicitly make them with
-         // the original (MetaMask) owner by providing the `owner` option to the `query` call.
-         counter.query('{ "query": "mutation { increment(value: 1) }" }', { owner });
+         counter.query('{ "query": "mutation { increment(value: 1) }" }');
      });
     </script>
   </body>
