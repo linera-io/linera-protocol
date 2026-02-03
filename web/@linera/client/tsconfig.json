@@ -6,9 +6,11 @@
         "module": "Node16",
         "moduleResolution": "node16",
         "sourceMap": true,
+        "inlineSources": true,
+        "declaration": true,
+        "declarationMap": true,
         "outDir": "dist/",
         "rootDir": "src",
-        "declaration": true,
         "paths": {
             "web-thread:wasm-shim": ["./src/wasm/index.js"]
         }
