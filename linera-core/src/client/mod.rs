@@ -1552,30 +1552,6 @@ impl<Env: Environment> Client<Env> {
     /// message is rejected and execution is retried, until the block accepts only messages
     /// that succeed.
     ///
-    /// If a message fails due to block limits being exceeded and it's not the first
-    /// transaction, the message is removed (not rejected) so it can be retried in a later
-    /// block. All subsequent messages from the same sender are also removed.
-    ///
-    /// Returns the modified block (with rejected/removed bundles) and the execution result.
-    #[tracing::instrument(level = "trace", skip(self, block))]
-    async fn stage_block_execution_and_discard_failing_messages(
-        &self,
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: Vec<Blob>,
-        max_failures: u32,
-    ) -> Result<(Block, ChainInfoResponse), chain_client::Error> {
-        let (executed_block, response) = self
-            .stage_block_execution_with_policy(
-                block,
-                round,
-                published_blobs,
-                BundleExecutionPolicy::AutoRetry { max_failures },
-            )
-            .await?;
-        Ok((executed_block, response))
-    }
-
     /// Attempts to execute the block locally with a specified policy for handling bundle failures.
     /// If any attempt to read a blob fails, the blob is downloaded and execution is retried.
     ///

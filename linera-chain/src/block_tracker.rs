@@ -363,11 +363,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         self.resource_controller
     }
 
-    /// Saves a checkpoint of the tracker's mutable state.
+    /// Creates a checkpoint of the tracker's mutable state.
     ///
     /// This captures all state that could be modified during transaction execution,
     /// allowing restoration if execution fails.
-    pub fn save_checkpoint(&self) -> TrackerCheckpoint {
+    pub fn create_checkpoint(&self) -> TrackerCheckpoint {
         TrackerCheckpoint {
             resource_tracker: self.resource_controller.tracker,
             next_application_index: self.next_application_index,

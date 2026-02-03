@@ -35,7 +35,10 @@ use linera_base::{
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
-    data_types::{BlockProposal, ChainAndHeight, IncomingBundle, ProposedBlock, Transaction},
+    data_types::{
+        BlockProposal, BundleExecutionPolicy, ChainAndHeight, IncomingBundle, ProposedBlock,
+        Transaction,
+    },
     manager::LockingBlock,
     types::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, Timeout, TimeoutCertificate,
@@ -1393,11 +1396,13 @@ impl<Env: Environment> ChainClient<Env> {
         // Also, compute the final certified hash while we're at it.
         let (block, _) = self
             .client
-            .stage_block_execution_and_discard_failing_messages(
+            .stage_block_execution_with_policy(
                 proposed_block,
                 round,
                 blobs.clone(),
-                self.options.max_block_limit_errors,
+                BundleExecutionPolicy::AutoRetry {
+                    max_failures: self.options.max_block_limit_errors,
+                },
             )
             .await?;
         let (proposed_block, _) = block.clone().into_proposal();
@@ -1562,11 +1567,13 @@ impl<Env: Environment> ChainClient<Env> {
         };
         match self
             .client
-            .stage_block_execution_and_discard_failing_messages(
+            .stage_block_execution_with_policy(
                 block,
                 None,
                 Vec::new(),
-                self.options.max_block_limit_errors,
+                BundleExecutionPolicy::AutoRetry {
+                    max_failures: self.options.max_block_limit_errors,
+                },
             )
             .await
         {

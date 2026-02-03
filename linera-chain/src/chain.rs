@@ -764,7 +764,7 @@ where
             let checkpoint = if auto_retry && is_bundle {
                 Some((
                     chain.clone_unchecked()?,
-                    block_execution_tracker.save_checkpoint(),
+                    block_execution_tracker.create_checkpoint(),
                 ))
             } else {
                 None

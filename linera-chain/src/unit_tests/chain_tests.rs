@@ -56,7 +56,8 @@ impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>> {
             .expect("Loading from memory should work")
     }
 
-    /// Test helper that calls `execute_block` with default test parameters.
+    /// Test helper that calls `execute_block` with default test parameters:
+    /// `round = None`, `replayed_oracle_responses = None`, `policy = Abort`.
     #[cfg(with_testing)]
     pub async fn execute_test_block_simple(
         &mut self,
