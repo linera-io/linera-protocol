@@ -57,11 +57,18 @@ pub struct InitializeOptions {
     pub profiling: bool,
 }
 
+static INITIALIZED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+
 #[wasm_bindgen]
 pub fn initialize(options: Option<InitializeOptions>) {
     use tracing_subscriber::{
         prelude::__tracing_subscriber_SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter,
     };
+
+    if INITIALIZED.set(()).is_err() {
+        tracing::warn!("already initialized, not re-initializing");
+        return;
+    }
 
     let options = options.unwrap_or_default();
 
