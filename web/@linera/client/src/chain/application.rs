@@ -72,7 +72,7 @@ impl Application {
         if !operations.is_empty() {
             let _hash = self
                 .client
-                .0
+                .client_context
                 .lock()
                 .await
                 .apply_client_command(&chain_client, |_chain_client| {
