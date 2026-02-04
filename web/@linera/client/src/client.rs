@@ -38,9 +38,6 @@ impl Client {
         signer: Signer,
         options: Option<linera_client::Options>,
     ) -> Result<Client, JsError> {
-        const BLOCK_CACHE_SIZE: usize = 5000;
-        const EXECUTION_STATE_CACHE_SIZE: usize = 10000;
-
         let options = options.unwrap_or_default();
 
         let mut storage = storage::get_storage().await?;
@@ -56,8 +53,6 @@ impl Client {
             &options,
             wallet.default,
             wallet.genesis_config.clone(),
-            BLOCK_CACHE_SIZE,
-            EXECUTION_STATE_CACHE_SIZE,
         )
         .await?;
         // The `Arc` here is useless, but it is required by the `ChainListener` API.
