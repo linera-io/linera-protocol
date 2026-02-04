@@ -52,7 +52,9 @@ impl Client {
 
         let options = options.unwrap_or_default();
 
-        let mut storage = storage::get_storage().await?;
+        let mut storage = storage::get_storage(
+            &format!("linera/{}", wallet.default.expect("Web wallets should always have a chain"))
+        ).await?;
         wallet
             .genesis_config
             .initialize_storage(&mut storage)
