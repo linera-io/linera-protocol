@@ -46,6 +46,12 @@ web = [
 
 web-default = ["web"]
 
+opentelemetry = [
+    "dep:opentelemetry",
+    "dep:opentelemetry_sdk",
+    "dep:tracing-opentelemetry",
+]
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
@@ -83,6 +89,10 @@ serde-reflection.workspace = true
 test-strategy.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+http.workspace = true
+opentelemetry = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
 tonic = { workspace = true, features = [
     "tls-webpki-roots",
     "codegen",

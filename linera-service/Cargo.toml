@@ -16,7 +16,7 @@ workspace = true
 
 [features]
 ethereum = []
-default = ["wasmer", "rocksdb", "storage-service"]
+default = ["wasmer", "rocksdb", "storage-service", "opentelemetry"]
 revm = [
     "linera-base/revm",
     "linera-execution/revm",
@@ -60,6 +60,7 @@ memory-profiling = [
     "linera-metrics/memory-profiling",
 ]
 storage-service = ["linera-storage-service"]
+opentelemetry = ["linera-rpc/opentelemetry"]
 
 [dependencies]
 alloy-primitives.workspace = true

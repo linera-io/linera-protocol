@@ -19,6 +19,9 @@ pub mod simple;
 
 pub mod grpc;
 
+#[cfg(feature = "opentelemetry")]
+pub mod propagation;
+
 pub use client::Client;
 pub use message::{RpcMessage, ShardInfo};
 pub use node_provider::{NodeOptions, NodeProvider};

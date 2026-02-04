@@ -5722,6 +5722,7 @@ dependencies = [
  "clap",
  "ed25519-dalek",
  "futures",
+ "http 1.3.1",
  "insta",
  "linera-base",
  "linera-chain",
@@ -5730,6 +5731,8 @@ dependencies = [
  "linera-rpc",
  "linera-storage",
  "linera-version",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "papaya",
  "prometheus",
  "proptest",
@@ -5750,6 +5753,7 @@ dependencies = [
  "tonic-web-wasm-client",
  "tower 0.4.13",
  "tracing",
+ "tracing-opentelemetry",
  "wasm-bindgen-test",
 ]
 

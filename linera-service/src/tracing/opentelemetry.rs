@@ -3,11 +3,12 @@
 
 //! OpenTelemetry integration for tracing with OTLP export and Chrome trace export.
 
-use opentelemetry::{global, trace::TracerProvider};
+use opentelemetry::{global, propagation::TextMapCompositePropagator, trace::TracerProvider};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
 #[cfg(with_testing)]
 use opentelemetry_sdk::trace::InMemorySpanExporter;
 use opentelemetry_sdk::{
+    propagation::{BaggagePropagator, TraceContextPropagator},
     trace::{BatchSpanProcessor, SdkTracerProvider},
     Resource,
 };
@@ -102,6 +103,19 @@ pub fn build_opentelemetry_layer_with_test_exporter(
     (opentelemetry_layer, exporter_clone, tracer_provider)
 }
 
+/// Sets up the global text map propagator with TraceContext and Baggage support.
+///
+/// This enables:
+/// - W3C TraceContext propagation (traceparent, tracestate headers)
+/// - W3C Baggage propagation (baggage header for traffic_type, etc.)
+fn setup_propagator() {
+    let propagator = TextMapCompositePropagator::new(vec![
+        Box::new(TraceContextPropagator::new()),
+        Box::new(BaggagePropagator::new()),
+    ]);
+    global::set_text_map_propagator(propagator);
+}
+
 /// Initializes tracing with OpenTelemetry OTLP exporter.
 ///
 /// Exports traces using the OTLP protocol to any OpenTelemetry-compatible backend.
@@ -109,6 +123,9 @@ pub fn build_opentelemetry_layer_with_test_exporter(
 /// Only enables OpenTelemetry if LINERA_OTLP_EXPORTER_ENDPOINT env var is set.
 /// This prevents DNS errors in environments where OpenTelemetry is not deployed.
 pub fn init(log_name: &str, otlp_endpoint: Option<&str>) {
+    // Set up composite propagator for TraceContext and Baggage
+    setup_propagator();
+
     // Check if OpenTelemetry endpoint is configured via parameter or env var
     let endpoint = match otlp_endpoint {
         Some(ep) if !ep.is_empty() => ep.to_string(),
@@ -117,7 +134,8 @@ pub fn init(log_name: &str, otlp_endpoint: Option<&str>) {
             _ => {
                 eprintln!(
                     "LINERA_OTLP_EXPORTER_ENDPOINT not set and no endpoint provided. \
-                     Falling back to standard tracing without OpenTelemetry support."
+                     Falling back to standard tracing without OpenTelemetry span export.\
+                     Baggage propagation is still enabled."
                 );
                 crate::tracing::init(log_name);
                 return;
