@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 
 use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex};
 use linera_base::identifiers::{AccountOwner, ChainId};
@@ -9,7 +9,9 @@ use linera_client::chain_listener::{ChainListener, ClientContext as _};
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-use crate::{chain::Chain, signer::Signer, storage, wallet::Wallet, Environment, JsResult};
+use crate::{
+    chain::Chain, lock::Lock, signer::Signer, storage, wallet::Wallet, Environment, JsResult,
+};
 
 /// The full client API, exposed to the wallet implementation. Calls
 /// to this API can be trusted to have originated from the user's
@@ -23,6 +25,7 @@ pub struct Client {
     // It does nothing here in this single-threaded context, but is
     // hard-coded by `ChainListener`.
     pub(crate) client_context: Arc<AsyncMutex<linera_client::ClientContext<Environment>>>,
+    pub(crate) _lock: Rc<Lock>,
 }
 
 #[derive(Default, serde::Deserialize, tsify::Tsify)]
@@ -52,9 +55,14 @@ impl Client {
 
         let options = options.unwrap_or_default();
 
-        let mut storage = storage::get_storage(
-            &format!("linera/{}", wallet.default.expect("Web wallets should always have a chain"))
-        ).await?;
+        let wallet_name = format!(
+            "{}",
+            wallet
+                .default
+                .expect("Web wallets should always have a chain")
+        );
+        let lock = Lock::try_acquire(&wallet_name).await?;
+        let mut storage = storage::get_storage(&wallet_name).await?;
         wallet
             .genesis_config
             .initialize_storage(&mut storage)
@@ -98,6 +106,7 @@ impl Client {
         log::info!("Linera Web client successfully initialized");
         Ok(Self {
             client_context: client,
+            _lock: Rc::new(lock),
         })
     }
 

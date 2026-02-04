@@ -32,6 +32,7 @@ pub use client::Client;
 pub mod chain;
 pub use chain::Chain;
 pub mod faucet;
+pub mod lock;
 
 pub mod signer;
 pub use signer::Signer;
