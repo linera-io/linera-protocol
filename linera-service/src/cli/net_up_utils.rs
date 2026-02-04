@@ -258,6 +258,7 @@ pub async fn handle_net_up_service(
         num_shards,
         num_proxies,
         policy_config,
+        http_request_allow_list: None,
         cross_chain_config,
         storage_config_builder,
         path_provider,
