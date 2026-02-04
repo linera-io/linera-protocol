@@ -499,7 +499,7 @@ pub enum ClientCommand {
         http_request_timeout_ms: Option<u64>,
 
         /// Set the list of hosts that contracts and services can send HTTP requests to.
-        #[arg(long)]
+        #[arg(long, value_delimiter = ',')]
         http_request_allow_list: Option<Vec<String>>,
     },
 
@@ -687,7 +687,7 @@ pub enum ClientCommand {
         http_request_timeout_ms: Option<u64>,
 
         /// Set the list of hosts that contracts and services can send HTTP requests to.
-        #[arg(long)]
+        #[arg(long, value_delimiter = ',')]
         http_request_allow_list: Option<Vec<String>>,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
