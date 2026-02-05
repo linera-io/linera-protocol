@@ -88,7 +88,7 @@ impl BlockBuilder {
     /// The timestamp must be at least as large as the parent block's timestamp (which is used as
     /// the default). It must also be at least as large as the timestamp of any incoming message
     /// bundle added via [`with_messages_from`](Self::with_messages_from) or
-    /// [`with_incoming_bundles`](Self::with_incoming_bundles).
+    /// [`with_messages_from_by_action`](Self::with_messages_from_by_action).
     pub fn with_timestamp(&mut self, timestamp: Timestamp) -> &mut Self {
         self.block.timestamp = timestamp;
         self
