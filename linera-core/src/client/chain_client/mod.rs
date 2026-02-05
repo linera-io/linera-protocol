@@ -86,8 +86,10 @@ use crate::{
 pub struct Options {
     /// Maximum number of pending message bundles processed at a time in a block.
     pub max_pending_message_bundles: usize,
-    /// Maximum number of loaded message bundles to remove from a block proposal due to
-    /// block limit errors before removing all remaining bundles.
+    /// Maximum number of message bundles to discard from a block proposal due to block limit
+    /// errors before discarding all remaining bundles.
+    ///
+    /// Discarded bundles can be retried in the next block.
     pub max_block_limit_errors: u32,
     /// The policy for automatically handling incoming messages.
     pub message_policy: MessagePolicy,

@@ -700,7 +700,7 @@ where
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         exec_policy: BundleExecutionPolicy,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
-        // AutoRetry is incompatible with replaying oracle responses because removing or
+        // AutoRetry is incompatible with replaying oracle responses because discarding or
         // rejecting bundles would change which transactions execute.
         if !matches!(exec_policy, BundleExecutionPolicy::Abort) {
             assert!(
@@ -776,7 +776,7 @@ where
 
             // If the transaction executed successfully, we move on to the next one.
             // On transient errors (e.g. missing blobs) we fail, so it can be retried after
-            // syncing. In auto-retry mode, we can remove or reject message bundles that failed
+            // syncing. In auto-retry mode, we can discard or reject message bundles that failed
             // with non-transient errors.
             let (error, context, incoming_bundle, saved_chain, saved_tracker) =
                 match (result, transaction, checkpoint) {
@@ -800,26 +800,26 @@ where
 
             if error.is_limit_error() && i > 0 {
                 failure_count += 1;
-                // If we've exceeded max failures, remove all remaining message bundles.
+                // If we've exceeded max failures, discard all remaining message bundles.
                 let maybe_sender = if failure_count > max_failures {
                     info!(
                         failure_count,
                         max_failures,
-                        "Exceeded max bundle failures, removing all remaining message bundles"
+                        "Exceeded max bundle failures, discarding all remaining message bundles"
                     );
                     None
                 } else {
-                    // Not the first - remove it and same-sender subsequent bundles.
+                    // Not the first - discard it and same-sender subsequent bundles.
                     info!(
                         %error,
                         index = i,
                         origin = %incoming_bundle.origin,
-                        "Message bundle exceeded block limits and will be removed for \
+                        "Message bundle exceeded block limits and will be discarded for \
                         retry in a later block"
                     );
                     Some(incoming_bundle.origin)
                 };
-                Self::remove_remaining_bundles(block, i, maybe_sender);
+                Self::discard_remaining_bundles(block, i, maybe_sender);
                 // Continue without incrementing i (next transaction is now at i).
             } else if incoming_bundle.bundle.is_protected()
                 || incoming_bundle.action == MessageAction::Reject
@@ -840,7 +840,7 @@ where
             }
         }
 
-        // This can only happen if all transactions were incoming bundles that all got removed
+        // This can only happen if all transactions were incoming bundles that all got discarded
         // due to resource limit errors. This is unlikely in practice but theoretically possible.
         ensure!(!block.transactions.is_empty(), ChainError::EmptyBlock);
 
@@ -914,8 +914,8 @@ where
         ))
     }
 
-    /// Removes all bundles from the given origin (or all if `None`), starting at the given index.
-    fn remove_remaining_bundles(
+    /// Discards all bundles from the given origin (or all if `None`), starting at the given index.
+    fn discard_remaining_bundles(
         block: &mut ProposedBlock,
         mut index: usize,
         maybe_origin: Option<ChainId>,
@@ -936,11 +936,11 @@ where
     /// Executes a block with a specified policy for handling bundle failures.
     ///
     /// This method supports automatic retry with checkpointing when bundles fail:
-    /// - For limit errors (block too large, fuel exceeded, etc.): the bundle is removed
+    /// - For limit errors (block too large, fuel exceeded, etc.): the bundle is discarded
     ///   so it can be retried in a later block, unless it's the first transaction
     ///   (which gets rejected as inherently too large).
     /// - For non-limit errors: the bundle is rejected (triggering bounced messages).
-    /// - After `max_failures` failed bundles, all remaining message bundles are removed.
+    /// - After `max_failures` failed bundles, all remaining message bundles are discarded.
     ///
     /// The block may be modified to reflect the actual executed transactions.
     #[instrument(skip_all, fields(

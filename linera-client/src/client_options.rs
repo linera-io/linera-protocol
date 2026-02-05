@@ -55,8 +55,10 @@ pub struct Options {
     #[arg(long, default_value = "10")]
     pub max_pending_message_bundles: usize,
 
-    /// Maximum number of message bundles to remove from a block proposal due to block limit
-    /// errors before removing all remaining bundles.
+    /// Maximum number of message bundles to discard from a block proposal due to block limit
+    /// errors before discarding all remaining bundles.
+    ///
+    /// Discarded bundles can be retried in the next block.
     #[arg(long, default_value = "3")]
     pub max_block_limit_errors: u32,
 
