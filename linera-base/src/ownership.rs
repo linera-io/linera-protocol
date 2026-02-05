@@ -149,6 +149,14 @@ impl ChainOwnership {
         self.super_owners.contains(owner) || self.owners.contains_key(owner)
     }
 
+    /// Returns `true` if this owner can participate in multi-leader rounds, i.e. it
+    /// is a regular owner or super owner or `open_multi_leader_rounds == true`.
+    pub fn can_propose_in_multi_leader_round(&self, owner: &AccountOwner) -> bool {
+        self.open_multi_leader_rounds
+            || self.owners.contains_key(owner)
+            || self.super_owners.contains(owner)
+    }
+
     /// Returns the duration of the given round.
     pub fn round_timeout(&self, round: Round) -> Option<TimeDelta> {
         let tc = &self.timeout_config;
