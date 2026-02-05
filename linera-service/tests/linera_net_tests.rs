@@ -4636,19 +4636,22 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
 
     // Admin chain block 2: publish module
     // Admin chain block 3: create application
-    use counter::CounterAbi;
-    let (counter_contract, counter_service) = admin_client.build_example("counter").await?;
-    let counter_id = admin_client
-        .publish_and_create::<CounterAbi, (), u64>(
-            counter_contract,
-            counter_service,
+    use task_processor::TaskProcessorAbi;
+    let (task_processor_contract, task_processor_service) =
+        admin_client.build_example("task-processor").await?;
+    let task_processor_id = admin_client
+        .publish_and_create::<TaskProcessorAbi, (), ()>(
+            task_processor_contract,
+            task_processor_service,
             VmRuntime::Wasm,
             &(),
-            &0u64,
+            &(),
             &[],
             None,
         )
         .await?;
+
+    let operators = vec![("ls".to_string(), "/bin/ls".into())];
 
     // Admin chain block 4: open chain for worker 1
     let worker1_client = net.make_client().await;
@@ -4679,7 +4682,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
             port1,
             ProcessInbox::Automatic,
             &controller_id.forget_abi(),
-            &[],
+            &operators,
         )
         .await?;
 
@@ -4699,7 +4702,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let worker = state
         .local_worker
         .expect("Worker 1 should be registered after block notification");
-    assert!(worker.capabilities.is_empty());
+    assert_eq!(worker.capabilities.len(), 1);
     assert_ne!(
         worker1_chain, admin_chain,
         "Worker should be on a different chain than admin"
@@ -4728,9 +4731,13 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let app2 = node_service2.make_application(&worker2_chain, &controller_id)?;
     let response = app2.query("localWorkerState").await?;
     let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
-    assert!(
-        state.local_worker.is_some(),
-        "Worker 2 should be registered after block notification"
+    let worker = state
+        .local_worker
+        .expect("Worker 2 should be registered after block notification");
+    assert!(worker.capabilities.is_empty());
+    assert_ne!(
+        worker2_chain, admin_chain,
+        "Worker 2 should be on a different chain than admin"
     );
 
     let admin_app = admin_node_service.make_application(&admin_chain, &controller_id)?;
@@ -4748,7 +4755,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     assert_ne!(worker1_chain, worker2_chain);
 
     let managed_service = ManagedService {
-        application_id: counter_id.forget_abi(),
+        application_id: task_processor_id.forget_abi(),
         name: "test-service".to_string(),
         chain_id: worker1_chain,
         requirements: vec![],
@@ -4800,6 +4807,31 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     assert_eq!(state.local_services.len(), 1);
     assert_eq!(state.local_services[0].name, "test-service");
 
+    let task_app = node_service1.make_application(&worker1_chain, &task_processor_id)?;
+    let task_count: u64 = task_app.query_json("taskCount").await?;
+    assert_eq!(task_count, 0, "Initial task count should be 0");
+
+    task_app
+        .mutate(r#"requestTask(operator: "ls", input: "")"#)
+        .await?;
+
+    notifications1
+        .wait_for_block(BlockHeight::from(2))
+        .await
+        .unwrap_or_else(|_| {
+            panic!("should get notification about RequestTask block on chain {worker1_chain}")
+        });
+
+    notifications1
+        .wait_for_block(BlockHeight::from(3))
+        .await
+        .unwrap_or_else(|_| {
+            panic!("should get notification about StoreResult block on chain {worker1_chain}")
+        });
+
+    let task_count: u64 = task_app.query_json("taskCount").await?;
+    assert_eq!(task_count, 1, "Task should have been processed");
+
     let mutation = format!(
         "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [] }} }})",
         admin_owner, service_id
@@ -4814,9 +4846,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
             panic!("should receive a notification about a block on chain {admin_chain}")
         });
 
-    // Worker 1 chain block 2: receive service removal
+    // Worker 1 chain block 4: receive service removal
     notifications1
-        .wait_for_block(BlockHeight::from(2))
+        .wait_for_block(BlockHeight::from(4))
         .await
         .unwrap_or_else(|_| {
             panic!("should get notification about a block on chain {worker1_chain}")
