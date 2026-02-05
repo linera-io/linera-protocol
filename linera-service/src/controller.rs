@@ -268,12 +268,15 @@ where
 
         let (update_sender, update_receiver) = mpsc::unbounded_channel();
 
-        let chain_client = self
+        let mut chain_client = self
             .context
             .lock()
             .await
             .make_chain_client(service_chain_id)
             .await?;
+        if let Some(owner) = self.chain_client.preferred_owner() {
+            chain_client.set_preferred_owner(owner);
+        }
         let processor = TaskProcessor::new(
             service_chain_id,
             application_ids,
