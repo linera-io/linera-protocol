@@ -338,6 +338,7 @@ native-fungible = { path = "./examples/native-fungible" }
 non-fungible = { path = "./examples/non-fungible" }
 publish-read-data-blob = { path = "./linera-sdk/tests/fixtures/publish-read-data-blob" }
 social = { path = "./examples/social" }
+task-processor = { path = "./examples/task-processor" }
 time-expiry = { path = "./linera-sdk/tests/fixtures/time-expiry" }
 
 [workspace.dependencies.aws-config]
