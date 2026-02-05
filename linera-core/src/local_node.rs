@@ -12,6 +12,7 @@ use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, Epoch},
     identifiers::{BlobId, ChainId, StreamId},
+    time::Duration,
 };
 use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
@@ -139,11 +140,12 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
+        staging_bundles_time_budget: Option<Duration>,
     ) -> Result<(Block, ChainInfoResponse, ResourceTracker), LocalNodeError> {
         Ok(self
             .node
             .state
-            .stage_block_execution(block, round, published_blobs)
+            .stage_block_execution(block, round, published_blobs, staging_bundles_time_budget)
             .await?)
     }
 

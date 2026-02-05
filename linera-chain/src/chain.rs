@@ -16,6 +16,7 @@ use linera_base::{
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
     ownership::ChainOwnership,
+    time::{Duration, Instant},
 };
 use linera_execution::{
     committee::Committee, ExecutionRuntimeContext, ExecutionStateView, Message, Operation,
@@ -732,7 +733,8 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
+        staging_bundles_time_budget: Option<Duration>,
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker, Vec<usize>), ChainError> {
         #[cfg(with_metrics)]
         let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency_us();
         chain.system.timestamp.set(block.timestamp);
@@ -773,10 +775,35 @@ where
             block,
         )?;
 
-        for transaction in block.transaction_refs() {
+        let mut cumulative_bundle_time = Duration::ZERO;
+        let mut bundles_budget_exceeded = false;
+        let mut skipped_indices = Vec::new();
+
+        for (idx, transaction) in block.transactions.iter().enumerate() {
+            let is_bundle = matches!(transaction, Transaction::ReceiveMessages(_));
+            if is_bundle && bundles_budget_exceeded {
+                skipped_indices.push(idx);
+                continue;
+            }
+
+            let bundle_start = if is_bundle && staging_bundles_time_budget.is_some() {
+                Some(Instant::now())
+            } else {
+                None
+            };
+
             block_execution_tracker
                 .execute_transaction(transaction, round, chain)
                 .await?;
+
+            if let Some(start) = bundle_start {
+                cumulative_bundle_time += start.elapsed();
+                if staging_bundles_time_budget
+                    .is_some_and(|budget| cumulative_bundle_time >= budget)
+                {
+                    bundles_budget_exceeded = true;
+                }
+            }
         }
 
         let recipients = block_execution_tracker.recipients();
@@ -840,6 +867,7 @@ where
                 operation_results,
             },
             resource_tracker,
+            skipped_indices,
         ))
     }
 
@@ -856,7 +884,8 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
+        staging_bundles_time_budget: Option<Duration>,
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker, Vec<usize>), ChainError> {
         assert_eq!(
             block.chain_id,
             self.execution_state.context().extra().chain_id()
@@ -913,6 +942,7 @@ where
             round,
             published_blobs,
             replaying_oracle_responses,
+            staging_bundles_time_budget,
         )
         .await
     }

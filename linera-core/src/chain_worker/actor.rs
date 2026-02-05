@@ -17,7 +17,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{ApplicationId, BlobId, ChainId, StreamId},
     task,
-    time::Instant,
+    time::{Duration, Instant},
 };
 use linera_chain::{
     data_types::{BlockProposal, MessageBundle, ProposedBlock},
@@ -127,6 +127,7 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
+        staging_bundles_time_budget: Option<Duration>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError>>,
     },

@@ -219,7 +219,7 @@ impl BlockBuilder {
         let (block, _, resource_tracker) = self
             .validator
             .worker()
-            .stage_block_execution(self.block, None, published_blobs)
+            .stage_block_execution(self.block, None, published_blobs, None)
             .await?;
 
         let value = ConfirmedBlock::new(block);
