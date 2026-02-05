@@ -488,7 +488,7 @@ impl<Env: Environment> ClientContext<Env> {
             .extend_chain_mode(chain_id, ListeningMode::FullChain);
         let client = self.make_chain_client(chain_id).await?;
         let info = client.prepare_for_owner(owner).await.map_err(|error| {
-            tracing::error!(%error, "Chain {chain_id} is not owned by {owner}.");
+            tracing::error!(%chain_id, %owner, %error, "Chain is not owned");
             error::Inner::ChainOwnership
         })?;
 
