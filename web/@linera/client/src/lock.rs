@@ -27,21 +27,26 @@ impl Lock {
             let callback =
                 wasm_bindgen::closure::Closure::once(move |lock: Option<web_sys::Lock>| {
                     js_sys::Promise::new(&mut |release, _reject| {
+                        let value = if let Some(lock) = &lock {
+                            tracing::debug!(name = lock.name(), "acquired lock");
+                            Some(Self {
+                                lock: lock.clone(),
+                                release,
+                            })
+                        } else {
+                            tracing::debug!(name = lock.name(), "failed to acquire lock");
+                            release.call0(&JsValue::NULL).unwrap_throw();
+                            None
+                        };
+
                         resolve
                             .call1(
                                 &JsValue::NULL,
-                                &serde_wasm_bindgen::to_value(&if let Some(lock) = &lock {
-                                    Some(Self {
-                                        lock: lock.clone(),
-                                        release,
-                                    })
-                                } else {
-                                    release.call0(&JsValue::NULL).unwrap_throw();
-                                    None
-                                })
-                                .unwrap_throw(),
+                                &serde_wasm_bindgen::to_value(&value).unwrap_throw(),
                             )
                             .unwrap_throw();
+
+                        std::mem::forget(value);
                     })
                 });
 
@@ -54,6 +59,8 @@ impl Lock {
                     &options,
                     callback.as_ref().unchecked_ref(),
                 );
+
+            callback.forget();
         }))
         .await
         .unwrap_throw();
@@ -66,6 +73,7 @@ impl Lock {
 
 impl Drop for Lock {
     fn drop(&mut self) {
+        tracing::debug!(name = self.lock.name(), "releasing lock");
         let _: JsValue = self.release.call0(&JsValue::UNDEFINED).unwrap_throw();
     }
 }
