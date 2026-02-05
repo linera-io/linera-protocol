@@ -4667,6 +4667,19 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         .open_and_assign(&worker2_client, Amount::from_tokens(100))
         .await?;
 
+    // Admin chain block 6: open chain for the operator service
+    let (service_chain, _) = admin_client
+        .open_chain(
+            admin_chain,
+            Some(
+                worker1_client
+                    .get_owner()
+                    .expect("worker1 should have an owner for their default chain"),
+            ),
+            Amount::from_tokens(10),
+        )
+        .await?;
+
     let admin_port = get_node_port().await;
     let mut admin_node_service = admin_client
         .run_node_service(admin_port, ProcessInbox::Automatic)
@@ -4690,9 +4703,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
 
     // Waiting for a notification about a block created right after starting the service
     // is unreliable - wait for the block created on the controller admin chain instead.
-    // Admin chain block 6: receive worker 1 registration.
+    // Admin chain block 7: receive worker 1 registration.
     admin_notifications
-        .wait_for_block(BlockHeight::from(6))
+        .wait_for_block(BlockHeight::from(7))
         .await
         .unwrap_or_else(|_| panic!("should get notification about a block on chain {admin_chain}"));
 
@@ -4722,9 +4735,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
 
     // Same as above: instead of waiting for the notification on worker2_chain, wait for
     // the notification about reception of the registration on admin chain.
-    // Admin chain block 7: receive worker 2 registration.
+    // Admin chain block 8: receive worker 2 registration.
     admin_notifications
-        .wait_for_block(BlockHeight::from(7))
+        .wait_for_block(BlockHeight::from(8))
         .await
         .unwrap_or_else(|_| panic!("should get notification about a block on chain {admin_chain}"));
 
@@ -4757,11 +4770,11 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let managed_service = ManagedService {
         application_id: task_processor_id.forget_abi(),
         name: "test-service".to_string(),
-        chain_id: worker1_chain,
+        chain_id: service_chain,
         requirements: vec![],
     };
     let service_bytes = bcs::to_bytes(&managed_service)?;
-    // Admin chain block 8: publish data blob
+    // Admin chain block 9: publish data blob
     let service_id = admin_node_service
         .publish_data_blob(&admin_chain, service_bytes)
         .await?;
@@ -4772,9 +4785,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     );
     admin_app.mutate(&mutation).await?;
 
-    // Admin chain block 9: set admins
+    // Admin chain block 10: set admins
     admin_notifications
-        .wait_for_block(BlockHeight::from(9))
+        .wait_for_block(BlockHeight::from(10))
         .await
         .unwrap_or_else(|_| {
             panic!("should receive a notification about a block on chain {admin_chain}")
@@ -4786,9 +4799,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     );
     admin_app.mutate(&mutation).await?;
 
-    // Admin chain block 10: assign service to worker 1
+    // Admin chain block 11: assign service to worker 1
     admin_notifications
-        .wait_for_block(BlockHeight::from(10))
+        .wait_for_block(BlockHeight::from(11))
         .await
         .unwrap_or_else(|_| {
             panic!("should receive a notification about a block on chain {admin_chain}")
@@ -4807,7 +4820,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     assert_eq!(state.local_services.len(), 1);
     assert_eq!(state.local_services[0].name, "test-service");
 
-    let task_app = node_service1.make_application(&worker1_chain, &task_processor_id)?;
+    let task_app = node_service1.make_application(&service_chain, &task_processor_id)?;
     let task_count: u64 = task_app.query_json("taskCount").await?;
     assert_eq!(task_count, 0, "Initial task count should be 0");
 
@@ -4838,9 +4851,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     );
     admin_app.mutate(&mutation).await?;
 
-    // Admin chain block 11: remove service from worker 1
+    // Admin chain block 12: remove service from worker 1
     admin_notifications
-        .wait_for_block(BlockHeight::from(11))
+        .wait_for_block(BlockHeight::from(12))
         .await
         .unwrap_or_else(|_| {
             panic!("should receive a notification about a block on chain {admin_chain}")
