@@ -16,6 +16,7 @@
     "@linera/metamask": "workspace:*"
   },
   "devDependencies": {
-    "vite": "^5.4.11"
+    "@types/node": "22.7.5",
+    "vite": "^7.1.7"
   }
 }

@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import path from 'path';
+import checker from 'vite-plugin-checker'
 
 const checkEnvironment = required => {
   return {
@@ -22,6 +23,7 @@ export default defineConfig({
       'LINERA_FAUCET_URL',
       'LINERA_APPLICATION_ID',
     ]),
+    checker({ typescript: true }),
   ],
   server: {
     headers: {
