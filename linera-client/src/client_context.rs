@@ -474,10 +474,6 @@ impl<Env: Environment> ClientContext<Env> {
         chain_id: ChainId,
         owner: AccountOwner,
     ) -> Result<(), Error> {
-        if !self.client.has_key_for(&owner).await? {
-            tracing::error!("No key pair found for owner {owner}");
-            return Err(error::Inner::ChainOwnership.into());
-        }
         self.client
             .extend_chain_mode(chain_id, ListeningMode::FullChain);
         let client = self.make_chain_client(chain_id).await?;

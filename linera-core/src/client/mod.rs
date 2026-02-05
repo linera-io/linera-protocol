@@ -2018,6 +2018,10 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         owner: AccountOwner,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
+        ensure!(
+            self.client.has_key_for(&owner).await?,
+            ChainClientError::CannotFindKeyForChain(self.chain_id)
+        );
         // Ensure we have the chain description blob.
         self.client
             .get_chain_description_blob(self.chain_id)
