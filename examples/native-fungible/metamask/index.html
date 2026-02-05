@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linera | Fungible (MetaMask)</title>
+    <link href="/style.css" rel="stylesheet">
+    <link href="/icon.png" rel="icon">
+    <style type="text/css">
+      .ui #transfer {
+          display: flex;
+          flex-direction: column;
+          max-width: 40rem;
+      }
+
+      .ui .account-details {
+          display: flex;
+          align-items: center;
+          max-width: 40rem;
+      }
+
+      .ui #account-id {
+          overflow-x: scroll;
+      }
+
+      .ui label, .ui input[type="submit"] {
+          margin-top: 0.5rem;
+      }
+
+      .ui label input {
+          width: 100%;
+      }
+
+      .ui #ticker-symbol {
+          font-variant-caps: all-small-caps;
+      }
+
+      .ui #account-id {
+          white-space: pre;
+          flex-grow: 1;
+          padding: 0.5rem 0;
+          margin: 0.5rem 0;
+      }
+
+      #errors {
+          list-style-type: none;
+          margin: 1rem 0;
+          font-family: monospace;
+          max-width: 40em;
+      }
+
+      #errors li {
+          border: 1px solid red;
+          color: red;
+          padding: 0.3em;
+          margin: 0.3em 0;
+      }
+
+      #copy-account {
+          cursor: pointer;
+          margin-left: 0.5em;
+          padding: 0.1rem 0.3rem;
+          background-color: hsl(179, 54%, 38%);
+      }
+
+      .ui .account-details {
+          display: flex;
+          align-items: center;
+          max-width: 40rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <div class="description">
+          <h1>Fungible (MetaMask)</h1>
+          <p>
+            This application is a demo to showcase personal chains, real-time transfers,
+            and trustless user interfaces in Linera, with transactions signed by MetaMask.
+          </p>
+          <p>
+            You'll need to have MetaMask installed and connected to the page for this demo to run.
+          </p>
+          <p>
+            User-initiated transactions (transfers) are signed by MetaMask. Incoming messages
+            and automatic operations use an in-memory autosigner key.
+          </p>
+          <p><em>Send funds to a friend and watch their balance update in real time.</em></p>
+        </div>
+        <div class="ui">
+          <h3>Account</h3>
+
+          <div class="account-details">
+            <p class="hex" id="account-id">loading account…</p>
+            <button id="copy-account">⎘</button>
+          </div>
+
+          <h4>Balance</h4>
+          <p>
+            <span id="balance"><code>retrieving funds…</code></span>
+            <span id="ticker-symbol"></span>
+          </p>
+
+          <h4>Transfer</h4>
+          <form id="transfer">
+            <label>
+              Recipient
+              <input type="text" name="recipient">
+            </label>
+
+            <label>
+              Amount
+              <input type="text" name="amount" inputmode="decimal" pattern="\d+(\.\d*)?">
+            </label>
+
+            <input type="submit" value="Send" disabled>
+          </form>
+
+          <ul id="errors">
+            <template>
+              <li class="message"></li>
+            </template>
+          </ul>
+        </div>
+      </div>
+
+      <div class="logs">
+        <h2>Connected as <code id="owner" class="hex">requesting owner…</code> </h2>
+        <h2>Chain history for <code id="chain-id" class="hex">requesting a new microchain…</code></h2>
+        <ul id="logs">
+          <template>
+            <li>
+              <span class="height"></span>: <span class="code hash"></span>
+            </li>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import * as linera from '@linera/client';
+      import * as linera_metamask from '@linera/metamask';
+
+      const gql = (query, variables = {}) => JSON.stringify({ query, variables });
+
+      function prependEntry(parent, variables) {
+          const entry = parent.querySelector('template').content.cloneNode(true);
+          for (const [name, value] of Object.entries(variables)) {
+              const element = entry.querySelector(`.${name}`);
+              if (element) element.textContent = value;
+          }
+
+          parent.insertBefore(entry, parent.firstChild);
+      }
+
+      async function updateBalance(application, owner, blockHash) {
+          const response = JSON.parse(await application.query(
+              gql(`query { tickerSymbol, accounts { entry(key: "${owner}") { value } } }`),
+              { blockHash },
+          ));
+          document.querySelector('#ticker-symbol').textContent = response.data.tickerSymbol;
+          document.querySelector('#balance').textContent = (+( response.data.accounts.entry?.value || 0)).toFixed(2);
+      }
+
+      async function transfer(application, donor, amount, recipient) {
+          const errorContainer = document.querySelector('#errors');
+          for (const element of errorContainer.children)
+              if (!(element instanceof HTMLTemplateElement))
+                  errorContainer.removeChild(element);
+
+          let errors = [];
+          try {
+              const match = recipient.match(/^(0x[0-9a-f]{40}|0x[0-9a-f]{64})@([0-9a-f]{64})$/i);
+              if (!match) throw new Error('Invalid recipient address: expected `owner@chain_id`');
+
+              const query = gql(`mutation(
+                  $donor: AccountOwner!,
+                  $amount: Amount!,
+                  $recipient: FungibleAccount!,
+              ) {
+                  transfer(owner: $donor, amount: $amount, targetAccount: $recipient)
+              }`, {
+                  donor,
+                  amount,
+                  recipient: { owner: match[1], chainId: match[2] },
+              });
+
+              errors = JSON.parse(await application.query(query)).errors || [];
+          } catch (e) {
+              console.error(e);
+              errors.push({ message: e.message });
+          }
+
+          for (const error of errors)
+              prependEntry(errorContainer, error);
+      };
+
+      const transferForm = document.querySelector('form#transfer');
+      const submitButton = transferForm.querySelector('input[type="submit"]');
+      submitButton.disabled = true;
+
+      document.querySelector('#copy-account').addEventListener('click', (event) => {
+          event.preventDefault();
+          navigator.clipboard.writeText(document.querySelector('#account-id').textContent);
+      });
+
+      // Initialize the Linera client and set up the MetaMask signer.
+      await linera.initialize();
+      const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
+      const signer = await new linera_metamask.Signer();
+      const wallet = await faucet.createWallet();
+      const owner = await signer.address();
+      const chainId = await faucet.claimChain(wallet, owner);
+      document.querySelector('#chain-id').innerText = chainId;
+      document.querySelector('#owner').innerText = owner;
+
+      // For autosigning: first we set up a local (in-memory) signer, and provide it to the
+      // client along with the MetaMask signer.
+      // We set it as the default owner of the chain in the wallet.
+      const autosigner = linera.signer.PrivateKey.createRandom();
+      wallet.setOwner(chainId, autosigner.address());
+
+      const client = await new linera.Client(wallet, new linera.signer.Composite(autosigner, signer));
+      const chain = await client.chain(chainId, { owner });
+
+      // For autosigning: we then add the in-memory signer as an owner of the chain to allow it to sign transactions.
+      await chain.addOwner(autosigner.address());
+
+      // Connect to the fungible application on the chain.
+      const application = await chain.application(import.meta.env.LINERA_APPLICATION_ID);
+
+      await updateBalance(application, owner, null);
+
+      chain.onNotification(notification => {
+          let newBlock = notification.reason.NewBlock;
+          if (notification.reason.BlockExecuted)
+            updateBalance(application, owner, notification.reason.BlockExecuted.hash);
+          else if (newBlock) {
+            prependEntry(document.querySelector('#logs'), newBlock);
+            updateBalance(application, owner);
+          }
+      });
+
+      submitButton.disabled = false;
+
+      document.querySelector('#account-id').textContent = `${owner}@${chainId}`;
+
+      transferForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          transfer(
+              application,
+              owner,
+              event.target.elements.amount.value,
+              event.target.elements.recipient.value,
+          );
+      });
+
+      await chain.transfer({
+          recipient: {
+              chain_id: chainId,
+              owner,
+          },
+          amount: 10,
+      });
+    </script>
+  </body>
+</html>

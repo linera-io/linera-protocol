@@ -95,6 +95,19 @@ importers:
         specifier: 7.1.7
         version: 7.1.7(@types/node@25.0.10)(yaml@2.8.1)
 
+  native-fungible/metamask:
+    dependencies:
+      '@linera/client':
+        specifier: workspace:*
+        version: link:../../../web/@linera/client
+      '@linera/metamask':
+        specifier: workspace:*
+        version: link:../../../web/@linera/metamask
+    devDependencies:
+      vite:
+        specifier: ^5.4.11
+        version: 5.4.20(@types/node@25.0.10)
+
 packages:
 
   '@adraffy/ens-normalize@1.10.1':
