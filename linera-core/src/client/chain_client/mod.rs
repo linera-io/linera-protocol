@@ -659,8 +659,9 @@ impl<Env: Environment> ChainClient<Env> {
             BTreeSet::new()
         };
 
-        let is_owner = manager.ownership.open_multi_leader_rounds
-            || manager.ownership.is_owner(&preferred_owner)
+        let is_owner = manager
+            .ownership
+            .can_propose_in_multi_leader_round(&preferred_owner)
             || fallback_owners.contains(&preferred_owner);
 
         if !is_owner {
@@ -695,6 +696,10 @@ impl<Env: Environment> ChainClient<Env> {
     /// an owner, or because `open_multi_leader_rounds` is enabled).
     #[instrument(level = "trace")]
     pub async fn prepare_for_owner(&self, owner: AccountOwner) -> Result<Box<ChainInfo>, Error> {
+        ensure!(
+            self.has_key_for(&owner).await?,
+            Error::CannotFindKeyForChain(self.chain_id)
+        );
         // Ensure we have the chain description blob.
         self.client
             .get_chain_description_blob(self.chain_id)
@@ -705,8 +710,9 @@ impl<Env: Environment> ChainClient<Env> {
 
         // Validate that the owner can propose on this chain.
         ensure!(
-            info.manager.ownership.is_owner(&owner)
-                || info.manager.ownership.open_multi_leader_rounds,
+            info.manager
+                .ownership
+                .can_propose_in_multi_leader_round(&owner),
             Error::NotAnOwner(self.chain_id)
         );
 
