@@ -1432,7 +1432,6 @@ impl Runnable for Job {
             }
 
             Assign { owner, chain_id } => {
-                ensure!(signer.contains_key(&owner).await?, "Missing key for owner");
                 let mut context = options
                     .create_client_context(storage, wallet, signer.into_value())
                     .await?;
