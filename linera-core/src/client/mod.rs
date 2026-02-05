@@ -25,15 +25,13 @@ use linera_base::{
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::{data_types::Bytecode, identifiers::ModuleId, vm::VmRuntime};
 use linera_chain::{
-    data_types::{
-        BlockProposal, ChainAndHeight, LiteVote, MessageAction, ProposedBlock, Transaction,
-    },
+    data_types::{BlockProposal, BundleExecutionPolicy, ChainAndHeight, LiteVote, ProposedBlock},
     manager::LockingBlock,
     types::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
-    ChainError, ChainExecutionContext,
+    ChainError,
 };
 use linera_execution::committee::Committee;
 use linera_storage::{ResultReadCertificates, Storage as _};
@@ -1554,97 +1552,48 @@ impl<Env: Environment> Client<Env> {
     /// message is rejected and execution is retried, until the block accepts only messages
     /// that succeed.
     ///
-    /// If a message fails due to block limits being exceeded and it's not the first
-    /// transaction, the message is removed (not rejected) so it can be retried in a later
-    /// block. All subsequent messages from the same sender are also removed.
-    // TODO(#2806): Measure how failing messages affect the execution times.
-    #[tracing::instrument(level = "trace", skip(self, block))]
-    async fn stage_block_execution_and_discard_failing_messages(
+    /// Attempts to execute the block locally with a specified policy for handling bundle failures.
+    /// If any attempt to read a blob fails, the blob is downloaded and execution is retried.
+    ///
+    /// Returns the modified block (bundles may be rejected/removed based on the policy)
+    /// and the execution result.
+    #[instrument(level = "trace", skip(self, block))]
+    async fn stage_block_execution_with_policy(
         &self,
-        mut block: ProposedBlock,
+        block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
+        policy: BundleExecutionPolicy,
     ) -> Result<(Block, ChainInfoResponse), chain_client::Error> {
         loop {
             let result = self
-                .stage_block_execution(block.clone(), round, published_blobs.clone())
+                .local_node
+                .stage_block_execution_with_policy(
+                    block.clone(),
+                    round,
+                    published_blobs.clone(),
+                    policy,
+                )
                 .await;
-            if let Err(chain_client::Error::LocalNodeError(LocalNodeError::WorkerError(
-                WorkerError::ChainError(chain_error),
-            ))) = &result
-            {
-                if let ChainError::ExecutionError(
-                    error,
-                    ChainExecutionContext::IncomingBundle(index),
-                ) = &**chain_error
-                {
-                    let index = *index as usize;
-                    let transaction = block
-                        .transactions
-                        .get_mut(index)
-                        .expect("Transaction at given index should exist");
-                    let Transaction::ReceiveMessages(incoming_bundle) = transaction else {
-                        panic!(
-                            "Expected incoming bundle at transaction index {}, found operation",
-                            index
-                        );
-                    };
-                    ensure!(
-                        !incoming_bundle.bundle.is_protected(),
-                        chain_client::Error::BlockProposalError(
-                            "Protected incoming message failed to execute locally"
-                        )
-                    );
-                    if incoming_bundle.action == MessageAction::Reject {
-                        return result;
-                    }
-
-                    // Check if this is a block limit error.
-                    if error.is_limit_error() {
-                        if index == 0 {
-                            // First transaction: it's inherently too large, reject it.
-                            info!(
-                                %error, origin = ?incoming_bundle.origin,
-                                "First message bundle exceeds block limits and will be rejected."
-                            );
-                            incoming_bundle.action = MessageAction::Reject;
-                        } else {
-                            // Not the first transaction: might succeed in a later block.
-                            // Remove it and all subsequent bundles from the same sender.
-                            let origin = incoming_bundle.origin;
-                            info!(
-                                %error, %index, ?origin,
-                                "Message bundle exceeded block limits and will be removed for retry in a later block."
-                            );
-                            // Remove the failed bundle and all subsequent bundles from the same sender.
-                            let mut i = index;
-                            while i < block.transactions.len() {
-                                let same_sender = matches!(
-                                    &block.transactions[i],
-                                    Transaction::ReceiveMessages(bundle) if bundle.origin == origin
-                                );
-                                if same_sender {
-                                    block.transactions.remove(i);
-                                } else {
-                                    i += 1;
-                                }
-                            }
-                        }
-                        continue;
-                    }
-
-                    // Non-limit error: reject the faulty message from the block and continue.
-                    // TODO(#1420): This is potentially a bit heavy-handed for
-                    // retryable errors.
-                    info!(
-                        %error, %index, origin = ?incoming_bundle.origin,
-                        "Message bundle failed to execute locally and will be rejected."
-                    );
-                    incoming_bundle.action = MessageAction::Reject;
-                    continue;
-                }
+            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
+                let validators = self.validator_nodes().await?;
+                self.update_local_node_with_blobs_from(blob_ids.clone(), &validators)
+                    .await?;
+                continue; // We found the missing blob: retry.
             }
-            return result;
+            if let Ok((_, executed_block, _, _)) = &result {
+                let hash = CryptoHash::new(executed_block);
+                let notification = Notification {
+                    chain_id: executed_block.header.chain_id,
+                    reason: Reason::BlockExecuted {
+                        height: executed_block.header.height,
+                        hash,
+                    },
+                };
+                self.notifier.notify(&[notification]);
+            }
+            let (_modified_block, executed_block, response, _resource_tracker) = result?;
+            return Ok((executed_block, response));
         }
     }
 
