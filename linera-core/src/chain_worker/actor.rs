@@ -20,7 +20,7 @@ use linera_base::{
     time::Instant,
 };
 use linera_chain::{
-    data_types::{BlockProposal, MessageBundle, ProposedBlock},
+    data_types::{BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock},
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
@@ -129,6 +129,19 @@ where
         published_blobs: Vec<Blob>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError>>,
+    },
+
+    /// Execute a block with a policy for handling bundle failures.
+    /// The block may be modified (bundles rejected or removed) based on the policy.
+    StageBlockExecutionWithPolicy {
+        block: ProposedBlock,
+        round: Option<u32>,
+        published_blobs: Vec<Blob>,
+        policy: BundleExecutionPolicy,
+        #[debug(skip)]
+        callback: oneshot::Sender<
+            Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError>,
+        >,
     },
 
     /// Process a leader timeout issued for this multi-owner chain.
