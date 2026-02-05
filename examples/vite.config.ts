@@ -24,6 +24,7 @@ export default defineConfig({
     ]),
   ],
   server: {
+    host: '0.0.0.0', // So your iPhone can see it
     headers: {
       'Cross-Origin-Embedder-Policy': 'require-corp',
       'Cross-Origin-Opener-Policy': 'same-origin',
@@ -34,6 +35,7 @@ export default defineConfig({
         path.resolve(__dirname, '../web'),
       ],
     },
+    allowedHosts: true,
   },
   esbuild: {
     supported: {

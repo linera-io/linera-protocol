@@ -71,3 +71,6 @@ workspace = true
 [dependencies.web-sys]
 features = ["console", "Window"]
 workspace = true
+
+[profile.release]
+debug = true
