@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex};
-use linera_base::identifiers::ChainId;
+use linera_base::identifiers::{AccountOwner, ChainId};
 use linera_client::chain_listener::{ChainListener, ClientContext as _};
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
@@ -23,6 +23,15 @@ pub struct Client {
     // It does nothing here in this single-threaded context, but is
     // hard-coded by `ChainListener`.
     pub(crate) client_context: Arc<AsyncMutex<linera_client::ClientContext<Environment>>>,
+}
+
+#[derive(Default, serde::Deserialize, tsify::Tsify)]
+#[tsify(from_wasm_abi)]
+#[serde(default)]
+/// Options for `Client.chain`.
+pub struct ChainOptions {
+    /// The owner to use for operations on this chain.
+    owner: Option<AccountOwner>,
 }
 
 #[wasm_bindgen]
@@ -91,14 +100,20 @@ impl Client {
     ///
     /// If the wallet could not be read or chain synchronization fails.
     #[wasm_bindgen]
-    pub async fn chain(&self, chain: ChainId) -> JsResult<Chain> {
+    pub async fn chain(&self, chain: ChainId, options: Option<ChainOptions>) -> JsResult<Chain> {
+        let options = options.unwrap_or_default();
+        let mut chain_client = self
+            .client_context
+            .lock()
+            .await
+            .make_chain_client(chain)
+            .await?;
+        if let Some(owner) = options.owner {
+            chain_client.set_preferred_owner(owner);
+        }
+
         Ok(Chain {
-            chain_client: self
-                .client_context
-                .lock()
-                .await
-                .make_chain_client(chain)
-                .await?,
+            chain_client,
             client: self.clone(),
         })
     }
