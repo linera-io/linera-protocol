@@ -10008,6 +10008,7 @@ dependencies = [
  "async-graphql",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
