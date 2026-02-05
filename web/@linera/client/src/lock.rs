@@ -1,24 +1,70 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Browser-based wallet locking using the Web Locks API.
+//!
+//! This module provides a mechanism to ensure exclusive access to a wallet within a
+//! browser context. It uses the [Web Locks API] to coordinate between multiple tabs or
+//! windows that might try to access the same wallet simultaneously.
+//!
+//! The lock is automatically released when the [`Lock`] is dropped.
+//!
+//! # Example
+//!
+//! ```ignore
+//! let lock = Lock::try_acquire("my-wallet").await?;
+//! // Wallet is now exclusively locked for this context
+//! // Lock is automatically released when `lock` goes out of scope
+//! ```
+//!
+//! [Web Locks API]: https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API
+
 use wasm_bindgen::{JsCast as _, JsValue, UnwrapThrowExt as _};
 use wasm_bindgen_futures::JsFuture;
 
+/// Errors that can occur when acquiring a lock.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The lock could not be acquired because another context already holds it.
     #[error("wallet {name} already in use")]
     Contended { name: String },
 }
 
+/// An exclusive lock on a named resource, backed by the Web Locks API.
+///
+/// This struct represents an acquired lock. The lock is held for as long as this value
+/// exists and is automatically released when dropped.
+///
+/// The struct is serializable to allow transfer across WASM boundaries while preserving
+/// the underlying JavaScript objects.
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct Lock {
+    /// The underlying Web Locks API lock object.
     #[serde(with = "serde_wasm_bindgen::preserve")]
     lock: web_sys::Lock,
+    /// A JavaScript function that, when called, resolves the promise and releases the lock.
     #[serde(with = "serde_wasm_bindgen::preserve")]
     release: js_sys::Function,
 }
 
 impl Lock {
+    /// Attempts to acquire an exclusive lock on the given name without blocking.
+    ///
+    /// This uses the Web Locks API with the `ifAvailable` option, meaning it will
+    /// immediately return an error if the lock is already held rather than waiting.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the lock to acquire. This should uniquely identify the
+    ///   resource being protected (e.g., a wallet identifier).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Contended`] if the lock is already held by another context.
+    ///
+    /// # Panics
+    ///
+    /// Panics if not running in a browser context with access to `window.navigator.locks`.
     pub async fn try_acquire(name: &str) -> Result<Self, Error> {
         let options = web_sys::LockOptions::new();
         options.set_if_available(true);
@@ -28,13 +74,11 @@ impl Lock {
                 wasm_bindgen::closure::Closure::once(move |lock: Option<web_sys::Lock>| {
                     js_sys::Promise::new(&mut |release, _reject| {
                         let value = if let Some(lock) = &lock {
-                            tracing::debug!(name = lock.name(), "acquired lock");
                             Some(Self {
                                 lock: lock.clone(),
                                 release,
                             })
                         } else {
-                            tracing::debug!(name = lock.name(), "failed to acquire lock");
                             release.call0(&JsValue::NULL).unwrap_throw();
                             None
                         };
@@ -73,7 +117,6 @@ impl Lock {
 
 impl Drop for Lock {
     fn drop(&mut self) {
-        tracing::debug!(name = self.lock.name(), "releasing lock");
         let _: JsValue = self.release.call0(&JsValue::UNDEFINED).unwrap_throw();
     }
 }
