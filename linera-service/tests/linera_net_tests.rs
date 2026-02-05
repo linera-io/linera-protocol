@@ -4668,17 +4668,30 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         .await?;
 
     // Admin chain block 6: open chain for the operator service
-    let (service_chain, _) = admin_client
-        .open_chain(
+    let service_client = net.make_client().await;
+    service_client.wallet_init(None).await?;
+    let service_owner = service_client.keygen().await?;
+    // We make it a multi-owner chain, so that worker1 can also propose.
+    let service_chain = admin_client
+        .open_multi_owner_chain(
             admin_chain,
-            Some(
-                worker1_client
-                    .get_owner()
-                    .expect("worker1 should have an owner for their default chain"),
-            ),
+            vec![
+                (service_owner, 100),
+                (
+                    worker1_client
+                        .get_owner()
+                        .expect("worker1_client should have an owner"),
+                    100,
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            u32::MAX,
             Amount::from_tokens(10),
+            1000,
         )
         .await?;
+    service_client.assign(service_owner, service_chain).await?;
 
     let admin_port = get_node_port().await;
     let mut admin_node_service = admin_client
@@ -4824,22 +4837,34 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let task_count: u64 = task_app.query_json("taskCount").await?;
     assert_eq!(task_count, 0, "Initial task count should be 0");
 
-    task_app
+    // We start listening to notifications on the service chain as well.
+    let mut service_notifications = node_service1.notifications(service_chain).await?;
+
+    // We request the task using service_client - this is because worker1 will not be able
+    // to propose blocks via GraphQL, as it only uses the chain because the controller
+    // told it to, so only operations via the controller and task processor are expected
+    // to work.
+    let service_port = get_node_port().await;
+    let service_service = service_client
+        .run_node_service(service_port, ProcessInbox::Automatic)
+        .await?;
+    let service_task_app = service_service.make_application(&service_chain, &task_processor_id)?;
+    service_task_app
         .mutate(r#"requestTask(operator: "ls", input: "")"#)
         .await?;
 
-    notifications1
-        .wait_for_block(BlockHeight::from(2))
+    service_notifications
+        .wait_for_block(BlockHeight::from(0))
         .await
         .unwrap_or_else(|_| {
-            panic!("should get notification about RequestTask block on chain {worker1_chain}")
+            panic!("should get notification about RequestTask block on chain {service_chain}")
         });
 
-    notifications1
-        .wait_for_block(BlockHeight::from(3))
+    service_notifications
+        .wait_for_block(BlockHeight::from(1))
         .await
         .unwrap_or_else(|_| {
-            panic!("should get notification about StoreResult block on chain {worker1_chain}")
+            panic!("should get notification about StoreResult block on chain {service_chain}")
         });
 
     let task_count: u64 = task_app.query_json("taskCount").await?;
@@ -4859,9 +4884,9 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
             panic!("should receive a notification about a block on chain {admin_chain}")
         });
 
-    // Worker 1 chain block 4: receive service removal
+    // Worker 1 chain block 2: receive service removal
     notifications1
-        .wait_for_block(BlockHeight::from(4))
+        .wait_for_block(BlockHeight::from(2))
         .await
         .unwrap_or_else(|_| {
             panic!("should get notification about a block on chain {worker1_chain}")
