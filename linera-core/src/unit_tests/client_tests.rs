@@ -44,9 +44,7 @@ use crate::test_utils::ScyllaDbStorageBuilder;
 #[cfg(feature = "storage-service")]
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
-    client::{
-        ChainClient, ChainClientError, ChainClientOptions, ClientOutcome, ListeningMode,
-    },
+    client::{ChainClient, ChainClientError, ChainClientOptions, ClientOutcome, ListeningMode},
     environment::wallet::Chain,
     local_node::LocalNodeError,
     node::{

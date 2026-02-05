@@ -430,8 +430,7 @@ where
         .worker()
         .stage_block_execution(create_counter_block, None, vec![])
         .await?;
-    let create_counter_cert =
-        env.make_certificate(ConfirmedBlock::new(create_counter_executed));
+    let create_counter_cert = env.make_certificate(ConfirmedBlock::new(create_counter_executed));
     env.worker()
         .fully_handle_certificate_with_notifications(create_counter_cert.clone(), &())
         .await?;
@@ -461,8 +460,7 @@ where
         .worker()
         .stage_block_execution(create_meta_block, None, vec![])
         .await?;
-    let create_meta_cert =
-        env.make_certificate(ConfirmedBlock::new(create_meta_executed));
+    let create_meta_cert = env.make_certificate(ConfirmedBlock::new(create_meta_executed));
     env.worker()
         .fully_handle_certificate_with_notifications(create_meta_cert.clone(), &())
         .await?;

@@ -2838,17 +2838,14 @@ impl<Env: Environment> ChainClient<Env> {
         let round = self.round_for_oracle(&info, &identity).await?;
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
-        let (block, _) = Box::pin(
-            self.client
-                .stage_block_execution_with_policy(
-                    proposed_block,
-                    round,
-                    blobs.clone(),
-                    BundleExecutionPolicy::AutoRetry {
-                        max_failures: self.options.max_block_limit_errors,
-                    },
-                ),
-        )
+        let (block, _) = Box::pin(self.client.stage_block_execution_with_policy(
+            proposed_block,
+            round,
+            blobs.clone(),
+            BundleExecutionPolicy::AutoRetry {
+                max_failures: self.options.max_block_limit_errors,
+            },
+        ))
         .await?;
         let (proposed_block, _) = block.clone().into_proposal();
         self.update_state(|state| {
@@ -3016,17 +3013,14 @@ impl<Env: Environment> ChainClient<Env> {
             },
             timestamp,
         };
-        match Box::pin(
-            self.client
-                .stage_block_execution_with_policy(
-                    block,
-                    None,
-                    Vec::new(),
-                    BundleExecutionPolicy::AutoRetry {
-                        max_failures: self.options.max_block_limit_errors,
-                    },
-                ),
-        )
+        match Box::pin(self.client.stage_block_execution_with_policy(
+            block,
+            None,
+            Vec::new(),
+            BundleExecutionPolicy::AutoRetry {
+                max_failures: self.options.max_block_limit_errors,
+            },
+        ))
         .await
         {
             Ok((_, response)) => Ok((

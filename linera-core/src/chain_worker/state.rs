@@ -1443,7 +1443,7 @@ where
     /// policy for handling bundle failures.
     ///
     /// The block may be modified to reflect the actual executed transactions
-    /// (bundles may be rejected or removed based on the policy).
+    /// (bundles may be rejected or discarded based on the policy).
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.height
@@ -1595,23 +1595,22 @@ where
         self.chain
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
-        let outcome = if let Some(outcome) = outcome {
-            outcome.clone()
+        let block = if let Some(outcome) = outcome {
+            outcome.clone().with(proposal.content.block.clone())
         } else {
-            let (_, outcome, _resource_tracker) = Box::pin(self.chain.execute_block(
+            let (executed_block, _resource_tracker) = Box::pin(self.execute_block(
                 block.clone(),
                 local_time,
                 round.multi_leader(),
                 &published_blobs,
-                None,
                 BundleExecutionPolicy::Abort,
             ))
             .await?;
-            outcome
+            executed_block
         };
 
         ensure!(
-            !round.is_fast() || !outcome.has_oracle_responses(),
+            !round.is_fast() || !block.has_oracle_responses(),
             WorkerError::FastBlockUsingOracles
         );
         let chain = &mut self.chain;
@@ -1619,12 +1618,11 @@ where
         chain
             .tip_state
             .get_mut()
-            .update_counters(&block.transactions, &outcome.messages)?;
+            .update_counters(&block.body.transactions, &block.body.messages)?;
         // Don't save the changes since the block is not confirmed yet.
         chain.rollback();
 
         // Create the vote and store it in the chain state.
-        let block = outcome.with(proposal.content.block.clone());
         let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
         let blobs = self
             .get_required_blobs(proposal.expected_blob_ids(), &created_blobs)
