@@ -274,6 +274,8 @@ where
             .await
             .make_chain_client(service_chain_id)
             .await?;
+        // The processor may need to propose blocks with task results - for that, it will
+        // need the chain client to be configured with a preferred owner.
         if let Some(owner) = self.chain_client.preferred_owner() {
             chain_client.set_preferred_owner(owner);
         }
