@@ -37,8 +37,7 @@
   },
   "homepage": "https://github.com/linera-io/linera-protocol/tree/main/web#readme",
   "dependencies": {
-    "ethers": "^6.15.0",
-    "bowser": "2.13.1"
+    "ethers": "^6.15.0"
   },
   "devDependencies": {
     "@types/node": "22.7.5",
