@@ -55,6 +55,11 @@ pub struct Options {
     #[arg(long, default_value = "10")]
     pub max_pending_message_bundles: usize,
 
+    /// The maximum time budget (ms) for staging incoming message bundles per block.
+    /// When set, overrides max-pending-message-bundles for bundle selection.
+    #[arg(long = "staging-bundles-time-budget-ms", value_parser = util::parse_millis)]
+    pub staging_bundles_time_budget: Option<Duration>,
+
     /// The duration in milliseconds after which an idle chain worker will free its memory.
     #[arg(
         long = "chain-worker-ttl-ms",
@@ -269,6 +274,7 @@ impl Options {
             sender_certificate_download_batch_size: self.sender_certificate_download_batch_size,
             max_joined_tasks: self.max_joined_tasks,
             allow_fast_blocks: self.allow_fast_blocks,
+            staging_bundles_time_budget: self.staging_bundles_time_budget,
         }
     }
 
