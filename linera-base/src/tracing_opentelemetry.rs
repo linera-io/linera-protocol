@@ -131,12 +131,12 @@ pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: Option<&str>) {
         _ => match std::env::var("LINERA_OTLP_EXPORTER_ENDPOINT") {
             Ok(ep) if !ep.is_empty() => ep,
             _ => {
-                eprintln!(
+                crate::tracing::init(log_name);
+                tracing::warn!(
                     "LINERA_OTLP_EXPORTER_ENDPOINT not set and no endpoint provided. \
                      Falling back to standard tracing without OpenTelemetry span export. \
                      Baggage propagation is still enabled."
                 );
-                crate::tracing::init(log_name);
                 return;
             }
         },
@@ -164,10 +164,11 @@ pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: Option<&str>) {
 /// Fallback when opentelemetry feature is not enabled.
 #[cfg(not(feature = "opentelemetry"))]
 pub fn init_with_opentelemetry(log_name: &str, _otlp_endpoint: Option<&str>) {
-    eprintln!(
-        "OTLP export requires the 'opentelemetry' feature to be enabled! Falling back to default tracing initialization."
-    );
     crate::tracing::init(log_name);
+    tracing::warn!(
+        "OTLP export requires the 'opentelemetry' feature to be enabled. \
+         Falling back to default tracing initialization."
+    );
 }
 
 /// Guard that flushes Chrome trace file when dropped.
