@@ -22,6 +22,9 @@ key directly in memory and uses it to sign.
 #![allow(clippy::unused_async)]
 #![recursion_limit = "256"]
 
+#[cfg(not(web_sys_unstable_apis))]
+compile_error!("linera-web requires web_sys_unstable_apis");
+
 use std::rc::Rc;
 
 use wasm_bindgen::prelude::*;
