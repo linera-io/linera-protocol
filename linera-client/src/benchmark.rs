@@ -11,12 +11,13 @@ use std::{
 };
 
 use linera_base::{
-    data_types::Amount,
+    data_types::{Amount, Timestamp},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     time::Instant,
 };
 use linera_core::{
     client::chain_client::{self, ChainClient},
+    data_types::ClientOutcome,
     Environment,
 };
 use linera_execution::{system::SystemOperation, Operation};
@@ -687,10 +688,32 @@ impl<Env: Environment> Benchmark<Env> {
         chain_client: &ChainClient<Env>,
     ) -> Result<(), BenchmarkError> {
         let start = Instant::now();
-        chain_client
-            .execute_operation(Operation::system(SystemOperation::CloseChain))
-            .await?
-            .expect("Close chain operation should not fail!");
+        loop {
+            let result = chain_client
+                .execute_operation(Operation::system(SystemOperation::CloseChain))
+                .await?;
+            match result {
+                ClientOutcome::Committed(_) => break,
+                ClientOutcome::Conflict(certificate) => {
+                    info!(
+                        "Conflict while closing chain {:?}: {}. Retrying...",
+                        chain_client.chain_id(),
+                        certificate.hash()
+                    );
+                }
+                ClientOutcome::WaitForTimeout(timeout) => {
+                    info!(
+                        "Waiting for timeout while closing chain {:?}: {}",
+                        chain_client.chain_id(),
+                        timeout
+                    );
+                    linera_base::time::timer::sleep(
+                        timeout.timestamp.duration_since(Timestamp::now()),
+                    )
+                    .await;
+                }
+            }
+        }
 
         debug!(
             "Closed chain {:?} in {} ms",
