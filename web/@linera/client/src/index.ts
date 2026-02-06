@@ -25,9 +25,11 @@ export async function initialize(options?: wasm.InitializeOptions) {
   const exports = await wasm.default();
 
   // Safari 26.2 crashes with shared WebAssembly memory during
-  // multi-threaded operation (WebKit #303387). Pre-allocating a large block
-  // while still single-threaded prevents the crash — Rust's wasm32 allocator
-  // (dlmalloc) acquires all memory via memory.grow, so filling its pool here
+  // multi-threaded operation (WebKit #303387). Rust's wasm32 allocator
+  // (dlmalloc) uses via memory.grow to decide how much memory is left
+  // so starting with INITIAL and MAXIMUM values that are too close 
+  // to the actual memory limit causes it to grow memory and crash.
+  // Pre-allocating a large block while still single-threaded prevents the crash — 
   // avoids memory.grow calls once worker threads are running.
   if (isBrokenSafari()) {
     const PREALLOC_BYTES = 768 * 1024 * 1024;
