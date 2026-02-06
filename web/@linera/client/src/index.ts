@@ -32,10 +32,9 @@ export async function initialize(options?: wasm.InitializeOptions) {
   if (isBrokenSafari()) {
     const PREALLOC_BYTES = 768 * 1024 * 1024;
     try {
-      const ex = exports as any;
-      const ptr = ex.__wbindgen_malloc(PREALLOC_BYTES, 1);
+      const ptr = exports.__wbindgen_malloc(PREALLOC_BYTES, 1);
       if (ptr !== 0) {
-        ex.__wbindgen_free(ptr, PREALLOC_BYTES, 1);
+        exports.__wbindgen_free(ptr, PREALLOC_BYTES, 1);
       }
     } catch {
       // Pre-allocation is best-effort
