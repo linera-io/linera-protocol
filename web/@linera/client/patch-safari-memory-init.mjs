@@ -1,23 +1,29 @@
 // patch-safari-memory-init.mjs
 //
 // Build-time script that patches WASM binaries produced by wasm-bindgen to work
-// around a Safari/WebKit bug where `memory.init` on shared memory causes a trap.
+// around Safari/WebKit bugs with shared memory:
 //
-// Patches two functions:
-//   1. __wasm_init_memory: replaces memory.init/memory.fill/data.drop with
-//      drops/nops (same byte length, in-place)
-//   2. __wasm_init_tls: replaces `memory.init $.tdata` with `memory.copy`
-//      (copies from the template in linear memory instead of from the passive
-//      segment). This changes the function body size by a few bytes.
+//   Bug 1: `memory.init` on shared memory traps (crashes the module).
+//   Bug 2: `memory.grow` on shared memory crashes during multi-threaded
+//          operation (WebKit #304386).
 //
-// The patched WASM requires JS-side memory initialization before __wbindgen_start.
-// See wasm-memory-init.ts for the runtime counterpart.
+// Two-phase approach:
+//
+//   Phase 1 — ANALYZE `__wasm_init_memory` (no patching):
+//     Extracts segment dest offsets, BSS info, and the atomic flag address.
+//     At runtime, Safari skips this function by pre-setting the flag to 2
+//     via Atomics.store, then copies segments from JS before instantiation.
+//
+//   Phase 2 — PATCH `__wasm_init_tls`:
+//     Replaces `memory.init $.tdata` with `memory.copy` so that per-thread
+//     TLS initialization reads the template from linear memory instead of
+//     from a passive segment. This is the only binary modification.
 //
 // Usage: node patch-safari-memory-init.mjs
 //
 // Inputs:  src/wasm/index_bg.wasm
-// Outputs: src/wasm/index_bg.wasm (overwritten with patched version)
-//          src/wasm/memory-init-metadata.js (segment dest offsets + BSS info)
+// Outputs: src/wasm/index_bg.wasm (patched: __wasm_init_tls only)
+//          src/wasm/memory-init-metadata.js (segment offsets + BSS + flag address)
 
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
@@ -27,12 +33,9 @@ const METADATA_PATH = resolve('./src/wasm/memory-init-metadata.js');
 const METADATA_DTS_PATH = resolve('./src/wasm/memory-init-metadata.d.ts');
 
 // WASM opcodes
-const OP_NOP = 0x01;
-const OP_DROP = 0x1a;
 const OP_I32_CONST = 0x41;
 const OP_PREFIX = 0xfc;
 const OP_MEMORY_INIT = 8;
-const OP_DATA_DROP = 9;
 const OP_MEMORY_COPY = 10;
 const OP_MEMORY_FILL = 11;
 
@@ -193,13 +196,13 @@ function locateFunctionBody(buf, sections, funcIndex, importCount) {
   return { bodySizePos, bodyStart: pos, bodySize };
 }
 
-// ---- __wasm_init_memory patching (in-place, same size) ----
+// ---- Phase 1: Analyze __wasm_init_memory (extract metadata, no patching) ----
 
-function patchInitMemory(buf, bodyStart, bodySize) {
+function analyzeInitMemory(buf, bodyStart, bodySize) {
   const bodyEnd = bodyStart + bodySize;
-  const patches = [];
   const segments = [];
   let bss = null;
+  let flagAddress = null;
 
   // Skip local declarations
   let pos = bodyStart;
@@ -221,67 +224,43 @@ function patchInitMemory(buf, bodyStart, bodySize) {
       let value;
       [value, pos] = readI32LEB(buf, pos);
       constStack.push({ value, pos: startPos });
+      // The very first i32.const in the function is the flag address
+      // (used by the atomic cmpxchg at the top of the function)
+      if (flagAddress === null) flagAddress = value;
       continue;
     }
 
     if (opcode === OP_PREFIX) {
       pos++;
       let subOp;
-      const subStart = pos;
       [subOp, pos] = readU32LEB(buf, pos);
 
       if (subOp === OP_MEMORY_INIT) {
-        let segIdx, memIdx;
+        let segIdx;
         [segIdx, pos] = readU32LEB(buf, pos);
-        [memIdx, pos] = readU32LEB(buf, pos);
+        [, pos] = readU32LEB(buf, pos); // memIdx
 
-        let dest = -1, len = -1;
         if (constStack.length >= 3) {
-          len = constStack[constStack.length - 1].value;
-          const src = constStack[constStack.length - 2].value;
-          dest = constStack[constStack.length - 3].value;
-          segments.push({ segIdx, destOffset: dest, srcOffset: src, length: len });
+          const len = constStack[constStack.length - 1].value;
+          const dest = constStack[constStack.length - 3].value;
+          segments.push({ segIdx, destOffset: dest, length: len });
         }
-        const patchStart = subStart - 1;
-        const patchLen = pos - patchStart;
-        const rep = new Uint8Array(patchLen);
-        rep[0] = OP_DROP; rep[1] = OP_DROP; rep[2] = OP_DROP;
-        for (let i = 3; i < patchLen; i++) rep[i] = OP_NOP;
-        patches.push({ offset: patchStart, bytes: rep });
-        console.log(`  Patching memory.init seg=${segIdx} at ${patchStart} (${patchLen}B) → dest=${dest} len=${len}`);
+        console.log(`  Found memory.init seg=${segIdx} → dest=${constStack.length >= 3 ? constStack[constStack.length - 3].value : '?'} len=${constStack.length >= 3 ? constStack[constStack.length - 1].value : '?'}`);
         constStack.length = 0;
         continue;
       }
       if (subOp === OP_MEMORY_FILL) {
-        let memIdx;
-        [memIdx, pos] = readU32LEB(buf, pos);
-        let dest = -1, len = -1;
+        [, pos] = readU32LEB(buf, pos); // memIdx
         if (constStack.length >= 3) {
-          len = constStack[constStack.length - 1].value;
-          constStack[constStack.length - 2].value; // fill value
-          dest = constStack[constStack.length - 3].value;
+          const len = constStack[constStack.length - 1].value;
+          const dest = constStack[constStack.length - 3].value;
           bss = { destOffset: dest, length: len };
         }
-        const patchStart = subStart - 1;
-        const patchLen = pos - patchStart;
-        const rep = new Uint8Array(patchLen);
-        rep[0] = OP_DROP; rep[1] = OP_DROP; rep[2] = OP_DROP;
-        for (let i = 3; i < patchLen; i++) rep[i] = OP_NOP;
-        patches.push({ offset: patchStart, bytes: rep });
-        console.log(`  Patching memory.fill at ${patchStart} (${patchLen}B) → dest=${dest} len=${len}`);
+        console.log(`  Found memory.fill (BSS) → dest=${bss?.destOffset} len=${bss?.length}`);
         constStack.length = 0;
         continue;
       }
-      if (subOp === OP_DATA_DROP) {
-        let segIdx;
-        [segIdx, pos] = readU32LEB(buf, pos);
-        const patchStart = subStart - 1;
-        const patchLen = pos - patchStart;
-        const rep = new Uint8Array(patchLen).fill(OP_NOP);
-        patches.push({ offset: patchStart, bytes: rep });
-        console.log(`  Patching data.drop seg=${segIdx} at ${patchStart} (${patchLen}B)`);
-        continue;
-      }
+      // Skip other prefix opcodes
       constStack.length = 0;
       continue;
     }
@@ -318,20 +297,15 @@ function patchInitMemory(buf, bodyStart, bodySize) {
     }
   }
 
-  return { patches, segments, bss };
+  return { segments, bss, flagAddress };
 }
 
-// ---- __wasm_init_tls patching (changes body size, requires rebuild) ----
+// ---- Phase 2: Patch __wasm_init_tls (memory.init → memory.copy) ----
 
 function patchInitTls(buf, bodyStart, bodySize, tdataDestOffset) {
-  // Find the byte sequence: i32.const 0 ; i32.const <len> ; memory.init <seg> <mem>
-  // within __wasm_init_tls and replace with:
-  //   i32.const <tdataDestOffset> ; i32.const <len> ; memory.copy <mem> <mem>
   const bodyEnd = bodyStart + bodySize;
 
-  // Scan for memory.init within the function body
   let pos = bodyStart;
-  // Skip local decls
   let localCount;
   [localCount, pos] = readU32LEB(buf, pos);
   for (let i = 0; i < localCount; i++) { [, pos] = readU32LEB(buf, pos); pos++; }
@@ -344,20 +318,16 @@ function patchInitTls(buf, bodyStart, bodySize, tdataDestOffset) {
       let subOp;
       [subOp, pos] = readU32LEB(buf, pos);
       if (subOp === OP_MEMORY_INIT) {
-        let segIdx, memIdx;
+        let segIdx;
         [segIdx, pos] = readU32LEB(buf, pos);
-        [memIdx, pos] = readU32LEB(buf, pos);
+        [, pos] = readU32LEB(buf, pos); // memIdx
         const memInitEnd = pos;
 
-        // Walk backwards to find the i32.const that provides the src offset (should be 0)
-        // The pattern is: ... i32.const <src> ; i32.const <len> ; memory.init
-        // We need to find where `i32.const 0` starts (the src offset operand)
-        // Scan forward from code start to find it precisely
+        // Scan from code start to find i32.const positions before memory.init
         let scanPos = bodyStart;
         [localCount, scanPos] = readU32LEB(buf, scanPos);
         for (let i = 0; i < localCount; i++) { [, scanPos] = readU32LEB(buf, scanPos); scanPos++; }
 
-        // Track positions of i32.const instructions
         const constPositions = [];
         while (scanPos < prefixPos) {
           if (buf[scanPos] === OP_I32_CONST) {
@@ -368,32 +338,28 @@ function patchInitTls(buf, bodyStart, bodySize, tdataDestOffset) {
             constPositions.push({ pos: cPos, endPos: scanPos, value: val });
           } else {
             scanPos++;
-            // skip immediates (simplified — we only need to get past them)
             switch (buf[scanPos - 1]) {
               case 0x20: case 0x21: case 0x22: case 0x23: case 0x24:
               case 0x0c: case 0x0d: case 0x10:
                 [, scanPos] = readU32LEB(buf, scanPos); break;
+              case 0x41: [, scanPos] = readI32LEB(buf, scanPos); break;
               case 0x02: case 0x03: case 0x04: scanPos++; break;
             }
           }
         }
 
-        // The last two i32.const before memory.init are: src_offset, length
         if (constPositions.length < 2) {
           throw new Error('Could not find i32.const operands before memory.init in __wasm_init_tls');
         }
-        const srcConst = constPositions[constPositions.length - 2]; // src offset (should be 0)
-        const lenConst = constPositions[constPositions.length - 1]; // length
+        const srcConst = constPositions[constPositions.length - 2];
+        const lenConst = constPositions[constPositions.length - 1];
 
         console.log(`  Found memory.init $.tdata in __wasm_init_tls:`);
         console.log(`    src_offset: i32.const ${srcConst.value} at [${srcConst.pos}..${srcConst.endPos}]`);
         console.log(`    length:     i32.const ${lenConst.value} at [${lenConst.pos}..${lenConst.endPos}]`);
         console.log(`    memory.init at [${prefixPos}..${memInitEnd}]`);
 
-        // Build replacement bytes:
-        //   i32.const <tdataDestOffset>  (replaces i32.const 0)
-        //   i32.const <len>              (unchanged)
-        //   memory.copy 0 0              (replaces memory.init seg mem)
+        // Build replacement: i32.const <tdataDestOffset> ; i32.const <len> ; memory.copy 0 0
         const newSrcConst = new Uint8Array([OP_I32_CONST, ...encodeI32LEB(tdataDestOffset)]);
         const oldLenBytes = buf.slice(lenConst.pos, lenConst.endPos);
         const newMemCopy = new Uint8Array([OP_PREFIX, ...encodeU32LEB(OP_MEMORY_COPY), 0x00, 0x00]);
@@ -418,7 +384,6 @@ function patchInitTls(buf, bodyStart, bodySize, tdataDestOffset) {
       continue;
     }
     pos++;
-    // Skip immediates for other opcodes (simplified)
     switch (buf[pos - 1]) {
       case 0x20: case 0x21: case 0x22: case 0x23: case 0x24:
       case 0x0c: case 0x0d: case 0x10:
@@ -446,11 +411,6 @@ function patchInitTls(buf, bodyStart, bodySize, tdataDestOffset) {
 }
 
 function rebuildBinaryWithSplice(buf, sections, codeSection, bodySizePos, oldBodySize, spliceStart, spliceEnd, newBytes, sizeDiff) {
-  // The binary needs to be rebuilt with:
-  // 1. Updated function body size LEB128
-  // 2. The spliced-in new bytes replacing the old range
-  // 3. Updated code section size LEB128
-
   const oldBodySizeLEB = encodeU32LEB(oldBodySize);
   const newBodySizeLEB = encodeU32LEB(oldBodySize + sizeDiff);
 
@@ -464,33 +424,26 @@ function rebuildBinaryWithSplice(buf, sections, codeSection, bodySizePos, oldBod
   const newBuf = new Uint8Array(buf.length + totalSizeDiff);
   let writePos = 0;
 
-  // Copy up to code section size LEB
   newBuf.set(buf.slice(0, codeSection.sizePos), writePos);
   writePos += codeSection.sizePos;
 
-  // Write new section size
   newBuf.set(newSectionSizeLEB, writePos);
   writePos += newSectionSizeLEB.length;
 
-  // Copy from after old section size to function body size
   const afterOldSectionSize = codeSection.sizePos + oldSectionSizeLEB.length;
   newBuf.set(buf.slice(afterOldSectionSize, bodySizePos), writePos);
   writePos += bodySizePos - afterOldSectionSize;
 
-  // Write new body size
   newBuf.set(newBodySizeLEB, writePos);
   writePos += newBodySizeLEB.length;
 
-  // Copy from after old body size to splice start
   const afterOldBodySize = bodySizePos + oldBodySizeLEB.length;
   newBuf.set(buf.slice(afterOldBodySize, spliceStart), writePos);
   writePos += spliceStart - afterOldBodySize;
 
-  // Write new bytes
   newBuf.set(newBytes, writePos);
   writePos += newBytes.length;
 
-  // Copy from after splice to end of file
   newBuf.set(buf.slice(spliceEnd), writePos);
   writePos += buf.length - spliceEnd;
 
@@ -512,9 +465,9 @@ console.log(`Found ${sections.length} sections`);
 const importCount = countImports(buf, sections);
 console.log(`Import count: ${importCount} functions`);
 
-// ---- Phase 1: Patch __wasm_init_memory (in-place) ----
+// ---- Phase 1: Analyze __wasm_init_memory (extract metadata only) ----
 
-console.log('\n--- Phase 1: __wasm_init_memory ---');
+console.log('\n--- Phase 1: Analyze __wasm_init_memory ---');
 const initMemIdx = findFunctionByName(buf, sections, '__wasm_init_memory');
 if (initMemIdx < 0) { console.error('ERROR: __wasm_init_memory not found'); process.exit(1); }
 console.log(`Found __wasm_init_memory at function index ${initMemIdx}`);
@@ -522,16 +475,14 @@ console.log(`Found __wasm_init_memory at function index ${initMemIdx}`);
 const initMemBody = locateFunctionBody(buf, sections, initMemIdx, importCount);
 console.log(`Function body: offset=${initMemBody.bodyStart}, size=${initMemBody.bodySize}`);
 
-const { patches, segments, bss } = patchInitMemory(buf, initMemBody.bodyStart, initMemBody.bodySize);
-if (segments.length === 0) { console.error('ERROR: No memory.init in __wasm_init_memory'); process.exit(1); }
+const { segments, bss, flagAddress } = analyzeInitMemory(buf, initMemBody.bodyStart, initMemBody.bodySize);
+if (segments.length === 0) { console.error('ERROR: No memory.init found in __wasm_init_memory'); process.exit(1); }
+if (flagAddress === null) { console.error('ERROR: Could not extract flag address from __wasm_init_memory'); process.exit(1); }
+console.log(`Flag address: ${flagAddress}`);
 
-// Apply in-place patches
-for (const p of patches) buf.set(p.bytes, p.offset);
-console.log(`Applied ${patches.length} in-place patches`);
+// ---- Phase 2: Patch __wasm_init_tls (memory.init → memory.copy) ----
 
-// ---- Phase 2: Patch __wasm_init_tls (rebuild binary) ----
-
-console.log('\n--- Phase 2: __wasm_init_tls ---');
+console.log('\n--- Phase 2: Patch __wasm_init_tls ---');
 const initTlsIdx = findFunctionByName(buf, sections, '__wasm_init_tls');
 if (initTlsIdx < 0) { console.error('ERROR: __wasm_init_tls not found'); process.exit(1); }
 console.log(`Found __wasm_init_tls at function index ${initTlsIdx}`);
@@ -539,7 +490,6 @@ console.log(`Found __wasm_init_tls at function index ${initTlsIdx}`);
 const initTlsBody = locateFunctionBody(buf, sections, initTlsIdx, importCount);
 console.log(`Function body: offset=${initTlsBody.bodyStart}, size=${initTlsBody.bodySize}`);
 
-// The .tdata dest offset is where the TLS template lives in linear memory
 const tdataSegment = segments.find(s => s.segIdx === 0);
 if (!tdataSegment) { console.error('ERROR: .tdata segment (idx 0) not found'); process.exit(1); }
 const tdataDestOffset = tdataSegment.destOffset;
@@ -567,6 +517,7 @@ const metadata = {
     length: s.length,
   })),
   bss: bss ? { offset: bss.destOffset, length: bss.length } : null,
+  flagAddress,
 };
 
 writeFileSync(METADATA_PATH, `// Auto-generated by patch-safari-memory-init.mjs
@@ -583,6 +534,7 @@ export declare const MEMORY_INIT_METADATA: {
     length: number;
   }>;
   bss: { offset: number; length: number } | null;
+  flagAddress: number;
 };
 `);
 
@@ -590,4 +542,5 @@ console.log(`Wrote metadata to ${METADATA_PATH}`);
 console.log(`\nSegments:`);
 for (const s of segments) console.log(`  seg[${s.segIdx}] → offset ${s.destOffset}, ${s.length} bytes`);
 if (bss) console.log(`  BSS → offset ${bss.destOffset}, ${bss.length} bytes (zero-fill)`);
-console.log(`\n✅ Safari memory init patch complete`);
+console.log(`  Flag address: ${flagAddress}`);
+console.log(`\n✅ Safari memory init patch complete (Phase 2 only — __wasm_init_tls)`);

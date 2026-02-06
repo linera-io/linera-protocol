@@ -1,12 +1,13 @@
-// Runtime helper for JS-side WASM shared memory initialization.
+// Runtime helper for JS-side WASM shared memory initialization (Safari only).
 //
 // Works around a Safari/WebKit bug where the `memory.init` WASM instruction
 // traps when targeting shared memory (SharedArrayBuffer). Instead, this module
 // parses the passive data segments directly from the WASM binary and copies
 // them into the SharedArrayBuffer from JavaScript before WASM instantiation.
 //
-// The WASM binary must be pre-patched by patch-safari-memory-init.mjs which
-// replaces memory.init/memory.fill/data.drop with drops/nops.
+// At runtime, __wasm_init_memory's atomic flag is pre-set to 2 so it skips
+// its memory.init calls entirely. This module provides the data that would
+// have been copied by that function.
 
 import { MEMORY_INIT_METADATA } from './wasm/memory-init-metadata.js';
 
