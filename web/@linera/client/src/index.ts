@@ -4,13 +4,13 @@ export type { Signer } from './signer/Signer.js';
 
 import * as wasm from './wasm/index.js';
 
-function isSafari(): boolean {
-  try {
-    const ua = navigator.userAgent;
-    return /Safari\//.test(ua) && !/Chrome\/|Chromium\//.test(ua);
-  } catch {
-    return false;
-  }
+import Bowser from 'bowser';
+
+function isBrokenSafari(): boolean {
+  const browser = Bowser.getParser(window.navigator.userAgent);
+  return browser.satisfies({
+    safari: "~26.2"
+  }) || false;
 }
 
 export async function initialize(options?: wasm.InitializeOptions) {
@@ -24,12 +24,12 @@ export async function initialize(options?: wasm.InitializeOptions) {
 
   const exports = await wasm.default();
 
-  // Safari 26-26.2 crashes with shared WebAssembly memory during
+  // Safari 26.2 crashes with shared WebAssembly memory during
   // multi-threaded operation (WebKit #303387). Pre-allocating a large block
   // while still single-threaded prevents the crash — Rust's wasm32 allocator
   // (dlmalloc) acquires all memory via memory.grow, so filling its pool here
   // avoids memory.grow calls once worker threads are running.
-  if (isSafari()) {
+  if (isBrokenSafari()) {
     const PREALLOC_BYTES = 768 * 1024 * 1024;
     try {
       const ex = exports as any;
