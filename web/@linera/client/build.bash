@@ -36,8 +36,6 @@ wasm-bindgen \
     --target web \
     --split-linked-modules
 
-node patch-safari-memory-init.mjs
-
 mkdir -p dist
 cp -r src/wasm dist/
 
