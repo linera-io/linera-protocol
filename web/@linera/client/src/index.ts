@@ -24,14 +24,11 @@ export async function initialize(options?: wasm.InitializeOptions) {
 
   const exports = await wasm.default();
 
-  // Safari 26-26.2 has a WebKit bug where the per-thread memory size cache
-  // isn't updated across threads after memory.grow (WebKit commit 299880).
-  // Rust's wasm32 allocator (dlmalloc) gets all memory via memory.grow, so
-  // normal operation triggers cross-thread cache staleness → crashes.
-  //
-  // Workaround: pre-allocate a large block while still single-threaded to
-  // fill dlmalloc's pool. After this, allocations come from the pool without
-  // triggering memory.grow, so the stale cache bug is never hit.
+  // Safari 26-26.2 crashes with shared WebAssembly memory during
+  // multi-threaded operation (WebKit #303387). Pre-allocating a large block
+  // while still single-threaded prevents the crash — Rust's wasm32 allocator
+  // (dlmalloc) acquires all memory via memory.grow, so filling its pool here
+  // avoids memory.grow calls once worker threads are running.
   if (isSafari()) {
     const PREALLOC_BYTES = 768 * 1024 * 1024;
     try {
