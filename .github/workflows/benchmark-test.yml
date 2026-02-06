@@ -55,5 +55,5 @@ jobs:
         until nc -z "$STORAGE_HOST" "$STORAGE_PORT"; do sleep 1; done
     - name: Run the benchmark test
       run: |
-        cargo build --locked -p linera-service --bin linera-benchmark --features storage-service
-        cargo test --locked -p linera-service --features storage-service benchmark
+        cargo build --locked -p linera-service --bin linera-benchmark --features storage-service,opentelemetry
+        cargo test --locked -p linera-service --features storage-service,opentelemetry benchmark
