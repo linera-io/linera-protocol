@@ -275,7 +275,7 @@ jobs:
         until nc -z "$STORAGE_HOST" "$STORAGE_PORT"; do sleep 1; done
     - name: Run the storage-service tests
       run: |
-        cargo test --features storage-service -- storage_service --nocapture
+        cargo test --features storage-service,opentelemetry -- storage_service --nocapture
 
   check-wit-files:
     needs: changed-files

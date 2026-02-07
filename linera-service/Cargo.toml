@@ -16,7 +16,7 @@ workspace = true
 
 [features]
 ethereum = []
-default = ["wasmer", "rocksdb", "storage-service", "opentelemetry"]
+default = ["wasmer", "rocksdb", "storage-service"]
 revm = [
     "linera-base/revm",
     "linera-execution/revm",
