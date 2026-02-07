@@ -80,6 +80,13 @@ impl GrpcClient {
                 trace!("Unexpected gRPC status: {status:?}; retrying");
                 true
             }
+            Code::Internal if status.message().contains("h2 protocol error") => {
+                // HTTP/2 connection reset errors are transient network issues, not real
+                // internal errors. This happens when the server restarts and the
+                // connection is forcibly closed.
+                trace!("gRPC connection reset: {status:?}; retrying");
+                true
+            }
             Code::NotFound => false, // This code is used if e.g. the validator is missing blobs.
             Code::InvalidArgument
             | Code::AlreadyExists
