@@ -1,0 +1,600 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18/src/internal.rs`."><title>internal.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="crossbeam_epoch" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">crossbeam_epoch/</div>internal.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! The global data and participant for garbage collection.
+<a href=#2 id=2 data-nosnippet>2</a>//!
+<a href=#3 id=3 data-nosnippet>3</a>//! # Registration
+<a href=#4 id=4 data-nosnippet>4</a>//!
+<a href=#5 id=5 data-nosnippet>5</a>//! In order to track all participants in one place, we need some form of participant
+<a href=#6 id=6 data-nosnippet>6</a>//! registration. When a participant is created, it is registered to a global lock-free
+<a href=#7 id=7 data-nosnippet>7</a>//! singly-linked list of registries; and when a participant is leaving, it is unregistered from the
+<a href=#8 id=8 data-nosnippet>8</a>//! list.
+<a href=#9 id=9 data-nosnippet>9</a>//!
+<a href=#10 id=10 data-nosnippet>10</a>//! # Pinning
+<a href=#11 id=11 data-nosnippet>11</a>//!
+<a href=#12 id=12 data-nosnippet>12</a>//! Every participant contains an integer that tells whether the participant is pinned and if so,
+<a href=#13 id=13 data-nosnippet>13</a>//! what was the global epoch at the time it was pinned. Participants also hold a pin counter that
+<a href=#14 id=14 data-nosnippet>14</a>//! aids in periodic global epoch advancement.
+<a href=#15 id=15 data-nosnippet>15</a>//!
+<a href=#16 id=16 data-nosnippet>16</a>//! When a participant is pinned, a `Guard` is returned as a witness that the participant is pinned.
+<a href=#17 id=17 data-nosnippet>17</a>//! Guards are necessary for performing atomic operations, and for freeing/dropping locations.
+<a href=#18 id=18 data-nosnippet>18</a>//!
+<a href=#19 id=19 data-nosnippet>19</a>//! # Thread-local bag
+<a href=#20 id=20 data-nosnippet>20</a>//!
+<a href=#21 id=21 data-nosnippet>21</a>//! Objects that get unlinked from concurrent data structures must be stashed away until the global
+<a href=#22 id=22 data-nosnippet>22</a>//! epoch sufficiently advances so that they become safe for destruction. Pointers to such objects
+<a href=#23 id=23 data-nosnippet>23</a>//! are pushed into a thread-local bag, and when it becomes full, the bag is marked with the current
+<a href=#24 id=24 data-nosnippet>24</a>//! global epoch and pushed into the global queue of bags. We store objects in thread-local storages
+<a href=#25 id=25 data-nosnippet>25</a>//! for amortizing the synchronization cost of pushing the garbages to a global queue.
+<a href=#26 id=26 data-nosnippet>26</a>//!
+<a href=#27 id=27 data-nosnippet>27</a>//! # Global queue
+<a href=#28 id=28 data-nosnippet>28</a>//!
+<a href=#29 id=29 data-nosnippet>29</a>//! Whenever a bag is pushed into a queue, the objects in some bags in the queue are collected and
+<a href=#30 id=30 data-nosnippet>30</a>//! destroyed along the way. This design reduces contention on data structures. The global queue
+<a href=#31 id=31 data-nosnippet>31</a>//! cannot be explicitly accessed: the only way to interact with it is by calling functions
+<a href=#32 id=32 data-nosnippet>32</a>//! `defer()` that adds an object to the thread-local bag, or `collect()` that manually triggers
+<a href=#33 id=33 data-nosnippet>33</a>//! garbage collection.
+<a href=#34 id=34 data-nosnippet>34</a>//!
+<a href=#35 id=35 data-nosnippet>35</a>//! Ideally each instance of concurrent data structure may have its own queue that gets fully
+<a href=#36 id=36 data-nosnippet>36</a>//! destroyed as soon as the data structure gets dropped.
+<a href=#37 id=37 data-nosnippet>37</a>
+<a href=#38 id=38 data-nosnippet>38</a></span><span class="kw">use </span><span class="kw">crate</span>::primitive::cell::UnsafeCell;
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span><span class="kw">crate</span>::primitive::sync::atomic::{<span class="self">self</span>, Ordering};
+<a href=#40 id=40 data-nosnippet>40</a><span class="kw">use </span>core::cell::Cell;
+<a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span>core::mem::{<span class="self">self</span>, ManuallyDrop};
+<a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span>core::num::Wrapping;
+<a href=#43 id=43 data-nosnippet>43</a><span class="kw">use </span>core::{fmt, ptr};
+<a href=#44 id=44 data-nosnippet>44</a>
+<a href=#45 id=45 data-nosnippet>45</a><span class="kw">use </span>crossbeam_utils::CachePadded;
+<a href=#46 id=46 data-nosnippet>46</a>
+<a href=#47 id=47 data-nosnippet>47</a><span class="kw">use </span><span class="kw">crate</span>::atomic::{Owned, Shared};
+<a href=#48 id=48 data-nosnippet>48</a><span class="kw">use </span><span class="kw">crate</span>::collector::{Collector, LocalHandle};
+<a href=#49 id=49 data-nosnippet>49</a><span class="kw">use </span><span class="kw">crate</span>::deferred::Deferred;
+<a href=#50 id=50 data-nosnippet>50</a><span class="kw">use </span><span class="kw">crate</span>::epoch::{AtomicEpoch, Epoch};
+<a href=#51 id=51 data-nosnippet>51</a><span class="kw">use </span><span class="kw">crate</span>::guard::{unprotected, Guard};
+<a href=#52 id=52 data-nosnippet>52</a><span class="kw">use </span><span class="kw">crate</span>::sync::list::{Entry, IsElement, IterError, List};
+<a href=#53 id=53 data-nosnippet>53</a><span class="kw">use </span><span class="kw">crate</span>::sync::queue::Queue;
+<a href=#54 id=54 data-nosnippet>54</a>
+<a href=#55 id=55 data-nosnippet>55</a><span class="doccomment">/// Maximum number of objects a bag can contain.
+<a href=#56 id=56 data-nosnippet>56</a></span><span class="attr">#[cfg(not(any(crossbeam_sanitize, miri)))]
+<a href=#57 id=57 data-nosnippet>57</a></span><span class="kw">const </span>MAX_OBJECTS: usize = <span class="number">64</span>;
+<a href=#58 id=58 data-nosnippet>58</a><span class="comment">// Makes it more likely to trigger any potential data races.
+<a href=#59 id=59 data-nosnippet>59</a></span><span class="attr">#[cfg(any(crossbeam_sanitize, miri))]
+<a href=#60 id=60 data-nosnippet>60</a></span><span class="kw">const </span>MAX_OBJECTS: usize = <span class="number">4</span>;
+<a href=#61 id=61 data-nosnippet>61</a>
+<a href=#62 id=62 data-nosnippet>62</a><span class="doccomment">/// A bag of deferred functions.
+<a href=#63 id=63 data-nosnippet>63</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Bag {
+<a href=#64 id=64 data-nosnippet>64</a>    <span class="doccomment">/// Stashed objects.
+<a href=#65 id=65 data-nosnippet>65</a>    </span>deferreds: [Deferred; MAX_OBJECTS],
+<a href=#66 id=66 data-nosnippet>66</a>    len: usize,
+<a href=#67 id=67 data-nosnippet>67</a>}
+<a href=#68 id=68 data-nosnippet>68</a>
+<a href=#69 id=69 data-nosnippet>69</a><span class="doccomment">/// `Bag::try_push()` requires that it is safe for another thread to execute the given functions.
+<a href=#70 id=70 data-nosnippet>70</a></span><span class="kw">unsafe impl </span>Send <span class="kw">for </span>Bag {}
+<a href=#71 id=71 data-nosnippet>71</a>
+<a href=#72 id=72 data-nosnippet>72</a><span class="kw">impl </span>Bag {
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="doccomment">/// Returns a new, empty bag.
+<a href=#74 id=74 data-nosnippet>74</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#75 id=75 data-nosnippet>75</a>        <span class="self">Self</span>::default()
+<a href=#76 id=76 data-nosnippet>76</a>    }
+<a href=#77 id=77 data-nosnippet>77</a>
+<a href=#78 id=78 data-nosnippet>78</a>    <span class="doccomment">/// Returns `true` if the bag is empty.
+<a href=#79 id=79 data-nosnippet>79</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#80 id=80 data-nosnippet>80</a>        <span class="self">self</span>.len == <span class="number">0
+<a href=#81 id=81 data-nosnippet>81</a>    </span>}
+<a href=#82 id=82 data-nosnippet>82</a>
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="doccomment">/// Attempts to insert a deferred function into the bag.
+<a href=#84 id=84 data-nosnippet>84</a>    ///
+<a href=#85 id=85 data-nosnippet>85</a>    /// Returns `Ok(())` if successful, and `Err(deferred)` for the given `deferred` if the bag is
+<a href=#86 id=86 data-nosnippet>86</a>    /// full.
+<a href=#87 id=87 data-nosnippet>87</a>    ///
+<a href=#88 id=88 data-nosnippet>88</a>    /// # Safety
+<a href=#89 id=89 data-nosnippet>89</a>    ///
+<a href=#90 id=90 data-nosnippet>90</a>    /// It should be safe for another thread to execute the given function.
+<a href=#91 id=91 data-nosnippet>91</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">unsafe fn </span>try_push(<span class="kw-2">&amp;mut </span><span class="self">self</span>, deferred: Deferred) -&gt; <span class="prelude-ty">Result</span>&lt;(), Deferred&gt; {
+<a href=#92 id=92 data-nosnippet>92</a>        <span class="kw">if </span><span class="self">self</span>.len &lt; MAX_OBJECTS {
+<a href=#93 id=93 data-nosnippet>93</a>            <span class="self">self</span>.deferreds[<span class="self">self</span>.len] = deferred;
+<a href=#94 id=94 data-nosnippet>94</a>            <span class="self">self</span>.len += <span class="number">1</span>;
+<a href=#95 id=95 data-nosnippet>95</a>            <span class="prelude-val">Ok</span>(())
+<a href=#96 id=96 data-nosnippet>96</a>        } <span class="kw">else </span>{
+<a href=#97 id=97 data-nosnippet>97</a>            <span class="prelude-val">Err</span>(deferred)
+<a href=#98 id=98 data-nosnippet>98</a>        }
+<a href=#99 id=99 data-nosnippet>99</a>    }
+<a href=#100 id=100 data-nosnippet>100</a>
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="doccomment">/// Seals the bag with the given epoch.
+<a href=#102 id=102 data-nosnippet>102</a>    </span><span class="kw">fn </span>seal(<span class="self">self</span>, epoch: Epoch) -&gt; SealedBag {
+<a href=#103 id=103 data-nosnippet>103</a>        SealedBag { epoch, _bag: <span class="self">self </span>}
+<a href=#104 id=104 data-nosnippet>104</a>    }
+<a href=#105 id=105 data-nosnippet>105</a>}
+<a href=#106 id=106 data-nosnippet>106</a>
+<a href=#107 id=107 data-nosnippet>107</a><span class="kw">impl </span>Default <span class="kw">for </span>Bag {
+<a href=#108 id=108 data-nosnippet>108</a>    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+<a href=#109 id=109 data-nosnippet>109</a>        Bag {
+<a href=#110 id=110 data-nosnippet>110</a>            len: <span class="number">0</span>,
+<a href=#111 id=111 data-nosnippet>111</a>            deferreds: [Deferred::NO_OP; MAX_OBJECTS],
+<a href=#112 id=112 data-nosnippet>112</a>        }
+<a href=#113 id=113 data-nosnippet>113</a>    }
+<a href=#114 id=114 data-nosnippet>114</a>}
+<a href=#115 id=115 data-nosnippet>115</a>
+<a href=#116 id=116 data-nosnippet>116</a><span class="kw">impl </span>Drop <span class="kw">for </span>Bag {
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#118 id=118 data-nosnippet>118</a>        <span class="comment">// Call all deferred functions.
+<a href=#119 id=119 data-nosnippet>119</a>        </span><span class="kw">for </span>deferred <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.deferreds[..<span class="self">self</span>.len] {
+<a href=#120 id=120 data-nosnippet>120</a>            <span class="kw">let </span>no_op = Deferred::NO_OP;
+<a href=#121 id=121 data-nosnippet>121</a>            <span class="kw">let </span>owned_deferred = mem::replace(deferred, no_op);
+<a href=#122 id=122 data-nosnippet>122</a>            owned_deferred.call();
+<a href=#123 id=123 data-nosnippet>123</a>        }
+<a href=#124 id=124 data-nosnippet>124</a>    }
+<a href=#125 id=125 data-nosnippet>125</a>}
+<a href=#126 id=126 data-nosnippet>126</a>
+<a href=#127 id=127 data-nosnippet>127</a><span class="comment">// can't #[derive(Debug)] because Debug is not implemented for arrays 64 items long
+<a href=#128 id=128 data-nosnippet>128</a></span><span class="kw">impl </span>fmt::Debug <span class="kw">for </span>Bag {
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#130 id=130 data-nosnippet>130</a>        f.debug_struct(<span class="string">"Bag"</span>)
+<a href=#131 id=131 data-nosnippet>131</a>            .field(<span class="string">"deferreds"</span>, &amp;&amp;<span class="self">self</span>.deferreds[..<span class="self">self</span>.len])
+<a href=#132 id=132 data-nosnippet>132</a>            .finish()
+<a href=#133 id=133 data-nosnippet>133</a>    }
+<a href=#134 id=134 data-nosnippet>134</a>}
+<a href=#135 id=135 data-nosnippet>135</a>
+<a href=#136 id=136 data-nosnippet>136</a><span class="doccomment">/// A pair of an epoch and a bag.
+<a href=#137 id=137 data-nosnippet>137</a></span><span class="attr">#[derive(Default, Debug)]
+<a href=#138 id=138 data-nosnippet>138</a></span><span class="kw">struct </span>SealedBag {
+<a href=#139 id=139 data-nosnippet>139</a>    epoch: Epoch,
+<a href=#140 id=140 data-nosnippet>140</a>    _bag: Bag,
+<a href=#141 id=141 data-nosnippet>141</a>}
+<a href=#142 id=142 data-nosnippet>142</a>
+<a href=#143 id=143 data-nosnippet>143</a><span class="doccomment">/// It is safe to share `SealedBag` because `is_expired` only inspects the epoch.
+<a href=#144 id=144 data-nosnippet>144</a></span><span class="kw">unsafe impl </span>Sync <span class="kw">for </span>SealedBag {}
+<a href=#145 id=145 data-nosnippet>145</a>
+<a href=#146 id=146 data-nosnippet>146</a><span class="kw">impl </span>SealedBag {
+<a href=#147 id=147 data-nosnippet>147</a>    <span class="doccomment">/// Checks if it is safe to drop the bag w.r.t. the given global epoch.
+<a href=#148 id=148 data-nosnippet>148</a>    </span><span class="kw">fn </span>is_expired(<span class="kw-2">&amp;</span><span class="self">self</span>, global_epoch: Epoch) -&gt; bool {
+<a href=#149 id=149 data-nosnippet>149</a>        <span class="comment">// A pinned participant can witness at most one epoch advancement. Therefore, any bag that
+<a href=#150 id=150 data-nosnippet>150</a>        // is within one epoch of the current one cannot be destroyed yet.
+<a href=#151 id=151 data-nosnippet>151</a>        </span>global_epoch.wrapping_sub(<span class="self">self</span>.epoch) &gt;= <span class="number">2
+<a href=#152 id=152 data-nosnippet>152</a>    </span>}
+<a href=#153 id=153 data-nosnippet>153</a>}
+<a href=#154 id=154 data-nosnippet>154</a>
+<a href=#155 id=155 data-nosnippet>155</a><span class="doccomment">/// The global data for a garbage collector.
+<a href=#156 id=156 data-nosnippet>156</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Global {
+<a href=#157 id=157 data-nosnippet>157</a>    <span class="doccomment">/// The intrusive linked list of `Local`s.
+<a href=#158 id=158 data-nosnippet>158</a>    </span>locals: List&lt;Local&gt;,
+<a href=#159 id=159 data-nosnippet>159</a>
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="doccomment">/// The global queue of bags of deferred functions.
+<a href=#161 id=161 data-nosnippet>161</a>    </span>queue: Queue&lt;SealedBag&gt;,
+<a href=#162 id=162 data-nosnippet>162</a>
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="doccomment">/// The global epoch.
+<a href=#164 id=164 data-nosnippet>164</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) epoch: CachePadded&lt;AtomicEpoch&gt;,
+<a href=#165 id=165 data-nosnippet>165</a>}
+<a href=#166 id=166 data-nosnippet>166</a>
+<a href=#167 id=167 data-nosnippet>167</a><span class="kw">impl </span>Global {
+<a href=#168 id=168 data-nosnippet>168</a>    <span class="doccomment">/// Number of bags to destroy.
+<a href=#169 id=169 data-nosnippet>169</a>    </span><span class="kw">const </span>COLLECT_STEPS: usize = <span class="number">8</span>;
+<a href=#170 id=170 data-nosnippet>170</a>
+<a href=#171 id=171 data-nosnippet>171</a>    <span class="doccomment">/// Creates a new global data for garbage collection.
+<a href=#172 id=172 data-nosnippet>172</a>    </span><span class="attr">#[inline]
+<a href=#173 id=173 data-nosnippet>173</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#174 id=174 data-nosnippet>174</a>        <span class="self">Self </span>{
+<a href=#175 id=175 data-nosnippet>175</a>            locals: List::new(),
+<a href=#176 id=176 data-nosnippet>176</a>            queue: Queue::new(),
+<a href=#177 id=177 data-nosnippet>177</a>            epoch: CachePadded::new(AtomicEpoch::new(Epoch::starting())),
+<a href=#178 id=178 data-nosnippet>178</a>        }
+<a href=#179 id=179 data-nosnippet>179</a>    }
+<a href=#180 id=180 data-nosnippet>180</a>
+<a href=#181 id=181 data-nosnippet>181</a>    <span class="doccomment">/// Pushes the bag into the global queue and replaces the bag with a new empty bag.
+<a href=#182 id=182 data-nosnippet>182</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>push_bag(<span class="kw-2">&amp;</span><span class="self">self</span>, bag: <span class="kw-2">&amp;mut </span>Bag, guard: <span class="kw-2">&amp;</span>Guard) {
+<a href=#183 id=183 data-nosnippet>183</a>        <span class="kw">let </span>bag = mem::replace(bag, Bag::new());
+<a href=#184 id=184 data-nosnippet>184</a>
+<a href=#185 id=185 data-nosnippet>185</a>        atomic::fence(Ordering::SeqCst);
+<a href=#186 id=186 data-nosnippet>186</a>
+<a href=#187 id=187 data-nosnippet>187</a>        <span class="kw">let </span>epoch = <span class="self">self</span>.epoch.load(Ordering::Relaxed);
+<a href=#188 id=188 data-nosnippet>188</a>        <span class="self">self</span>.queue.push(bag.seal(epoch), guard);
+<a href=#189 id=189 data-nosnippet>189</a>    }
+<a href=#190 id=190 data-nosnippet>190</a>
+<a href=#191 id=191 data-nosnippet>191</a>    <span class="doccomment">/// Collects several bags from the global queue and executes deferred functions in them.
+<a href=#192 id=192 data-nosnippet>192</a>    ///
+<a href=#193 id=193 data-nosnippet>193</a>    /// Note: This may itself produce garbage and in turn allocate new bags.
+<a href=#194 id=194 data-nosnippet>194</a>    ///
+<a href=#195 id=195 data-nosnippet>195</a>    /// `pin()` rarely calls `collect()`, so we want the compiler to place that call on a cold
+<a href=#196 id=196 data-nosnippet>196</a>    /// path. In other words, we want the compiler to optimize branching for the case when
+<a href=#197 id=197 data-nosnippet>197</a>    /// `collect()` is not called.
+<a href=#198 id=198 data-nosnippet>198</a>    </span><span class="attr">#[cold]
+<a href=#199 id=199 data-nosnippet>199</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>collect(<span class="kw-2">&amp;</span><span class="self">self</span>, guard: <span class="kw-2">&amp;</span>Guard) {
+<a href=#200 id=200 data-nosnippet>200</a>        <span class="kw">let </span>global_epoch = <span class="self">self</span>.try_advance(guard);
+<a href=#201 id=201 data-nosnippet>201</a>
+<a href=#202 id=202 data-nosnippet>202</a>        <span class="kw">let </span>steps = <span class="kw">if </span><span class="macro">cfg!</span>(crossbeam_sanitize) {
+<a href=#203 id=203 data-nosnippet>203</a>            usize::max_value()
+<a href=#204 id=204 data-nosnippet>204</a>        } <span class="kw">else </span>{
+<a href=#205 id=205 data-nosnippet>205</a>            <span class="self">Self</span>::COLLECT_STEPS
+<a href=#206 id=206 data-nosnippet>206</a>        };
+<a href=#207 id=207 data-nosnippet>207</a>
+<a href=#208 id=208 data-nosnippet>208</a>        <span class="kw">for _ in </span><span class="number">0</span>..steps {
+<a href=#209 id=209 data-nosnippet>209</a>            <span class="kw">match </span><span class="self">self</span>.queue.try_pop_if(
+<a href=#210 id=210 data-nosnippet>210</a>                <span class="kw-2">&amp;</span>|sealed_bag: <span class="kw-2">&amp;</span>SealedBag| sealed_bag.is_expired(global_epoch),
+<a href=#211 id=211 data-nosnippet>211</a>                guard,
+<a href=#212 id=212 data-nosnippet>212</a>            ) {
+<a href=#213 id=213 data-nosnippet>213</a>                <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
+<a href=#214 id=214 data-nosnippet>214</a>                <span class="prelude-val">Some</span>(sealed_bag) =&gt; drop(sealed_bag),
+<a href=#215 id=215 data-nosnippet>215</a>            }
+<a href=#216 id=216 data-nosnippet>216</a>        }
+<a href=#217 id=217 data-nosnippet>217</a>    }
+<a href=#218 id=218 data-nosnippet>218</a>
+<a href=#219 id=219 data-nosnippet>219</a>    <span class="doccomment">/// Attempts to advance the global epoch.
+<a href=#220 id=220 data-nosnippet>220</a>    ///
+<a href=#221 id=221 data-nosnippet>221</a>    /// The global epoch can advance only if all currently pinned participants have been pinned in
+<a href=#222 id=222 data-nosnippet>222</a>    /// the current epoch.
+<a href=#223 id=223 data-nosnippet>223</a>    ///
+<a href=#224 id=224 data-nosnippet>224</a>    /// Returns the current global epoch.
+<a href=#225 id=225 data-nosnippet>225</a>    ///
+<a href=#226 id=226 data-nosnippet>226</a>    /// `try_advance()` is annotated `#[cold]` because it is rarely called.
+<a href=#227 id=227 data-nosnippet>227</a>    </span><span class="attr">#[cold]
+<a href=#228 id=228 data-nosnippet>228</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>try_advance(<span class="kw-2">&amp;</span><span class="self">self</span>, guard: <span class="kw-2">&amp;</span>Guard) -&gt; Epoch {
+<a href=#229 id=229 data-nosnippet>229</a>        <span class="kw">let </span>global_epoch = <span class="self">self</span>.epoch.load(Ordering::Relaxed);
+<a href=#230 id=230 data-nosnippet>230</a>        atomic::fence(Ordering::SeqCst);
+<a href=#231 id=231 data-nosnippet>231</a>
+<a href=#232 id=232 data-nosnippet>232</a>        <span class="comment">// TODO(stjepang): `Local`s are stored in a linked list because linked lists are fairly
+<a href=#233 id=233 data-nosnippet>233</a>        // easy to implement in a lock-free manner. However, traversal can be slow due to cache
+<a href=#234 id=234 data-nosnippet>234</a>        // misses and data dependencies. We should experiment with other data structures as well.
+<a href=#235 id=235 data-nosnippet>235</a>        </span><span class="kw">for </span>local <span class="kw">in </span><span class="self">self</span>.locals.iter(guard) {
+<a href=#236 id=236 data-nosnippet>236</a>            <span class="kw">match </span>local {
+<a href=#237 id=237 data-nosnippet>237</a>                <span class="prelude-val">Err</span>(IterError::Stalled) =&gt; {
+<a href=#238 id=238 data-nosnippet>238</a>                    <span class="comment">// A concurrent thread stalled this iteration. That thread might also try to
+<a href=#239 id=239 data-nosnippet>239</a>                    // advance the epoch, in which case we leave the job to it. Otherwise, the
+<a href=#240 id=240 data-nosnippet>240</a>                    // epoch will not be advanced.
+<a href=#241 id=241 data-nosnippet>241</a>                    </span><span class="kw">return </span>global_epoch;
+<a href=#242 id=242 data-nosnippet>242</a>                }
+<a href=#243 id=243 data-nosnippet>243</a>                <span class="prelude-val">Ok</span>(local) =&gt; {
+<a href=#244 id=244 data-nosnippet>244</a>                    <span class="kw">let </span>local_epoch = local.epoch.load(Ordering::Relaxed);
+<a href=#245 id=245 data-nosnippet>245</a>
+<a href=#246 id=246 data-nosnippet>246</a>                    <span class="comment">// If the participant was pinned in a different epoch, we cannot advance the
+<a href=#247 id=247 data-nosnippet>247</a>                    // global epoch just yet.
+<a href=#248 id=248 data-nosnippet>248</a>                    </span><span class="kw">if </span>local_epoch.is_pinned() &amp;&amp; local_epoch.unpinned() != global_epoch {
+<a href=#249 id=249 data-nosnippet>249</a>                        <span class="kw">return </span>global_epoch;
+<a href=#250 id=250 data-nosnippet>250</a>                    }
+<a href=#251 id=251 data-nosnippet>251</a>                }
+<a href=#252 id=252 data-nosnippet>252</a>            }
+<a href=#253 id=253 data-nosnippet>253</a>        }
+<a href=#254 id=254 data-nosnippet>254</a>        atomic::fence(Ordering::Acquire);
+<a href=#255 id=255 data-nosnippet>255</a>
+<a href=#256 id=256 data-nosnippet>256</a>        <span class="comment">// All pinned participants were pinned in the current global epoch.
+<a href=#257 id=257 data-nosnippet>257</a>        // Now let's advance the global epoch...
+<a href=#258 id=258 data-nosnippet>258</a>        //
+<a href=#259 id=259 data-nosnippet>259</a>        // Note that if another thread already advanced it before us, this store will simply
+<a href=#260 id=260 data-nosnippet>260</a>        // overwrite the global epoch with the same value. This is true because `try_advance` was
+<a href=#261 id=261 data-nosnippet>261</a>        // called from a thread that was pinned in `global_epoch`, and the global epoch cannot be
+<a href=#262 id=262 data-nosnippet>262</a>        // advanced two steps ahead of it.
+<a href=#263 id=263 data-nosnippet>263</a>        </span><span class="kw">let </span>new_epoch = global_epoch.successor();
+<a href=#264 id=264 data-nosnippet>264</a>        <span class="self">self</span>.epoch.store(new_epoch, Ordering::Release);
+<a href=#265 id=265 data-nosnippet>265</a>        new_epoch
+<a href=#266 id=266 data-nosnippet>266</a>    }
+<a href=#267 id=267 data-nosnippet>267</a>}
+<a href=#268 id=268 data-nosnippet>268</a>
+<a href=#269 id=269 data-nosnippet>269</a><span class="doccomment">/// Participant for garbage collection.
+<a href=#270 id=270 data-nosnippet>270</a></span><span class="attr">#[repr(C)] </span><span class="comment">// Note: `entry` must be the first field
+<a href=#271 id=271 data-nosnippet>271</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Local {
+<a href=#272 id=272 data-nosnippet>272</a>    <span class="doccomment">/// A node in the intrusive linked list of `Local`s.
+<a href=#273 id=273 data-nosnippet>273</a>    </span>entry: Entry,
+<a href=#274 id=274 data-nosnippet>274</a>
+<a href=#275 id=275 data-nosnippet>275</a>    <span class="doccomment">/// A reference to the global data.
+<a href=#276 id=276 data-nosnippet>276</a>    ///
+<a href=#277 id=277 data-nosnippet>277</a>    /// When all guards and handles get dropped, this reference is destroyed.
+<a href=#278 id=278 data-nosnippet>278</a>    </span>collector: UnsafeCell&lt;ManuallyDrop&lt;Collector&gt;&gt;,
+<a href=#279 id=279 data-nosnippet>279</a>
+<a href=#280 id=280 data-nosnippet>280</a>    <span class="doccomment">/// The local bag of deferred functions.
+<a href=#281 id=281 data-nosnippet>281</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) bag: UnsafeCell&lt;Bag&gt;,
+<a href=#282 id=282 data-nosnippet>282</a>
+<a href=#283 id=283 data-nosnippet>283</a>    <span class="doccomment">/// The number of guards keeping this participant pinned.
+<a href=#284 id=284 data-nosnippet>284</a>    </span>guard_count: Cell&lt;usize&gt;,
+<a href=#285 id=285 data-nosnippet>285</a>
+<a href=#286 id=286 data-nosnippet>286</a>    <span class="doccomment">/// The number of active handles.
+<a href=#287 id=287 data-nosnippet>287</a>    </span>handle_count: Cell&lt;usize&gt;,
+<a href=#288 id=288 data-nosnippet>288</a>
+<a href=#289 id=289 data-nosnippet>289</a>    <span class="doccomment">/// Total number of pinnings performed.
+<a href=#290 id=290 data-nosnippet>290</a>    ///
+<a href=#291 id=291 data-nosnippet>291</a>    /// This is just an auxiliary counter that sometimes kicks off collection.
+<a href=#292 id=292 data-nosnippet>292</a>    </span>pin_count: Cell&lt;Wrapping&lt;usize&gt;&gt;,
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a>    <span class="doccomment">/// The local epoch.
+<a href=#295 id=295 data-nosnippet>295</a>    </span>epoch: CachePadded&lt;AtomicEpoch&gt;,
+<a href=#296 id=296 data-nosnippet>296</a>}
+<a href=#297 id=297 data-nosnippet>297</a>
+<a href=#298 id=298 data-nosnippet>298</a><span class="comment">// Make sure `Local` is less than or equal to 2048 bytes.
+<a href=#299 id=299 data-nosnippet>299</a>// https://github.com/crossbeam-rs/crossbeam/issues/551
+<a href=#300 id=300 data-nosnippet>300</a></span><span class="attr">#[cfg(not(any(crossbeam_sanitize, miri)))] </span><span class="comment">// `crossbeam_sanitize` and `miri` reduce the size of `Local`
+<a href=#301 id=301 data-nosnippet>301</a></span><span class="attr">#[test]
+<a href=#302 id=302 data-nosnippet>302</a></span><span class="kw">fn </span>local_size() {
+<a href=#303 id=303 data-nosnippet>303</a>    <span class="comment">// TODO: https://github.com/crossbeam-rs/crossbeam/issues/869
+<a href=#304 id=304 data-nosnippet>304</a>    // assert!(
+<a href=#305 id=305 data-nosnippet>305</a>    //     core::mem::size_of::&lt;Local&gt;() &lt;= 2048,
+<a href=#306 id=306 data-nosnippet>306</a>    //     "An allocation of `Local` should be &lt;= 2048 bytes."
+<a href=#307 id=307 data-nosnippet>307</a>    // );
+<a href=#308 id=308 data-nosnippet>308</a></span>}
+<a href=#309 id=309 data-nosnippet>309</a>
+<a href=#310 id=310 data-nosnippet>310</a><span class="kw">impl </span>Local {
+<a href=#311 id=311 data-nosnippet>311</a>    <span class="doccomment">/// Number of pinnings after which a participant will execute some deferred functions from the
+<a href=#312 id=312 data-nosnippet>312</a>    /// global queue.
+<a href=#313 id=313 data-nosnippet>313</a>    </span><span class="kw">const </span>PINNINGS_BETWEEN_COLLECT: usize = <span class="number">128</span>;
+<a href=#314 id=314 data-nosnippet>314</a>
+<a href=#315 id=315 data-nosnippet>315</a>    <span class="doccomment">/// Registers a new `Local` in the provided `Global`.
+<a href=#316 id=316 data-nosnippet>316</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>register(collector: <span class="kw-2">&amp;</span>Collector) -&gt; LocalHandle {
+<a href=#317 id=317 data-nosnippet>317</a>        <span class="kw">unsafe </span>{
+<a href=#318 id=318 data-nosnippet>318</a>            <span class="comment">// Since we dereference no pointers in this block, it is safe to use `unprotected`.
+<a href=#319 id=319 data-nosnippet>319</a>
+<a href=#320 id=320 data-nosnippet>320</a>            </span><span class="kw">let </span>local = Owned::new(Local {
+<a href=#321 id=321 data-nosnippet>321</a>                entry: Entry::default(),
+<a href=#322 id=322 data-nosnippet>322</a>                collector: UnsafeCell::new(ManuallyDrop::new(collector.clone())),
+<a href=#323 id=323 data-nosnippet>323</a>                bag: UnsafeCell::new(Bag::new()),
+<a href=#324 id=324 data-nosnippet>324</a>                guard_count: Cell::new(<span class="number">0</span>),
+<a href=#325 id=325 data-nosnippet>325</a>                handle_count: Cell::new(<span class="number">1</span>),
+<a href=#326 id=326 data-nosnippet>326</a>                pin_count: Cell::new(Wrapping(<span class="number">0</span>)),
+<a href=#327 id=327 data-nosnippet>327</a>                epoch: CachePadded::new(AtomicEpoch::new(Epoch::starting())),
+<a href=#328 id=328 data-nosnippet>328</a>            })
+<a href=#329 id=329 data-nosnippet>329</a>            .into_shared(unprotected());
+<a href=#330 id=330 data-nosnippet>330</a>            collector.global.locals.insert(local, unprotected());
+<a href=#331 id=331 data-nosnippet>331</a>            LocalHandle {
+<a href=#332 id=332 data-nosnippet>332</a>                local: local.as_raw(),
+<a href=#333 id=333 data-nosnippet>333</a>            }
+<a href=#334 id=334 data-nosnippet>334</a>        }
+<a href=#335 id=335 data-nosnippet>335</a>    }
+<a href=#336 id=336 data-nosnippet>336</a>
+<a href=#337 id=337 data-nosnippet>337</a>    <span class="doccomment">/// Returns a reference to the `Global` in which this `Local` resides.
+<a href=#338 id=338 data-nosnippet>338</a>    </span><span class="attr">#[inline]
+<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Global {
+<a href=#340 id=340 data-nosnippet>340</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.collector().global
+<a href=#341 id=341 data-nosnippet>341</a>    }
+<a href=#342 id=342 data-nosnippet>342</a>
+<a href=#343 id=343 data-nosnippet>343</a>    <span class="doccomment">/// Returns a reference to the `Collector` in which this `Local` resides.
+<a href=#344 id=344 data-nosnippet>344</a>    </span><span class="attr">#[inline]
+<a href=#345 id=345 data-nosnippet>345</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>collector(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Collector {
+<a href=#346 id=346 data-nosnippet>346</a>        <span class="self">self</span>.collector.with(|c| <span class="kw">unsafe </span>{ <span class="kw-2">&amp;**</span>c })
+<a href=#347 id=347 data-nosnippet>347</a>    }
+<a href=#348 id=348 data-nosnippet>348</a>
+<a href=#349 id=349 data-nosnippet>349</a>    <span class="doccomment">/// Returns `true` if the current participant is pinned.
+<a href=#350 id=350 data-nosnippet>350</a>    </span><span class="attr">#[inline]
+<a href=#351 id=351 data-nosnippet>351</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>is_pinned(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#352 id=352 data-nosnippet>352</a>        <span class="self">self</span>.guard_count.get() &gt; <span class="number">0
+<a href=#353 id=353 data-nosnippet>353</a>    </span>}
+<a href=#354 id=354 data-nosnippet>354</a>
+<a href=#355 id=355 data-nosnippet>355</a>    <span class="doccomment">/// Adds `deferred` to the thread-local bag.
+<a href=#356 id=356 data-nosnippet>356</a>    ///
+<a href=#357 id=357 data-nosnippet>357</a>    /// # Safety
+<a href=#358 id=358 data-nosnippet>358</a>    ///
+<a href=#359 id=359 data-nosnippet>359</a>    /// It should be safe for another thread to execute the given function.
+<a href=#360 id=360 data-nosnippet>360</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">unsafe fn </span>defer(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>deferred: Deferred, guard: <span class="kw-2">&amp;</span>Guard) {
+<a href=#361 id=361 data-nosnippet>361</a>        <span class="kw">let </span>bag = <span class="self">self</span>.bag.with_mut(|b| <span class="kw-2">&amp;mut *</span>b);
+<a href=#362 id=362 data-nosnippet>362</a>
+<a href=#363 id=363 data-nosnippet>363</a>        <span class="kw">while let </span><span class="prelude-val">Err</span>(d) = bag.try_push(deferred) {
+<a href=#364 id=364 data-nosnippet>364</a>            <span class="self">self</span>.global().push_bag(bag, guard);
+<a href=#365 id=365 data-nosnippet>365</a>            deferred = d;
+<a href=#366 id=366 data-nosnippet>366</a>        }
+<a href=#367 id=367 data-nosnippet>367</a>    }
+<a href=#368 id=368 data-nosnippet>368</a>
+<a href=#369 id=369 data-nosnippet>369</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>flush(<span class="kw-2">&amp;</span><span class="self">self</span>, guard: <span class="kw-2">&amp;</span>Guard) {
+<a href=#370 id=370 data-nosnippet>370</a>        <span class="kw">let </span>bag = <span class="self">self</span>.bag.with_mut(|b| <span class="kw">unsafe </span>{ <span class="kw-2">&amp;mut *</span>b });
+<a href=#371 id=371 data-nosnippet>371</a>
+<a href=#372 id=372 data-nosnippet>372</a>        <span class="kw">if </span>!bag.is_empty() {
+<a href=#373 id=373 data-nosnippet>373</a>            <span class="self">self</span>.global().push_bag(bag, guard);
+<a href=#374 id=374 data-nosnippet>374</a>        }
+<a href=#375 id=375 data-nosnippet>375</a>
+<a href=#376 id=376 data-nosnippet>376</a>        <span class="self">self</span>.global().collect(guard);
+<a href=#377 id=377 data-nosnippet>377</a>    }
+<a href=#378 id=378 data-nosnippet>378</a>
+<a href=#379 id=379 data-nosnippet>379</a>    <span class="doccomment">/// Pins the `Local`.
+<a href=#380 id=380 data-nosnippet>380</a>    </span><span class="attr">#[inline]
+<a href=#381 id=381 data-nosnippet>381</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>pin(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Guard {
+<a href=#382 id=382 data-nosnippet>382</a>        <span class="kw">let </span>guard = Guard { local: <span class="self">self </span>};
+<a href=#383 id=383 data-nosnippet>383</a>
+<a href=#384 id=384 data-nosnippet>384</a>        <span class="kw">let </span>guard_count = <span class="self">self</span>.guard_count.get();
+<a href=#385 id=385 data-nosnippet>385</a>        <span class="self">self</span>.guard_count.set(guard_count.checked_add(<span class="number">1</span>).unwrap());
+<a href=#386 id=386 data-nosnippet>386</a>
+<a href=#387 id=387 data-nosnippet>387</a>        <span class="kw">if </span>guard_count == <span class="number">0 </span>{
+<a href=#388 id=388 data-nosnippet>388</a>            <span class="kw">let </span>global_epoch = <span class="self">self</span>.global().epoch.load(Ordering::Relaxed);
+<a href=#389 id=389 data-nosnippet>389</a>            <span class="kw">let </span>new_epoch = global_epoch.pinned();
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a>            <span class="comment">// Now we must store `new_epoch` into `self.epoch` and execute a `SeqCst` fence.
+<a href=#392 id=392 data-nosnippet>392</a>            // The fence makes sure that any future loads from `Atomic`s will not happen before
+<a href=#393 id=393 data-nosnippet>393</a>            // this store.
+<a href=#394 id=394 data-nosnippet>394</a>            </span><span class="kw">if </span><span class="macro">cfg!</span>(all(
+<a href=#395 id=395 data-nosnippet>395</a>                any(target_arch = <span class="string">"x86"</span>, target_arch = <span class="string">"x86_64"</span>),
+<a href=#396 id=396 data-nosnippet>396</a>                not(miri)
+<a href=#397 id=397 data-nosnippet>397</a>            )) {
+<a href=#398 id=398 data-nosnippet>398</a>                <span class="comment">// HACK(stjepang): On x86 architectures there are two different ways of executing
+<a href=#399 id=399 data-nosnippet>399</a>                // a `SeqCst` fence.
+<a href=#400 id=400 data-nosnippet>400</a>                //
+<a href=#401 id=401 data-nosnippet>401</a>                // 1. `atomic::fence(SeqCst)`, which compiles into a `mfence` instruction.
+<a href=#402 id=402 data-nosnippet>402</a>                // 2. `_.compare_exchange(_, _, SeqCst, SeqCst)`, which compiles into a `lock cmpxchg`
+<a href=#403 id=403 data-nosnippet>403</a>                //    instruction.
+<a href=#404 id=404 data-nosnippet>404</a>                //
+<a href=#405 id=405 data-nosnippet>405</a>                // Both instructions have the effect of a full barrier, but benchmarks have shown
+<a href=#406 id=406 data-nosnippet>406</a>                // that the second one makes pinning faster in this particular case.  It is not
+<a href=#407 id=407 data-nosnippet>407</a>                // clear that this is permitted by the C++ memory model (SC fences work very
+<a href=#408 id=408 data-nosnippet>408</a>                // differently from SC accesses), but experimental evidence suggests that this
+<a href=#409 id=409 data-nosnippet>409</a>                // works fine.  Using inline assembly would be a viable (and correct) alternative,
+<a href=#410 id=410 data-nosnippet>410</a>                // but alas, that is not possible on stable Rust.
+<a href=#411 id=411 data-nosnippet>411</a>                </span><span class="kw">let </span>current = Epoch::starting();
+<a href=#412 id=412 data-nosnippet>412</a>                <span class="kw">let </span>res = <span class="self">self</span>.epoch.compare_exchange(
+<a href=#413 id=413 data-nosnippet>413</a>                    current,
+<a href=#414 id=414 data-nosnippet>414</a>                    new_epoch,
+<a href=#415 id=415 data-nosnippet>415</a>                    Ordering::SeqCst,
+<a href=#416 id=416 data-nosnippet>416</a>                    Ordering::SeqCst,
+<a href=#417 id=417 data-nosnippet>417</a>                );
+<a href=#418 id=418 data-nosnippet>418</a>                <span class="macro">debug_assert!</span>(res.is_ok(), <span class="string">"participant was expected to be unpinned"</span>);
+<a href=#419 id=419 data-nosnippet>419</a>                <span class="comment">// We add a compiler fence to make it less likely for LLVM to do something wrong
+<a href=#420 id=420 data-nosnippet>420</a>                // here.  Formally, this is not enough to get rid of data races; practically,
+<a href=#421 id=421 data-nosnippet>421</a>                // it should go a long way.
+<a href=#422 id=422 data-nosnippet>422</a>                </span>atomic::compiler_fence(Ordering::SeqCst);
+<a href=#423 id=423 data-nosnippet>423</a>            } <span class="kw">else </span>{
+<a href=#424 id=424 data-nosnippet>424</a>                <span class="self">self</span>.epoch.store(new_epoch, Ordering::Relaxed);
+<a href=#425 id=425 data-nosnippet>425</a>                atomic::fence(Ordering::SeqCst);
+<a href=#426 id=426 data-nosnippet>426</a>            }
+<a href=#427 id=427 data-nosnippet>427</a>
+<a href=#428 id=428 data-nosnippet>428</a>            <span class="comment">// Increment the pin counter.
+<a href=#429 id=429 data-nosnippet>429</a>            </span><span class="kw">let </span>count = <span class="self">self</span>.pin_count.get();
+<a href=#430 id=430 data-nosnippet>430</a>            <span class="self">self</span>.pin_count.set(count + Wrapping(<span class="number">1</span>));
+<a href=#431 id=431 data-nosnippet>431</a>
+<a href=#432 id=432 data-nosnippet>432</a>            <span class="comment">// After every `PINNINGS_BETWEEN_COLLECT` try advancing the epoch and collecting
+<a href=#433 id=433 data-nosnippet>433</a>            // some garbage.
+<a href=#434 id=434 data-nosnippet>434</a>            </span><span class="kw">if </span>count.<span class="number">0 </span>% <span class="self">Self</span>::PINNINGS_BETWEEN_COLLECT == <span class="number">0 </span>{
+<a href=#435 id=435 data-nosnippet>435</a>                <span class="self">self</span>.global().collect(<span class="kw-2">&amp;</span>guard);
+<a href=#436 id=436 data-nosnippet>436</a>            }
+<a href=#437 id=437 data-nosnippet>437</a>        }
+<a href=#438 id=438 data-nosnippet>438</a>
+<a href=#439 id=439 data-nosnippet>439</a>        guard
+<a href=#440 id=440 data-nosnippet>440</a>    }
+<a href=#441 id=441 data-nosnippet>441</a>
+<a href=#442 id=442 data-nosnippet>442</a>    <span class="doccomment">/// Unpins the `Local`.
+<a href=#443 id=443 data-nosnippet>443</a>    </span><span class="attr">#[inline]
+<a href=#444 id=444 data-nosnippet>444</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>unpin(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#445 id=445 data-nosnippet>445</a>        <span class="kw">let </span>guard_count = <span class="self">self</span>.guard_count.get();
+<a href=#446 id=446 data-nosnippet>446</a>        <span class="self">self</span>.guard_count.set(guard_count - <span class="number">1</span>);
+<a href=#447 id=447 data-nosnippet>447</a>
+<a href=#448 id=448 data-nosnippet>448</a>        <span class="kw">if </span>guard_count == <span class="number">1 </span>{
+<a href=#449 id=449 data-nosnippet>449</a>            <span class="self">self</span>.epoch.store(Epoch::starting(), Ordering::Release);
+<a href=#450 id=450 data-nosnippet>450</a>
+<a href=#451 id=451 data-nosnippet>451</a>            <span class="kw">if </span><span class="self">self</span>.handle_count.get() == <span class="number">0 </span>{
+<a href=#452 id=452 data-nosnippet>452</a>                <span class="self">self</span>.finalize();
+<a href=#453 id=453 data-nosnippet>453</a>            }
+<a href=#454 id=454 data-nosnippet>454</a>        }
+<a href=#455 id=455 data-nosnippet>455</a>    }
+<a href=#456 id=456 data-nosnippet>456</a>
+<a href=#457 id=457 data-nosnippet>457</a>    <span class="doccomment">/// Unpins and then pins the `Local`.
+<a href=#458 id=458 data-nosnippet>458</a>    </span><span class="attr">#[inline]
+<a href=#459 id=459 data-nosnippet>459</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>repin(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#460 id=460 data-nosnippet>460</a>        <span class="kw">let </span>guard_count = <span class="self">self</span>.guard_count.get();
+<a href=#461 id=461 data-nosnippet>461</a>
+<a href=#462 id=462 data-nosnippet>462</a>        <span class="comment">// Update the local epoch only if there's only one guard.
+<a href=#463 id=463 data-nosnippet>463</a>        </span><span class="kw">if </span>guard_count == <span class="number">1 </span>{
+<a href=#464 id=464 data-nosnippet>464</a>            <span class="kw">let </span>epoch = <span class="self">self</span>.epoch.load(Ordering::Relaxed);
+<a href=#465 id=465 data-nosnippet>465</a>            <span class="kw">let </span>global_epoch = <span class="self">self</span>.global().epoch.load(Ordering::Relaxed).pinned();
+<a href=#466 id=466 data-nosnippet>466</a>
+<a href=#467 id=467 data-nosnippet>467</a>            <span class="comment">// Update the local epoch only if the global epoch is greater than the local epoch.
+<a href=#468 id=468 data-nosnippet>468</a>            </span><span class="kw">if </span>epoch != global_epoch {
+<a href=#469 id=469 data-nosnippet>469</a>                <span class="comment">// We store the new epoch with `Release` because we need to ensure any memory
+<a href=#470 id=470 data-nosnippet>470</a>                // accesses from the previous epoch do not leak into the new one.
+<a href=#471 id=471 data-nosnippet>471</a>                </span><span class="self">self</span>.epoch.store(global_epoch, Ordering::Release);
+<a href=#472 id=472 data-nosnippet>472</a>
+<a href=#473 id=473 data-nosnippet>473</a>                <span class="comment">// However, we don't need a following `SeqCst` fence, because it is safe for memory
+<a href=#474 id=474 data-nosnippet>474</a>                // accesses from the new epoch to be executed before updating the local epoch. At
+<a href=#475 id=475 data-nosnippet>475</a>                // worse, other threads will see the new epoch late and delay GC slightly.
+<a href=#476 id=476 data-nosnippet>476</a>            </span>}
+<a href=#477 id=477 data-nosnippet>477</a>        }
+<a href=#478 id=478 data-nosnippet>478</a>    }
+<a href=#479 id=479 data-nosnippet>479</a>
+<a href=#480 id=480 data-nosnippet>480</a>    <span class="doccomment">/// Increments the handle count.
+<a href=#481 id=481 data-nosnippet>481</a>    </span><span class="attr">#[inline]
+<a href=#482 id=482 data-nosnippet>482</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>acquire_handle(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#483 id=483 data-nosnippet>483</a>        <span class="kw">let </span>handle_count = <span class="self">self</span>.handle_count.get();
+<a href=#484 id=484 data-nosnippet>484</a>        <span class="macro">debug_assert!</span>(handle_count &gt;= <span class="number">1</span>);
+<a href=#485 id=485 data-nosnippet>485</a>        <span class="self">self</span>.handle_count.set(handle_count + <span class="number">1</span>);
+<a href=#486 id=486 data-nosnippet>486</a>    }
+<a href=#487 id=487 data-nosnippet>487</a>
+<a href=#488 id=488 data-nosnippet>488</a>    <span class="doccomment">/// Decrements the handle count.
+<a href=#489 id=489 data-nosnippet>489</a>    </span><span class="attr">#[inline]
+<a href=#490 id=490 data-nosnippet>490</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>release_handle(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#491 id=491 data-nosnippet>491</a>        <span class="kw">let </span>guard_count = <span class="self">self</span>.guard_count.get();
+<a href=#492 id=492 data-nosnippet>492</a>        <span class="kw">let </span>handle_count = <span class="self">self</span>.handle_count.get();
+<a href=#493 id=493 data-nosnippet>493</a>        <span class="macro">debug_assert!</span>(handle_count &gt;= <span class="number">1</span>);
+<a href=#494 id=494 data-nosnippet>494</a>        <span class="self">self</span>.handle_count.set(handle_count - <span class="number">1</span>);
+<a href=#495 id=495 data-nosnippet>495</a>
+<a href=#496 id=496 data-nosnippet>496</a>        <span class="kw">if </span>guard_count == <span class="number">0 </span>&amp;&amp; handle_count == <span class="number">1 </span>{
+<a href=#497 id=497 data-nosnippet>497</a>            <span class="self">self</span>.finalize();
+<a href=#498 id=498 data-nosnippet>498</a>        }
+<a href=#499 id=499 data-nosnippet>499</a>    }
+<a href=#500 id=500 data-nosnippet>500</a>
+<a href=#501 id=501 data-nosnippet>501</a>    <span class="doccomment">/// Removes the `Local` from the global linked list.
+<a href=#502 id=502 data-nosnippet>502</a>    </span><span class="attr">#[cold]
+<a href=#503 id=503 data-nosnippet>503</a>    </span><span class="kw">fn </span>finalize(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#504 id=504 data-nosnippet>504</a>        <span class="macro">debug_assert_eq!</span>(<span class="self">self</span>.guard_count.get(), <span class="number">0</span>);
+<a href=#505 id=505 data-nosnippet>505</a>        <span class="macro">debug_assert_eq!</span>(<span class="self">self</span>.handle_count.get(), <span class="number">0</span>);
+<a href=#506 id=506 data-nosnippet>506</a>
+<a href=#507 id=507 data-nosnippet>507</a>        <span class="comment">// Temporarily increment handle count. This is required so that the following call to `pin`
+<a href=#508 id=508 data-nosnippet>508</a>        // doesn't call `finalize` again.
+<a href=#509 id=509 data-nosnippet>509</a>        </span><span class="self">self</span>.handle_count.set(<span class="number">1</span>);
+<a href=#510 id=510 data-nosnippet>510</a>        <span class="kw">unsafe </span>{
+<a href=#511 id=511 data-nosnippet>511</a>            <span class="comment">// Pin and move the local bag into the global queue. It's important that `push_bag`
+<a href=#512 id=512 data-nosnippet>512</a>            // doesn't defer destruction on any new garbage.
+<a href=#513 id=513 data-nosnippet>513</a>            </span><span class="kw">let </span>guard = <span class="kw-2">&amp;</span><span class="self">self</span>.pin();
+<a href=#514 id=514 data-nosnippet>514</a>            <span class="self">self</span>.global()
+<a href=#515 id=515 data-nosnippet>515</a>                .push_bag(<span class="self">self</span>.bag.with_mut(|b| <span class="kw-2">&amp;mut *</span>b), guard);
+<a href=#516 id=516 data-nosnippet>516</a>        }
+<a href=#517 id=517 data-nosnippet>517</a>        <span class="comment">// Revert the handle count back to zero.
+<a href=#518 id=518 data-nosnippet>518</a>        </span><span class="self">self</span>.handle_count.set(<span class="number">0</span>);
+<a href=#519 id=519 data-nosnippet>519</a>
+<a href=#520 id=520 data-nosnippet>520</a>        <span class="kw">unsafe </span>{
+<a href=#521 id=521 data-nosnippet>521</a>            <span class="comment">// Take the reference to the `Global` out of this `Local`. Since we're not protected
+<a href=#522 id=522 data-nosnippet>522</a>            // by a guard at this time, it's crucial that the reference is read before marking the
+<a href=#523 id=523 data-nosnippet>523</a>            // `Local` as deleted.
+<a href=#524 id=524 data-nosnippet>524</a>            </span><span class="kw">let </span>collector: Collector = ptr::read(<span class="self">self</span>.collector.with(|c| <span class="kw-2">&amp;*</span>(<span class="kw-2">*</span>c)));
+<a href=#525 id=525 data-nosnippet>525</a>
+<a href=#526 id=526 data-nosnippet>526</a>            <span class="comment">// Mark this node in the linked list as deleted.
+<a href=#527 id=527 data-nosnippet>527</a>            </span><span class="self">self</span>.entry.delete(unprotected());
+<a href=#528 id=528 data-nosnippet>528</a>
+<a href=#529 id=529 data-nosnippet>529</a>            <span class="comment">// Finally, drop the reference to the global. Note that this might be the last reference
+<a href=#530 id=530 data-nosnippet>530</a>            // to the `Global`. If so, the global data will be destroyed and all deferred functions
+<a href=#531 id=531 data-nosnippet>531</a>            // in its queue will be executed.
+<a href=#532 id=532 data-nosnippet>532</a>            </span>drop(collector);
+<a href=#533 id=533 data-nosnippet>533</a>        }
+<a href=#534 id=534 data-nosnippet>534</a>    }
+<a href=#535 id=535 data-nosnippet>535</a>}
+<a href=#536 id=536 data-nosnippet>536</a>
+<a href=#537 id=537 data-nosnippet>537</a><span class="kw">impl </span>IsElement&lt;<span class="self">Self</span>&gt; <span class="kw">for </span>Local {
+<a href=#538 id=538 data-nosnippet>538</a>    <span class="kw">fn </span>entry_of(local: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; <span class="kw-2">&amp;</span>Entry {
+<a href=#539 id=539 data-nosnippet>539</a>        <span class="comment">// SAFETY: `Local` is `repr(C)` and `entry` is the first field of it.
+<a href=#540 id=540 data-nosnippet>540</a>        </span><span class="kw">unsafe </span>{
+<a href=#541 id=541 data-nosnippet>541</a>            <span class="kw">let </span>entry_ptr = (local <span class="kw">as </span><span class="kw-2">*const </span><span class="self">Self</span>).cast::&lt;Entry&gt;();
+<a href=#542 id=542 data-nosnippet>542</a>            <span class="kw-2">&amp;*</span>entry_ptr
+<a href=#543 id=543 data-nosnippet>543</a>        }
+<a href=#544 id=544 data-nosnippet>544</a>    }
+<a href=#545 id=545 data-nosnippet>545</a>
+<a href=#546 id=546 data-nosnippet>546</a>    <span class="kw">unsafe fn </span>element_of(entry: <span class="kw-2">&amp;</span>Entry) -&gt; <span class="kw-2">&amp;</span><span class="self">Self </span>{
+<a href=#547 id=547 data-nosnippet>547</a>        <span class="comment">// SAFETY: `Local` is `repr(C)` and `entry` is the first field of it.
+<a href=#548 id=548 data-nosnippet>548</a>        </span><span class="kw">let </span>local_ptr = (entry <span class="kw">as </span><span class="kw-2">*const </span>Entry).cast::&lt;<span class="self">Self</span>&gt;();
+<a href=#549 id=549 data-nosnippet>549</a>        <span class="kw-2">&amp;*</span>local_ptr
+<a href=#550 id=550 data-nosnippet>550</a>    }
+<a href=#551 id=551 data-nosnippet>551</a>
+<a href=#552 id=552 data-nosnippet>552</a>    <span class="kw">unsafe fn </span>finalize(entry: <span class="kw-2">&amp;</span>Entry, guard: <span class="kw-2">&amp;</span>Guard) {
+<a href=#553 id=553 data-nosnippet>553</a>        guard.defer_destroy(Shared::from(<span class="self">Self</span>::element_of(entry) <span class="kw">as </span><span class="kw-2">*const </span><span class="kw">_</span>));
+<a href=#554 id=554 data-nosnippet>554</a>    }
+<a href=#555 id=555 data-nosnippet>555</a>}
+<a href=#556 id=556 data-nosnippet>556</a>
+<a href=#557 id=557 data-nosnippet>557</a><span class="attr">#[cfg(all(test, not(crossbeam_loom)))]
+<a href=#558 id=558 data-nosnippet>558</a></span><span class="kw">mod </span>tests {
+<a href=#559 id=559 data-nosnippet>559</a>    <span class="kw">use </span>std::sync::atomic::{AtomicUsize, Ordering};
+<a href=#560 id=560 data-nosnippet>560</a>
+<a href=#561 id=561 data-nosnippet>561</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#562 id=562 data-nosnippet>562</a>
+<a href=#563 id=563 data-nosnippet>563</a>    <span class="attr">#[test]
+<a href=#564 id=564 data-nosnippet>564</a>    </span><span class="kw">fn </span>check_defer() {
+<a href=#565 id=565 data-nosnippet>565</a>        <span class="kw">static </span>FLAG: AtomicUsize = AtomicUsize::new(<span class="number">0</span>);
+<a href=#566 id=566 data-nosnippet>566</a>        <span class="kw">fn </span>set() {
+<a href=#567 id=567 data-nosnippet>567</a>            FLAG.store(<span class="number">42</span>, Ordering::Relaxed);
+<a href=#568 id=568 data-nosnippet>568</a>        }
+<a href=#569 id=569 data-nosnippet>569</a>
+<a href=#570 id=570 data-nosnippet>570</a>        <span class="kw">let </span>d = Deferred::new(set);
+<a href=#571 id=571 data-nosnippet>571</a>        <span class="macro">assert_eq!</span>(FLAG.load(Ordering::Relaxed), <span class="number">0</span>);
+<a href=#572 id=572 data-nosnippet>572</a>        d.call();
+<a href=#573 id=573 data-nosnippet>573</a>        <span class="macro">assert_eq!</span>(FLAG.load(Ordering::Relaxed), <span class="number">42</span>);
+<a href=#574 id=574 data-nosnippet>574</a>    }
+<a href=#575 id=575 data-nosnippet>575</a>
+<a href=#576 id=576 data-nosnippet>576</a>    <span class="attr">#[test]
+<a href=#577 id=577 data-nosnippet>577</a>    </span><span class="kw">fn </span>check_bag() {
+<a href=#578 id=578 data-nosnippet>578</a>        <span class="kw">static </span>FLAG: AtomicUsize = AtomicUsize::new(<span class="number">0</span>);
+<a href=#579 id=579 data-nosnippet>579</a>        <span class="kw">fn </span>incr() {
+<a href=#580 id=580 data-nosnippet>580</a>            FLAG.fetch_add(<span class="number">1</span>, Ordering::Relaxed);
+<a href=#581 id=581 data-nosnippet>581</a>        }
+<a href=#582 id=582 data-nosnippet>582</a>
+<a href=#583 id=583 data-nosnippet>583</a>        <span class="kw">let </span><span class="kw-2">mut </span>bag = Bag::new();
+<a href=#584 id=584 data-nosnippet>584</a>        <span class="macro">assert!</span>(bag.is_empty());
+<a href=#585 id=585 data-nosnippet>585</a>
+<a href=#586 id=586 data-nosnippet>586</a>        <span class="kw">for _ in </span><span class="number">0</span>..MAX_OBJECTS {
+<a href=#587 id=587 data-nosnippet>587</a>            <span class="macro">assert!</span>(<span class="kw">unsafe </span>{ bag.try_push(Deferred::new(incr)).is_ok() });
+<a href=#588 id=588 data-nosnippet>588</a>            <span class="macro">assert!</span>(!bag.is_empty());
+<a href=#589 id=589 data-nosnippet>589</a>            <span class="macro">assert_eq!</span>(FLAG.load(Ordering::Relaxed), <span class="number">0</span>);
+<a href=#590 id=590 data-nosnippet>590</a>        }
+<a href=#591 id=591 data-nosnippet>591</a>
+<a href=#592 id=592 data-nosnippet>592</a>        <span class="kw">let </span>result = <span class="kw">unsafe </span>{ bag.try_push(Deferred::new(incr)) };
+<a href=#593 id=593 data-nosnippet>593</a>        <span class="macro">assert!</span>(result.is_err());
+<a href=#594 id=594 data-nosnippet>594</a>        <span class="macro">assert!</span>(!bag.is_empty());
+<a href=#595 id=595 data-nosnippet>595</a>        <span class="macro">assert_eq!</span>(FLAG.load(Ordering::Relaxed), <span class="number">0</span>);
+<a href=#596 id=596 data-nosnippet>596</a>
+<a href=#597 id=597 data-nosnippet>597</a>        drop(bag);
+<a href=#598 id=598 data-nosnippet>598</a>        <span class="macro">assert_eq!</span>(FLAG.load(Ordering::Relaxed), MAX_OBJECTS);
+<a href=#599 id=599 data-nosnippet>599</a>    }
+<a href=#600 id=600 data-nosnippet>600</a>}</code></pre></div></section></main></body></html>

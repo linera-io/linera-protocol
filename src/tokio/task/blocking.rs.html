@@ -1,0 +1,209 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.47.1/src/task/blocking.rs`."><title>blocking.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">tokio/task/</div>blocking.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">crate</span>::task::JoinHandle;
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a><span class="macro">cfg_rt_multi_thread!</span> {
+<a href=#4 id=4 data-nosnippet>4</a>    <span class="doccomment">/// Runs the provided blocking function on the current thread without
+<a href=#5 id=5 data-nosnippet>5</a>    /// blocking the executor.
+<a href=#6 id=6 data-nosnippet>6</a>    ///
+<a href=#7 id=7 data-nosnippet>7</a>    /// In general, issuing a blocking call or performing a lot of compute in a
+<a href=#8 id=8 data-nosnippet>8</a>    /// future without yielding is problematic, as it may prevent the executor
+<a href=#9 id=9 data-nosnippet>9</a>    /// from driving other tasks forward. Calling this function informs the
+<a href=#10 id=10 data-nosnippet>10</a>    /// executor that the currently executing task is about to block the thread,
+<a href=#11 id=11 data-nosnippet>11</a>    /// so the executor is able to hand off any other tasks it has to a new
+<a href=#12 id=12 data-nosnippet>12</a>    /// worker thread before that happens. See the [CPU-bound tasks and blocking
+<a href=#13 id=13 data-nosnippet>13</a>    /// code][blocking] section for more information.
+<a href=#14 id=14 data-nosnippet>14</a>    ///
+<a href=#15 id=15 data-nosnippet>15</a>    /// Be aware that although this function avoids starving other independently
+<a href=#16 id=16 data-nosnippet>16</a>    /// spawned tasks, any other code running concurrently in the same task will
+<a href=#17 id=17 data-nosnippet>17</a>    /// be suspended during the call to `block_in_place`. This can happen e.g.
+<a href=#18 id=18 data-nosnippet>18</a>    /// when using the [`join!`] macro. To avoid this issue, use
+<a href=#19 id=19 data-nosnippet>19</a>    /// [`spawn_blocking`] instead of `block_in_place`.
+<a href=#20 id=20 data-nosnippet>20</a>    ///
+<a href=#21 id=21 data-nosnippet>21</a>    /// Note that this function cannot be used within a [`current_thread`] runtime
+<a href=#22 id=22 data-nosnippet>22</a>    /// because in this case there are no other worker threads to hand off tasks
+<a href=#23 id=23 data-nosnippet>23</a>    /// to. On the other hand, calling the function outside a runtime is
+<a href=#24 id=24 data-nosnippet>24</a>    /// allowed. In this case, `block_in_place` just calls the provided closure
+<a href=#25 id=25 data-nosnippet>25</a>    /// normally.
+<a href=#26 id=26 data-nosnippet>26</a>    ///
+<a href=#27 id=27 data-nosnippet>27</a>    /// Code running behind `block_in_place` cannot be cancelled. When you shut
+<a href=#28 id=28 data-nosnippet>28</a>    /// down the executor, it will wait indefinitely for all blocking operations
+<a href=#29 id=29 data-nosnippet>29</a>    /// to finish. You can use [`shutdown_timeout`] to stop waiting for them
+<a href=#30 id=30 data-nosnippet>30</a>    /// after a certain timeout. Be aware that this will still not cancel the
+<a href=#31 id=31 data-nosnippet>31</a>    /// tasks — they are simply allowed to keep running after the method
+<a href=#32 id=32 data-nosnippet>32</a>    /// returns.
+<a href=#33 id=33 data-nosnippet>33</a>    ///
+<a href=#34 id=34 data-nosnippet>34</a>    /// [blocking]: ../index.html#cpu-bound-tasks-and-blocking-code
+<a href=#35 id=35 data-nosnippet>35</a>    /// [`spawn_blocking`]: fn@crate::task::spawn_blocking
+<a href=#36 id=36 data-nosnippet>36</a>    /// [`join!`]: macro@join
+<a href=#37 id=37 data-nosnippet>37</a>    /// [`thread::spawn`]: fn@std::thread::spawn
+<a href=#38 id=38 data-nosnippet>38</a>    /// [`shutdown_timeout`]: fn@crate::runtime::Runtime::shutdown_timeout
+<a href=#39 id=39 data-nosnippet>39</a>    ///
+<a href=#40 id=40 data-nosnippet>40</a>    /// # Examples
+<a href=#41 id=41 data-nosnippet>41</a>    ///
+<a href=#42 id=42 data-nosnippet>42</a>    /// ```
+<a href=#43 id=43 data-nosnippet>43</a>    /// use tokio::task;
+<a href=#44 id=44 data-nosnippet>44</a>    ///
+<a href=#45 id=45 data-nosnippet>45</a>    /// # async fn docs() {
+<a href=#46 id=46 data-nosnippet>46</a>    /// task::block_in_place(move || {
+<a href=#47 id=47 data-nosnippet>47</a>    ///     // do some compute-heavy work or call synchronous code
+<a href=#48 id=48 data-nosnippet>48</a>    /// });
+<a href=#49 id=49 data-nosnippet>49</a>    /// # }
+<a href=#50 id=50 data-nosnippet>50</a>    /// ```
+<a href=#51 id=51 data-nosnippet>51</a>    ///
+<a href=#52 id=52 data-nosnippet>52</a>    /// Code running inside `block_in_place` may use `block_on` to reenter the
+<a href=#53 id=53 data-nosnippet>53</a>    /// async context.
+<a href=#54 id=54 data-nosnippet>54</a>    ///
+<a href=#55 id=55 data-nosnippet>55</a>    /// ```
+<a href=#56 id=56 data-nosnippet>56</a>    /// use tokio::task;
+<a href=#57 id=57 data-nosnippet>57</a>    /// use tokio::runtime::Handle;
+<a href=#58 id=58 data-nosnippet>58</a>    ///
+<a href=#59 id=59 data-nosnippet>59</a>    /// # async fn docs() {
+<a href=#60 id=60 data-nosnippet>60</a>    /// task::block_in_place(move || {
+<a href=#61 id=61 data-nosnippet>61</a>    ///     Handle::current().block_on(async move {
+<a href=#62 id=62 data-nosnippet>62</a>    ///         // do something async
+<a href=#63 id=63 data-nosnippet>63</a>    ///     });
+<a href=#64 id=64 data-nosnippet>64</a>    /// });
+<a href=#65 id=65 data-nosnippet>65</a>    /// # }
+<a href=#66 id=66 data-nosnippet>66</a>    /// ```
+<a href=#67 id=67 data-nosnippet>67</a>    ///
+<a href=#68 id=68 data-nosnippet>68</a>    /// # Panics
+<a href=#69 id=69 data-nosnippet>69</a>    ///
+<a href=#70 id=70 data-nosnippet>70</a>    /// This function panics if called from a [`current_thread`] runtime.
+<a href=#71 id=71 data-nosnippet>71</a>    ///
+<a href=#72 id=72 data-nosnippet>72</a>    /// [`current_thread`]: fn@crate::runtime::Builder::new_current_thread
+<a href=#73 id=73 data-nosnippet>73</a>    </span><span class="attr">#[track_caller]
+<a href=#74 id=74 data-nosnippet>74</a>    </span><span class="kw">pub fn </span>block_in_place&lt;F, R&gt;(f: F) -&gt; R
+<a href=#75 id=75 data-nosnippet>75</a>    <span class="kw">where
+<a href=#76 id=76 data-nosnippet>76</a>        </span>F: FnOnce() -&gt; R,
+<a href=#77 id=77 data-nosnippet>77</a>    {
+<a href=#78 id=78 data-nosnippet>78</a>        <span class="kw">crate</span>::runtime::scheduler::block_in_place(f)
+<a href=#79 id=79 data-nosnippet>79</a>    }
+<a href=#80 id=80 data-nosnippet>80</a>}
+<a href=#81 id=81 data-nosnippet>81</a>
+<a href=#82 id=82 data-nosnippet>82</a><span class="macro">cfg_rt!</span> {
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="doccomment">/// Runs the provided closure on a thread where blocking is acceptable.
+<a href=#84 id=84 data-nosnippet>84</a>    ///
+<a href=#85 id=85 data-nosnippet>85</a>    /// In general, issuing a blocking call or performing a lot of compute in a
+<a href=#86 id=86 data-nosnippet>86</a>    /// future without yielding is problematic, as it may prevent the executor from
+<a href=#87 id=87 data-nosnippet>87</a>    /// driving other futures forward. This function runs the provided closure on a
+<a href=#88 id=88 data-nosnippet>88</a>    /// thread dedicated to blocking operations. See the [CPU-bound tasks and
+<a href=#89 id=89 data-nosnippet>89</a>    /// blocking code][blocking] section for more information.
+<a href=#90 id=90 data-nosnippet>90</a>    ///
+<a href=#91 id=91 data-nosnippet>91</a>    /// Tokio will spawn more blocking threads when they are requested through this
+<a href=#92 id=92 data-nosnippet>92</a>    /// function until the upper limit configured on the [`Builder`] is reached.
+<a href=#93 id=93 data-nosnippet>93</a>    /// After reaching the upper limit, the tasks are put in a queue.
+<a href=#94 id=94 data-nosnippet>94</a>    /// The thread limit is very large by default, because `spawn_blocking` is often
+<a href=#95 id=95 data-nosnippet>95</a>    /// used for various kinds of IO operations that cannot be performed
+<a href=#96 id=96 data-nosnippet>96</a>    /// asynchronously.  When you run CPU-bound code using `spawn_blocking`, you
+<a href=#97 id=97 data-nosnippet>97</a>    /// should keep this large upper limit in mind. When running many CPU-bound
+<a href=#98 id=98 data-nosnippet>98</a>    /// computations, a semaphore or some other synchronization primitive should be
+<a href=#99 id=99 data-nosnippet>99</a>    /// used to limit the number of computation executed in parallel. Specialized
+<a href=#100 id=100 data-nosnippet>100</a>    /// CPU-bound executors, such as [rayon], may also be a good fit.
+<a href=#101 id=101 data-nosnippet>101</a>    ///
+<a href=#102 id=102 data-nosnippet>102</a>    /// This function is intended for non-async operations that eventually finish on
+<a href=#103 id=103 data-nosnippet>103</a>    /// their own. If you want to spawn an ordinary thread, you should use
+<a href=#104 id=104 data-nosnippet>104</a>    /// [`thread::spawn`] instead.
+<a href=#105 id=105 data-nosnippet>105</a>    ///
+<a href=#106 id=106 data-nosnippet>106</a>    /// Be aware that tasks spawned using `spawn_blocking` cannot be aborted
+<a href=#107 id=107 data-nosnippet>107</a>    /// because they are not async. If you call [`abort`] on a `spawn_blocking`
+<a href=#108 id=108 data-nosnippet>108</a>    /// task, then this *will not have any effect*, and the task will continue
+<a href=#109 id=109 data-nosnippet>109</a>    /// running normally. The exception is if the task has not started running
+<a href=#110 id=110 data-nosnippet>110</a>    /// yet; in that case, calling `abort` may prevent the task from starting.
+<a href=#111 id=111 data-nosnippet>111</a>    ///
+<a href=#112 id=112 data-nosnippet>112</a>    /// When you shut down the executor, it will wait indefinitely for all blocking operations to
+<a href=#113 id=113 data-nosnippet>113</a>    /// finish. You can use [`shutdown_timeout`] to stop waiting for them after a
+<a href=#114 id=114 data-nosnippet>114</a>    /// certain timeout. Be aware that this will still not cancel the tasks — they
+<a href=#115 id=115 data-nosnippet>115</a>    /// are simply allowed to keep running after the method returns.  It is possible
+<a href=#116 id=116 data-nosnippet>116</a>    /// for a blocking task to be cancelled if it has not yet started running, but this
+<a href=#117 id=117 data-nosnippet>117</a>    /// is not guaranteed.
+<a href=#118 id=118 data-nosnippet>118</a>    ///
+<a href=#119 id=119 data-nosnippet>119</a>    /// Note that if you are using the single threaded runtime, this function will
+<a href=#120 id=120 data-nosnippet>120</a>    /// still spawn additional threads for blocking operations. The current-thread
+<a href=#121 id=121 data-nosnippet>121</a>    /// scheduler's single thread is only used for asynchronous code.
+<a href=#122 id=122 data-nosnippet>122</a>    ///
+<a href=#123 id=123 data-nosnippet>123</a>    /// # Related APIs and patterns for bridging asynchronous and blocking code
+<a href=#124 id=124 data-nosnippet>124</a>    ///
+<a href=#125 id=125 data-nosnippet>125</a>    /// In simple cases, it is sufficient to have the closure accept input
+<a href=#126 id=126 data-nosnippet>126</a>    /// parameters at creation time and return a single value (or struct/tuple, etc.).
+<a href=#127 id=127 data-nosnippet>127</a>    ///
+<a href=#128 id=128 data-nosnippet>128</a>    /// For more complex situations in which it is desirable to stream data to or from
+<a href=#129 id=129 data-nosnippet>129</a>    /// the synchronous context, the [`mpsc channel`] has `blocking_send` and
+<a href=#130 id=130 data-nosnippet>130</a>    /// `blocking_recv` methods for use in non-async code such as the thread created
+<a href=#131 id=131 data-nosnippet>131</a>    /// by `spawn_blocking`.
+<a href=#132 id=132 data-nosnippet>132</a>    ///
+<a href=#133 id=133 data-nosnippet>133</a>    /// Another option is [`SyncIoBridge`] for cases where the synchronous context
+<a href=#134 id=134 data-nosnippet>134</a>    /// is operating on byte streams.  For example, you might use an asynchronous
+<a href=#135 id=135 data-nosnippet>135</a>    /// HTTP client such as [hyper] to fetch data, but perform complex parsing
+<a href=#136 id=136 data-nosnippet>136</a>    /// of the payload body using a library written for synchronous I/O.
+<a href=#137 id=137 data-nosnippet>137</a>    ///
+<a href=#138 id=138 data-nosnippet>138</a>    /// Finally, see also [Bridging with sync code][bridgesync] for discussions
+<a href=#139 id=139 data-nosnippet>139</a>    /// around the opposite case of using Tokio as part of a larger synchronous
+<a href=#140 id=140 data-nosnippet>140</a>    /// codebase.
+<a href=#141 id=141 data-nosnippet>141</a>    ///
+<a href=#142 id=142 data-nosnippet>142</a>    /// [`Builder`]: struct@crate::runtime::Builder
+<a href=#143 id=143 data-nosnippet>143</a>    /// [blocking]: ../index.html#cpu-bound-tasks-and-blocking-code
+<a href=#144 id=144 data-nosnippet>144</a>    /// [rayon]: https://docs.rs/rayon
+<a href=#145 id=145 data-nosnippet>145</a>    /// [`mpsc channel`]: crate::sync::mpsc
+<a href=#146 id=146 data-nosnippet>146</a>    /// [`SyncIoBridge`]: https://docs.rs/tokio-util/latest/tokio_util/io/struct.SyncIoBridge.html
+<a href=#147 id=147 data-nosnippet>147</a>    /// [hyper]: https://docs.rs/hyper
+<a href=#148 id=148 data-nosnippet>148</a>    /// [`thread::spawn`]: fn@std::thread::spawn
+<a href=#149 id=149 data-nosnippet>149</a>    /// [`shutdown_timeout`]: fn@crate::runtime::Runtime::shutdown_timeout
+<a href=#150 id=150 data-nosnippet>150</a>    /// [bridgesync]: https://tokio.rs/tokio/topics/bridging
+<a href=#151 id=151 data-nosnippet>151</a>    /// [`AtomicBool`]: struct@std::sync::atomic::AtomicBool
+<a href=#152 id=152 data-nosnippet>152</a>    /// [`abort`]: crate::task::JoinHandle::abort
+<a href=#153 id=153 data-nosnippet>153</a>    ///
+<a href=#154 id=154 data-nosnippet>154</a>    /// # Examples
+<a href=#155 id=155 data-nosnippet>155</a>    ///
+<a href=#156 id=156 data-nosnippet>156</a>    /// Pass an input value and receive result of computation:
+<a href=#157 id=157 data-nosnippet>157</a>    ///
+<a href=#158 id=158 data-nosnippet>158</a>    /// ```
+<a href=#159 id=159 data-nosnippet>159</a>    /// use tokio::task;
+<a href=#160 id=160 data-nosnippet>160</a>    ///
+<a href=#161 id=161 data-nosnippet>161</a>    /// # async fn docs() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt;{
+<a href=#162 id=162 data-nosnippet>162</a>    /// // Initial input
+<a href=#163 id=163 data-nosnippet>163</a>    /// let mut v = "Hello, ".to_string();
+<a href=#164 id=164 data-nosnippet>164</a>    /// let res = task::spawn_blocking(move || {
+<a href=#165 id=165 data-nosnippet>165</a>    ///     // Stand-in for compute-heavy work or using synchronous APIs
+<a href=#166 id=166 data-nosnippet>166</a>    ///     v.push_str("world");
+<a href=#167 id=167 data-nosnippet>167</a>    ///     // Pass ownership of the value back to the asynchronous context
+<a href=#168 id=168 data-nosnippet>168</a>    ///     v
+<a href=#169 id=169 data-nosnippet>169</a>    /// }).await?;
+<a href=#170 id=170 data-nosnippet>170</a>    ///
+<a href=#171 id=171 data-nosnippet>171</a>    /// // `res` is the value returned from the thread
+<a href=#172 id=172 data-nosnippet>172</a>    /// assert_eq!(res.as_str(), "Hello, world");
+<a href=#173 id=173 data-nosnippet>173</a>    /// # Ok(())
+<a href=#174 id=174 data-nosnippet>174</a>    /// # }
+<a href=#175 id=175 data-nosnippet>175</a>    /// ```
+<a href=#176 id=176 data-nosnippet>176</a>    ///
+<a href=#177 id=177 data-nosnippet>177</a>    /// Use a channel:
+<a href=#178 id=178 data-nosnippet>178</a>    ///
+<a href=#179 id=179 data-nosnippet>179</a>    /// ```
+<a href=#180 id=180 data-nosnippet>180</a>    /// use tokio::task;
+<a href=#181 id=181 data-nosnippet>181</a>    /// use tokio::sync::mpsc;
+<a href=#182 id=182 data-nosnippet>182</a>    ///
+<a href=#183 id=183 data-nosnippet>183</a>    /// # async fn docs() {
+<a href=#184 id=184 data-nosnippet>184</a>    /// let (tx, mut rx) = mpsc::channel(2);
+<a href=#185 id=185 data-nosnippet>185</a>    /// let start = 5;
+<a href=#186 id=186 data-nosnippet>186</a>    /// let worker = task::spawn_blocking(move || {
+<a href=#187 id=187 data-nosnippet>187</a>    ///     for x in 0..10 {
+<a href=#188 id=188 data-nosnippet>188</a>    ///         // Stand in for complex computation
+<a href=#189 id=189 data-nosnippet>189</a>    ///         tx.blocking_send(start + x).unwrap();
+<a href=#190 id=190 data-nosnippet>190</a>    ///     }
+<a href=#191 id=191 data-nosnippet>191</a>    /// });
+<a href=#192 id=192 data-nosnippet>192</a>    ///
+<a href=#193 id=193 data-nosnippet>193</a>    /// let mut acc = 0;
+<a href=#194 id=194 data-nosnippet>194</a>    /// while let Some(v) = rx.recv().await {
+<a href=#195 id=195 data-nosnippet>195</a>    ///     acc += v;
+<a href=#196 id=196 data-nosnippet>196</a>    /// }
+<a href=#197 id=197 data-nosnippet>197</a>    /// assert_eq!(acc, 95);
+<a href=#198 id=198 data-nosnippet>198</a>    /// worker.await.unwrap();
+<a href=#199 id=199 data-nosnippet>199</a>    /// # }
+<a href=#200 id=200 data-nosnippet>200</a>    /// ```
+<a href=#201 id=201 data-nosnippet>201</a>    </span><span class="attr">#[track_caller]
+<a href=#202 id=202 data-nosnippet>202</a>    </span><span class="kw">pub fn </span>spawn_blocking&lt;F, R&gt;(f: F) -&gt; JoinHandle&lt;R&gt;
+<a href=#203 id=203 data-nosnippet>203</a>    <span class="kw">where
+<a href=#204 id=204 data-nosnippet>204</a>        </span>F: FnOnce() -&gt; R + Send + <span class="lifetime">'static</span>,
+<a href=#205 id=205 data-nosnippet>205</a>        R: Send + <span class="lifetime">'static</span>,
+<a href=#206 id=206 data-nosnippet>206</a>    {
+<a href=#207 id=207 data-nosnippet>207</a>        <span class="kw">crate</span>::runtime::spawn_blocking(f)
+<a href=#208 id=208 data-nosnippet>208</a>    }
+<a href=#209 id=209 data-nosnippet>209</a>}</code></pre></div></section></main></body></html>

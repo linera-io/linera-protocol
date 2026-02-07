@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GetResourcePolicyError"],"mod":["builders"],"struct":["GetResourcePolicy","GetResourcePolicyInput","GetResourcePolicyOutput"]};

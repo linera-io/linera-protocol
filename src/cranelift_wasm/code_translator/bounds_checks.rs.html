@@ -1,0 +1,731 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cranelift-wasm-0.112.3/src/code_translator/bounds_checks.rs`."><title>bounds_checks.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="cranelift_wasm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">cranelift_wasm/code_translator/</div>bounds_checks.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Implementation of Wasm to CLIF memory access translation.
+<a href=#2 id=2 data-nosnippet>2</a>//!
+<a href=#3 id=3 data-nosnippet>3</a>//! Given
+<a href=#4 id=4 data-nosnippet>4</a>//!
+<a href=#5 id=5 data-nosnippet>5</a>//! * a dynamic Wasm memory index operand,
+<a href=#6 id=6 data-nosnippet>6</a>//! * a static offset immediate, and
+<a href=#7 id=7 data-nosnippet>7</a>//! * a static access size,
+<a href=#8 id=8 data-nosnippet>8</a>//!
+<a href=#9 id=9 data-nosnippet>9</a>//! bounds check the memory access and translate it into a native memory access.
+<a href=#10 id=10 data-nosnippet>10</a>//!
+<a href=#11 id=11 data-nosnippet>11</a>//! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+<a href=#12 id=12 data-nosnippet>12</a>//! !!!                                                                      !!!
+<a href=#13 id=13 data-nosnippet>13</a>//! !!!    THIS CODE IS VERY SUBTLE, HAS MANY SPECIAL CASES, AND IS ALSO     !!!
+<a href=#14 id=14 data-nosnippet>14</a>//! !!!   ABSOLUTELY CRITICAL FOR MAINTAINING THE SAFETY OF THE WASM HEAP    !!!
+<a href=#15 id=15 data-nosnippet>15</a>//! !!!                             SANDBOX.                                 !!!
+<a href=#16 id=16 data-nosnippet>16</a>//! !!!                                                                      !!!
+<a href=#17 id=17 data-nosnippet>17</a>//! !!!    A good rule of thumb is to get two reviews on any substantive     !!!
+<a href=#18 id=18 data-nosnippet>18</a>//! !!!                         changes in here.                             !!!
+<a href=#19 id=19 data-nosnippet>19</a>//! !!!                                                                      !!!
+<a href=#20 id=20 data-nosnippet>20</a>//! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+<a href=#21 id=21 data-nosnippet>21</a>
+<a href=#22 id=22 data-nosnippet>22</a></span><span class="kw">use </span><span class="kw">super</span>::Reachability;
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use crate</span>::{FuncEnvironment, HeapData, HeapStyle};
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>cranelift_codegen::{
+<a href=#25 id=25 data-nosnippet>25</a>    cursor::{Cursor, FuncCursor},
+<a href=#26 id=26 data-nosnippet>26</a>    ir::{<span class="self">self</span>, condcodes::IntCC, InstBuilder, RelSourceLoc},
+<a href=#27 id=27 data-nosnippet>27</a>    ir::{Expr, Fact},
+<a href=#28 id=28 data-nosnippet>28</a>};
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>cranelift_frontend::FunctionBuilder;
+<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>wasmtime_types::WasmResult;
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>Reachability::<span class="kw-2">*</span>;
+<a href=#32 id=32 data-nosnippet>32</a>
+<a href=#33 id=33 data-nosnippet>33</a><span class="doccomment">/// Helper used to emit bounds checks (as necessary) and compute the native
+<a href=#34 id=34 data-nosnippet>34</a>/// address of a heap access.
+<a href=#35 id=35 data-nosnippet>35</a>///
+<a href=#36 id=36 data-nosnippet>36</a>/// Returns the `ir::Value` holding the native address of the heap access, or
+<a href=#37 id=37 data-nosnippet>37</a>/// `None` if the heap access will unconditionally trap.
+<a href=#38 id=38 data-nosnippet>38</a></span><span class="kw">pub fn </span>bounds_check_and_compute_addr&lt;Env&gt;(
+<a href=#39 id=39 data-nosnippet>39</a>    builder: <span class="kw-2">&amp;mut </span>FunctionBuilder,
+<a href=#40 id=40 data-nosnippet>40</a>    env: <span class="kw-2">&amp;mut </span>Env,
+<a href=#41 id=41 data-nosnippet>41</a>    heap: <span class="kw-2">&amp;</span>HeapData,
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="comment">// Dynamic operand indexing into the heap.
+<a href=#43 id=43 data-nosnippet>43</a>    </span>index: ir::Value,
+<a href=#44 id=44 data-nosnippet>44</a>    <span class="comment">// Static immediate added to the index.
+<a href=#45 id=45 data-nosnippet>45</a>    </span>offset: u32,
+<a href=#46 id=46 data-nosnippet>46</a>    <span class="comment">// Static size of the heap access.
+<a href=#47 id=47 data-nosnippet>47</a>    </span>access_size: u8,
+<a href=#48 id=48 data-nosnippet>48</a>) -&gt; WasmResult&lt;Reachability&lt;ir::Value&gt;&gt;
+<a href=#49 id=49 data-nosnippet>49</a><span class="kw">where
+<a href=#50 id=50 data-nosnippet>50</a>    </span>Env: FuncEnvironment + <span class="question-mark">?</span>Sized,
+<a href=#51 id=51 data-nosnippet>51</a>{
+<a href=#52 id=52 data-nosnippet>52</a>    <span class="kw">let </span>pointer_bit_width = u16::try_from(env.pointer_type().bits()).unwrap();
+<a href=#53 id=53 data-nosnippet>53</a>    <span class="kw">let </span>orig_index = index;
+<a href=#54 id=54 data-nosnippet>54</a>    <span class="kw">let </span>index = cast_index_to_pointer_ty(
+<a href=#55 id=55 data-nosnippet>55</a>        index,
+<a href=#56 id=56 data-nosnippet>56</a>        heap.index_type,
+<a href=#57 id=57 data-nosnippet>57</a>        env.pointer_type(),
+<a href=#58 id=58 data-nosnippet>58</a>        heap.memory_type.is_some(),
+<a href=#59 id=59 data-nosnippet>59</a>        <span class="kw-2">&amp;mut </span>builder.cursor(),
+<a href=#60 id=60 data-nosnippet>60</a>    );
+<a href=#61 id=61 data-nosnippet>61</a>    <span class="kw">let </span>offset_and_size = offset_plus_size(offset, access_size);
+<a href=#62 id=62 data-nosnippet>62</a>    <span class="kw">let </span>spectre_mitigations_enabled = env.heap_access_spectre_mitigation();
+<a href=#63 id=63 data-nosnippet>63</a>    <span class="kw">let </span>pcc = env.proof_carrying_code();
+<a href=#64 id=64 data-nosnippet>64</a>
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="kw">let </span>host_page_size_log2 = env.target_config().page_size_align_log2;
+<a href=#66 id=66 data-nosnippet>66</a>    <span class="kw">let </span>can_use_virtual_memory = heap.page_size_log2 &gt;= host_page_size_log2;
+<a href=#67 id=67 data-nosnippet>67</a>
+<a href=#68 id=68 data-nosnippet>68</a>    <span class="kw">let </span>make_compare = |builder: <span class="kw-2">&amp;mut </span>FunctionBuilder,
+<a href=#69 id=69 data-nosnippet>69</a>                        compare_kind: IntCC,
+<a href=#70 id=70 data-nosnippet>70</a>                        lhs: ir::Value,
+<a href=#71 id=71 data-nosnippet>71</a>                        lhs_off: <span class="prelude-ty">Option</span>&lt;i64&gt;,
+<a href=#72 id=72 data-nosnippet>72</a>                        rhs: ir::Value,
+<a href=#73 id=73 data-nosnippet>73</a>                        rhs_off: <span class="prelude-ty">Option</span>&lt;i64&gt;| {
+<a href=#74 id=74 data-nosnippet>74</a>        <span class="kw">let </span>result = builder.ins().icmp(compare_kind, lhs, rhs);
+<a href=#75 id=75 data-nosnippet>75</a>        <span class="kw">if </span>pcc {
+<a href=#76 id=76 data-nosnippet>76</a>            <span class="comment">// Name the original value as a def of the SSA value;
+<a href=#77 id=77 data-nosnippet>77</a>            // if the value was extended, name that as well with a
+<a href=#78 id=78 data-nosnippet>78</a>            // dynamic range, overwriting the basic full-range
+<a href=#79 id=79 data-nosnippet>79</a>            // fact that we previously put on the uextend.
+<a href=#80 id=80 data-nosnippet>80</a>            </span>builder.func.dfg.facts[orig_index] = <span class="prelude-val">Some</span>(Fact::Def { value: orig_index });
+<a href=#81 id=81 data-nosnippet>81</a>            <span class="kw">if </span>index != orig_index {
+<a href=#82 id=82 data-nosnippet>82</a>                builder.func.dfg.facts[index] = <span class="prelude-val">Some</span>(Fact::value(pointer_bit_width, orig_index));
+<a href=#83 id=83 data-nosnippet>83</a>            }
+<a href=#84 id=84 data-nosnippet>84</a>
+<a href=#85 id=85 data-nosnippet>85</a>            <span class="comment">// Create a fact on the LHS that is a "trivial symbolic
+<a href=#86 id=86 data-nosnippet>86</a>            // fact": v1 has range v1+LHS_off..=v1+LHS_off
+<a href=#87 id=87 data-nosnippet>87</a>            </span>builder.func.dfg.facts[lhs] = <span class="prelude-val">Some</span>(Fact::value_offset(
+<a href=#88 id=88 data-nosnippet>88</a>                pointer_bit_width,
+<a href=#89 id=89 data-nosnippet>89</a>                orig_index,
+<a href=#90 id=90 data-nosnippet>90</a>                lhs_off.unwrap(),
+<a href=#91 id=91 data-nosnippet>91</a>            ));
+<a href=#92 id=92 data-nosnippet>92</a>            <span class="comment">// If the RHS is a symbolic value (v1 or gv1), we can
+<a href=#93 id=93 data-nosnippet>93</a>            // emit a Compare fact.
+<a href=#94 id=94 data-nosnippet>94</a>            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(rhs) = builder.func.dfg.facts[rhs]
+<a href=#95 id=95 data-nosnippet>95</a>                .as_ref()
+<a href=#96 id=96 data-nosnippet>96</a>                .and_then(|f| f.as_symbol())
+<a href=#97 id=97 data-nosnippet>97</a>            {
+<a href=#98 id=98 data-nosnippet>98</a>                builder.func.dfg.facts[result] = <span class="prelude-val">Some</span>(Fact::Compare {
+<a href=#99 id=99 data-nosnippet>99</a>                    kind: compare_kind,
+<a href=#100 id=100 data-nosnippet>100</a>                    lhs: Expr::offset(<span class="kw-2">&amp;</span>Expr::value(orig_index), lhs_off.unwrap()).unwrap(),
+<a href=#101 id=101 data-nosnippet>101</a>                    rhs: Expr::offset(rhs, rhs_off.unwrap()).unwrap(),
+<a href=#102 id=102 data-nosnippet>102</a>                });
+<a href=#103 id=103 data-nosnippet>103</a>            }
+<a href=#104 id=104 data-nosnippet>104</a>            <span class="comment">// Likewise, if the RHS is a constant, we can emit a
+<a href=#105 id=105 data-nosnippet>105</a>            // Compare fact.
+<a href=#106 id=106 data-nosnippet>106</a>            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(k) = builder.func.dfg.facts[rhs]
+<a href=#107 id=107 data-nosnippet>107</a>                .as_ref()
+<a href=#108 id=108 data-nosnippet>108</a>                .and_then(|f| f.as_const(pointer_bit_width))
+<a href=#109 id=109 data-nosnippet>109</a>            {
+<a href=#110 id=110 data-nosnippet>110</a>                builder.func.dfg.facts[result] = <span class="prelude-val">Some</span>(Fact::Compare {
+<a href=#111 id=111 data-nosnippet>111</a>                    kind: compare_kind,
+<a href=#112 id=112 data-nosnippet>112</a>                    lhs: Expr::offset(<span class="kw-2">&amp;</span>Expr::value(orig_index), lhs_off.unwrap()).unwrap(),
+<a href=#113 id=113 data-nosnippet>113</a>                    rhs: Expr::constant((k <span class="kw">as </span>i64).checked_add(rhs_off.unwrap()).unwrap()),
+<a href=#114 id=114 data-nosnippet>114</a>                });
+<a href=#115 id=115 data-nosnippet>115</a>            }
+<a href=#116 id=116 data-nosnippet>116</a>        }
+<a href=#117 id=117 data-nosnippet>117</a>        result
+<a href=#118 id=118 data-nosnippet>118</a>    };
+<a href=#119 id=119 data-nosnippet>119</a>
+<a href=#120 id=120 data-nosnippet>120</a>    <span class="comment">// We need to emit code that will trap (or compute an address that will trap
+<a href=#121 id=121 data-nosnippet>121</a>    // when accessed) if
+<a href=#122 id=122 data-nosnippet>122</a>    //
+<a href=#123 id=123 data-nosnippet>123</a>    //     index + offset + access_size &gt; bound
+<a href=#124 id=124 data-nosnippet>124</a>    //
+<a href=#125 id=125 data-nosnippet>125</a>    // or if the `index + offset + access_size` addition overflows.
+<a href=#126 id=126 data-nosnippet>126</a>    //
+<a href=#127 id=127 data-nosnippet>127</a>    // Note that we ultimately want a 64-bit integer (we only target 64-bit
+<a href=#128 id=128 data-nosnippet>128</a>    // architectures at the moment) and that `offset` is a `u32` and
+<a href=#129 id=129 data-nosnippet>129</a>    // `access_size` is a `u8`. This means that we can add the latter together
+<a href=#130 id=130 data-nosnippet>130</a>    // as `u64`s without fear of overflow, and we only have to be concerned with
+<a href=#131 id=131 data-nosnippet>131</a>    // whether adding in `index` will overflow.
+<a href=#132 id=132 data-nosnippet>132</a>    //
+<a href=#133 id=133 data-nosnippet>133</a>    // Finally, the following right-hand sides of the matches do have a little
+<a href=#134 id=134 data-nosnippet>134</a>    // bit of duplicated code across them, but I think writing it this way is
+<a href=#135 id=135 data-nosnippet>135</a>    // worth it for readability and seeing very clearly each of our cases for
+<a href=#136 id=136 data-nosnippet>136</a>    // different bounds checks and optimizations of those bounds checks. It is
+<a href=#137 id=137 data-nosnippet>137</a>    // intentionally written in a straightforward case-matching style that will
+<a href=#138 id=138 data-nosnippet>138</a>    // hopefully make it easy to port to ISLE one day.
+<a href=#139 id=139 data-nosnippet>139</a>    </span><span class="prelude-val">Ok</span>(<span class="kw">match </span>heap.style {
+<a href=#140 id=140 data-nosnippet>140</a>        <span class="comment">// ====== Dynamic Memories ======
+<a href=#141 id=141 data-nosnippet>141</a>        //
+<a href=#142 id=142 data-nosnippet>142</a>        // 1. First special case for when `offset + access_size == 1`:
+<a href=#143 id=143 data-nosnippet>143</a>        //
+<a href=#144 id=144 data-nosnippet>144</a>        //            index + 1 &gt; bound
+<a href=#145 id=145 data-nosnippet>145</a>        //        ==&gt; index &gt;= bound
+<a href=#146 id=146 data-nosnippet>146</a>        </span>HeapStyle::Dynamic { bound_gv } <span class="kw">if </span>offset_and_size == <span class="number">1 </span>=&gt; {
+<a href=#147 id=147 data-nosnippet>147</a>            <span class="kw">let </span>bound = get_dynamic_heap_bound(builder, env, heap);
+<a href=#148 id=148 data-nosnippet>148</a>            <span class="kw">let </span>oob = make_compare(
+<a href=#149 id=149 data-nosnippet>149</a>                builder,
+<a href=#150 id=150 data-nosnippet>150</a>                IntCC::UnsignedGreaterThanOrEqual,
+<a href=#151 id=151 data-nosnippet>151</a>                index,
+<a href=#152 id=152 data-nosnippet>152</a>                <span class="prelude-val">Some</span>(<span class="number">0</span>),
+<a href=#153 id=153 data-nosnippet>153</a>                bound,
+<a href=#154 id=154 data-nosnippet>154</a>                <span class="prelude-val">Some</span>(<span class="number">0</span>),
+<a href=#155 id=155 data-nosnippet>155</a>            );
+<a href=#156 id=156 data-nosnippet>156</a>            Reachable(explicit_check_oob_condition_and_compute_addr(
+<a href=#157 id=157 data-nosnippet>157</a>                <span class="kw-2">&amp;mut </span>builder.cursor(),
+<a href=#158 id=158 data-nosnippet>158</a>                heap,
+<a href=#159 id=159 data-nosnippet>159</a>                env.pointer_type(),
+<a href=#160 id=160 data-nosnippet>160</a>                index,
+<a href=#161 id=161 data-nosnippet>161</a>                offset,
+<a href=#162 id=162 data-nosnippet>162</a>                access_size,
+<a href=#163 id=163 data-nosnippet>163</a>                spectre_mitigations_enabled,
+<a href=#164 id=164 data-nosnippet>164</a>                AddrPcc::dynamic(heap.memory_type, bound_gv),
+<a href=#165 id=165 data-nosnippet>165</a>                oob,
+<a href=#166 id=166 data-nosnippet>166</a>            ))
+<a href=#167 id=167 data-nosnippet>167</a>        }
+<a href=#168 id=168 data-nosnippet>168</a>
+<a href=#169 id=169 data-nosnippet>169</a>        <span class="comment">// 2. Second special case for when we know that there are enough guard
+<a href=#170 id=170 data-nosnippet>170</a>        //    pages to cover the offset and access size.
+<a href=#171 id=171 data-nosnippet>171</a>        //
+<a href=#172 id=172 data-nosnippet>172</a>        //    The precise should-we-trap condition is
+<a href=#173 id=173 data-nosnippet>173</a>        //
+<a href=#174 id=174 data-nosnippet>174</a>        //        index + offset + access_size &gt; bound
+<a href=#175 id=175 data-nosnippet>175</a>        //
+<a href=#176 id=176 data-nosnippet>176</a>        //    However, if we instead check only the partial condition
+<a href=#177 id=177 data-nosnippet>177</a>        //
+<a href=#178 id=178 data-nosnippet>178</a>        //        index &gt; bound
+<a href=#179 id=179 data-nosnippet>179</a>        //
+<a href=#180 id=180 data-nosnippet>180</a>        //    then the most out of bounds that the access can be, while that
+<a href=#181 id=181 data-nosnippet>181</a>        //    partial check still succeeds, is `offset + access_size`.
+<a href=#182 id=182 data-nosnippet>182</a>        //
+<a href=#183 id=183 data-nosnippet>183</a>        //    However, when we have a guard region that is at least as large as
+<a href=#184 id=184 data-nosnippet>184</a>        //    `offset + access_size`, we can rely on the virtual memory
+<a href=#185 id=185 data-nosnippet>185</a>        //    subsystem handling these out-of-bounds errors at
+<a href=#186 id=186 data-nosnippet>186</a>        //    runtime. Therefore, the partial `index &gt; bound` check is
+<a href=#187 id=187 data-nosnippet>187</a>        //    sufficient for this heap configuration.
+<a href=#188 id=188 data-nosnippet>188</a>        //
+<a href=#189 id=189 data-nosnippet>189</a>        //    Additionally, this has the advantage that a series of Wasm loads
+<a href=#190 id=190 data-nosnippet>190</a>        //    that use the same dynamic index operand but different static
+<a href=#191 id=191 data-nosnippet>191</a>        //    offset immediates -- which is a common code pattern when accessing
+<a href=#192 id=192 data-nosnippet>192</a>        //    multiple fields in the same struct that is in linear memory --
+<a href=#193 id=193 data-nosnippet>193</a>        //    will all emit the same `index &gt; bound` check, which we can GVN.
+<a href=#194 id=194 data-nosnippet>194</a>        </span>HeapStyle::Dynamic { bound_gv }
+<a href=#195 id=195 data-nosnippet>195</a>            <span class="kw">if </span>can_use_virtual_memory &amp;&amp; offset_and_size &lt;= heap.offset_guard_size =&gt;
+<a href=#196 id=196 data-nosnippet>196</a>        {
+<a href=#197 id=197 data-nosnippet>197</a>            <span class="kw">let </span>bound = get_dynamic_heap_bound(builder, env, heap);
+<a href=#198 id=198 data-nosnippet>198</a>            <span class="kw">let </span>oob = make_compare(
+<a href=#199 id=199 data-nosnippet>199</a>                builder,
+<a href=#200 id=200 data-nosnippet>200</a>                IntCC::UnsignedGreaterThan,
+<a href=#201 id=201 data-nosnippet>201</a>                index,
+<a href=#202 id=202 data-nosnippet>202</a>                <span class="prelude-val">Some</span>(<span class="number">0</span>),
+<a href=#203 id=203 data-nosnippet>203</a>                bound,
+<a href=#204 id=204 data-nosnippet>204</a>                <span class="prelude-val">Some</span>(<span class="number">0</span>),
+<a href=#205 id=205 data-nosnippet>205</a>            );
+<a href=#206 id=206 data-nosnippet>206</a>            Reachable(explicit_check_oob_condition_and_compute_addr(
+<a href=#207 id=207 data-nosnippet>207</a>                <span class="kw-2">&amp;mut </span>builder.cursor(),
+<a href=#208 id=208 data-nosnippet>208</a>                heap,
+<a href=#209 id=209 data-nosnippet>209</a>                env.pointer_type(),
+<a href=#210 id=210 data-nosnippet>210</a>                index,
+<a href=#211 id=211 data-nosnippet>211</a>                offset,
+<a href=#212 id=212 data-nosnippet>212</a>                access_size,
+<a href=#213 id=213 data-nosnippet>213</a>                spectre_mitigations_enabled,
+<a href=#214 id=214 data-nosnippet>214</a>                AddrPcc::dynamic(heap.memory_type, bound_gv),
+<a href=#215 id=215 data-nosnippet>215</a>                oob,
+<a href=#216 id=216 data-nosnippet>216</a>            ))
+<a href=#217 id=217 data-nosnippet>217</a>        }
+<a href=#218 id=218 data-nosnippet>218</a>
+<a href=#219 id=219 data-nosnippet>219</a>        <span class="comment">// 3. Third special case for when `offset + access_size &lt;= min_size`.
+<a href=#220 id=220 data-nosnippet>220</a>        //
+<a href=#221 id=221 data-nosnippet>221</a>        //    We know that `bound &gt;= min_size`, so we can do the following
+<a href=#222 id=222 data-nosnippet>222</a>        //    comparison, without fear of the right-hand side wrapping around:
+<a href=#223 id=223 data-nosnippet>223</a>        //
+<a href=#224 id=224 data-nosnippet>224</a>        //            index + offset + access_size &gt; bound
+<a href=#225 id=225 data-nosnippet>225</a>        //        ==&gt; index &gt; bound - (offset + access_size)
+<a href=#226 id=226 data-nosnippet>226</a>        </span>HeapStyle::Dynamic { bound_gv } <span class="kw">if </span>offset_and_size &lt;= heap.min_size.into() =&gt; {
+<a href=#227 id=227 data-nosnippet>227</a>            <span class="kw">let </span>bound = get_dynamic_heap_bound(builder, env, heap);
+<a href=#228 id=228 data-nosnippet>228</a>            <span class="kw">let </span>adjustment = offset_and_size <span class="kw">as </span>i64;
+<a href=#229 id=229 data-nosnippet>229</a>            <span class="kw">let </span>adjustment_value = builder.ins().iconst(env.pointer_type(), adjustment);
+<a href=#230 id=230 data-nosnippet>230</a>            <span class="kw">if </span>pcc {
+<a href=#231 id=231 data-nosnippet>231</a>                builder.func.dfg.facts[adjustment_value] =
+<a href=#232 id=232 data-nosnippet>232</a>                    <span class="prelude-val">Some</span>(Fact::constant(pointer_bit_width, offset_and_size));
+<a href=#233 id=233 data-nosnippet>233</a>            }
+<a href=#234 id=234 data-nosnippet>234</a>            <span class="kw">let </span>adjusted_bound = builder.ins().isub(bound, adjustment_value);
+<a href=#235 id=235 data-nosnippet>235</a>            <span class="kw">if </span>pcc {
+<a href=#236 id=236 data-nosnippet>236</a>                builder.func.dfg.facts[adjusted_bound] = <span class="prelude-val">Some</span>(Fact::global_value_offset(
+<a href=#237 id=237 data-nosnippet>237</a>                    pointer_bit_width,
+<a href=#238 id=238 data-nosnippet>238</a>                    bound_gv,
+<a href=#239 id=239 data-nosnippet>239</a>                    -adjustment,
+<a href=#240 id=240 data-nosnippet>240</a>                ));
+<a href=#241 id=241 data-nosnippet>241</a>            }
+<a href=#242 id=242 data-nosnippet>242</a>            <span class="kw">let </span>oob = make_compare(
+<a href=#243 id=243 data-nosnippet>243</a>                builder,
+<a href=#244 id=244 data-nosnippet>244</a>                IntCC::UnsignedGreaterThan,
+<a href=#245 id=245 data-nosnippet>245</a>                index,
+<a href=#246 id=246 data-nosnippet>246</a>                <span class="prelude-val">Some</span>(<span class="number">0</span>),
+<a href=#247 id=247 data-nosnippet>247</a>                adjusted_bound,
+<a href=#248 id=248 data-nosnippet>248</a>                <span class="prelude-val">Some</span>(adjustment),
+<a href=#249 id=249 data-nosnippet>249</a>            );
+<a href=#250 id=250 data-nosnippet>250</a>            Reachable(explicit_check_oob_condition_and_compute_addr(
+<a href=#251 id=251 data-nosnippet>251</a>                <span class="kw-2">&amp;mut </span>builder.cursor(),
+<a href=#252 id=252 data-nosnippet>252</a>                heap,
+<a href=#253 id=253 data-nosnippet>253</a>                env.pointer_type(),
+<a href=#254 id=254 data-nosnippet>254</a>                index,
+<a href=#255 id=255 data-nosnippet>255</a>                offset,
+<a href=#256 id=256 data-nosnippet>256</a>                access_size,
+<a href=#257 id=257 data-nosnippet>257</a>                spectre_mitigations_enabled,
+<a href=#258 id=258 data-nosnippet>258</a>                AddrPcc::dynamic(heap.memory_type, bound_gv),
+<a href=#259 id=259 data-nosnippet>259</a>                oob,
+<a href=#260 id=260 data-nosnippet>260</a>            ))
+<a href=#261 id=261 data-nosnippet>261</a>        }
+<a href=#262 id=262 data-nosnippet>262</a>
+<a href=#263 id=263 data-nosnippet>263</a>        <span class="comment">// 4. General case for dynamic memories:
+<a href=#264 id=264 data-nosnippet>264</a>        //
+<a href=#265 id=265 data-nosnippet>265</a>        //        index + offset + access_size &gt; bound
+<a href=#266 id=266 data-nosnippet>266</a>        //
+<a href=#267 id=267 data-nosnippet>267</a>        //    And we have to handle the overflow case in the left-hand side.
+<a href=#268 id=268 data-nosnippet>268</a>        </span>HeapStyle::Dynamic { bound_gv } =&gt; {
+<a href=#269 id=269 data-nosnippet>269</a>            <span class="kw">let </span>access_size_val = builder
+<a href=#270 id=270 data-nosnippet>270</a>                .ins()
+<a href=#271 id=271 data-nosnippet>271</a>                <span class="comment">// Explicit cast from u64 to i64: we just want the raw
+<a href=#272 id=272 data-nosnippet>272</a>                // bits, and iconst takes an `Imm64`.
+<a href=#273 id=273 data-nosnippet>273</a>                </span>.iconst(env.pointer_type(), offset_and_size <span class="kw">as </span>i64);
+<a href=#274 id=274 data-nosnippet>274</a>            <span class="kw">if </span>pcc {
+<a href=#275 id=275 data-nosnippet>275</a>                builder.func.dfg.facts[access_size_val] =
+<a href=#276 id=276 data-nosnippet>276</a>                    <span class="prelude-val">Some</span>(Fact::constant(pointer_bit_width, offset_and_size));
+<a href=#277 id=277 data-nosnippet>277</a>            }
+<a href=#278 id=278 data-nosnippet>278</a>            <span class="kw">let </span>adjusted_index = builder.ins().uadd_overflow_trap(
+<a href=#279 id=279 data-nosnippet>279</a>                index,
+<a href=#280 id=280 data-nosnippet>280</a>                access_size_val,
+<a href=#281 id=281 data-nosnippet>281</a>                ir::TrapCode::HeapOutOfBounds,
+<a href=#282 id=282 data-nosnippet>282</a>            );
+<a href=#283 id=283 data-nosnippet>283</a>            <span class="kw">if </span>pcc {
+<a href=#284 id=284 data-nosnippet>284</a>                builder.func.dfg.facts[adjusted_index] = <span class="prelude-val">Some</span>(Fact::value_offset(
+<a href=#285 id=285 data-nosnippet>285</a>                    pointer_bit_width,
+<a href=#286 id=286 data-nosnippet>286</a>                    index,
+<a href=#287 id=287 data-nosnippet>287</a>                    i64::try_from(offset_and_size).unwrap(),
+<a href=#288 id=288 data-nosnippet>288</a>                ));
+<a href=#289 id=289 data-nosnippet>289</a>            }
+<a href=#290 id=290 data-nosnippet>290</a>            <span class="kw">let </span>bound = get_dynamic_heap_bound(builder, env, heap);
+<a href=#291 id=291 data-nosnippet>291</a>            <span class="kw">let </span>oob = make_compare(
+<a href=#292 id=292 data-nosnippet>292</a>                builder,
+<a href=#293 id=293 data-nosnippet>293</a>                IntCC::UnsignedGreaterThan,
+<a href=#294 id=294 data-nosnippet>294</a>                adjusted_index,
+<a href=#295 id=295 data-nosnippet>295</a>                i64::try_from(offset_and_size).ok(),
+<a href=#296 id=296 data-nosnippet>296</a>                bound,
+<a href=#297 id=297 data-nosnippet>297</a>                <span class="prelude-val">Some</span>(<span class="number">0</span>),
+<a href=#298 id=298 data-nosnippet>298</a>            );
+<a href=#299 id=299 data-nosnippet>299</a>            Reachable(explicit_check_oob_condition_and_compute_addr(
+<a href=#300 id=300 data-nosnippet>300</a>                <span class="kw-2">&amp;mut </span>builder.cursor(),
+<a href=#301 id=301 data-nosnippet>301</a>                heap,
+<a href=#302 id=302 data-nosnippet>302</a>                env.pointer_type(),
+<a href=#303 id=303 data-nosnippet>303</a>                index,
+<a href=#304 id=304 data-nosnippet>304</a>                offset,
+<a href=#305 id=305 data-nosnippet>305</a>                access_size,
+<a href=#306 id=306 data-nosnippet>306</a>                spectre_mitigations_enabled,
+<a href=#307 id=307 data-nosnippet>307</a>                AddrPcc::dynamic(heap.memory_type, bound_gv),
+<a href=#308 id=308 data-nosnippet>308</a>                oob,
+<a href=#309 id=309 data-nosnippet>309</a>            ))
+<a href=#310 id=310 data-nosnippet>310</a>        }
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a>        <span class="comment">// ====== Static Memories ======
+<a href=#313 id=313 data-nosnippet>313</a>        //
+<a href=#314 id=314 data-nosnippet>314</a>        // With static memories we know the size of the heap bound at compile
+<a href=#315 id=315 data-nosnippet>315</a>        // time.
+<a href=#316 id=316 data-nosnippet>316</a>        //
+<a href=#317 id=317 data-nosnippet>317</a>        // 1. First special case: trap immediately if `offset + access_size &gt;
+<a href=#318 id=318 data-nosnippet>318</a>        //    bound`, since we will end up being out-of-bounds regardless of the
+<a href=#319 id=319 data-nosnippet>319</a>        //    given `index`.
+<a href=#320 id=320 data-nosnippet>320</a>        </span>HeapStyle::Static { bound } <span class="kw">if </span>offset_and_size &gt; bound.into() =&gt; {
+<a href=#321 id=321 data-nosnippet>321</a>            <span class="macro">assert!</span>(
+<a href=#322 id=322 data-nosnippet>322</a>                can_use_virtual_memory,
+<a href=#323 id=323 data-nosnippet>323</a>                <span class="string">"static memories require the ability to use virtual memory"
+<a href=#324 id=324 data-nosnippet>324</a>            </span>);
+<a href=#325 id=325 data-nosnippet>325</a>            env.before_unconditionally_trapping_memory_access(builder)<span class="question-mark">?</span>;
+<a href=#326 id=326 data-nosnippet>326</a>            builder.ins().trap(ir::TrapCode::HeapOutOfBounds);
+<a href=#327 id=327 data-nosnippet>327</a>            Unreachable
+<a href=#328 id=328 data-nosnippet>328</a>        }
+<a href=#329 id=329 data-nosnippet>329</a>
+<a href=#330 id=330 data-nosnippet>330</a>        <span class="comment">// 2. Second special case for when we can completely omit explicit
+<a href=#331 id=331 data-nosnippet>331</a>        //    bounds checks for 32-bit static memories.
+<a href=#332 id=332 data-nosnippet>332</a>        //
+<a href=#333 id=333 data-nosnippet>333</a>        //    First, let's rewrite our comparison to move all of the constants
+<a href=#334 id=334 data-nosnippet>334</a>        //    to one side:
+<a href=#335 id=335 data-nosnippet>335</a>        //
+<a href=#336 id=336 data-nosnippet>336</a>        //            index + offset + access_size &gt; bound
+<a href=#337 id=337 data-nosnippet>337</a>        //        ==&gt; index &gt; bound - (offset + access_size)
+<a href=#338 id=338 data-nosnippet>338</a>        //
+<a href=#339 id=339 data-nosnippet>339</a>        //    We know the subtraction on the right-hand side won't wrap because
+<a href=#340 id=340 data-nosnippet>340</a>        //    we didn't hit the first special case.
+<a href=#341 id=341 data-nosnippet>341</a>        //
+<a href=#342 id=342 data-nosnippet>342</a>        //    Additionally, we add our guard pages (if any) to the right-hand
+<a href=#343 id=343 data-nosnippet>343</a>        //    side, since we can rely on the virtual memory subsystem at runtime
+<a href=#344 id=344 data-nosnippet>344</a>        //    to catch out-of-bound accesses within the range `bound .. bound +
+<a href=#345 id=345 data-nosnippet>345</a>        //    guard_size`. So now we are dealing with
+<a href=#346 id=346 data-nosnippet>346</a>        //
+<a href=#347 id=347 data-nosnippet>347</a>        //        index &gt; bound + guard_size - (offset + access_size)
+<a href=#348 id=348 data-nosnippet>348</a>        //
+<a href=#349 id=349 data-nosnippet>349</a>        //    Note that `bound + guard_size` cannot overflow for
+<a href=#350 id=350 data-nosnippet>350</a>        //    correctly-configured heaps, as otherwise the heap wouldn't fit in
+<a href=#351 id=351 data-nosnippet>351</a>        //    a 64-bit memory space.
+<a href=#352 id=352 data-nosnippet>352</a>        //
+<a href=#353 id=353 data-nosnippet>353</a>        //    The complement of our should-this-trap comparison expression is
+<a href=#354 id=354 data-nosnippet>354</a>        //    the should-this-not-trap comparison expression:
+<a href=#355 id=355 data-nosnippet>355</a>        //
+<a href=#356 id=356 data-nosnippet>356</a>        //        index &lt;= bound + guard_size - (offset + access_size)
+<a href=#357 id=357 data-nosnippet>357</a>        //
+<a href=#358 id=358 data-nosnippet>358</a>        //    If we know the right-hand side is greater than or equal to
+<a href=#359 id=359 data-nosnippet>359</a>        //    `u32::MAX`, then
+<a href=#360 id=360 data-nosnippet>360</a>        //
+<a href=#361 id=361 data-nosnippet>361</a>        //        index &lt;= u32::MAX &lt;= bound + guard_size - (offset + access_size)
+<a href=#362 id=362 data-nosnippet>362</a>        //
+<a href=#363 id=363 data-nosnippet>363</a>        //    This expression is always true when the heap is indexed with
+<a href=#364 id=364 data-nosnippet>364</a>        //    32-bit integers because `index` cannot be larger than
+<a href=#365 id=365 data-nosnippet>365</a>        //    `u32::MAX`. This means that `index` is always either in bounds or
+<a href=#366 id=366 data-nosnippet>366</a>        //    within the guard page region, neither of which require emitting an
+<a href=#367 id=367 data-nosnippet>367</a>        //    explicit bounds check.
+<a href=#368 id=368 data-nosnippet>368</a>        </span>HeapStyle::Static { bound }
+<a href=#369 id=369 data-nosnippet>369</a>            <span class="kw">if </span>can_use_virtual_memory
+<a href=#370 id=370 data-nosnippet>370</a>                &amp;&amp; heap.index_type == ir::types::I32
+<a href=#371 id=371 data-nosnippet>371</a>                &amp;&amp; u64::from(u32::MAX)
+<a href=#372 id=372 data-nosnippet>372</a>                    &lt;= u64::from(bound) + u64::from(heap.offset_guard_size) - offset_and_size =&gt;
+<a href=#373 id=373 data-nosnippet>373</a>        {
+<a href=#374 id=374 data-nosnippet>374</a>            <span class="macro">assert!</span>(
+<a href=#375 id=375 data-nosnippet>375</a>                can_use_virtual_memory,
+<a href=#376 id=376 data-nosnippet>376</a>                <span class="string">"static memories require the ability to use virtual memory"
+<a href=#377 id=377 data-nosnippet>377</a>            </span>);
+<a href=#378 id=378 data-nosnippet>378</a>            Reachable(compute_addr(
+<a href=#379 id=379 data-nosnippet>379</a>                <span class="kw-2">&amp;mut </span>builder.cursor(),
+<a href=#380 id=380 data-nosnippet>380</a>                heap,
+<a href=#381 id=381 data-nosnippet>381</a>                env.pointer_type(),
+<a href=#382 id=382 data-nosnippet>382</a>                index,
+<a href=#383 id=383 data-nosnippet>383</a>                offset,
+<a href=#384 id=384 data-nosnippet>384</a>                AddrPcc::static32(
+<a href=#385 id=385 data-nosnippet>385</a>                    heap.memory_type,
+<a href=#386 id=386 data-nosnippet>386</a>                    u64::from(bound) + u64::from(heap.offset_guard_size),
+<a href=#387 id=387 data-nosnippet>387</a>                ),
+<a href=#388 id=388 data-nosnippet>388</a>            ))
+<a href=#389 id=389 data-nosnippet>389</a>        }
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="comment">// 3. General case for static memories.
+<a href=#392 id=392 data-nosnippet>392</a>        //
+<a href=#393 id=393 data-nosnippet>393</a>        //    We have to explicitly test whether
+<a href=#394 id=394 data-nosnippet>394</a>        //
+<a href=#395 id=395 data-nosnippet>395</a>        //        index &gt; bound - (offset + access_size)
+<a href=#396 id=396 data-nosnippet>396</a>        //
+<a href=#397 id=397 data-nosnippet>397</a>        //    and trap if so.
+<a href=#398 id=398 data-nosnippet>398</a>        //
+<a href=#399 id=399 data-nosnippet>399</a>        //    Since we have to emit explicit bounds checks, we might as well be
+<a href=#400 id=400 data-nosnippet>400</a>        //    precise, not rely on the virtual memory subsystem at all, and not
+<a href=#401 id=401 data-nosnippet>401</a>        //    factor in the guard pages here.
+<a href=#402 id=402 data-nosnippet>402</a>        </span>HeapStyle::Static { bound } =&gt; {
+<a href=#403 id=403 data-nosnippet>403</a>            <span class="macro">assert!</span>(
+<a href=#404 id=404 data-nosnippet>404</a>                can_use_virtual_memory,
+<a href=#405 id=405 data-nosnippet>405</a>                <span class="string">"static memories require the ability to use virtual memory"
+<a href=#406 id=406 data-nosnippet>406</a>            </span>);
+<a href=#407 id=407 data-nosnippet>407</a>            <span class="comment">// NB: this subtraction cannot wrap because we didn't hit the first
+<a href=#408 id=408 data-nosnippet>408</a>            // special case.
+<a href=#409 id=409 data-nosnippet>409</a>            </span><span class="kw">let </span>adjusted_bound = u64::from(bound) - offset_and_size;
+<a href=#410 id=410 data-nosnippet>410</a>            <span class="kw">let </span>adjusted_bound_value = builder
+<a href=#411 id=411 data-nosnippet>411</a>                .ins()
+<a href=#412 id=412 data-nosnippet>412</a>                .iconst(env.pointer_type(), adjusted_bound <span class="kw">as </span>i64);
+<a href=#413 id=413 data-nosnippet>413</a>            <span class="kw">if </span>pcc {
+<a href=#414 id=414 data-nosnippet>414</a>                builder.func.dfg.facts[adjusted_bound_value] =
+<a href=#415 id=415 data-nosnippet>415</a>                    <span class="prelude-val">Some</span>(Fact::constant(pointer_bit_width, adjusted_bound));
+<a href=#416 id=416 data-nosnippet>416</a>            }
+<a href=#417 id=417 data-nosnippet>417</a>            <span class="kw">let </span>oob = make_compare(
+<a href=#418 id=418 data-nosnippet>418</a>                builder,
+<a href=#419 id=419 data-nosnippet>419</a>                IntCC::UnsignedGreaterThan,
+<a href=#420 id=420 data-nosnippet>420</a>                index,
+<a href=#421 id=421 data-nosnippet>421</a>                <span class="prelude-val">Some</span>(<span class="number">0</span>),
+<a href=#422 id=422 data-nosnippet>422</a>                adjusted_bound_value,
+<a href=#423 id=423 data-nosnippet>423</a>                <span class="prelude-val">Some</span>(<span class="number">0</span>),
+<a href=#424 id=424 data-nosnippet>424</a>            );
+<a href=#425 id=425 data-nosnippet>425</a>            Reachable(explicit_check_oob_condition_and_compute_addr(
+<a href=#426 id=426 data-nosnippet>426</a>                <span class="kw-2">&amp;mut </span>builder.cursor(),
+<a href=#427 id=427 data-nosnippet>427</a>                heap,
+<a href=#428 id=428 data-nosnippet>428</a>                env.pointer_type(),
+<a href=#429 id=429 data-nosnippet>429</a>                index,
+<a href=#430 id=430 data-nosnippet>430</a>                offset,
+<a href=#431 id=431 data-nosnippet>431</a>                access_size,
+<a href=#432 id=432 data-nosnippet>432</a>                spectre_mitigations_enabled,
+<a href=#433 id=433 data-nosnippet>433</a>                AddrPcc::static32(heap.memory_type, u64::from(bound)),
+<a href=#434 id=434 data-nosnippet>434</a>                oob,
+<a href=#435 id=435 data-nosnippet>435</a>            ))
+<a href=#436 id=436 data-nosnippet>436</a>        }
+<a href=#437 id=437 data-nosnippet>437</a>    })
+<a href=#438 id=438 data-nosnippet>438</a>}
+<a href=#439 id=439 data-nosnippet>439</a>
+<a href=#440 id=440 data-nosnippet>440</a><span class="doccomment">/// Get the bound of a dynamic heap as an `ir::Value`.
+<a href=#441 id=441 data-nosnippet>441</a></span><span class="kw">fn </span>get_dynamic_heap_bound&lt;Env&gt;(
+<a href=#442 id=442 data-nosnippet>442</a>    builder: <span class="kw-2">&amp;mut </span>FunctionBuilder,
+<a href=#443 id=443 data-nosnippet>443</a>    env: <span class="kw-2">&amp;mut </span>Env,
+<a href=#444 id=444 data-nosnippet>444</a>    heap: <span class="kw-2">&amp;</span>HeapData,
+<a href=#445 id=445 data-nosnippet>445</a>) -&gt; ir::Value
+<a href=#446 id=446 data-nosnippet>446</a><span class="kw">where
+<a href=#447 id=447 data-nosnippet>447</a>    </span>Env: FuncEnvironment + <span class="question-mark">?</span>Sized,
+<a href=#448 id=448 data-nosnippet>448</a>{
+<a href=#449 id=449 data-nosnippet>449</a>    <span class="kw">let </span>enable_pcc = heap.memory_type.is_some();
+<a href=#450 id=450 data-nosnippet>450</a>
+<a href=#451 id=451 data-nosnippet>451</a>    <span class="kw">let </span>(value, gv) = <span class="kw">match </span>(heap.max_size, <span class="kw-2">&amp;</span>heap.style) {
+<a href=#452 id=452 data-nosnippet>452</a>        <span class="comment">// The heap has a constant size, no need to actually load the
+<a href=#453 id=453 data-nosnippet>453</a>        // bound.  TODO: this is currently disabled for PCC because we
+<a href=#454 id=454 data-nosnippet>454</a>        // can't easily prove that the GV load indeed results in a
+<a href=#455 id=455 data-nosnippet>455</a>        // constant (that information is lost in the CLIF). We'll want
+<a href=#456 id=456 data-nosnippet>456</a>        // to create an `iconst` GV expression kind to reify this fact
+<a href=#457 id=457 data-nosnippet>457</a>        // in the GV, then re-enable this opt. (Or, alternately,
+<a href=#458 id=458 data-nosnippet>458</a>        // compile such memories with a static-bound memtype and
+<a href=#459 id=459 data-nosnippet>459</a>        // facts.)
+<a href=#460 id=460 data-nosnippet>460</a>        </span>(<span class="prelude-val">Some</span>(max_size), HeapStyle::Dynamic { bound_gv })
+<a href=#461 id=461 data-nosnippet>461</a>            <span class="kw">if </span>heap.min_size == max_size &amp;&amp; !enable_pcc =&gt;
+<a href=#462 id=462 data-nosnippet>462</a>        {
+<a href=#463 id=463 data-nosnippet>463</a>            (
+<a href=#464 id=464 data-nosnippet>464</a>                builder.ins().iconst(env.pointer_type(), max_size <span class="kw">as </span>i64),
+<a href=#465 id=465 data-nosnippet>465</a>                <span class="kw-2">*</span>bound_gv,
+<a href=#466 id=466 data-nosnippet>466</a>            )
+<a href=#467 id=467 data-nosnippet>467</a>        }
+<a href=#468 id=468 data-nosnippet>468</a>
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="comment">// Load the heap bound from its global variable.
+<a href=#470 id=470 data-nosnippet>470</a>        </span>(<span class="kw">_</span>, HeapStyle::Dynamic { bound_gv }) =&gt; (
+<a href=#471 id=471 data-nosnippet>471</a>            builder.ins().global_value(env.pointer_type(), <span class="kw-2">*</span>bound_gv),
+<a href=#472 id=472 data-nosnippet>472</a>            <span class="kw-2">*</span>bound_gv,
+<a href=#473 id=473 data-nosnippet>473</a>        ),
+<a href=#474 id=474 data-nosnippet>474</a>
+<a href=#475 id=475 data-nosnippet>475</a>        (<span class="kw">_</span>, HeapStyle::Static { .. }) =&gt; <span class="macro">unreachable!</span>(<span class="string">"not a dynamic heap"</span>),
+<a href=#476 id=476 data-nosnippet>476</a>    };
+<a href=#477 id=477 data-nosnippet>477</a>
+<a href=#478 id=478 data-nosnippet>478</a>    <span class="comment">// If proof-carrying code is enabled, apply a fact to the range to
+<a href=#479 id=479 data-nosnippet>479</a>    // tie it to the GV.
+<a href=#480 id=480 data-nosnippet>480</a>    </span><span class="kw">if </span>enable_pcc {
+<a href=#481 id=481 data-nosnippet>481</a>        builder.func.dfg.facts[value] = <span class="prelude-val">Some</span>(Fact::global_value(
+<a href=#482 id=482 data-nosnippet>482</a>            u16::try_from(env.pointer_type().bits()).unwrap(),
+<a href=#483 id=483 data-nosnippet>483</a>            gv,
+<a href=#484 id=484 data-nosnippet>484</a>        ));
+<a href=#485 id=485 data-nosnippet>485</a>    }
+<a href=#486 id=486 data-nosnippet>486</a>
+<a href=#487 id=487 data-nosnippet>487</a>    value
+<a href=#488 id=488 data-nosnippet>488</a>}
+<a href=#489 id=489 data-nosnippet>489</a>
+<a href=#490 id=490 data-nosnippet>490</a><span class="kw">fn </span>cast_index_to_pointer_ty(
+<a href=#491 id=491 data-nosnippet>491</a>    index: ir::Value,
+<a href=#492 id=492 data-nosnippet>492</a>    index_ty: ir::Type,
+<a href=#493 id=493 data-nosnippet>493</a>    pointer_ty: ir::Type,
+<a href=#494 id=494 data-nosnippet>494</a>    pcc: bool,
+<a href=#495 id=495 data-nosnippet>495</a>    pos: <span class="kw-2">&amp;mut </span>FuncCursor,
+<a href=#496 id=496 data-nosnippet>496</a>) -&gt; ir::Value {
+<a href=#497 id=497 data-nosnippet>497</a>    <span class="kw">if </span>index_ty == pointer_ty {
+<a href=#498 id=498 data-nosnippet>498</a>        <span class="kw">return </span>index;
+<a href=#499 id=499 data-nosnippet>499</a>    }
+<a href=#500 id=500 data-nosnippet>500</a>    <span class="comment">// Note that using 64-bit heaps on a 32-bit host is not currently supported,
+<a href=#501 id=501 data-nosnippet>501</a>    // would require at least a bounds check here to ensure that the truncation
+<a href=#502 id=502 data-nosnippet>502</a>    // from 64-to-32 bits doesn't lose any upper bits. For now though we're
+<a href=#503 id=503 data-nosnippet>503</a>    // mostly interested in the 32-bit-heaps-on-64-bit-hosts cast.
+<a href=#504 id=504 data-nosnippet>504</a>    </span><span class="macro">assert!</span>(index_ty.bits() &lt; pointer_ty.bits());
+<a href=#505 id=505 data-nosnippet>505</a>
+<a href=#506 id=506 data-nosnippet>506</a>    <span class="comment">// Convert `index` to `addr_ty`.
+<a href=#507 id=507 data-nosnippet>507</a>    </span><span class="kw">let </span>extended_index = pos.ins().uextend(pointer_ty, index);
+<a href=#508 id=508 data-nosnippet>508</a>
+<a href=#509 id=509 data-nosnippet>509</a>    <span class="comment">// Add a range fact on the extended value.
+<a href=#510 id=510 data-nosnippet>510</a>    </span><span class="kw">if </span>pcc {
+<a href=#511 id=511 data-nosnippet>511</a>        pos.func.dfg.facts[extended_index] = <span class="prelude-val">Some</span>(Fact::max_range_for_width_extended(
+<a href=#512 id=512 data-nosnippet>512</a>            u16::try_from(index_ty.bits()).unwrap(),
+<a href=#513 id=513 data-nosnippet>513</a>            u16::try_from(pointer_ty.bits()).unwrap(),
+<a href=#514 id=514 data-nosnippet>514</a>        ));
+<a href=#515 id=515 data-nosnippet>515</a>    }
+<a href=#516 id=516 data-nosnippet>516</a>
+<a href=#517 id=517 data-nosnippet>517</a>    <span class="comment">// Add debug value-label alias so that debuginfo can name the extended
+<a href=#518 id=518 data-nosnippet>518</a>    // value as the address
+<a href=#519 id=519 data-nosnippet>519</a>    </span><span class="kw">let </span>loc = pos.srcloc();
+<a href=#520 id=520 data-nosnippet>520</a>    <span class="kw">let </span>loc = RelSourceLoc::from_base_offset(pos.func.params.base_srcloc(), loc);
+<a href=#521 id=521 data-nosnippet>521</a>    pos.func
+<a href=#522 id=522 data-nosnippet>522</a>        .stencil
+<a href=#523 id=523 data-nosnippet>523</a>        .dfg
+<a href=#524 id=524 data-nosnippet>524</a>        .add_value_label_alias(extended_index, loc, index);
+<a href=#525 id=525 data-nosnippet>525</a>
+<a href=#526 id=526 data-nosnippet>526</a>    extended_index
+<a href=#527 id=527 data-nosnippet>527</a>}
+<a href=#528 id=528 data-nosnippet>528</a>
+<a href=#529 id=529 data-nosnippet>529</a><span class="doccomment">/// Which facts do we want to emit for proof-carrying code, if any, on
+<a href=#530 id=530 data-nosnippet>530</a>/// address computations?
+<a href=#531 id=531 data-nosnippet>531</a></span><span class="attr">#[derive(Clone, Copy, Debug)]
+<a href=#532 id=532 data-nosnippet>532</a></span><span class="kw">enum </span>AddrPcc {
+<a href=#533 id=533 data-nosnippet>533</a>    <span class="doccomment">/// A 32-bit static memory with the given size.
+<a href=#534 id=534 data-nosnippet>534</a>    </span>Static32(ir::MemoryType, u64),
+<a href=#535 id=535 data-nosnippet>535</a>    <span class="doccomment">/// Dynamic bounds-check, with actual memory size (the `GlobalValue`)
+<a href=#536 id=536 data-nosnippet>536</a>    /// expressed symbolically.
+<a href=#537 id=537 data-nosnippet>537</a>    </span>Dynamic(ir::MemoryType, ir::GlobalValue),
+<a href=#538 id=538 data-nosnippet>538</a>}
+<a href=#539 id=539 data-nosnippet>539</a><span class="kw">impl </span>AddrPcc {
+<a href=#540 id=540 data-nosnippet>540</a>    <span class="kw">fn </span>static32(memory_type: <span class="prelude-ty">Option</span>&lt;ir::MemoryType&gt;, size: u64) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#541 id=541 data-nosnippet>541</a>        memory_type.map(|ty| AddrPcc::Static32(ty, size))
+<a href=#542 id=542 data-nosnippet>542</a>    }
+<a href=#543 id=543 data-nosnippet>543</a>    <span class="kw">fn </span>dynamic(memory_type: <span class="prelude-ty">Option</span>&lt;ir::MemoryType&gt;, bound: ir::GlobalValue) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#544 id=544 data-nosnippet>544</a>        memory_type.map(|ty| AddrPcc::Dynamic(ty, bound))
+<a href=#545 id=545 data-nosnippet>545</a>    }
+<a href=#546 id=546 data-nosnippet>546</a>}
+<a href=#547 id=547 data-nosnippet>547</a>
+<a href=#548 id=548 data-nosnippet>548</a><span class="doccomment">/// Emit explicit checks on the given out-of-bounds condition for the Wasm
+<a href=#549 id=549 data-nosnippet>549</a>/// address and return the native address.
+<a href=#550 id=550 data-nosnippet>550</a>///
+<a href=#551 id=551 data-nosnippet>551</a>/// This function deduplicates explicit bounds checks and Spectre mitigations
+<a href=#552 id=552 data-nosnippet>552</a>/// that inherently also implement bounds checking.
+<a href=#553 id=553 data-nosnippet>553</a></span><span class="kw">fn </span>explicit_check_oob_condition_and_compute_addr(
+<a href=#554 id=554 data-nosnippet>554</a>    pos: <span class="kw-2">&amp;mut </span>FuncCursor,
+<a href=#555 id=555 data-nosnippet>555</a>    heap: <span class="kw-2">&amp;</span>HeapData,
+<a href=#556 id=556 data-nosnippet>556</a>    addr_ty: ir::Type,
+<a href=#557 id=557 data-nosnippet>557</a>    index: ir::Value,
+<a href=#558 id=558 data-nosnippet>558</a>    offset: u32,
+<a href=#559 id=559 data-nosnippet>559</a>    access_size: u8,
+<a href=#560 id=560 data-nosnippet>560</a>    <span class="comment">// Whether Spectre mitigations are enabled for heap accesses.
+<a href=#561 id=561 data-nosnippet>561</a>    </span>spectre_mitigations_enabled: bool,
+<a href=#562 id=562 data-nosnippet>562</a>    <span class="comment">// Whether we're emitting PCC facts.
+<a href=#563 id=563 data-nosnippet>563</a>    </span>pcc: <span class="prelude-ty">Option</span>&lt;AddrPcc&gt;,
+<a href=#564 id=564 data-nosnippet>564</a>    <span class="comment">// The `i8` boolean value that is non-zero when the heap access is out of
+<a href=#565 id=565 data-nosnippet>565</a>    // bounds (and therefore we should trap) and is zero when the heap access is
+<a href=#566 id=566 data-nosnippet>566</a>    // in bounds (and therefore we can proceed).
+<a href=#567 id=567 data-nosnippet>567</a>    </span>oob_condition: ir::Value,
+<a href=#568 id=568 data-nosnippet>568</a>) -&gt; ir::Value {
+<a href=#569 id=569 data-nosnippet>569</a>    <span class="kw">if </span>!spectre_mitigations_enabled {
+<a href=#570 id=570 data-nosnippet>570</a>        pos.ins()
+<a href=#571 id=571 data-nosnippet>571</a>            .trapnz(oob_condition, ir::TrapCode::HeapOutOfBounds);
+<a href=#572 id=572 data-nosnippet>572</a>    }
+<a href=#573 id=573 data-nosnippet>573</a>
+<a href=#574 id=574 data-nosnippet>574</a>    <span class="kw">let </span><span class="kw-2">mut </span>addr = compute_addr(pos, heap, addr_ty, index, offset, pcc);
+<a href=#575 id=575 data-nosnippet>575</a>
+<a href=#576 id=576 data-nosnippet>576</a>    <span class="kw">if </span>spectre_mitigations_enabled {
+<a href=#577 id=577 data-nosnippet>577</a>        <span class="kw">let </span>null = pos.ins().iconst(addr_ty, <span class="number">0</span>);
+<a href=#578 id=578 data-nosnippet>578</a>        addr = pos.ins().select_spectre_guard(oob_condition, null, addr);
+<a href=#579 id=579 data-nosnippet>579</a>
+<a href=#580 id=580 data-nosnippet>580</a>        <span class="kw">match </span>pcc {
+<a href=#581 id=581 data-nosnippet>581</a>            <span class="prelude-val">None </span>=&gt; {}
+<a href=#582 id=582 data-nosnippet>582</a>            <span class="prelude-val">Some</span>(AddrPcc::Static32(ty, size)) =&gt; {
+<a href=#583 id=583 data-nosnippet>583</a>                pos.func.dfg.facts[null] =
+<a href=#584 id=584 data-nosnippet>584</a>                    <span class="prelude-val">Some</span>(Fact::constant(u16::try_from(addr_ty.bits()).unwrap(), <span class="number">0</span>));
+<a href=#585 id=585 data-nosnippet>585</a>                pos.func.dfg.facts[addr] = <span class="prelude-val">Some</span>(Fact::Mem {
+<a href=#586 id=586 data-nosnippet>586</a>                    ty,
+<a href=#587 id=587 data-nosnippet>587</a>                    min_offset: <span class="number">0</span>,
+<a href=#588 id=588 data-nosnippet>588</a>                    max_offset: size.checked_sub(u64::from(access_size)).unwrap(),
+<a href=#589 id=589 data-nosnippet>589</a>                    nullable: <span class="bool-val">true</span>,
+<a href=#590 id=590 data-nosnippet>590</a>                });
+<a href=#591 id=591 data-nosnippet>591</a>            }
+<a href=#592 id=592 data-nosnippet>592</a>            <span class="prelude-val">Some</span>(AddrPcc::Dynamic(ty, gv)) =&gt; {
+<a href=#593 id=593 data-nosnippet>593</a>                pos.func.dfg.facts[null] =
+<a href=#594 id=594 data-nosnippet>594</a>                    <span class="prelude-val">Some</span>(Fact::constant(u16::try_from(addr_ty.bits()).unwrap(), <span class="number">0</span>));
+<a href=#595 id=595 data-nosnippet>595</a>                pos.func.dfg.facts[addr] = <span class="prelude-val">Some</span>(Fact::DynamicMem {
+<a href=#596 id=596 data-nosnippet>596</a>                    ty,
+<a href=#597 id=597 data-nosnippet>597</a>                    min: Expr::constant(<span class="number">0</span>),
+<a href=#598 id=598 data-nosnippet>598</a>                    max: Expr::offset(
+<a href=#599 id=599 data-nosnippet>599</a>                        <span class="kw-2">&amp;</span>Expr::global_value(gv),
+<a href=#600 id=600 data-nosnippet>600</a>                        i64::try_from(heap.offset_guard_size)
+<a href=#601 id=601 data-nosnippet>601</a>                            .unwrap()
+<a href=#602 id=602 data-nosnippet>602</a>                            .checked_sub(i64::from(access_size))
+<a href=#603 id=603 data-nosnippet>603</a>                            .unwrap(),
+<a href=#604 id=604 data-nosnippet>604</a>                    )
+<a href=#605 id=605 data-nosnippet>605</a>                    .unwrap(),
+<a href=#606 id=606 data-nosnippet>606</a>                    nullable: <span class="bool-val">true</span>,
+<a href=#607 id=607 data-nosnippet>607</a>                });
+<a href=#608 id=608 data-nosnippet>608</a>            }
+<a href=#609 id=609 data-nosnippet>609</a>        }
+<a href=#610 id=610 data-nosnippet>610</a>    }
+<a href=#611 id=611 data-nosnippet>611</a>
+<a href=#612 id=612 data-nosnippet>612</a>    addr
+<a href=#613 id=613 data-nosnippet>613</a>}
+<a href=#614 id=614 data-nosnippet>614</a>
+<a href=#615 id=615 data-nosnippet>615</a><span class="doccomment">/// Emit code for the native address computation of a Wasm address,
+<a href=#616 id=616 data-nosnippet>616</a>/// without any bounds checks or overflow checks.
+<a href=#617 id=617 data-nosnippet>617</a>///
+<a href=#618 id=618 data-nosnippet>618</a>/// It is the caller's responsibility to ensure that any necessary bounds and
+<a href=#619 id=619 data-nosnippet>619</a>/// overflow checks are emitted, and that the resulting address is never used
+<a href=#620 id=620 data-nosnippet>620</a>/// unless they succeed.
+<a href=#621 id=621 data-nosnippet>621</a></span><span class="kw">fn </span>compute_addr(
+<a href=#622 id=622 data-nosnippet>622</a>    pos: <span class="kw-2">&amp;mut </span>FuncCursor,
+<a href=#623 id=623 data-nosnippet>623</a>    heap: <span class="kw-2">&amp;</span>HeapData,
+<a href=#624 id=624 data-nosnippet>624</a>    addr_ty: ir::Type,
+<a href=#625 id=625 data-nosnippet>625</a>    index: ir::Value,
+<a href=#626 id=626 data-nosnippet>626</a>    offset: u32,
+<a href=#627 id=627 data-nosnippet>627</a>    pcc: <span class="prelude-ty">Option</span>&lt;AddrPcc&gt;,
+<a href=#628 id=628 data-nosnippet>628</a>) -&gt; ir::Value {
+<a href=#629 id=629 data-nosnippet>629</a>    <span class="macro">debug_assert_eq!</span>(pos.func.dfg.value_type(index), addr_ty);
+<a href=#630 id=630 data-nosnippet>630</a>
+<a href=#631 id=631 data-nosnippet>631</a>    <span class="kw">let </span>heap_base = pos.ins().global_value(addr_ty, heap.base);
+<a href=#632 id=632 data-nosnippet>632</a>
+<a href=#633 id=633 data-nosnippet>633</a>    <span class="kw">match </span>pcc {
+<a href=#634 id=634 data-nosnippet>634</a>        <span class="prelude-val">None </span>=&gt; {}
+<a href=#635 id=635 data-nosnippet>635</a>        <span class="prelude-val">Some</span>(AddrPcc::Static32(ty, _size)) =&gt; {
+<a href=#636 id=636 data-nosnippet>636</a>            pos.func.dfg.facts[heap_base] = <span class="prelude-val">Some</span>(Fact::Mem {
+<a href=#637 id=637 data-nosnippet>637</a>                ty,
+<a href=#638 id=638 data-nosnippet>638</a>                min_offset: <span class="number">0</span>,
+<a href=#639 id=639 data-nosnippet>639</a>                max_offset: <span class="number">0</span>,
+<a href=#640 id=640 data-nosnippet>640</a>                nullable: <span class="bool-val">false</span>,
+<a href=#641 id=641 data-nosnippet>641</a>            });
+<a href=#642 id=642 data-nosnippet>642</a>        }
+<a href=#643 id=643 data-nosnippet>643</a>        <span class="prelude-val">Some</span>(AddrPcc::Dynamic(ty, _limit)) =&gt; {
+<a href=#644 id=644 data-nosnippet>644</a>            pos.func.dfg.facts[heap_base] = <span class="prelude-val">Some</span>(Fact::dynamic_base_ptr(ty));
+<a href=#645 id=645 data-nosnippet>645</a>        }
+<a href=#646 id=646 data-nosnippet>646</a>    }
+<a href=#647 id=647 data-nosnippet>647</a>
+<a href=#648 id=648 data-nosnippet>648</a>    <span class="kw">let </span>base_and_index = pos.ins().iadd(heap_base, index);
+<a href=#649 id=649 data-nosnippet>649</a>
+<a href=#650 id=650 data-nosnippet>650</a>    <span class="kw">match </span>pcc {
+<a href=#651 id=651 data-nosnippet>651</a>        <span class="prelude-val">None </span>=&gt; {}
+<a href=#652 id=652 data-nosnippet>652</a>        <span class="prelude-val">Some</span>(AddrPcc::Static32(ty, <span class="kw">_</span>) | AddrPcc::Dynamic(ty, <span class="kw">_</span>)) =&gt; {
+<a href=#653 id=653 data-nosnippet>653</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(idx) = pos.func.dfg.facts[index]
+<a href=#654 id=654 data-nosnippet>654</a>                .as_ref()
+<a href=#655 id=655 data-nosnippet>655</a>                .and_then(|f| f.as_symbol())
+<a href=#656 id=656 data-nosnippet>656</a>                .cloned()
+<a href=#657 id=657 data-nosnippet>657</a>            {
+<a href=#658 id=658 data-nosnippet>658</a>                pos.func.dfg.facts[base_and_index] = <span class="prelude-val">Some</span>(Fact::DynamicMem {
+<a href=#659 id=659 data-nosnippet>659</a>                    ty,
+<a href=#660 id=660 data-nosnippet>660</a>                    min: idx.clone(),
+<a href=#661 id=661 data-nosnippet>661</a>                    max: idx,
+<a href=#662 id=662 data-nosnippet>662</a>                    nullable: <span class="bool-val">false</span>,
+<a href=#663 id=663 data-nosnippet>663</a>                });
+<a href=#664 id=664 data-nosnippet>664</a>            } <span class="kw">else </span>{
+<a href=#665 id=665 data-nosnippet>665</a>                pos.func.dfg.facts[base_and_index] = <span class="prelude-val">Some</span>(Fact::Mem {
+<a href=#666 id=666 data-nosnippet>666</a>                    ty,
+<a href=#667 id=667 data-nosnippet>667</a>                    min_offset: <span class="number">0</span>,
+<a href=#668 id=668 data-nosnippet>668</a>                    max_offset: u64::from(u32::MAX),
+<a href=#669 id=669 data-nosnippet>669</a>                    nullable: <span class="bool-val">false</span>,
+<a href=#670 id=670 data-nosnippet>670</a>                });
+<a href=#671 id=671 data-nosnippet>671</a>            }
+<a href=#672 id=672 data-nosnippet>672</a>        }
+<a href=#673 id=673 data-nosnippet>673</a>    }
+<a href=#674 id=674 data-nosnippet>674</a>
+<a href=#675 id=675 data-nosnippet>675</a>    <span class="kw">if </span>offset == <span class="number">0 </span>{
+<a href=#676 id=676 data-nosnippet>676</a>        base_and_index
+<a href=#677 id=677 data-nosnippet>677</a>    } <span class="kw">else </span>{
+<a href=#678 id=678 data-nosnippet>678</a>        <span class="comment">// NB: The addition of the offset immediate must happen *before* the
+<a href=#679 id=679 data-nosnippet>679</a>        // `select_spectre_guard`, if any. If it happens after, then we
+<a href=#680 id=680 data-nosnippet>680</a>        // potentially are letting speculative execution read the whole first
+<a href=#681 id=681 data-nosnippet>681</a>        // 4GiB of memory.
+<a href=#682 id=682 data-nosnippet>682</a>        </span><span class="kw">let </span>offset_val = pos.ins().iconst(addr_ty, i64::from(offset));
+<a href=#683 id=683 data-nosnippet>683</a>
+<a href=#684 id=684 data-nosnippet>684</a>        <span class="kw">if </span>pcc.is_some() {
+<a href=#685 id=685 data-nosnippet>685</a>            pos.func.dfg.facts[offset_val] = <span class="prelude-val">Some</span>(Fact::constant(
+<a href=#686 id=686 data-nosnippet>686</a>                u16::try_from(addr_ty.bits()).unwrap(),
+<a href=#687 id=687 data-nosnippet>687</a>                u64::from(offset),
+<a href=#688 id=688 data-nosnippet>688</a>            ));
+<a href=#689 id=689 data-nosnippet>689</a>        }
+<a href=#690 id=690 data-nosnippet>690</a>
+<a href=#691 id=691 data-nosnippet>691</a>        <span class="kw">let </span>result = pos.ins().iadd(base_and_index, offset_val);
+<a href=#692 id=692 data-nosnippet>692</a>
+<a href=#693 id=693 data-nosnippet>693</a>        <span class="kw">match </span>pcc {
+<a href=#694 id=694 data-nosnippet>694</a>            <span class="prelude-val">None </span>=&gt; {}
+<a href=#695 id=695 data-nosnippet>695</a>            <span class="prelude-val">Some</span>(AddrPcc::Static32(ty, <span class="kw">_</span>) | AddrPcc::Dynamic(ty, <span class="kw">_</span>)) =&gt; {
+<a href=#696 id=696 data-nosnippet>696</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(idx) = pos.func.dfg.facts[index]
+<a href=#697 id=697 data-nosnippet>697</a>                    .as_ref()
+<a href=#698 id=698 data-nosnippet>698</a>                    .and_then(|f| f.as_symbol())
+<a href=#699 id=699 data-nosnippet>699</a>                {
+<a href=#700 id=700 data-nosnippet>700</a>                    pos.func.dfg.facts[result] = <span class="prelude-val">Some</span>(Fact::DynamicMem {
+<a href=#701 id=701 data-nosnippet>701</a>                        ty,
+<a href=#702 id=702 data-nosnippet>702</a>                        min: idx.clone(),
+<a href=#703 id=703 data-nosnippet>703</a>                        <span class="comment">// Safety: adding an offset to an expression with
+<a href=#704 id=704 data-nosnippet>704</a>                        // zero offset -- add cannot wrap, so `unwrap()`
+<a href=#705 id=705 data-nosnippet>705</a>                        // cannot fail.
+<a href=#706 id=706 data-nosnippet>706</a>                        </span>max: Expr::offset(idx, i64::from(offset)).unwrap(),
+<a href=#707 id=707 data-nosnippet>707</a>                        nullable: <span class="bool-val">false</span>,
+<a href=#708 id=708 data-nosnippet>708</a>                    });
+<a href=#709 id=709 data-nosnippet>709</a>                } <span class="kw">else </span>{
+<a href=#710 id=710 data-nosnippet>710</a>                    pos.func.dfg.facts[result] = <span class="prelude-val">Some</span>(Fact::Mem {
+<a href=#711 id=711 data-nosnippet>711</a>                        ty,
+<a href=#712 id=712 data-nosnippet>712</a>                        min_offset: u64::from(offset),
+<a href=#713 id=713 data-nosnippet>713</a>                        <span class="comment">// Safety: can't overflow -- two u32s summed in a
+<a href=#714 id=714 data-nosnippet>714</a>                        // 64-bit add. TODO: when memory64 is supported here,
+<a href=#715 id=715 data-nosnippet>715</a>                        // `u32::MAX` is no longer true, and we'll need to
+<a href=#716 id=716 data-nosnippet>716</a>                        // handle overflow here.
+<a href=#717 id=717 data-nosnippet>717</a>                        </span>max_offset: u64::from(u32::MAX) + u64::from(offset),
+<a href=#718 id=718 data-nosnippet>718</a>                        nullable: <span class="bool-val">false</span>,
+<a href=#719 id=719 data-nosnippet>719</a>                    });
+<a href=#720 id=720 data-nosnippet>720</a>                }
+<a href=#721 id=721 data-nosnippet>721</a>            }
+<a href=#722 id=722 data-nosnippet>722</a>        }
+<a href=#723 id=723 data-nosnippet>723</a>        result
+<a href=#724 id=724 data-nosnippet>724</a>    }
+<a href=#725 id=725 data-nosnippet>725</a>}
+<a href=#726 id=726 data-nosnippet>726</a>
+<a href=#727 id=727 data-nosnippet>727</a><span class="attr">#[inline]
+<a href=#728 id=728 data-nosnippet>728</a></span><span class="kw">fn </span>offset_plus_size(offset: u32, size: u8) -&gt; u64 {
+<a href=#729 id=729 data-nosnippet>729</a>    <span class="comment">// Cannot overflow because we are widening to `u64`.
+<a href=#730 id=730 data-nosnippet>730</a>    </span>offset <span class="kw">as </span>u64 + size <span class="kw">as </span>u64
+<a href=#731 id=731 data-nosnippet>731</a>}</code></pre></div></section></main></body></html>

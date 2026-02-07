@@ -1,0 +1,155 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`ark-ec` defines traits and algorithms for working with different kinds of additive groups, with a focus on groups arising from elliptic curves. It further provides concrete instantiations of these traits for various elliptic curve models, including popular families of pairing-friendly curves such as the BLS12 family of curves. Implementations of particular curves using these curve models can be found in `arkworks-rs/curves`."><title>ark_ec - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ark_ec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ark_ec/index.html">ark_ec</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#usage" title="Usage">Usage</a><ul><li><a href="#the-group-trait" title="The `Group` trait">The <code>Group</code> trait</a></li></ul></li><li><a href="#scalar-multiplication" title="Scalar multiplication">Scalar multiplication</a><ul><li><a href="#elliptic-curve-groups" title="Elliptic curve groups">Elliptic curve groups</a></li><li><a href="#pairings" title="Pairings">Pairings</a></li><li><a href="#hash-to-group" title="Hash-to-group">Hash-to-group</a></li></ul></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>ark_ec</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/ark_ec/lib.rs.html#1-260">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h1 align="center">ark-ec</h1>
+<p align="center">
+    <img src="https://github.com/arkworks-rs/algebra/workflows/CI/badge.svg?branch=master">
+    <a href="https://github.com/arkworks-rs/algebra/blob/master/LICENSE-APACHE"><img src="https://img.shields.io/badge/license-APACHE-blue.svg"></a>
+    <a href="https://github.com/arkworks-rs/algebra/blob/master/LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+    <a href="https://deps.rs/repo/github/arkworks-rs/algebra"><img src="https://deps.rs/repo/github/arkworks-rs/algebra/status.svg"></a>
+</p>
+<p><code>ark-ec</code> defines traits and algorithms for working with different kinds of additive groups, with a focus on groups arising from elliptic curves. It further provides concrete instantiations of these traits for various elliptic curve models, including popular families of pairing-friendly curves such as the BLS12 family of curves.
+Implementations of particular curves using these curve models can be found in <a href="https://github.com/arkworks-rs/algebra/blob/master/curves/README.md"><code>arkworks-rs/curves</code></a>.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3><h4 id="the-group-trait"><a class="doc-anchor" href="#the-group-trait">§</a>The <code>Group</code> trait</h4>
+<p>Many cryptographic protocols use as core building-blocks prime-order groups. The <a href="https://github.com/arkworks-rs/algebra/blob/master/ec/src/lib.rs"><code>PrimeGroup</code></a> trait is an abstraction that represents elements of such abelian prime-order groups. It provides methods for performing common operations on group elements:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ec::{AdditiveGroup, PrimeGroup};
+<span class="kw">use </span>ark_ff::{PrimeField, Field};
+<span class="comment">// We'll use the BLS12-381 G1 curve for this example.
+// This group has a prime order `r`, and is associated with a prime field `Fr`.
+</span><span class="kw">use </span>ark_test_curves::bls12_381::{G1Projective <span class="kw">as </span>G, Fr <span class="kw">as </span>ScalarField};
+<span class="kw">use </span>ark_std::{Zero, UniformRand, ops::Mul};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = ark_std::test_rng();
+<span class="comment">// Let's sample uniformly random group elements:
+</span><span class="kw">let </span>a = G::rand(<span class="kw-2">&amp;mut </span>rng);
+<span class="kw">let </span>b = G::rand(<span class="kw-2">&amp;mut </span>rng);
+
+<span class="comment">// We can add elements, ...
+</span><span class="kw">let </span>c = a + b;
+<span class="comment">// ... subtract them, ...
+</span><span class="kw">let </span>d = a - b;
+<span class="comment">// ... and double them.
+</span><span class="macro">assert_eq!</span>(c + d, a.double());
+<span class="comment">// We can also negate elements, ...
+</span><span class="kw">let </span>e = -a;
+<span class="comment">// ... and check that negation satisfies the basic group law
+</span><span class="macro">assert_eq!</span>(e + a, G::zero());
+
+<span class="comment">// We can also multiply group elements by elements of the corresponding scalar field
+// (an act known as *scalar multiplication*)
+</span><span class="kw">let </span>scalar = ScalarField::rand(<span class="kw-2">&amp;mut </span>rng);
+<span class="kw">let </span>e = c.mul(scalar);
+<span class="kw">let </span>f = e.mul(scalar.inverse().unwrap());
+<span class="macro">assert_eq!</span>(f, c);</code></pre></div>
+<h3 id="scalar-multiplication"><a class="doc-anchor" href="#scalar-multiplication">§</a>Scalar multiplication</h3>
+<p>While the <code>PrimeGroup</code> trait already produces scalar multiplication routines, in many cases one can take advantage of
+the group structure to perform scalar multiplication more efficiently. To allow such specialization, <code>ark-ec</code> provides
+the <code>ScalarMul</code> and <code>VariableBaseMSM</code> traits. The latter trait computes an “inner product” between a vector of scalars <code>s</code> and a vector of group elements <code>g</code>. That is, it computes <code>s.iter().zip(g).map(|(s, g)| g * s).sum()</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ec::{PrimeGroup, VariableBaseMSM};
+<span class="kw">use </span>ark_ff::{PrimeField, Field};
+<span class="comment">// We'll use the BLS12-381 G1 curve for this example.
+// This group has a prime order `r`, and is associated with a prime field `Fr`.
+</span><span class="kw">use </span>ark_test_curves::bls12_381::{G1Projective <span class="kw">as </span>G, G1Affine <span class="kw">as </span>GAffine, Fr <span class="kw">as </span>ScalarField};
+<span class="kw">use </span>ark_std::{Zero,  UniformRand};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = ark_std::test_rng();
+<span class="comment">// Let's sample uniformly random group elements:
+</span><span class="kw">let </span>a = GAffine::rand(<span class="kw-2">&amp;mut </span>rng);
+<span class="kw">let </span>b = GAffine::rand(<span class="kw-2">&amp;mut </span>rng);
+
+<span class="kw">let </span>s1 = ScalarField::rand(<span class="kw-2">&amp;mut </span>rng);
+<span class="kw">let </span>s2 = ScalarField::rand(<span class="kw-2">&amp;mut </span>rng);
+
+<span class="comment">// Note that we're using the `GAffine` type here, as opposed to `G`.
+// This is because MSMs are more efficient when the group elements are in affine form. (See below for why.)
+//
+// The `VariableBaseMSM` trait allows specializing the input group element representation to allow
+// for more efficient implementations.
+</span><span class="kw">let </span>r = G::msm(<span class="kw-2">&amp;</span>[a, b], <span class="kw-2">&amp;</span>[s1, s2]).unwrap();
+<span class="macro">assert_eq!</span>(r, a * s1 + b * s2);</code></pre></div>
+<h4 id="elliptic-curve-groups"><a class="doc-anchor" href="#elliptic-curve-groups">§</a>Elliptic curve groups</h4>
+<p>There are two traits that are important when working with elliptic curves
+over finite fields: <a href="trait.CurveGroup.html" title="trait ark_ec::CurveGroup"><code>CurveGroup</code></a>, and <a href="trait.AffineRepr.html" title="trait ark_ec::AffineRepr"><code>AffineRepr</code></a>. Both traits
+represent elements of the same curve, but provide different underlying representations.
+In particular, the <a href="trait.CurveGroup.html" title="trait ark_ec::CurveGroup"><code>CurveGroup</code></a> representation of a curve point is generally
+more efficient for arithmetic, but does not provide a unique representative
+for a curve point. An <a href="trait.AffineRepr.html" title="trait ark_ec::AffineRepr"><code>AffineRepr</code></a> representation, on the other hand, <em>is</em> unique,
+but is slower for most arithmetic operations. Let’s explore how and when to use
+these:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ec::{AdditiveGroup, AffineRepr, PrimeGroup, CurveGroup, VariableBaseMSM};
+<span class="kw">use </span>ark_ff::{PrimeField, Field};
+<span class="kw">use </span>ark_test_curves::bls12_381::{G1Projective <span class="kw">as </span>G, G1Affine <span class="kw">as </span>GAffine, Fr <span class="kw">as </span>ScalarField};
+<span class="kw">use </span>ark_std::{Zero, UniformRand};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = ark_std::test_rng();
+<span class="comment">// Let's generate an elliptic curve group element in the `CurveGroup` representation
+</span><span class="kw">let </span>a = G::rand(<span class="kw-2">&amp;mut </span>rng);
+<span class="comment">// We can convert it the `AffineRepr` representation...
+</span><span class="kw">let </span>a_aff = a.into_affine();
+<span class="comment">// ... and check that the two representations are equal.
+</span><span class="macro">assert_eq!</span>(a_aff, a);
+<span class="comment">// We can also convert back to the `CurveGroup` representation:
+</span><span class="macro">assert_eq!</span>(a, a_aff.into_group());
+
+<span class="comment">// As a general rule, most group operations are slower when elements
+// are represented as `AffineRepr`. However, adding an `AffineRepr`
+// point to a `CurveGroup` one is usually slightly more efficient than
+// adding two `CurveGroup` points.
+</span><span class="kw">let </span>d = a + a_aff;
+<span class="macro">assert_eq!</span>(d, a.double());
+
+<span class="comment">// This efficiency also translates into more efficient scalar multiplication routines.
+</span><span class="kw">let </span>scalar = ScalarField::rand(<span class="kw-2">&amp;mut </span>rng);
+<span class="kw">let </span>mul_result = a_aff * scalar;
+<span class="macro">assert_eq!</span>(a * scalar, mul_result);
+
+<span class="comment">// Finally, while not recommended, users can directly construct group elements
+// from the x and y coordinates of the curve points. This is useful when implementing algorithms
+// like hash-to-curve.
+</span><span class="kw">let </span>a_x = a_aff.x;
+<span class="kw">let </span>a_y = a_aff.y;
+<span class="kw">let </span>is_at_infinity = a_aff.is_zero();
+<span class="comment">// This check ensures that `new_a` is indeed in the curve group, and in particular
+// is within the prime-order group.
+</span><span class="kw">let </span>new_a = GAffine::new(a_x, a_y);
+<span class="macro">assert_eq!</span>(a_aff, new_a);
+<span class="macro">assert!</span>(new_a.is_on_curve());
+<span class="macro">assert!</span>(new_a.is_in_correct_subgroup_assuming_on_curve());</code></pre></div>
+<p>Besides the foregoing abstract interfaces for elliptic curve groups, <code>ark-ec</code> also provides
+the following concrete instantiations of common elliptic curve models:</p>
+<ul>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ec/src/models/short_weierstrass.rs"><em>Short Weierstrass</em></a> curves. The <code>AffineRepr</code> in this case is in typical Short Weierstrass point representation, and the <code>CurveGroup</code> is using points in <a href="https://en.wikibooks.org/wiki/Cryptography/Prime_Curve/Jacobian_Coordinates">Jacobian Coordinates</a>.</li>
+<li><a href="https://github.com/arkworks-rs/algebra/blob/master/ec/src/models/twisted_edwards.rs"><em>Twisted Edwards</em></a> curves. The <code>AffineRepr</code> in this case is in standard Twisted Edwards curve representation, whereas the <code>CurveGroup</code> uses points in <a href="https://eprint.iacr.org/2008/522.pdf">Extended Twisted Edwards Coordinates</a>.</li>
+</ul>
+<h4 id="pairings"><a class="doc-anchor" href="#pairings">§</a>Pairings</h4>
+<p><a href="https://github.com/arkworks-rs/algebra/blob/master/ec/src/pairing.rs"><code>Pairing</code></a> is a trait that defines the interface for a pairing-friendly elliptic curve. Besides the general interface, we provide concrete instantiations of popular pairing-friendly families of curves, such as the <a href="https://github.com/arkworks-rs/algebra/blob/master/ec/src/models/bls12/mod.rs">Barreto-Lynn-Scott</a> and <a href="https://github.com/arkworks-rs/algebra/blob/master/ec/src/models/bn/mod.rs">Barreto-Naehrig</a> families.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ec::{pairing::Pairing, AffineRepr};
+<span class="kw">use </span>ark_ff::Field;
+<span class="kw">use </span>ark_std::UniformRand;
+
+<span class="kw">use </span>ark_test_curves::bls12_381::{Bls12_381, G1Projective <span class="kw">as </span>G1, G2Projective <span class="kw">as </span>G2, Fq12 <span class="kw">as </span>Fq12};
+<span class="kw">use </span>ark_test_curves::bls12_381::Fr <span class="kw">as </span>ScalarField;
+
+<span class="comment">// The pairing engine is parameterized by the scalar field of the curve.
+</span><span class="kw">let </span><span class="kw-2">mut </span>rng = ark_std::test_rng();
+<span class="kw">let </span>s = ScalarField::rand(<span class="kw-2">&amp;mut </span>rng);
+<span class="kw">let </span>a = G1::rand(<span class="kw-2">&amp;mut </span>rng);
+<span class="kw">let </span>b = G2::rand(<span class="kw-2">&amp;mut </span>rng);
+
+<span class="comment">// We can compute the pairing of two points on the curve, either monolithically...
+</span><span class="kw">let </span>e1 = Bls12_381::pairing(a, b);
+<span class="comment">// ... or in two steps. First, we compute the Miller loop...
+</span><span class="kw">let </span>ml_result = Bls12_381::miller_loop(a, b);
+<span class="comment">// ... and then the final exponentiation.
+</span><span class="kw">let </span>e2 = Bls12_381::final_exponentiation(ml_result).unwrap();
+<span class="macro">assert_eq!</span>(e1, e2);</code></pre></div>
+<h4 id="hash-to-group"><a class="doc-anchor" href="#hash-to-group">§</a>Hash-to-group</h4>
+<p><code>ark-ec</code> also provides traits for hashing to elliptic curve groups. The <a href="https://github.com/arkworks-rs/algebra/blob/master/ec/src/hashing/mod.rs"><code>HashToCurve</code></a> trait allows users to hash arbitrary byte strings to elliptic curve group elements, and allows using different hashing strategies.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.VariableBaseMSM"><code>pub use scalar_mul::variable_base::<a class="trait" href="scalar_mul/variable_base/trait.VariableBaseMSM.html" title="trait ark_ec::scalar_mul::variable_base::VariableBaseMSM">VariableBaseMSM</a>;</code></dt><dt id="reexport.ScalarMul"><code>pub use scalar_mul::<a class="trait" href="scalar_mul/trait.ScalarMul.html" title="trait ark_ec::scalar_mul::ScalarMul">ScalarMul</a>;</code></dt><dt><code>pub use self::<a class="mod" href="models/index.html" title="mod ark_ec::models">models</a>::*;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="hashing/index.html" title="mod ark_ec::hashing">hashing</a></dt><dd>Provides a <code>HashToCurve</code> trait and implementations of this trait via
+different hashing strategies.</dd><dt><a class="mod" href="models/index.html" title="mod ark_ec::models">models</a></dt><dt><a class="mod" href="pairing/index.html" title="mod ark_ec::pairing">pairing</a></dt><dt><a class="mod" href="scalar_mul/index.html" title="mod ark_ec::scalar_mul">scalar_<wbr>mul</a></dt></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.AdditiveGroup.html" title="trait ark_ec::AdditiveGroup">Additive<wbr>Group</a></dt><dt><a class="trait" href="trait.AffineRepr.html" title="trait ark_ec::AffineRepr">Affine<wbr>Repr</a></dt><dd>The canonical representation of an elliptic curve group element.
+This should represent the affine coordinates of the point corresponding
+to this group element.</dd><dt><a class="trait" href="trait.CurveCycle.html" title="trait ark_ec::CurveCycle">Curve<wbr>Cycle</a></dt><dd>Wrapper trait representing a cycle of elliptic curves (E1, E2) such that
+the base field of E1 is the scalar field of E2, and the scalar field of E1
+is the base field of E2.</dd><dt><a class="trait" href="trait.CurveGroup.html" title="trait ark_ec::CurveGroup">Curve<wbr>Group</a></dt><dd>An opaque representation of an elliptic curve group element that is suitable
+for efficient group arithmetic.</dd><dt><a class="trait" href="trait.PairingFriendlyCycle.html" title="trait ark_ec::PairingFriendlyCycle">Pairing<wbr>Friendly<wbr>Cycle</a></dt><dd>A cycle of curves where both curves are pairing-friendly.</dd><dt><a class="trait" href="trait.PrimeGroup.html" title="trait ark_ec::PrimeGroup">Prime<wbr>Group</a></dt><dd>Represents (elements of) a group of prime order <code>r</code>.</dd></dl></section></div></main></body></html>

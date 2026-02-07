@@ -1,0 +1,358 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/k8s-openapi-0.21.1/src/v1_28/api/storage/v1/csi_driver_spec.rs`."><title>csi_driver_spec.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../../../../" data-static-root-path="../../../../../../static.files/" data-current-crate="k8s_openapi" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../../../../src-files.js"></script><script defer src="../../../../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">k8s_openapi/v1_28/api/storage/v1/</div>csi_driver_spec.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Generated from definition io.k8s.api.storage.v1.CSIDriverSpec
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a></span><span class="doccomment">/// CSIDriverSpec is the specification of a CSIDriver.
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="attr">#[derive(Clone, Debug, Default, PartialEq)]
+<a href=#5 id=5 data-nosnippet>5</a></span><span class="kw">pub struct </span>CSIDriverSpec {
+<a href=#6 id=6 data-nosnippet>6</a>    <span class="doccomment">/// attachRequired indicates this CSI volume driver requires an attach operation (because it implements the CSI ControllerPublishVolume() method), and that the Kubernetes attach detach controller should call the attach volume interface which checks the volumeattachment status and waits until the volume is attached before proceeding to mounting. The CSI external-attacher coordinates with CSI volume driver and updates the volumeattachment status when the attach operation is complete. If the CSIDriverRegistry feature gate is enabled and the value is specified to false, the attach operation will be skipped. Otherwise the attach operation will be called.
+<a href=#7 id=7 data-nosnippet>7</a>    ///
+<a href=#8 id=8 data-nosnippet>8</a>    /// This field is immutable.
+<a href=#9 id=9 data-nosnippet>9</a>    </span><span class="kw">pub </span>attach_required: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+<a href=#10 id=10 data-nosnippet>10</a>
+<a href=#11 id=11 data-nosnippet>11</a>    <span class="doccomment">/// fsGroupPolicy defines if the underlying volume supports changing ownership and permission of the volume before being mounted. Refer to the specific FSGroupPolicy values for additional details.
+<a href=#12 id=12 data-nosnippet>12</a>    ///
+<a href=#13 id=13 data-nosnippet>13</a>    /// This field is immutable.
+<a href=#14 id=14 data-nosnippet>14</a>    ///
+<a href=#15 id=15 data-nosnippet>15</a>    /// Defaults to ReadWriteOnceWithFSType, which will examine each volume to determine if Kubernetes should modify ownership and permissions of the volume. With the default policy the defined fsGroup will only be applied if a fstype is defined and the volume's access mode contains ReadWriteOnce.
+<a href=#16 id=16 data-nosnippet>16</a>    </span><span class="kw">pub </span>fs_group_policy: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#17 id=17 data-nosnippet>17</a>
+<a href=#18 id=18 data-nosnippet>18</a>    <span class="doccomment">/// podInfoOnMount indicates this CSI volume driver requires additional pod information (like podName, podUID, etc.) during mount operations, if set to true. If set to false, pod information will not be passed on mount. Default is false.
+<a href=#19 id=19 data-nosnippet>19</a>    ///
+<a href=#20 id=20 data-nosnippet>20</a>    /// The CSI driver specifies podInfoOnMount as part of driver deployment. If true, Kubelet will pass pod information as VolumeContext in the CSI NodePublishVolume() calls. The CSI driver is responsible for parsing and validating the information passed in as VolumeContext.
+<a href=#21 id=21 data-nosnippet>21</a>    ///
+<a href=#22 id=22 data-nosnippet>22</a>    /// The following VolumeConext will be passed if podInfoOnMount is set to true. This list might grow, but the prefix will be used. "csi.storage.k8s.io/pod.name": pod.Name "csi.storage.k8s.io/pod.namespace": pod.Namespace "csi.storage.k8s.io/pod.uid": string(pod.UID) "csi.storage.k8s.io/ephemeral": "true" if the volume is an ephemeral inline volume
+<a href=#23 id=23 data-nosnippet>23</a>    ///                                 defined by a CSIVolumeSource, otherwise "false"
+<a href=#24 id=24 data-nosnippet>24</a>    ///
+<a href=#25 id=25 data-nosnippet>25</a>    /// "csi.storage.k8s.io/ephemeral" is a new feature in Kubernetes 1.16. It is only required for drivers which support both the "Persistent" and "Ephemeral" VolumeLifecycleMode. Other drivers can leave pod info disabled and/or ignore this field. As Kubernetes 1.15 doesn't support this field, drivers can only support one mode when deployed on such a cluster and the deployment determines which mode that is, for example via a command line parameter of the driver.
+<a href=#26 id=26 data-nosnippet>26</a>    ///
+<a href=#27 id=27 data-nosnippet>27</a>    /// This field is immutable.
+<a href=#28 id=28 data-nosnippet>28</a>    </span><span class="kw">pub </span>pod_info_on_mount: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+<a href=#29 id=29 data-nosnippet>29</a>
+<a href=#30 id=30 data-nosnippet>30</a>    <span class="doccomment">/// requiresRepublish indicates the CSI driver wants `NodePublishVolume` being periodically called to reflect any possible change in the mounted volume. This field defaults to false.
+<a href=#31 id=31 data-nosnippet>31</a>    ///
+<a href=#32 id=32 data-nosnippet>32</a>    /// Note: After a successful initial NodePublishVolume call, subsequent calls to NodePublishVolume should only update the contents of the volume. New mount points will not be seen by a running container.
+<a href=#33 id=33 data-nosnippet>33</a>    </span><span class="kw">pub </span>requires_republish: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a>    <span class="doccomment">/// seLinuxMount specifies if the CSI driver supports "-o context" mount option.
+<a href=#36 id=36 data-nosnippet>36</a>    ///
+<a href=#37 id=37 data-nosnippet>37</a>    /// When "true", the CSI driver must ensure that all volumes provided by this CSI driver can be mounted separately with different `-o context` options. This is typical for storage backends that provide volumes as filesystems on block devices or as independent shared volumes. Kubernetes will call NodeStage / NodePublish with "-o context=xyz" mount option when mounting a ReadWriteOncePod volume used in Pod that has explicitly set SELinux context. In the future, it may be expanded to other volume AccessModes. In any case, Kubernetes will ensure that the volume is mounted only with a single SELinux context.
+<a href=#38 id=38 data-nosnippet>38</a>    ///
+<a href=#39 id=39 data-nosnippet>39</a>    /// When "false", Kubernetes won't pass any special SELinux mount options to the driver. This is typical for volumes that represent subdirectories of a bigger shared filesystem.
+<a href=#40 id=40 data-nosnippet>40</a>    ///
+<a href=#41 id=41 data-nosnippet>41</a>    /// Default is "false".
+<a href=#42 id=42 data-nosnippet>42</a>    </span><span class="kw">pub </span>se_linux_mount: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+<a href=#43 id=43 data-nosnippet>43</a>
+<a href=#44 id=44 data-nosnippet>44</a>    <span class="doccomment">/// storageCapacity indicates that the CSI volume driver wants pod scheduling to consider the storage capacity that the driver deployment will report by creating CSIStorageCapacity objects with capacity information, if set to true.
+<a href=#45 id=45 data-nosnippet>45</a>    ///
+<a href=#46 id=46 data-nosnippet>46</a>    /// The check can be enabled immediately when deploying a driver. In that case, provisioning new volumes with late binding will pause until the driver deployment has published some suitable CSIStorageCapacity object.
+<a href=#47 id=47 data-nosnippet>47</a>    ///
+<a href=#48 id=48 data-nosnippet>48</a>    /// Alternatively, the driver can be deployed with the field unset or false and it can be flipped later when storage capacity information has been published.
+<a href=#49 id=49 data-nosnippet>49</a>    ///
+<a href=#50 id=50 data-nosnippet>50</a>    /// This field was immutable in Kubernetes \&lt;= 1.22 and now is mutable.
+<a href=#51 id=51 data-nosnippet>51</a>    </span><span class="kw">pub </span>storage_capacity: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+<a href=#52 id=52 data-nosnippet>52</a>
+<a href=#53 id=53 data-nosnippet>53</a>    <span class="doccomment">/// tokenRequests indicates the CSI driver needs pods' service account tokens it is mounting volume for to do necessary authentication. Kubelet will pass the tokens in VolumeContext in the CSI NodePublishVolume calls. The CSI driver should parse and validate the following VolumeContext: "csi.storage.k8s.io/serviceAccount.tokens": {
+<a href=#54 id=54 data-nosnippet>54</a>    ///   "\&lt;audience\&gt;": {
+<a href=#55 id=55 data-nosnippet>55</a>    ///     "token": \&lt;token\&gt;,
+<a href=#56 id=56 data-nosnippet>56</a>    ///     "expirationTimestamp": \&lt;expiration timestamp in RFC3339\&gt;,
+<a href=#57 id=57 data-nosnippet>57</a>    ///   },
+<a href=#58 id=58 data-nosnippet>58</a>    ///   ...
+<a href=#59 id=59 data-nosnippet>59</a>    /// }
+<a href=#60 id=60 data-nosnippet>60</a>    ///
+<a href=#61 id=61 data-nosnippet>61</a>    /// Note: Audience in each TokenRequest should be different and at most one token is empty string. To receive a new token after expiry, RequiresRepublish can be used to trigger NodePublishVolume periodically.
+<a href=#62 id=62 data-nosnippet>62</a>    </span><span class="kw">pub </span>token_requests: <span class="prelude-ty">Option</span>&lt;Vec&lt;<span class="kw">crate</span>::api::storage::v1::TokenRequest&gt;&gt;,
+<a href=#63 id=63 data-nosnippet>63</a>
+<a href=#64 id=64 data-nosnippet>64</a>    <span class="doccomment">/// volumeLifecycleModes defines what kind of volumes this CSI volume driver supports. The default if the list is empty is "Persistent", which is the usage defined by the CSI specification and implemented in Kubernetes via the usual PV/PVC mechanism.
+<a href=#65 id=65 data-nosnippet>65</a>    ///
+<a href=#66 id=66 data-nosnippet>66</a>    /// The other mode is "Ephemeral". In this mode, volumes are defined inline inside the pod spec with CSIVolumeSource and their lifecycle is tied to the lifecycle of that pod. A driver has to be aware of this because it is only going to get a NodePublishVolume call for such a volume.
+<a href=#67 id=67 data-nosnippet>67</a>    ///
+<a href=#68 id=68 data-nosnippet>68</a>    /// For more information about implementing this mode, see https://kubernetes-csi.github.io/docs/ephemeral-local-volumes.html A driver can support one or more of these modes and more modes may be added in the future.
+<a href=#69 id=69 data-nosnippet>69</a>    ///
+<a href=#70 id=70 data-nosnippet>70</a>    /// This field is beta. This field is immutable.
+<a href=#71 id=71 data-nosnippet>71</a>    </span><span class="kw">pub </span>volume_lifecycle_modes: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
+<a href=#72 id=72 data-nosnippet>72</a>}
+<a href=#73 id=73 data-nosnippet>73</a>
+<a href=#74 id=74 data-nosnippet>74</a><span class="kw">impl </span><span class="kw">crate</span>::DeepMerge <span class="kw">for </span>CSIDriverSpec {
+<a href=#75 id=75 data-nosnippet>75</a>    <span class="kw">fn </span>merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="self">Self</span>) {
+<a href=#76 id=76 data-nosnippet>76</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.attach_required, other.attach_required);
+<a href=#77 id=77 data-nosnippet>77</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.fs_group_policy, other.fs_group_policy);
+<a href=#78 id=78 data-nosnippet>78</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.pod_info_on_mount, other.pod_info_on_mount);
+<a href=#79 id=79 data-nosnippet>79</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.requires_republish, other.requires_republish);
+<a href=#80 id=80 data-nosnippet>80</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.se_linux_mount, other.se_linux_mount);
+<a href=#81 id=81 data-nosnippet>81</a>        <span class="kw">crate</span>::DeepMerge::merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>.storage_capacity, other.storage_capacity);
+<a href=#82 id=82 data-nosnippet>82</a>        <span class="kw">crate</span>::merge_strategies::list::atomic(<span class="kw-2">&amp;mut </span><span class="self">self</span>.token_requests, other.token_requests);
+<a href=#83 id=83 data-nosnippet>83</a>        <span class="kw">crate</span>::merge_strategies::list::set(<span class="kw-2">&amp;mut </span><span class="self">self</span>.volume_lifecycle_modes, other.volume_lifecycle_modes);
+<a href=#84 id=84 data-nosnippet>84</a>    }
+<a href=#85 id=85 data-nosnippet>85</a>}
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a><span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; <span class="kw">crate</span>::serde::Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>CSIDriverSpec {
+<a href=#88 id=88 data-nosnippet>88</a>    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt; <span class="kw">where </span>D: <span class="kw">crate</span>::serde::Deserializer&lt;<span class="lifetime">'de</span>&gt; {
+<a href=#89 id=89 data-nosnippet>89</a>        <span class="attr">#[allow(non_camel_case_types)]
+<a href=#90 id=90 data-nosnippet>90</a>        </span><span class="kw">enum </span>Field {
+<a href=#91 id=91 data-nosnippet>91</a>            Key_attach_required,
+<a href=#92 id=92 data-nosnippet>92</a>            Key_fs_group_policy,
+<a href=#93 id=93 data-nosnippet>93</a>            Key_pod_info_on_mount,
+<a href=#94 id=94 data-nosnippet>94</a>            Key_requires_republish,
+<a href=#95 id=95 data-nosnippet>95</a>            Key_se_linux_mount,
+<a href=#96 id=96 data-nosnippet>96</a>            Key_storage_capacity,
+<a href=#97 id=97 data-nosnippet>97</a>            Key_token_requests,
+<a href=#98 id=98 data-nosnippet>98</a>            Key_volume_lifecycle_modes,
+<a href=#99 id=99 data-nosnippet>99</a>            Other,
+<a href=#100 id=100 data-nosnippet>100</a>        }
+<a href=#101 id=101 data-nosnippet>101</a>
+<a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; <span class="kw">crate</span>::serde::Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>Field {
+<a href=#103 id=103 data-nosnippet>103</a>            <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt; <span class="kw">where </span>D: <span class="kw">crate</span>::serde::Deserializer&lt;<span class="lifetime">'de</span>&gt; {
+<a href=#104 id=104 data-nosnippet>104</a>                <span class="kw">struct </span>Visitor;
+<a href=#105 id=105 data-nosnippet>105</a>
+<a href=#106 id=106 data-nosnippet>106</a>                <span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; <span class="kw">crate</span>::serde::de::Visitor&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>Visitor {
+<a href=#107 id=107 data-nosnippet>107</a>                    <span class="kw">type </span>Value = Field;
+<a href=#108 id=108 data-nosnippet>108</a>
+<a href=#109 id=109 data-nosnippet>109</a>                    <span class="kw">fn </span>expecting(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+<a href=#110 id=110 data-nosnippet>110</a>                        f.write_str(<span class="string">"field identifier"</span>)
+<a href=#111 id=111 data-nosnippet>111</a>                    }
+<a href=#112 id=112 data-nosnippet>112</a>
+<a href=#113 id=113 data-nosnippet>113</a>                    <span class="kw">fn </span>visit_str&lt;E&gt;(<span class="self">self</span>, v: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Value, E&gt; <span class="kw">where </span>E: <span class="kw">crate</span>::serde::de::Error {
+<a href=#114 id=114 data-nosnippet>114</a>                        <span class="prelude-val">Ok</span>(<span class="kw">match </span>v {
+<a href=#115 id=115 data-nosnippet>115</a>                            <span class="string">"attachRequired" </span>=&gt; Field::Key_attach_required,
+<a href=#116 id=116 data-nosnippet>116</a>                            <span class="string">"fsGroupPolicy" </span>=&gt; Field::Key_fs_group_policy,
+<a href=#117 id=117 data-nosnippet>117</a>                            <span class="string">"podInfoOnMount" </span>=&gt; Field::Key_pod_info_on_mount,
+<a href=#118 id=118 data-nosnippet>118</a>                            <span class="string">"requiresRepublish" </span>=&gt; Field::Key_requires_republish,
+<a href=#119 id=119 data-nosnippet>119</a>                            <span class="string">"seLinuxMount" </span>=&gt; Field::Key_se_linux_mount,
+<a href=#120 id=120 data-nosnippet>120</a>                            <span class="string">"storageCapacity" </span>=&gt; Field::Key_storage_capacity,
+<a href=#121 id=121 data-nosnippet>121</a>                            <span class="string">"tokenRequests" </span>=&gt; Field::Key_token_requests,
+<a href=#122 id=122 data-nosnippet>122</a>                            <span class="string">"volumeLifecycleModes" </span>=&gt; Field::Key_volume_lifecycle_modes,
+<a href=#123 id=123 data-nosnippet>123</a>                            <span class="kw">_ </span>=&gt; Field::Other,
+<a href=#124 id=124 data-nosnippet>124</a>                        })
+<a href=#125 id=125 data-nosnippet>125</a>                    }
+<a href=#126 id=126 data-nosnippet>126</a>                }
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a>                deserializer.deserialize_identifier(Visitor)
+<a href=#129 id=129 data-nosnippet>129</a>            }
+<a href=#130 id=130 data-nosnippet>130</a>        }
+<a href=#131 id=131 data-nosnippet>131</a>
+<a href=#132 id=132 data-nosnippet>132</a>        <span class="kw">struct </span>Visitor;
+<a href=#133 id=133 data-nosnippet>133</a>
+<a href=#134 id=134 data-nosnippet>134</a>        <span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; <span class="kw">crate</span>::serde::de::Visitor&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>Visitor {
+<a href=#135 id=135 data-nosnippet>135</a>            <span class="kw">type </span>Value = CSIDriverSpec;
+<a href=#136 id=136 data-nosnippet>136</a>
+<a href=#137 id=137 data-nosnippet>137</a>            <span class="kw">fn </span>expecting(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+<a href=#138 id=138 data-nosnippet>138</a>                f.write_str(<span class="string">"CSIDriverSpec"</span>)
+<a href=#139 id=139 data-nosnippet>139</a>            }
+<a href=#140 id=140 data-nosnippet>140</a>
+<a href=#141 id=141 data-nosnippet>141</a>            <span class="kw">fn </span>visit_map&lt;A&gt;(<span class="self">self</span>, <span class="kw-2">mut </span>map: A) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Value, A::Error&gt; <span class="kw">where </span>A: <span class="kw">crate</span>::serde::de::MapAccess&lt;<span class="lifetime">'de</span>&gt; {
+<a href=#142 id=142 data-nosnippet>142</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_attach_required: <span class="prelude-ty">Option</span>&lt;bool&gt; = <span class="prelude-val">None</span>;
+<a href=#143 id=143 data-nosnippet>143</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_fs_group_policy: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="prelude-val">None</span>;
+<a href=#144 id=144 data-nosnippet>144</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_pod_info_on_mount: <span class="prelude-ty">Option</span>&lt;bool&gt; = <span class="prelude-val">None</span>;
+<a href=#145 id=145 data-nosnippet>145</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_requires_republish: <span class="prelude-ty">Option</span>&lt;bool&gt; = <span class="prelude-val">None</span>;
+<a href=#146 id=146 data-nosnippet>146</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_se_linux_mount: <span class="prelude-ty">Option</span>&lt;bool&gt; = <span class="prelude-val">None</span>;
+<a href=#147 id=147 data-nosnippet>147</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_storage_capacity: <span class="prelude-ty">Option</span>&lt;bool&gt; = <span class="prelude-val">None</span>;
+<a href=#148 id=148 data-nosnippet>148</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_token_requests: <span class="prelude-ty">Option</span>&lt;Vec&lt;<span class="kw">crate</span>::api::storage::v1::TokenRequest&gt;&gt; = <span class="prelude-val">None</span>;
+<a href=#149 id=149 data-nosnippet>149</a>                <span class="kw">let </span><span class="kw-2">mut </span>value_volume_lifecycle_modes: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt; = <span class="prelude-val">None</span>;
+<a href=#150 id=150 data-nosnippet>150</a>
+<a href=#151 id=151 data-nosnippet>151</a>                <span class="kw">while let </span><span class="prelude-val">Some</span>(key) = <span class="kw">crate</span>::serde::de::MapAccess::next_key::&lt;Field&gt;(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">? </span>{
+<a href=#152 id=152 data-nosnippet>152</a>                    <span class="kw">match </span>key {
+<a href=#153 id=153 data-nosnippet>153</a>                        Field::Key_attach_required =&gt; value_attach_required = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#154 id=154 data-nosnippet>154</a>                        Field::Key_fs_group_policy =&gt; value_fs_group_policy = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#155 id=155 data-nosnippet>155</a>                        Field::Key_pod_info_on_mount =&gt; value_pod_info_on_mount = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#156 id=156 data-nosnippet>156</a>                        Field::Key_requires_republish =&gt; value_requires_republish = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#157 id=157 data-nosnippet>157</a>                        Field::Key_se_linux_mount =&gt; value_se_linux_mount = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#158 id=158 data-nosnippet>158</a>                        Field::Key_storage_capacity =&gt; value_storage_capacity = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#159 id=159 data-nosnippet>159</a>                        Field::Key_token_requests =&gt; value_token_requests = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#160 id=160 data-nosnippet>160</a>                        Field::Key_volume_lifecycle_modes =&gt; value_volume_lifecycle_modes = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>,
+<a href=#161 id=161 data-nosnippet>161</a>                        Field::Other =&gt; { <span class="kw">let _</span>: <span class="kw">crate</span>::serde::de::IgnoredAny = <span class="kw">crate</span>::serde::de::MapAccess::next_value(<span class="kw-2">&amp;mut </span>map)<span class="question-mark">?</span>; },
+<a href=#162 id=162 data-nosnippet>162</a>                    }
+<a href=#163 id=163 data-nosnippet>163</a>                }
+<a href=#164 id=164 data-nosnippet>164</a>
+<a href=#165 id=165 data-nosnippet>165</a>                <span class="prelude-val">Ok</span>(CSIDriverSpec {
+<a href=#166 id=166 data-nosnippet>166</a>                    attach_required: value_attach_required,
+<a href=#167 id=167 data-nosnippet>167</a>                    fs_group_policy: value_fs_group_policy,
+<a href=#168 id=168 data-nosnippet>168</a>                    pod_info_on_mount: value_pod_info_on_mount,
+<a href=#169 id=169 data-nosnippet>169</a>                    requires_republish: value_requires_republish,
+<a href=#170 id=170 data-nosnippet>170</a>                    se_linux_mount: value_se_linux_mount,
+<a href=#171 id=171 data-nosnippet>171</a>                    storage_capacity: value_storage_capacity,
+<a href=#172 id=172 data-nosnippet>172</a>                    token_requests: value_token_requests,
+<a href=#173 id=173 data-nosnippet>173</a>                    volume_lifecycle_modes: value_volume_lifecycle_modes,
+<a href=#174 id=174 data-nosnippet>174</a>                })
+<a href=#175 id=175 data-nosnippet>175</a>            }
+<a href=#176 id=176 data-nosnippet>176</a>        }
+<a href=#177 id=177 data-nosnippet>177</a>
+<a href=#178 id=178 data-nosnippet>178</a>        deserializer.deserialize_struct(
+<a href=#179 id=179 data-nosnippet>179</a>            <span class="string">"CSIDriverSpec"</span>,
+<a href=#180 id=180 data-nosnippet>180</a>            <span class="kw-2">&amp;</span>[
+<a href=#181 id=181 data-nosnippet>181</a>                <span class="string">"attachRequired"</span>,
+<a href=#182 id=182 data-nosnippet>182</a>                <span class="string">"fsGroupPolicy"</span>,
+<a href=#183 id=183 data-nosnippet>183</a>                <span class="string">"podInfoOnMount"</span>,
+<a href=#184 id=184 data-nosnippet>184</a>                <span class="string">"requiresRepublish"</span>,
+<a href=#185 id=185 data-nosnippet>185</a>                <span class="string">"seLinuxMount"</span>,
+<a href=#186 id=186 data-nosnippet>186</a>                <span class="string">"storageCapacity"</span>,
+<a href=#187 id=187 data-nosnippet>187</a>                <span class="string">"tokenRequests"</span>,
+<a href=#188 id=188 data-nosnippet>188</a>                <span class="string">"volumeLifecycleModes"</span>,
+<a href=#189 id=189 data-nosnippet>189</a>            ],
+<a href=#190 id=190 data-nosnippet>190</a>            Visitor,
+<a href=#191 id=191 data-nosnippet>191</a>        )
+<a href=#192 id=192 data-nosnippet>192</a>    }
+<a href=#193 id=193 data-nosnippet>193</a>}
+<a href=#194 id=194 data-nosnippet>194</a>
+<a href=#195 id=195 data-nosnippet>195</a><span class="kw">impl </span><span class="kw">crate</span>::serde::Serialize <span class="kw">for </span>CSIDriverSpec {
+<a href=#196 id=196 data-nosnippet>196</a>    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; <span class="kw">where </span>S: <span class="kw">crate</span>::serde::Serializer {
+<a href=#197 id=197 data-nosnippet>197</a>        <span class="kw">let </span><span class="kw-2">mut </span>state = serializer.serialize_struct(
+<a href=#198 id=198 data-nosnippet>198</a>            <span class="string">"CSIDriverSpec"</span>,
+<a href=#199 id=199 data-nosnippet>199</a>            <span class="self">self</span>.attach_required.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#200 id=200 data-nosnippet>200</a>            <span class="self">self</span>.fs_group_policy.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#201 id=201 data-nosnippet>201</a>            <span class="self">self</span>.pod_info_on_mount.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#202 id=202 data-nosnippet>202</a>            <span class="self">self</span>.requires_republish.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#203 id=203 data-nosnippet>203</a>            <span class="self">self</span>.se_linux_mount.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#204 id=204 data-nosnippet>204</a>            <span class="self">self</span>.storage_capacity.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#205 id=205 data-nosnippet>205</a>            <span class="self">self</span>.token_requests.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>) +
+<a href=#206 id=206 data-nosnippet>206</a>            <span class="self">self</span>.volume_lifecycle_modes.as_ref().map_or(<span class="number">0</span>, |<span class="kw">_</span>| <span class="number">1</span>),
+<a href=#207 id=207 data-nosnippet>207</a>        )<span class="question-mark">?</span>;
+<a href=#208 id=208 data-nosnippet>208</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.attach_required {
+<a href=#209 id=209 data-nosnippet>209</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"attachRequired"</span>, value)<span class="question-mark">?</span>;
+<a href=#210 id=210 data-nosnippet>210</a>        }
+<a href=#211 id=211 data-nosnippet>211</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.fs_group_policy {
+<a href=#212 id=212 data-nosnippet>212</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"fsGroupPolicy"</span>, value)<span class="question-mark">?</span>;
+<a href=#213 id=213 data-nosnippet>213</a>        }
+<a href=#214 id=214 data-nosnippet>214</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.pod_info_on_mount {
+<a href=#215 id=215 data-nosnippet>215</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"podInfoOnMount"</span>, value)<span class="question-mark">?</span>;
+<a href=#216 id=216 data-nosnippet>216</a>        }
+<a href=#217 id=217 data-nosnippet>217</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.requires_republish {
+<a href=#218 id=218 data-nosnippet>218</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"requiresRepublish"</span>, value)<span class="question-mark">?</span>;
+<a href=#219 id=219 data-nosnippet>219</a>        }
+<a href=#220 id=220 data-nosnippet>220</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.se_linux_mount {
+<a href=#221 id=221 data-nosnippet>221</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"seLinuxMount"</span>, value)<span class="question-mark">?</span>;
+<a href=#222 id=222 data-nosnippet>222</a>        }
+<a href=#223 id=223 data-nosnippet>223</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.storage_capacity {
+<a href=#224 id=224 data-nosnippet>224</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"storageCapacity"</span>, value)<span class="question-mark">?</span>;
+<a href=#225 id=225 data-nosnippet>225</a>        }
+<a href=#226 id=226 data-nosnippet>226</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.token_requests {
+<a href=#227 id=227 data-nosnippet>227</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"tokenRequests"</span>, value)<span class="question-mark">?</span>;
+<a href=#228 id=228 data-nosnippet>228</a>        }
+<a href=#229 id=229 data-nosnippet>229</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;</span><span class="self">self</span>.volume_lifecycle_modes {
+<a href=#230 id=230 data-nosnippet>230</a>            <span class="kw">crate</span>::serde::ser::SerializeStruct::serialize_field(<span class="kw-2">&amp;mut </span>state, <span class="string">"volumeLifecycleModes"</span>, value)<span class="question-mark">?</span>;
+<a href=#231 id=231 data-nosnippet>231</a>        }
+<a href=#232 id=232 data-nosnippet>232</a>        <span class="kw">crate</span>::serde::ser::SerializeStruct::end(state)
+<a href=#233 id=233 data-nosnippet>233</a>    }
+<a href=#234 id=234 data-nosnippet>234</a>}
+<a href=#235 id=235 data-nosnippet>235</a>
+<a href=#236 id=236 data-nosnippet>236</a><span class="attr">#[cfg(feature = <span class="string">"schemars"</span>)]
+<a href=#237 id=237 data-nosnippet>237</a></span><span class="kw">impl </span><span class="kw">crate</span>::schemars::JsonSchema <span class="kw">for </span>CSIDriverSpec {
+<a href=#238 id=238 data-nosnippet>238</a>    <span class="kw">fn </span>schema_name() -&gt; String {
+<a href=#239 id=239 data-nosnippet>239</a>        <span class="string">"io.k8s.api.storage.v1.CSIDriverSpec"</span>.to_owned()
+<a href=#240 id=240 data-nosnippet>240</a>    }
+<a href=#241 id=241 data-nosnippet>241</a>
+<a href=#242 id=242 data-nosnippet>242</a>    <span class="kw">fn </span>json_schema(__gen: <span class="kw-2">&amp;mut </span><span class="kw">crate</span>::schemars::gen::SchemaGenerator) -&gt; <span class="kw">crate</span>::schemars::schema::Schema {
+<a href=#243 id=243 data-nosnippet>243</a>        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#244 id=244 data-nosnippet>244</a>            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#245 id=245 data-nosnippet>245</a>                description: <span class="prelude-val">Some</span>(<span class="string">"CSIDriverSpec is the specification of a CSIDriver."</span>.to_owned()),
+<a href=#246 id=246 data-nosnippet>246</a>                ..Default::default()
+<a href=#247 id=247 data-nosnippet>247</a>            })),
+<a href=#248 id=248 data-nosnippet>248</a>            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::Object))),
+<a href=#249 id=249 data-nosnippet>249</a>            object: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::ObjectValidation {
+<a href=#250 id=250 data-nosnippet>250</a>                properties: [
+<a href=#251 id=251 data-nosnippet>251</a>                    (
+<a href=#252 id=252 data-nosnippet>252</a>                        <span class="string">"attachRequired"</span>.to_owned(),
+<a href=#253 id=253 data-nosnippet>253</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#254 id=254 data-nosnippet>254</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#255 id=255 data-nosnippet>255</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"attachRequired indicates this CSI volume driver requires an attach operation (because it implements the CSI ControllerPublishVolume() method), and that the Kubernetes attach detach controller should call the attach volume interface which checks the volumeattachment status and waits until the volume is attached before proceeding to mounting. The CSI external-attacher coordinates with CSI volume driver and updates the volumeattachment status when the attach operation is complete. If the CSIDriverRegistry feature gate is enabled and the value is specified to false, the attach operation will be skipped. Otherwise the attach operation will be called.\n\nThis field is immutable."</span>.to_owned()),
+<a href=#256 id=256 data-nosnippet>256</a>                                ..Default::default()
+<a href=#257 id=257 data-nosnippet>257</a>                            })),
+<a href=#258 id=258 data-nosnippet>258</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::Boolean))),
+<a href=#259 id=259 data-nosnippet>259</a>                            ..Default::default()
+<a href=#260 id=260 data-nosnippet>260</a>                        }),
+<a href=#261 id=261 data-nosnippet>261</a>                    ),
+<a href=#262 id=262 data-nosnippet>262</a>                    (
+<a href=#263 id=263 data-nosnippet>263</a>                        <span class="string">"fsGroupPolicy"</span>.to_owned(),
+<a href=#264 id=264 data-nosnippet>264</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#265 id=265 data-nosnippet>265</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#266 id=266 data-nosnippet>266</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"fsGroupPolicy defines if the underlying volume supports changing ownership and permission of the volume before being mounted. Refer to the specific FSGroupPolicy values for additional details.\n\nThis field is immutable.\n\nDefaults to ReadWriteOnceWithFSType, which will examine each volume to determine if Kubernetes should modify ownership and permissions of the volume. With the default policy the defined fsGroup will only be applied if a fstype is defined and the volume's access mode contains ReadWriteOnce."</span>.to_owned()),
+<a href=#267 id=267 data-nosnippet>267</a>                                ..Default::default()
+<a href=#268 id=268 data-nosnippet>268</a>                            })),
+<a href=#269 id=269 data-nosnippet>269</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::String))),
+<a href=#270 id=270 data-nosnippet>270</a>                            ..Default::default()
+<a href=#271 id=271 data-nosnippet>271</a>                        }),
+<a href=#272 id=272 data-nosnippet>272</a>                    ),
+<a href=#273 id=273 data-nosnippet>273</a>                    (
+<a href=#274 id=274 data-nosnippet>274</a>                        <span class="string">"podInfoOnMount"</span>.to_owned(),
+<a href=#275 id=275 data-nosnippet>275</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#276 id=276 data-nosnippet>276</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#277 id=277 data-nosnippet>277</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"podInfoOnMount indicates this CSI volume driver requires additional pod information (like podName, podUID, etc.) during mount operations, if set to true. If set to false, pod information will not be passed on mount. Default is false.\n\nThe CSI driver specifies podInfoOnMount as part of driver deployment. If true, Kubelet will pass pod information as VolumeContext in the CSI NodePublishVolume() calls. The CSI driver is responsible for parsing and validating the information passed in as VolumeContext.\n\nThe following VolumeConext will be passed if podInfoOnMount is set to true. This list might grow, but the prefix will be used. \"csi.storage.k8s.io/pod.name\": pod.Name \"csi.storage.k8s.io/pod.namespace\": pod.Namespace \"csi.storage.k8s.io/pod.uid\": string(pod.UID) \"csi.storage.k8s.io/ephemeral\": \"true\" if the volume is an ephemeral inline volume\n                                defined by a CSIVolumeSource, otherwise \"false\"\n\n\"csi.storage.k8s.io/ephemeral\" is a new feature in Kubernetes 1.16. It is only required for drivers which support both the \"Persistent\" and \"Ephemeral\" VolumeLifecycleMode. Other drivers can leave pod info disabled and/or ignore this field. As Kubernetes 1.15 doesn't support this field, drivers can only support one mode when deployed on such a cluster and the deployment determines which mode that is, for example via a command line parameter of the driver.\n\nThis field is immutable."</span>.to_owned()),
+<a href=#278 id=278 data-nosnippet>278</a>                                ..Default::default()
+<a href=#279 id=279 data-nosnippet>279</a>                            })),
+<a href=#280 id=280 data-nosnippet>280</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::Boolean))),
+<a href=#281 id=281 data-nosnippet>281</a>                            ..Default::default()
+<a href=#282 id=282 data-nosnippet>282</a>                        }),
+<a href=#283 id=283 data-nosnippet>283</a>                    ),
+<a href=#284 id=284 data-nosnippet>284</a>                    (
+<a href=#285 id=285 data-nosnippet>285</a>                        <span class="string">"requiresRepublish"</span>.to_owned(),
+<a href=#286 id=286 data-nosnippet>286</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#287 id=287 data-nosnippet>287</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#288 id=288 data-nosnippet>288</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"requiresRepublish indicates the CSI driver wants `NodePublishVolume` being periodically called to reflect any possible change in the mounted volume. This field defaults to false.\n\nNote: After a successful initial NodePublishVolume call, subsequent calls to NodePublishVolume should only update the contents of the volume. New mount points will not be seen by a running container."</span>.to_owned()),
+<a href=#289 id=289 data-nosnippet>289</a>                                ..Default::default()
+<a href=#290 id=290 data-nosnippet>290</a>                            })),
+<a href=#291 id=291 data-nosnippet>291</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::Boolean))),
+<a href=#292 id=292 data-nosnippet>292</a>                            ..Default::default()
+<a href=#293 id=293 data-nosnippet>293</a>                        }),
+<a href=#294 id=294 data-nosnippet>294</a>                    ),
+<a href=#295 id=295 data-nosnippet>295</a>                    (
+<a href=#296 id=296 data-nosnippet>296</a>                        <span class="string">"seLinuxMount"</span>.to_owned(),
+<a href=#297 id=297 data-nosnippet>297</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#298 id=298 data-nosnippet>298</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#299 id=299 data-nosnippet>299</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"seLinuxMount specifies if the CSI driver supports \"-o context\" mount option.\n\nWhen \"true\", the CSI driver must ensure that all volumes provided by this CSI driver can be mounted separately with different `-o context` options. This is typical for storage backends that provide volumes as filesystems on block devices or as independent shared volumes. Kubernetes will call NodeStage / NodePublish with \"-o context=xyz\" mount option when mounting a ReadWriteOncePod volume used in Pod that has explicitly set SELinux context. In the future, it may be expanded to other volume AccessModes. In any case, Kubernetes will ensure that the volume is mounted only with a single SELinux context.\n\nWhen \"false\", Kubernetes won't pass any special SELinux mount options to the driver. This is typical for volumes that represent subdirectories of a bigger shared filesystem.\n\nDefault is \"false\"."</span>.to_owned()),
+<a href=#300 id=300 data-nosnippet>300</a>                                ..Default::default()
+<a href=#301 id=301 data-nosnippet>301</a>                            })),
+<a href=#302 id=302 data-nosnippet>302</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::Boolean))),
+<a href=#303 id=303 data-nosnippet>303</a>                            ..Default::default()
+<a href=#304 id=304 data-nosnippet>304</a>                        }),
+<a href=#305 id=305 data-nosnippet>305</a>                    ),
+<a href=#306 id=306 data-nosnippet>306</a>                    (
+<a href=#307 id=307 data-nosnippet>307</a>                        <span class="string">"storageCapacity"</span>.to_owned(),
+<a href=#308 id=308 data-nosnippet>308</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#309 id=309 data-nosnippet>309</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#310 id=310 data-nosnippet>310</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"storageCapacity indicates that the CSI volume driver wants pod scheduling to consider the storage capacity that the driver deployment will report by creating CSIStorageCapacity objects with capacity information, if set to true.\n\nThe check can be enabled immediately when deploying a driver. In that case, provisioning new volumes with late binding will pause until the driver deployment has published some suitable CSIStorageCapacity object.\n\nAlternatively, the driver can be deployed with the field unset or false and it can be flipped later when storage capacity information has been published.\n\nThis field was immutable in Kubernetes &lt;= 1.22 and now is mutable."</span>.to_owned()),
+<a href=#311 id=311 data-nosnippet>311</a>                                ..Default::default()
+<a href=#312 id=312 data-nosnippet>312</a>                            })),
+<a href=#313 id=313 data-nosnippet>313</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::Boolean))),
+<a href=#314 id=314 data-nosnippet>314</a>                            ..Default::default()
+<a href=#315 id=315 data-nosnippet>315</a>                        }),
+<a href=#316 id=316 data-nosnippet>316</a>                    ),
+<a href=#317 id=317 data-nosnippet>317</a>                    (
+<a href=#318 id=318 data-nosnippet>318</a>                        <span class="string">"tokenRequests"</span>.to_owned(),
+<a href=#319 id=319 data-nosnippet>319</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#320 id=320 data-nosnippet>320</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#321 id=321 data-nosnippet>321</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"tokenRequests indicates the CSI driver needs pods' service account tokens it is mounting volume for to do necessary authentication. Kubelet will pass the tokens in VolumeContext in the CSI NodePublishVolume calls. The CSI driver should parse and validate the following VolumeContext: \"csi.storage.k8s.io/serviceAccount.tokens\": {\n  \"&lt;audience&gt;\": {\n    \"token\": &lt;token&gt;,\n    \"expirationTimestamp\": &lt;expiration timestamp in RFC3339&gt;,\n  },\n  ...\n}\n\nNote: Audience in each TokenRequest should be different and at most one token is empty string. To receive a new token after expiry, RequiresRepublish can be used to trigger NodePublishVolume periodically."</span>.to_owned()),
+<a href=#322 id=322 data-nosnippet>322</a>                                ..Default::default()
+<a href=#323 id=323 data-nosnippet>323</a>                            })),
+<a href=#324 id=324 data-nosnippet>324</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::Array))),
+<a href=#325 id=325 data-nosnippet>325</a>                            array: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::ArrayValidation {
+<a href=#326 id=326 data-nosnippet>326</a>                                items: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(__gen.subschema_for::&lt;<span class="kw">crate</span>::api::storage::v1::TokenRequest&gt;()))),
+<a href=#327 id=327 data-nosnippet>327</a>                                ..Default::default()
+<a href=#328 id=328 data-nosnippet>328</a>                            })),
+<a href=#329 id=329 data-nosnippet>329</a>                            ..Default::default()
+<a href=#330 id=330 data-nosnippet>330</a>                        }),
+<a href=#331 id=331 data-nosnippet>331</a>                    ),
+<a href=#332 id=332 data-nosnippet>332</a>                    (
+<a href=#333 id=333 data-nosnippet>333</a>                        <span class="string">"volumeLifecycleModes"</span>.to_owned(),
+<a href=#334 id=334 data-nosnippet>334</a>                        <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#335 id=335 data-nosnippet>335</a>                            metadata: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::Metadata {
+<a href=#336 id=336 data-nosnippet>336</a>                                description: <span class="prelude-val">Some</span>(<span class="string">"volumeLifecycleModes defines what kind of volumes this CSI volume driver supports. The default if the list is empty is \"Persistent\", which is the usage defined by the CSI specification and implemented in Kubernetes via the usual PV/PVC mechanism.\n\nThe other mode is \"Ephemeral\". In this mode, volumes are defined inline inside the pod spec with CSIVolumeSource and their lifecycle is tied to the lifecycle of that pod. A driver has to be aware of this because it is only going to get a NodePublishVolume call for such a volume.\n\nFor more information about implementing this mode, see https://kubernetes-csi.github.io/docs/ephemeral-local-volumes.html A driver can support one or more of these modes and more modes may be added in the future.\n\nThis field is beta. This field is immutable."</span>.to_owned()),
+<a href=#337 id=337 data-nosnippet>337</a>                                ..Default::default()
+<a href=#338 id=338 data-nosnippet>338</a>                            })),
+<a href=#339 id=339 data-nosnippet>339</a>                            instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::Array))),
+<a href=#340 id=340 data-nosnippet>340</a>                            array: <span class="prelude-val">Some</span>(Box::new(<span class="kw">crate</span>::schemars::schema::ArrayValidation {
+<a href=#341 id=341 data-nosnippet>341</a>                                items: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(
+<a href=#342 id=342 data-nosnippet>342</a>                                    <span class="kw">crate</span>::schemars::schema::Schema::Object(<span class="kw">crate</span>::schemars::schema::SchemaObject {
+<a href=#343 id=343 data-nosnippet>343</a>                                        instance_type: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::schemars::schema::SingleOrVec::Single(Box::new(<span class="kw">crate</span>::schemars::schema::InstanceType::String))),
+<a href=#344 id=344 data-nosnippet>344</a>                                        ..Default::default()
+<a href=#345 id=345 data-nosnippet>345</a>                                    })
+<a href=#346 id=346 data-nosnippet>346</a>                                ))),
+<a href=#347 id=347 data-nosnippet>347</a>                                ..Default::default()
+<a href=#348 id=348 data-nosnippet>348</a>                            })),
+<a href=#349 id=349 data-nosnippet>349</a>                            ..Default::default()
+<a href=#350 id=350 data-nosnippet>350</a>                        }),
+<a href=#351 id=351 data-nosnippet>351</a>                    ),
+<a href=#352 id=352 data-nosnippet>352</a>                ].into(),
+<a href=#353 id=353 data-nosnippet>353</a>                ..Default::default()
+<a href=#354 id=354 data-nosnippet>354</a>            })),
+<a href=#355 id=355 data-nosnippet>355</a>            ..Default::default()
+<a href=#356 id=356 data-nosnippet>356</a>        })
+<a href=#357 id=357 data-nosnippet>357</a>    }
+<a href=#358 id=358 data-nosnippet>358</a>}</code></pre></div></section></main></body></html>

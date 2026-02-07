@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["ark_ec",[["impl&lt;P: <a class=\"trait\" href=\"ark_ec/models/short_weierstrass/trait.SWCurveConfig.html\" title=\"trait ark_ec::models::short_weierstrass::SWCurveConfig\">SWCurveConfig</a>&gt; <a class=\"trait\" href=\"ark_ec/trait.AdditiveGroup.html\" title=\"trait ark_ec::AdditiveGroup\">AdditiveGroup</a> for <a class=\"struct\" href=\"ark_ec/models/short_weierstrass/struct.Projective.html\" title=\"struct ark_ec::models::short_weierstrass::Projective\">Projective</a>&lt;P&gt;"],["impl&lt;P: <a class=\"trait\" href=\"ark_ec/models/twisted_edwards/trait.TECurveConfig.html\" title=\"trait ark_ec::models::twisted_edwards::TECurveConfig\">TECurveConfig</a>&gt; <a class=\"trait\" href=\"ark_ec/trait.AdditiveGroup.html\" title=\"trait ark_ec::AdditiveGroup\">AdditiveGroup</a> for <a class=\"struct\" href=\"ark_ec/models/twisted_edwards/struct.Projective.html\" title=\"struct ark_ec::models::twisted_edwards::Projective\">Projective</a>&lt;P&gt;"],["impl&lt;P: <a class=\"trait\" href=\"ark_ec/pairing/trait.Pairing.html\" title=\"trait ark_ec::pairing::Pairing\">Pairing</a>&gt; <a class=\"trait\" href=\"ark_ec/trait.AdditiveGroup.html\" title=\"trait ark_ec::AdditiveGroup\">AdditiveGroup</a> for <a class=\"struct\" href=\"ark_ec/pairing/struct.PairingOutput.html\" title=\"struct ark_ec::pairing::PairingOutput\">PairingOutput</a>&lt;P&gt;"]]],["ark_ff",[]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1359,14]}

@@ -1,0 +1,47 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="github crates-io docs-rs"><title>macro_string - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="macro_string" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../macro_string/index.html">macro_<wbr>string</a><span class="version">0.1.4</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>macro_string</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/macro_string/lib.rs.html#1-462">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/dtolnay/macro-string"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> <a href="https://crates.io/crates/macro-string"><img src="https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&amp;labelColor=555555&amp;logo=rust" alt="crates-io" /></a> <a href="https://docs.rs/macro-string"><img src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&amp;labelColor=555555&amp;logo=docs.rs" alt="docs-rs" /></a></p>
+<br>
+<p>This crate is a helper library for procedural macros to perform eager
+evaluation of standard library string macros like <code>concat!</code> and <code>env!</code> in
+macro input.</p>
+<table><tr><td>
+<b>Supported macros:</b>
+<code>concat!</code>,
+<code>env!</code>,
+<code>include!</code>,
+<code>include_str!</code>,
+<code>stringify!</code>
+</td></tr></table>
+<p>For example, to implement a macro such as the following:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Parses JSON at compile time and expands to a serde_json::Value.
+</span><span class="kw">let </span>j = <span class="macro">include_json!</span>(<span class="macro">concat!</span>(<span class="macro">env!</span>(<span class="string">"CARGO_MANIFEST_DIR"</span>), <span class="string">"/manifest.json"</span>));</code></pre></div>
+<p>the implementation of <code>include_json!</code> will need to parse and eagerly
+evaluate the two macro calls within its input tokens.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>macro_string::MacroString;
+<span class="kw">use </span>proc_macro::TokenStream;
+<span class="kw">use </span>proc_macro2::Span;
+<span class="kw">use </span>std::fs;
+<span class="kw">use </span>syn::parse_macro_input;
+
+<span class="attr">#[proc_macro]
+</span><span class="kw">pub fn </span>include_json(input: TokenStream) -&gt; TokenStream {
+    <span class="kw">let </span>MacroString(path) = <span class="macro">parse_macro_input!</span>(input);
+
+    <span class="kw">let </span>content = <span class="kw">match </span>fs::read(<span class="kw-2">&amp;</span>path) {
+        <span class="prelude-val">Ok</span>(content) =&gt; content,
+        <span class="prelude-val">Err</span>(err) =&gt; {
+            <span class="kw">return </span>TokenStream::from(syn::Error::new(Span::call_site(), err).to_compile_error());
+        }
+    };
+
+    <span class="kw">let </span>json: serde_json::Value = <span class="kw">match </span>serde_json::from_slice(<span class="kw-2">&amp;</span>content) {
+        <span class="prelude-val">Ok</span>(json) =&gt; json,
+        <span class="prelude-val">Err</span>(err) =&gt; {
+            <span class="kw">return </span>TokenStream::from(syn::Error::new(Span::call_site(), err).to_compile_error());
+        }
+    };
+
+    <span class="comment">/*TODO: print serde_json::Value to TokenStream*/
+</span>}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.MacroString.html" title="struct macro_string::MacroString">Macro<wbr>String</a></dt></dl></section></div></main></body></html>

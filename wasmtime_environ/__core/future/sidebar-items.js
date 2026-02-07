@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["async_drop","async_drop_in_place","pending","poll_fn","ready"],"macro":["join"],"struct":["AsyncDropInPlace","Pending","PollFn","Ready"],"trait":["AsyncDrop","Future","IntoFuture"]};

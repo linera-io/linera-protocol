@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["alphabet","captures","escape","interpolate","iter","lazy","look","pool","prefilter","primitives","start","syntax","wire"]};

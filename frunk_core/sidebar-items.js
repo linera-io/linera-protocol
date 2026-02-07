@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["Coprod","HList","field","hlist","hlist_pat","poly_fn"],"mod":["coproduct","generic","hlist","indices","labelled","path","traits"]};

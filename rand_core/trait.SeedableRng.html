@@ -1,0 +1,132 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A random number generator that can be explicitly seeded."><title>SeedableRng in rand_core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="rand_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../rand_core/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../rand_core/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt="logo"></a><h2><a href="../rand_core/index.html">rand_<wbr>core</a><span class="version">0.9.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Seedable<wbr>Rng</a></h2><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Seed" title="Seed">Seed</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.from_seed" title="from_seed">from_seed</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.from_os_rng" title="from_os_rng">from_os_rng</a></li><li><a href="#method.from_rng" title="from_rng">from_rng</a></li><li><a href="#method.seed_from_u64" title="seed_from_u64">seed_from_u64</a></li><li><a href="#method.try_from_os_rng" title="try_from_os_rng">try_from_os_rng</a></li><li><a href="#method.try_from_rng" title="try_from_rng">try_from_rng</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate rand_<wbr>core</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">rand_core</a></div><h1>Trait <span class="trait">SeedableRng</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/rand_core/lib.rs.html#371-577">Source</a> </span></div><pre class="rust item-decl"><code>pub trait SeedableRng: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> {
+    type <a href="#associatedtype.Seed" class="associatedtype">Seed</a>: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>]&gt; + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.AsMut.html" title="trait core::convert::AsMut">AsMut</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>]&gt;;
+
+    // Required method
+    fn <a href="#tymethod.from_seed" class="fn">from_seed</a>(seed: Self::<a class="associatedtype" href="trait.SeedableRng.html#associatedtype.Seed" title="type rand_core::SeedableRng::Seed">Seed</a>) -&gt; Self;
+
+    // Provided methods
+    fn <a href="#method.seed_from_u64" class="fn">seed_from_u64</a>(state: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>) -&gt; Self { ... }
+<span class="item-spacer"></span>    fn <a href="#method.from_rng" class="fn">from_rng</a>(rng: &amp;mut impl <a class="trait" href="trait.RngCore.html" title="trait rand_core::RngCore">RngCore</a>) -&gt; Self { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_from_rng" class="fn">try_from_rng</a>&lt;R: <a class="trait" href="trait.TryRngCore.html" title="trait rand_core::TryRngCore">TryRngCore</a>&gt;(rng: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.reference.html">&amp;mut R</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self, R::<a class="associatedtype" href="trait.TryRngCore.html#associatedtype.Error" title="type rand_core::TryRngCore::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.from_os_rng" class="fn">from_os_rng</a>() -&gt; Self { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_from_os_rng" class="fn">try_from_os_rng</a>() -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self, <a class="struct" href="../getrandom/error/struct.Error.html" title="struct getrandom::error::Error">Error</a>&gt; { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A random number generator that can be explicitly seeded.</p>
+<p>This trait encapsulates the low-level functionality common to all
+pseudo-random number generators (PRNGs, or algorithmic generators).</p>
+<p>A generator implementing <code>SeedableRng</code> will usually be deterministic, but
+beware that portability and reproducibility of results <strong>is not implied</strong>.
+Refer to documentation of the generator, noting that generators named after
+a specific algorithm are usually tested for reproducibility against a
+reference vector, while <code>SmallRng</code> and <code>StdRng</code> specifically opt out of
+reproducibility guarantees.</p>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Seed" class="method"><a class="src rightside" href="../src/rand_core/lib.rs.html#423">Source</a><h4 class="code-header">type <a href="#associatedtype.Seed" class="associatedtype">Seed</a>: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>]&gt; + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.AsMut.html" title="trait core::convert::AsMut">AsMut</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>]&gt;</h4></section></summary><div class="docblock"><p>Seed type, which is restricted to types mutably-dereferenceable as <code>u8</code>
+arrays (we recommend <code>[u8; N]</code> for some <code>N</code>).</p>
+<p>It is recommended to seed PRNGs with a seed of at least circa 100 bits,
+which means an array of <code>[u8; 12]</code> or greater to avoid picking RNGs with
+partially overlapping periods.</p>
+<p>For cryptographic RNG’s a seed of 256 bits is recommended, <code>[u8; 32]</code>.</p>
+<h5 id="implementing-seedablerng-for-rngs-with-large-seeds"><a class="doc-anchor" href="#implementing-seedablerng-for-rngs-with-large-seeds">§</a>Implementing <code>SeedableRng</code> for RNGs with large seeds</h5>
+<p>Note that <a href="https://doc.rust-lang.org/1.86.0/core/default/trait.Default.html" title="trait core::default::Default"><code>Default</code></a> is not implemented for large arrays <code>[u8; N]</code> with
+<code>N</code> &gt; 32. To be able to implement the traits required by <code>SeedableRng</code>
+for RNGs with such large seeds, the newtype pattern can be used:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand_core::SeedableRng;
+
+<span class="kw">const </span>N: usize = <span class="number">64</span>;
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>MyRngSeed(<span class="kw">pub </span>[u8; N]);
+<span class="kw">pub struct </span>MyRng(MyRngSeed);
+
+<span class="kw">impl </span>Default <span class="kw">for </span>MyRngSeed {
+    <span class="kw">fn </span>default() -&gt; MyRngSeed {
+        MyRngSeed([<span class="number">0</span>; N])
+    }
+}
+
+<span class="kw">impl </span>AsRef&lt;[u8]&gt; <span class="kw">for </span>MyRngSeed {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[u8] {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+}
+
+<span class="kw">impl </span>AsMut&lt;[u8]&gt; <span class="kw">for </span>MyRngSeed {
+    <span class="kw">fn </span>as_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>[u8] {
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>.<span class="number">0
+    </span>}
+}
+
+<span class="kw">impl </span>SeedableRng <span class="kw">for </span>MyRng {
+    <span class="kw">type </span>Seed = MyRngSeed;
+
+    <span class="kw">fn </span>from_seed(seed: MyRngSeed) -&gt; MyRng {
+        MyRng(seed)
+    }
+}</code></pre></div>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.from_seed" class="method"><a class="src rightside" href="../src/rand_core/lib.rs.html#450">Source</a><h4 class="code-header">fn <a href="#tymethod.from_seed" class="fn">from_seed</a>(seed: Self::<a class="associatedtype" href="trait.SeedableRng.html#associatedtype.Seed" title="type rand_core::SeedableRng::Seed">Seed</a>) -&gt; Self</h4></section></summary><div class="docblock"><p>Create a new PRNG using the given seed.</p>
+<p>PRNG implementations are allowed to assume that bits in the seed are
+well distributed. That means usually that the number of one and zero
+bits are roughly equal, and values like 0, 1 and (size - 1) are unlikely.
+Note that many non-cryptographic PRNGs will show poor quality output
+if this is not adhered to. If you wish to seed from simple numbers, use
+<code>seed_from_u64</code> instead.</p>
+<p>All PRNG implementations should be reproducible unless otherwise noted:
+given a fixed <code>seed</code>, the same sequence of output should be produced
+on all runs, library versions and architectures (e.g. check endianness).
+Any “value-breaking” changes to the generator should require bumping at
+least the minor version and documentation of the change.</p>
+<p>It is not required that this function yield the same state as a
+reference implementation of the PRNG given equivalent seed; if necessary
+another constructor replicating behaviour from a reference
+implementation can be added.</p>
+<p>PRNG implementations should make sure <code>from_seed</code> never panics. In the
+case that some special values (like an all zero seed) are not viable
+seeds it is preferable to map these to alternative constant value(s),
+for example <code>0xBAD5EEDu32</code> or <code>0x0DDB1A5E5BAD5EEDu64</code> (“odd biases? bad
+seed”). This is assuming only a small number of values must be rejected.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.seed_from_u64" class="method"><a class="src rightside" href="../src/rand_core/lib.rs.html#466-495">Source</a><h4 class="code-header">fn <a href="#method.seed_from_u64" class="fn">seed_from_u64</a>(state: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>) -&gt; Self</h4></section></summary><div class="docblock"><p>Create a new PRNG using a <code>u64</code> seed.</p>
+<p>This is a convenience-wrapper around <code>from_seed</code> to allow construction
+of any <code>SeedableRng</code> from a simple <code>u64</code> value. It is designed such that
+low Hamming Weight numbers like 0 and 1 can be used and should still
+result in good, independent seeds to the PRNG which is returned.</p>
+<p>This <strong>is not suitable for cryptography</strong>, as should be clear given that
+the input size is only 64 bits.</p>
+<p>Implementations for PRNGs <em>may</em> provide their own implementations of
+this function, but the default implementation should be good enough for
+all purposes. <em>Changing</em> the implementation of this function should be
+considered a value-breaking change.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.from_rng" class="method"><a class="src rightside" href="../src/rand_core/lib.rs.html#521-525">Source</a><h4 class="code-header">fn <a href="#method.from_rng" class="fn">from_rng</a>(rng: &amp;mut impl <a class="trait" href="trait.RngCore.html" title="trait rand_core::RngCore">RngCore</a>) -&gt; Self</h4></section></summary><div class="docblock"><p>Create a new PRNG seeded from an infallible <code>Rng</code>.</p>
+<p>This may be useful when needing to rapidly seed many PRNGs from a master
+PRNG, and to allow forking of PRNGs. It may be considered deterministic.</p>
+<p>The master PRNG should be at least as high quality as the child PRNGs.
+When seeding non-cryptographic child PRNGs, we recommend using a
+different algorithm for the master PRNG (ideally a CSPRNG) to avoid
+correlations between the child PRNGs. If this is not possible (e.g.
+forking using small non-crypto PRNGs) ensure that your PRNG has a good
+mixing function on the output or consider use of a hash function with
+<code>from_seed</code>.</p>
+<p>Note that seeding <code>XorShiftRng</code> from another <code>XorShiftRng</code> provides an
+extreme example of what can go wrong: the new PRNG will be a clone
+of the parent.</p>
+<p>PRNG implementations are allowed to assume that a good RNG is provided
+for seeding, and that it is cryptographically secure when appropriate.
+As of <code>rand</code> 0.7 / <code>rand_core</code> 0.5, implementations overriding this
+method should ensure the implementation satisfies reproducibility
+(in prior versions this was not required).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from_rng" class="method"><a class="src rightside" href="../src/rand_core/lib.rs.html#530-534">Source</a><h4 class="code-header">fn <a href="#method.try_from_rng" class="fn">try_from_rng</a>&lt;R: <a class="trait" href="trait.TryRngCore.html" title="trait rand_core::TryRngCore">TryRngCore</a>&gt;(rng: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.reference.html">&amp;mut R</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self, R::<a class="associatedtype" href="trait.TryRngCore.html#associatedtype.Error" title="type rand_core::TryRngCore::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Create a new PRNG seeded from a potentially fallible <code>Rng</code>.</p>
+<p>See <a href="trait.SeedableRng.html#method.from_rng" title="associated function rand_core::SeedableRng::from_rng"><code>from_rng</code></a> docs for more information.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.from_os_rng" class="method"><a class="src rightside" href="../src/rand_core/lib.rs.html#555-560">Source</a><h4 class="code-header">fn <a href="#method.from_os_rng" class="fn">from_os_rng</a>() -&gt; Self</h4></section></summary><div class="docblock"><p>Creates a new instance of the RNG seeded via <a href="https://docs.rs/getrandom"><code>getrandom</code></a>.</p>
+<p>This method is the recommended way to construct non-deterministic PRNGs
+since it is convenient and secure.</p>
+<p>Note that this method may panic on (extremely unlikely) <a href="https://docs.rs/getrandom"><code>getrandom</code></a> errors.
+If it’s not desirable, use the <a href="trait.SeedableRng.html#method.try_from_os_rng" title="associated function rand_core::SeedableRng::try_from_os_rng"><code>try_from_os_rng</code></a> method instead.</p>
+<p>In case the overhead of using <a href="https://docs.rs/getrandom"><code>getrandom</code></a> to seed <em>many</em> PRNGs is an
+issue, one may prefer to seed from a local PRNG, e.g.
+<code>from_rng(rand::rng()).unwrap()</code>.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>If <a href="https://docs.rs/getrandom"><code>getrandom</code></a> is unable to provide secure entropy this method will panic.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from_os_rng" class="method"><a class="src rightside" href="../src/rand_core/lib.rs.html#571-576">Source</a><h4 class="code-header">fn <a href="#method.try_from_os_rng" class="fn">try_from_os_rng</a>() -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self, <a class="struct" href="../getrandom/error/struct.Error.html" title="struct getrandom::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Creates a new instance of the RNG seeded via <a href="https://docs.rs/getrandom"><code>getrandom</code></a> without unwrapping
+potential <a href="https://docs.rs/getrandom"><code>getrandom</code></a> errors.</p>
+<p>In case the overhead of using <a href="https://docs.rs/getrandom"><code>getrandom</code></a> to seed <em>many</em> PRNGs is an
+issue, one may prefer to seed from a local PRNG, e.g.
+<code>from_rng(&amp;mut rand::rng()).unwrap()</code>.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><details class="toggle implementors-toggle"><summary><section id="impl-SeedableRng-for-BlockRng64%3CR%3E" class="impl"><a class="src rightside" href="../src/rand_core/block.rs.html#400-422">Source</a><a href="#impl-SeedableRng-for-BlockRng64%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="block/trait.BlockRngCore.html" title="trait rand_core::block::BlockRngCore">BlockRngCore</a> + <a class="trait" href="trait.SeedableRng.html" title="trait rand_core::SeedableRng">SeedableRng</a>&gt; <a class="trait" href="trait.SeedableRng.html" title="trait rand_core::SeedableRng">SeedableRng</a> for <a class="struct" href="block/struct.BlockRng64.html" title="struct rand_core::block::BlockRng64">BlockRng64</a>&lt;R&gt;</h3></section></summary><div class="impl-items"><section id="associatedtype.Seed-1" class="associatedtype trait-impl"><a class="src rightside" href="../src/rand_core/block.rs.html#401">Source</a><a href="#associatedtype.Seed-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Seed" class="associatedtype">Seed</a> = &lt;R as <a class="trait" href="trait.SeedableRng.html" title="trait rand_core::SeedableRng">SeedableRng</a>&gt;::<a class="associatedtype" href="trait.SeedableRng.html#associatedtype.Seed" title="type rand_core::SeedableRng::Seed">Seed</a></h4></section></div></details><details class="toggle implementors-toggle"><summary><section id="impl-SeedableRng-for-BlockRng%3CR%3E" class="impl"><a class="src rightside" href="../src/rand_core/block.rs.html#237-259">Source</a><a href="#impl-SeedableRng-for-BlockRng%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="block/trait.BlockRngCore.html" title="trait rand_core::block::BlockRngCore">BlockRngCore</a> + <a class="trait" href="trait.SeedableRng.html" title="trait rand_core::SeedableRng">SeedableRng</a>&gt; <a class="trait" href="trait.SeedableRng.html" title="trait rand_core::SeedableRng">SeedableRng</a> for <a class="struct" href="block/struct.BlockRng.html" title="struct rand_core::block::BlockRng">BlockRng</a>&lt;R&gt;</h3></section></summary><div class="impl-items"><section id="associatedtype.Seed-2" class="associatedtype trait-impl"><a class="src rightside" href="../src/rand_core/block.rs.html#238">Source</a><a href="#associatedtype.Seed-2" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Seed" class="associatedtype">Seed</a> = &lt;R as <a class="trait" href="trait.SeedableRng.html" title="trait rand_core::SeedableRng">SeedableRng</a>&gt;::<a class="associatedtype" href="trait.SeedableRng.html#associatedtype.Seed" title="type rand_core::SeedableRng::Seed">Seed</a></h4></section></div></details></div><script src="../trait.impl/rand_core/trait.SeedableRng.js" async></script></section></div></main></body></html>

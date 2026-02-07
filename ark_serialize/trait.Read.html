@@ -1,0 +1,400 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The `Read` trait allows for reading bytes from a source."><title>Read in ark_serialize - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ark_serialize" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ark_serialize/index.html">ark_<wbr>serialize</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Read</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.read" title="read">read</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.by_ref" title="by_ref">by_ref</a></li><li><a href="#method.bytes" title="bytes">bytes</a></li><li><a href="#method.chain" title="chain">chain</a></li><li><a href="#method.is_read_vectored" title="is_read_vectored">is_read_vectored</a></li><li><a href="#method.read_buf" title="read_buf">read_buf</a></li><li><a href="#method.read_buf_exact" title="read_buf_exact">read_buf_exact</a></li><li><a href="#method.read_exact" title="read_exact">read_exact</a></li><li><a href="#method.read_to_end" title="read_to_end">read_to_end</a></li><li><a href="#method.read_to_string" title="read_to_string">read_to_string</a></li><li><a href="#method.read_vectored" title="read_vectored">read_vectored</a></li><li><a href="#method.take" title="take">take</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate ark_<wbr>serialize</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">ark_serialize</a></div><h1>Trait <span class="trait">Read</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#691">Source</a> </span></div><pre class="rust item-decl"><code>pub trait Read {
+    // Required method
+    fn <a href="#tymethod.read" class="fn">read</a>(&amp;mut self, buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;;
+
+    // Provided methods
+    fn <a href="#method.read_vectored" class="fn">read_vectored</a>(
+        &amp;mut self,
+        bufs: &amp;mut [<a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/struct.IoSliceMut.html" title="struct std::io::IoSliceMut">IoSliceMut</a>&lt;'_&gt;],
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.is_read_vectored" class="fn">is_read_vectored</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_to_end" class="fn">read_to_end</a>(&amp;mut self, buf: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_to_string" class="fn">read_to_string</a>(&amp;mut self, buf: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_exact" class="fn">read_exact</a>(&amp;mut self, buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_buf" class="fn">read_buf</a>(&amp;mut self, buf: <a class="struct" href="https://doc.rust-lang.org/1.86.0/core/io/borrowed_buf/struct.BorrowedCursor.html" title="struct core::io::borrowed_buf::BorrowedCursor">BorrowedCursor</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_buf_exact" class="fn">read_buf_exact</a>(
+        &amp;mut self,
+        cursor: <a class="struct" href="https://doc.rust-lang.org/1.86.0/core/io/borrowed_buf/struct.BorrowedCursor.html" title="struct core::io::borrowed_buf::BorrowedCursor">BorrowedCursor</a>&lt;'_&gt;,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.by_ref" class="fn">by_ref</a>(&amp;mut self) -&gt; &amp;mut Self
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.bytes" class="fn">bytes</a>(self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/struct.Bytes.html" title="struct std::io::Bytes">Bytes</a>&lt;Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.chain" class="fn">chain</a>&lt;R&gt;(self, next: R) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/struct.Chain.html" title="struct std::io::Chain">Chain</a>&lt;Self, R&gt; <a href="#" class="tooltip" data-notable-ty="Chain&lt;Self, R&gt;">ⓘ</a>
+       <span class="where">where R: <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a>,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.take" class="fn">take</a>(self, limit: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/struct.Take.html" title="struct std::io::Take">Take</a>&lt;Self&gt; <a href="#" class="tooltip" data-notable-ty="Take&lt;Self&gt;">ⓘ</a>
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The <code>Read</code> trait allows for reading bytes from a source.</p>
+<p>Implementors of the <code>Read</code> trait are called ‘readers’.</p>
+<p>Readers are defined by one required method, <a href="trait.Read.html#tymethod.read" title="method ark_serialize::Read::read"><code>read()</code></a>. Each call to <a href="trait.Read.html#tymethod.read" title="method ark_serialize::Read::read"><code>read()</code></a>
+will attempt to pull bytes from this source into a provided buffer. A
+number of other methods are implemented in terms of <a href="trait.Read.html#tymethod.read" title="method ark_serialize::Read::read"><code>read()</code></a>, giving
+implementors a number of ways to read bytes while only needing to implement
+a single method.</p>
+<p>Readers are intended to be composable with one another. Many implementors
+throughout <a href="https://doc.rust-lang.org/1.86.0/std/io/index.html" title="mod std::io"><code>std::io</code></a> take and provide types which implement the <code>Read</code>
+trait.</p>
+<p>Please note that each call to <a href="trait.Read.html#tymethod.read" title="method ark_serialize::Read::read"><code>read()</code></a> may involve a system call, and
+therefore, using something that implements <a href="https://doc.rust-lang.org/1.86.0/std/io/trait.BufRead.html" title="trait std::io::BufRead"><code>BufRead</code></a>, such as
+<a href="https://doc.rust-lang.org/1.86.0/std/io/buffered/bufreader/struct.BufReader.html" title="struct std::io::buffered::bufreader::BufReader"><code>BufReader</code></a>, will be more efficient.</p>
+<p>Repeated calls to the reader use the same cursor, so for example
+calling <code>read_to_end</code> twice on a <a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File"><code>File</code></a> will only return the file’s
+contents once. It’s recommended to first call <code>rewind()</code> in that case.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p><a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">use </span>std::io::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>std::fs::File;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = [<span class="number">0</span>; <span class="number">10</span>];
+
+    <span class="comment">// read up to 10 bytes
+    </span>f.read(<span class="kw-2">&amp;mut </span>buffer)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = Vec::new();
+    <span class="comment">// read the whole file
+    </span>f.read_to_end(<span class="kw-2">&amp;mut </span>buffer)<span class="question-mark">?</span>;
+
+    <span class="comment">// read into a String, so that you don't need to do the conversion.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>buffer = String::new();
+    f.read_to_string(<span class="kw-2">&amp;mut </span>buffer)<span class="question-mark">?</span>;
+
+    <span class="comment">// and more! See the other methods for more details.
+    </span><span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>Read from <a href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html" title="primitive str"><code>&amp;str</code></a> because <a href="https://doc.rust-lang.org/1.86.0/std/primitive.slice.html" title="primitive slice"><code>&amp;[u8]</code></a> implements <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>b = <span class="string">"This string will be read"</span>.as_bytes();
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = [<span class="number">0</span>; <span class="number">10</span>];
+
+    <span class="comment">// read up to 10 bytes
+    </span>b.read(<span class="kw-2">&amp;mut </span>buffer)<span class="question-mark">?</span>;
+
+    <span class="comment">// etc... it works exactly as a File does!
+    </span><span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.read" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#772">Source</a></span><h4 class="code-header">fn <a href="#tymethod.read" class="fn">read</a>(&amp;mut self, buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Pull some bytes from this source into the specified buffer, returning
+how many bytes were read.</p>
+<p>This function does not provide any guarantees about whether it blocks
+waiting for data, but if an object needs to block for a read and cannot,
+it will typically signal this via an <a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html#variant.Err" title="variant core::result::Result::Err"><code>Err</code></a> return value.</p>
+<p>If the return value of this method is <a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html#variant.Ok" title="variant core::result::Result::Ok"><code>Ok(n)</code></a>, then implementations must
+guarantee that <code>0 &lt;= n &lt;= buf.len()</code>. A nonzero <code>n</code> value indicates
+that the buffer <code>buf</code> has been filled in with <code>n</code> bytes of data from this
+source. If <code>n</code> is <code>0</code>, then it can indicate one of two scenarios:</p>
+<ol>
+<li>This reader has reached its “end of file” and will likely no longer
+be able to produce bytes. Note that this does not mean that the
+reader will <em>always</em> no longer be able to produce bytes. As an example,
+on Linux, this method will call the <code>recv</code> syscall for a <a href="https://doc.rust-lang.org/1.86.0/std/net/tcp/struct.TcpStream.html" title="struct std::net::tcp::TcpStream"><code>TcpStream</code></a>,
+where returning zero indicates the connection was shut down correctly. While
+for <a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File"><code>File</code></a>, it is possible to reach the end of file and get zero as result,
+but if more data is appended to the file, future calls to <code>read</code> will return
+more data.</li>
+<li>The buffer specified was 0 bytes in length.</li>
+</ol>
+<p>It is not an error if the returned value <code>n</code> is smaller than the buffer size,
+even when the reader is not at the end of the stream yet.
+This may happen for example because fewer bytes are actually available right now
+(e. g. being close to end-of-file) or because read() was interrupted by a signal.</p>
+<p>As this trait is safe to implement, callers in unsafe code cannot rely on
+<code>n &lt;= buf.len()</code> for safety.
+Extra care needs to be taken when <code>unsafe</code> functions are used to access the read bytes.
+Callers have to ensure that no unchecked out-of-bounds accesses are possible even if
+<code>n &gt; buf.len()</code>.</p>
+<p><em>Implementations</em> of this method can make no assumptions about the contents of <code>buf</code> when
+this function is called. It is recommended that implementations only write data to <code>buf</code>
+instead of reading its contents.</p>
+<p>Correspondingly, however, <em>callers</em> of this method in unsafe code must not assume
+any guarantees about how the implementation uses <code>buf</code>. The trait is safe to implement,
+so it is possible that the code that’s supposed to write to the buffer might also read
+from it. It is your responsibility to make sure that <code>buf</code> is initialized
+before calling <code>read</code>. Calling <code>read</code> with an uninitialized <code>buf</code> (of the kind one
+obtains via <a href="https://doc.rust-lang.org/1.86.0/core/mem/maybe_uninit/union.MaybeUninit.html" title="union core::mem::maybe_uninit::MaybeUninit"><code>MaybeUninit&lt;T&gt;</code></a>) is not safe, and can lead to undefined behavior.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>If this function encounters any form of I/O or other error, an error
+variant will be returned. If an error is returned then it must be
+guaranteed that no bytes were read.</p>
+<p>An error of the <a href="https://doc.rust-lang.org/1.86.0/std/io/error/enum.ErrorKind.html#variant.Interrupted" title="variant std::io::error::ErrorKind::Interrupted"><code>ErrorKind::Interrupted</code></a> kind is non-fatal and the read
+operation should be retried if there is nothing else to do.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<p><a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">use </span>std::io::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>std::fs::File;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = [<span class="number">0</span>; <span class="number">10</span>];
+
+    <span class="comment">// read up to 10 bytes
+    </span><span class="kw">let </span>n = f.read(<span class="kw-2">&amp;mut </span>buffer[..])<span class="question-mark">?</span>;
+
+    <span class="macro">println!</span>(<span class="string">"The bytes: {:?}"</span>, <span class="kw-2">&amp;</span>buffer[..n]);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.read_vectored" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.36.0">1.36.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#784">Source</a></span><h4 class="code-header">fn <a href="#method.read_vectored" class="fn">read_vectored</a>(&amp;mut self, bufs: &amp;mut [<a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/struct.IoSliceMut.html" title="struct std::io::IoSliceMut">IoSliceMut</a>&lt;'_&gt;]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Like <code>read</code>, except that it reads into a slice of buffers.</p>
+<p>Data is copied to fill each buffer in order, with the final buffer
+written to possibly being only partially filled. This method must
+behave equivalently to a single call to <code>read</code> with concatenated
+buffers.</p>
+<p>The default implementation calls <code>read</code> with either the first nonempty
+buffer provided, or an empty one if none exists.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_read_vectored" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#797">Source</a><h4 class="code-header">fn <a href="#method.is_read_vectored" class="fn">is_read_vectored</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>can_vector</code>)</span></div></span></summary><div class="docblock"><p>Determines if this <code>Read</code>er has an efficient <code>read_vectored</code>
+implementation.</p>
+<p>If a <code>Read</code>er does not override the default <code>read_vectored</code>
+implementation, code using it may want to avoid the method all together
+and coalesce writes into a single buffer for higher performance.</p>
+<p>The default implementation returns <code>false</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_to_end" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#881">Source</a></span><h4 class="code-header">fn <a href="#method.read_to_end" class="fn">read_to_end</a>(&amp;mut self, buf: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Reads all bytes until EOF in this source, placing them into <code>buf</code>.</p>
+<p>All bytes read from this source will be appended to the specified buffer
+<code>buf</code>. This function will continuously call <a href="trait.Read.html#tymethod.read" title="method ark_serialize::Read::read"><code>read()</code></a> to append more data to
+<code>buf</code> until <a href="trait.Read.html#tymethod.read" title="method ark_serialize::Read::read"><code>read()</code></a> returns either <a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html#variant.Ok" title="variant core::result::Result::Ok"><code>Ok(0)</code></a> or an error of
+non-<a href="https://doc.rust-lang.org/1.86.0/std/io/error/enum.ErrorKind.html#variant.Interrupted" title="variant std::io::error::ErrorKind::Interrupted"><code>ErrorKind::Interrupted</code></a> kind.</p>
+<p>If successful, this function will return the total number of bytes read.</p>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>If this function encounters an error of the kind
+<a href="https://doc.rust-lang.org/1.86.0/std/io/error/enum.ErrorKind.html#variant.Interrupted" title="variant std::io::error::ErrorKind::Interrupted"><code>ErrorKind::Interrupted</code></a> then the error is ignored and the operation
+will continue.</p>
+<p>If any other read error is encountered then this function immediately
+returns. Any bytes which have already been read will be appended to
+<code>buf</code>.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<p><a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">use </span>std::io::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>std::fs::File;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = Vec::new();
+
+    <span class="comment">// read the whole file
+    </span>f.read_to_end(<span class="kw-2">&amp;mut </span>buffer)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>(See also the <a href="https://doc.rust-lang.org/1.86.0/std/fs/fn.read.html" title="fn std::fs::read"><code>std::fs::read</code></a> convenience function for reading from a
+file.)</p>
+<h6 id="implementing-read_to_end"><a class="doc-anchor" href="#implementing-read_to_end">§</a>Implementing <code>read_to_end</code></h6>
+<p>When implementing the <code>io::Read</code> trait, it is recommended to allocate
+memory using <a href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html#method.try_reserve" title="method alloc::vec::Vec::try_reserve"><code>Vec::try_reserve</code></a>. However, this behavior is not guaranteed
+by all implementations, and <code>read_to_end</code> may not handle out-of-memory
+situations gracefully.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>read_to_end(<span class="kw-2">&amp;mut </span><span class="self">self</span>, dest_vec: <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;) -&gt; io::Result&lt;usize&gt; {
+    <span class="kw">let </span>initial_vec_len = dest_vec.len();
+    <span class="kw">loop </span>{
+        <span class="kw">let </span>src_buf = <span class="self">self</span>.example_datasource.fill_buf()<span class="question-mark">?</span>;
+        <span class="kw">if </span>src_buf.is_empty() {
+            <span class="kw">break</span>;
+        }
+        dest_vec.try_reserve(src_buf.len())<span class="question-mark">?</span>;
+        dest_vec.extend_from_slice(src_buf);
+
+        <span class="comment">// Any irreversible side effects should happen after `try_reserve` succeeds,
+        // to avoid losing data on allocation error.
+        </span><span class="kw">let </span>read = src_buf.len();
+        <span class="self">self</span>.example_datasource.consume(read);
+    }
+    <span class="prelude-val">Ok</span>(dest_vec.len() - initial_vec_len)
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_to_string" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#924">Source</a></span><h4 class="code-header">fn <a href="#method.read_to_string" class="fn">read_to_string</a>(&amp;mut self, buf: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Reads all bytes until EOF in this source, appending them to <code>buf</code>.</p>
+<p>If successful, this function returns the number of bytes which were read
+and appended to <code>buf</code>.</p>
+<h5 id="errors-2"><a class="doc-anchor" href="#errors-2">§</a>Errors</h5>
+<p>If the data in this stream is <em>not</em> valid UTF-8 then an error is
+returned and <code>buf</code> is unchanged.</p>
+<p>See <a href="trait.Read.html#method.read_to_end" title="method ark_serialize::Read::read_to_end"><code>read_to_end</code></a> for other error semantics.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<p><a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">use </span>std::io::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>std::fs::File;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = String::new();
+
+    f.read_to_string(<span class="kw-2">&amp;mut </span>buffer)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>(See also the <a href="https://doc.rust-lang.org/1.86.0/std/fs/fn.read_to_string.html" title="fn std::fs::read_to_string"><code>std::fs::read_to_string</code></a> convenience function for
+reading from a file.)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_exact" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.6.0">1.6.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#977">Source</a></span><h4 class="code-header">fn <a href="#method.read_exact" class="fn">read_exact</a>(&amp;mut self, buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Reads the exact number of bytes required to fill <code>buf</code>.</p>
+<p>This function reads as many bytes as necessary to completely fill the
+specified buffer <code>buf</code>.</p>
+<p><em>Implementations</em> of this method can make no assumptions about the contents of <code>buf</code> when
+this function is called. It is recommended that implementations only write data to <code>buf</code>
+instead of reading its contents. The documentation on <a href="trait.Read.html#tymethod.read" title="method ark_serialize::Read::read"><code>read</code></a> has a more detailed
+explanation of this subject.</p>
+<h5 id="errors-3"><a class="doc-anchor" href="#errors-3">§</a>Errors</h5>
+<p>If this function encounters an error of the kind
+<a href="https://doc.rust-lang.org/1.86.0/std/io/error/enum.ErrorKind.html#variant.Interrupted" title="variant std::io::error::ErrorKind::Interrupted"><code>ErrorKind::Interrupted</code></a> then the error is ignored and the operation
+will continue.</p>
+<p>If this function encounters an “end of file” before completely filling
+the buffer, it returns an error of the kind <a href="https://doc.rust-lang.org/1.86.0/std/io/error/enum.ErrorKind.html#variant.UnexpectedEof" title="variant std::io::error::ErrorKind::UnexpectedEof"><code>ErrorKind::UnexpectedEof</code></a>.
+The contents of <code>buf</code> are unspecified in this case.</p>
+<p>If any other read error is encountered then this function immediately
+returns. The contents of <code>buf</code> are unspecified in this case.</p>
+<p>If this function returns an error, it is unspecified how many bytes it
+has read, but it will never read more than would be necessary to
+completely fill the buffer.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<p><a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">use </span>std::io::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>std::fs::File;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = [<span class="number">0</span>; <span class="number">10</span>];
+
+    <span class="comment">// read exactly 10 bytes
+    </span>f.read_exact(<span class="kw-2">&amp;mut </span>buffer)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_buf" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#990">Source</a><h4 class="code-header">fn <a href="#method.read_buf" class="fn">read_buf</a>(&amp;mut self, buf: <a class="struct" href="https://doc.rust-lang.org/1.86.0/core/io/borrowed_buf/struct.BorrowedCursor.html" title="struct core::io::borrowed_buf::BorrowedCursor">BorrowedCursor</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>read_buf</code>)</span></div></span></summary><div class="docblock"><p>Pull some bytes from this source into the specified buffer.</p>
+<p>This is equivalent to the <a href="trait.Read.html#tymethod.read" title="method ark_serialize::Read::read"><code>read</code></a> method, except that it is passed a <a href="https://doc.rust-lang.org/1.86.0/core/io/borrowed_buf/struct.BorrowedCursor.html" title="struct core::io::borrowed_buf::BorrowedCursor"><code>BorrowedCursor</code></a> rather than <code>[u8]</code> to allow use
+with uninitialized buffers. The new data will be appended to any existing contents of <code>buf</code>.</p>
+<p>The default implementation delegates to <code>read</code>.</p>
+<p>This method makes it possible to return both data and an error but it is advised against.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_buf_exact" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#1013">Source</a><h4 class="code-header">fn <a href="#method.read_buf_exact" class="fn">read_buf_exact</a>(&amp;mut self, cursor: <a class="struct" href="https://doc.rust-lang.org/1.86.0/core/io/borrowed_buf/struct.BorrowedCursor.html" title="struct core::io::borrowed_buf::BorrowedCursor">BorrowedCursor</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>read_buf</code>)</span></div></span></summary><div class="docblock"><p>Reads the exact number of bytes required to fill <code>cursor</code>.</p>
+<p>This is similar to the <a href="trait.Read.html#method.read_exact" title="method ark_serialize::Read::read_exact"><code>read_exact</code></a> method, except
+that it is passed a <a href="https://doc.rust-lang.org/1.86.0/core/io/borrowed_buf/struct.BorrowedCursor.html" title="struct core::io::borrowed_buf::BorrowedCursor"><code>BorrowedCursor</code></a> rather than <code>[u8]</code> to allow use
+with uninitialized buffers.</p>
+<h5 id="errors-4"><a class="doc-anchor" href="#errors-4">§</a>Errors</h5>
+<p>If this function encounters an error of the kind <a href="https://doc.rust-lang.org/1.86.0/std/io/error/enum.ErrorKind.html#variant.Interrupted" title="variant std::io::error::ErrorKind::Interrupted"><code>ErrorKind::Interrupted</code></a>
+then the error is ignored and the operation will continue.</p>
+<p>If this function encounters an “end of file” before completely filling
+the buffer, it returns an error of the kind <a href="https://doc.rust-lang.org/1.86.0/std/io/error/enum.ErrorKind.html#variant.UnexpectedEof" title="variant std::io::error::ErrorKind::UnexpectedEof"><code>ErrorKind::UnexpectedEof</code></a>.</p>
+<p>If any other read error is encountered then this function immediately
+returns.</p>
+<p>If this function returns an error, all bytes read will be appended to <code>cursor</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.by_ref" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#1052-1054">Source</a></span><h4 class="code-header">fn <a href="#method.by_ref" class="fn">by_ref</a>(&amp;mut self) -&gt; &amp;mut Self<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Creates a “by reference” adaptor for this instance of <code>Read</code>.</p>
+<p>The returned adapter also implements <code>Read</code> and will simply borrow this
+current reader.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<p><a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">use </span>std::io::Read;
+<span class="kw">use </span>std::fs::File;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>other_buffer = Vec::new();
+
+    {
+        <span class="kw">let </span>reference = f.by_ref();
+
+        <span class="comment">// read at most 5 bytes
+        </span>reference.take(<span class="number">5</span>).read_to_end(<span class="kw-2">&amp;mut </span>buffer)<span class="question-mark">?</span>;
+
+    } <span class="comment">// drop our &amp;mut reference so we can use f again
+
+    // original file still usable, read the rest
+    </span>f.read_to_end(<span class="kw-2">&amp;mut </span>other_buffer)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.bytes" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#1095-1097">Source</a></span><h4 class="code-header">fn <a href="#method.bytes" class="fn">bytes</a>(self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/struct.Bytes.html" title="struct std::io::Bytes">Bytes</a>&lt;Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Transforms this <code>Read</code> instance to an <a href="https://doc.rust-lang.org/1.86.0/core/iter/traits/iterator/trait.Iterator.html" title="trait core::iter::traits::iterator::Iterator"><code>Iterator</code></a> over its bytes.</p>
+<p>The returned type implements <a href="https://doc.rust-lang.org/1.86.0/core/iter/traits/iterator/trait.Iterator.html" title="trait core::iter::traits::iterator::Iterator"><code>Iterator</code></a> where the <a href="https://doc.rust-lang.org/1.86.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item" title="associated type core::iter::traits::iterator::Iterator::Item"><code>Item</code></a> is
+<code><a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="Result">Result</a>&lt;<a href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html" title="primitive u8">u8</a>, <a href="https://doc.rust-lang.org/1.86.0/std/io/error/struct.Error.html" title="io::Error">io::Error</a>&gt;</code>.
+The yielded item is <a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html#variant.Ok" title="variant core::result::Result::Ok"><code>Ok</code></a> if a byte was successfully read and <a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html#variant.Err" title="variant core::result::Result::Err"><code>Err</code></a>
+otherwise. EOF is mapped to returning <a href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a> from this iterator.</p>
+<p>The default implementation calls <code>read</code> for each byte,
+which can be very inefficient for data that’s not in memory,
+such as <a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="fs::File"><code>File</code></a>. Consider using a <a href="https://doc.rust-lang.org/1.86.0/std/io/buffered/bufreader/struct.BufReader.html" title="struct std::io::buffered::bufreader::BufReader"><code>BufReader</code></a> in such cases.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<p><a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">use </span>std::io::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>std::io::BufReader;
+<span class="kw">use </span>std::fs::File;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>f = BufReader::new(File::open(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>);
+
+    <span class="kw">for </span>byte <span class="kw">in </span>f.bytes() {
+        <span class="macro">println!</span>(<span class="string">"{}"</span>, byte<span class="question-mark">?</span>);
+    }
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.chain" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#1133-1135">Source</a></span><h4 class="code-header">fn <a href="#method.chain" class="fn">chain</a>&lt;R&gt;(self, next: R) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/struct.Chain.html" title="struct std::io::Chain">Chain</a>&lt;Self, R&gt; <a href="#" class="tooltip" data-notable-ty="Chain&lt;Self, R&gt;">ⓘ</a><div class="where">where
+    R: <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a>,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Creates an adapter which will chain this stream with another.</p>
+<p>The returned <code>Read</code> instance will first read all bytes from this object
+until EOF is encountered. Afterwards the output is equivalent to the
+output of <code>next</code>.</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<p><a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">use </span>std::io::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>std::fs::File;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>f1 = File::open(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>f2 = File::open(<span class="string">"bar.txt"</span>)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>handle = f1.chain(f2);
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = String::new();
+
+    <span class="comment">// read the value into a String. We could use any Read method here,
+    // this is just one example.
+    </span>handle.read_to_string(<span class="kw-2">&amp;mut </span>buffer)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.take" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#1172-1174">Source</a></span><h4 class="code-header">fn <a href="#method.take" class="fn">take</a>(self, limit: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/struct.Take.html" title="struct std::io::Take">Take</a>&lt;Self&gt; <a href="#" class="tooltip" data-notable-ty="Take&lt;Self&gt;">ⓘ</a><div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Creates an adapter which will read at most <code>limit</code> bytes from it.</p>
+<p>This function returns a new instance of <code>Read</code> which will read at most
+<code>limit</code> bytes, after which it will always return EOF (<a href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html#variant.Ok" title="variant core::result::Result::Ok"><code>Ok(0)</code></a>). Any
+read errors will not count towards the number of bytes read and future
+calls to <a href="trait.Read.html#tymethod.read" title="method ark_serialize::Read::read"><code>read()</code></a> may succeed.</p>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<p><a href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">use </span>std::io::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>std::fs::File;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>f = File::open(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = [<span class="number">0</span>; <span class="number">5</span>];
+
+    <span class="comment">// read at most five bytes
+    </span><span class="kw">let </span><span class="kw-2">mut </span>handle = f.take(<span class="number">5</span>);
+
+    handle.read(<span class="kw-2">&amp;mut </span>buffer)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-Read-for-%26File" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/fs.rs.html#1096">Source</a></span><a href="#impl-Read-for-%26File" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for &amp;<a class="struct" href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File">File</a></h3></section><section id="impl-Read-for-%26PipeReader" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/std/io/pipe.rs.html#187">Source</a><a href="#impl-Read-for-%26PipeReader" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for &amp;<a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/pipe/struct.PipeReader.html" title="struct std::io::pipe::PipeReader">PipeReader</a></h3></section><section id="impl-Read-for-%26Stdin" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.78.0">1.78.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/stdio.rs.html#466">Source</a></span><a href="#impl-Read-for-%26Stdin" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for &amp;<a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/stdio/struct.Stdin.html" title="struct std::io::stdio::Stdin">Stdin</a></h3></section><section id="impl-Read-for-%26TcpStream" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/net/tcp.rs.html#662">Source</a></span><a href="#impl-Read-for-%26TcpStream" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for &amp;<a class="struct" href="https://doc.rust-lang.org/1.86.0/std/net/tcp/struct.TcpStream.html" title="struct std::net::tcp::TcpStream">TcpStream</a></h3></section><section id="impl-Read-for-%26%5Bu8%5D" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/impls.rs.html#298">Source</a></span><a href="#impl-Read-for-%26%5Bu8%5D" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>]</h3><div class="docblock"><p>Read is implemented for <code>&amp;[u8]</code> by copying from the slice.</p>
+</div></section><div class="docblock"><p>Note that reading updates the slice to point to the yet unread part.
+The slice will be empty when EOF is reached.</p>
+</div><section id="impl-Read-for-Arc%3CFile%3E" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.73.0">1.73.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/fs.rs.html#1281">Source</a></span><a href="#impl-Read-for-Arc%3CFile%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File">File</a>&gt;</h3></section><section id="impl-Read-for-File" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/fs.rs.html#1235">Source</a></span><a href="#impl-Read-for-File" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File">File</a></h3></section><section id="impl-Read-for-PipeReader" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/std/io/pipe.rs.html#207">Source</a><a href="#impl-Read-for-PipeReader" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/pipe/struct.PipeReader.html" title="struct std::io::pipe::PipeReader">PipeReader</a></h3></section><section id="impl-Read-for-Stdin" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/stdio.rs.html#437">Source</a></span><a href="#impl-Read-for-Stdin" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/stdio/struct.Stdin.html" title="struct std::io::stdio::Stdin">Stdin</a></h3></section><section id="impl-Read-for-StdinLock%3C'_%3E" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/stdio.rs.html#503">Source</a></span><a href="#impl-Read-for-StdinLock%3C'_%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/stdio/struct.StdinLock.html" title="struct std::io::stdio::StdinLock">StdinLock</a>&lt;'_&gt;</h3></section><section id="impl-Read-for-Empty" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/util.rs.html#61">Source</a></span><a href="#impl-Read-for-Empty" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/util/struct.Empty.html" title="struct std::io::util::Empty">Empty</a></h3></section><section id="impl-Read-for-Repeat" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/util.rs.html#183">Source</a></span><a href="#impl-Read-for-Repeat" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/util/struct.Repeat.html" title="struct std::io::util::Repeat">Repeat</a></h3></section><section id="impl-Read-for-TcpStream" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/net/tcp.rs.html#623">Source</a></span><a href="#impl-Read-for-TcpStream" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/net/tcp/struct.TcpStream.html" title="struct std::net::tcp::TcpStream">TcpStream</a></h3></section><section id="impl-Read-for-UnixStream" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.10.0">1.10.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/os/unix/net/stream.rs.html#572">Source</a></span><a href="#impl-Read-for-UnixStream" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/os/unix/net/stream/struct.UnixStream.html" title="struct std::os::unix::net::stream::UnixStream">UnixStream</a></h3></section><section id="impl-Read-for-ChildStderr" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/process.rs.html#477">Source</a></span><a href="#impl-Read-for-ChildStderr" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/process/struct.ChildStderr.html" title="struct std::process::ChildStderr">ChildStderr</a></h3></section><section id="impl-Read-for-ChildStdout" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/process.rs.html#407">Source</a></span><a href="#impl-Read-for-ChildStdout" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/process/struct.ChildStdout.html" title="struct std::process::ChildStdout">ChildStdout</a></h3></section><section id="impl-Read-for-dyn+RngCore" class="impl"><a class="src rightside" href="../src/rand_core/lib.rs.html#473">Source</a><a href="#impl-Read-for-dyn+RngCore" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for dyn <a class="trait" href="../rand_core/trait.RngCore.html" title="trait rand_core::RngCore">RngCore</a></h3></section><section id="impl-Read-for-%26UnixStream" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.10.0">1.10.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/os/unix/net/stream.rs.html#592">Source</a></span><a href="#impl-Read-for-%26UnixStream" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for &amp;'a <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/os/unix/net/stream/struct.UnixStream.html" title="struct std::os::unix::net::stream::UnixStream">UnixStream</a></h3></section><section id="impl-Read-for-VecDeque%3Cu8,+A%3E" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.63.0">1.63.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/impls.rs.html#506">Source</a></span><a href="#impl-Read-for-VecDeque%3Cu8,+A%3E" class="anchor">§</a><h3 class="code-header">impl&lt;A&gt; <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/collections/vec_deque/struct.VecDeque.html" title="struct alloc::collections::vec_deque::VecDeque">VecDeque</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>, A&gt;<div class="where">where
+    A: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/alloc/trait.Allocator.html" title="trait core::alloc::Allocator">Allocator</a>,</div></h3><div class="docblock"><p>Read is implemented for <code>VecDeque&lt;u8&gt;</code> by consuming bytes from the front of the <code>VecDeque</code>.</p>
+</div></section><section id="impl-Read-for-%26mut+R" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/impls.rs.html#13">Source</a></span><a href="#impl-Read-for-%26mut+R" class="anchor">§</a><h3 class="code-header">impl&lt;R&gt; <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.reference.html">&amp;mut R</a><div class="where">where
+    R: <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section><section id="impl-Read-for-Box%3CR%3E" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/impls.rs.html#152">Source</a></span><a href="#impl-Read-for-Box%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R&gt; <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;R&gt;<div class="where">where
+    R: <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section><section id="impl-Read-for-BufReader%3CR%3E" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/buffered/bufreader.rs.html#333">Source</a></span><a href="#impl-Read-for-BufReader%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R&gt; <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/buffered/bufreader/struct.BufReader.html" title="struct std::io::buffered::bufreader::BufReader">BufReader</a>&lt;R&gt;<div class="where">where
+    R: <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section><section id="impl-Read-for-XofReaderCoreWrapper%3CT%3E" class="impl"><a class="src rightside" href="../src/digest/core_api/xof_reader.rs.html#52-56">Source</a><a href="#impl-Read-for-XofReaderCoreWrapper%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="../digest/core_api/xof_reader/struct.XofReaderCoreWrapper.html" title="struct digest::core_api::xof_reader::XofReaderCoreWrapper">XofReaderCoreWrapper</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../digest/core_api/trait.XofReaderCore.html" title="trait digest::core_api::XofReaderCore">XofReaderCore</a>,
+    &lt;T as <a class="trait" href="../crypto_common/trait.BlockSizeUser.html" title="trait crypto_common::BlockSizeUser">BlockSizeUser</a>&gt;::<a class="associatedtype" href="../crypto_common/trait.BlockSizeUser.html#associatedtype.BlockSize" title="type crypto_common::BlockSizeUser::BlockSize">BlockSize</a>: <a class="trait" href="../typenum/type_operators/trait.IsLess.html" title="trait typenum::type_operators::IsLess">IsLess</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UTerm.html" title="struct typenum::uint::UTerm">UTerm</a>, <a class="struct" href="../typenum/bit/struct.B1.html" title="struct typenum::bit::B1">B1</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;&gt;,
+    &lt;&lt;T as <a class="trait" href="../crypto_common/trait.BlockSizeUser.html" title="trait crypto_common::BlockSizeUser">BlockSizeUser</a>&gt;::<a class="associatedtype" href="../crypto_common/trait.BlockSizeUser.html#associatedtype.BlockSize" title="type crypto_common::BlockSizeUser::BlockSize">BlockSize</a> as <a class="trait" href="../typenum/type_operators/trait.IsLess.html" title="trait typenum::type_operators::IsLess">IsLess</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UInt.html" title="struct typenum::uint::UInt">UInt</a>&lt;<a class="struct" href="../typenum/uint/struct.UTerm.html" title="struct typenum::uint::UTerm">UTerm</a>, <a class="struct" href="../typenum/bit/struct.B1.html" title="struct typenum::bit::B1">B1</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;, <a class="struct" href="../typenum/bit/struct.B0.html" title="struct typenum::bit::B0">B0</a>&gt;&gt;&gt;::<a class="associatedtype" href="../typenum/type_operators/trait.IsLess.html#associatedtype.Output" title="type typenum::type_operators::IsLess::Output">Output</a>: <a class="trait" href="../typenum/marker_traits/trait.NonZero.html" title="trait typenum::marker_traits::NonZero">NonZero</a>,</div></h3></section><section id="impl-Read-for-Cursor%3CT%3E" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/cursor.rs.html#324-326">Source</a></span><a href="#impl-Read-for-Cursor%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/cursor/struct.Cursor.html" title="struct std::io::cursor::Cursor">Cursor</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>]&gt;,</div></h3></section><section id="impl-Read-for-Take%3CT%3E" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#2968">Source</a></span><a href="#impl-Read-for-Take%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/struct.Take.html" title="struct std::io::Take">Take</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a>,</div></h3></section><section id="impl-Read-for-Chain%3CT,+U%3E" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/std/io/mod.rs.html#2707">Source</a></span><a href="#impl-Read-for-Chain%3CT,+U%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a> for <a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/struct.Chain.html" title="struct std::io::Chain">Chain</a>&lt;T, U&gt;<div class="where">where
+    T: <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a>,
+    U: <a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a>,</div></h3></section></div><script src="../trait.impl/std/io/trait.Read.js" data-ignore-extern-crates="std,alloc,rand_core,digest" async></script><script type="text/json" id="notable-traits-data">{"Chain<Self, R>":"<h3>Notable traits for <code><a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/std/io/struct.Chain.html\" title=\"struct std::io::Chain\">Chain</a>&lt;T, U&gt;</code></h3><pre><code><div class=\"where\">impl&lt;T, U&gt; <a class=\"trait\" href=\"trait.Read.html\" title=\"trait ark_serialize::Read\">Read</a> for <a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/std/io/struct.Chain.html\" title=\"struct std::io::Chain\">Chain</a>&lt;T, U&gt;<div class=\"where\">where\n    T: <a class=\"trait\" href=\"trait.Read.html\" title=\"trait ark_serialize::Read\">Read</a>,\n    U: <a class=\"trait\" href=\"trait.Read.html\" title=\"trait ark_serialize::Read\">Read</a>,</div></div>","Take<Self>":"<h3>Notable traits for <code><a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/std/io/struct.Take.html\" title=\"struct std::io::Take\">Take</a>&lt;T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;T&gt; <a class=\"trait\" href=\"trait.Read.html\" title=\"trait ark_serialize::Read\">Read</a> for <a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/std/io/struct.Take.html\" title=\"struct std::io::Take\">Take</a>&lt;T&gt;<div class=\"where\">where\n    T: <a class=\"trait\" href=\"trait.Read.html\" title=\"trait ark_serialize::Read\">Read</a>,</div></div>"}</script></section></div></main></body></html>

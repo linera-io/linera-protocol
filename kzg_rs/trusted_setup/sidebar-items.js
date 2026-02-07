@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EnvKzgSettings"],"fn":["get_g1_points","get_g2_points","get_kzg_settings","get_roots_of_unity"],"struct":["KzgSettings"]};

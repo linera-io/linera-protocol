@@ -1,0 +1,1 @@
+searchState.loadedDescShard("futures_timer", 0, "A general purpose crate for working with timeouts and …\nA future representing the notification that an elapsed …\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCreates a new future which will fire at <code>dur</code> time into the …\nResets this timeout to an new timeout which will fire at …")
