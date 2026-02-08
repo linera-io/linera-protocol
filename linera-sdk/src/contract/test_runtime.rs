@@ -82,6 +82,7 @@ where
     expected_publish_module_calls: VecDeque<ExpectedPublishModuleCall>,
     expected_create_application_calls: VecDeque<ExpectedCreateApplicationCall>,
     expected_create_data_blob_calls: VecDeque<ExpectedCreateDataBlobCall>,
+    remaining_fuel: Option<u64>,
     key_value_store: KeyValueStore,
 }
 
@@ -133,6 +134,7 @@ where
             expected_publish_module_calls: VecDeque::new(),
             expected_create_application_calls: VecDeque::new(),
             expected_create_data_blob_calls: VecDeque::new(),
+            remaining_fuel: None,
             key_value_store: KeyValueStore::mock().to_mut(),
         }
     }
@@ -1081,6 +1083,23 @@ where
     /// Returns the multi-leader round in which this block was validated.
     pub fn validation_round(&mut self) -> Option<u32> {
         self.round
+    }
+
+    /// Configures the remaining fuel to return during the test.
+    pub fn with_remaining_fuel(mut self, remaining_fuel: u64) -> Self {
+        self.remaining_fuel = Some(remaining_fuel);
+        self
+    }
+
+    /// Configures the remaining fuel to return during the test.
+    pub fn set_remaining_fuel(&mut self, remaining_fuel: u64) -> &mut Self {
+        self.remaining_fuel = Some(remaining_fuel);
+        self
+    }
+
+    /// Returns the amount of execution fuel remaining before execution is aborted.
+    pub fn remaining_fuel(&mut self) -> u64 {
+        self.remaining_fuel.unwrap_or(u64::MAX)
     }
 }
 

@@ -709,6 +709,15 @@ where
             .map_err(|e| RuntimeError::Custom(e.into()))
     }
 
+    /// Returns the amount of execution fuel remaining before execution is aborted.
+    fn remaining_fuel(caller: &mut Caller) -> Result<u64, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime_mut()
+            .remaining_fuel(VmRuntime::Wasm)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Returns the multi-leader round in which this block was validated.
     fn validation_round(caller: &mut Caller) -> Result<Option<u32>, RuntimeError> {
         caller
