@@ -37,6 +37,11 @@ impl BlockBuilder {
     /// owned by `owner`. It becomes the block after the specified `previous_block`, or the genesis
     /// block if [`None`] is specified.
     ///
+    /// The block's timestamp defaults to the maximum of the parent block's timestamp and the
+    /// validator's current clock time, ensuring it satisfies the validity rule that a block's
+    /// timestamp must not be earlier than its parent's. Use [`with_timestamp`](Self::with_timestamp)
+    /// to override.
+    ///
     /// # Notes
     ///
     /// This is an internal method, because the [`BlockBuilder`] instance should be built by an
@@ -59,6 +64,10 @@ impl BlockBuilder {
                     .expect("Block height limit reached")
             })
             .unwrap_or_default();
+        let parent_timestamp = previous_block
+            .map(|certificate| certificate.inner().timestamp())
+            .unwrap_or_default();
+        let timestamp = parent_timestamp.max(validator.clock().current_time());
 
         BlockBuilder {
             block: ProposedBlock {
@@ -68,13 +77,18 @@ impl BlockBuilder {
                 previous_block_hash,
                 height,
                 authenticated_owner: Some(owner),
-                timestamp: Timestamp::from(0),
+                timestamp,
             },
             validator,
         }
     }
 
     /// Configures the timestamp of this block.
+    ///
+    /// The timestamp must be at least as large as the parent block's timestamp (which is used as
+    /// the default). It must also be at least as large as the timestamp of any incoming message
+    /// bundle added via [`with_messages_from`](Self::with_messages_from) or
+    /// [`with_messages_from_by_action`](Self::with_messages_from_by_action).
     pub fn with_timestamp(&mut self, timestamp: Timestamp) -> &mut Self {
         self.block.timestamp = timestamp;
         self
@@ -164,24 +178,38 @@ impl BlockBuilder {
 
     /// Receives incoming message bundles by specifying them directly.
     ///
+    /// Automatically advances the block's timestamp to be at least as large as the latest
+    /// bundle's timestamp, since blocks are not allowed to have a timestamp older than any of
+    /// their incoming bundles. Use [`with_timestamp`](Self::with_timestamp) afterwards to set a
+    /// later timestamp if needed.
+    ///
     /// This is an internal method that bypasses the check to see if the messages are already
     /// present in the inboxes of the microchain that owns this block.
     pub(crate) fn with_incoming_bundles(
         &mut self,
         bundles: impl IntoIterator<Item = IncomingBundle>,
     ) -> &mut Self {
-        self.block
-            .transactions
-            .extend(bundles.into_iter().map(Transaction::ReceiveMessages));
+        for bundle in bundles {
+            self.block.timestamp = self.block.timestamp.max(bundle.bundle.timestamp);
+            self.block
+                .transactions
+                .push(Transaction::ReceiveMessages(bundle));
+        }
         self
     }
 
-    /// Receives all direct messages  that were sent to this chain by the given certificate.
+    /// Receives all direct messages that were sent to this chain by the given certificate.
+    ///
+    /// The block's timestamp is automatically advanced to be at least as large as the
+    /// certificate's block timestamp.
     pub fn with_messages_from(&mut self, certificate: &ConfirmedBlockCertificate) -> &mut Self {
         self.with_messages_from_by_action(certificate, MessageAction::Accept)
     }
 
     /// Receives all messages that were sent to this chain by the given certificate.
+    ///
+    /// The block's timestamp is automatically advanced to be at least as large as the
+    /// certificate's block timestamp.
     pub fn with_messages_from_by_action(
         &mut self,
         certificate: &ConfirmedBlockCertificate,
