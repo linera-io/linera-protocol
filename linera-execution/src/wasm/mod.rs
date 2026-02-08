@@ -344,6 +344,7 @@ pub mod test {
 
     #[cfg(with_fs)]
     use super::{WasmContractModule, WasmRuntime, WasmServiceModule};
+    use linera_base::util::wasm::optimize_wasm_files_in;
 
     fn build_applications_in_directory(dir: &str) -> Result<(), std::io::Error> {
         let output = std::process::Command::new("cargo")
@@ -359,6 +360,8 @@ pub mod test {
                 String::from_utf8_lossy(&output.stderr),
             );
         }
+        let output_directory = Path::new(dir).join("target/wasm32-unknown-unknown/release");
+        optimize_wasm_files_in(&output_directory)?;
         Ok(())
     }
 
