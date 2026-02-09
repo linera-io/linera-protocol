@@ -153,7 +153,9 @@ impl ProposedBlock {
 }
 
 /// A transaction in a block: incoming messages or an operation.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Allocative)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Allocative, strum::AsRefStr,
+)]
 pub enum Transaction {
     /// Receive a bundle of incoming messages.
     ReceiveMessages(IncomingBundle),
