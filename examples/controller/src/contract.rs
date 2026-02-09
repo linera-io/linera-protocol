@@ -107,7 +107,7 @@ impl Contract for ControllerContract {
                 assert_eq!(
                     self.runtime.chain_id(),
                     self.runtime.application_creator_chain_id(),
-                    "ExecuteAdminCommand can only be executed on the chain that created the PM engine"
+                    "ExecuteWorkerCommand can only be executed on the chain that created the PM engine"
                 );
                 let origin_chain_id = self.runtime.message_origin_chain_id().expect(
                     "Incoming message origin chain ID has to be available when executing a message",
@@ -119,7 +119,7 @@ impl Contract for ControllerContract {
                 assert_eq!(
                     self.runtime.chain_id(),
                     self.runtime.application_creator_chain_id(),
-                    "ExecuteAdminCommand can only be executed on the chain that created the PM engine"
+                    "ExecuteControllerCommand can only be executed on the chain that created the PM engine"
                 );
                 self.execute_controller_command_locally(admin, command)
                     .await;
