@@ -399,13 +399,19 @@ impl<Env: Environment> ClientContext<Env> {
         client: &ChainClient<Env_>,
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
+        let existing_owner = self
+            .wallet()
+            .get(info.chain_id)
+            .await
+            .map_err(error::Inner::wallet)?
+            .and_then(|chain| chain.owner);
 
         self.wallet()
             .insert(
                 info.chain_id,
                 wallet::Chain {
                     pending_proposal: client.pending_proposal().clone(),
-                    owner: client.preferred_owner(),
+                    owner: existing_owner,
                     ..info.as_ref().into()
                 },
             )
