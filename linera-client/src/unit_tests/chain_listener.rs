@@ -68,13 +68,13 @@ impl chain_listener::ClientContext for ClientContext {
         client: &ChainClient<environment::Test>,
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
-        let client_owner = client.preferred_owner();
+        let existing_owner = self.wallet().get(info.chain_id).and_then(|c| c.owner);
         let pending_proposal = client.pending_proposal().clone();
         self.wallet().insert(
             info.chain_id,
             wallet::Chain {
                 pending_proposal,
-                owner: client_owner,
+                owner: existing_owner,
                 ..info.as_ref().into()
             },
         );
