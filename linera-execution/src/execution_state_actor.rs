@@ -144,7 +144,7 @@ where
     // TODO(#1416): Support concurrent I/O.
     #[instrument(
         skip_all,
-        fields(request_type = %request_type_name(&request))
+        fields(request_type = %request.as_ref())
     )]
     pub(crate) async fn handle_request(
         &mut self,
@@ -927,7 +927,7 @@ where
     #[instrument(skip_all, fields(
         chain_id = %context.chain_id,
         block_height = %context.height,
-        operation_type = %operation_type_name(&operation),
+        operation_type = %operation.as_ref(),
     ))]
     pub async fn execute_operation(
         &mut self,
@@ -975,7 +975,7 @@ where
         block_height = %context.height,
         origin = %context.origin,
         is_bouncing = %context.is_bouncing,
-        message_type = %message_type_name(&message),
+        message_type = %message.as_ref(),
     ))]
     pub async fn execute_message(
         &mut self,
@@ -1109,7 +1109,7 @@ where
 }
 
 /// Requests to the execution state.
-#[derive(Debug)]
+#[derive(Debug, strum::AsRefStr)]
 pub enum ExecutionRequest {
     #[cfg(not(web))]
     LoadContract {
@@ -1387,70 +1387,4 @@ pub enum ExecutionRequest {
         message: String,
         level: tracing::log::Level,
     },
-}
-
-/// Returns a human-readable name for the operation type.
-fn operation_type_name(operation: &Operation) -> &'static str {
-    match operation {
-        Operation::System(_) => "System",
-        Operation::User { .. } => "User",
-    }
-}
-
-/// Returns a human-readable name for the message type.
-fn message_type_name(message: &Message) -> &'static str {
-    match message {
-        Message::System(_) => "System",
-        Message::User { .. } => "User",
-    }
-}
-
-/// Returns the variant name of an `ExecutionRequest`.
-fn request_type_name(request: &ExecutionRequest) -> &'static str {
-    use ExecutionRequest::*;
-    match request {
-        #[cfg(not(web))]
-        LoadContract { .. } => "LoadContract",
-        #[cfg(not(web))]
-        LoadService { .. } => "LoadService",
-        ChainBalance { .. } => "ChainBalance",
-        OwnerBalance { .. } => "OwnerBalance",
-        OwnerBalances { .. } => "OwnerBalances",
-        BalanceOwners { .. } => "BalanceOwners",
-        Transfer { .. } => "Transfer",
-        Claim { .. } => "Claim",
-        SystemTimestamp { .. } => "SystemTimestamp",
-        ChainOwnership { .. } => "ChainOwnership",
-        ApplicationPermissions { .. } => "ApplicationPermissions",
-        ReadApplicationDescription { .. } => "ReadApplicationDescription",
-        ReadValueBytes { .. } => "ReadValueBytes",
-        ContainsKey { .. } => "ContainsKey",
-        ContainsKeys { .. } => "ContainsKeys",
-        ReadMultiValuesBytes { .. } => "ReadMultiValuesBytes",
-        FindKeysByPrefix { .. } => "FindKeysByPrefix",
-        FindKeyValuesByPrefix { .. } => "FindKeyValuesByPrefix",
-        WriteBatch { .. } => "WriteBatch",
-        OpenChain { .. } => "OpenChain",
-        CloseChain { .. } => "CloseChain",
-        ChangeOwnership { .. } => "ChangeOwnership",
-        ChangeApplicationPermissions { .. } => "ChangeApplicationPermissions",
-        CreateApplication { .. } => "CreateApplication",
-        PerformHttpRequest { .. } => "PerformHttpRequest",
-        ReadBlobContent { .. } => "ReadBlobContent",
-        AssertBlobExists { .. } => "AssertBlobExists",
-        Emit { .. } => "Emit",
-        ReadEvent { .. } => "ReadEvent",
-        SubscribeToEvents { .. } => "SubscribeToEvents",
-        UnsubscribeFromEvents { .. } => "UnsubscribeFromEvents",
-        GetApplicationPermissions { .. } => "GetApplicationPermissions",
-        QueryServiceOracle { .. } => "QueryServiceOracle",
-        AddOutgoingMessage { .. } => "AddOutgoingMessage",
-        SetLocalTime { .. } => "SetLocalTime",
-        AssertBefore { .. } => "AssertBefore",
-        AddCreatedBlob { .. } => "AddCreatedBlob",
-        ValidationRound { .. } => "ValidationRound",
-        AllowApplicationLogs { .. } => "AllowApplicationLogs",
-        #[cfg(web)]
-        Log { .. } => "Log",
-    }
 }

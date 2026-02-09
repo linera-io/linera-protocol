@@ -106,7 +106,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         chain_id = %self.chain_id,
         block_height = %self.block_height,
         transaction_index = %self.transaction_index,
-        transaction_type = %transaction_type_name(transaction),
+        transaction_type = %transaction.as_ref(),
     ))]
     pub async fn execute_transaction<C>(
         &mut self,
@@ -438,11 +438,3 @@ pub(crate) type FinalizeExecutionResult = (
     Vec<OperationResult>,
     ResourceTracker,
 );
-
-/// Returns a human-readable name for the transaction type.
-fn transaction_type_name(transaction: &Transaction) -> &'static str {
-    match transaction {
-        Transaction::ReceiveMessages(_) => "ReceiveMessages",
-        Transaction::ExecuteOperation(_) => "ExecuteOperation",
-    }
-}

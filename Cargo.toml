@@ -239,6 +239,7 @@ similar-asserts = "1.5.0"
 sqlx = "0.8"
 static_assertions = "1.1.0"
 stdext = "0.3.3"
+strum = { version = "0.26", features = ["derive"] }
 syn = "2.0.52"
 sync_wrapper = { version = "1.0.1", features = ["futures"] }
 sysinfo = "0.33.1"
