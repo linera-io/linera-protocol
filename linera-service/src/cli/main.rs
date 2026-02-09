@@ -48,7 +48,10 @@ use linera_base::{
     time::{Duration, Instant},
 };
 use linera_client::{
-    benchmark::BenchmarkConfig,
+    benchmark::{
+        BenchmarkConfig, FungibleTransferGenerator, NativeFungibleTransferGenerator,
+        OperationGenerator,
+    },
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
     config::{CommitteeConfig, GenesisConfig},
 };
@@ -721,6 +724,7 @@ impl Runnable for Job {
                             runtime_in_seconds,
                             delay_between_chains_ms,
                             config_path,
+                            single_destination_per_block,
                         } = benchmark_options;
                         assert!(
                         options.client_options.max_pending_message_bundles
@@ -748,14 +752,14 @@ impl Runnable for Job {
                         let mut context = options
                             .create_client_context(storage.clone(), wallet, signer.into_value())
                             .await?;
-                        let (chain_clients, blocks_infos) = context
+                        let chain_clients = context
                             .prepare_for_benchmark(
                                 num_chains,
-                                transactions_per_block,
                                 tokens_per_chain,
                                 fungible_application_id,
                                 pub_keys,
                                 config_path.as_deref(),
+                                close_chains,
                             )
                             .await?;
 
@@ -802,12 +806,39 @@ impl Runnable for Job {
                             mpsc::unbounded_channel().1,
                             true, // Enabling background sync for benchmarks
                         );
+                        let all_chain_ids: Vec<ChainId> =
+                            chain_clients.iter().map(|c| c.chain_id()).collect();
+                        let generators: Vec<Box<dyn OperationGenerator>> = chain_clients
+                            .iter()
+                            .map(|client| -> anyhow::Result<Box<dyn OperationGenerator>> {
+                                let source = client.chain_id();
+                                let destinations: Vec<ChainId> = all_chain_ids
+                                    .iter()
+                                    .copied()
+                                    .filter(|id| *id != source)
+                                    .collect();
+                                if let Some(app_id) = fungible_application_id {
+                                    Ok(Box::new(FungibleTransferGenerator::new(
+                                        app_id,
+                                        source,
+                                        destinations,
+                                        single_destination_per_block,
+                                    )?))
+                                } else {
+                                    Ok(Box::new(NativeFungibleTransferGenerator::new(
+                                        source,
+                                        destinations,
+                                        single_destination_per_block,
+                                    )?))
+                                }
+                            })
+                            .collect::<Result<_, _>>()?;
+
                         linera_client::benchmark::Benchmark::run_benchmark(
-                            num_chains,
-                            transactions_per_block,
                             bps,
                             chain_clients.clone(),
-                            blocks_infos,
+                            generators,
+                            transactions_per_block,
                             health_check_endpoints.clone(),
                             runtime_in_seconds,
                             delay_between_chains_ms,
@@ -865,8 +896,6 @@ impl Runnable for Job {
                                         "--storage-max-stream-queries".to_string(),
                                         "50".to_string(),
                                         "--timings".to_string(),
-                                        "--max-pending-message-bundles".to_string(),
-                                        "10000".to_string(),
                                         "--max-new-events-per-block".to_string(),
                                         "10000".to_string(),
                                     ],
