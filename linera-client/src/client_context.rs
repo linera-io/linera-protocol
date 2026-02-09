@@ -27,7 +27,7 @@ use tracing::{debug, info, warn};
 #[cfg(not(web))]
 use {
     crate::{
-        benchmark::{Benchmark, BenchmarkError},
+        benchmark::{fungible_transfer, Benchmark, BenchmarkError},
         client_metrics::ClientMetrics,
     },
     futures::stream,
@@ -40,7 +40,7 @@ use {
         system::{OpenChainConfig, SystemOperation},
         Operation,
     },
-    std::{collections::HashSet, iter, path::Path},
+    std::{collections::HashSet, path::Path},
     tokio::{sync::mpsc, task},
 };
 #[cfg(feature = "fs")]
@@ -868,12 +868,12 @@ impl<Env: Environment> ClientContext<Env> {
     pub async fn prepare_for_benchmark(
         &mut self,
         num_chains: usize,
-        transactions_per_block: usize,
         tokens_per_chain: Amount,
         fungible_application_id: Option<ApplicationId>,
         pub_keys: Vec<AccountPublicKey>,
         chains_config_path: Option<&Path>,
-    ) -> Result<(Vec<ChainClient<Env>>, Vec<Vec<Operation>>), Error> {
+        close_chains: bool,
+    ) -> Result<Vec<ChainClient<Env>>, Error> {
         let start = Instant::now();
         // Below all block proposals are supposed to succeed without retries, we
         // must make sure that all incoming payments have been accepted on-chain
@@ -891,6 +891,7 @@ impl<Env: Environment> ClientContext<Env> {
                 tokens_per_chain,
                 pub_keys,
                 chains_config_path.is_some(),
+                close_chains,
             )
             .await?;
         info!(
@@ -933,14 +934,7 @@ impl<Env: Environment> ClientContext<Env> {
             }
         }
 
-        let blocks_infos = Benchmark::<Env>::make_benchmark_block_info(
-            benchmark_chains,
-            transactions_per_block,
-            fungible_application_id,
-            all_chains,
-        )?;
-
-        Ok((chain_clients, blocks_infos))
+        Ok(chain_clients)
     }
 
     pub async fn wrap_up_benchmark(
@@ -1034,39 +1028,50 @@ impl<Env: Environment> ClientContext<Env> {
 
     /// Creates chains if necessary, and returns a map of exactly `num_chains` chain IDs
     /// with key pairs, as well as a map of the chain clients.
+    ///
+    /// If `close_chains` is true, chains are not looked up from or stored in the wallet,
+    /// since they will be closed after the benchmark and shouldn't be reused.
     async fn make_benchmark_chains(
         &mut self,
         num_chains: usize,
         balance: Amount,
         pub_keys: Vec<AccountPublicKey>,
         wallet_only: bool,
+        close_chains: bool,
     ) -> Result<(Vec<(ChainId, AccountOwner)>, Vec<ChainClient<Env>>), Error> {
         let mut chains_found_in_wallet = 0;
         let mut benchmark_chains = Vec::with_capacity(num_chains);
         let mut chain_clients = Vec::with_capacity(num_chains);
         let start = Instant::now();
-        let mut owned_chain_ids = std::pin::pin!(self.wallet().owned_chain_ids());
-        while let Some(chain_id) = owned_chain_ids.next().await {
-            let chain_id = chain_id.map_err(error::Inner::wallet)?;
-            if chains_found_in_wallet == num_chains {
-                break;
+
+        // When close_chains is true and we're creating our own chains (not wallet_only),
+        // skip wallet lookup to avoid picking up existing chains that would then be closed.
+        // When wallet_only is true, chains were pre-created by the parent process and must
+        // be read from the wallet.
+        if !close_chains || wallet_only {
+            let mut owned_chain_ids = std::pin::pin!(self.wallet().owned_chain_ids());
+            while let Some(chain_id) = owned_chain_ids.next().await {
+                let chain_id = chain_id.map_err(error::Inner::wallet)?;
+                if chains_found_in_wallet == num_chains {
+                    break;
+                }
+                let chain_client = self.make_chain_client(chain_id).await?;
+                let ownership = chain_client.chain_info().await?.manager.ownership;
+                if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
+                    continue;
+                }
+                let owner = *ownership.super_owners.first().unwrap();
+                chain_client.process_inbox().await?;
+                benchmark_chains.push((chain_id, owner));
+                chain_clients.push(chain_client);
+                chains_found_in_wallet += 1;
             }
-            let chain_client = self.make_chain_client(chain_id).await?;
-            let ownership = chain_client.chain_info().await?.manager.ownership;
-            if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
-                continue;
-            }
-            let owner = *ownership.super_owners.first().unwrap();
-            chain_client.process_inbox().await?;
-            benchmark_chains.push((chain_id, owner));
-            chain_clients.push(chain_client);
-            chains_found_in_wallet += 1;
+            info!(
+                "Got {} chains from the wallet in {} ms",
+                benchmark_chains.len(),
+                start.elapsed().as_millis()
+            );
         }
-        info!(
-            "Got {} chains from the wallet in {} ms",
-            benchmark_chains.len(),
-            start.elapsed().as_millis()
-        );
 
         let num_chains_to_create = num_chains - chains_found_in_wallet;
 
@@ -1086,20 +1091,23 @@ impl<Env: Environment> ClientContext<Env> {
             let operations_per_block = 900; // Over this we seem to hit the block size limits.
             for i in (0..num_chains_to_create).step_by(operations_per_block) {
                 let num_new_chains = operations_per_block.min(num_chains_to_create - i);
-                let pub_key = pub_keys_iter.next().unwrap();
-                let owner = pub_key.into();
+                // Each chain gets its own unique owner (previously all chains in a batch
+                // shared one owner, which could cause conflicts during benchmarking).
+                let owners: Vec<AccountOwner> = (&mut pub_keys_iter)
+                    .take(num_new_chains)
+                    .map(|pk| pk.into())
+                    .collect();
 
                 let certificate = Self::execute_open_chains_operations(
-                    num_new_chains,
                     &default_chain_client,
                     balance,
-                    owner,
+                    owners.clone(),
                 )
                 .await?;
                 info!("Block executed successfully");
 
                 let block = certificate.block();
-                for i in 0..num_new_chains {
+                for (i, owner) in owners.into_iter().enumerate() {
                     let chain_id = block.body.blobs[i]
                         .iter()
                         .find(|blob| blob.id().blob_type == BlobType::ChainDescription)
@@ -1130,9 +1138,12 @@ impl<Env: Environment> ClientContext<Env> {
             );
         }
 
-        info!("Updating wallet from client");
-        self.update_wallet_from_client(&default_chain_client)
-            .await?;
+        // Only update wallet if chains will be reused (not closed after benchmark)
+        if !close_chains {
+            info!("Updating wallet from client");
+            self.update_wallet_from_client(&default_chain_client)
+                .await?;
+        }
         info!("Retrying pending outgoing messages");
         default_chain_client
             .retry_pending_outgoing_messages()
@@ -1145,22 +1156,22 @@ impl<Env: Environment> ClientContext<Env> {
     }
 
     async fn execute_open_chains_operations(
-        num_new_chains: usize,
         chain_client: &ChainClient<Env>,
         balance: Amount,
-        owner: AccountOwner,
+        owners: Vec<AccountOwner>,
     ) -> Result<ConfirmedBlockCertificate, Error> {
-        let config = OpenChainConfig {
-            ownership: ChainOwnership::single_super(owner),
-            balance,
-            application_permissions: Default::default(),
-        };
-        let operations = iter::repeat_n(
-            Operation::system(SystemOperation::OpenChain(config)),
-            num_new_chains,
-        )
-        .collect();
-        info!("Executing {} OpenChain operations", num_new_chains);
+        let operations: Vec<_> = owners
+            .iter()
+            .map(|owner| {
+                let config = OpenChainConfig {
+                    ownership: ChainOwnership::single_super(*owner),
+                    balance,
+                    application_permissions: Default::default(),
+                };
+                Operation::system(SystemOperation::OpenChain(config))
+            })
+            .collect();
+        info!("Executing {} OpenChain operations", operations.len());
         Ok(chain_client
             .execute_operations(operations, vec![])
             .await?
@@ -1187,13 +1198,7 @@ impl<Env: Environment> ClientContext<Env> {
         let operations: Vec<Operation> = key_pairs
             .iter()
             .map(|(chain_id, owner)| {
-                Benchmark::<Env>::fungible_transfer(
-                    application_id,
-                    *chain_id,
-                    default_key,
-                    *owner,
-                    amount,
-                )
+                fungible_transfer(application_id, *chain_id, default_key, *owner, amount)
             })
             .collect();
         let chain_client = self.make_chain_client(default_chain_id).await?;
