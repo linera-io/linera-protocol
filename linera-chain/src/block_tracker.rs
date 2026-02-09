@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_execution::{
     execution_state_actor::ExecutionStateActor, ExecutionRuntimeContext, ExecutionStateView,
-    MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
+    Message, MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
     ResourceTracker, SystemExecutionStateView, TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::Context;
@@ -285,6 +285,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         for message_out in &txn_outcome.outgoing_messages {
             if message_out.kind == MessageKind::Bouncing {
                 continue; // Bouncing messages are free.
+            }
+            if let Message::User { application_id, .. } = &message_out.message {
+                if resource_controller.policy().is_free_app(application_id) {
+                    continue; // Outgoing message fees are waived for free apps.
+                }
             }
             resource_controller
                 .track_message(&message_out.message)
