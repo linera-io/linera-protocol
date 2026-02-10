@@ -1,15 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::rc::Rc;
-
 use linera_base::identifiers::AccountOwner;
 use linera_core::wallet;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
 use super::{JsResult, Wallet};
-use crate::lock::Lock;
 
 #[wasm_bindgen]
 pub struct Faucet(linera_faucet_client::Faucet);
@@ -32,7 +29,7 @@ impl Faucet {
             chains: std::rc::Rc::new(wallet::Memory::default()),
             default: None,
             genesis_config: self.0.genesis_config().await?,
-            _lock: Rc::new(Lock::try_acquire("default").await?),
+            lock: None,
         })
     }
 
@@ -64,7 +61,6 @@ impl Faucet {
         let chain_id_str = chain_id.to_string();
         if wallet.default.is_none() {
             wallet.default = Some(chain_id);
-            wallet._lock = Rc::new(Lock::try_acquire(&chain_id_str).await?);
         }
         Ok(chain_id_str)
     }

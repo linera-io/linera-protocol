@@ -43,7 +43,7 @@ impl Client {
     /// unavailable, or if `options` is incorrectly structured.
     #[wasm_bindgen(constructor)]
     pub async fn new(
-        wallet: &Wallet,
+        mut wallet: Wallet,
         signer: Signer,
         options: Option<linera_client::Options>,
     ) -> Result<Client, JsError> {
@@ -52,6 +52,7 @@ impl Client {
 
         let options = options.unwrap_or_default();
 
+        wallet.lock().await?;
         let mut storage = storage::get_storage(&wallet.name()).await?;
         wallet
             .genesis_config
