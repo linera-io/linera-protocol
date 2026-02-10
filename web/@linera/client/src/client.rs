@@ -55,12 +55,10 @@ impl Client {
 
         let options = options.unwrap_or_default();
 
-        let wallet_name = format!(
-            "{}",
-            wallet
-                .default
-                .expect("Web wallets should always have a chain")
-        );
+        let wallet_name = wallet
+            .default
+            .map(|name| name.to_string())
+            .unwrap_or_else(|| "default".into());
         let lock = Lock::try_acquire(&wallet_name).await?;
         let mut storage = storage::get_storage(&wallet_name).await?;
         wallet
