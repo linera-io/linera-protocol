@@ -772,12 +772,30 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     return Ok(());
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
+#[cfg_attr(
+    all(feature = "storage-service", feature = "opentelemetry"),
+    test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc")
+)]
+#[cfg_attr(
+    all(feature = "storage-service", feature = "opentelemetry"),
+    test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp")
+)]
+#[cfg_attr(
+    all(feature = "scylladb", feature = "opentelemetry"),
+    test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc")
+)]
+#[cfg_attr(
+    all(feature = "dynamodb", feature = "opentelemetry"),
+    test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc")
+)]
+#[cfg_attr(
+    all(feature = "scylladb", feature = "opentelemetry"),
+    test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp")
+)]
+#[cfg_attr(
+    all(feature = "dynamodb", feature = "opentelemetry"),
+    test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp")
+)]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
