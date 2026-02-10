@@ -715,18 +715,20 @@ where
             }
 
             #[cfg(web)]
-            Log { message, level } => {
-                // Output directly to browser console with clean formatting
-                let formatted: js_sys::JsString = format!("[CONTRACT {level}] {message}").into();
-                match level {
-                    tracing::log::Level::Trace | tracing::log::Level::Debug => {
-                        web_sys::console::debug_1(&formatted)
-                    }
-                    tracing::log::Level::Info => web_sys::console::log_1(&formatted),
-                    tracing::log::Level::Warn => web_sys::console::warn_1(&formatted),
-                    tracing::log::Level::Error => web_sys::console::error_1(&formatted),
+            Log { message, level } => match level {
+                tracing::log::Level::Trace | tracing::log::Level::Debug => {
+                    tracing::debug!(target: "user_application_log", message = %message);
                 }
-            }
+                tracing::log::Level::Info => {
+                    tracing::info!(target: "user_application_log", message = %message);
+                }
+                tracing::log::Level::Warn => {
+                    tracing::warn!(target: "user_application_log", message = %message);
+                }
+                tracing::log::Level::Error => {
+                    tracing::error!(target: "user_application_log", message = %message);
+                }
+            },
         }
 
         Ok(())
