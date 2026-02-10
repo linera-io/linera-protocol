@@ -705,6 +705,9 @@ where
             }
 
             AddCreatedBlob { blob, callback } => {
+                if self.resource_controller.is_free {
+                    self.txn_tracker.mark_blob_free(blob.id());
+                }
                 self.txn_tracker.add_created_blob(blob);
                 callback.respond(());
             }

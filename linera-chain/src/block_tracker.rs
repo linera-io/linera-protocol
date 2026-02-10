@@ -324,6 +324,9 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
 
         // Account for blobs published by this transaction directly.
         for blob in &txn_outcome.blobs {
+            if txn_outcome.free_blob_ids.contains(&blob.id()) {
+                continue; // Blob publishing fees are waived for free apps.
+            }
             resource_controller
                 .track_blob_published(blob)
                 .with_execution_context(context)?;

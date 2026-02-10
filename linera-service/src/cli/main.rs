@@ -657,13 +657,11 @@ impl Runnable for Job {
                                             .unwrap_or(existing_policy.http_request_allow_list),
                                         free_application_ids: free_application_ids
                                             .map(|ids| {
-                                                ids.into_iter()
-                                                    .map(|s| {
-                                                        serde_json::from_value(
-                                                            serde_json::Value::String(s),
-                                                        )
-                                                    })
-                                                    .collect::<Result<BTreeSet<_>, _>>()
+                                                ids.into_iter().map(|s| s.parse()).collect::<Result<
+                                                    BTreeSet<_>,
+                                                    _,
+                                                >>(
+                                                )
                                             })
                                             .transpose()
                                             .expect("Invalid application ID")
@@ -2083,7 +2081,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     .as_ref()
                     .map(|ids| {
                         ids.iter()
-                            .map(|s| serde_json::from_value(serde_json::Value::String(s.clone())))
+                            .map(|s| s.parse())
                             .collect::<Result<BTreeSet<_>, _>>()
                     })
                     .transpose()

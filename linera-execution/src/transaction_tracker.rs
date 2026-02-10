@@ -54,6 +54,8 @@ pub struct TransactionTracker {
     streams_to_process: BTreeMap<ApplicationId, AppStreamUpdates>,
     /// Published blobs this transaction refers to by [`BlobId`].
     blobs_published: BTreeSet<BlobId>,
+    /// Blob IDs created or published by free apps (fees waived).
+    free_blob_ids: BTreeSet<BlobId>,
 }
 
 /// The [`TransactionTracker`] contents after a transaction has finished.
@@ -73,6 +75,8 @@ pub struct TransactionOutcome {
     pub operation_result: Vec<u8>,
     /// Blobs published by this transaction.
     pub blobs_published: BTreeSet<BlobId>,
+    /// Blob IDs created or published by free apps (fees waived).
+    pub free_blob_ids: BTreeSet<BlobId>,
 }
 
 impl TransactionTracker {
@@ -165,6 +169,11 @@ impl TransactionTracker {
 
     pub fn add_published_blob(&mut self, blob_id: BlobId) {
         self.blobs_published.insert(blob_id);
+    }
+
+    /// Marks a blob as created/published by a free app, so its fees will be waived.
+    pub fn mark_blob_free(&mut self, blob_id: BlobId) {
+        self.free_blob_ids.insert(blob_id);
     }
 
     pub fn created_blobs(&self) -> &BTreeMap<BlobId, BlobContent> {
@@ -298,6 +307,7 @@ impl TransactionTracker {
             operation_result,
             streams_to_process,
             blobs_published,
+            free_blob_ids,
         } = self;
         ensure!(
             streams_to_process.is_empty(),
@@ -322,6 +332,7 @@ impl TransactionTracker {
             blobs,
             operation_result: operation_result.unwrap_or_default(),
             blobs_published,
+            free_blob_ids,
         })
     }
 }
