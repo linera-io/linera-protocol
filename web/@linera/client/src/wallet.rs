@@ -18,6 +18,7 @@ pub struct Wallet {
     pub(crate) chains: Rc<wallet::Memory>,
     pub(crate) default: Option<ChainId>,
     pub(crate) genesis_config: GenesisConfig,
+    pub(crate) _lock: std::rc::Rc<crate::lock::Lock>,
 }
 
 #[wasm_bindgen]
@@ -36,5 +37,11 @@ impl Wallet {
             .ok_or(JsError::new(&format!(
                 "chain {chain_id} doesn't exist in wallet"
             )))
+    }
+
+    pub fn name(&self) -> String {
+        self.default
+            .map(|name| name.to_string())
+            .unwrap_or_else(|| "default".into())
     }
 }
