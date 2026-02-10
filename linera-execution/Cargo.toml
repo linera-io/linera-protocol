@@ -35,13 +35,7 @@ fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
 wasmer = ["dep:wasmer", "wasmer/enable-serde", "linera-witty/wasmer"]
 wasmtime = ["dep:wasmtime", "linera-witty/wasmtime"]
-web = [
-    "linera-base/web",
-    "linera-views/web",
-    "js-sys",
-    "web-sys",
-    "web-thread-select/web",
-]
+web = ["linera-base/web", "linera-views/web", "js-sys", "web-thread-select/web"]
 
 [dependencies]
 allocative.workspace = true
@@ -107,7 +101,6 @@ tracing = { workspace = true, features = ["log"] }
 url.workspace = true
 wasm-instrument = { workspace = true, features = ["sign_ext"] }
 wasmtime = { workspace = true, optional = true }
-web-sys = { workspace = true, optional = true, features = ["console"] }
 web-thread-pool.workspace = true
 web-thread-select.workspace = true
 
