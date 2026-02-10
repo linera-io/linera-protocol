@@ -896,6 +896,106 @@ where
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
+async fn test_memory_event_streams_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_event_streams_limit(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+async fn run_test_event_streams_limit<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let keys = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, keys)
+        .await?
+        .with_policy(ResourceControlPolicy::no_fees());
+
+    let sender = builder.add_root_chain(0, Amount::ONE).await?;
+    let mut receiver = builder.add_root_chain(1, Amount::ONE).await?;
+
+    let module_id = receiver.publish_wasm_example("social").await?;
+    let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
+
+    let (application_id, _cert) = receiver
+        .create_application(module_id, &(), &(), vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // Subscribe to the sender.
+    let request_subscribe = social::Operation::Subscribe {
+        chain_id: sender.chain_id(),
+    };
+    receiver
+        .execute_operation(Operation::user(application_id, &request_subscribe)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Create 8 posts on the sender in a single block.
+    let posts: Vec<_> = (0..8)
+        .map(|i| {
+            Operation::user(
+                application_id,
+                &social::Operation::Post {
+                    text: format!("Post {i}"),
+                    image_url: None,
+                },
+            )
+            .unwrap()
+        })
+        .collect();
+    sender
+        .execute_operations(posts, vec![])
+        .await
+        .unwrap_ok_committed();
+
+    receiver.synchronize_from_validators().await.unwrap();
+
+    // Limit to 3 new events per block.
+    receiver.options_mut().max_new_events_per_block = 3;
+
+    let certs = receiver.process_inbox().await.unwrap().0;
+    assert_eq!(certs.len(), 3);
+
+    let stream_id = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: b"posts".into(),
+    };
+
+    // First block: events 0..3.
+    let operations = certs[0].block().body.operations().collect::<Vec<_>>();
+    let [Operation::System(op)] = &*operations else {
+        panic!("Expected one operation, got {:?}", operations);
+    };
+    assert_eq!(
+        **op,
+        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id.clone(), 3)])
+    );
+
+    // Second block: events 3..6.
+    let operations = certs[1].block().body.operations().collect::<Vec<_>>();
+    let [Operation::System(op)] = &*operations else {
+        panic!("Expected one operation, got {:?}", operations);
+    };
+    assert_eq!(
+        **op,
+        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id.clone(), 6)])
+    );
+
+    // Third block: events 6..8.
+    let operations = certs[2].block().body.operations().collect::<Vec<_>>();
+    let [Operation::System(op)] = &*operations else {
+        panic!("Expected one operation, got {:?}", operations);
+    };
+    assert_eq!(
+        **op,
+        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 8)])
+    );
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
 async fn test_memory_message_policy_accept_apps(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
     run_test_message_policy_accept_apps(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
