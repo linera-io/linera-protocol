@@ -1066,7 +1066,9 @@ pub trait ContractRuntime: BaseRuntime {
 }
 
 /// An operation to be executed in a block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
+#[derive(
+    Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative, strum::AsRefStr,
+)]
 pub enum Operation {
     /// A system operation.
     System(Box<SystemOperation>),
@@ -1082,7 +1084,9 @@ pub enum Operation {
 impl BcsHashable<'_> for Operation {}
 
 /// A message to be sent and possibly executed in the receiver's block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
+#[derive(
+    Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative, strum::AsRefStr,
+)]
 pub enum Message {
     /// A system message.
     System(SystemMessage),
