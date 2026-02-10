@@ -81,6 +81,7 @@ pub struct ClientWrapper {
     wallet: String,
     keystore: String,
     max_pending_message_bundles: usize,
+    max_new_events_per_block: usize,
     network: Network,
     pub path_provider: PathProvider,
     on_drop: OnClientDrop,
@@ -136,6 +137,7 @@ impl ClientWrapper {
             wallet,
             keystore,
             max_pending_message_bundles: 10_000,
+            max_new_events_per_block: 10_000,
             network,
             path_provider,
             on_drop,
@@ -263,6 +265,8 @@ impl ClientWrapper {
         self.required_command_arguments().chain([
             "--max-pending-message-bundles".into(),
             self.max_pending_message_bundles.to_string().into(),
+            "--max-new-events-per-block".into(),
+            self.max_new_events_per_block.to_string().into(),
             "--with-application-logs".into(),
         ])
     }

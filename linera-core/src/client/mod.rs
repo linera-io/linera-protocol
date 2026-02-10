@@ -1630,6 +1630,8 @@ pub enum TimingType {
 pub struct ChainClientOptions {
     /// Maximum number of pending message bundles processed at a time in a block.
     pub max_pending_message_bundles: usize,
+    /// Maximum number of new stream events processed at a time in a block.
+    pub max_new_events_per_block: usize,
     /// The policy for automatically handling incoming messages.
     pub message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
@@ -1664,6 +1666,7 @@ impl ChainClientOptions {
 
         ChainClientOptions {
             max_pending_message_bundles: 10,
+            max_new_events_per_block: 10,
             message_policy: MessagePolicy::new_accept_all(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
@@ -2100,27 +2103,45 @@ impl<Env: Environment> ChainClient<Env> {
             })
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
+                let previous_index = subscriptions.next_index;
                 async move {
                     let next_index = client
                         .local_node
                         .get_stream_event_count(chain_id, stream_id.clone())
                         .await?;
                     if let Some(next_index) =
-                        next_index.filter(|next_index| *next_index > subscriptions.next_index)
+                        next_index.filter(|next_index| *next_index > previous_index)
                     {
-                        Ok(Some((chain_id, stream_id, next_index)))
+                        Ok(Some((chain_id, stream_id, previous_index, next_index)))
                     } else {
                         Ok::<_, ChainClientError>(None)
                     }
                 }
             });
-        let updates = futures::stream::iter(futures)
+        let all_updates = futures::stream::iter(futures)
             .buffer_unordered(self.options.max_joined_tasks)
             .try_collect::<Vec<_>>()
             .await?
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
+        // Apply the max_new_events_per_block limit.
+        let max_events = self.options.max_new_events_per_block;
+        let mut total_events: usize = 0;
+        let mut updates = Vec::new();
+        for (chain_id, stream_id, previous_index, next_index) in all_updates {
+            let new_events = (next_index - previous_index) as usize;
+            if total_events + new_events <= max_events {
+                total_events += new_events;
+                updates.push((chain_id, stream_id, next_index));
+            } else {
+                let remaining = max_events.saturating_sub(total_events);
+                if remaining > 0 {
+                    updates.push((chain_id, stream_id, previous_index + remaining as u32));
+                }
+                break;
+            }
+        }
         if updates.is_empty() {
             return Ok(None);
         }

@@ -55,6 +55,10 @@ pub struct Options {
     #[arg(long, default_value = "10")]
     pub max_pending_message_bundles: usize,
 
+    /// The maximum number of new stream events to include in a block proposal.
+    #[arg(long, default_value = "10")]
+    pub max_new_events_per_block: usize,
+
     /// The duration in milliseconds after which an idle chain worker will free its memory.
     #[arg(
         long = "chain-worker-ttl-ms",
@@ -260,6 +264,7 @@ impl Options {
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
         ChainClientOptions {
             max_pending_message_bundles: self.max_pending_message_bundles,
+            max_new_events_per_block: self.max_new_events_per_block,
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,
