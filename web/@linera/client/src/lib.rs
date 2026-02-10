@@ -71,9 +71,8 @@ pub fn initialize(options: Option<InitializeOptions>) {
     let options = options.unwrap_or_default();
     // If no log filter is provided, disable the user application log by default, to avoid
     // overwhelming the console with logs from the client library itself.
-    // Everything else defaults to INFO due to `with_default_directive` below.
     let log_filter = if options.log.is_empty() {
-        "user_application_log=off"
+        "user_application_log=off,linera_client=info"
     } else {
         &options.log
     };
