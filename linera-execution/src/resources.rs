@@ -27,7 +27,7 @@ pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
     /// The account paying for the resource usage.
     pub account: Account,
     /// When true, balance deductions are skipped (fees waived for free apps).
-    is_free: bool,
+    pub is_free: bool,
 }
 
 impl<Account, Tracker> ResourceController<Account, Tracker> {
@@ -39,11 +39,6 @@ impl<Account, Tracker> ResourceController<Account, Tracker> {
             account,
             is_free: false,
         }
-    }
-
-    /// Sets whether this controller should waive balance deductions (for free apps).
-    pub fn set_free(&mut self, free: bool) {
-        self.is_free = free;
     }
 
     /// Returns a reference to the policy.

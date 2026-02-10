@@ -898,8 +898,8 @@ where
             .resource_controller
             .policy()
             .is_free_app(&application_id);
-        controller.set_free(is_free);
-        self.resource_controller.set_free(is_free);
+        controller.is_free = is_free;
+        self.resource_controller.is_free = is_free;
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
 
@@ -951,7 +951,7 @@ where
 
         let (result, controller) = contract_runtime_task.await??;
 
-        self.resource_controller.set_free(false);
+        self.resource_controller.is_free = false;
 
         self.txn_tracker.add_operation_result(result);
 

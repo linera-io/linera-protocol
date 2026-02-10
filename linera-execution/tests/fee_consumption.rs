@@ -7,7 +7,7 @@ use std::{collections::BTreeSet, sync::Arc, vec};
 
 use linera_base::{
     crypto::AccountPublicKey,
-    data_types::{Amount, BlockHeight, OracleResponse},
+    data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
     http,
     identifiers::{Account, AccountOwner, StreamName},
     vm::VmRuntime,
@@ -283,7 +283,7 @@ async fn test_fee_consumption(
         refund_grant_to,
         height: BlockHeight(0),
         round: Some(0),
-        timestamp: Default::default(),
+        timestamp: Timestamp::default(),
     };
     let mut grant = initial_grant.unwrap_or_default();
     let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
@@ -482,7 +482,7 @@ async fn test_free_app_message_no_fees() -> anyhow::Result<()> {
         refund_grant_to,
         height: BlockHeight(0),
         round: Some(0),
-        timestamp: Default::default(),
+        timestamp: Timestamp::default(),
     };
     let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
     ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
@@ -546,7 +546,7 @@ async fn test_free_app_operation_still_charged() -> anyhow::Result<()> {
         height: BlockHeight(0),
         round: Some(0),
         authenticated_owner: None,
-        timestamp: Default::default(),
+        timestamp: Timestamp::default(),
     };
     let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
     ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
