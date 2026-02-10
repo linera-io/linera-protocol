@@ -131,6 +131,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--max-pending-message-bundles <MAX_PENDING_MESSAGE_BUNDLES>` — The maximum number of incoming message bundles to include in a block proposal
 
   Default value: `10`
+* `--max-new-events-per-block <MAX_NEW_EVENTS_PER_BLOCK>` — The maximum number of new stream events to include in a block proposal
+
+  Default value: `10`
 * `--chain-worker-ttl-ms <CHAIN_WORKER_TTL>` — The duration in milliseconds after which an idle chain worker will free its memory
 
   Default value: `30000`
