@@ -230,7 +230,9 @@ where
                 .derive_tag_key(KeyTag::Index as u8, &index)?;
             self.context.store().read_value(&key).await?
         } else {
-            self.new_values.get(index - self.stored_count as usize).cloned()
+            self.new_values
+                .get(index - self.stored_count as usize)
+                .cloned()
         };
         Ok(value)
     }
@@ -264,7 +266,11 @@ where
                     index_to_positions.entry(index).or_default().push(pos);
                     result.push(None);
                 } else {
-                    result.push(self.new_values.get(index - self.stored_count as usize).cloned());
+                    result.push(
+                        self.new_values
+                            .get(index - self.stored_count as usize)
+                            .cloned(),
+                    );
                 }
             }
             let mut keys = Vec::new();

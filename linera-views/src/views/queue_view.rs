@@ -124,7 +124,10 @@ where
             batch.delete_key_prefix(key_prefix);
             new_stored_indices = Range::default();
         } else if self.front_delete_count > 0 {
-            let deletion_range = self.stored_indices.clone().take(self.front_delete_count as usize);
+            let deletion_range = self
+                .stored_indices
+                .clone()
+                .take(self.front_delete_count as usize);
             new_stored_indices.start += self.front_delete_count;
             for index in deletion_range {
                 let key = self
