@@ -24,6 +24,7 @@ use linera_base::{
 };
 use linera_views::batch::Batch;
 use oneshot::Receiver;
+use tracing::instrument;
 
 use crate::{
     execution::UserAction,
@@ -397,6 +398,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
 
 impl SyncRuntimeInternal<UserContractInstance> {
     /// Loads a contract instance, initializing it with this runtime if needed.
+    #[instrument(skip_all, fields(application_id = %id))]
     fn load_contract_instance(
         &mut self,
         this: SyncRuntimeHandle<UserContractInstance>,
@@ -1082,6 +1084,7 @@ impl ContractSyncRuntime {
 }
 
 impl ContractSyncRuntimeHandle {
+    #[instrument(skip_all, fields(application_id = %application_id))]
     fn run_action(
         &mut self,
         application_id: ApplicationId,
@@ -1121,6 +1124,7 @@ impl ContractSyncRuntimeHandle {
     }
 
     /// Notifies all loaded applications that execution is finalizing.
+    #[instrument(skip_all)]
     fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError> {
         let applications = mem::take(&mut self.inner().applications_to_finalize)
             .into_iter()
@@ -1139,6 +1143,7 @@ impl ContractSyncRuntimeHandle {
     }
 
     /// Executes a `closure` with the contract code for the `application_id`.
+    #[instrument(skip_all, fields(application_id = %application_id))]
     fn execute(
         &mut self,
         application_id: ApplicationId,
