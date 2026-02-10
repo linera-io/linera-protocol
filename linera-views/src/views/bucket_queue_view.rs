@@ -294,7 +294,10 @@ where
             let mut start = 0_u64;
             while start < self.new_back_values.len() as u64 {
                 let end = std::cmp::min(start + N, self.new_back_values.len() as u64);
-                let value_chunk: Vec<_> = self.new_back_values.range(start as usize..end as usize).collect();
+                let value_chunk: Vec<_> = self
+                    .new_back_values
+                    .range(start as usize..end as usize)
+                    .collect();
                 let key = self.get_bucket_key(index)?;
                 batch.put_key_value(key, &value_chunk)?;
                 descriptions.push(BucketDescription {
