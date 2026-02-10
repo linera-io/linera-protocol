@@ -303,8 +303,11 @@ impl ActiveChain {
     /// Adds a block to this microchain that receives all queued messages in the microchains
     /// inboxes.
     ///
-    /// Returns the certificate of the latest block added to the chain, if any.
-    pub async fn handle_received_messages(&self) -> Option<ConfirmedBlockCertificate> {
+    /// Returns the certificate and resource tracker of the latest block added to the chain, if
+    /// any.
+    pub async fn handle_received_messages(
+        &self,
+    ) -> Option<(ConfirmedBlockCertificate, ResourceTracker)> {
         let chain_id = self.id();
         let (information, _) = self
             .validator
@@ -318,18 +321,20 @@ impl ActiveChain {
         if messages.is_empty() {
             return None;
         }
-        let (certificate, _) = self
+        let result = self
             .add_block(|block| {
                 block.with_incoming_bundles(messages);
             })
             .await;
-        Some(certificate)
+        Some(result)
     }
 
     /// Processes all new events from streams this chain subscribes to.
     ///
     /// Adds a block to this microchain that processes the new events.
-    pub async fn handle_new_events(&self) {
+    ///
+    /// Returns the certificate and resource tracker of the block added to the chain.
+    pub async fn handle_new_events(&self) -> (ConfirmedBlockCertificate, ResourceTracker) {
         let chain_id = self.id();
         let worker = self.validator.worker();
         let subscription_map = worker
@@ -372,7 +377,7 @@ impl ActiveChain {
         self.add_block(|block| {
             block.with_system_operation(SystemOperation::UpdateStreams(updates));
         })
-        .await;
+        .await
     }
 
     /// Publishes the module in the crate calling this method to this microchain.
