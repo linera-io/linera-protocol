@@ -126,8 +126,8 @@ struct Bucket<T> {
 /// seems adequate.
 //#[allocative(bound = "T: Allocative")]
 #[derive(Debug, Allocative)]
-#[allocative(bound = "C, T: Allocative, const N: usize")]
-pub struct BucketQueueView<C, T, const N: usize> {
+#[allocative(bound = "C, T: Allocative, const N: u64")]
+pub struct BucketQueueView<C, T, const N: u64> {
     /// The view context.
     #[allocative(skip)]
     context: C,
@@ -144,7 +144,7 @@ pub struct BucketQueueView<C, T, const N: usize> {
     delete_storage_first: bool,
 }
 
-impl<C, T, const N: usize> View for BucketQueueView<C, T, N>
+impl<C, T, const N: u64> View for BucketQueueView<C, T, N>
 where
     C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
@@ -247,7 +247,7 @@ where
             stored_front_position = 0;
         } else if let Some(cursor) = self.cursor {
             // Delete buckets that are before the cursor
-            for i in 0..cursor.offset {
+            for i in 0..cursor.offset as usize {
                 let bucket = &self.stored_buckets[i];
                 let index = bucket.index;
                 let key = self.get_bucket_key(index)?;
@@ -255,13 +255,13 @@ where
             }
             stored_front_position = cursor.position;
             // Build descriptions for remaining buckets
-            let first_index = self.stored_buckets[cursor.offset].index;
+            let first_index = self.stored_buckets[cursor.offset as usize].index;
             let start_offset = if first_index != 0 {
                 // Need to move the first remaining bucket to index 0
                 let key = self.get_bucket_key(first_index)?;
                 batch.delete_key(key);
                 let key = self.get_bucket_key(0)?;
-                let bucket = &self.stored_buckets[cursor.offset];
+                let bucket = &self.stored_buckets[cursor.offset as usize];
                 let State::Loaded { data } = &bucket.state else {
                     unreachable!("The front bucket is always loaded.");
                 };
@@ -274,7 +274,7 @@ where
             } else {
                 cursor.offset
             };
-            for bucket in self.stored_buckets.range(start_offset..) {
+            for bucket in self.stored_buckets.range(start_offset as usize..) {
                 descriptions.push(bucket.to_description());
             }
         }
@@ -291,10 +291,10 @@ where
                 // This shouldn't happen if stored_count() > 0
                 0
             };
-            let mut start = 0;
-            while start < self.new_back_values.len() {
-                let end = std::cmp::min(start + N, self.new_back_values.len());
-                let value_chunk: Vec<_> = self.new_back_values.range(start..end).collect();
+            let mut start = 0_u64;
+            while start < self.new_back_values.len() as u64 {
+                let end = std::cmp::min(start + N, self.new_back_values.len() as u64);
+                let value_chunk: Vec<_> = self.new_back_values.range(start as usize..end as usize).collect();
                 let key = self.get_bucket_key(index)?;
                 batch.put_key_value(key, &value_chunk)?;
                 descriptions.push(BucketDescription {
@@ -340,7 +340,7 @@ where
             };
             let new_back_values = std::mem::take(&mut self.new_back_values);
             let new_back_values = new_back_values.into_iter().collect::<Vec<_>>();
-            for value_chunk in new_back_values.chunks(N) {
+            for value_chunk in new_back_values.chunks(N as usize) {
                 self.stored_buckets.push_back(Bucket {
                     index,
                     state: State::Loaded {
@@ -366,7 +366,7 @@ where
     }
 }
 
-impl<C: Clone, T: Clone, const N: usize> ClonableView for BucketQueueView<C, T, N>
+impl<C: Clone, T: Clone, const N: u64> ClonableView for BucketQueueView<C, T, N>
 where
     Self: View,
 {
@@ -382,7 +382,7 @@ where
     }
 }
 
-impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
+impl<C: Context, T, const N: u64> BucketQueueView<C, T, N> {
     /// Gets the key corresponding to this bucket index.
     fn get_bucket_key(&self, index: u64) -> Result<Vec<u8>, ViewError> {
         Ok(if index == 0 {
@@ -440,7 +440,7 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
     }
 }
 
-impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C, T, N> {
+impl<C: Context, T: DeserializeOwned + Clone, const N: u64> BucketQueueView<C, T, N> {
     /// Gets a reference on the front value if any.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -791,7 +791,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     }
 }
 
-impl<C: Context, T: Serialize + DeserializeOwned + Send + Sync + Clone, const N: usize> HashableView
+impl<C: Context, T: Serialize + DeserializeOwned + Send + Sync + Clone, const N: u64> HashableView
     for BucketQueueView<C, T, N>
 where
     Self: View,
@@ -813,11 +813,11 @@ where
 }
 
 /// Type wrapping `QueueView` while memoizing the hash.
-pub type HashedBucketQueueView<C, T, const N: usize> =
+pub type HashedBucketQueueView<C, T, const N: u64> =
     WrappedHashableContainerView<C, BucketQueueView<C, T, N>, HasherOutput>;
 
 /// Wrapper around `BucketQueueView` to compute hashes based on the history of changes.
-pub type HistoricallyHashedBucketQueueView<C, T, const N: usize> =
+pub type HistoricallyHashedBucketQueueView<C, T, const N: u64> =
     HistoricallyHashableView<C, BucketQueueView<C, T, N>>;
 
 #[cfg(with_graphql)]
@@ -830,7 +830,7 @@ mod graphql {
         graphql::{hash_name, mangle},
     };
 
-    impl<C: Send + Sync, T: async_graphql::OutputType, const N: usize> async_graphql::TypeName
+    impl<C: Send + Sync, T: async_graphql::OutputType, const N: u64> async_graphql::TypeName
         for BucketQueueView<C, T, N>
     {
         fn type_name() -> Cow<'static, str> {
@@ -844,7 +844,7 @@ mod graphql {
     }
 
     #[async_graphql::Object(cache_control(no_cache), name_type)]
-    impl<C: Context, T: async_graphql::OutputType, const N: usize> BucketQueueView<C, T, N>
+    impl<C: Context, T: async_graphql::OutputType, const N: u64> BucketQueueView<C, T, N>
     where
         C: Send + Sync,
         T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
