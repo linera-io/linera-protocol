@@ -5485,7 +5485,6 @@ dependencies = [
  "tracing-subscriber 0.3.19",
  "url",
  "wasmtime",
- "web-sys",
  "web-thread-pool",
  "web-thread-select",
 ]
