@@ -69,6 +69,14 @@ pub fn initialize(options: Option<InitializeOptions>) {
     }
 
     let options = options.unwrap_or_default();
+    // If no log filter is provided, disable the user application log by default, to avoid
+    // overwhelming the console with logs from the client library itself.
+    // Everything else defaults to INFO due to `with_default_directive` below.
+    let log_filter = if options.log.is_empty() {
+        "user_application_log=off"
+    } else {
+        &options.log
+    };
 
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
 
@@ -76,7 +84,7 @@ pub fn initialize(options: Option<InitializeOptions>) {
         .with(
             EnvFilter::builder()
                 .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
-                .parse_lossy(options.log),
+                .parse_lossy(log_filter),
         )
         .with(
             tracing_subscriber::fmt::layer()
