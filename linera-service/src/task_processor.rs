@@ -188,7 +188,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     // Retry in at most 1 minute.
                     self.deadlines.push(Reverse((
                         now.saturating_add(TimeDelta::from_secs(60)),
-                        None,
+                        Some(application_id),
                     )));
                     continue;
                 }
