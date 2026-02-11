@@ -990,6 +990,9 @@ ResourceControlPolicy:
     - http_request_timeout_ms: U64
     - http_request_allow_list:
         SEQ: STR
+    - free_application_ids:
+        SEQ:
+          TYPENAME: ApplicationId
 Response:
   STRUCT:
     - status: U16
