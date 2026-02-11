@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+
 use custom_debug_derive::Debug;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency;
@@ -408,11 +409,17 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     /// Panics if the number of lists of oracle responses, outgoing messages,
     /// events, or blobs does not match the expected counts.
     pub fn finalize(self) -> FinalizeExecutionResult {
-        // Asserts that the number of outcomes matches the expected count.
-        assert_eq!(self.oracle_responses.len(), self.expected_outcomes_count);
-        assert_eq!(self.messages.len(), self.expected_outcomes_count);
-        assert_eq!(self.events.len(), self.expected_outcomes_count);
-        assert_eq!(self.blobs.len(), self.expected_outcomes_count);
+        // With time-budgeted bundle staging, some transactions may have been
+        // skipped, so the actual count can be less than expected_outcomes_count.
+        let actual_count = self.oracle_responses.len();
+        assert!(
+            actual_count <= self.expected_outcomes_count,
+            "more outcomes ({actual_count}) than transactions ({})",
+            self.expected_outcomes_count,
+        );
+        assert_eq!(self.messages.len(), actual_count);
+        assert_eq!(self.events.len(), actual_count);
+        assert_eq!(self.blobs.len(), actual_count);
 
         #[cfg(with_metrics)]
         crate::chain::metrics::track_block_metrics(&self.resource_controller.tracker);

@@ -21,6 +21,7 @@ use linera_base::{
     ensure,
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
+    time::Duration,
 };
 use linera_chain::{
     data_types::{
@@ -161,11 +162,17 @@ where
                 block,
                 round,
                 published_blobs,
+                staging_bundles_time_budget,
                 callback,
             } => callback
                 .send(
-                    self.stage_block_execution(block, round, &published_blobs)
-                        .await,
+                    self.stage_block_execution(
+                        block,
+                        round,
+                        &published_blobs,
+                        staging_bundles_time_budget,
+                    )
+                    .await,
                 )
                 .is_ok(),
             ChainWorkerRequest::ProcessTimeout {
@@ -916,13 +923,14 @@ where
                     .await;
                 outcome.clone()
             } else {
-                let (verified, _resource_tracker) = chain
+                let (verified, _resource_tracker, _skipped) = chain
                     .execute_block(
                         &proposed_block,
                         local_time,
                         None,
                         &published_blobs,
                         oracle_responses,
+                        None,
                     )
                     .await?;
                 verified
@@ -1411,9 +1419,10 @@ where
     ))]
     pub(super) async fn stage_block_execution(
         &mut self,
-        block: ProposedBlock,
+        mut block: ProposedBlock,
         round: Option<u32>,
         published_blobs: &[Blob],
+        staging_bundles_time_budget: Option<Duration>,
     ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
@@ -1421,11 +1430,25 @@ where
         let (_, committee) = self.chain.current_committee()?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
+        // Execute first (may skip some bundles when time-budgeted).
+        let (outcome, resource_tracker, skipped_indices) = Box::pin(self.execute_block(
+            &block,
+            local_time,
+            round,
+            published_blobs,
+            staging_bundles_time_budget,
+        ))
+        .await?;
+
+        // Remove skipped ReceiveMessages from the block in reverse order.
+        for &idx in skipped_indices.iter().rev() {
+            block.transactions.remove(idx);
+        }
+
+        // Remove only the remaining (executed) bundles from inboxes.
         self.chain
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
-        let (outcome, resource_tracker) =
-            Box::pin(self.execute_block(&block, local_time, round, published_blobs)).await?;
 
         // No need to sign: only used internally.
         let mut response = ChainInfoResponse::new(&self.chain, None);
@@ -1557,11 +1580,12 @@ where
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
-            let (executed_block, _resource_tracker) = Box::pin(self.execute_block(
+            let (executed_block, _resource_tracker, _skipped) = Box::pin(self.execute_block(
                 block,
                 local_time,
                 round.multi_leader(),
                 &published_blobs,
+                None,
             ))
             .await?;
             executed_block
@@ -1686,13 +1710,17 @@ where
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
-    ) -> Result<(BlockExecutionOutcome, ResourceTracker), WorkerError> {
-        let (outcome, resource_tracker) =
-            Box::pin(
-                self.chain
-                    .execute_block(block, local_time, round, published_blobs, None),
-            )
-            .await?;
+        staging_bundles_time_budget: Option<Duration>,
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker, Vec<usize>), WorkerError> {
+        let (outcome, resource_tracker, skipped_indices) = Box::pin(self.chain.execute_block(
+            block,
+            local_time,
+            round,
+            published_blobs,
+            None,
+            staging_bundles_time_budget,
+        ))
+        .await?;
         let block = Block::new(block.clone(), outcome.clone());
         let block_hash = CryptoHash::new(&block);
         self.execution_state_cache.insert_owned(
@@ -1704,7 +1732,7 @@ where
             )
             .await,
         );
-        Ok((outcome, resource_tracker))
+        Ok((outcome, resource_tracker, skipped_indices))
     }
 
     /// Initializes and saves the current chain if it is not active yet.

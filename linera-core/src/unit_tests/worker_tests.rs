@@ -781,7 +781,7 @@ where
     // Stage execution to get the block for certificate creation.
     let (block, _, _) = env
         .worker()
-        .stage_block_execution(proposed_block, None, vec![])
+        .stage_block_execution(proposed_block, None, vec![], None)
         .await?;
     // Past timestamp should be handled immediately (and succeed).
     let result = env.worker().handle_block_proposal(block_proposal).await;
@@ -805,7 +805,7 @@ where
         .unwrap();
     let (block, _, _) = env
         .worker()
-        .stage_block_execution(proposed_block, None, vec![])
+        .stage_block_execution(proposed_block, None, vec![], None)
         .await?;
     let result = env.worker().handle_block_proposal(block_proposal).await;
     assert!(result.is_ok(), "Current timestamp should be accepted");
@@ -828,7 +828,7 @@ where
         .unwrap();
     let (block, _, _) = env
         .worker()
-        .stage_block_execution(proposed_block, None, vec![])
+        .stage_block_execution(proposed_block, None, vec![], None)
         .await?;
 
     // Spawn the proposal handling. It should not complete immediately.
@@ -3470,7 +3470,7 @@ where
         .with_authenticated_signer(Some(owner0));
     let (block0, _, _) = env
         .worker()
-        .stage_block_execution(proposed_block0, None, vec![])
+        .stage_block_execution(proposed_block0, None, vec![], None)
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
@@ -3532,7 +3532,7 @@ where
     let proposed_block1 = make_child_block(&value0).with_simple_transfer(chain_1, small_transfer);
     let (block1, _, _) = env
         .worker()
-        .stage_block_execution(proposed_block1.clone(), None, vec![])
+        .stage_block_execution(proposed_block1.clone(), None, vec![], None)
         .await?;
     let proposal1_wrong_owner = proposed_block1
         .clone()
@@ -3582,7 +3582,7 @@ where
     let proposed_block2 = make_child_block(&value0.clone()).with_simple_transfer(chain_1, amount);
     let (block2, _, _) = env
         .worker()
-        .stage_block_execution(proposed_block2.clone(), None, vec![])
+        .stage_block_execution(proposed_block2.clone(), None, vec![], None)
         .await?;
 
     // Since round 3 is already over, the validator won't vote for a validated block from round 3.
@@ -3721,7 +3721,7 @@ where
         });
     let (block0, _, _) = env
         .worker()
-        .stage_block_execution(proposed_block0, None, vec![])
+        .stage_block_execution(proposed_block0, None, vec![], None)
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
@@ -3833,7 +3833,7 @@ where
         });
     let (block0, _, _) = env
         .worker()
-        .stage_block_execution(proposed_block0, None, vec![])
+        .stage_block_execution(proposed_block0, None, vec![], None)
         .await?;
     let value0 = ConfirmedBlock::new(block0);
     let certificate0 = env.make_certificate(value0.clone());
@@ -3861,7 +3861,7 @@ where
         .unwrap();
     let (block1, _, _) = env
         .worker()
-        .stage_block_execution(proposed_block1.clone(), None, vec![])
+        .stage_block_execution(proposed_block1.clone(), None, vec![], None)
         .await?;
     let value1 = ConfirmedBlock::new(block1);
     let (response, _) = env
@@ -3918,7 +3918,7 @@ where
     // A validated block certificate from a later round can override the locked fast block.
     let (block2, _, _) = env
         .worker()
-        .stage_block_execution(proposed_block2.clone(), None, vec![])
+        .stage_block_execution(proposed_block2.clone(), None, vec![], None)
         .await?;
     let value2 = ValidatedBlock::new(block2.clone());
     let certificate2 = env.make_certificate_with_round(value2.clone(), Round::MultiLeader(0));
@@ -4280,7 +4280,7 @@ where
     // Test stage_block_execution directly - this should fail with IncorrectMessageOrder.
     assert_matches!(
         env.worker()
-            .stage_block_execution(bad_proposed_block.clone(), None, vec![])
+            .stage_block_execution(bad_proposed_block.clone(), None, vec![], None)
             .await,
         Err(WorkerError::ChainError(chain_error))
             if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. })

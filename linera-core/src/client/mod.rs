@@ -1497,10 +1497,16 @@ impl<Env: Environment> Client<Env> {
         mut block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
+        staging_bundles_time_budget: Option<Duration>,
     ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self
-                .stage_block_execution(block.clone(), round, published_blobs.clone())
+                .stage_block_execution(
+                    block.clone(),
+                    round,
+                    published_blobs.clone(),
+                    staging_bundles_time_budget,
+                )
                 .await;
             if let Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(chain_error),
@@ -1589,11 +1595,17 @@ impl<Env: Environment> Client<Env> {
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
+        staging_bundles_time_budget: Option<Duration>,
     ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self
                 .local_node
-                .stage_block_execution(block.clone(), round, published_blobs.clone())
+                .stage_block_execution(
+                    block.clone(),
+                    round,
+                    published_blobs.clone(),
+                    staging_bundles_time_budget,
+                )
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let validators = self.validator_nodes().await?;
@@ -1652,6 +1664,9 @@ pub struct ChainClientOptions {
     /// Whether to allow creating blocks in the fast round. Fast blocks have lower latency but
     /// must be used carefully so that there are never any conflicting fast block proposals.
     pub allow_fast_blocks: bool,
+    /// Optional time budget for staging incoming message bundles per block.
+    /// When set, overrides max_pending_message_bundles for bundle selection.
+    pub staging_bundles_time_budget: Option<Duration>,
 }
 
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
@@ -1673,6 +1688,7 @@ impl ChainClientOptions {
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
+            staging_bundles_time_budget: None,
         }
     }
 }
@@ -2069,11 +2085,16 @@ impl<Env: Environment> ChainClient<Env> {
             );
         }
 
+        let max_bundles = if self.options.staging_bundles_time_budget.is_some() {
+            usize::MAX
+        } else {
+            self.options.max_pending_message_bundles
+        };
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
             .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
-            .take(self.options.max_pending_message_bundles)
+            .take(max_bundles)
             .collect())
     }
 
@@ -2928,6 +2949,7 @@ impl<Env: Environment> ChainClient<Env> {
                     proposed_block,
                     round,
                     blobs.clone(),
+                    self.options.staging_bundles_time_budget,
                 ),
         )
         .await?;
@@ -3099,7 +3121,7 @@ impl<Env: Environment> ChainClient<Env> {
         };
         match Box::pin(
             self.client
-                .stage_block_execution_and_discard_failing_messages(block, None, Vec::new()),
+                .stage_block_execution_and_discard_failing_messages(block, None, Vec::new(), None),
         )
         .await
         {
@@ -3283,7 +3305,7 @@ impl<Env: Environment> ChainClient<Env> {
                         })?;
                     let block = self
                         .client
-                        .stage_block_execution(proposed_block, None, blobs.clone())
+                        .stage_block_execution(proposed_block, None, blobs.clone(), None)
                         .await?
                         .0;
                     debug!("Retrying locking block from fast round.");
@@ -3296,7 +3318,7 @@ impl<Env: Environment> ChainClient<Env> {
             let round = self.round_for_oracle(&info, &owner).await?;
             let (block, _) = self
                 .client
-                .stage_block_execution(proposed_block, round, pending_proposal.blobs.clone())
+                .stage_block_execution(proposed_block, round, pending_proposal.blobs.clone(), None)
                 .await?;
             debug!("Proposing the local pending block.");
             (block, pending_proposal.blobs)

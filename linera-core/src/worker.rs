@@ -5,7 +5,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     sync::{Arc, Mutex, RwLock},
-    time::Duration,
 };
 
 use futures::future::Either;
@@ -17,7 +16,7 @@ use linera_base::{
     doc_scalar,
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
-    time::Instant,
+    time::{Duration, Instant},
     util::traits::DynError,
 };
 #[cfg(with_testing)]
@@ -756,12 +755,14 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
+        staging_bundles_time_budget: Option<Duration>,
     ) -> Result<(Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         self.query_chain_worker(block.chain_id, move |callback| {
             ChainWorkerRequest::StageBlockExecution {
                 block,
                 round,
                 published_blobs,
+                staging_bundles_time_budget,
                 callback,
             }
         })
