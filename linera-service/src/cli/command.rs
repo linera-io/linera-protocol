@@ -488,6 +488,10 @@ pub enum ClientCommand {
         /// Set the list of hosts that contracts and services can send HTTP requests to.
         #[arg(long, value_delimiter = ',')]
         http_request_allow_list: Option<Vec<String>>,
+
+        /// Set the list of application IDs for which message- and event-related fees are waived.
+        #[arg(long, value_delimiter = ',')]
+        free_application_ids: Option<Vec<String>>,
     },
 
     /// Run benchmarks to test network performance.
@@ -676,6 +680,10 @@ pub enum ClientCommand {
         /// Set the list of hosts that contracts and services can send HTTP requests to.
         #[arg(long, value_delimiter = ',')]
         http_request_allow_list: Option<Vec<String>>,
+
+        /// Set the list of application IDs for which message- and event-related fees are waived.
+        #[arg(long, value_delimiter = ',')]
+        free_application_ids: Option<Vec<String>>,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.

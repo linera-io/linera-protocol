@@ -542,6 +542,7 @@ impl Runnable for Job {
                                     maximum_http_response_bytes,
                                     http_request_timeout_ms,
                                     http_request_allow_list,
+                                    free_application_ids,
                                 } => {
                                     let existing_policy = policy.clone();
                                     policy = linera_execution::ResourceControlPolicy {
@@ -614,6 +615,17 @@ impl Runnable for Job {
                                         http_request_allow_list: http_request_allow_list
                                             .map(BTreeSet::from_iter)
                                             .unwrap_or(existing_policy.http_request_allow_list),
+                                        free_application_ids: free_application_ids
+                                            .map(|ids| {
+                                                ids.into_iter().map(|s| s.parse()).collect::<Result<
+                                                    BTreeSet<_>,
+                                                    _,
+                                                >>(
+                                                )
+                                            })
+                                            .transpose()
+                                            .expect("Invalid application ID")
+                                            .unwrap_or(existing_policy.free_application_ids),
                                     };
                                     info!("{policy}");
                                     if committee.policy() == &policy {
@@ -1950,6 +1962,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
             maximum_http_response_bytes,
             http_request_timeout_ms,
             http_request_allow_list,
+            free_application_ids,
             testing_prng_seed,
             network_name,
         } => {
@@ -2007,6 +2020,16 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     .as_ref()
                     .map(|list| list.iter().cloned().collect())
                     .unwrap_or(existing_policy.http_request_allow_list),
+                free_application_ids: free_application_ids
+                    .as_ref()
+                    .map(|ids| {
+                        ids.iter()
+                            .map(|s| s.parse())
+                            .collect::<Result<BTreeSet<_>, _>>()
+                    })
+                    .transpose()
+                    .expect("Invalid application ID")
+                    .unwrap_or(existing_policy.free_application_ids),
             };
             let timestamp = start_timestamp.map_or_else(Timestamp::now, |st| {
                 let micros =

@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_execution::{
     execution_state_actor::ExecutionStateActor, ExecutionRuntimeContext, ExecutionStateView,
-    MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
+    Message, MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
     ResourceTracker, SystemExecutionStateView, TransactionOutcome, TransactionTracker,
     FLAG_FREE_REJECT,
 };
@@ -313,6 +313,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             {
                 continue; // Bouncing messages are free.
             }
+            if let Message::User { application_id, .. } = &message_out.message {
+                if resource_controller.policy().is_free_app(application_id) {
+                    continue; // Outgoing message fees are waived for free apps.
+                }
+            }
             resource_controller
                 .track_message(&message_out.message)
                 .with_execution_context(context)?;
@@ -329,6 +334,9 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
 
         // Account for blobs published by this transaction directly.
         for blob in &txn_outcome.blobs {
+            if txn_outcome.free_blob_ids.contains(&blob.id()) {
+                continue; // Blob publishing fees are waived for free apps.
+            }
             resource_controller
                 .track_blob_published(blob)
                 .with_execution_context(context)?;
