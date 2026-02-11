@@ -18,6 +18,8 @@ use linera_base::{
     identifiers::{ApplicationId, BlobType},
     vm::VmRuntime,
 };
+
+use crate::{FLAG_FREE_APPLICATION_ID_PREFIX, FLAG_FREE_APPLICATION_ID_SUFFIX};
 use serde::{Deserialize, Serialize};
 
 use crate::ExecutionError;
@@ -94,8 +96,6 @@ pub struct ResourceControlPolicy {
     pub http_request_timeout_ms: u64,
     /// The list of hosts that contracts and services can send HTTP requests to.
     pub http_request_allow_list: BTreeSet<String>,
-    /// The list of application IDs for which all message- and event-related fees are waived.
-    pub free_application_ids: BTreeSet<ApplicationId>,
 }
 
 impl fmt::Display for ResourceControlPolicy {
@@ -133,7 +133,6 @@ impl fmt::Display for ResourceControlPolicy {
             maximum_http_response_bytes,
             http_request_allow_list,
             http_request_timeout_ms,
-            free_application_ids,
         } = self;
         write!(
             f,
@@ -170,8 +169,7 @@ impl fmt::Display for ResourceControlPolicy {
             {maximum_oracle_response_bytes} maximum number of bytes of an oracle response\n\
             {maximum_http_response_bytes} maximum number of bytes of an HTTP response\n\
             {http_request_timeout_ms} ms timeout for HTTP requests\n\
-            HTTP hosts allowed for contracts and services: {http_request_allow_list:#?}\n\
-            Free application IDs: {free_application_ids:#?}\n",
+            HTTP hosts allowed for contracts and services: {http_request_allow_list:#?}\n",
         )?;
         Ok(())
     }
@@ -221,13 +219,18 @@ impl ResourceControlPolicy {
             maximum_http_response_bytes: u64::MAX,
             http_request_timeout_ms: u64::MAX,
             http_request_allow_list: BTreeSet::new(),
-            free_application_ids: BTreeSet::new(),
         }
+    }
+
+    /// Returns the flag string for a free application ID.
+    pub fn free_app_flag(app_id: &ApplicationId) -> String {
+        format!("{FLAG_FREE_APPLICATION_ID_PREFIX}{app_id}{FLAG_FREE_APPLICATION_ID_SUFFIX}")
     }
 
     /// Returns whether the given application has its message- and event-related fees waived.
     pub fn is_free_app(&self, app_id: &ApplicationId) -> bool {
-        self.free_application_ids.contains(app_id)
+        self.http_request_allow_list
+            .contains(&Self::free_app_flag(app_id))
     }
 
     /// The maximum fuel per block according to the `VmRuntime`.
@@ -306,7 +309,6 @@ impl ResourceControlPolicy {
             maximum_http_response_bytes: 10_000,
             http_request_timeout_ms: 20_000,
             http_request_allow_list: BTreeSet::new(),
-            free_application_ids: BTreeSet::new(),
         }
     }
 

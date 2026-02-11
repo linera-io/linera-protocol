@@ -239,7 +239,6 @@ async fn test_fee_consumption(
         blob_byte_read: Amount::from_tokens(101),
         blob_byte_published: Amount::from_tokens(103),
         http_request_allow_list: BTreeSet::new(),
-        free_application_ids: BTreeSet::new(),
     };
 
     let consumed_fees = spends
@@ -450,7 +449,9 @@ async fn test_free_app_message_no_fees() -> anyhow::Result<()> {
     // Use all_categories() which sets non-zero prices for all fee types, then add
     // the application as a free app.
     let mut policy = ResourceControlPolicy::all_categories();
-    policy.free_application_ids.insert(application_id);
+    policy
+        .http_request_allow_list
+        .insert(ResourceControlPolicy::free_app_flag(&application_id));
 
     let mut controller =
         ResourceController::new(Arc::new(policy), ResourceTracker::default(), Some(signer));
@@ -478,7 +479,7 @@ async fn test_free_app_message_no_fees() -> anyhow::Result<()> {
         chain_id,
         origin: chain_id,
         is_bouncing: false,
-        authenticated_owner: Some(signer),
+        authenticated_signer: Some(signer),
         refund_grant_to,
         height: BlockHeight(0),
         round: Some(0),
@@ -525,7 +526,9 @@ async fn test_free_app_operation_still_charged() -> anyhow::Result<()> {
     view.system.balance.set(chain_balance);
 
     let mut policy = ResourceControlPolicy::all_categories();
-    policy.free_application_ids.insert(application_id);
+    policy
+        .http_request_allow_list
+        .insert(ResourceControlPolicy::free_app_flag(&application_id));
 
     let mut controller = ResourceController::new(
         Arc::new(policy),
@@ -545,7 +548,7 @@ async fn test_free_app_operation_still_charged() -> anyhow::Result<()> {
         chain_id,
         height: BlockHeight(0),
         round: Some(0),
-        authenticated_owner: None,
+        authenticated_signer: None,
         timestamp: Timestamp::default(),
     };
     let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
