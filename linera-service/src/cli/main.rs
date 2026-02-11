@@ -42,7 +42,7 @@ use futures::{lock::Mutex, FutureExt as _, StreamExt as _};
 use linera_base::{
     crypto::Signer,
     data_types::{ApplicationPermissions, Timestamp},
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{AccountOwner, ApplicationId, ChainId},
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
     time::{Duration, Instant},
@@ -542,6 +542,7 @@ impl Runnable for Job {
                                     maximum_http_response_bytes,
                                     http_request_timeout_ms,
                                     http_request_allow_list,
+                                    free_application_ids,
                                 } => {
                                     let existing_policy = policy.clone();
                                     policy = linera_execution::ResourceControlPolicy {
@@ -611,9 +612,26 @@ impl Runnable for Job {
                                             .unwrap_or(existing_policy.maximum_http_response_bytes),
                                         http_request_timeout_ms: http_request_timeout_ms
                                             .unwrap_or(existing_policy.http_request_timeout_ms),
-                                        http_request_allow_list: http_request_allow_list
-                                            .map(BTreeSet::from_iter)
-                                            .unwrap_or(existing_policy.http_request_allow_list),
+                                        http_request_allow_list: {
+                                            let mut list = http_request_allow_list
+                                                .map(BTreeSet::from_iter)
+                                                .unwrap_or(
+                                                    existing_policy.http_request_allow_list,
+                                                );
+                                            if let Some(ids) = free_application_ids {
+                                                for id_str in ids {
+                                                    let app_id: ApplicationId = id_str
+                                                        .parse()
+                                                        .expect("Invalid application ID");
+                                                    list.insert(
+                                                        linera_execution::ResourceControlPolicy::free_app_flag(
+                                                            &app_id,
+                                                        ),
+                                                    );
+                                                }
+                                            }
+                                            list
+                                        },
                                     };
                                     info!("{policy}");
                                     if committee.policy() == &policy {
@@ -847,6 +865,10 @@ impl Runnable for Job {
                                         "--storage-max-stream-queries".to_string(),
                                         "50".to_string(),
                                         "--timings".to_string(),
+                                        "--max-pending-message-bundles".to_string(),
+                                        "10000".to_string(),
+                                        "--max-new-events-per-block".to_string(),
+                                        "10000".to_string(),
                                     ],
                                 )))
                             })
@@ -1548,7 +1570,11 @@ impl Runnable for Job {
 
                 let description = cli_wrappers::Faucet::new(faucet_url).claim(&owner).await?;
 
-                if !description.config().ownership.verify_owner(&owner) {
+                if !description
+                    .config()
+                    .ownership
+                    .can_propose_in_multi_leader_round(&owner)
+                {
                     anyhow::bail!(
                         "The chain with the ID returned by the faucet is not owned by you. \
                          Please make sure you are connecting to a genuine faucet."
@@ -1942,6 +1968,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
             maximum_http_response_bytes,
             http_request_timeout_ms,
             http_request_allow_list,
+            free_application_ids,
             testing_prng_seed,
             network_name,
         } => {
@@ -1995,10 +2022,22 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     .unwrap_or(existing_policy.maximum_http_response_bytes),
                 http_request_timeout_ms: http_request_timeout_ms
                     .unwrap_or(existing_policy.http_request_timeout_ms),
-                http_request_allow_list: http_request_allow_list
-                    .as_ref()
-                    .map(|list| list.iter().cloned().collect())
-                    .unwrap_or(existing_policy.http_request_allow_list),
+                http_request_allow_list: {
+                    let mut list = http_request_allow_list
+                        .as_ref()
+                        .map(|list| list.iter().cloned().collect())
+                        .unwrap_or(existing_policy.http_request_allow_list);
+                    if let Some(ids) = &free_application_ids {
+                        for id_str in ids {
+                            let app_id: ApplicationId =
+                                id_str.parse().expect("Invalid application ID");
+                            list.insert(linera_execution::ResourceControlPolicy::free_app_flag(
+                                &app_id,
+                            ));
+                        }
+                    }
+                    list
+                },
             };
             let timestamp = start_timestamp.map_or_else(Timestamp::now, |st| {
                 let micros =

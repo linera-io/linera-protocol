@@ -62,6 +62,10 @@ pub struct Options {
     #[arg(long, default_value = "3")]
     pub max_block_limit_errors: u32,
 
+    /// The maximum number of new stream events to include in a block proposal.
+    #[arg(long, default_value = "10")]
+    pub max_new_events_per_block: usize,
+
     /// The duration in milliseconds after which an idle chain worker will free its memory.
     #[arg(
         long = "chain-worker-ttl-ms",
@@ -268,6 +272,7 @@ impl Options {
         ChainClientOptions {
             max_pending_message_bundles: self.max_pending_message_bundles,
             max_block_limit_errors: self.max_block_limit_errors,
+            max_new_events_per_block: self.max_new_events_per_block,
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,

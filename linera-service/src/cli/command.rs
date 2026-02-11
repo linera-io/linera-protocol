@@ -486,8 +486,28 @@ pub enum ClientCommand {
         http_request_timeout_ms: Option<u64>,
 
         /// Set the list of hosts that contracts and services can send HTTP requests to.
-        #[arg(long)]
+        ///
+        /// Besides hostnames, the following special flags are recognized:
+        ///
+        /// - `FLAG_ZERO_HASH.linera.network`: Skip hashing of the execution state
+        ///   (return all zeros instead).
+        /// - `FLAG_FREE_REJECT.linera.network`: Make bouncing messages free of charge.
+        /// - `FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE.linera.network`: Require
+        ///   accepted (not rejected) incoming messages to satisfy mandatory application
+        ///   checks.
+        /// - `FLAG_FREE_APPLICATION_ID_<APP_ID>.linera.network`: Waive all message-
+        ///   and event-related fees for the given application ID (see also
+        ///   `--free-application-ids`).
+        #[arg(long, value_delimiter = ',')]
         http_request_allow_list: Option<Vec<String>>,
+
+        /// Set the list of application IDs for which message- and event-related fees are waived.
+        ///
+        /// This is a convenience flag that adds
+        /// `FLAG_FREE_APPLICATION_ID_<APP_ID>.linera.network` entries to the HTTP
+        /// request allow list.
+        #[arg(long, value_delimiter = ',')]
+        free_application_ids: Option<Vec<String>>,
     },
 
     /// Run benchmarks to test network performance.
@@ -674,8 +694,28 @@ pub enum ClientCommand {
         http_request_timeout_ms: Option<u64>,
 
         /// Set the list of hosts that contracts and services can send HTTP requests to.
-        #[arg(long)]
+        ///
+        /// Besides hostnames, the following special flags are recognized:
+        ///
+        /// - `FLAG_ZERO_HASH.linera.network`: Skip hashing of the execution state
+        ///   (return all zeros instead).
+        /// - `FLAG_FREE_REJECT.linera.network`: Make bouncing messages free of charge.
+        /// - `FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE.linera.network`: Require
+        ///   accepted (not rejected) incoming messages to satisfy mandatory application
+        ///   checks.
+        /// - `FLAG_FREE_APPLICATION_ID_<APP_ID>.linera.network`: Waive all message-
+        ///   and event-related fees for the given application ID (see also
+        ///   `--free-application-ids`).
+        #[arg(long, value_delimiter = ',')]
         http_request_allow_list: Option<Vec<String>>,
+
+        /// Set the list of application IDs for which message- and event-related fees are waived.
+        ///
+        /// This is a convenience flag that adds
+        /// `FLAG_FREE_APPLICATION_ID_<APP_ID>.linera.network` entries to the HTTP
+        /// request allow list.
+        #[arg(long, value_delimiter = ',')]
+        free_application_ids: Option<Vec<String>>,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.

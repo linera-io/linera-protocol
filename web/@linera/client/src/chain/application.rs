@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::identifiers::{AccountOwner, ApplicationId};
+use linera_base::identifiers::ApplicationId;
 use linera_core::client::ChainClient;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
@@ -19,10 +19,9 @@ pub struct Application {
 #[serde(rename_all = "camelCase")]
 #[tsify(from_wasm_abi)]
 pub struct QueryOptions {
+    // TODO(#5377): should this be in `ChainOptions`?
     #[serde(default)]
     pub block_hash: Option<String>,
-    #[serde(default)]
-    pub owner: Option<AccountOwner>,
 }
 
 #[wasm_bindgen]
@@ -43,11 +42,8 @@ impl Application {
     // TODO(#5152) a lot of this logic is shared with `linera_service::node_service`
     pub async fn query(&self, query: &str, options: Option<QueryOptions>) -> JsResult<String> {
         tracing::debug!("querying application: {query}");
-        let QueryOptions { block_hash, owner } = options.unwrap_or_default();
-        let mut chain_client = self.chain_client.clone();
-        if let Some(owner) = owner {
-            chain_client.set_preferred_owner(owner);
-        }
+        let QueryOptions { block_hash } = options.unwrap_or_default();
+        let chain_client = self.chain_client.clone();
         let block_hash = if let Some(hash) = block_hash {
             Some(hash.as_str().parse()?)
         } else {
@@ -72,7 +68,7 @@ impl Application {
         if !operations.is_empty() {
             let _hash = self
                 .client
-                .0
+                .client_context
                 .lock()
                 .await
                 .apply_client_command(&chain_client, |_chain_client| {

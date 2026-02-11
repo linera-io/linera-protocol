@@ -600,11 +600,11 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Ensures that the client has the `ChainDescription` blob corresponding to this
-    /// client's `ChainId`.
-    pub async fn get_chain_description(
+    /// client's `ChainId`, and returns the chain description blob.
+    pub async fn get_chain_description_blob(
         &self,
         chain_id: ChainId,
-    ) -> Result<ChainDescription, ChainClientError> {
+    ) -> Result<Blob, ChainClientError> {
         let chain_desc_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
         let blob = self
             .local_node
@@ -613,16 +613,25 @@ impl<Env: Environment> Client<Env> {
             .await?;
         if let Some(blob) = blob {
             // We have the blob - return it.
-            return Ok(bcs::from_bytes(blob.bytes())?);
-        };
+            return Ok(blob);
+        }
         // Recover history from the current validators, according to the admin chain.
         Box::pin(self.synchronize_chain_state(self.admin_chain_id)).await?;
         let nodes = self.validator_nodes().await?;
-        let blob = self
+        Ok(self
             .update_local_node_with_blobs_from(vec![chain_desc_id], &nodes)
             .await?
             .pop()
-            .unwrap(); // Returns exactly as many blobs as passed-in IDs.
+            .unwrap()) // Returns exactly as many blobs as passed-in IDs.
+    }
+
+    /// Ensures that the client has the `ChainDescription` blob corresponding to this
+    /// client's `ChainId`, and returns the chain description.
+    pub async fn get_chain_description(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainDescription, ChainClientError> {
+        let blob = self.get_chain_description_blob(chain_id).await?;
         Ok(bcs::from_bytes(blob.bytes())?)
     }
 
@@ -1577,6 +1586,8 @@ pub struct ChainClientOptions {
     ///
     /// Discarded bundles can be retried in the next block.
     pub max_block_limit_errors: u32,
+    /// Maximum number of new stream events processed at a time in a block.
+    pub max_new_events_per_block: usize,
     /// The policy for automatically handling incoming messages.
     pub message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
@@ -1612,6 +1623,7 @@ impl ChainClientOptions {
         ChainClientOptions {
             max_pending_message_bundles: 10,
             max_block_limit_errors: 3,
+            max_new_events_per_block: 10,
             message_policy: MessagePolicy::new_accept_all(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
@@ -1957,6 +1969,38 @@ impl<Env: Environment> ChainClient<Env> {
         self.client.get_chain_description(self.chain_id).await
     }
 
+    /// Prepares the chain for the specified owner.
+    ///
+    /// Ensures we have the chain description blob, gets chain info, and validates
+    /// that the owner can propose on this chain (either by being an owner or via
+    /// `open_multi_leader_rounds`).
+    pub async fn prepare_for_owner(
+        &self,
+        owner: AccountOwner,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
+        ensure!(
+            self.client.has_key_for(&owner).await?,
+            ChainClientError::CannotFindKeyForChain(self.chain_id)
+        );
+        // Ensure we have the chain description blob.
+        self.client
+            .get_chain_description_blob(self.chain_id)
+            .await?;
+
+        // Get chain info.
+        let info = self.chain_info().await?;
+
+        // Validate that the owner can propose on this chain.
+        ensure!(
+            info.manager
+                .ownership
+                .can_propose_in_multi_leader_round(&owner),
+            ChainClientError::NotAnOwner(self.chain_id)
+        );
+
+        Ok(info)
+    }
+
     /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
     /// local chain.
     #[instrument(level = "trace")]
@@ -2016,27 +2060,45 @@ impl<Env: Environment> ChainClient<Env> {
             })
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
+                let previous_index = subscriptions.next_index;
                 async move {
                     let next_index = client
                         .local_node
                         .get_stream_event_count(chain_id, stream_id.clone())
                         .await?;
                     if let Some(next_index) =
-                        next_index.filter(|next_index| *next_index > subscriptions.next_index)
+                        next_index.filter(|next_index| *next_index > previous_index)
                     {
-                        Ok(Some((chain_id, stream_id, next_index)))
+                        Ok(Some((chain_id, stream_id, previous_index, next_index)))
                     } else {
                         Ok::<_, ChainClientError>(None)
                     }
                 }
             });
-        let updates = futures::stream::iter(futures)
+        let all_updates = futures::stream::iter(futures)
             .buffer_unordered(self.options.max_joined_tasks)
             .try_collect::<Vec<_>>()
             .await?
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
+        // Apply the max_new_events_per_block limit.
+        let max_events = self.options.max_new_events_per_block;
+        let mut total_events: usize = 0;
+        let mut updates = Vec::new();
+        for (chain_id, stream_id, previous_index, next_index) in all_updates {
+            let new_events = (next_index - previous_index) as usize;
+            if total_events + new_events <= max_events {
+                total_events += new_events;
+                updates.push((chain_id, stream_id, next_index));
+            } else {
+                let remaining = max_events.saturating_sub(total_events);
+                if remaining > 0 {
+                    updates.push((chain_id, stream_id, previous_index + remaining as u32));
+                }
+                break;
+            }
+        }
         if updates.is_empty() {
             return Ok(None);
         }
@@ -2093,11 +2155,11 @@ impl<Env: Environment> ChainClient<Env> {
             LocalNodeError::InactiveChain(self.chain_id)
         );
 
+        // Check if the preferred owner can propose on this chain: either they are an owner,
+        // the current leader, or open_multi_leader_rounds is enabled.
         let is_owner = manager
             .ownership
-            .all_owners()
-            .chain(&manager.leader)
-            .any(|owner| *owner == preferred_owner);
+            .can_propose_in_multi_leader_round(&preferred_owner);
 
         if !is_owner {
             let accepted_owners = manager
@@ -2106,7 +2168,7 @@ impl<Env: Environment> ChainClient<Env> {
                 .chain(&manager.leader)
                 .collect::<Vec<_>>();
             warn!(%self.chain_id, ?accepted_owners, ?preferred_owner,
-                "Chain has multiple owners configured but none is preferred owner",
+                "The preferred owner is not configured as an owner of this chain",
             );
             return Err(ChainClientError::NotAnOwner(self.chain_id));
         }

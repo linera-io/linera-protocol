@@ -80,7 +80,6 @@ pub struct ClientWrapper {
     storage: String,
     wallet: String,
     keystore: String,
-    max_pending_message_bundles: usize,
     network: Network,
     pub path_provider: PathProvider,
     on_drop: OnClientDrop,
@@ -135,7 +134,6 @@ impl ClientWrapper {
             storage,
             wallet,
             keystore,
-            max_pending_message_bundles: 10_000,
             network,
             path_provider,
             on_drop,
@@ -260,11 +258,8 @@ impl ClientWrapper {
 
     /// Returns an iterator over the arguments that should be added to all command invocations.
     fn command_arguments(&self) -> impl Iterator<Item = Cow<'_, str>> + '_ {
-        self.required_command_arguments().chain([
-            "--max-pending-message-bundles".into(),
-            self.max_pending_message_bundles.to_string().into(),
-            "--with-application-logs".into(),
-        ])
+        self.required_command_arguments()
+            .chain(["--with-application-logs".into()])
     }
 
     /// Returns the [`Command`] instance configured to run the appropriate binary.
@@ -521,6 +516,47 @@ impl ClientWrapper {
                 return Ok(NodeService::new(port, child));
             } else {
                 warn!("Waiting for node service to start");
+            }
+        }
+        bail!("Failed to start node service");
+    }
+
+    /// Runs `linera service` with a controller application.
+    pub async fn run_node_service_with_controller(
+        &self,
+        port: impl Into<Option<u16>>,
+        process_inbox: ProcessInbox,
+        controller_id: &ApplicationId,
+        operators: &[(String, PathBuf)],
+    ) -> Result<NodeService> {
+        let port = port.into().unwrap_or(8080);
+        let mut command = self.command().await?;
+        command.arg("service");
+        if let ProcessInbox::Skip = process_inbox {
+            command.arg("--listener-skip-process-inbox");
+        }
+        if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
+            command.args(var.split_whitespace());
+        }
+        command.args(["--controller-id", &controller_id.to_string()]);
+        for (name, path) in operators {
+            command.args(["--operators", &format!("{}={}", name, path.display())]);
+        }
+        let child = command
+            .args(["--port".to_string(), port.to_string()])
+            .spawn_into()?;
+        let client = reqwest_client();
+        for i in 0..10 {
+            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
+            let request = client
+                .get(format!("http://localhost:{}/", port))
+                .send()
+                .await;
+            if request.is_ok() {
+                tracing::info!("Node service has started");
+                return Ok(NodeService::new(port, child));
+            } else {
+                tracing::warn!("Waiting for node service to start");
             }
         }
         bail!("Failed to start node service");

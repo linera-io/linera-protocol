@@ -22,6 +22,7 @@ use linera_base::{
 use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
 use reqwest::{header::HeaderMap, Client, Url};
+use tracing::{info_span, instrument, Instrument as _};
 
 use crate::{
     execution::UserAction,
@@ -89,6 +90,7 @@ where
         }
     }
 
+    #[instrument(skip_all, fields(application_id = %id))]
     pub(crate) async fn load_contract(
         &mut self,
         id: ApplicationId,
@@ -140,6 +142,10 @@ where
     }
 
     // TODO(#1416): Support concurrent I/O.
+    #[instrument(
+        skip_all,
+        fields(request_type = %request.as_ref())
+    )]
     pub(crate) async fn handle_request(
         &mut self,
         request: ExecutionRequest,
@@ -685,6 +691,9 @@ where
             }
 
             AddCreatedBlob { blob, callback } => {
+                if self.resource_controller.is_free {
+                    self.txn_tracker.mark_blob_free(blob.id());
+                }
                 self.txn_tracker.add_created_blob(blob);
                 callback.respond(());
             }
@@ -709,18 +718,20 @@ where
             }
 
             #[cfg(web)]
-            Log { message, level } => {
-                // Output directly to browser console with clean formatting
-                let formatted: js_sys::JsString = format!("[CONTRACT {level}] {message}").into();
-                match level {
-                    tracing::log::Level::Trace | tracing::log::Level::Debug => {
-                        web_sys::console::debug_1(&formatted)
-                    }
-                    tracing::log::Level::Info => web_sys::console::log_1(&formatted),
-                    tracing::log::Level::Warn => web_sys::console::warn_1(&formatted),
-                    tracing::log::Level::Error => web_sys::console::error_1(&formatted),
+            Log { message, level } => match level {
+                tracing::log::Level::Trace | tracing::log::Level::Debug => {
+                    tracing::debug!(target: "user_application_log", message = %message);
                 }
-            }
+                tracing::log::Level::Info => {
+                    tracing::info!(target: "user_application_log", message = %message);
+                }
+                tracing::log::Level::Warn => {
+                    tracing::warn!(target: "user_application_log", message = %message);
+                }
+                tracing::log::Level::Error => {
+                    tracing::error!(target: "user_application_log", message = %message);
+                }
+            },
         }
 
         Ok(())
@@ -728,6 +739,7 @@ where
 
     /// Calls `process_streams` for all applications that are subscribed to streams with new
     /// events or that have new subscriptions.
+    #[instrument(skip_all)]
     async fn process_subscriptions(
         &mut self,
         context: ProcessStreamsContext,
@@ -811,6 +823,7 @@ where
     }
 
     // TODO(#5034): unify with `service_and_dependencies`
+    #[instrument(skip_all, fields(application_id = %application))]
     async fn contract_and_dependencies(
         &mut self,
         application: ApplicationId,
@@ -834,6 +847,7 @@ where
         Ok((codes, descriptions))
     }
 
+    #[instrument(skip_all, fields(application_id = %application_id))]
     async fn run_user_action_with_runtime(
         &mut self,
         application_id: ApplicationId,
@@ -848,11 +862,20 @@ where
             .with_state_and_grant(&mut self.state.system, cloned_grant.as_mut())
             .await?
             .balance()?;
-        let controller = ResourceController::new(
+        let mut controller = ResourceController::new(
             self.resource_controller.policy().clone(),
             self.resource_controller.tracker,
             initial_balance,
         );
+        let is_free = matches!(
+            &action,
+            UserAction::Message(..) | UserAction::ProcessStreams(..)
+        ) && self
+            .resource_controller
+            .policy()
+            .is_free_app(&application_id);
+        controller.is_free = is_free;
+        self.resource_controller.is_free = is_free;
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
 
@@ -893,11 +916,18 @@ where
             })
             .await;
 
-        while let Some(request) = execution_state_receiver.next().await {
-            self.handle_request(request).await?;
+        async {
+            while let Some(request) = execution_state_receiver.next().await {
+                self.handle_request(request).await?;
+            }
+            Ok::<(), ExecutionError>(())
         }
+        .instrument(info_span!("handle_runtime_requests"))
+        .await?;
 
         let (result, controller) = contract_runtime_task.await??;
+
+        self.resource_controller.is_free = false;
 
         self.txn_tracker.add_operation_result(result);
 
@@ -910,6 +940,11 @@ where
         Ok(())
     }
 
+    #[instrument(skip_all, fields(
+        chain_id = %context.chain_id,
+        block_height = %context.height,
+        operation_type = %operation.as_ref(),
+    ))]
     pub async fn execute_operation(
         &mut self,
         context: OperationContext,
@@ -951,6 +986,13 @@ where
         Ok(())
     }
 
+    #[instrument(skip_all, fields(
+        chain_id = %context.chain_id,
+        block_height = %context.height,
+        origin = %context.origin,
+        is_bouncing = %context.is_bouncing,
+        message_type = %message.as_ref(),
+    ))]
     pub async fn execute_message(
         &mut self,
         context: MessageContext,
@@ -1083,7 +1125,7 @@ where
 }
 
 /// Requests to the execution state.
-#[derive(Debug)]
+#[derive(Debug, strum::AsRefStr)]
 pub enum ExecutionRequest {
     #[cfg(not(web))]
     LoadContract {

@@ -15,12 +15,12 @@ use allocative::Allocative;
 use linera_base::{
     data_types::{Amount, ArithmeticError, BlobContent, CompressedBytecode, Resources},
     ensure,
-    identifiers::BlobType,
+    identifiers::{ApplicationId, BlobType},
     vm::VmRuntime,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::ExecutionError;
+use crate::{ExecutionError, FLAG_FREE_APPLICATION_ID_PREFIX, FLAG_FREE_APPLICATION_ID_SUFFIX};
 
 /// A collection of prices and limits associated with block execution.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Allocative)]
@@ -218,6 +218,17 @@ impl ResourceControlPolicy {
             http_request_timeout_ms: u64::MAX,
             http_request_allow_list: BTreeSet::new(),
         }
+    }
+
+    /// Returns the flag string for a free application ID.
+    pub fn free_app_flag(app_id: &ApplicationId) -> String {
+        format!("{FLAG_FREE_APPLICATION_ID_PREFIX}{app_id}{FLAG_FREE_APPLICATION_ID_SUFFIX}")
+    }
+
+    /// Returns whether the given application has its message- and event-related fees waived.
+    pub fn is_free_app(&self, app_id: &ApplicationId) -> bool {
+        self.http_request_allow_list
+            .contains(&Self::free_app_flag(app_id))
     }
 
     /// The maximum fuel per block according to the `VmRuntime`.

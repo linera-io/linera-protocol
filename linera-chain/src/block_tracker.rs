@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_execution::{
     execution_state_actor::ExecutionStateActor, ExecutionRuntimeContext, ExecutionStateView,
-    MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
+    Message, MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
     ResourceTracker, SystemExecutionStateView, TransactionOutcome, TransactionTracker,
     FLAG_FREE_REJECT,
 };
@@ -101,6 +101,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id,
         block_height = %self.block_height,
+        transaction_index = %self.transaction_index,
+        transaction_type = %transaction.as_ref(),
     ))]
     pub async fn execute_transaction<C>(
         &mut self,
@@ -180,6 +182,13 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Executes a message as part of an incoming bundle in a block.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id,
+        block_height = %self.block_height,
+        origin = %incoming_bundle.origin,
+        action = ?incoming_bundle.action,
+        is_bouncing = %posted_message.is_bouncing(),
+    ))]
     async fn execute_message_in_block<C>(
         &mut self,
         chain: &mut ExecutionStateView<C>,
@@ -272,6 +281,14 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     /// so that the execution of the next transaction doesn't overwrite the previous ones.
     ///
     /// Tracks the resources used by the transaction - size of the incoming and outgoing messages, blobs, etc.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id,
+        block_height = %self.block_height,
+        transaction_index = %self.transaction_index,
+        outgoing_messages_count = %txn_outcome.outgoing_messages.len(),
+        events_count = %txn_outcome.events.len(),
+        blobs_count = %txn_outcome.blobs.len(),
+    ))]
     pub async fn process_txn_outcome<C>(
         &mut self,
         txn_outcome: TransactionOutcome,
@@ -292,6 +309,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             {
                 continue; // Bouncing messages are free.
             }
+            if let Message::User { application_id, .. } = &message_out.message {
+                if resource_controller.policy().is_free_app(application_id) {
+                    continue; // Outgoing message fees are waived for free apps.
+                }
+            }
             resource_controller
                 .track_message(&message_out.message)
                 .with_execution_context(context)?;
@@ -308,6 +330,9 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
 
         // Account for blobs published by this transaction directly.
         for blob in &txn_outcome.blobs {
+            if txn_outcome.free_blob_ids.contains(&blob.id()) {
+                continue; // Blob publishing fees are waived for free apps.
+            }
             resource_controller
                 .track_blob_published(blob)
                 .with_execution_context(context)?;

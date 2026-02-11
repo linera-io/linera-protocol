@@ -26,6 +26,8 @@ pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
     pub tracker: Tracker,
     /// The account paying for the resource usage.
     pub account: Account,
+    /// When true, balance deductions are skipped (fees waived for free apps).
+    pub is_free: bool,
 }
 
 impl<Account, Tracker> ResourceController<Account, Tracker> {
@@ -35,6 +37,7 @@ impl<Account, Tracker> ResourceController<Account, Tracker> {
             policy,
             tracker,
             account,
+            is_free: false,
         }
     }
 
@@ -351,7 +354,11 @@ where
     }
 
     /// Subtracts an amount from a balance and reports an error if that is impossible.
+    /// When `is_free` is set, balance deductions are skipped (fees waived).
     fn update_balance(&mut self, fees: Amount) -> Result<(), ExecutionError> {
+        if self.is_free {
+            return Ok(());
+        }
         self.account
             .try_sub_assign(fees)
             .map_err(|_| ExecutionError::FeesExceedFunding {
@@ -363,9 +370,12 @@ where
 
     /// Obtains the amount of fuel that could be spent by consuming the entire balance.
     pub(crate) fn remaining_fuel(&self, vm_runtime: VmRuntime) -> u64 {
-        let balance = self.balance().unwrap_or(Amount::MAX);
         let fuel = self.tracker.as_ref().fuel(vm_runtime);
         let maximum_fuel_per_block = self.policy.maximum_fuel_per_block(vm_runtime);
+        if self.is_free {
+            return maximum_fuel_per_block.saturating_sub(fuel);
+        }
+        let balance = self.balance().unwrap_or(Amount::MAX);
         self.policy
             .remaining_fuel(balance, vm_runtime)
             .min(maximum_fuel_per_block.saturating_sub(fuel))
@@ -800,6 +810,7 @@ impl ResourceController<Option<AccountOwner>, ResourceTracker> {
             policy: self.policy.clone(),
             tracker: &mut self.tracker,
             account: Sources { sources },
+            is_free: self.is_free,
         })
     }
 }
