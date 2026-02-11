@@ -29,6 +29,7 @@ impl Faucet {
             chains: std::rc::Rc::new(wallet::Memory::default()),
             default: None,
             genesis_config: self.0.genesis_config().await?,
+            lock: None,
         })
     }
 
@@ -57,9 +58,10 @@ impl Faucet {
                 ..description.into()
             },
         );
+        let chain_id_str = chain_id.to_string();
         if wallet.default.is_none() {
             wallet.default = Some(chain_id);
         }
-        Ok(chain_id.to_string())
+        Ok(chain_id_str)
     }
 }
