@@ -22,8 +22,6 @@ key directly in memory and uses it to sign.
 #![allow(clippy::unused_async)]
 #![recursion_limit = "256"]
 
-use std::rc::Rc;
-
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
@@ -42,8 +40,7 @@ pub mod wallet;
 pub use wallet::Wallet;
 
 pub type Network = linera_rpc::node_provider::NodeProvider;
-pub type Environment =
-    linera_core::environment::Impl<Storage, Network, Signer, Rc<linera_core::wallet::Memory>>;
+pub type Environment = linera_core::environment::Impl<Storage, Network, Signer, Wallet>;
 
 type JsResult<T> = Result<T, JsError>;
 

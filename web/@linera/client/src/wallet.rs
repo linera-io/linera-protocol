@@ -57,3 +57,10 @@ impl Wallet {
         Ok(())
     }
 }
+
+impl std::ops::Deref for Wallet {
+    type Target = wallet::Memory;
+    fn deref(&self) -> &Self::Target {
+        &*self.chains
+    }
+}
