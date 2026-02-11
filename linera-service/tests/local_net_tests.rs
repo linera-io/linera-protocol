@@ -1360,7 +1360,7 @@ async fn test_node_service_with_task_processor() -> Result<()> {
 #[cfg(feature = "storage-service")]
 #[test_log::test(tokio::test)]
 async fn test_task_processor_outcome_ordering() -> Result<()> {
-    use std::{io::Write, os::unix::fs::PermissionsExt, time::Duration};
+    use std::{io::Write, os::unix::fs::PermissionsExt};
 
     use linera_base::{abi::ContractAbi, identifiers::ApplicationId};
 
@@ -1417,6 +1417,9 @@ async fn test_task_processor_outcome_ordering() -> Result<()> {
 
     node_service.ensure_is_running()?;
 
+    // Subscribe to notifications for the chain.
+    let mut notifications = Box::pin(node_service.notifications(chain).await?);
+
     let app = node_service.make_application(&chain, &app_id.with_abi::<TaskProcessorAbi>())?;
 
     // Submit both tasks in a single block: slow first, then fast.
@@ -1427,36 +1430,20 @@ async fn test_task_processor_outcome_ordering() -> Result<()> {
     ])
     .await?;
 
-    // Wait until both tasks have been processed.
-    for _ in 0..30 {
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        let count: u64 = app.query_json("taskCount").await?;
-        if count >= 2 {
-            break;
-        }
-    }
+    // Wait for the block containing the RequestTask operations.
+    notifications.wait_for_block(None).await?;
+
+    // Wait for the two blocks containing the StoreResult operations.
+    notifications.wait_for_block(None).await?;
+    notifications.wait_for_block(None).await?;
 
     let task_count: u64 = app.query_json("taskCount").await?;
-    assert!(
-        task_count >= 2,
-        "Expected at least 2 tasks, got {task_count}"
-    );
+    assert_eq!(task_count, 2);
 
     // Verify the results are in request order (slow first, fast second),
     // not completion order (which would be fast first).
     let results: Vec<String> = app.query_json("results").await?;
-    assert!(
-        results.len() >= 2,
-        "Expected at least 2 results, got {results:?}"
-    );
-    assert_eq!(
-        results[0], "slow_result",
-        "First result should be from the slow task"
-    );
-    assert_eq!(
-        results[1], "fast_result",
-        "Second result should be from the fast task"
-    );
+    assert_eq!(results, vec!["slow_result", "fast_result"]);
 
     net.ensure_is_running().await?;
     net.terminate().await?;
