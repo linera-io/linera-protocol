@@ -102,6 +102,11 @@ pub const FLAG_FREE_REJECT: &str = "FLAG_FREE_REJECT.linera.network";
 /// applications requirement for a block.
 pub const FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE: &str =
     "FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE.linera.network";
+/// The prefix for flags that mark an application as free (message- and event-related fees waived).
+/// The full flag is `FLAG_FREE_APPLICATION_ID_<APP_ID>.linera.network`.
+pub const FLAG_FREE_APPLICATION_ID_PREFIX: &str = "FLAG_FREE_APPLICATION_ID_";
+/// The suffix for free application ID flags.
+pub const FLAG_FREE_APPLICATION_ID_SUFFIX: &str = ".linera.network";
 
 /// An implementation of [`UserContractModule`].
 #[derive(Clone)]
