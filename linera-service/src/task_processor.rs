@@ -78,13 +78,13 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             last_requested_callbacks: BTreeMap::new(),
             chain_client,
             cancellation_token,
+            notifications,
             outcome_sender,
             outcome_receiver,
-            notifications,
+            update_receiver,
             deadlines: BinaryHeap::new(),
             operators,
             last_task_handles: BTreeMap::new(),
-            update_receiver,
         }
     }
 
@@ -146,12 +146,12 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         self.application_ids = update.application_ids;
 
         // Process actions for newly added applications
-        let new_apps: Vec<_> = self
+        let new_apps = self
             .application_ids
             .iter()
             .filter(|app_id| !old_app_set.contains(app_id))
             .cloned()
-            .collect();
+            .collect::<Vec<_>>();
         if !new_apps.is_empty() {
             self.process_actions(new_apps).await;
         }
@@ -222,7 +222,9 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     let results = future::join_all(handles).await;
                     // Wait for the previous batch to finish sending outcomes first.
                     if let Some(previous) = previous {
-                        let _ = previous.await;
+                        if let Err(error) = previous.await {
+                            error!(%application_id, %error, "Task panicked");
+                        }
                     }
                     // Submit outcomes in the original order.
                     for result in results {
@@ -233,11 +235,11 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                                     break;
                                 }
                             }
-                            Ok(Err(e)) => {
-                                error!("Error executing task for {application_id}: {e}");
+                            Ok(Err(error)) => {
+                                error!(%application_id, %error, "Error executing task");
                             }
-                            Err(e) => {
-                                error!("Task panicked for {application_id}: {e}");
+                            Err(error) => {
+                                error!(%application_id, %error, "Task panicked");
                             }
                         }
                     }

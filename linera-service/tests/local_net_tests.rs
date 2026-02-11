@@ -1437,7 +1437,10 @@ async fn test_task_processor_outcome_ordering() -> Result<()> {
     }
 
     let task_count: u64 = app.query_json("taskCount").await?;
-    assert!(task_count >= 2, "Expected at least 2 tasks, got {task_count}");
+    assert!(
+        task_count >= 2,
+        "Expected at least 2 tasks, got {task_count}"
+    );
 
     // Verify the results are in request order (slow first, fast second),
     // not completion order (which would be fast first).
@@ -1446,8 +1449,14 @@ async fn test_task_processor_outcome_ordering() -> Result<()> {
         results.len() >= 2,
         "Expected at least 2 results, got {results:?}"
     );
-    assert_eq!(results[0], "slow_result", "First result should be from the slow task");
-    assert_eq!(results[1], "fast_result", "Second result should be from the fast task");
+    assert_eq!(
+        results[0], "slow_result",
+        "First result should be from the slow task"
+    );
+    assert_eq!(
+        results[1], "fast_result",
+        "Second result should be from the fast task"
+    );
 
     net.ensure_is_running().await?;
     net.terminate().await?;
