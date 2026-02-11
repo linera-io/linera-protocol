@@ -18,11 +18,9 @@ use linera_base::{
     identifiers::{ApplicationId, BlobType},
     vm::VmRuntime,
 };
-
-use crate::{FLAG_FREE_APPLICATION_ID_PREFIX, FLAG_FREE_APPLICATION_ID_SUFFIX};
 use serde::{Deserialize, Serialize};
 
-use crate::ExecutionError;
+use crate::{ExecutionError, FLAG_FREE_APPLICATION_ID_PREFIX, FLAG_FREE_APPLICATION_ID_SUFFIX};
 
 /// A collection of prices and limits associated with block execution.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Allocative)]
