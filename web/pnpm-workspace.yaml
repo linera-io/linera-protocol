@@ -1,3 +1,4 @@
 packages:
 - '@linera/client'
 - '@linera/metamask'
+publishBranch: testnet_conway
