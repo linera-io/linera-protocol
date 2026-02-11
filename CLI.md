@@ -523,8 +523,14 @@ View or update the resource control policy
 * `--maximum-oracle-response-bytes <MAXIMUM_ORACLE_RESPONSE_BYTES>` — Set the maximum size of oracle responses
 * `--maximum-http-response-bytes <MAXIMUM_HTTP_RESPONSE_BYTES>` — Set the maximum size in bytes of a received HTTP response
 * `--http-request-timeout-ms <HTTP_REQUEST_TIMEOUT_MS>` — Set the maximum amount of time allowed to wait for an HTTP response
-* `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to
-* `--free-application-ids <FREE_APPLICATION_IDS>` — Set the list of application IDs for which message- and event-related fees are waived
+* `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to.
+
+   Besides hostnames, the following special flags are recognized:
+
+   - `FLAG_ZERO_HASH.linera.network`: Skip hashing of the execution state (return all zeros instead). - `FLAG_FREE_REJECT.linera.network`: Make bouncing messages free of charge. - `FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE.linera.network`: Require accepted (not rejected) incoming messages to satisfy mandatory application checks. - `FLAG_FREE_APPLICATION_ID_<APP_ID>.linera.network`: Waive all message- and event-related fees for the given application ID (see also `--free-application-ids`).
+* `--free-application-ids <FREE_APPLICATION_IDS>` — Set the list of application IDs for which message- and event-related fees are waived.
+
+   This is a convenience flag that adds `FLAG_FREE_APPLICATION_ID_<APP_ID>.linera.network` entries to the HTTP request allow list.
 
 
 
@@ -671,8 +677,14 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 * `--maximum-oracle-response-bytes <MAXIMUM_ORACLE_RESPONSE_BYTES>` — Set the maximum size of oracle responses. (This will overwrite value from `--policy-config`)
 * `--maximum-http-response-bytes <MAXIMUM_HTTP_RESPONSE_BYTES>` — Set the maximum size in bytes of a received HTTP response
 * `--http-request-timeout-ms <HTTP_REQUEST_TIMEOUT_MS>` — Set the maximum amount of time allowed to wait for an HTTP response
-* `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to
-* `--free-application-ids <FREE_APPLICATION_IDS>` — Set the list of application IDs for which message- and event-related fees are waived
+* `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to.
+
+   Besides hostnames, the following special flags are recognized:
+
+   - `FLAG_ZERO_HASH.linera.network`: Skip hashing of the execution state (return all zeros instead). - `FLAG_FREE_REJECT.linera.network`: Make bouncing messages free of charge. - `FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE.linera.network`: Require accepted (not rejected) incoming messages to satisfy mandatory application checks. - `FLAG_FREE_APPLICATION_ID_<APP_ID>.linera.network`: Waive all message- and event-related fees for the given application ID (see also `--free-application-ids`).
+* `--free-application-ids <FREE_APPLICATION_IDS>` — Set the list of application IDs for which message- and event-related fees are waived.
+
+   This is a convenience flag that adds `FLAG_FREE_APPLICATION_ID_<APP_ID>.linera.network` entries to the HTTP request allow list.
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 * `--network-name <NETWORK_NAME>` — A unique name to identify this network
 

@@ -2031,9 +2031,9 @@ async fn run(options: &Options) -> Result<i32, Error> {
                         for id_str in ids {
                             let app_id: ApplicationId =
                                 id_str.parse().expect("Invalid application ID");
-                            list.insert(
-                                linera_execution::ResourceControlPolicy::free_app_flag(&app_id),
-                            );
+                            list.insert(linera_execution::ResourceControlPolicy::free_app_flag(
+                                &app_id,
+                            ));
                         }
                     }
                     list
