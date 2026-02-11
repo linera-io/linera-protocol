@@ -1355,6 +1355,106 @@ async fn test_node_service_with_task_processor() -> Result<()> {
     Ok(())
 }
 
+/// Test that task processor outcomes are submitted in the order they were requested,
+/// even when a later task finishes before an earlier one.
+#[cfg(feature = "storage-service")]
+#[test_log::test(tokio::test)]
+async fn test_task_processor_outcome_ordering() -> Result<()> {
+    use std::{io::Write, os::unix::fs::PermissionsExt, time::Duration};
+
+    use linera_base::{abi::ContractAbi, identifiers::ApplicationId};
+
+    struct TaskProcessorAbi;
+
+    impl ContractAbi for TaskProcessorAbi {
+        type Operation = ();
+        type Response = ();
+    }
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
+
+    // Publish and create the task-processor example application.
+    let example_dir = ClientWrapper::example_path("task-processor")?;
+    let app_id_str = client
+        .project_publish(example_dir, vec![], None, &())
+        .await?;
+    let app_id: ApplicationId = app_id_str.trim().parse()?;
+
+    // Create a slow operator that sleeps before echoing its input.
+    let tmp_dir = tempfile::tempdir()?;
+    let slow_path = tmp_dir.path().join("slow-operator");
+    {
+        let mut file = std::fs::File::create(&slow_path)?;
+        writeln!(file, "#!/bin/sh")?;
+        writeln!(file, "sleep 1")?;
+        writeln!(file, "cat")?;
+    }
+    std::fs::set_permissions(&slow_path, std::fs::Permissions::from_mode(0o755))?;
+
+    // Create a fast operator that echoes immediately.
+    let fast_path = tmp_dir.path().join("fast-operator");
+    {
+        let mut file = std::fs::File::create(&fast_path)?;
+        writeln!(file, "#!/bin/sh")?;
+        writeln!(file, "cat")?;
+    }
+    std::fs::set_permissions(&fast_path, std::fs::Permissions::from_mode(0o755))?;
+
+    // Start the node service with both operators.
+    let port = get_node_port().await;
+    let operators = vec![
+        ("slow".to_string(), slow_path),
+        ("fast".to_string(), fast_path),
+    ];
+    let mut node_service = client
+        .run_node_service_with_options(port, ProcessInbox::Skip, &[app_id], &operators, false)
+        .await?;
+
+    node_service.ensure_is_running()?;
+
+    let app = node_service.make_application(&chain, &app_id.with_abi::<TaskProcessorAbi>())?;
+
+    // Submit both tasks in a single block: slow first, then fast.
+    // The slow task takes longer but should have its result stored first.
+    app.multiple_mutate(&[
+        r#"requestTask(operator: "slow", input: "slow_result")"#.to_string(),
+        r#"requestTask(operator: "fast", input: "fast_result")"#.to_string(),
+    ])
+    .await?;
+
+    // Wait until both tasks have been processed.
+    for _ in 0..30 {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let count: u64 = app.query_json("taskCount").await?;
+        if count >= 2 {
+            break;
+        }
+    }
+
+    let task_count: u64 = app.query_json("taskCount").await?;
+    assert!(task_count >= 2, "Expected at least 2 tasks, got {task_count}");
+
+    // Verify the results are in request order (slow first, fast second),
+    // not completion order (which would be fast first).
+    let results: Vec<String> = app.query_json("results").await?;
+    assert!(
+        results.len() >= 2,
+        "Expected at least 2 results, got {results:?}"
+    );
+    assert_eq!(results[0], "slow_result", "First result should be from the slow task");
+    assert_eq!(results[1], "fast_result", "Second result should be from the fast task");
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
 /// Test that the node service read-only mode disables mutations and prevents query-triggered operations.
 #[cfg(feature = "storage-service")]
 #[test_log::test(tokio::test)]
