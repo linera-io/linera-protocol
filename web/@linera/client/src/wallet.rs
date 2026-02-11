@@ -10,6 +10,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
 use super::JsResult;
+use crate::lock::Lock;
 
 /// A wallet that stores the user's chains and keys in memory.
 #[wasm_bindgen]
@@ -18,6 +19,7 @@ pub struct Wallet {
     pub(crate) chains: Rc<wallet::Memory>,
     pub(crate) default: Option<ChainId>,
     pub(crate) genesis_config: GenesisConfig,
+    pub(crate) lock: Option<Rc<Lock>>,
 }
 
 #[wasm_bindgen]
@@ -36,5 +38,29 @@ impl Wallet {
             .ok_or(JsError::new(&format!(
                 "chain {chain_id} doesn't exist in wallet"
             )))
+    }
+
+    #[must_use]
+    /// Get the name of the wallet. Wallets with different names should use different
+    /// storage; only one wallet can use the same name at a time.
+    pub fn name(&self) -> String {
+        self.default
+            .map_or_else(|| "default".into(), |name| name.to_string())
+    }
+
+    /// Lock the wallet, preventing anyone else from using a wallet with this name.
+    ///
+    /// # Errors
+    /// If the wallet is already locked.
+    pub async fn lock(&mut self) -> JsResult<()> {
+        self.lock = Some(Rc::new(Lock::try_acquire(&self.name()).await?));
+        Ok(())
+    }
+}
+
+impl std::ops::Deref for Wallet {
+    type Target = wallet::Memory;
+    fn deref(&self) -> &Self::Target {
+        &*self.chains
     }
 }

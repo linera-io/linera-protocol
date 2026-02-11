@@ -24,6 +24,7 @@ log.workspace = true
 num-traits.workspace = true
 serde.workspace = true
 serde-wasm-bindgen.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
@@ -69,5 +70,12 @@ features = ["web", "indexeddb"]
 workspace = true
 
 [dependencies.web-sys]
-features = ["console", "Window"]
+features = [
+    "console",
+    "Lock",
+    "LockManager",
+    "LockOptions",
+    "Navigator",
+    "Window",
+]
 workspace = true
