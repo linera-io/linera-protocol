@@ -80,24 +80,33 @@ async fn benchmark_with_fungible(
 ) -> Result<()> {
     info!("Creating the clients and initializing the wallets");
     let path_provider = PathProvider::create_temporary_directory().unwrap();
-    let publisher = ClientWrapper::new(
+    let benchmark_args = vec![
+        "--wait-for-outgoing-messages".to_string(),
+        "--max-pending-message-bundles".to_string(),
+        "10000".to_string(),
+        "--max-new-events-per-block".to_string(),
+        "10000".to_string(),
+    ];
+    let publisher = ClientWrapper::new_with_extra_args(
         path_provider,
         Network::Grpc,
         None,
         num_wallets,
         OnClientDrop::CloseChains,
+        benchmark_args.clone(),
     );
     publisher.wallet_init(Some(&faucet)).await?;
     publisher.request_chain(&faucet, true).await?;
     let clients = (0..num_wallets)
         .map(|n| {
             let path_provider = PathProvider::create_temporary_directory().unwrap();
-            Ok(ClientWrapper::new(
+            Ok(ClientWrapper::new_with_extra_args(
                 path_provider,
                 Network::Grpc,
                 None,
                 n,
                 OnClientDrop::CloseChains,
+                benchmark_args.clone(),
             ))
         })
         .collect::<Result<Vec<_>, anyhow::Error>>()?;

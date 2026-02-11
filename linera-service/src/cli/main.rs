@@ -847,6 +847,10 @@ impl Runnable for Job {
                                         "--storage-max-stream-queries".to_string(),
                                         "50".to_string(),
                                         "--timings".to_string(),
+                                        "--max-pending-message-bundles".to_string(),
+                                        "10000".to_string(),
+                                        "--max-new-events-per-block".to_string(),
+                                        "10000".to_string(),
                                     ],
                                 )))
                             })
