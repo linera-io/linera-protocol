@@ -1839,6 +1839,15 @@ impl<A> ApplicationWrapper<A> {
         self.run_graphql_query(&format!("mutation {{ {mutation} }}"))
             .await
     }
+
+    pub async fn multiple_mutate(&self, mutations: &[String]) -> Result<Value> {
+        let mut out = String::from("mutation {\n");
+        for (index, mutation) in mutations.iter().enumerate() {
+            out = format!("{}  u{}: {}\n", out, index, mutation);
+        }
+        out.push_str("}\n");
+        self.run_graphql_query(&out).await
+    }
 }
 
 impl<A> From<String> for ApplicationWrapper<A> {
