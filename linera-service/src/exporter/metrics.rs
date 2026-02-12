@@ -96,14 +96,6 @@ pub(crate) static NOTIFICATIONS_RECEIVED: LazyLock<IntCounter> = LazyLock::new(|
     )
 });
 
-pub(crate) static BLOCKS_INDEXED: LazyLock<IntCounter> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_with_subsystem(
-        "exporter",
-        "blocks_indexed",
-        "Number of blocks indexed into canonical state",
-    )
-});
-
 pub(crate) static CANONICAL_STATE_HEIGHT: LazyLock<IntGauge> = LazyLock::new(|| {
     prometheus_util::register_int_gauge_with_subsystem(
         "exporter",
