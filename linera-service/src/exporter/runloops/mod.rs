@@ -262,7 +262,7 @@ where
     use linera_base::identifiers::BlobType;
     use linera_execution::{system::AdminOperation, Operation, SystemOperation};
 
-    let latest_index = exporter_storage.get_latest_index();
+    let latest_index = exporter_storage.get_latest_index().await;
     if latest_index == 0 {
         tracing::info!("No blocks in canonical state to scan");
         return None;
@@ -915,11 +915,13 @@ mod test {
 
             block_processor_storage.index_block(&block1_id).await?;
             block_processor_storage
-                .push_block(crate::common::CanonicalBlock::new(block1_id.hash, &[]));
+                .push_block(crate::common::CanonicalBlock::new(block1_id.hash, &[]))
+                .await;
 
             block_processor_storage.index_block(&block2_id).await?;
             block_processor_storage
-                .push_block(crate::common::CanonicalBlock::new(block2_id.hash, &[]));
+                .push_block(crate::common::CanonicalBlock::new(block2_id.hash, &[]))
+                .await;
 
             // Save but don't persist the committee blob ID
             block_processor_storage.save().await?;

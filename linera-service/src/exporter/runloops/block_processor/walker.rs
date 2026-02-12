@@ -78,7 +78,7 @@ where
             let block_id = node_visitor.node.block;
             if self.index_block(&block_id).await? {
                 let block_to_push = CanonicalBlock::new(block_id.hash, &blobs_to_send);
-                self.storage.push_block(block_to_push);
+                self.storage.push_block(block_to_push).await;
                 for blob in blobs_to_index_block_with {
                     self.storage.index_blob(blob).ok();
                 }
