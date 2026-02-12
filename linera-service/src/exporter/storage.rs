@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::HashSet,
     marker::PhantomData,
     sync::{atomic::AtomicU64, Arc},
 };
@@ -32,8 +32,6 @@ use crate::{
     common::{BlockId, CanonicalBlock, ExporterError, LiteBlockId},
     state::{BlockExporterStateView, DestinationStates},
 };
-
-const NUM_OF_BLOBS: usize = 20;
 
 pub(super) struct ExporterStorage<S>
 where
@@ -78,8 +76,7 @@ where
         destination_states: DestinationStates,
         limits: LimitsConfig,
     ) -> Self {
-        let shared_canonical_state =
-            CanonicalState::new((limits.auxiliary_cache_size_mb / 3).into(), state_context);
+        let shared_canonical_state = CanonicalState::new(state_context);
         let blobs_cache = Arc::new(FifoCache::with_weighter(
             limits.blob_cache_items_capacity as usize,
             (limits.blob_cache_weight_mb as u64) * 1024 * 1024,
@@ -382,10 +379,6 @@ where
         };
         self.exporter_state_view.post_save();
 
-        // clear the shared state only after persisting it
-        // only matters for the shared updates buffer
-        self.shared_storage.shared_canonical_state.clear();
-
         Ok(())
     }
 }
@@ -394,18 +387,15 @@ where
 struct CanonicalState<C> {
     /// The number of blocks in the canonical state.
     count: usize,
+    /// The number of entries already flushed to the LogView.
+    flushed_count: usize,
     /// The (persistent) storage view that is used to access the canonical state.
     state_context: LogView<C, CanonicalBlock>,
-    /// A cache that stores the canonical blocks.
-    /// This cache is used to speed up access to the canonical state.
-    /// It uses a FIFO eviction policy and is limited by the size of the cache.
-    /// The cache is used to avoid reading the canonical state from the persistent storage
-    /// for every request.
-    state_cache: Arc<FifoCache<usize, CanonicalBlock, CanonicalStateCacheWeighter>>,
-    /// A buffer that stores the updates to the canonical state.
+    /// A buffer that stores all canonical blocks seen since process start.
     ///
-    /// This buffer is used to temporarily hold updates to the canonical state before they are
-    /// flushed to the persistent storage.
+    /// Entries are never removed; this is cheap because [`CanonicalBlock`] is
+    /// just a hash plus blob IDs.  The LogView is only consulted for entries
+    /// from before the current process started.
     state_updates_buffer: Arc<papaya::HashMap<usize, CanonicalBlock>>,
 }
 
@@ -413,20 +403,11 @@ impl<C> CanonicalState<C>
 where
     C: Context + Send + Sync + 'static,
 {
-    fn new(cache_size: usize, state_context: LogView<C, CanonicalBlock>) -> Self {
-        let cache_size = cache_size * 1024 * 1024;
-        let items_capacity = cache_size
-            / (size_of::<usize>()
-                + size_of::<CanonicalBlock>()
-                + NUM_OF_BLOBS * size_of::<BlobId>());
-
+    fn new(state_context: LogView<C, CanonicalBlock>) -> Self {
+        let count = state_context.count();
         Self {
-            count: state_context.count(),
-            state_cache: Arc::new(FifoCache::with_weighter(
-                items_capacity,
-                cache_size as u64,
-                CacheWeighter::default(),
-            )),
+            count,
+            flushed_count: count,
             state_updates_buffer: Arc::new(papaya::HashMap::new()),
             state_context,
         }
@@ -435,7 +416,7 @@ where
     fn clone(&mut self) -> Result<Self, ExporterError> {
         Ok(Self {
             count: self.count,
-            state_cache: self.state_cache.clone(),
+            flushed_count: self.flushed_count,
             state_updates_buffer: self.state_updates_buffer.clone(),
             state_context: self.state_context.clone_unchecked()?,
         })
@@ -447,55 +428,40 @@ where
     }
 
     async fn get(&self, index: usize) -> Result<CanonicalBlock, ExporterError> {
-        match self.state_cache.get_value_or_guard_async(&index).await {
-            Ok(value) => Ok(value),
-            Err(guard) => {
-                let block = if let Some(entry) = {
-                    let pinned = self.state_updates_buffer.pin();
-                    pinned.get(&index).cloned()
-                } {
-                    entry
-                } else {
-                    #[cfg(with_metrics)]
-                    metrics::GET_CANONICAL_BLOCK_HISTOGRAM.measure_latency();
-                    self.state_context
-                        .get(index)
-                        .await?
-                        .ok_or(ExporterError::UnprocessedBlock)?
-                };
-
-                guard.insert(block.clone()).ok();
-                Ok(block)
-            }
+        if let Some(entry) = {
+            let pinned = self.state_updates_buffer.pin();
+            pinned.get(&index).cloned()
+        } {
+            return Ok(entry);
         }
+
+        #[cfg(with_metrics)]
+        metrics::GET_CANONICAL_BLOCK_HISTOGRAM.measure_latency();
+        self.state_context
+            .get(index)
+            .await?
+            .ok_or(ExporterError::UnprocessedBlock)
     }
 
     fn push(&mut self, value: CanonicalBlock) {
         let index = self.next_index();
-        self.state_updates_buffer.pin().insert(index, value.clone());
-        self.state_cache.insert(index, value);
+        self.state_updates_buffer.pin().insert(index, value);
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ExporterError> {
-        for (_, value) in self
-            .state_updates_buffer
-            .pin()
-            .iter()
-            .map(|(key, value)| (*key, value.clone()))
-            .collect::<BTreeMap<_, _>>()
-        {
-            self.state_context.push(value);
+        let pinned = self.state_updates_buffer.pin();
+        for index in self.flushed_count..self.count {
+            if let Some(value) = pinned.get(&index) {
+                self.state_context.push(value.clone());
+            }
         }
+        drop(pinned);
 
         self.state_context.pre_save(batch)?;
         self.state_context.post_save();
+        self.flushed_count = self.count;
 
         Ok(())
-    }
-
-    fn clear(&mut self) {
-        self.state_updates_buffer.pin().clear();
-        self.state_context.rollback();
     }
 
     fn next_index(&mut self) -> usize {
@@ -530,13 +496,6 @@ impl Weighter<CryptoHash, Arc<ConfirmedBlockCertificate>> for BlockCacheWeighter
     }
 }
 
-impl Weighter<usize, CanonicalBlock> for CanonicalStateCacheWeighter {
-    fn weight(&self, _key: &usize, _val: &CanonicalBlock) -> u64 {
-        (size_of::<usize>() + size_of::<CanonicalBlock>() + NUM_OF_BLOBS * size_of::<BlobId>())
-            as u64
-    }
-}
-
 impl<Q, V> Default for CacheWeighter<Q, V> {
     fn default() -> Self {
         Self {
@@ -548,4 +507,3 @@ impl<Q, V> Default for CacheWeighter<Q, V> {
 
 type BlobCacheWeighter = CacheWeighter<BlobId, Arc<Blob>>;
 type BlockCacheWeighter = CacheWeighter<CryptoHash, Arc<ConfirmedBlockCertificate>>;
-type CanonicalStateCacheWeighter = CacheWeighter<usize, CanonicalBlock>;
