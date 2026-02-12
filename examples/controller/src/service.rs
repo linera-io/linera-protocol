@@ -90,6 +90,26 @@ impl ControllerState {
             .map(|bytes| bcs::from_bytes(&bytes).ok())
             .collect::<Option<_>>()
             .expect("Service IDs should be valid data blobs");
+        let local_pending_services = self
+            .local_pending_services
+            .index_values()
+            .await
+            .expect("storage")
+            .into_iter()
+            .map(|(service_id, pending_service)| {
+                (
+                    service_id,
+                    runtime.read_data_blob(service_id),
+                    pending_service,
+                )
+            })
+            .map(|(service_id, bytes, pending_service)| {
+                bcs::from_bytes::<ManagedService>(&bytes)
+                    .ok()
+                    .map(|service| (service_id, (service.chain_id, pending_service)))
+            })
+            .collect::<Option<_>>()
+            .expect("Pending service IDs should be valid data blobs");
         let local_chains = self
             .local_chains
             .indices()
@@ -107,6 +127,7 @@ impl ControllerState {
         LocalWorkerState {
             local_worker,
             local_services,
+            local_pending_services,
             local_chains,
             local_message_policy,
         }
@@ -115,10 +136,10 @@ impl ControllerState {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{collections::HashSet, sync::Arc};
 
     use linera_sdk::{
-        abis::controller::{LocalWorkerState, ManagedService, Worker},
+        abis::controller::{LocalWorkerState, ManagedService, PendingService, Worker},
         linera_base_types::{
             AccountOwner, ApplicationId, BlobContent, ChainId, CryptoHash, DataBlobHash,
         },
@@ -263,6 +284,16 @@ mod tests {
             .insert(&chain2)
             .expect("Failed to insert chain");
 
+        // Add a pending service
+        let pending_service = PendingService {
+            owners_to_remove: HashSet::new(),
+            start_block_height: 1.into(),
+        };
+        state
+            .local_pending_services
+            .insert(&service_id, pending_service)
+            .expect("Failed to insert a pending service");
+
         let runtime = Arc::new(runtime);
         runtime.set_blob(service_id, service_bytes);
 
@@ -292,5 +323,13 @@ mod tests {
         // Verify chains.
         assert_eq!(state.local_chains.len(), 2);
         assert!(state.local_chains.contains(&chain1));
+
+        // Verify pending services.
+        assert_eq!(state.local_pending_services.len(), 1);
+        let (pending_service_id, (pending_chain_id, pending_service)) =
+            &state.local_pending_services[0];
+        assert_eq!(*pending_service_id, service_id);
+        assert_eq!(*pending_chain_id, ChainId::default());
+        assert_eq!(pending_service.start_block_height, 1.into());
     }
 }
