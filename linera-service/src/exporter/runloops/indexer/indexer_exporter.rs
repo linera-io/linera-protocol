@@ -16,7 +16,11 @@ use linera_chain::types::ConfirmedBlockCertificate;
 use linera_rpc::NodeOptions;
 use linera_service::config::DestinationId;
 use linera_storage::Storage;
-use tokio::{select, sync::mpsc::Sender, time::sleep};
+use tokio::{
+    select,
+    sync::mpsc::Sender,
+    time::{interval_at, sleep, Instant},
+};
 use tonic::Streaming;
 
 use super::indexer_api::Element;
@@ -171,6 +175,7 @@ where
     }
 
     async fn run(&mut self) -> anyhow::Result<()> {
+        let keepalive_period = Duration::from_secs(30);
         let mut index = self.start_height;
         let mut futures = FuturesOrdered::new();
         while futures.len() < self.queue_size {
@@ -178,24 +183,39 @@ where
             index += 1;
         }
 
-        while let Some((block, blobs)) = futures.next().await.transpose()? {
-            for blob in blobs {
-                tracing::info!(
-                    blob_id=?blob.id(),
-                    "dispatching blob"
-                );
-                self.buffer.send(blob.try_into().unwrap()).await?
+        let mut keepalive = interval_at(Instant::now() + keepalive_period, keepalive_period);
+
+        loop {
+            select! {
+                result = futures.next() => {
+                    match result.transpose()? {
+                        Some((block, blobs)) => {
+                            for blob in blobs {
+                                tracing::info!(
+                                    blob_id=?blob.id(),
+                                    "dispatching blob"
+                                );
+                                self.buffer.send(blob.try_into().unwrap()).await?
+                            }
+
+                            let block_id = BlockId::from_confirmed_block(block.value());
+                            tracing::info!(?block_id, "dispatching block");
+                            self.buffer.send(block.try_into().unwrap()).await?;
+
+                            futures.push_back(self.get_block_with_blobs_task(index));
+                            index += 1;
+                            keepalive.reset();
+                        }
+                        None => return Ok(()),
+                    }
+                }
+
+                _ = keepalive.tick() => {
+                    tracing::trace!("sending keepalive to indexer");
+                    self.buffer.send(Element { payload: None }).await?;
+                }
             }
-
-            let block_id = BlockId::from_confirmed_block(block.value());
-            tracing::info!(?block_id, "dispatching block");
-            self.buffer.send(block.try_into().unwrap()).await?;
-
-            futures.push_back(self.get_block_with_blobs_task(index));
-            index += 1;
         }
-
-        Ok(())
     }
 
     async fn get_block_with_blobs_task(

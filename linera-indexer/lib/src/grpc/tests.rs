@@ -139,8 +139,8 @@ async fn test_process_element_empty_payload() {
     let element = Element { payload: None };
 
     match IndexerGrpcServer::process_element(&database, &mut pending_blobs, element).await {
-        Err(ProcessingError::EmptyPayload) => {}
-        _ => panic!("Expected EmptyPayload error"),
+        Ok(None) => {}
+        _ => panic!("Expected Ok(None) for empty payload"),
     }
 }
 
