@@ -12,7 +12,7 @@ use futures::{stream::BoxStream, Stream, StreamExt};
 use linera_base::{data_types::Blob, identifiers::BlobId};
 use linera_chain::types::ConfirmedBlockCertificate;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use crate::{
     db::{sqlite::SqliteError, IndexerDatabase},
@@ -177,8 +177,8 @@ where
                 Ok(Some(()))
             }
             None => {
-                warn!("Received empty element");
-                Err(ProcessingError::EmptyPayload)
+                tracing::trace!("received keepalive element, skipping");
+                Ok(None)
             }
         }
     }
