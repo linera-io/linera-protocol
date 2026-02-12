@@ -212,6 +212,8 @@ where
 
                 _ = keepalive.tick() => {
                     tracing::trace!("sending keepalive to indexer");
+                    #[cfg(with_metrics)]
+                    crate::metrics::KEEPALIVES_SENT.inc();
                     self.buffer.send(Element { payload: None }).await?;
                 }
             }

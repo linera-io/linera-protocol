@@ -32,6 +32,8 @@ impl NotifierService for ExporterService {
                             ?block_id,
                             "received new block notification from notifier service"
                         );
+                        #[cfg(with_metrics)]
+                        crate::metrics::NOTIFICATIONS_RECEIVED.inc();
                         block_id
                     }
                     Err(error) => {

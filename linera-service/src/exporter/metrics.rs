@@ -4,7 +4,7 @@
 use std::sync::LazyLock;
 
 use linera_base::prometheus_util::{self};
-use prometheus::{Histogram, HistogramVec, IntCounterVec, IntGauge, IntGaugeVec};
+use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec};
 
 pub(crate) static GET_BLOB_HISTOGRAM: LazyLock<Histogram> = LazyLock::new(|| {
     prometheus_util::register_histogram_with_subsystem(
@@ -85,5 +85,37 @@ pub(crate) static EXPORTER_NOTIFICATION_QUEUE_LENGTH: LazyLock<IntGauge> = LazyL
         "exporter",
         "notification_queue_length",
         "Length of the notification queue for the exporter service",
+    )
+});
+
+pub(crate) static NOTIFICATIONS_RECEIVED: LazyLock<IntCounter> = LazyLock::new(|| {
+    prometheus_util::register_int_counter_with_subsystem(
+        "exporter",
+        "notifications_received",
+        "Number of block notifications received from the notifier service",
+    )
+});
+
+pub(crate) static BLOCKS_INDEXED: LazyLock<IntCounter> = LazyLock::new(|| {
+    prometheus_util::register_int_counter_with_subsystem(
+        "exporter",
+        "blocks_indexed",
+        "Number of blocks indexed into canonical state",
+    )
+});
+
+pub(crate) static CANONICAL_STATE_HEIGHT: LazyLock<IntGauge> = LazyLock::new(|| {
+    prometheus_util::register_int_gauge_with_subsystem(
+        "exporter",
+        "canonical_state_height",
+        "Current height of the canonical state",
+    )
+});
+
+pub(crate) static KEEPALIVES_SENT: LazyLock<IntCounter> = LazyLock::new(|| {
+    prometheus_util::register_int_counter_with_subsystem(
+        "exporter",
+        "keepalives_sent",
+        "Number of keepalive messages sent to the indexer",
     )
 });

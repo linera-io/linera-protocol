@@ -139,7 +139,9 @@ where
     }
 
     fn push_block(&mut self, block: CanonicalBlock) {
-        self.shared_canonical_state.push(block)
+        self.shared_canonical_state.push(block);
+        #[cfg(with_metrics)]
+        metrics::CANONICAL_STATE_HEIGHT.set(self.shared_canonical_state.latest_index() as i64);
     }
 
     fn clone(&mut self) -> Result<Self, ExporterError> {

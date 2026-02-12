@@ -79,6 +79,8 @@ where
             if self.index_block(&block_id).await? {
                 let block_to_push = CanonicalBlock::new(block_id.hash, &blobs_to_send);
                 self.storage.push_block(block_to_push);
+                #[cfg(with_metrics)]
+                crate::metrics::BLOCKS_INDEXED.inc();
                 for blob in blobs_to_index_block_with {
                     self.storage.index_blob(blob).ok();
                 }
