@@ -14,12 +14,238 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, Round, TimeDelta},
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, GenericApplicationId, ModuleId},
 };
+use linera_eip712_derive::Eip712Struct;
 use linera_execution::{
     system::{AdminOperation, OpenChainConfig},
     Operation, SystemOperation,
 };
 
 use super::{MessageAction, ProposalContent, Transaction};
+
+// -- Eip712Struct trait --
+
+pub(crate) trait Eip712Struct {
+    const PRIMARY_DEF: &'static str;
+    fn eip712_type_hash() -> &'static [u8; 32];
+    fn hash_struct(&self) -> [u8; 32];
+    fn to_eip712_json(&self) -> serde_json::Value;
+    fn eip712_json_type_def() -> serde_json::Value;
+}
+
+// -- Derive structs --
+
+#[derive(Eip712Struct)]
+#[eip712(name = "TransferOp")]
+struct TransferOpEip712 {
+    #[eip712(soltype = "string")]
+    owner: String,
+    #[eip712(soltype = "string")]
+    recipient: String,
+    #[eip712(soltype = "uint128")]
+    amount: u128,
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "ClaimOp")]
+struct ClaimOpEip712 {
+    #[eip712(soltype = "string")]
+    owner: String,
+    #[eip712(soltype = "string")]
+    target_chain: String,
+    #[eip712(soltype = "string")]
+    recipient: String,
+    #[eip712(soltype = "uint128")]
+    amount: u128,
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "ReceiveMsg")]
+struct ReceiveMsgEip712 {
+    #[eip712(soltype = "string")]
+    origin: String,
+    #[eip712(soltype = "string")]
+    action: String,
+    #[eip712(soltype = "uint32")]
+    message_count: u32,
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "UserOp")]
+struct UserOpEip712 {
+    #[eip712(soltype = "string")]
+    application_id: String,
+    #[eip712(soltype = "bytes32")]
+    data_hash: [u8; 32],
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "WeightedOwner")]
+struct WeightedOwnerEip712 {
+    #[eip712(soltype = "string")]
+    owner: String,
+    #[eip712(soltype = "uint64")]
+    weight: u64,
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "CloseChainOp")]
+struct CloseChainOpEip712 {}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "OpenChainOp", references(WeightedOwnerEip712))]
+struct OpenChainOpEip712 {
+    #[eip712(soltype = "uint128")]
+    balance: u128,
+    #[eip712(soltype = "string[]")]
+    super_owners: Vec<String>,
+    #[eip712(soltype = "WeightedOwner[]")]
+    owners: Vec<WeightedOwnerEip712>,
+    #[eip712(soltype = "uint32")]
+    multi_leader_rounds: u32,
+    #[eip712(soltype = "bool")]
+    open_multi_leader_rounds: bool,
+    #[eip712(soltype = "uint64")]
+    base_timeout_micros: u64,
+    #[eip712(soltype = "uint64")]
+    timeout_increment_micros: u64,
+    #[eip712(soltype = "uint64")]
+    fallback_duration_micros: u64,
+    #[eip712(soltype = "uint64")]
+    fast_round_duration_micros: u64,
+    #[eip712(soltype = "bytes32")]
+    permissions_hash: [u8; 32],
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "ChangeOwnershipOp", references(WeightedOwnerEip712))]
+struct ChangeOwnershipOpEip712 {
+    #[eip712(soltype = "string[]")]
+    super_owners: Vec<String>,
+    #[eip712(soltype = "WeightedOwner[]")]
+    owners: Vec<WeightedOwnerEip712>,
+    #[eip712(soltype = "uint32")]
+    multi_leader_rounds: u32,
+    #[eip712(soltype = "bool")]
+    open_multi_leader_rounds: bool,
+    #[eip712(soltype = "uint64")]
+    base_timeout_micros: u64,
+    #[eip712(soltype = "uint64")]
+    timeout_increment_micros: u64,
+    #[eip712(soltype = "uint64")]
+    fallback_duration_micros: u64,
+    #[eip712(soltype = "uint64")]
+    fast_round_duration_micros: u64,
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "ChangeAppPermissionsOp")]
+struct ChangeAppPermissionsOpEip712 {
+    #[eip712(soltype = "bool")]
+    has_execute_filter: bool,
+    #[eip712(soltype = "string[]")]
+    execute_operations: Vec<String>,
+    #[eip712(soltype = "string[]")]
+    mandatory_applications: Vec<String>,
+    #[eip712(soltype = "string[]")]
+    close_chain_apps: Vec<String>,
+    #[eip712(soltype = "string[]")]
+    change_permissions_apps: Vec<String>,
+    #[eip712(soltype = "bool")]
+    has_oracle_filter: bool,
+    #[eip712(soltype = "string[]")]
+    oracle_apps: Vec<String>,
+    #[eip712(soltype = "bool")]
+    has_http_filter: bool,
+    #[eip712(soltype = "string[]")]
+    http_apps: Vec<String>,
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "PublishModuleOp")]
+struct PublishModuleOpEip712 {
+    #[eip712(soltype = "bytes32")]
+    contract_blob_hash: [u8; 32],
+    #[eip712(soltype = "bytes32")]
+    service_blob_hash: [u8; 32],
+    #[eip712(soltype = "string")]
+    vm_runtime: String,
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "PublishDataBlobOp")]
+struct PublishDataBlobOpEip712 {
+    #[eip712(soltype = "bytes32")]
+    blob_hash: [u8; 32],
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "VerifyBlobOp")]
+struct VerifyBlobOpEip712 {
+    #[eip712(soltype = "string")]
+    blob_type: String,
+    #[eip712(soltype = "bytes32")]
+    hash: [u8; 32],
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "CreateApplicationOp")]
+struct CreateApplicationOpEip712 {
+    #[eip712(soltype = "bytes32")]
+    contract_blob_hash: [u8; 32],
+    #[eip712(soltype = "bytes32")]
+    service_blob_hash: [u8; 32],
+    #[eip712(soltype = "string")]
+    vm_runtime: String,
+    #[eip712(soltype = "bytes32")]
+    parameters_hash: [u8; 32],
+    #[eip712(soltype = "bytes32")]
+    instantiation_argument_hash: [u8; 32],
+    #[eip712(soltype = "string[]")]
+    required_application_ids: Vec<String>,
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "AdminOp")]
+struct AdminOpEip712 {
+    #[eip712(soltype = "string")]
+    operation: String,
+    #[eip712(soltype = "uint64")]
+    epoch: u64,
+    #[eip712(soltype = "bytes32")]
+    blob_hash: [u8; 32],
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "ProcessNewEpochOp")]
+struct ProcessNewEpochOpEip712 {
+    #[eip712(soltype = "uint64")]
+    epoch: u64,
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "ProcessRemovedEpochOp")]
+struct ProcessRemovedEpochOpEip712 {
+    #[eip712(soltype = "uint64")]
+    epoch: u64,
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "StreamUpdate")]
+struct StreamUpdateEip712 {
+    #[eip712(soltype = "string")]
+    chain_id: String,
+    #[eip712(soltype = "string")]
+    stream_id: String,
+    #[eip712(soltype = "uint32")]
+    index: u32,
+}
+
+#[derive(Eip712Struct)]
+#[eip712(name = "UpdateStreamsOp", references(StreamUpdateEip712))]
+struct UpdateStreamsOpEip712 {
+    #[eip712(soltype = "StreamUpdate[]")]
+    updates: Vec<StreamUpdateEip712>,
+}
 
 // -- EIP-712 type strings --
 //
@@ -1581,5 +1807,485 @@ mod tests {
         let json = eip712_typed_data_json(&proposal);
         let json_hash = linera_base::crypto::eip712::compute_eip712_hash(&json);
         assert_eq!(direct_hash, json_hash);
+    }
+
+    // -- Regression tests: derived structs match hand-written hash functions --
+
+    #[test]
+    fn derived_primary_def_matches_type_string() {
+        assert_eq!(TransferOpEip712::PRIMARY_DEF, TRANSFER_OP_TYPE);
+        assert_eq!(ClaimOpEip712::PRIMARY_DEF, CLAIM_OP_TYPE);
+        assert_eq!(ReceiveMsgEip712::PRIMARY_DEF, RECEIVE_MSG_TYPE);
+        assert_eq!(UserOpEip712::PRIMARY_DEF, USER_OP_TYPE);
+        assert_eq!(WeightedOwnerEip712::PRIMARY_DEF, WEIGHTED_OWNER_TYPE);
+        assert_eq!(CloseChainOpEip712::PRIMARY_DEF, CLOSE_CHAIN_OP_TYPE);
+        assert_eq!(PublishModuleOpEip712::PRIMARY_DEF, PUBLISH_MODULE_OP_TYPE);
+        assert_eq!(
+            PublishDataBlobOpEip712::PRIMARY_DEF,
+            PUBLISH_DATA_BLOB_OP_TYPE
+        );
+        assert_eq!(VerifyBlobOpEip712::PRIMARY_DEF, VERIFY_BLOB_OP_TYPE);
+        assert_eq!(AdminOpEip712::PRIMARY_DEF, ADMIN_OP_TYPE);
+        assert_eq!(
+            ProcessNewEpochOpEip712::PRIMARY_DEF,
+            PROCESS_NEW_EPOCH_OP_TYPE
+        );
+        assert_eq!(
+            ProcessRemovedEpochOpEip712::PRIMARY_DEF,
+            PROCESS_REMOVED_EPOCH_OP_TYPE
+        );
+        assert_eq!(StreamUpdateEip712::PRIMARY_DEF, STREAM_UPDATE_TYPE);
+    }
+
+    #[test]
+    fn derived_type_hash_matches_type_string_with_refs() {
+        // Types with references append referenced PRIMARY_DEFs sorted.
+        assert_eq!(OpenChainOpEip712::PRIMARY_DEF, "OpenChainOp(uint128 balance,string[] superOwners,WeightedOwner[] owners,uint32 multiLeaderRounds,bool openMultiLeaderRounds,uint64 baseTimeoutMicros,uint64 timeoutIncrementMicros,uint64 fallbackDurationMicros,uint64 fastRoundDurationMicros,bytes32 permissionsHash)");
+
+        // The full type string for OpenChainOp is PRIMARY_DEF + sorted references.
+        assert_eq!(
+            *OpenChainOpEip712::eip712_type_hash(),
+            *OPEN_CHAIN_OP_TYPE_HASH
+        );
+        assert_eq!(
+            *ChangeOwnershipOpEip712::eip712_type_hash(),
+            *CHANGE_OWNERSHIP_OP_TYPE_HASH
+        );
+        assert_eq!(
+            *UpdateStreamsOpEip712::eip712_type_hash(),
+            *UPDATE_STREAMS_OP_TYPE_HASH
+        );
+    }
+
+    #[test]
+    fn derived_type_hash_matches_precomputed() {
+        assert_eq!(
+            *TransferOpEip712::eip712_type_hash(),
+            *TRANSFER_OP_TYPE_HASH
+        );
+        assert_eq!(*ClaimOpEip712::eip712_type_hash(), *CLAIM_OP_TYPE_HASH);
+        assert_eq!(
+            *ReceiveMsgEip712::eip712_type_hash(),
+            *RECEIVE_MSG_TYPE_HASH
+        );
+        assert_eq!(*UserOpEip712::eip712_type_hash(), *USER_OP_TYPE_HASH);
+        assert_eq!(
+            *WeightedOwnerEip712::eip712_type_hash(),
+            *WEIGHTED_OWNER_TYPE_HASH
+        );
+        assert_eq!(
+            *CloseChainOpEip712::eip712_type_hash(),
+            *CLOSE_CHAIN_OP_TYPE_HASH
+        );
+        assert_eq!(
+            *ChangeAppPermissionsOpEip712::eip712_type_hash(),
+            *CHANGE_APP_PERMISSIONS_OP_TYPE_HASH
+        );
+        assert_eq!(
+            *PublishModuleOpEip712::eip712_type_hash(),
+            *PUBLISH_MODULE_OP_TYPE_HASH
+        );
+        assert_eq!(
+            *PublishDataBlobOpEip712::eip712_type_hash(),
+            *PUBLISH_DATA_BLOB_OP_TYPE_HASH
+        );
+        assert_eq!(
+            *VerifyBlobOpEip712::eip712_type_hash(),
+            *VERIFY_BLOB_OP_TYPE_HASH
+        );
+        assert_eq!(
+            *CreateApplicationOpEip712::eip712_type_hash(),
+            *CREATE_APPLICATION_OP_TYPE_HASH
+        );
+        assert_eq!(*AdminOpEip712::eip712_type_hash(), *ADMIN_OP_TYPE_HASH);
+        assert_eq!(
+            *ProcessNewEpochOpEip712::eip712_type_hash(),
+            *PROCESS_NEW_EPOCH_OP_TYPE_HASH
+        );
+        assert_eq!(
+            *ProcessRemovedEpochOpEip712::eip712_type_hash(),
+            *PROCESS_REMOVED_EPOCH_OP_TYPE_HASH
+        );
+        assert_eq!(
+            *StreamUpdateEip712::eip712_type_hash(),
+            *STREAM_UPDATE_TYPE_HASH
+        );
+    }
+
+    #[test]
+    fn derived_transfer_hash_matches_old() {
+        let owner = AccountOwner::Address20([0xAB; 20]);
+        let recipient_chain = test_chain_id();
+        let recipient_owner = AccountOwner::Address20([0xCD; 20]);
+        let amount = Amount::from_tokens(100);
+
+        let old = hash_transfer_op(&owner, &recipient_chain, &recipient_owner, amount);
+        let derived = TransferOpEip712 {
+            owner: format_account_owner(&owner),
+            recipient: format_account(&recipient_chain, &recipient_owner),
+            amount: amount.to_attos(),
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_claim_hash_matches_old() {
+        let owner = AccountOwner::Address20([0xAB; 20]);
+        let target_chain = test_chain_id();
+        let recipient_chain = test_chain_id();
+        let recipient_owner = AccountOwner::Address20([0xCD; 20]);
+        let amount = Amount::from_tokens(50);
+
+        let old = hash_claim_op(
+            &owner,
+            &target_chain,
+            &recipient_chain,
+            &recipient_owner,
+            amount,
+        );
+        let derived = ClaimOpEip712 {
+            owner: format_account_owner(&owner),
+            target_chain: format_chain_id(&target_chain),
+            recipient: format_account(&recipient_chain, &recipient_owner),
+            amount: amount.to_attos(),
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_receive_msg_hash_matches_old() {
+        let origin = test_chain_id();
+        let action = MessageAction::Accept;
+        let count = 5u32;
+
+        let old = hash_receive_msg(&origin, &action, count);
+        let derived = ReceiveMsgEip712 {
+            origin: format_chain_id(&origin),
+            action: format_message_action(&action).to_string(),
+            message_count: count,
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_user_op_hash_matches_old() {
+        let app_id = ApplicationId::default();
+        let bytes = b"user op data";
+
+        let old = hash_user_op(&app_id, bytes);
+        let derived = UserOpEip712 {
+            application_id: format_application_id(&app_id),
+            data_hash: keccak256(bytes).0,
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_close_chain_hash_matches_old() {
+        let old = hash_close_chain_op();
+        let derived = CloseChainOpEip712 {}.hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_publish_data_blob_hash_matches_old() {
+        let blob_hash = CryptoHash::new(&TestString::new("blob"));
+        let old = hash_publish_data_blob_op(&blob_hash);
+        let derived = PublishDataBlobOpEip712 {
+            blob_hash: blob_hash.into(),
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_admin_op_hash_matches_old() {
+        use linera_base::data_types::Epoch;
+        use linera_execution::system::AdminOperation;
+
+        let admin_op = AdminOperation::CreateCommittee {
+            epoch: Epoch(42),
+            blob_hash: CryptoHash::new(&TestString::new("committee")),
+        };
+        let old = hash_admin_op(&admin_op);
+        let derived = AdminOpEip712 {
+            operation: "CreateCommittee".to_string(),
+            epoch: 42u64,
+            blob_hash: CryptoHash::new(&TestString::new("committee")).into(),
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_process_epoch_hashes_match_old() {
+        let old_new = hash_process_new_epoch_op(7);
+        let derived_new = ProcessNewEpochOpEip712 { epoch: 7 }.hash_struct();
+        assert_eq!(old_new, derived_new);
+
+        let old_removed = hash_process_removed_epoch_op(3);
+        let derived_removed = ProcessRemovedEpochOpEip712 { epoch: 3 }.hash_struct();
+        assert_eq!(old_removed, derived_removed);
+    }
+
+    #[test]
+    fn derived_weighted_owner_hash_matches_old() {
+        let owner_str = "0xabababababababababababababababababababab";
+        let weight = 100u64;
+        let old = hash_weighted_owner(owner_str, weight);
+        let derived = WeightedOwnerEip712 {
+            owner: owner_str.to_string(),
+            weight,
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_publish_module_hash_matches_old() {
+        let module_id = ModuleId::new(
+            CryptoHash::new(&TestString::new("contract")),
+            CryptoHash::new(&TestString::new("service")),
+            linera_base::vm::VmRuntime::Wasm,
+        );
+        let old = hash_publish_module_op(&module_id);
+        let derived = PublishModuleOpEip712 {
+            contract_blob_hash: module_id.contract_blob_hash.into(),
+            service_blob_hash: module_id.service_blob_hash.into(),
+            vm_runtime: format_vm_runtime(&module_id).to_string(),
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_verify_blob_hash_matches_old() {
+        let blob_type = BlobType::Data;
+        let hash = CryptoHash::new(&TestString::new("blob"));
+        let old = hash_verify_blob_op(&blob_type, &hash);
+        let derived = VerifyBlobOpEip712 {
+            blob_type: format_blob_type(&blob_type).to_string(),
+            hash: hash.into(),
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_create_application_hash_matches_old() {
+        let module_id = ModuleId::new(
+            CryptoHash::new(&TestString::new("contract")),
+            CryptoHash::new(&TestString::new("service")),
+            linera_base::vm::VmRuntime::Wasm,
+        );
+        let parameters = b"params";
+        let instantiation_argument = b"init_arg";
+        let req_ids = vec![];
+
+        let old =
+            hash_create_application_op(&module_id, parameters, instantiation_argument, &req_ids);
+        let derived = CreateApplicationOpEip712 {
+            contract_blob_hash: module_id.contract_blob_hash.into(),
+            service_blob_hash: module_id.service_blob_hash.into(),
+            vm_runtime: format_vm_runtime(&module_id).to_string(),
+            parameters_hash: keccak256(parameters).0,
+            instantiation_argument_hash: keccak256(instantiation_argument).0,
+            required_application_ids: req_ids.iter().map(format_application_id).collect(),
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_stream_update_hash_matches_old() {
+        let chain_id = test_chain_id();
+        let stream_id = linera_base::identifiers::StreamId {
+            application_id: GenericApplicationId::System,
+            stream_name: linera_base::identifiers::StreamName(vec![0x01, 0x02]),
+        };
+        let index = 10u32;
+
+        let sid = format_stream_id(&stream_id);
+        let old = hash_stream_update(&chain_id, &sid, index);
+        let derived = StreamUpdateEip712 {
+            chain_id: format_chain_id(&chain_id),
+            stream_id: sid,
+            index,
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_update_streams_hash_matches_old() {
+        let chain_id = test_chain_id();
+        let stream_id = linera_base::identifiers::StreamId {
+            application_id: GenericApplicationId::System,
+            stream_name: linera_base::identifiers::StreamName(vec![0x01, 0x02]),
+        };
+        let updates = vec![(chain_id, stream_id.clone(), 10u32)];
+
+        let old = hash_update_streams_op(&updates);
+        let derived = UpdateStreamsOpEip712 {
+            updates: updates
+                .iter()
+                .map(|(cid, sid, idx)| StreamUpdateEip712 {
+                    chain_id: format_chain_id(cid),
+                    stream_id: format_stream_id(sid),
+                    index: *idx,
+                })
+                .collect(),
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_change_ownership_hash_matches_old() {
+        let owner1 = AccountOwner::Address20([0xAA; 20]);
+        let owner2 = AccountOwner::Address20([0xBB; 20]);
+        let timeout = linera_base::ownership::TimeoutConfig {
+            base_timeout: TimeDelta::from_micros(1000),
+            timeout_increment: TimeDelta::from_micros(500),
+            fallback_duration: TimeDelta::from_micros(2000),
+            fast_round_duration: Some(TimeDelta::from_micros(100)),
+        };
+
+        let old = hash_change_ownership_op(&[owner1], &[(owner2, 50)], 3, true, &timeout);
+
+        let (so, o) = extract_ownership_vecs(&[owner1], &[(owner2, 50)]);
+        let derived = ChangeOwnershipOpEip712 {
+            super_owners: so,
+            owners: o
+                .iter()
+                .map(|(owner, weight)| WeightedOwnerEip712 {
+                    owner: owner.clone(),
+                    weight: *weight,
+                })
+                .collect(),
+            multi_leader_rounds: 3,
+            open_multi_leader_rounds: true,
+            base_timeout_micros: timedelta_micros(&timeout.base_timeout),
+            timeout_increment_micros: timedelta_micros(&timeout.timeout_increment),
+            fallback_duration_micros: timedelta_micros(&timeout.fallback_duration),
+            fast_round_duration_micros: timeout
+                .fast_round_duration
+                .map(|d| timedelta_micros(&d))
+                .unwrap_or(0),
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_change_app_permissions_hash_matches_old() {
+        let perms = ApplicationPermissions {
+            execute_operations: Some(vec![]),
+            mandatory_applications: vec![],
+            close_chain: vec![],
+            change_application_permissions: vec![],
+            call_service_as_oracle: None,
+            make_http_requests: None,
+        };
+
+        let old = hash_change_app_permissions_op(&perms);
+        let derived = ChangeAppPermissionsOpEip712 {
+            has_execute_filter: perms.execute_operations.is_some(),
+            execute_operations: perms
+                .execute_operations
+                .as_deref()
+                .unwrap_or(&[])
+                .iter()
+                .map(|id| format_application_id(id))
+                .collect(),
+            mandatory_applications: perms
+                .mandatory_applications
+                .iter()
+                .map(format_application_id)
+                .collect(),
+            close_chain_apps: perms
+                .close_chain
+                .iter()
+                .map(format_application_id)
+                .collect(),
+            change_permissions_apps: perms
+                .change_application_permissions
+                .iter()
+                .map(format_application_id)
+                .collect(),
+            has_oracle_filter: perms.call_service_as_oracle.is_some(),
+            oracle_apps: perms
+                .call_service_as_oracle
+                .as_deref()
+                .unwrap_or(&[])
+                .iter()
+                .map(|id| format_application_id(id))
+                .collect(),
+            has_http_filter: perms.make_http_requests.is_some(),
+            http_apps: perms
+                .make_http_requests
+                .as_deref()
+                .unwrap_or(&[])
+                .iter()
+                .map(|id| format_application_id(id))
+                .collect(),
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
+    }
+
+    #[test]
+    fn derived_open_chain_hash_matches_old() {
+        let ownership = linera_base::ownership::ChainOwnership {
+            super_owners: Default::default(),
+            owners: Default::default(),
+            multi_leader_rounds: 0,
+            open_multi_leader_rounds: false,
+            timeout_config: linera_base::ownership::TimeoutConfig {
+                base_timeout: TimeDelta::from_micros(10000),
+                timeout_increment: TimeDelta::from_micros(1000),
+                fallback_duration: TimeDelta::from_micros(5000),
+                fast_round_duration: None,
+            },
+        };
+        let perms = ApplicationPermissions::default();
+        let config = OpenChainConfig {
+            ownership: ownership.clone(),
+            balance: Amount::from_tokens(10),
+            application_permissions: perms.clone(),
+        };
+
+        let old = hash_open_chain_op(&config);
+
+        let (so, o) = extract_chain_ownership_vecs(&ownership);
+        let perms_hash = hash_app_permissions(&perms);
+        let derived = OpenChainOpEip712 {
+            balance: config.balance.to_attos(),
+            super_owners: so,
+            owners: o
+                .iter()
+                .map(|(owner, weight)| WeightedOwnerEip712 {
+                    owner: owner.clone(),
+                    weight: *weight,
+                })
+                .collect(),
+            multi_leader_rounds: ownership.multi_leader_rounds,
+            open_multi_leader_rounds: ownership.open_multi_leader_rounds,
+            base_timeout_micros: timedelta_micros(&ownership.timeout_config.base_timeout),
+            timeout_increment_micros: timedelta_micros(&ownership.timeout_config.timeout_increment),
+            fallback_duration_micros: timedelta_micros(&ownership.timeout_config.fallback_duration),
+            fast_round_duration_micros: ownership
+                .timeout_config
+                .fast_round_duration
+                .map(|d| timedelta_micros(&d))
+                .unwrap_or(0),
+            permissions_hash: perms_hash,
+        }
+        .hash_struct();
+        assert_eq!(old, derived);
     }
 }

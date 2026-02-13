@@ -34,6 +34,7 @@ axum = { workspace = true, optional = true }
 custom_debug_derive.workspace = true
 futures.workspace = true
 linera-base.workspace = true
+linera-eip712-derive.workspace = true
 linera-execution.workspace = true
 linera-views.workspace = true
 prometheus = { workspace = true, optional = true }
