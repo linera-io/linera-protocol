@@ -211,3 +211,7 @@ Messages are sent between chains to coordinate state:
 | `Stop { service_id, new_owners }` | Controller -> Worker | Stop a service, initiating ownership handoff via the service chain |
 | `FollowChain { chain_id }` | Controller -> Worker | Follow a chain |
 | `ForgetChain { chain_id }` | Controller -> Worker | Stop following a chain |
+| `AddOwners { service_id, new_owners }` | Worker -> Service Chain | Add new owners to a service chain during handoff |
+| `RemoveOwners { owners_to_remove }` | Worker -> Service Chain | Remove old owners from a service chain after handoff |
+| `OwnersAdded { service_id, added_at }` | Service Chain -> Worker | Confirm new owners were added at a given block height |
+| `HandoffStarted { service_id, target_block_height }` | Worker -> Controller | Notify controller that handoff phase 1 is complete |
