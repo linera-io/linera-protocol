@@ -44,7 +44,7 @@ pub enum Message {
         admin: AccountOwner,
         command: ControllerCommand,
     },
-    // -- Messages sent to the workers from the controller chain --
+    // -- Messages sent to the workers' control chains from the controller chain --
     Reset,
     Start {
         service_id: ManagedServiceId,
@@ -61,7 +61,7 @@ pub enum Message {
     ForgetChain {
         chain_id: ChainId,
     },
-    // -- Messages sent from the worker to a service chain --
+    // -- Messages sent from the worker's control chain to a service chain --
     AddOwners {
         service_id: ManagedServiceId,
         new_owners: HashSet<AccountOwner>,
@@ -69,12 +69,12 @@ pub enum Message {
     RemoveOwners {
         owners_to_remove: HashSet<AccountOwner>,
     },
-    // -- Messages sent from a service chain to the worker --
+    // -- Messages sent from a service chain to the worker's control chain --
     OwnersAdded {
         service_id: ManagedServiceId,
         added_at: BlockHeight,
     },
-    // -- Messages sent from the workers to the controller chain --
+    // -- Messages sent from the workers' control chains to the controller chain --
     HandoffStarted {
         service_id: ManagedServiceId,
         target_block_height: BlockHeight,
@@ -185,7 +185,7 @@ impl Contract for ControllerContract {
                 assert_eq!(
                     self.runtime.chain_id(),
                     self.runtime.application_creator_chain_id(),
-                    "ExecuteWorkerCommand can only be executed on the chain that created the PM engine"
+                    "ExecuteWorkerCommand can only be executed on the chain that created the controller"
                 );
                 let origin_chain_id = self.runtime.message_origin_chain_id().expect(
                     "Incoming message origin chain ID has to be available when executing a message",
@@ -197,7 +197,7 @@ impl Contract for ControllerContract {
                 assert_eq!(
                     self.runtime.chain_id(),
                     self.runtime.application_creator_chain_id(),
-                    "ExecuteControllerCommand can only be executed on the chain that created the PM engine"
+                    "ExecuteControllerCommand can only be executed on the chain that created the controller"
                 );
                 self.execute_controller_command_locally(admin, command)
                     .await;
@@ -209,7 +209,7 @@ impl Contract for ControllerContract {
                 assert_eq!(
                     self.runtime.chain_id(),
                     self.runtime.application_creator_chain_id(),
-                    "HandoffStarted can only be executed on the chain that created the PM engine"
+                    "HandoffStarted can only be executed on the chain that created the controller"
                 );
                 let service_pending_handoff = self
                     .state
