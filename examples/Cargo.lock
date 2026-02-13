@@ -3680,6 +3680,7 @@ name = "linera-chain"
 version = "0.16.0"
 dependencies = [
  "allocative",
+ "alloy-primitives",
  "anyhow",
  "async-graphql",
  "axum",
@@ -3687,6 +3688,7 @@ dependencies = [
  "custom_debug_derive",
  "futures",
  "linera-base",
+ "linera-eip712-derive",
  "linera-execution",
  "linera-views",
  "prometheus",
@@ -3739,6 +3741,16 @@ dependencies = [
  "trait-variant",
  "wasm-bindgen",
  "web-thread-pool",
+]
+
+[[package]]
+name = "linera-eip712-derive"
+version = "0.15.12"
+dependencies = [
+ "convert_case",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
 ]
 
 [[package]]
