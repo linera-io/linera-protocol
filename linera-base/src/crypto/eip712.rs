@@ -206,6 +206,31 @@ fn encode_atomic(type_name: &str, value: &serde_json::Value) -> [u8; 32] {
             }
             buf
         }
+        "address" => {
+            // Addresses are encoded as uint160 (20 bytes, left-padded to 32).
+            let s = value.as_str().expect("expected hex address string");
+            let s = s.strip_prefix("0x").unwrap_or(s);
+            let bytes = hex::decode(s).expect("invalid hex in address");
+            assert!(bytes.len() == 20, "address must be exactly 20 bytes");
+            let mut buf = [0u8; 32];
+            buf[12..32].copy_from_slice(&bytes);
+            buf
+        }
+        "uint256" => {
+            // Accept decimal string or JSON number.
+            let s = value
+                .as_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| value.as_u64().expect("expected uint256 value").to_string());
+            let n: [u8; 32] = {
+                let bytes = s
+                    .parse::<alloy_primitives::U256>()
+                    .expect("invalid uint256")
+                    .to_be_bytes::<32>();
+                bytes
+            };
+            n
+        }
         _ => panic!("unsupported EIP-712 atomic type: {type_name}"),
     }
 }
@@ -250,5 +275,162 @@ mod tests {
         let hash1 = compute_eip712_hash(json);
         let hash2 = compute_eip712_hash(json);
         assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_uint64_string_encoding() {
+        // String-encoded uint64 must produce the same hash as number-encoded.
+        let json_number = r#"{
+            "types": {
+                "EIP712Domain": [
+                    {"name": "name", "type": "string"},
+                    {"name": "version", "type": "string"}
+                ],
+                "Test": [{"name": "value", "type": "uint64"}]
+            },
+            "primaryType": "Test",
+            "domain": {"name": "Linera", "version": "1"},
+            "message": {"value": 42}
+        }"#;
+        let json_string = r#"{
+            "types": {
+                "EIP712Domain": [
+                    {"name": "name", "type": "string"},
+                    {"name": "version", "type": "string"}
+                ],
+                "Test": [{"name": "value", "type": "uint64"}]
+            },
+            "primaryType": "Test",
+            "domain": {"name": "Linera", "version": "1"},
+            "message": {"value": "42"}
+        }"#;
+        assert_eq!(
+            compute_eip712_hash(json_number),
+            compute_eip712_hash(json_string)
+        );
+    }
+
+    #[test]
+    fn test_uint64_max_as_string() {
+        // u64::MAX must work when string-encoded (this overflows JS Number).
+        let json = r#"{
+            "types": {
+                "EIP712Domain": [
+                    {"name": "name", "type": "string"},
+                    {"name": "version", "type": "string"}
+                ],
+                "Test": [{"name": "value", "type": "uint64"}]
+            },
+            "primaryType": "Test",
+            "domain": {"name": "Linera", "version": "1"},
+            "message": {"value": "18446744073709551615"}
+        }"#;
+        let hash = compute_eip712_hash(json);
+        assert_ne!(hash, [0u8; 32]);
+    }
+
+    /// Official EIP-712 test vector from the specification.
+    ///
+    /// Uses the canonical Mail(Person from, Person to, string contents) example
+    /// with known-good hash values from the spec's Example.js.
+    #[test]
+    fn test_eip712_spec_mail_example() {
+        let json = r#"{
+            "types": {
+                "EIP712Domain": [
+                    {"name": "name", "type": "string"},
+                    {"name": "version", "type": "string"},
+                    {"name": "chainId", "type": "uint256"},
+                    {"name": "verifyingContract", "type": "address"}
+                ],
+                "Person": [
+                    {"name": "name", "type": "string"},
+                    {"name": "wallet", "type": "address"}
+                ],
+                "Mail": [
+                    {"name": "from", "type": "Person"},
+                    {"name": "to", "type": "Person"},
+                    {"name": "contents", "type": "string"}
+                ]
+            },
+            "primaryType": "Mail",
+            "domain": {
+                "name": "Ether Mail",
+                "version": "1",
+                "chainId": "1",
+                "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
+            },
+            "message": {
+                "from": {"name": "Cow", "wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"},
+                "to": {"name": "Bob", "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"},
+                "contents": "Hello, Bob!"
+            }
+        }"#;
+
+        let hash = compute_eip712_hash(json);
+        let expected =
+            hex::decode("be609aee343fb3c4b28e1df9e632fca64fcfaede20f02e86244efddf30957bd2")
+                .unwrap();
+        assert_eq!(hash, expected.as_slice());
+    }
+
+    /// Verify intermediate hashes from the EIP-712 spec Mail example.
+    #[test]
+    fn test_eip712_spec_intermediate_hashes() {
+        // encodeType("Mail") should produce the canonical type string.
+        let types: BTreeMap<String, Vec<TypeField>> = serde_json::from_value(serde_json::json!({
+            "Person": [
+                {"name": "name", "type": "string"},
+                {"name": "wallet", "type": "address"}
+            ],
+            "Mail": [
+                {"name": "from", "type": "Person"},
+                {"name": "to", "type": "Person"},
+                {"name": "contents", "type": "string"}
+            ]
+        }))
+        .unwrap();
+
+        // typeHash("Mail") = keccak256("Mail(Person from,Person to,string contents)Person(string name,address wallet)")
+        let mail_type_hash = compute_type_hash(&types, "Mail");
+        let expected_type_hash =
+            hex::decode("a0cedeb2dc280ba39b857546d74f5549c3a1d7bdc2dd96bf881f76108e23dac2")
+                .unwrap();
+        assert_eq!(mail_type_hash, expected_type_hash.as_slice());
+
+        // hashStruct of the message.
+        let message: serde_json::Value = serde_json::json!({
+            "from": {"name": "Cow", "wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"},
+            "to": {"name": "Bob", "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"},
+            "contents": "Hello, Bob!"
+        });
+        let struct_hash = hash_struct(&types, "Mail", &message);
+        let expected_struct_hash =
+            hex::decode("c52c0ee5d84264471806290a3f2c4cecfc5490626bf912d01f240d7a274b371e")
+                .unwrap();
+        assert_eq!(struct_hash, expected_struct_hash.as_slice());
+
+        // Domain separator.
+        let domain_types: BTreeMap<String, Vec<TypeField>> =
+            serde_json::from_value(serde_json::json!({
+                "EIP712Domain": [
+                    {"name": "name", "type": "string"},
+                    {"name": "version", "type": "string"},
+                    {"name": "chainId", "type": "uint256"},
+                    {"name": "verifyingContract", "type": "address"}
+                ]
+            }))
+            .unwrap();
+        let domain: serde_json::Value = serde_json::json!({
+            "name": "Ether Mail",
+            "version": "1",
+            "chainId": "1",
+            "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
+        });
+        let domain_separator = hash_struct(&domain_types, "EIP712Domain", &domain);
+        let expected_domain =
+            hex::decode("f2cee375fa42b42143804025fc449deafd50cc031ca257e0b194a650a912090f")
+                .unwrap();
+        assert_eq!(domain_separator, expected_domain.as_slice());
     }
 }

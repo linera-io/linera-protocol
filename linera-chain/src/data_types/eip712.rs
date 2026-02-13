@@ -1388,4 +1388,153 @@ mod tests {
         assert_eq!(json["recipient"], "bob");
         assert_eq!(json["amount"], "500");
     }
+
+    /// Every derive struct's PRIMARY_DEF must appear in LINERA_BLOCK_PROPOSAL_TYPE,
+    /// and every referenced type in the proposal type string must have a matching struct.
+    #[test]
+    fn derive_structs_consistent_with_proposal_type() {
+        let proposal_type = LINERA_BLOCK_PROPOSAL_TYPE;
+
+        // All derive struct PRIMARY_DEFs must appear verbatim in the proposal type string.
+        // (LineraBlockProposal itself is excluded since it's the primary, not a reference.)
+        let all_primary_defs = [
+            TransferOpEip712::PRIMARY_DEF,
+            ClaimOpEip712::PRIMARY_DEF,
+            ReceiveMsgEip712::PRIMARY_DEF,
+            UserOpEip712::PRIMARY_DEF,
+            WeightedOwnerEip712::PRIMARY_DEF,
+            CloseChainOpEip712::PRIMARY_DEF,
+            OpenChainOpEip712::PRIMARY_DEF,
+            ChangeOwnershipOpEip712::PRIMARY_DEF,
+            ChangeAppPermissionsOpEip712::PRIMARY_DEF,
+            PublishModuleOpEip712::PRIMARY_DEF,
+            PublishDataBlobOpEip712::PRIMARY_DEF,
+            VerifyBlobOpEip712::PRIMARY_DEF,
+            CreateApplicationOpEip712::PRIMARY_DEF,
+            AdminOpEip712::PRIMARY_DEF,
+            ProcessNewEpochOpEip712::PRIMARY_DEF,
+            ProcessRemovedEpochOpEip712::PRIMARY_DEF,
+            StreamUpdateEip712::PRIMARY_DEF,
+            UpdateStreamsOpEip712::PRIMARY_DEF,
+        ];
+
+        for def in &all_primary_defs {
+            assert!(
+                proposal_type.contains(def),
+                "PRIMARY_DEF not found in LINERA_BLOCK_PROPOSAL_TYPE: {def}"
+            );
+        }
+
+        // Every referenced type after the primary definition's closing ')' must match
+        // a derive struct's PRIMARY_DEF.
+        let after_primary = proposal_type.find(')').unwrap() + 1;
+        let referenced = &proposal_type[after_primary..];
+        // Each referenced type is "TypeName(...)" — extract them and verify.
+        for ref_def in referenced.split(')').filter(|s| !s.is_empty()) {
+            let full_def = format!("{})", ref_def);
+            assert!(
+                all_primary_defs.contains(&full_def.as_str()),
+                "Referenced type in proposal not backed by derive struct: {full_def}"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_array_hash_encoding() {
+        // Empty arrays should produce keccak256("") which is a specific known hash.
+        let op = UpdateStreamsOpEip712 { updates: vec![] };
+        let h1 = op.hash_struct();
+        assert_ne!(h1, [0u8; 32]);
+
+        // Adding an element must change the hash.
+        let op2 = UpdateStreamsOpEip712 {
+            updates: vec![StreamUpdateEip712 {
+                chain_id: "c".to_string(),
+                stream_id: "s".to_string(),
+                index: 0,
+            }],
+        };
+        assert_ne!(h1, op2.hash_struct());
+    }
+
+    #[test]
+    fn empty_string_field_hashing() {
+        let t1 = TransferOpEip712 {
+            owner: String::new(),
+            recipient: String::new(),
+            amount: 0,
+        };
+        let h = t1.hash_struct();
+        assert_ne!(h, [0u8; 32]);
+
+        // Empty string should differ from non-empty.
+        let t2 = TransferOpEip712 {
+            owner: "a".to_string(),
+            recipient: String::new(),
+            amount: 0,
+        };
+        assert_ne!(h, t2.hash_struct());
+    }
+
+    #[test]
+    fn zero_and_max_value_hashing() {
+        // Zero amount.
+        let t_zero = TransferOpEip712 {
+            owner: "o".to_string(),
+            recipient: "r".to_string(),
+            amount: 0,
+        };
+        assert_ne!(t_zero.hash_struct(), [0u8; 32]);
+
+        // u128::MAX amount.
+        let t_max = TransferOpEip712 {
+            owner: "o".to_string(),
+            recipient: "r".to_string(),
+            amount: u128::MAX,
+        };
+        assert_ne!(t_max.hash_struct(), [0u8; 32]);
+        assert_ne!(t_zero.hash_struct(), t_max.hash_struct());
+    }
+
+    #[test]
+    fn u64_max_json_hash_matches_binary() {
+        // u64::MAX in a proposal field must hash identically via binary and JSON paths.
+        // This is the scenario that triggered the MetaMask overflow bug.
+        let proposal = ProposalContent {
+            block: ProposedBlock {
+                chain_id: test_chain_id(),
+                epoch: Epoch(11),
+                transactions: vec![],
+                height: BlockHeight(u64::MAX),
+                timestamp: 190000000u64.into(),
+                authenticated_signer: None,
+                previous_block_hash: None,
+            },
+            round: Round::SingleLeader(11),
+            outcome: None,
+        };
+        let direct_hash = eip712_signing_hash(&proposal);
+        let json = eip712_typed_data_json(&proposal);
+        let json_hash = linera_base::crypto::eip712::compute_eip712_hash(&json);
+        assert_eq!(direct_hash, json_hash);
+    }
+
+    #[test]
+    fn field_order_matters() {
+        // Two structs with the same field values but different field assignments
+        // must hash differently (verifies field ordering in encodeData).
+        let t1 = ClaimOpEip712 {
+            owner: "alice".to_string(),
+            target_chain: "chain_a".to_string(),
+            recipient: "bob".to_string(),
+            amount: 100,
+        };
+        let t2 = ClaimOpEip712 {
+            owner: "bob".to_string(),
+            target_chain: "chain_a".to_string(),
+            recipient: "alice".to_string(),
+            amount: 100,
+        };
+        assert_ne!(t1.hash_struct(), t2.hash_struct());
+    }
 }
