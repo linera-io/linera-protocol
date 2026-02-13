@@ -71,4 +71,8 @@ export default class PrivateKey implements Signer {
     }
     return true;
   }
+
+  async scheme(_owner: string): Promise<string> {
+    return "EvmSecp256k1";
+  }
 }
