@@ -64,7 +64,7 @@ string[] changePermissionsApps,\
 bool hasOracleFilter,string[] oracleApps,\
 bool hasHttpFilter,string[] httpApps)\
 ChangeOwnershipOp(\
-string[] superOwners,string[] owners,uint64[] ownerWeights,\
+string[] superOwners,WeightedOwner[] owners,\
 uint32 multiLeaderRounds,bool openMultiLeaderRounds,\
 uint64 baseTimeoutMicros,uint64 timeoutIncrementMicros,\
 uint64 fallbackDurationMicros,uint64 fastRoundDurationMicros)\
@@ -76,7 +76,7 @@ bytes32 parametersHash,bytes32 instantiationArgumentHash,\
 string[] requiredApplicationIds)\
 OpenChainOp(\
 uint128 balance,\
-string[] superOwners,string[] owners,uint64[] ownerWeights,\
+string[] superOwners,WeightedOwner[] owners,\
 uint32 multiLeaderRounds,bool openMultiLeaderRounds,\
 uint64 baseTimeoutMicros,uint64 timeoutIncrementMicros,\
 uint64 fallbackDurationMicros,uint64 fastRoundDurationMicros,\
@@ -90,7 +90,8 @@ StreamUpdate(string chainId,string streamId,uint32 index)\
 TransferOp(string owner,string recipient,uint128 amount)\
 UpdateStreamsOp(StreamUpdate[] updates)\
 UserOp(string applicationId,bytes32 dataHash)\
-VerifyBlobOp(string blobType,bytes32 hash)";
+VerifyBlobOp(string blobType,bytes32 hash)\
+WeightedOwner(string owner,uint64 weight)";
 
 // Individual type strings (for type hash computation).
 const TRANSFER_OP_TYPE: &str = "TransferOp(string owner,string recipient,uint128 amount)";
@@ -101,18 +102,21 @@ const USER_OP_TYPE: &str = "UserOp(string applicationId,bytes32 dataHash)";
 const OPEN_CHAIN_OP_TYPE: &str = "\
 OpenChainOp(\
 uint128 balance,\
-string[] superOwners,string[] owners,uint64[] ownerWeights,\
+string[] superOwners,WeightedOwner[] owners,\
 uint32 multiLeaderRounds,bool openMultiLeaderRounds,\
 uint64 baseTimeoutMicros,uint64 timeoutIncrementMicros,\
 uint64 fallbackDurationMicros,uint64 fastRoundDurationMicros,\
-bytes32 permissionsHash)";
+bytes32 permissionsHash)\
+WeightedOwner(string owner,uint64 weight)";
 const CLOSE_CHAIN_OP_TYPE: &str = "CloseChainOp()";
 const CHANGE_OWNERSHIP_OP_TYPE: &str = "\
 ChangeOwnershipOp(\
-string[] superOwners,string[] owners,uint64[] ownerWeights,\
+string[] superOwners,WeightedOwner[] owners,\
 uint32 multiLeaderRounds,bool openMultiLeaderRounds,\
 uint64 baseTimeoutMicros,uint64 timeoutIncrementMicros,\
-uint64 fallbackDurationMicros,uint64 fastRoundDurationMicros)";
+uint64 fallbackDurationMicros,uint64 fastRoundDurationMicros)\
+WeightedOwner(string owner,uint64 weight)";
+const WEIGHTED_OWNER_TYPE: &str = "WeightedOwner(string owner,uint64 weight)";
 const CHANGE_APP_PERMISSIONS_OP_TYPE: &str = "\
 ChangeAppPermissionsOp(\
 bool hasExecuteFilter,string[] executeOperations,\
@@ -170,14 +174,16 @@ static UPDATE_STREAMS_OP_TYPE_HASH: LazyLock<[u8; 32]> =
     LazyLock::new(|| keccak256(UPDATE_STREAMS_OP_TYPE).0);
 static STREAM_UPDATE_TYPE_HASH: LazyLock<[u8; 32]> =
     LazyLock::new(|| keccak256(STREAM_UPDATE_TYPE).0);
+static WEIGHTED_OWNER_TYPE_HASH: LazyLock<[u8; 32]> =
+    LazyLock::new(|| keccak256(WEIGHTED_OWNER_TYPE).0);
 
 // -- Domain separator (constant: name="Linera", version="1") --
 
 static DOMAIN_SEPARATOR: LazyLock<[u8; 32]> = LazyLock::new(|| {
     let mut buf = Vec::with_capacity(96);
     buf.extend_from_slice(&*DOMAIN_TYPE_HASH);
-    buf.extend_from_slice(&keccak256("Linera").0);
-    buf.extend_from_slice(&keccak256("1").0);
+    buf.extend_from_slice(&keccak256("Linera").0); // Domain name.
+    buf.extend_from_slice(&keccak256("1").0); // Version of the EIP-712 schema, not the protocol version.
     keccak256(&buf).0
 });
 
@@ -300,11 +306,19 @@ fn timedelta_micros(td: &TimeDelta) -> u64 {
 
 // -- Ownership encoding helpers (shared by OpenChainOp and ChangeOwnershipOp) --
 
+/// Hashes a single `WeightedOwner(string owner, uint64 weight)` struct.
+fn hash_weighted_owner(owner: &str, weight: u64) -> [u8; 32] {
+    let mut buf = Vec::with_capacity(3 * 32);
+    buf.extend_from_slice(&*WEIGHTED_OWNER_TYPE_HASH);
+    buf.extend_from_slice(&encode_string(owner));
+    buf.extend_from_slice(&encode_u64(weight));
+    keccak256(&buf).0
+}
+
 /// Appends the common ownership fields to an ABI buffer for struct hashing.
 fn encode_ownership_fields(
     super_owners: &[String],
-    owners: &[String],
-    weights: &[u64],
+    owners: &[(String, u64)],
     multi_leader_rounds: u32,
     open_multi_leader_rounds: bool,
     timeout: &linera_base::ownership::TimeoutConfig,
@@ -313,11 +327,11 @@ fn encode_ownership_fields(
     let so_hashes: Vec<[u8; 32]> = super_owners.iter().map(|s| encode_string(s)).collect();
     buf.extend_from_slice(&encode_hash_array(&so_hashes));
 
-    let o_hashes: Vec<[u8; 32]> = owners.iter().map(|s| encode_string(s)).collect();
-    buf.extend_from_slice(&encode_hash_array(&o_hashes));
-
-    let w_encoded: Vec<[u8; 32]> = weights.iter().map(|w| encode_u64(*w)).collect();
-    buf.extend_from_slice(&encode_hash_array(&w_encoded));
+    let owner_hashes: Vec<[u8; 32]> = owners
+        .iter()
+        .map(|(o, w)| hash_weighted_owner(o, *w))
+        .collect();
+    buf.extend_from_slice(&encode_hash_array(&owner_hashes));
 
     buf.extend_from_slice(&encode_u32(multi_leader_rounds));
     buf.extend_from_slice(&encode_bool(open_multi_leader_rounds));
@@ -332,36 +346,34 @@ fn encode_ownership_fields(
     ));
 }
 
-/// Extracts ownership string vectors from `ChangeOwnership` fields.
+/// Extracts ownership vectors from `ChangeOwnership` fields.
 fn extract_ownership_vecs(
     super_owners: &[AccountOwner],
     owners: &[(AccountOwner, u64)],
-) -> (Vec<String>, Vec<String>, Vec<u64>) {
+) -> (Vec<String>, Vec<(String, u64)>) {
     let so: Vec<String> = super_owners.iter().map(format_account_owner).collect();
-    let o: Vec<String> = owners
+    let o: Vec<(String, u64)> = owners
         .iter()
-        .map(|(o, _)| format_account_owner(o))
+        .map(|(o, w)| (format_account_owner(o), *w))
         .collect();
-    let w: Vec<u64> = owners.iter().map(|(_, w)| *w).collect();
-    (so, o, w)
+    (so, o)
 }
 
-/// Extracts ownership string vectors from a `ChainOwnership` struct.
+/// Extracts ownership vectors from a `ChainOwnership` struct.
 fn extract_chain_ownership_vecs(
     ownership: &linera_base::ownership::ChainOwnership,
-) -> (Vec<String>, Vec<String>, Vec<u64>) {
+) -> (Vec<String>, Vec<(String, u64)>) {
     let so: Vec<String> = ownership
         .super_owners
         .iter()
         .map(format_account_owner)
         .collect();
-    let o: Vec<String> = ownership
+    let o: Vec<(String, u64)> = ownership
         .owners
         .iter()
-        .map(|(o, _)| format_account_owner(o))
+        .map(|(o, w)| (format_account_owner(o), *w))
         .collect();
-    let w: Vec<u64> = ownership.owners.iter().map(|(_, w)| *w).collect();
-    (so, o, w)
+    (so, o)
 }
 
 // -- ApplicationPermissions encoding --
@@ -486,16 +498,15 @@ fn hash_user_op(application_id: &ApplicationId, data: &[u8]) -> [u8; 32] {
 }
 
 fn hash_open_chain_op(config: &OpenChainConfig) -> [u8; 32] {
-    let (so, o, w) = extract_chain_ownership_vecs(&config.ownership);
+    let (so, o) = extract_chain_ownership_vecs(&config.ownership);
     let perms_hash = hash_app_permissions(&config.application_permissions);
 
-    let mut buf = Vec::with_capacity(12 * 32);
+    let mut buf = Vec::with_capacity(11 * 32);
     buf.extend_from_slice(&*OPEN_CHAIN_OP_TYPE_HASH);
     buf.extend_from_slice(&encode_u128(config.balance.to_attos()));
     encode_ownership_fields(
         &so,
         &o,
-        &w,
         config.ownership.multi_leader_rounds,
         config.ownership.open_multi_leader_rounds,
         &config.ownership.timeout_config,
@@ -517,13 +528,12 @@ fn hash_change_ownership_op(
     open_multi_leader_rounds: bool,
     timeout_config: &linera_base::ownership::TimeoutConfig,
 ) -> [u8; 32] {
-    let (so, o, w) = extract_ownership_vecs(super_owners, owners);
-    let mut buf = Vec::with_capacity(11 * 32);
+    let (so, o) = extract_ownership_vecs(super_owners, owners);
+    let mut buf = Vec::with_capacity(10 * 32);
     buf.extend_from_slice(&*CHANGE_OWNERSHIP_OP_TYPE_HASH);
     encode_ownership_fields(
         &so,
         &o,
-        &w,
         multi_leader_rounds,
         open_multi_leader_rounds,
         timeout_config,
@@ -910,16 +920,18 @@ impl Default for CategorizedValues {
 
 fn ownership_json(
     super_owners: &[String],
-    owners: &[String],
-    weights: &[u64],
+    owners: &[(String, u64)],
     multi_leader_rounds: u32,
     open_multi_leader_rounds: bool,
     timeout: &linera_base::ownership::TimeoutConfig,
 ) -> serde_json::Value {
+    let owners_json: Vec<serde_json::Value> = owners
+        .iter()
+        .map(|(o, w)| serde_json::json!({"owner": o, "weight": w}))
+        .collect();
     serde_json::json!({
         "superOwners": super_owners,
-        "owners": owners,
-        "ownerWeights": weights,
+        "owners": owners_json,
         "multiLeaderRounds": multi_leader_rounds,
         "openMultiLeaderRounds": open_multi_leader_rounds,
         "baseTimeoutMicros": timedelta_micros(&timeout.base_timeout),
@@ -1013,7 +1025,7 @@ fn categorize_transactions_values(transactions: &[Transaction]) -> CategorizedVa
                     }));
                 }
                 SystemOperation::OpenChain(config) => {
-                    let (so, o, w) = extract_chain_ownership_vecs(&config.ownership);
+                    let (so, o) = extract_chain_ownership_vecs(&config.ownership);
                     let perms_hash = hash_app_permissions(&config.application_permissions);
                     let mut val = serde_json::json!({
                         "balance": config.balance.to_attos().to_string(),
@@ -1022,7 +1034,6 @@ fn categorize_transactions_values(transactions: &[Transaction]) -> CategorizedVa
                     let ownership = ownership_json(
                         &so,
                         &o,
-                        &w,
                         config.ownership.multi_leader_rounds,
                         config.ownership.open_multi_leader_rounds,
                         &config.ownership.timeout_config,
@@ -1045,11 +1056,10 @@ fn categorize_transactions_values(transactions: &[Transaction]) -> CategorizedVa
                     open_multi_leader_rounds,
                     timeout_config,
                 } => {
-                    let (so, o, w) = extract_ownership_vecs(super_owners, owners);
+                    let (so, o) = extract_ownership_vecs(super_owners, owners);
                     result.change_ownership_ops.push(ownership_json(
                         &so,
                         &o,
-                        &w,
                         *multi_leader_rounds,
                         *open_multi_leader_rounds,
                         timeout_config,
@@ -1231,8 +1241,7 @@ pub fn eip712_typed_data_json(content: &ProposalContent) -> String {
             "OpenChainOp": [
                 {"name": "balance", "type": "uint128"},
                 {"name": "superOwners", "type": "string[]"},
-                {"name": "owners", "type": "string[]"},
-                {"name": "ownerWeights", "type": "uint64[]"},
+                {"name": "owners", "type": "WeightedOwner[]"},
                 {"name": "multiLeaderRounds", "type": "uint32"},
                 {"name": "openMultiLeaderRounds", "type": "bool"},
                 {"name": "baseTimeoutMicros", "type": "uint64"},
@@ -1244,14 +1253,17 @@ pub fn eip712_typed_data_json(content: &ProposalContent) -> String {
             "CloseChainOp": [],
             "ChangeOwnershipOp": [
                 {"name": "superOwners", "type": "string[]"},
-                {"name": "owners", "type": "string[]"},
-                {"name": "ownerWeights", "type": "uint64[]"},
+                {"name": "owners", "type": "WeightedOwner[]"},
                 {"name": "multiLeaderRounds", "type": "uint32"},
                 {"name": "openMultiLeaderRounds", "type": "bool"},
                 {"name": "baseTimeoutMicros", "type": "uint64"},
                 {"name": "timeoutIncrementMicros", "type": "uint64"},
                 {"name": "fallbackDurationMicros", "type": "uint64"},
                 {"name": "fastRoundDurationMicros", "type": "uint64"}
+            ],
+            "WeightedOwner": [
+                {"name": "owner", "type": "string"},
+                {"name": "weight", "type": "uint64"}
             ],
             "ChangeAppPermissionsOp": [
                 {"name": "hasExecuteFilter", "type": "bool"},
