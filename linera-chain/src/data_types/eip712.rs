@@ -8,7 +8,7 @@
 
 use std::sync::LazyLock;
 
-use alloy_primitives::keccak256;
+use alloy_primitives::{hex, keccak256};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Round},
@@ -316,6 +316,170 @@ pub fn eip712_signing_hash(content: &ProposalContent) -> [u8; 32] {
     keccak256(&final_buf).0
 }
 
+// -- JSON typed data builder --
+
+/// Formats a `[u8; 32]` as a `0x`-prefixed hex string (66 chars).
+fn format_bytes32(bytes: [u8; 32]) -> String {
+    format!("0x{}", hex::encode(bytes))
+}
+
+/// Formats a `MessageAction` as a display string.
+fn format_message_action(action: &MessageAction) -> &'static str {
+    match action {
+        MessageAction::Accept => "Accept",
+        MessageAction::Reject => "Reject",
+    }
+}
+
+/// Categorized transaction values for JSON serialization.
+struct CategorizedValues {
+    transfers: Vec<serde_json::Value>,
+    claims: Vec<serde_json::Value>,
+    incoming_messages: Vec<serde_json::Value>,
+    user_operations: Vec<serde_json::Value>,
+    other_hashes: Vec<serde_json::Value>,
+}
+
+/// Same categorization logic as `categorize_transactions`, but produces JSON values
+/// instead of hashes.
+fn categorize_transactions_values(transactions: &[Transaction]) -> CategorizedValues {
+    let mut result = CategorizedValues {
+        transfers: Vec::new(),
+        claims: Vec::new(),
+        incoming_messages: Vec::new(),
+        user_operations: Vec::new(),
+        other_hashes: Vec::new(),
+    };
+
+    for tx in transactions {
+        match tx {
+            Transaction::ExecuteOperation(Operation::System(sys_op)) => match sys_op.as_ref() {
+                SystemOperation::Transfer {
+                    owner,
+                    recipient,
+                    amount,
+                } => {
+                    result.transfers.push(serde_json::json!({
+                        "owner": format_account_owner(owner),
+                        "recipient": format_account(&recipient.chain_id, &recipient.owner),
+                        "amount": amount.to_attos().to_string(),
+                    }));
+                }
+                SystemOperation::Claim {
+                    owner,
+                    target_id,
+                    recipient,
+                    amount,
+                } => {
+                    result.claims.push(serde_json::json!({
+                        "owner": format_account_owner(owner),
+                        "targetChain": format_chain_id(target_id),
+                        "recipient": format_account(&recipient.chain_id, &recipient.owner),
+                        "amount": amount.to_attos().to_string(),
+                    }));
+                }
+                _ => {
+                    let hash: [u8; 32] = CryptoHash::new(tx).into();
+                    result
+                        .other_hashes
+                        .push(serde_json::json!(format_bytes32(hash)));
+                }
+            },
+            Transaction::ExecuteOperation(Operation::User {
+                application_id,
+                bytes,
+            }) => {
+                let data_hash = keccak256(bytes).0;
+                result.user_operations.push(serde_json::json!({
+                    "applicationId": format_application_id(application_id),
+                    "dataHash": format_bytes32(data_hash),
+                }));
+            }
+            Transaction::ReceiveMessages(bundle) => {
+                result.incoming_messages.push(serde_json::json!({
+                    "origin": format_chain_id(&bundle.origin),
+                    "action": format_message_action(&bundle.action),
+                    "messageCount": bundle.bundle.messages.len() as u32,
+                }));
+            }
+        }
+    }
+
+    result
+}
+
+/// Produces the full EIP-712 typed data JSON for a `ProposalContent`.
+///
+/// The JSON can be sent to MetaMask via `eth_signTypedData_v4`, or parsed by the
+/// generic `compute_eip712_hash` in `linera-base` to produce the signing hash.
+pub fn eip712_typed_data_json(content: &ProposalContent) -> String {
+    let block = &content.block;
+    let categorized = categorize_transactions_values(&block.transactions);
+    let content_hash: [u8; 32] = CryptoHash::new(content).into();
+
+    let typed_data = serde_json::json!({
+        "types": {
+            "EIP712Domain": [
+                {"name": "name", "type": "string"},
+                {"name": "version", "type": "string"}
+            ],
+            "LineraBlockProposal": [
+                {"name": "chainId", "type": "bytes32"},
+                {"name": "epoch", "type": "uint64"},
+                {"name": "height", "type": "uint64"},
+                {"name": "timestamp", "type": "uint64"},
+                {"name": "round", "type": "string"},
+                {"name": "contentHash", "type": "bytes32"},
+                {"name": "transfers", "type": "TransferOp[]"},
+                {"name": "claims", "type": "ClaimOp[]"},
+                {"name": "incomingMessages", "type": "ReceiveMsg[]"},
+                {"name": "userOperations", "type": "UserOp[]"},
+                {"name": "otherTransactionHashes", "type": "bytes32[]"}
+            ],
+            "TransferOp": [
+                {"name": "owner", "type": "string"},
+                {"name": "recipient", "type": "string"},
+                {"name": "amount", "type": "uint128"}
+            ],
+            "ClaimOp": [
+                {"name": "owner", "type": "string"},
+                {"name": "targetChain", "type": "string"},
+                {"name": "recipient", "type": "string"},
+                {"name": "amount", "type": "uint128"}
+            ],
+            "ReceiveMsg": [
+                {"name": "origin", "type": "string"},
+                {"name": "action", "type": "string"},
+                {"name": "messageCount", "type": "uint32"}
+            ],
+            "UserOp": [
+                {"name": "applicationId", "type": "string"},
+                {"name": "dataHash", "type": "bytes32"}
+            ]
+        },
+        "primaryType": "LineraBlockProposal",
+        "domain": {
+            "name": "Linera",
+            "version": "1"
+        },
+        "message": {
+            "chainId": format_bytes32(block.chain_id.0.into()),
+            "epoch": block.epoch.0 as u64,
+            "height": block.height.0,
+            "timestamp": block.timestamp.micros(),
+            "round": format_round(&content.round),
+            "contentHash": format_bytes32(content_hash),
+            "transfers": categorized.transfers,
+            "claims": categorized.claims,
+            "incomingMessages": categorized.incoming_messages,
+            "userOperations": categorized.user_operations,
+            "otherTransactionHashes": categorized.other_hashes,
+        }
+    });
+
+    typed_data.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use linera_base::{
@@ -453,5 +617,58 @@ mod tests {
         let hash = eip712_signing_hash(&proposal);
         let empty_hash = eip712_signing_hash(&empty_proposal());
         assert_ne!(hash, empty_hash);
+    }
+
+    /// Verifies that `compute_eip712_hash(eip712_typed_data_json(content))` produces the
+    /// exact same hash as `eip712_signing_hash(content)` for an empty proposal.
+    #[test]
+    fn test_json_hash_matches_direct_hash_empty() {
+        let proposal = empty_proposal();
+        let direct_hash = eip712_signing_hash(&proposal);
+
+        let json = eip712_typed_data_json(&proposal);
+        let json_hash = linera_base::crypto::eip712::compute_eip712_hash(&json);
+
+        assert_eq!(direct_hash, json_hash);
+    }
+
+    /// Same cross-check but with a proposal containing a transfer transaction.
+    #[test]
+    fn test_json_hash_matches_direct_hash_with_transfer() {
+        use linera_execution::Operation;
+
+        let chain_id = test_chain_id();
+        let owner = AccountOwner::Address20([0xAB; 20]);
+        let recipient = Account {
+            chain_id,
+            owner: AccountOwner::Address20([0xCD; 20]),
+        };
+
+        let transfer =
+            Transaction::ExecuteOperation(Operation::System(Box::new(SystemOperation::Transfer {
+                owner,
+                recipient,
+                amount: Amount::from_tokens(50),
+            })));
+
+        let proposal = ProposalContent {
+            block: ProposedBlock {
+                chain_id,
+                epoch: Epoch(1),
+                transactions: vec![transfer],
+                height: BlockHeight(0),
+                timestamp: 1000u64.into(),
+                authenticated_signer: None,
+                previous_block_hash: None,
+            },
+            round: Round::Fast,
+            outcome: None,
+        };
+
+        let direct_hash = eip712_signing_hash(&proposal);
+        let json = eip712_typed_data_json(&proposal);
+        let json_hash = linera_base::crypto::eip712::compute_eip712_hash(&json);
+
+        assert_eq!(direct_hash, json_hash);
     }
 }

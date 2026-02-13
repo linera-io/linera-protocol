@@ -28,4 +28,13 @@ export interface Signer {
    * @returns A promise resolving to the signature scheme identifier string.
    */
   scheme(owner: string): Promise<string>;
+
+  /**
+   * Signs EIP-712 typed data using the private key associated with the specified EVM address.
+   *
+   * @param owner - The EVM address whose private key will be used to sign.
+   * @param typedData - JSON string of the EIP-712 typed data ({types, primaryType, domain, message}).
+   * @returns A promise resolving to the signature in hexadecimal string format.
+   */
+  signTypedData(owner: string, typedData: string): Promise<string>;
 }

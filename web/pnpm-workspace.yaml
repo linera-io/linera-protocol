@@ -1,3 +1,4 @@
 packages:
 - '@linera/client'
 - '@linera/metamask'
+- '@linera/metamask-eip712'

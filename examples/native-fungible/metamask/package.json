@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@linera/client": "workspace:*",
-    "@linera/metamask": "workspace:*"
+    "@linera/metamask-eip712": "workspace:*"
   },
   "devDependencies": {
     "vite": "^5.4.11"

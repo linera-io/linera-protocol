@@ -652,13 +652,16 @@ impl BlockProposal {
             block,
             outcome: None,
         };
-        let hash = match signer.scheme(&owner).await? {
+        let signature = match signer.scheme(&owner).await? {
             SignatureScheme::Eip712Secp256k1 => {
-                CryptoHash::from(eip712::eip712_signing_hash(&content))
+                let typed_data = eip712::eip712_typed_data_json(&content);
+                signer.sign_typed_data(&owner, &typed_data).await?
             }
-            _ => CryptoHash::new(&content),
+            _ => {
+                let hash = CryptoHash::new(&content);
+                signer.sign(&owner, &hash).await?
+            }
         };
-        let signature = signer.sign(&owner, &hash).await?;
 
         Ok(Self {
             content,
@@ -678,13 +681,16 @@ impl BlockProposal {
             block: old_proposal.content.block,
             outcome: None,
         };
-        let hash = match signer.scheme(&owner).await? {
+        let signature = match signer.scheme(&owner).await? {
             SignatureScheme::Eip712Secp256k1 => {
-                CryptoHash::from(eip712::eip712_signing_hash(&content))
+                let typed_data = eip712::eip712_typed_data_json(&content);
+                signer.sign_typed_data(&owner, &typed_data).await?
             }
-            _ => CryptoHash::new(&content),
+            _ => {
+                let hash = CryptoHash::new(&content);
+                signer.sign(&owner, &hash).await?
+            }
         };
-        let signature = signer.sign(&owner, &hash).await?;
 
         Ok(Self {
             content,

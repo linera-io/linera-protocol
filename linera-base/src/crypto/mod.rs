@@ -5,6 +5,7 @@
 //! Define the cryptographic primitives used by the Linera protocol.
 
 mod ed25519;
+pub mod eip712;
 mod hash;
 #[allow(dead_code)]
 mod secp256k1;

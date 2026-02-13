@@ -72,6 +72,20 @@ export default class PrivateKey implements Signer {
     return true;
   }
 
+  async signTypedData(owner: string, typedData: string): Promise<string> {
+    if (
+      typeof owner !== "string" ||
+      !ethers.isAddress(owner) ||
+      this.wallet.address.toLowerCase() !== owner.toLowerCase()
+    ) {
+      throw new Error("Invalid owner address");
+    }
+    const { domain, types, message } = JSON.parse(typedData);
+    // Remove EIP712Domain from types — ethers adds it automatically
+    delete types.EIP712Domain;
+    return await this.wallet.signTypedData(domain, types, message);
+  }
+
   async scheme(_owner: string): Promise<string> {
     return "EvmSecp256k1";
   }

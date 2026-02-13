@@ -1,0 +1,33 @@
+{
+  "name": "@linera/metamask-eip712",
+  "version": "0.15.12",
+  "description": "MetaMask EIP-712 wallet integration for the Linera blockchain",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "pnpm exec tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "ci": "pnpm run build",
+    "prepare": "pnpm run build"
+  },
+  "dependencies": {
+    "@linera/client": "workspace:*",
+    "@linera/metamask": "workspace:*",
+    "@metamask/providers": "^22.1.0",
+    "ethers": "^6.14.3"
+  },
+  "keywords": [],
+  "author": "Linera <contact@linera.io>",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/linera-io/linera-protocol/tree/main/web/@linera/metamask-eip712",
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
