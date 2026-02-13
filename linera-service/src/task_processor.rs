@@ -270,7 +270,12 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     }
                     // Signal that this batch is done so the main loop can process
                     // the next batch for this application.
-                    let _ = sender.send(TaskMessage::BatchComplete { application_id });
+                    if sender
+                        .send(TaskMessage::BatchComplete { application_id })
+                        .is_err()
+                    {
+                        error!("Outcome receiver dropped for {application_id}");
+                    }
                 });
             }
         }
