@@ -175,7 +175,11 @@ fn encode_atomic(type_name: &str, value: &serde_json::Value) -> [u8; 32] {
             buf
         }
         "uint64" => {
-            let n = value.as_u64().expect("expected u64 value");
+            // Accept both JSON number and decimal string (string avoids JS precision loss).
+            let n = value
+                .as_u64()
+                .or_else(|| value.as_str().and_then(|s| s.parse::<u64>().ok()))
+                .expect("expected u64 value (number or decimal string)");
             let mut buf = [0u8; 32];
             buf[24..32].copy_from_slice(&n.to_be_bytes());
             buf

@@ -908,9 +908,9 @@ pub fn eip712_typed_data_json(content: &ProposalContent) -> String {
         },
         "message": {
             "chainId": format_bytes32(block.chain_id.0.into()),
-            "epoch": block.epoch.0 as u64,
-            "height": block.height.0,
-            "timestamp": block.timestamp.micros(),
+            "epoch": (block.epoch.0 as u64).to_string(),
+            "height": block.height.0.to_string(),
+            "timestamp": block.timestamp.micros().to_string(),
             "round": format_round(&content.round),
             "contentHash": format_bytes32(content_hash),
             "transfers": json_vec(&cat.transfers),
