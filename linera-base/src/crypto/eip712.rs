@@ -194,6 +194,14 @@ fn encode_atomic(type_name: &str, value: &serde_json::Value) -> [u8; 32] {
             buf[28..32].copy_from_slice(&n.to_be_bytes());
             buf
         }
+        "bool" => {
+            let b = value.as_bool().expect("expected boolean value");
+            let mut buf = [0u8; 32];
+            if b {
+                buf[31] = 1;
+            }
+            buf
+        }
         _ => panic!("unsupported EIP-712 atomic type: {type_name}"),
     }
 }
